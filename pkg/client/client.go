@@ -126,6 +126,88 @@ func (c *Client) GetPresets() (*models.Presets, error) {
 	return &presets, nil
 }
 
+// SendKey sends a key press command to the device
+func (c *Client) SendKey(keyValue string) error {
+	if !models.IsValidKey(keyValue) {
+		return fmt.Errorf("invalid key value: %s", keyValue)
+	}
+
+	key := models.NewKey(keyValue)
+	return c.post("/key", key, nil)
+}
+
+// SendKeyPress sends a key press command (alias for SendKey)
+func (c *Client) SendKeyPress(keyValue string) error {
+	return c.SendKey(keyValue)
+}
+
+// SendKeyRelease sends a key release command
+func (c *Client) SendKeyRelease(keyValue string) error {
+	if !models.IsValidKey(keyValue) {
+		return fmt.Errorf("invalid key value: %s", keyValue)
+	}
+
+	key := models.NewKeyRelease(keyValue)
+	return c.post("/key", key, nil)
+}
+
+// Play sends a PLAY key command
+func (c *Client) Play() error {
+	return c.SendKey(models.KeyPlay)
+}
+
+// Pause sends a PAUSE key command
+func (c *Client) Pause() error {
+	return c.SendKey(models.KeyPause)
+}
+
+// Stop sends a STOP key command
+func (c *Client) Stop() error {
+	return c.SendKey(models.KeyStop)
+}
+
+// NextTrack sends a NEXT_TRACK key command
+func (c *Client) NextTrack() error {
+	return c.SendKey(models.KeyNextTrack)
+}
+
+// PrevTrack sends a PREV_TRACK key command
+func (c *Client) PrevTrack() error {
+	return c.SendKey(models.KeyPrevTrack)
+}
+
+// VolumeUp sends a VOLUME_UP key command
+func (c *Client) VolumeUp() error {
+	return c.SendKey(models.KeyVolumeUp)
+}
+
+// VolumeDown sends a VOLUME_DOWN key command
+func (c *Client) VolumeDown() error {
+	return c.SendKey(models.KeyVolumeDown)
+}
+
+// SelectPreset sends a preset key command (1-6)
+func (c *Client) SelectPreset(presetNumber int) error {
+	var keyValue string
+	switch presetNumber {
+	case 1:
+		keyValue = models.KeyPreset1
+	case 2:
+		keyValue = models.KeyPreset2
+	case 3:
+		keyValue = models.KeyPreset3
+	case 4:
+		keyValue = models.KeyPreset4
+	case 5:
+		keyValue = models.KeyPreset5
+	case 6:
+		keyValue = models.KeyPreset6
+	default:
+		return fmt.Errorf("invalid preset number: %d (must be 1-6)", presetNumber)
+	}
+	return c.SendKey(keyValue)
+}
+
 // Ping checks if the device is reachable by calling /info
 func (c *Client) Ping() error {
 	_, err := c.GetDeviceInfo()

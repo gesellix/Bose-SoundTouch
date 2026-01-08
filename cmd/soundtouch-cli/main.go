@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,9 +16,33 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
+// parseHostPort splits a host:port string into separate host and port components
+// If no port is specified, returns the original host and the provided default port
+func parseHostPort(hostPort string, defaultPort int) (string, int) {
+	// Check if host contains a port (has a colon)
+	if strings.Contains(hostPort, ":") {
+		host, portStr, err := net.SplitHostPort(hostPort)
+		if err != nil {
+			// If parsing fails, return original host and default port
+			return hostPort, defaultPort
+		}
+
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port < 1 || port > 65535 {
+			// If port parsing fails or is invalid, return host and default port
+			return host, defaultPort
+		}
+
+		return host, port
+	}
+
+	// No port specified, return original host and default port
+	return hostPort, defaultPort
+}
+
 func main() {
 	var (
-		host         = flag.String("host", "", "SoundTouch device host/IP address")
+		host         = flag.String("host", "", "SoundTouch device host/IP address (can include port like host:8090)")
 		port         = flag.Int("port", 8090, "SoundTouch device port")
 		timeout      = flag.Duration("timeout", 10*time.Second, "Request timeout")
 		discover     = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
@@ -27,6 +53,15 @@ func main() {
 		name         = flag.Bool("name", false, "Get device name")
 		capabilities = flag.Bool("capabilities", false, "Get device capabilities")
 		presets      = flag.Bool("presets", false, "Get configured presets")
+		key          = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, VOLUME_UP, VOLUME_DOWN, PRESET_1-6)")
+		play         = flag.Bool("play", false, "Send PLAY key command")
+		pause        = flag.Bool("pause", false, "Send PAUSE key command")
+		stop         = flag.Bool("stop", false, "Send STOP key command")
+		next         = flag.Bool("next", false, "Send NEXT_TRACK key command")
+		prev         = flag.Bool("prev", false, "Send PREV_TRACK key command")
+		volumeUp     = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
+		volumeDown   = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
+		preset       = flag.Int("preset", 0, "Select preset (1-6)")
 		help         = flag.Bool("help", false, "Show help")
 	)
 
@@ -38,9 +73,16 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && *preset == 0 && *host == "" {
 		printHelp()
 		return
+	}
+
+	// Parse host:port if provided
+	var finalHost string
+	var finalPort int
+	if *host != "" {
+		finalHost, finalPort = parseHostPort(*host, *port)
 	}
 
 	// Handle discovery
@@ -56,7 +98,7 @@ func main() {
 		if *host == "" {
 			log.Fatal("Host is required for info command. Use -host flag or -discover to find devices.")
 		}
-		if err := handleDeviceInfo(*host, *port, *timeout); err != nil {
+		if err := handleDeviceInfo(finalHost, finalPort, *timeout); err != nil {
 			log.Fatalf("Failed to get device info: %v", err)
 		}
 		return
@@ -67,7 +109,7 @@ func main() {
 		if *host == "" {
 			log.Fatal("Host is required for nowplaying command. Use -host flag or -discover to find devices.")
 		}
-		if err := handleNowPlaying(*host, *port, *timeout); err != nil {
+		if err := handleNowPlaying(finalHost, finalPort, *timeout); err != nil {
 			log.Fatalf("Failed to get now playing: %v", err)
 		}
 		return
@@ -78,7 +120,7 @@ func main() {
 		if *host == "" {
 			log.Fatal("Host is required for sources command. Use -host flag or -discover to find devices.")
 		}
-		if err := handleSources(*host, *port, *timeout); err != nil {
+		if err := handleSources(finalHost, finalPort, *timeout); err != nil {
 			log.Fatalf("Failed to get sources: %v", err)
 		}
 		return
@@ -89,7 +131,7 @@ func main() {
 		if *host == "" {
 			log.Fatal("Host is required for name command. Use -host flag or -discover to find devices.")
 		}
-		if err := handleName(*host, *port, *timeout); err != nil {
+		if err := handleName(finalHost, finalPort, *timeout); err != nil {
 			log.Fatalf("Failed to get device name: %v", err)
 		}
 		return
@@ -100,7 +142,7 @@ func main() {
 		if *host == "" {
 			log.Fatal("Host is required for capabilities command. Use -host flag or -discover to find devices.")
 		}
-		if err := handleCapabilities(*host, *port, *timeout); err != nil {
+		if err := handleCapabilities(finalHost, finalPort, *timeout); err != nil {
 			log.Fatalf("Failed to get device capabilities: %v", err)
 		}
 		return
@@ -111,8 +153,19 @@ func main() {
 		if *host == "" {
 			log.Fatal("Host is required for presets command. Use -host flag or -discover to find devices.")
 		}
-		if err := handlePresets(*host, *port, *timeout); err != nil {
+		if err := handlePresets(finalHost, finalPort, *timeout); err != nil {
 			log.Fatalf("Failed to get presets: %v", err)
+		}
+		return
+	}
+
+	// Handle key commands
+	if *key != "" || *play || *pause || *stop || *next || *prev || *volumeUp || *volumeDown || *preset > 0 {
+		if *host == "" {
+			log.Fatal("Host is required for key commands. Use -host flag or -discover to find devices.")
+		}
+		if err := handleKeyCommands(finalHost, finalPort, *timeout, *key, *play, *pause, *stop, *next, *prev, *volumeUp, *volumeDown, *preset); err != nil {
+			log.Fatalf("Failed to send key command: %v", err)
 		}
 		return
 	}
@@ -125,7 +178,7 @@ func printHelp() {
 	fmt.Println("  soundtouch-cli [options]")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  -host <ip>        SoundTouch device IP address")
+	fmt.Println("  -host <ip>        SoundTouch device IP address (or host:port)")
 	fmt.Println("  -port <port>      SoundTouch device port (default: 8090)")
 	fmt.Println("  -timeout <dur>    Request timeout (default: 10s)")
 	fmt.Println("  -discover         Discover SoundTouch devices via UPnP")
@@ -136,17 +189,32 @@ func printHelp() {
 	fmt.Println("  -name             Get device name (requires -host)")
 	fmt.Println("  -capabilities     Get device capabilities (requires -host)")
 	fmt.Println("  -presets          Get configured presets (requires -host)")
+	fmt.Println("  -key <key>        Send key command (requires -host)")
+	fmt.Println("  -play             Send PLAY key command (requires -host)")
+	fmt.Println("  -pause            Send PAUSE key command (requires -host)")
+	fmt.Println("  -stop             Send STOP key command (requires -host)")
+	fmt.Println("  -next             Send NEXT_TRACK key command (requires -host)")
+	fmt.Println("  -prev             Send PREV_TRACK key command (requires -host)")
+	fmt.Println("  -volume-up        Send VOLUME_UP key command (requires -host)")
+	fmt.Println("  -volume-down      Send VOLUME_DOWN key command (requires -host)")
+	fmt.Println("  -preset <1-6>     Select preset (requires -host)")
 	fmt.Println("  -help             Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  soundtouch-cli -discover")
 	fmt.Println("  soundtouch-cli -discover-all")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -info")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -info")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -nowplaying")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -sources")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -name")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -capabilities")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -presets")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -play")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -pause")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -volume-up")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -preset 1")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key STOP")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -port 8090 -info")
 }
 
@@ -722,5 +790,105 @@ func handlePresets(host string, port int, timeout time.Duration) error {
 		fmt.Printf("Most Recent: Preset %d (%s)\n", recent.ID, recent.GetDisplayName())
 	}
 
+	return nil
+}
+
+func handleKeyCommands(host string, port int, timeout time.Duration, key string, play, pause, stop, next, prev, volumeUp, volumeDown bool, preset int) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	// Count how many commands are requested
+	commandCount := 0
+	var commandName string
+
+	if key != "" {
+		commandCount++
+		commandName = fmt.Sprintf("key %s", key)
+	}
+	if play {
+		commandCount++
+		commandName = "PLAY"
+	}
+	if pause {
+		commandCount++
+		commandName = "PAUSE"
+	}
+	if stop {
+		commandCount++
+		commandName = "STOP"
+	}
+	if next {
+		commandCount++
+		commandName = "NEXT_TRACK"
+	}
+	if prev {
+		commandCount++
+		commandName = "PREV_TRACK"
+	}
+	if volumeUp {
+		commandCount++
+		commandName = "VOLUME_UP"
+	}
+	if volumeDown {
+		commandCount++
+		commandName = "VOLUME_DOWN"
+	}
+	if preset > 0 {
+		commandCount++
+		commandName = fmt.Sprintf("PRESET_%d", preset)
+	}
+
+	// Only allow one command at a time
+	if commandCount > 1 {
+		return fmt.Errorf("only one key command can be sent at a time")
+	}
+	if commandCount == 0 {
+		return fmt.Errorf("no key command specified")
+	}
+
+	fmt.Printf("Sending %s command to %s:%d...\n", commandName, host, port)
+
+	// Execute the appropriate command
+	if key != "" {
+		err = soundtouchClient.SendKey(strings.ToUpper(key))
+	} else if play {
+		err = soundtouchClient.Play()
+	} else if pause {
+		err = soundtouchClient.Pause()
+	} else if stop {
+		err = soundtouchClient.Stop()
+	} else if next {
+		err = soundtouchClient.NextTrack()
+	} else if prev {
+		err = soundtouchClient.PrevTrack()
+	} else if volumeUp {
+		err = soundtouchClient.VolumeUp()
+	} else if volumeDown {
+		err = soundtouchClient.VolumeDown()
+	} else if preset > 0 {
+		err = soundtouchClient.SelectPreset(preset)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to send key command: %w", err)
+	}
+
+	fmt.Printf("✓ %s command sent successfully\n", commandName)
 	return nil
 }
