@@ -7,6 +7,8 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 ### ✅ Implemented (Phase 1)
 - **HTTP Client with XML Support**: Complete client for SoundTouch Web API
 - **Device Information**: Get detailed device info via `/info` endpoint
+- **Now Playing Status**: Get current playback information via `/now_playing` endpoint
+- **Audio Sources**: Get available sources via `/sources` endpoint
 - **UPnP Discovery**: Automatic device discovery on local network
 - **Cross-Platform**: Works on Windows, macOS, Linux, and WASM
 - **CLI Tool**: Command-line interface for testing and basic operations
@@ -82,6 +84,49 @@ soundtouch-cli -host 192.168.1.100 -info
 soundtouch-cli -host 192.168.1.100 -port 8090 -timeout 15s -info
 ```
 
+#### Now Playing Status
+```bash
+# Get current playback information
+soundtouch-cli -host 192.168.1.100 -nowplaying
+
+# Example output:
+# Now Playing:
+#   Device ID: A81B6A536A98
+#   Source: SPOTIFY
+#   Status: Playing
+#   Title: In Between Breaths - Paris Unplugged
+#   Artist: SYML
+#   Album: Paris Unplugged
+#   Duration: 2:32 / 3:30
+#   Shuffle: Off
+#   Repeat: Off
+#   Artwork: https://i.scdn.co/image/...
+#   Capabilities: Skip, Skip Previous, Seek, Favorite
+
+#### Audio Sources
+```bash
+# Get available audio sources
+soundtouch-cli -host 192.168.1.100 -sources
+
+# Example output:
+# Audio Sources:
+#   Device ID: A81B6A536A98
+#   Total Sources: 14
+#   Ready Sources: 5
+#
+# Ready Sources:
+#   • AUX IN [Local, Multiroom]
+#   • user+spotify@example.com (user) [Remote, Multiroom, Streaming]
+#   • Alexa [Remote, Multiroom]
+#   • Tunein [Remote, Multiroom, Streaming]
+#   • Local_internet_radio [Remote, Multiroom, Streaming]
+#
+# Categories:
+#   Spotify: 1 account(s) ready
+#   AUX Input: Ready
+#   Streaming Services: 3 ready
+```
+
 ### Go Library Usage
 
 ```go
@@ -119,6 +164,32 @@ func main() {
     
     for _, device := range devices {
         fmt.Printf("Found: %s at %s:%d\n", device.Name, device.Host, device.Port)
+    }
+    
+    // Get current playback status
+    nowPlaying, err := soundtouchClient.GetNowPlaying()
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    if !nowPlaying.IsEmpty() {
+        fmt.Printf("Now Playing: %s by %s\n", 
+            nowPlaying.GetDisplayTitle(), 
+            nowPlaying.GetDisplayArtist())
+    }
+    
+    // Get available audio sources
+    sources, err := soundtouchClient.GetSources()
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("Ready Sources: %d/%d\n", 
+        sources.GetReadySourceCount(), 
+        sources.GetSourceCount())
+    
+    if sources.HasSpotify() {
+        fmt.Println("Spotify is available")
     }
 }
 ```
@@ -189,11 +260,11 @@ make help
 
 The SoundTouch Web API uses HTTP with XML payloads. Key endpoints include:
 
-- `GET /info` - Device information
-- `GET /now_playing` - Current playback status
+- `GET /info` - Device information ✅ Implemented
+- `GET /now_playing` - Current playback status ✅ Implemented
+- `GET /sources` - Available audio sources ✅ Implemented
 - `POST /key` - Send key commands (play, pause, etc.)
 - `GET/POST /volume` - Volume control
-- `GET /sources` - Available audio sources
 - WebSocket `/` - Real-time event stream
 
 For complete API documentation, see [docs/API-Endpoints-Overview.md](docs/API-Endpoints-Overview.md).

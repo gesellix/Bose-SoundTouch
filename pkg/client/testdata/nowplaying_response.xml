@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<nowPlaying deviceID="A81B6A536A98" source="SPOTIFY" sourceAccount="user@example.com">
+    <ContentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTphcnRpc3Q6NkF5QVRHZzdtRGdCbFo0TjV1Tm9nMA==" sourceAccount="user@example.com" isPresetable="true">
+        <itemName>SYML</itemName>
+        <containerArt>https://i.scdn.co/image/ab67616d0000b273ca6f00df62ef197fdc8af79c</containerArt>
+    </ContentItem>
+    <track>In Between Breaths - Paris Unplugged</track>
+    <artist>SYML</artist>
+    <album>Paris Unplugged</album>
+    <stationName></stationName>
+    <art artImageStatus="IMAGE_PRESENT">https://i.scdn.co/image/ab67616d0000b273ca6f00df62ef197fdc8af79c</art>
+    <time total="210">36</time>
+    <skipEnabled />
+    <favoriteEnabled />
+    <playStatus>PLAY_STATE</playStatus>
+    <shuffleSetting>SHUFFLE_OFF</shuffleSetting>
+    <repeatSetting>REPEAT_OFF</repeatSetting>
+    <skipPreviousEnabled />
+    <seekSupported value="true" />
+    <streamType>TRACK_ONDEMAND</streamType>
+    <trackID>spotify:track:3LX0dk3YT8cUgp7XxUJgTB</trackID>
+</nowPlaying>

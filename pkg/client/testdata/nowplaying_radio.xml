@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<nowPlaying deviceID="A81B6A536A98" source="TUNEIN">
+    <ContentItem source="TUNEIN" type="stationurl" location="http://stream.example.com/radio" sourceAccount="" isPresetable="true">
+        <itemName>Classic Rock 101.5</itemName>
+        <containerArt>https://cdn-radiotime-logos.tunein.com/s123456q.png</containerArt>
+    </ContentItem>
+    <stationName>Classic Rock 101.5</stationName>
+    <description>The Best Classic Rock Hits</description>
+    <stationLocation>New York, NY</stationLocation>
+    <art artImageStatus="IMAGE_PRESENT">https://cdn-radiotime-logos.tunein.com/s123456q.png</art>
+    <playStatus>PLAY_STATE</playStatus>
+    <shuffleSetting>SHUFFLE_OFF</shuffleSetting>
+    <repeatSetting>REPEAT_OFF</repeatSetting>
+    <streamType>RADIO_STREAMING</streamType>
+</nowPlaying>

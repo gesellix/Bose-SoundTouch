@@ -3,8 +3,10 @@ package client
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -284,6 +286,399 @@ func TestClientTimeout(t *testing.T) {
 	expectedError := "deadline exceeded"
 	if !contains(err.Error(), expectedError) {
 		t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
+func TestClient_GetNowPlaying(t *testing.T) {
+	tests := []struct {
+		name           string
+		responseFile   string
+		expectedError  bool
+		expectedTrack  string
+		expectedArtist string
+		expectedSource string
+		expectedStatus string
+	}{
+		{
+			name:           "spotify track playing",
+			responseFile:   "nowplaying_response.xml",
+			expectedError:  false,
+			expectedTrack:  "In Between Breaths - Paris Unplugged",
+			expectedArtist: "SYML",
+			expectedSource: "SPOTIFY",
+			expectedStatus: "Playing",
+		},
+		{
+			name:           "radio station playing",
+			responseFile:   "nowplaying_radio.xml",
+			expectedError:  false,
+			expectedTrack:  "",
+			expectedArtist: "",
+			expectedSource: "TUNEIN",
+			expectedStatus: "Playing",
+		},
+		{
+			name:           "standby state",
+			responseFile:   "nowplaying_empty.xml",
+			expectedError:  false,
+			expectedTrack:  "",
+			expectedArtist: "",
+			expectedSource: "STANDBY",
+			expectedStatus: "Unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" {
+					t.Errorf("Expected GET request, got %s", r.Method)
+				}
+
+				if r.URL.Path != "/now_playing" {
+					t.Errorf("Expected path /now_playing, got %s", r.URL.Path)
+				}
+
+				// Check headers
+				if userAgent := r.Header.Get("User-Agent"); userAgent == "" {
+					t.Error("Expected User-Agent header to be set")
+				}
+
+				if accept := r.Header.Get("Accept"); accept != "application/xml" {
+					t.Errorf("Expected Accept header 'application/xml', got '%s'", accept)
+				}
+
+				// Read test data
+				data, err := os.ReadFile(filepath.Join("testdata", tt.responseFile))
+				if err != nil {
+					t.Fatalf("Failed to read test data: %v", err)
+				}
+
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusOK)
+				w.Write(data)
+			}))
+			defer server.Close()
+
+			// Parse server URL to get host and port
+			serverURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
+			}
+
+			host := serverURL.Hostname()
+			port, _ := strconv.Atoi(serverURL.Port())
+
+			client := NewClient(ClientConfig{
+				Host:      host,
+				Port:      port,
+				Timeout:   5 * time.Second,
+				UserAgent: "test-client",
+			})
+
+			nowPlaying, err := client.GetNowPlaying()
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if nowPlaying == nil {
+				t.Fatal("Expected NowPlaying response but got nil")
+			}
+
+			// Verify basic fields
+			if nowPlaying.Source != tt.expectedSource {
+				t.Errorf("Expected Source '%s', got '%s'", tt.expectedSource, nowPlaying.Source)
+			}
+
+			if nowPlaying.Track != tt.expectedTrack {
+				t.Errorf("Expected Track '%s', got '%s'", tt.expectedTrack, nowPlaying.Track)
+			}
+
+			if nowPlaying.Artist != tt.expectedArtist {
+				t.Errorf("Expected Artist '%s', got '%s'", tt.expectedArtist, nowPlaying.Artist)
+			}
+
+			if nowPlaying.PlayStatus.String() != tt.expectedStatus {
+				t.Errorf("Expected PlayStatus '%s', got '%s'", tt.expectedStatus, nowPlaying.PlayStatus.String())
+			}
+		})
+	}
+}
+
+func TestClient_GetNowPlaying_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	host := serverURL.Hostname()
+	port, _ := strconv.Atoi(serverURL.Port())
+
+	client := NewClient(ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: 5 * time.Second,
+	})
+
+	_, err := client.GetNowPlaying()
+
+	if err == nil {
+		t.Error("Expected error for server error response")
+	}
+
+	expectedErrorMsg := "failed to get now playing"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
+func TestClient_GetNowPlaying_NetworkError(t *testing.T) {
+	client := NewClient(ClientConfig{
+		Host:    "non-existent-host.invalid",
+		Port:    8090,
+		Timeout: 1 * time.Second,
+	})
+
+	_, err := client.GetNowPlaying()
+
+	if err == nil {
+		t.Error("Expected error for network error")
+	}
+
+	expectedErrorMsg := "failed to get now playing"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
+func TestClient_GetNowPlaying_InvalidXML(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("<invalid-xml>"))
+	}))
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	host := serverURL.Hostname()
+	port, _ := strconv.Atoi(serverURL.Port())
+
+	client := NewClient(ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: 5 * time.Second,
+	})
+
+	_, err := client.GetNowPlaying()
+
+	if err == nil {
+		t.Error("Expected error for invalid XML response")
+	}
+
+	expectedErrorMsg := "failed to get now playing"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
+func TestClient_GetSources(t *testing.T) {
+	tests := []struct {
+		name          string
+		responseFile  string
+		expectedError bool
+		expectedCount int
+		expectedReady int
+		hasSpotify    bool
+		hasAux        bool
+		hasBluetooth  bool
+	}{
+		{
+			name:          "sources with mixed availability",
+			responseFile:  "sources_response.xml",
+			expectedError: false,
+			expectedCount: 14,
+			expectedReady: 5,
+			hasSpotify:    true,
+			hasAux:        true,
+			hasBluetooth:  false, // Bluetooth is unavailable in test data
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" {
+					t.Errorf("Expected GET request, got %s", r.Method)
+				}
+
+				if r.URL.Path != "/sources" {
+					t.Errorf("Expected path /sources, got %s", r.URL.Path)
+				}
+
+				// Check headers
+				if userAgent := r.Header.Get("User-Agent"); userAgent == "" {
+					t.Error("Expected User-Agent header to be set")
+				}
+
+				if accept := r.Header.Get("Accept"); accept != "application/xml" {
+					t.Errorf("Expected Accept header 'application/xml', got '%s'", accept)
+				}
+
+				// Read test data
+				data, err := os.ReadFile(filepath.Join("testdata", tt.responseFile))
+				if err != nil {
+					t.Fatalf("Failed to read test data: %v", err)
+				}
+
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusOK)
+				w.Write(data)
+			}))
+			defer server.Close()
+
+			// Parse server URL to get host and port
+			serverURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
+			}
+
+			host := serverURL.Hostname()
+			port, _ := strconv.Atoi(serverURL.Port())
+
+			client := NewClient(ClientConfig{
+				Host:      host,
+				Port:      port,
+				Timeout:   5 * time.Second,
+				UserAgent: "test-client",
+			})
+
+			sources, err := client.GetSources()
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if sources == nil {
+				t.Fatal("Expected Sources response but got nil")
+			}
+
+			// Verify counts
+			if sources.GetSourceCount() != tt.expectedCount {
+				t.Errorf("Expected source count %d, got %d", tt.expectedCount, sources.GetSourceCount())
+			}
+
+			if sources.GetReadySourceCount() != tt.expectedReady {
+				t.Errorf("Expected ready source count %d, got %d", tt.expectedReady, sources.GetReadySourceCount())
+			}
+
+			// Verify specific sources
+			if sources.HasSpotify() != tt.hasSpotify {
+				t.Errorf("Expected HasSpotify() %v, got %v", tt.hasSpotify, sources.HasSpotify())
+			}
+
+			if sources.HasAux() != tt.hasAux {
+				t.Errorf("Expected HasAux() %v, got %v", tt.hasAux, sources.HasAux())
+			}
+
+			if sources.HasBluetooth() != tt.hasBluetooth {
+				t.Errorf("Expected HasBluetooth() %v, got %v", tt.hasBluetooth, sources.HasBluetooth())
+			}
+		})
+	}
+}
+
+func TestClient_GetSources_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	host := serverURL.Hostname()
+	port, _ := strconv.Atoi(serverURL.Port())
+
+	client := NewClient(ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: 5 * time.Second,
+	})
+
+	_, err := client.GetSources()
+
+	if err == nil {
+		t.Error("Expected error for server error response")
+	}
+
+	expectedErrorMsg := "failed to get sources"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
+func TestClient_GetSources_NetworkError(t *testing.T) {
+	client := NewClient(ClientConfig{
+		Host:    "non-existent-host.invalid",
+		Port:    8090,
+		Timeout: 1 * time.Second,
+	})
+
+	_, err := client.GetSources()
+
+	if err == nil {
+		t.Error("Expected error for network error")
+	}
+
+	expectedErrorMsg := "failed to get sources"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
+func TestClient_GetSources_InvalidXML(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("<invalid-xml>"))
+	}))
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	host := serverURL.Hostname()
+	port, _ := strconv.Atoi(serverURL.Port())
+
+	client := NewClient(ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: 5 * time.Second,
+	})
+
+	_, err := client.GetSources()
+
+	if err == nil {
+		t.Error("Expected error for invalid XML response")
+	}
+
+	expectedErrorMsg := "failed to get sources"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
 	}
 }
 

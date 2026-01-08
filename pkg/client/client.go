@@ -76,6 +76,26 @@ func (c *Client) GetDeviceInfo() (*models.DeviceInfo, error) {
 	return &deviceInfo, nil
 }
 
+// GetNowPlaying retrieves current playback information from the /now_playing endpoint
+func (c *Client) GetNowPlaying() (*models.NowPlaying, error) {
+	var nowPlaying models.NowPlaying
+	err := c.get("/now_playing", &nowPlaying)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get now playing: %w", err)
+	}
+	return &nowPlaying, nil
+}
+
+// GetSources retrieves available audio sources from the /sources endpoint
+func (c *Client) GetSources() (*models.Sources, error) {
+	var sources models.Sources
+	err := c.get("/sources", &sources)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sources: %w", err)
+	}
+	return &sources, nil
+}
+
 // Ping checks if the device is reachable by calling /info
 func (c *Client) Ping() error {
 	_, err := c.GetDeviceInfo()

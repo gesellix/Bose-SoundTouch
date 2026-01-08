@@ -301,22 +301,27 @@ func (c Config) Validate() error
 
 ### Phase 1: Foundation & Core API ⭐ (Priority)
 - [x] Go module setup with modern dependencies
-- [ ] **Implement HTTP Client with XML Support**
-  - Basic client structure
-  - GET/POST methods with XML marshaling
-  - Error handling for HTTP + XML
-  - Timeout and retry logic
-- [ ] **Define core XML models**
-  - DeviceInfo, NowPlaying, Volume, Sources
-  - Custom XML unmarshaling for enums
-  - Validation and defaults
-- [ ] **Basic CLI tool for testing**
-  - Test device connection
-  - Basic operations (Info, Volume, Keys)
-- [ ] **Unit tests with mocks**
-  - HTTP client tests
-  - XML parsing tests
-  - Mock SoundTouch server for tests
+- [x] **HTTP Client with XML Support** ✅ DONE
+  - [x] Basic client structure
+  - [x] GET/POST methods with XML marshaling
+  - [x] Error handling for HTTP + XML
+  - [x] Timeout and retry logic
+- [x] **Core XML models** ✅ DONE
+  - [x] DeviceInfo - Device information endpoint
+  - [x] NowPlaying - Current playback status endpoint
+  - [x] Sources - Available audio sources endpoint
+  - [x] Custom XML unmarshaling for enums
+  - [x] Validation and defaults
+- [x] **CLI tool for testing** ✅ DONE
+  - [x] Test device connection
+  - [x] Device discovery via UPnP
+  - [x] Device info retrieval
+  - [x] Now playing status
+  - [x] Audio sources listing
+- [x] **Unit tests with mocks** ✅ DONE
+  - [x] HTTP client tests
+  - [x] XML parsing tests
+  - [x] Mock responses with real device data
 
 ### Phase 2: Device Discovery & Management 🔍
 - [ ] **Implement UPnP SSDP Discovery**
@@ -654,9 +659,11 @@ docker-compose up  # Mock devices + web app
 
 ### Phase 1-2 (Foundation)
 - ✅ Stable HTTP API connection to SoundTouch devices
-- ✅ Complete XML model coverage for core API
+- ✅ XML model coverage for implemented APIs (DeviceInfo, NowPlaying, Sources)
 - ✅ Automatic device discovery via UPnP
-- ✅ Functional CLI tool for all basic operations
+- ✅ Functional CLI tool with discovery, info, now playing, and sources commands
+- ✅ Now Playing endpoint with comprehensive status information
+- ✅ Sources endpoint with filtering and categorization features
 
 ### Phase 3-4 (Real-time & Web)
 - ✅ WebSocket event streaming with reconnection

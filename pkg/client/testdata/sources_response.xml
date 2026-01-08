@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<sources deviceID="A81B6A536A98">
+    <sourceItem source="AUX" sourceAccount="AUX" status="READY" isLocal="true" multiroomallowed="true">AUX IN</sourceItem>
+    <sourceItem source="AIRPLAY" sourceAccount="AirPlayUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="false">AirPlayUserName</sourceItem>
+    <sourceItem source="QPLAY" sourceAccount="QPlay1UserName" status="UNAVAILABLE" isLocal="true" multiroomallowed="true">QPlay1UserName</sourceItem>
+    <sourceItem source="QPLAY" sourceAccount="QPlay2UserName" status="UNAVAILABLE" isLocal="true" multiroomallowed="true">QPlay2UserName</sourceItem>
+    <sourceItem source="STORED_MUSIC_MEDIA_RENDERER" sourceAccount="StoredMusicUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">StoredMusicUserName</sourceItem>
+    <sourceItem source="UPNP" sourceAccount="UPnPUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">UPnPUserName</sourceItem>
+    <sourceItem source="NOTIFICATION" status="UNAVAILABLE" isLocal="false" multiroomallowed="true" />
+    <sourceItem source="SPOTIFY" sourceAccount="user@example.com" status="READY" isLocal="false" multiroomallowed="true">user+spotify@example.com</sourceItem>
+    <sourceItem source="BLUETOOTH" status="UNAVAILABLE" isLocal="true" multiroomallowed="true" />
+    <sourceItem source="SPOTIFY" sourceAccount="SpotifyConnectUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">SpotifyConnectUserName</sourceItem>
+    <sourceItem source="SPOTIFY" sourceAccount="SpotifyAlexaUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">SpotifyAlexaUserName</sourceItem>
+    <sourceItem source="ALEXA" status="READY" isLocal="false" multiroomallowed="true" />
+    <sourceItem source="TUNEIN" status="READY" isLocal="false" multiroomallowed="true" />
+    <sourceItem source="LOCAL_INTERNET_RADIO" status="READY" isLocal="false" multiroomallowed="true" />
+</sources>

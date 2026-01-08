@@ -59,6 +59,26 @@ For web components:
 - Consider accessibility (a11y)
 - Implement responsive design
 
+## Build and Development Guidelines
+
+### 7. Build Directory Structure
+
+- **Use Makefile for building**: Always use `make build` instead of direct `go build` commands
+- **Build directory**: All binaries must be created in the `./build/` directory
+- **Example**: Use `make build` to create `./build/soundtouch-cli`, not `./soundtouch-cli`
+- **Cross-platform builds**: Use `make build-all` for multi-platform binaries
+
+### 8. Real Device Test Data
+
+When creating test data for API endpoints, prefer real device responses over hypothetical examples:
+
+- **Available test endpoints**:
+  - `http://192.168.178.28:8090/now_playing` - Different response type 1
+  - `http://192.168.178.35:8090/now_playing` - Different response type 2
+- **Usage**: Fetch real responses to create accurate test fixtures
+- **Privacy**: Anonymize any personal data (account names, personal playlists, etc.)
+- **Coverage**: Use multiple real devices to cover different response variations
+
 ## Additional Notes
 
 - **Language: English** for code, commits, labels, and text in code

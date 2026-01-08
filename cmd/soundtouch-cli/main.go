@@ -11,6 +11,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/config"
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
 func main() {
@@ -21,6 +22,8 @@ func main() {
 		discover    = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
 		discoverAll = flag.Bool("discover-all", false, "Discover all SoundTouch devices and show info")
 		info        = flag.Bool("info", false, "Get device information")
+		nowPlaying  = flag.Bool("nowplaying", false, "Get current playback status")
+		sources     = flag.Bool("sources", false, "Get available audio sources")
 		help        = flag.Bool("help", false, "Show help")
 	)
 
@@ -32,7 +35,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && *host == "" {
 		printHelp()
 		return
 	}
@@ -55,6 +58,28 @@ func main() {
 		}
 		return
 	}
+
+	// Handle now playing
+	if *nowPlaying {
+		if *host == "" {
+			log.Fatal("Host is required for nowplaying command. Use -host flag or -discover to find devices.")
+		}
+		if err := handleNowPlaying(*host, *port, *timeout); err != nil {
+			log.Fatalf("Failed to get now playing: %v", err)
+		}
+		return
+	}
+
+	// Handle sources
+	if *sources {
+		if *host == "" {
+			log.Fatal("Host is required for sources command. Use -host flag or -discover to find devices.")
+		}
+		if err := handleSources(*host, *port, *timeout); err != nil {
+			log.Fatalf("Failed to get sources: %v", err)
+		}
+		return
+	}
 }
 
 func printHelp() {
@@ -70,12 +95,16 @@ func printHelp() {
 	fmt.Println("  -discover         Discover SoundTouch devices via UPnP")
 	fmt.Println("  -discover-all     Discover devices and show detailed info")
 	fmt.Println("  -info             Get device information (requires -host)")
+	fmt.Println("  -nowplaying       Get current playback status (requires -host)")
+	fmt.Println("  -sources          Get available audio sources (requires -host)")
 	fmt.Println("  -help             Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  soundtouch-cli -discover")
 	fmt.Println("  soundtouch-cli -discover-all")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -info")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -nowplaying")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -sources")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -port 8090 -info")
 }
 
@@ -217,6 +246,226 @@ func showDeviceInfoWithConfig(host string, port int, cfg *config.Config) error {
 	}
 
 	fmt.Printf("  Base URL: %s\n", soundtouchClient.BaseURL())
+
+	return nil
+}
+
+func handleNowPlaying(host string, port int, timeout time.Duration) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	fmt.Printf("Getting current playback status from %s:%d...\n", host, port)
+
+	// Get now playing info
+	nowPlaying, err := soundtouchClient.GetNowPlaying()
+	if err != nil {
+		return fmt.Errorf("failed to get now playing: %w", err)
+	}
+
+	// Display playback information
+	fmt.Printf("Now Playing:\n")
+	fmt.Printf("  Device ID: %s\n", nowPlaying.DeviceID)
+	fmt.Printf("  Source: %s\n", nowPlaying.Source)
+	fmt.Printf("  Status: %s\n", nowPlaying.PlayStatus.String())
+
+	if nowPlaying.IsEmpty() {
+		fmt.Printf("  No content currently playing\n")
+	} else {
+		// Track information
+		title := nowPlaying.GetDisplayTitle()
+		artist := nowPlaying.GetDisplayArtist()
+
+		fmt.Printf("  Title: %s\n", title)
+		if artist != "" {
+			fmt.Printf("  Artist: %s\n", artist)
+		}
+		if nowPlaying.Album != "" {
+			fmt.Printf("  Album: %s\n", nowPlaying.Album)
+		}
+
+		// Radio/streaming info
+		if nowPlaying.IsRadio() && nowPlaying.StationName != "" {
+			fmt.Printf("  Station: %s\n", nowPlaying.StationName)
+		}
+
+		// Duration/Position info
+		if nowPlaying.HasTimeInfo() {
+			if duration := nowPlaying.FormatDuration(); duration != "" {
+				fmt.Printf("  Duration: %s\n", duration)
+			} else if position := nowPlaying.FormatPosition(); position != "" {
+				fmt.Printf("  Position: %s\n", position)
+			}
+		}
+
+		// Playback settings
+		if nowPlaying.ShuffleSetting != "" {
+			fmt.Printf("  Shuffle: %s\n", nowPlaying.ShuffleSetting.String())
+		}
+		if nowPlaying.RepeatSetting != "" {
+			fmt.Printf("  Repeat: %s\n", nowPlaying.RepeatSetting.String())
+		}
+
+		// Artwork
+		if artURL := nowPlaying.GetArtworkURL(); artURL != "" {
+			fmt.Printf("  Artwork: %s\n", artURL)
+		}
+
+		// Additional metadata
+		if nowPlaying.Description != "" {
+			fmt.Printf("  Description: %s\n", nowPlaying.Description)
+		}
+		if nowPlaying.StationLocation != "" {
+			fmt.Printf("  Station Location: %s\n", nowPlaying.StationLocation)
+		}
+
+		// Capabilities
+		var capabilities []string
+		if nowPlaying.CanSkip() {
+			capabilities = append(capabilities, "Skip")
+		}
+		if nowPlaying.CanSkipPrevious() {
+			capabilities = append(capabilities, "Skip Previous")
+		}
+		if nowPlaying.IsSeekSupported() {
+			capabilities = append(capabilities, "Seek")
+		}
+		if nowPlaying.CanFavorite() {
+			capabilities = append(capabilities, "Favorite")
+		}
+		if len(capabilities) > 0 {
+			fmt.Printf("  Capabilities: %s\n", strings.Join(capabilities, ", "))
+		}
+	}
+
+	return nil
+}
+
+func handleSources(host string, port int, timeout time.Duration) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	fmt.Printf("Getting available audio sources from %s:%d...\n", host, port)
+
+	// Get sources info
+	sources, err := soundtouchClient.GetSources()
+	if err != nil {
+		return fmt.Errorf("failed to get sources: %w", err)
+	}
+
+	// Display sources information
+	fmt.Printf("Audio Sources:\n")
+	fmt.Printf("  Device ID: %s\n", sources.DeviceID)
+	fmt.Printf("  Total Sources: %d\n", sources.GetSourceCount())
+	fmt.Printf("  Ready Sources: %d\n", sources.GetReadySourceCount())
+	fmt.Println()
+
+	// Display available sources
+	availableSources := sources.GetAvailableSources()
+	if len(availableSources) > 0 {
+		fmt.Printf("Ready Sources:\n")
+		for _, source := range availableSources {
+			fmt.Printf("  • %s", source.GetDisplayName())
+			if source.SourceAccount != "" && source.SourceAccount != source.Source {
+				fmt.Printf(" (%s)", source.SourceAccount)
+			}
+
+			var attributes []string
+			if source.IsLocalSource() {
+				attributes = append(attributes, "Local")
+			} else {
+				attributes = append(attributes, "Remote")
+			}
+			if source.SupportsMultiroom() {
+				attributes = append(attributes, "Multiroom")
+			}
+			if source.IsStreamingService() {
+				attributes = append(attributes, "Streaming")
+			}
+
+			if len(attributes) > 0 {
+				fmt.Printf(" [%s]", strings.Join(attributes, ", "))
+			}
+			fmt.Println()
+		}
+		fmt.Println()
+	}
+
+	// Display unavailable sources
+	var unavailableSources []models.SourceItem
+	for _, source := range sources.SourceItem {
+		if source.Status.IsUnavailable() {
+			unavailableSources = append(unavailableSources, source)
+		}
+	}
+
+	if len(unavailableSources) > 0 {
+		fmt.Printf("Unavailable Sources:\n")
+		for _, source := range unavailableSources {
+			fmt.Printf("  • %s", source.GetDisplayName())
+			if source.SourceAccount != "" && source.SourceAccount != source.Source {
+				fmt.Printf(" (%s)", source.SourceAccount)
+			}
+			fmt.Printf(" [%s]", source.Status.String())
+			fmt.Println()
+		}
+		fmt.Println()
+	}
+
+	// Summary by category
+	fmt.Printf("Categories:\n")
+	if sources.HasSpotify() {
+		spotifySources := sources.GetReadySpotifySources()
+		fmt.Printf("  Spotify: %d account(s) ready\n", len(spotifySources))
+	}
+	if sources.HasBluetooth() {
+		fmt.Printf("  Bluetooth: Ready\n")
+	}
+	if sources.HasAux() {
+		fmt.Printf("  AUX Input: Ready\n")
+	}
+
+	streamingSources := sources.GetStreamingSources()
+	readyStreaming := 0
+	for _, source := range streamingSources {
+		if source.Status.IsReady() {
+			readyStreaming++
+		}
+	}
+	if readyStreaming > 0 {
+		fmt.Printf("  Streaming Services: %d ready\n", readyStreaming)
+	}
 
 	return nil
 }
