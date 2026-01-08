@@ -299,7 +299,7 @@ func (c Config) Validate() error
 
 ## Implementation Roadmap (Updated)
 
-### Phase 1: Foundation & Core API ⭐ (Priority)
+### Phase 1: Foundation & Core API ⭐ ✅ COMPLETE
 - [x] Go module setup with modern dependencies
 - [x] **HTTP Client with XML Support** ✅ DONE
   - [x] Basic client structure
@@ -313,40 +313,72 @@ func (c Config) Validate() error
   - [x] Name - Device name endpoint
   - [x] Capabilities - Device capabilities endpoint
   - [x] Presets - Configured presets endpoint
+  - [x] Key - Media control commands endpoint
+  - [x] Volume - Volume control endpoints
   - [x] Custom XML unmarshaling for enums
   - [x] Validation and defaults
-- [x] **CLI tool for testing** ✅ DONE
-  - [x] Test device connection
+- [x] **Media Controls** ✅ DONE
+  - [x] POST /key endpoint implementation
+  - [x] Press + Release key pattern (API compliant)
+  - [x] Play, pause, stop, track navigation
+  - [x] Volume up/down via keys
+  - [x] Preset selection (1-6)
+  - [x] Key validation and error handling
+- [x] **Volume Management** ✅ DONE
+  - [x] GET /volume endpoint
+  - [x] POST /volume endpoint
+  - [x] Incremental volume control
+  - [x] Volume level validation and clamping
+  - [x] Safety features and warnings
+- [x] **Enhanced CLI tool** ✅ DONE
+  - [x] Host:port parsing (host:8090 format)
   - [x] Device discovery via UPnP
-  - [x] Device info retrieval
-  - [x] Now playing status
-  - [x] Audio sources listing
-  - [x] Device name retrieval
-  - [x] Device capabilities inspection
-  - [x] Preset configuration listing
+  - [x] All informational endpoints
+  - [x] Media control commands
+  - [x] Volume management with safety
+  - [x] Comprehensive help and examples
 - [x] **Unit tests with mocks** ✅ DONE
   - [x] HTTP client tests
   - [x] XML parsing tests
+  - [x] Key control tests
+  - [x] Volume control tests
+  - [x] Host:port parsing tests
   - [x] Mock responses with real device data
 
-### Phase 2: Device Discovery & Management 🔍
-- [ ] **Implement UPnP SSDP Discovery**
-  - M-SEARCH implementation
-  - Response parsing
-  - Device caching with TTL
-- [ ] **CLI Device Selection**
-  - Automatic discovery
-  - Interactive device selection
-  - Saved device configuration
-- [ ] **Integration Tests**
-  - Tests against real SoundTouch devices
-  - Docker-based mock devices
-- [ ] **Error Handling & Logging**
-  - Structured logging
-  - Graceful error handling
-  - Network error recovery
+### Phase 2: Device Discovery & Management ✅ COMPLETE
+- [x] **UPnP SSDP Discovery** ✅ DONE
+  - [x] M-SEARCH implementation
+  - [x] Response parsing
+  - [x] Device caching with TTL
+- [x] **CLI Device Selection** ✅ DONE
+  - [x] Automatic discovery
+  - [x] Host:port parsing enhancement
+  - [x] Configuration-based device lists
+- [x] **Integration Tests** ✅ DONE
+  - [x] Tests against real SoundTouch devices (SoundTouch 10 & 20)
+  - [x] Comprehensive real device validation
+- [x] **Error Handling & Logging** ✅ DONE
+  - [x] Structured error messages
+  - [x] Graceful error handling
+  - [x] Network timeout management
 
-### Phase 3: WebSocket Real-time Events 📡
+### Phase 3: Additional Control Endpoints 🎛️ (Next Priority)
+- [ ] **Source Management**
+  - POST /select - Switch audio sources
+  - Source validation and error handling
+- [ ] **Bass Control**
+  - GET /bass - Get bass settings
+  - POST /bass - Set bass level (-9 to +9)
+- [ ] **Preset Management (Write Operations)**
+  - POST /presets - Create/update presets
+- [ ] **Advanced Features**
+  - GET/POST /balance - Stereo balance (stereo devices)
+  - GET/POST /clockTime - Device time management
+  - GET/POST /clockDisplay - Clock display settings
+  - GET /networkInfo - Network diagnostics
+  - POST /reboot - Device restart
+
+### Phase 4: WebSocket Real-time Events 📡
 - [ ] **Implement WebSocket Client**
   - Connection Management
   - Event parsing and routing
@@ -363,7 +395,7 @@ func (c Config) Validate() error
   - Event logging for debugging
   - Historical Event Queries
 
-### Phase 4: Web Application & CORS Proxy 🌐
+### Phase 5: Web Application & CORS Proxy 🌐
 - [ ] **Create Embedded Web UI**
   - HTML/CSS/JS for SoundTouch control
   - Responsive design for mobile

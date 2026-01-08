@@ -4,7 +4,7 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 
 ## Features
 
-### ✅ Implemented (Phase 1)
+### ✅ Implemented
 - **HTTP Client with XML Support**: Complete client for SoundTouch Web API
 - **Device Information**: Get detailed device info via `/info` endpoint
 - **Device Name**: Get device name via `/name` endpoint
@@ -12,17 +12,21 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 - **Configured Presets**: Get preset configurations via `/presets` endpoint
 - **Now Playing Status**: Get current playback information via `/now_playing` endpoint
 - **Audio Sources**: Get available sources via `/sources` endpoint
+- **Media Controls**: Play, pause, stop, track navigation via `/key` endpoint
+- **Volume Management**: Get/set volume, incremental control via `/volume` endpoint
+- **Host:Port Parsing**: Enhanced CLI with automatic host:port parsing
 - **UPnP Discovery**: Automatic device discovery on local network
 - **Cross-Platform**: Works on Windows, macOS, Linux, and WASM
-- **CLI Tool**: Command-line interface for testing and basic operations
+- **CLI Tool**: Command-line interface for testing and control operations
 - **Flexible Configuration**: Support for .env files and environment variables
 - **Hybrid Discovery**: Combines UPnP discovery with configured device lists
+- **Safety Features**: Volume warnings, increment limits, error validation
 
 ### 🔄 Planned
 - Real-time WebSocket events
-- Playback control (play, pause, volume, etc.)
-- Source management (Spotify, Bluetooth, etc.)
-- Preset management
+- Source management (switching between Spotify, Bluetooth, etc.)
+- Bass control
+- Preset management (create/update presets)
 - Web application interface
 - Multi-room zone support
 
@@ -108,7 +112,7 @@ soundtouch-cli -host 192.168.1.100 -nowplaying
 #### Audio Sources
 ```bash
 # Get available audio sources
-soundtouch-cli -host 192.168.1.100 -sources
+soundtouch-cli -host 192.168.1.100:8090 -sources
 
 # Example output:
 # Audio Sources:
@@ -127,6 +131,50 @@ soundtouch-cli -host 192.168.1.100 -sources
 #   Spotify: 1 account(s) ready
 #   AUX Input: Ready
 #   Streaming Services: 3 ready
+```
+
+#### Media Controls
+```bash
+# Basic playback controls
+soundtouch-cli -host 192.168.1.100:8090 -play
+soundtouch-cli -host 192.168.1.100:8090 -pause
+soundtouch-cli -host 192.168.1.100:8090 -stop
+
+# Track navigation
+soundtouch-cli -host 192.168.1.100:8090 -next
+soundtouch-cli -host 192.168.1.100:8090 -prev
+
+# Volume controls (key-based)
+soundtouch-cli -host 192.168.1.100:8090 -volume-up
+soundtouch-cli -host 192.168.1.100:8090 -volume-down
+
+# Preset selection
+soundtouch-cli -host 192.168.1.100:8090 -preset 1
+soundtouch-cli -host 192.168.1.100:8090 -preset 6
+
+# Generic key command
+soundtouch-cli -host 192.168.1.100:8090 -key STOP
+```
+
+#### Volume Management
+```bash
+# Get current volume
+soundtouch-cli -host 192.168.1.100:8090 -volume
+
+# Example output:
+# Current Volume:
+#   Device ID: A81B6A536A98
+#   Current Level: 50 (Medium)
+#   Target Level: 50
+#   Muted: false
+
+# Set specific volume (0-100, shows warning for >30)
+soundtouch-cli -host 192.168.1.100:8090 -set-volume 25
+soundtouch-cli -host 192.168.1.100:8090 -set-volume 0  # Mute
+
+# Incremental volume control
+soundtouch-cli -host 192.168.1.100:8090 -inc-volume 3
+soundtouch-cli -host 192.168.1.100:8090 -dec-volume 5
 ```
 
 #### Device Name
@@ -267,6 +315,26 @@ func main() {
         log.Fatal(err)
     }
     fmt.Printf("Presets Used: %d/6\n", len(presets.GetUsedPresetSlots()))
+    
+    // Media controls
+    fmt.Println("Playing music...")
+    if err := soundtouchClient.Play(); err != nil {
+        log.Printf("Failed to play: %v", err)
+    }
+    
+    // Volume control
+    volume, err := soundtouchClient.GetVolume()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Current Volume: %d (%s)\n", 
+        volume.GetLevel(), 
+        volume.GetVolumeString())
+    
+    // Set comfortable volume
+    if err := soundtouchClient.SetVolume(25); err != nil {
+        log.Printf("Failed to set volume: %v", err)
+    }
 }
 ```
 
@@ -337,16 +405,22 @@ make help
 The SoundTouch Web API uses HTTP with XML payloads. Key endpoints include:
 
 - `GET /info` - Device information ✅ Implemented
-- `GET /name` - Device name ✅ Implemented
+- `GET /name` - Device name ✅ Implemented  
 - `GET /capabilities` - Device capabilities ✅ Implemented
 - `GET /presets` - Configured presets ✅ Implemented
 - `GET /now_playing` - Current playback status ✅ Implemented
 - `GET /sources` - Available audio sources ✅ Implemented
-- `POST /key` - Send key commands (play, pause, etc.)
-- `GET/POST /volume` - Volume control
+- `POST /key` - Send key commands (play, pause, etc.) ✅ Implemented
+- `GET/POST /volume` - Volume control ✅ Implemented
+- `POST /select` - Source selection
+- `GET/POST /bass` - Bass control
 - WebSocket `/` - Real-time event stream
 
-For complete API documentation, see [docs/API-Endpoints-Overview.md](docs/API-Endpoints-Overview.md).
+For complete API documentation, see:
+- [API Endpoints Overview](docs/API-Endpoints-Overview.md)
+- [Key Controls Documentation](docs/KEY-CONTROLS.md)
+- [Volume Controls Documentation](docs/VOLUME-CONTROLS.md)
+- [Host:Port Parsing Feature](docs/HOST-PORT-PARSING.md)
 
 ## Configuration Options
 

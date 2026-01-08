@@ -2,6 +2,11 @@
 
 This document provides a comprehensive overview of the available API endpoints of the Bose SoundTouch Web API based on the official specification.
 
+## Implementation Status Legend
+- ✅ **Implemented** - Fully implemented with tests and real device validation
+- 🔄 **Planned** - Not yet implemented, planned for future development
+- 📝 **Documented** - API documented but not implemented
+
 ## API Basics
 
 - **Protocol**: HTTP REST-like
@@ -13,7 +18,7 @@ This document provides a comprehensive overview of the available API endpoints o
 
 ## Device Information
 
-### GET /info
+### GET /info ✅ **Implemented**
 Retrieves basic device information.
 
 **Response XML Structure:**
@@ -28,7 +33,7 @@ Retrieves basic device information.
 
 ## Playback Control
 
-### GET /now_playing
+### GET /now_playing ✅ **Implemented**
 Retrieves information about the currently playing music.
 
 **Response XML Structure:**
@@ -49,12 +54,15 @@ Retrieves information about the currently playing music.
 </nowPlaying>
 ```
 
-### POST /key
+### POST /key ✅ **Implemented**
 Sends key commands to the device.
 
-**Request XML:**
+**Important**: Proper key simulation requires sending both press and release states:
+
+**Request XML (Press + Release):**
 ```xml
-<key state="press" sender="Sender">KEY_NAME</key>
+<key state="press" sender="Gabbo">KEY_NAME</key>
+<key state="release" sender="Gabbo">KEY_NAME</key>
 ```
 
 **Available Keys:**
@@ -80,7 +88,7 @@ Sends key commands to the device.
 
 ## Volume Control
 
-### GET /volume
+### GET /volume ✅ **Implemented**
 Retrieves the current volume.
 
 **Response XML:**
@@ -92,7 +100,7 @@ Retrieves the current volume.
 </volume>
 ```
 
-### POST /volume
+### POST /volume ✅ **Implemented**
 Sets the volume.
 
 **Request XML:**
@@ -102,7 +110,7 @@ Sets the volume.
 
 ## Bass Settings
 
-### GET /bass
+### GET /bass 🔄 **Planned**
 Retrieves the current bass settings.
 
 **Response XML:**
@@ -113,7 +121,7 @@ Retrieves the current bass settings.
 </bass>
 ```
 
-### POST /bass
+### POST /bass 🔄 **Planned**
 Sets the bass settings (-9 to +9).
 
 **Request XML:**
@@ -123,7 +131,7 @@ Sets the bass settings (-9 to +9).
 
 ## Source Management
 
-### GET /sources
+### GET /sources ✅ **Implemented**
 Retrieves the available audio sources.
 
 **Response XML:**
@@ -149,7 +157,7 @@ Retrieves the available audio sources.
 - `AUX`
 - `STORED_MUSIC`
 
-### POST /select
+### POST /select 🔄 **Planned**
 Selects an audio source.
 
 **Request XML:**
@@ -161,7 +169,7 @@ Selects an audio source.
 
 ## Preset Management
 
-### GET /presets
+### GET /presets ✅ **Implemented**
 Retrieves the configured presets.
 
 **Response XML:**
@@ -177,7 +185,7 @@ Retrieves the configured presets.
 </presets>
 ```
 
-### POST /presets
+### POST /presets 🔄 **Planned**
 Creates or updates a preset.
 
 **Request XML:**
@@ -191,33 +199,33 @@ Creates or updates a preset.
 
 ## Advanced Features
 
-### GET /getZone
+### GET /getZone 🔄 **Planned**
 Retrieves multiroom zone information.
 
-### POST /setZone
+### POST /setZone 🔄 **Planned**
 Configures multiroom zones.
 
-### GET /balance
+### GET /balance 🔄 **Planned**
 Retrieves balance settings (stereo devices).
 
-### POST /balance
+### POST /balance 🔄 **Planned**
 Sets balance settings.
 
-### GET /clockTime
+### GET /clockTime 🔄 **Planned**
 Retrieves the device time.
 
-### POST /clockTime
+### POST /clockTime 🔄 **Planned**
 Sets the device time.
 
-### GET /clockDisplay
+### GET /clockDisplay 🔄 **Planned**
 Retrieves clock display settings.
 
-### POST /clockDisplay
+### POST /clockDisplay 🔄 **Planned**
 Configures the clock display.
 
 ## WebSocket Connection
 
-### WebSocket /
+### WebSocket / 🔄 **Planned**
 Establishes a persistent connection for live updates.
 
 **Event Types:**
@@ -228,13 +236,16 @@ Establishes a persistent connection for live updates.
 
 ## Network and System
 
-### GET /networkInfo
+### GET /networkInfo 🔄 **Planned**
 Retrieves network information.
 
-### GET /capabilities
+### GET /capabilities ✅ **Implemented**
 Retrieves device capabilities.
 
-### POST /reboot
+### GET /name ✅ **Implemented**
+Retrieves the device name.
+
+### POST /reboot 🔄 **Planned**
 Restarts the device.
 
 ## Error Handling
