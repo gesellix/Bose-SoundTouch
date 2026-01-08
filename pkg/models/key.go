@@ -34,6 +34,7 @@ const (
 )
 
 // NewKey creates a new key press command
+// Note: For proper key simulation, use client.SendKey() which sends both press and release
 func NewKey(keyValue string) *Key {
 	return &Key{
 		State:  KeyStatePress,
@@ -43,11 +44,13 @@ func NewKey(keyValue string) *Key {
 }
 
 // NewKeyPress creates a new key press command (alias for NewKey)
+// Note: This creates only the press state. For complete key simulation, use client.SendKey()
 func NewKeyPress(keyValue string) *Key {
 	return NewKey(keyValue)
 }
 
 // NewKeyRelease creates a new key release command
+// Note: This creates only the release state. For complete key simulation, use client.SendKey()
 func NewKeyRelease(keyValue string) *Key {
 	return &Key{
 		State:  KeyStateRelease,

@@ -62,6 +62,10 @@ func main() {
 		volumeUp     = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
 		volumeDown   = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
 		preset       = flag.Int("preset", 0, "Select preset (1-6)")
+		volume       = flag.Bool("volume", false, "Get current volume level")
+		setVolume    = flag.Int("set-volume", -1, "Set volume level (0-100)")
+		incVolume    = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
+		decVolume    = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
 		help         = flag.Bool("help", false, "Show help")
 	)
 
@@ -73,7 +77,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && *preset == 0 && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && *host == "" {
 		printHelp()
 		return
 	}
@@ -169,6 +173,17 @@ func main() {
 		}
 		return
 	}
+
+	// Handle volume commands
+	if *volume || *setVolume != -1 || *incVolume > 0 || *decVolume > 0 {
+		if *host == "" {
+			log.Fatal("Host is required for volume commands. Use -host flag or -discover to find devices.")
+		}
+		if err := handleVolumeCommands(finalHost, finalPort, *timeout, *volume, *setVolume, *incVolume, *decVolume); err != nil {
+			log.Fatalf("Failed to execute volume command: %v", err)
+		}
+		return
+	}
 }
 
 func printHelp() {
@@ -198,6 +213,10 @@ func printHelp() {
 	fmt.Println("  -volume-up        Send VOLUME_UP key command (requires -host)")
 	fmt.Println("  -volume-down      Send VOLUME_DOWN key command (requires -host)")
 	fmt.Println("  -preset <1-6>     Select preset (requires -host)")
+	fmt.Println("  -volume           Get current volume level (requires -host)")
+	fmt.Println("  -set-volume <0-100> Set volume level (requires -host)")
+	fmt.Println("  -inc-volume <1-10>  Increase volume by amount (requires -host, default: 2)")
+	fmt.Println("  -dec-volume <1-10>  Decrease volume by amount (requires -host, default: 2)")
 	fmt.Println("  -help             Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
@@ -215,6 +234,10 @@ func printHelp() {
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -volume-up")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -preset 1")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key STOP")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -volume")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -set-volume 25")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -inc-volume 2")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -dec-volume 3")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -port 8090 -info")
 }
 
@@ -891,4 +914,108 @@ func handleKeyCommands(host string, port int, timeout time.Duration, key string,
 
 	fmt.Printf("✓ %s command sent successfully\n", commandName)
 	return nil
+}
+
+func handleVolumeCommands(host string, port int, timeout time.Duration, getVolume bool, setVolume, incVolume, decVolume int) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	// Handle get volume
+	if getVolume {
+		fmt.Printf("Getting current volume from %s:%d...\n", host, port)
+		volume, err := soundtouchClient.GetVolume()
+		if err != nil {
+			return fmt.Errorf("failed to get volume: %w", err)
+		}
+
+		fmt.Printf("Current Volume:\n")
+		fmt.Printf("  Device ID: %s\n", volume.DeviceID)
+		fmt.Printf("  Current Level: %d (%s)\n", volume.GetLevel(), models.GetVolumeLevelName(volume.GetLevel()))
+		fmt.Printf("  Target Level: %d\n", volume.GetTargetLevel())
+		fmt.Printf("  Muted: %v\n", volume.IsMuted())
+		if !volume.IsVolumeSync() {
+			fmt.Printf("  Note: Volume is adjusting (target: %d, actual: %d)\n", volume.GetTargetLevel(), volume.GetLevel())
+		}
+		return nil
+	}
+
+	// Handle set volume
+	if setVolume != -1 {
+		if setVolume > 30 {
+			fmt.Printf("⚠️  Warning: Setting volume to %d (this is quite loud!)\n", setVolume)
+			fmt.Printf("Proceeding in 2 seconds... Press Ctrl+C to cancel\n")
+			time.Sleep(2 * time.Second)
+		}
+
+		fmt.Printf("Setting volume to %d on %s:%d...\n", setVolume, host, port)
+		err := soundtouchClient.SetVolume(setVolume)
+		if err != nil {
+			return fmt.Errorf("failed to set volume: %w", err)
+		}
+
+		// Get updated volume
+		volume, err := soundtouchClient.GetVolume()
+		if err != nil {
+			fmt.Printf("✓ Volume set successfully\n")
+		} else {
+			fmt.Printf("✓ Volume set to %d (%s)\n", volume.GetLevel(), models.GetVolumeLevelName(volume.GetLevel()))
+		}
+		return nil
+	}
+
+	// Handle volume increase (with safety limits)
+	if incVolume > 0 {
+		if incVolume > 10 {
+			incVolume = 10 // Safety limit
+		}
+		if incVolume == 0 {
+			incVolume = 2 // Default increment
+		}
+
+		fmt.Printf("Increasing volume by %d on %s:%d...\n", incVolume, host, port)
+		volume, err := soundtouchClient.IncreaseVolume(incVolume)
+		if err != nil {
+			return fmt.Errorf("failed to increase volume: %w", err)
+		}
+
+		fmt.Printf("✓ Volume increased to %d (%s)\n", volume.GetLevel(), models.GetVolumeLevelName(volume.GetLevel()))
+		return nil
+	}
+
+	// Handle volume decrease
+	if decVolume > 0 {
+		if decVolume > 20 {
+			decVolume = 20 // Safety limit for decrease
+		}
+		if decVolume == 0 {
+			decVolume = 2 // Default decrement
+		}
+
+		fmt.Printf("Decreasing volume by %d on %s:%d...\n", decVolume, host, port)
+		volume, err := soundtouchClient.DecreaseVolume(decVolume)
+		if err != nil {
+			return fmt.Errorf("failed to decrease volume: %w", err)
+		}
+
+		fmt.Printf("✓ Volume decreased to %d (%s)\n", volume.GetLevel(), models.GetVolumeLevelName(volume.GetLevel()))
+		return nil
+	}
+
+	return fmt.Errorf("no volume command specified")
 }

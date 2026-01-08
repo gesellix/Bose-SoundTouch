@@ -284,3 +284,52 @@ func BenchmarkIsValidKey(b *testing.B) {
 		IsValidKey(KeyPlay)
 	}
 }
+
+// Test that demonstrates the press+release pattern from API documentation
+func TestKeyPressReleasePattern(t *testing.T) {
+	// According to API docs, we should send press followed by release
+	keyValue := KeyPlay
+
+	// Create press command
+	keyPress := NewKey(keyValue)
+	if keyPress.State != KeyStatePress {
+		t.Errorf("Expected press state, got %s", keyPress.State)
+	}
+	if keyPress.Value != keyValue {
+		t.Errorf("Expected key value %s, got %s", keyValue, keyPress.Value)
+	}
+	if keyPress.Sender != "Gabbo" {
+		t.Errorf("Expected sender 'Gabbo', got %s", keyPress.Sender)
+	}
+
+	// Create release command
+	keyRelease := NewKeyRelease(keyValue)
+	if keyRelease.State != KeyStateRelease {
+		t.Errorf("Expected release state, got %s", keyRelease.State)
+	}
+	if keyRelease.Value != keyValue {
+		t.Errorf("Expected key value %s, got %s", keyValue, keyRelease.Value)
+	}
+	if keyRelease.Sender != "Gabbo" {
+		t.Errorf("Expected sender 'Gabbo', got %s", keyRelease.Sender)
+	}
+
+	// Test XML marshaling for both
+	pressXML, err := xml.Marshal(keyPress)
+	if err != nil {
+		t.Fatalf("Failed to marshal press XML: %v", err)
+	}
+	expectedPressXML := `<key state="press" sender="Gabbo">PLAY</key>`
+	if string(pressXML) != expectedPressXML {
+		t.Errorf("Press XML: got %s, want %s", string(pressXML), expectedPressXML)
+	}
+
+	releaseXML, err := xml.Marshal(keyRelease)
+	if err != nil {
+		t.Fatalf("Failed to marshal release XML: %v", err)
+	}
+	expectedReleaseXML := `<key state="release" sender="Gabbo">PLAY</key>`
+	if string(releaseXML) != expectedReleaseXML {
+		t.Errorf("Release XML: got %s, want %s", string(releaseXML), expectedReleaseXML)
+	}
+}

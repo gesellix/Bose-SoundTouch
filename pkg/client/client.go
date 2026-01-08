@@ -126,19 +126,42 @@ func (c *Client) GetPresets() (*models.Presets, error) {
 	return &presets, nil
 }
 
-// SendKey sends a key press command to the device
+// SendKey sends a key press command to the device (press followed by release)
 func (c *Client) SendKey(keyValue string) error {
+	if !models.IsValidKey(keyValue) {
+		return fmt.Errorf("invalid key value: %s", keyValue)
+	}
+
+	// Send press state
+	keyPress := models.NewKey(keyValue)
+	err := c.post("/key", keyPress, nil)
+	if err != nil {
+		return fmt.Errorf("failed to send key press: %w", err)
+	}
+
+	// Send release state
+	keyRelease := models.NewKeyRelease(keyValue)
+	err = c.post("/key", keyRelease, nil)
+	if err != nil {
+		return fmt.Errorf("failed to send key release: %w", err)
+	}
+
+	return nil
+}
+
+// SendKeyPress sends a key press command (alias for SendKey - sends press+release)
+func (c *Client) SendKeyPress(keyValue string) error {
+	return c.SendKey(keyValue)
+}
+
+// SendKeyPressOnly sends only the key press state (without release)
+func (c *Client) SendKeyPressOnly(keyValue string) error {
 	if !models.IsValidKey(keyValue) {
 		return fmt.Errorf("invalid key value: %s", keyValue)
 	}
 
 	key := models.NewKey(keyValue)
 	return c.post("/key", key, nil)
-}
-
-// SendKeyPress sends a key press command (alias for SendKey)
-func (c *Client) SendKeyPress(keyValue string) error {
-	return c.SendKey(keyValue)
 }
 
 // SendKeyRelease sends a key release command
@@ -149,6 +172,11 @@ func (c *Client) SendKeyRelease(keyValue string) error {
 
 	key := models.NewKeyRelease(keyValue)
 	return c.post("/key", key, nil)
+}
+
+// SendKeyReleaseOnly sends only the key release state (alias for SendKeyRelease)
+func (c *Client) SendKeyReleaseOnly(keyValue string) error {
+	return c.SendKeyRelease(keyValue)
 }
 
 // Play sends a PLAY key command
@@ -206,6 +234,66 @@ func (c *Client) SelectPreset(presetNumber int) error {
 		return fmt.Errorf("invalid preset number: %d (must be 1-6)", presetNumber)
 	}
 	return c.SendKey(keyValue)
+}
+
+// GetVolume retrieves the current volume level from the /volume endpoint
+func (c *Client) GetVolume() (*models.Volume, error) {
+	var volume models.Volume
+	err := c.get("/volume", &volume)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volume: %w", err)
+	}
+	return &volume, nil
+}
+
+// SetVolume sets the volume level using the /volume endpoint
+func (c *Client) SetVolume(level int) error {
+	if !models.ValidateVolumeLevel(level) {
+		return fmt.Errorf("invalid volume level: %d (must be 0-100)", level)
+	}
+
+	volumeReq := models.NewVolumeRequest(level)
+	return c.post("/volume", volumeReq, nil)
+}
+
+// SetVolumeSafe sets volume with validation and clamping
+func (c *Client) SetVolumeSafe(level int) error {
+	clampedLevel := models.ClampVolumeLevel(level)
+	return c.SetVolume(clampedLevel)
+}
+
+// IncreaseVolume increases volume by the specified amount (with safety limits)
+func (c *Client) IncreaseVolume(amount int) (*models.Volume, error) {
+	currentVolume, err := c.GetVolume()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current volume: %w", err)
+	}
+
+	newLevel := models.ClampVolumeLevel(currentVolume.GetLevel() + amount)
+	err = c.SetVolume(newLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set volume: %w", err)
+	}
+
+	// Return updated volume
+	return c.GetVolume()
+}
+
+// DecreaseVolume decreases volume by the specified amount (with safety limits)
+func (c *Client) DecreaseVolume(amount int) (*models.Volume, error) {
+	currentVolume, err := c.GetVolume()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current volume: %w", err)
+	}
+
+	newLevel := models.ClampVolumeLevel(currentVolume.GetLevel() - amount)
+	err = c.SetVolume(newLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set volume: %w", err)
+	}
+
+	// Return updated volume
+	return c.GetVolume()
 }
 
 // Ping checks if the device is reachable by calling /info

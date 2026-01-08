@@ -20,8 +20,10 @@ The key control functionality allows sending media control commands to SoundTouc
 Sends a key command to the SoundTouch device.
 
 **Request Format:**
+According to the API documentation, proper key simulation requires sending both press and release states:
 ```xml
 <key state="press" sender="Gabbo">KEY_NAME</key>
+<key state="release" sender="Gabbo">KEY_NAME</key>
 ```
 
 **Response Format:**
@@ -62,14 +64,17 @@ Our implementation uses **"Gabbo"** as the default sender, which is the standard
 ### Basic Methods
 
 ```go
-// Send any valid key command
+// Send complete key command (press + release - recommended)
 err := client.SendKey(models.KeyPlay)
 
-// Send key press (default behavior)
+// Send key press and release (alias for SendKey)
 err := client.SendKeyPress(models.KeyPlay)
 
-// Send key release
-err := client.SendKeyRelease(models.KeyPlay)
+// Send only key press state (advanced usage)
+err := client.SendKeyPressOnly(models.KeyPlay)
+
+// Send only key release state (advanced usage)
+err := client.SendKeyReleaseOnly(models.KeyPlay)
 ```
 
 ### Convenience Methods
@@ -215,12 +220,13 @@ func sendKeyCommand(client *client.Client, keyValue string) error {
         return fmt.Errorf("invalid key: %s", keyValue)
     }
     
+    // SendKey automatically sends both press and release states
     return client.SendKey(keyValue)
 }
 
 func sendAllValidKeys(client *client.Client) {
     for _, key := range models.GetAllValidKeys() {
-        fmt.Printf("Sending key: %s\n", key)
+        fmt.Printf("Sending key: %s (press+release)\n", key)
         if err := client.SendKey(key); err != nil {
             log.Printf("Failed to send %s: %v", key, err)
         }
@@ -231,12 +237,13 @@ func sendAllValidKeys(client *client.Client) {
 
 ## Implementation Notes
 
-1. **Sender Field Critical**: The `sender` attribute must be "Gabbo" for commands to be accepted
-2. **XML Format**: Simple XML structure without namespaces or headers
-3. **State Handling**: Both "press" and "release" states are supported
-4. **Input Validation**: All key values are validated before sending to the device
-5. **Error Handling**: Comprehensive error handling for invalid keys and API errors
-6. **CLI Safety**: Only one key command allowed per CLI invocation to prevent conflicts
+1. **Press + Release Pattern**: Following API documentation, `SendKey()` sends both press and release states for proper key simulation
+2. **Sender Field Critical**: The `sender` attribute must be "Gabbo" for commands to be accepted
+3. **XML Format**: Simple XML structure without namespaces or headers
+4. **State Handling**: Both "press" and "release" states are supported, with complete press+release cycle as default
+5. **Input Validation**: All key values are validated before sending to the device
+6. **Error Handling**: Comprehensive error handling for invalid keys and API errors
+7. **CLI Safety**: Only one key command allowed per CLI invocation to prevent conflicts
 
 ## Future Enhancements
 
