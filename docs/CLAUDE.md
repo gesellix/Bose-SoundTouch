@@ -78,6 +78,7 @@ When creating test data for API endpoints, prefer real device responses over hyp
 - **Usage**: Fetch real responses to create accurate test fixtures
 - **Privacy**: Anonymize any personal data (account names, personal playlists, etc.)
 - **Coverage**: Use multiple real devices to cover different response variations
+- **Non-responsive endpoints**: Some endpoints like `/trackInfo` may not respond or exist on all devices
 
 ## Additional Notes
 

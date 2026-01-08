@@ -682,6 +682,366 @@ func TestClient_GetSources_InvalidXML(t *testing.T) {
 	}
 }
 
+func TestClient_GetName(t *testing.T) {
+	tests := []struct {
+		name          string
+		responseFile  string
+		expectedError bool
+		expectedName  string
+	}{
+		{
+			name:          "valid device name",
+			responseFile:  "name_response.xml",
+			expectedError: false,
+			expectedName:  "Sound Machinechen",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" {
+					t.Errorf("Expected GET request, got %s", r.Method)
+				}
+
+				if r.URL.Path != "/name" {
+					t.Errorf("Expected path /name, got %s", r.URL.Path)
+				}
+
+				// Check headers
+				if userAgent := r.Header.Get("User-Agent"); userAgent == "" {
+					t.Error("Expected User-Agent header to be set")
+				}
+
+				if accept := r.Header.Get("Accept"); accept != "application/xml" {
+					t.Errorf("Expected Accept header 'application/xml', got '%s'", accept)
+				}
+
+				// Read test data
+				data, err := os.ReadFile(filepath.Join("testdata", tt.responseFile))
+				if err != nil {
+					t.Fatalf("Failed to read test data: %v", err)
+				}
+
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusOK)
+				w.Write(data)
+			}))
+			defer server.Close()
+
+			// Parse server URL to get host and port
+			serverURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
+			}
+
+			host := serverURL.Hostname()
+			port, _ := strconv.Atoi(serverURL.Port())
+
+			client := NewClient(ClientConfig{
+				Host:      host,
+				Port:      port,
+				Timeout:   5 * time.Second,
+				UserAgent: "test-client",
+			})
+
+			name, err := client.GetName()
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if name == nil {
+				t.Fatal("Expected Name response but got nil")
+			}
+
+			if name.GetName() != tt.expectedName {
+				t.Errorf("Expected name '%s', got '%s'", tt.expectedName, name.GetName())
+			}
+		})
+	}
+}
+
+func TestClient_GetCapabilities(t *testing.T) {
+	tests := []struct {
+		name           string
+		responseFile   string
+		expectedError  bool
+		expectedDevice string
+		hasLRStereo    bool
+		hasDualMode    bool
+		hasWSAPIProxy  bool
+	}{
+		{
+			name:           "valid capabilities",
+			responseFile:   "capabilities_response.xml",
+			expectedError:  false,
+			expectedDevice: "A81B6A536A98",
+			hasLRStereo:    true,
+			hasDualMode:    true,
+			hasWSAPIProxy:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" {
+					t.Errorf("Expected GET request, got %s", r.Method)
+				}
+
+				if r.URL.Path != "/capabilities" {
+					t.Errorf("Expected path /capabilities, got %s", r.URL.Path)
+				}
+
+				// Read test data
+				data, err := os.ReadFile(filepath.Join("testdata", tt.responseFile))
+				if err != nil {
+					t.Fatalf("Failed to read test data: %v", err)
+				}
+
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusOK)
+				w.Write(data)
+			}))
+			defer server.Close()
+
+			// Parse server URL to get host and port
+			serverURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
+			}
+
+			host := serverURL.Hostname()
+			port, _ := strconv.Atoi(serverURL.Port())
+
+			client := NewClient(ClientConfig{
+				Host:      host,
+				Port:      port,
+				Timeout:   5 * time.Second,
+				UserAgent: "test-client",
+			})
+
+			capabilities, err := client.GetCapabilities()
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if capabilities == nil {
+				t.Fatal("Expected Capabilities response but got nil")
+			}
+
+			if capabilities.DeviceID != tt.expectedDevice {
+				t.Errorf("Expected device ID '%s', got '%s'", tt.expectedDevice, capabilities.DeviceID)
+			}
+
+			if capabilities.HasLRStereoCapability() != tt.hasLRStereo {
+				t.Errorf("Expected HasLRStereoCapability() %v, got %v", tt.hasLRStereo, capabilities.HasLRStereoCapability())
+			}
+
+			if capabilities.HasDualModeNetwork() != tt.hasDualMode {
+				t.Errorf("Expected HasDualModeNetwork() %v, got %v", tt.hasDualMode, capabilities.HasDualModeNetwork())
+			}
+
+			if capabilities.HasWSAPIProxy() != tt.hasWSAPIProxy {
+				t.Errorf("Expected HasWSAPIProxy() %v, got %v", tt.hasWSAPIProxy, capabilities.HasWSAPIProxy())
+			}
+		})
+	}
+}
+
+func TestClient_GetPresets(t *testing.T) {
+	tests := []struct {
+		name            string
+		responseFile    string
+		expectedError   bool
+		expectedCount   int
+		expectedUsed    int
+		expectedSpotify int
+	}{
+		{
+			name:            "valid presets",
+			responseFile:    "presets_response.xml",
+			expectedError:   false,
+			expectedCount:   6,
+			expectedUsed:    6,
+			expectedSpotify: 6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" {
+					t.Errorf("Expected GET request, got %s", r.Method)
+				}
+
+				if r.URL.Path != "/presets" {
+					t.Errorf("Expected path /presets, got %s", r.URL.Path)
+				}
+
+				// Read test data
+				data, err := os.ReadFile(filepath.Join("testdata", tt.responseFile))
+				if err != nil {
+					t.Fatalf("Failed to read test data: %v", err)
+				}
+
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusOK)
+				w.Write(data)
+			}))
+			defer server.Close()
+
+			// Parse server URL to get host and port
+			serverURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
+			}
+
+			host := serverURL.Hostname()
+			port, _ := strconv.Atoi(serverURL.Port())
+
+			client := NewClient(ClientConfig{
+				Host:      host,
+				Port:      port,
+				Timeout:   5 * time.Second,
+				UserAgent: "test-client",
+			})
+
+			presets, err := client.GetPresets()
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if presets == nil {
+				t.Fatal("Expected Presets response but got nil")
+			}
+
+			if presets.GetPresetCount() != tt.expectedCount {
+				t.Errorf("Expected preset count %d, got %d", tt.expectedCount, presets.GetPresetCount())
+			}
+
+			if len(presets.GetUsedPresetSlots()) != tt.expectedUsed {
+				t.Errorf("Expected used count %d, got %d", tt.expectedUsed, len(presets.GetUsedPresetSlots()))
+			}
+
+			if len(presets.GetSpotifyPresets()) != tt.expectedSpotify {
+				t.Errorf("Expected Spotify count %d, got %d", tt.expectedSpotify, len(presets.GetSpotifyPresets()))
+			}
+		})
+	}
+}
+
+func TestClient_GetName_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	host := serverURL.Hostname()
+	port, _ := strconv.Atoi(serverURL.Port())
+
+	client := NewClient(ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: 5 * time.Second,
+	})
+
+	_, err := client.GetName()
+
+	if err == nil {
+		t.Error("Expected error for server error response")
+	}
+
+	expectedErrorMsg := "failed to get device name"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
+func TestClient_GetCapabilities_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	host := serverURL.Hostname()
+	port, _ := strconv.Atoi(serverURL.Port())
+
+	client := NewClient(ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: 5 * time.Second,
+	})
+
+	_, err := client.GetCapabilities()
+
+	if err == nil {
+		t.Error("Expected error for server error response")
+	}
+
+	expectedErrorMsg := "failed to get device capabilities"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
+func TestClient_GetPresets_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	serverURL, _ := url.Parse(server.URL)
+	host := serverURL.Hostname()
+	port, _ := strconv.Atoi(serverURL.Port())
+
+	client := NewClient(ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: 5 * time.Second,
+	})
+
+	_, err := client.GetPresets()
+
+	if err == nil {
+		t.Error("Expected error for server error response")
+	}
+
+	expectedErrorMsg := "failed to get presets"
+	if !strings.Contains(err.Error(), expectedErrorMsg) {
+		t.Errorf("Expected error message to contain '%s', got '%s'", expectedErrorMsg, err.Error())
+	}
+}
+
 // Helper functions
 
 func loadTestData(t *testing.T, filename string) string {

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<capabilities deviceID="A81B6A536A98">
+    <networkConfig>
+        <dualMode>true</dualMode>
+        <wsapiproxy>true</wsapiproxy>
+        <allInterfacesSupported />
+        <wlanInterfaces />
+        <security />
+    </networkConfig>
+    <dspCapabilities>
+        <dspMonoStereo available="false" />
+    </dspCapabilities>
+    <lightswitch>false</lightswitch>
+    <clockDisplay>false</clockDisplay>
+    <capability name="systemtimeout" url="/systemtimeout" info="" />
+    <capability name="rebroadcastlatencymode" url="/rebroadcastlatencymode" info="" />
+    <lrStereoCapable>true</lrStereoCapable>
+    <bcoresetCapable>false</bcoresetCapable>
+    <disablePowerSaving>true</disablePowerSaving>
+</capabilities>

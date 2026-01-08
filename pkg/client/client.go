@@ -96,6 +96,36 @@ func (c *Client) GetSources() (*models.Sources, error) {
 	return &sources, nil
 }
 
+// GetName retrieves the device name from the /name endpoint
+func (c *Client) GetName() (*models.Name, error) {
+	var name models.Name
+	err := c.get("/name", &name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device name: %w", err)
+	}
+	return &name, nil
+}
+
+// GetCapabilities retrieves device capabilities from the /capabilities endpoint
+func (c *Client) GetCapabilities() (*models.Capabilities, error) {
+	var capabilities models.Capabilities
+	err := c.get("/capabilities", &capabilities)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device capabilities: %w", err)
+	}
+	return &capabilities, nil
+}
+
+// GetPresets retrieves configured presets from the /presets endpoint
+func (c *Client) GetPresets() (*models.Presets, error) {
+	var presets models.Presets
+	err := c.get("/presets", &presets)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get presets: %w", err)
+	}
+	return &presets, nil
+}
+
 // Ping checks if the device is reachable by calling /info
 func (c *Client) Ping() error {
 	_, err := c.GetDeviceInfo()

@@ -310,6 +310,9 @@ func (c Config) Validate() error
   - [x] DeviceInfo - Device information endpoint
   - [x] NowPlaying - Current playback status endpoint
   - [x] Sources - Available audio sources endpoint
+  - [x] Name - Device name endpoint
+  - [x] Capabilities - Device capabilities endpoint
+  - [x] Presets - Configured presets endpoint
   - [x] Custom XML unmarshaling for enums
   - [x] Validation and defaults
 - [x] **CLI tool for testing** ✅ DONE
@@ -318,6 +321,9 @@ func (c Config) Validate() error
   - [x] Device info retrieval
   - [x] Now playing status
   - [x] Audio sources listing
+  - [x] Device name retrieval
+  - [x] Device capabilities inspection
+  - [x] Preset configuration listing
 - [x] **Unit tests with mocks** ✅ DONE
   - [x] HTTP client tests
   - [x] XML parsing tests
@@ -659,11 +665,13 @@ docker-compose up  # Mock devices + web app
 
 ### Phase 1-2 (Foundation)
 - ✅ Stable HTTP API connection to SoundTouch devices
-- ✅ XML model coverage for implemented APIs (DeviceInfo, NowPlaying, Sources)
+- ✅ XML model coverage for implemented APIs (DeviceInfo, NowPlaying, Sources, Name, Capabilities, Presets)
 - ✅ Automatic device discovery via UPnP
-- ✅ Functional CLI tool with discovery, info, now playing, and sources commands
+- ✅ Functional CLI tool with discovery, info, now playing, sources, name, capabilities, and presets commands
 - ✅ Now Playing endpoint with comprehensive status information
 - ✅ Sources endpoint with filtering and categorization features
+- ✅ Device identification endpoints (name, capabilities)
+- ✅ Preset management with comprehensive analysis and filtering
 
 ### Phase 3-4 (Real-time & Web)
 - ✅ WebSocket event streaming with reconnection

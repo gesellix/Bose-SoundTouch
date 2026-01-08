@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<presets>
+    <preset id="1" createdOn="1719128436" updatedOn="1728740382">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh" sourceAccount="user@example.com" isPresetable="true">
+            <itemName>My Playlist</itemName>
+            <containerArt>https://i.scdn.co/image/ab67616d00001e025ff75c5d082fc50a3a74ad7b</containerArt>
+        </ContentItem>
+    </preset>
+    <preset id="2" createdOn="1703353552" updatedOn="1743615710">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playbook/container/c3BvdGlmeTpwbGF5bGlzdDoxV2dKT3EyWktYU1BTRGxDdWI1NERV" sourceAccount="user@example.com" isPresetable="true">
+            <itemName>Chill Music Collection</itemName>
+            <containerArt>https://i.scdn.co/image/ab67616d0000b273e07c8adc6fb49168dc8b7a2f</containerArt>
+        </ContentItem>
+    </preset>
+    <preset id="3" createdOn="1585994240" updatedOn="1727112013">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playbook/container/c3BvdGlmeTphbGJ1bTo3MnY3UTRtNkZ3bUlpWkV2QXZUY0hT" sourceAccount="user@example.com" isPresetable="true">
+            <itemName>Kids Songs</itemName>
+            <containerArt>https://i.scdn.co/image/ab67616d0000b273e32d3cf7356dacb162678d1f</containerArt>
+        </ContentItem>
+    </preset>
+    <preset id="4" createdOn="1514712063" updatedOn="1745991460">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playbook/container/c3BvdGlmeTphbGJ1bTo2QXI1SHhOV1h0dnJhcXM3Rkk3Yllx" sourceAccount="user@example.com" isPresetable="true">
+            <itemName>Movie Soundtrack</itemName>
+            <containerArt>https://i.scdn.co/image/ab67616d0000b273bc16d1eefe86b079c8805f8f</containerArt>
+        </ContentItem>
+    </preset>
+    <preset id="5" createdOn="1509901730" updatedOn="1744629417">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playbook/container/c3BvdGlmeTp0cmFjazo2M1RsOWsxc0g4dHpubjNicW9NdXlG" sourceAccount="user@example.com" isPresetable="true">
+            <itemName>Pop Hits</itemName>
+            <containerArt>https://i.scdn.co/image/ab67616d0000b2734214ddc9e33e76de6a8ee888</containerArt>
+        </ContentItem>
+    </preset>
+    <preset id="6" createdOn="1585502139" updatedOn="1730021067">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playbook/container/c3BvdGlmeTphbGJ1bTo3RjUwdWg3b0dpdG1BRVNjUktWNnBE" sourceAccount="user@example.com" isPresetable="true">
+            <itemName>World Music</itemName>
+            <containerArt>https://i.scdn.co/image/ab67616d0000b273f0e55478f4a15182405bcb47</containerArt>
+        </ContentItem>
+    </preset>
+</presets>

@@ -7,12 +7,14 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 ### ✅ Implemented (Phase 1)
 - **HTTP Client with XML Support**: Complete client for SoundTouch Web API
 - **Device Information**: Get detailed device info via `/info` endpoint
+- **Device Name**: Get device name via `/name` endpoint
+- **Device Capabilities**: Get device capabilities via `/capabilities` endpoint
+- **Configured Presets**: Get preset configurations via `/presets` endpoint
 - **Now Playing Status**: Get current playback information via `/now_playing` endpoint
 - **Audio Sources**: Get available sources via `/sources` endpoint
 - **UPnP Discovery**: Automatic device discovery on local network
 - **Cross-Platform**: Works on Windows, macOS, Linux, and WASM
 - **CLI Tool**: Command-line interface for testing and basic operations
-- **Comprehensive Tests**: Unit and integration tests with real device responses
 - **Flexible Configuration**: Support for .env files and environment variables
 - **Hybrid Discovery**: Combines UPnP discovery with configured device lists
 
@@ -127,6 +129,59 @@ soundtouch-cli -host 192.168.1.100 -sources
 #   Streaming Services: 3 ready
 ```
 
+#### Device Name
+```bash
+# Get device name
+soundtouch-cli -host 192.168.1.100 -name
+
+# Example output:
+# Device Name: Sound Machinechen
+```
+
+#### Device Capabilities
+```bash
+# Get device capabilities
+soundtouch-cli -host 192.168.1.100 -capabilities
+
+# Example output:
+# Device Capabilities:
+#   Device ID: A81B6A536A98
+#
+# System Features:
+#   • Power Saving Disabled
+#
+# Audio Features:
+#   • L/R Stereo
+#
+# Network Features:
+#   • Dual Mode
+#   • WSAPI Proxy
+#
+# Extended Capabilities:
+#   • systemtimeout (/systemtimeout)
+#   • rebroadcastlatencymode (/rebroadcastlatencymode)
+```
+
+#### Configured Presets
+```bash
+# Get configured presets
+soundtouch-cli -host 192.168.1.100 -presets
+
+# Example output:
+# Configured Presets:
+#   Used Slots: 6/6
+#   Spotify Presets: 6
+#
+# Preset 1: My Playlist
+#   Source: SPOTIFY (user@example.com)
+#   Type: tracklisturl
+#   Created: 2024-06-23 09:40:36
+#   Updated: 2024-10-12 15:39:42
+#   Artwork: https://i.scdn.co/image/...
+#
+# Most Recent: Preset 4 (Movie Soundtrack)
+```
+
 ### Go Library Usage
 
 ```go
@@ -191,6 +246,27 @@ func main() {
     if sources.HasSpotify() {
         fmt.Println("Spotify is available")
     }
+    
+    // Get device name
+    name, err := soundtouchClient.GetName()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Device: %s\n", name.GetName())
+    
+    // Get device capabilities
+    capabilities, err := soundtouchClient.GetCapabilities()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("L/R Stereo Support: %v\n", capabilities.HasLRStereoCapability())
+    
+    // Get presets
+    presets, err := soundtouchClient.GetPresets()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Presets Used: %d/6\n", len(presets.GetUsedPresetSlots()))
 }
 ```
 
@@ -261,6 +337,9 @@ make help
 The SoundTouch Web API uses HTTP with XML payloads. Key endpoints include:
 
 - `GET /info` - Device information ✅ Implemented
+- `GET /name` - Device name ✅ Implemented
+- `GET /capabilities` - Device capabilities ✅ Implemented
+- `GET /presets` - Configured presets ✅ Implemented
 - `GET /now_playing` - Current playback status ✅ Implemented
 - `GET /sources` - Available audio sources ✅ Implemented
 - `POST /key` - Send key commands (play, pause, etc.)
