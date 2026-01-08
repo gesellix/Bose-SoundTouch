@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<info deviceID="A81B6A536A98">
+    <name>Sound Machinechen</name>
+    <type>SoundTouch 10</type>
+    <margeAccountUUID>3230304</margeAccountUUID>
+    <components>
+        <component>
+            <componentCategory>SCM</componentCategory>
+            <softwareVersion>27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29</softwareVersion>
+            <serialNumber>I6332527703739342000020</serialNumber>
+        </component>
+        <component>
+            <componentCategory>PackagedProduct</componentCategory>
+            <softwareVersion>27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29</softwareVersion>
+            <serialNumber>069231P63364828AE</serialNumber>
+        </component>
+    </components>
+    <margeURL>https://streaming.bose.com</margeURL>
+    <networkInfo type="SCM">
+        <macAddress>A81B6A536A98</macAddress>
+        <ipAddress>192.168.178.35</ipAddress>
+    </networkInfo>
+    <networkInfo type="SMSC">
+        <macAddress>A81B6A849D99</macAddress>
+        <ipAddress>192.168.178.35</ipAddress>
+    </networkInfo>
+    <moduleType>sm2</moduleType>
+    <variant>rhino</variant>
+    <variantMode>normal</variantMode>
+    <countryCode>GB</countryCode>
+    <regionCode>GB</regionCode>
+</info>

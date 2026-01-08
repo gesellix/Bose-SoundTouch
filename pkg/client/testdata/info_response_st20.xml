@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<info deviceID="08DF1F0BA325">
+    <name>A Sound Machine</name>
+    <type>SoundTouch 20</type>
+    <margeAccountUUID>3230304</margeAccountUUID>
+    <components>
+        <component>
+            <componentCategory>SCM</componentCategory>
+            <softwareVersion>27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29</softwareVersion>
+            <serialNumber>K4245112804625125000710</serialNumber>
+        </component>
+        <component>
+            <componentCategory>PackagedProduct</componentCategory>
+            <serialNumber>066802942560222AE</serialNumber>
+        </component>
+        <component>
+            <componentCategory>Lightswitch</componentCategory>
+            <serialNumber></serialNumber>
+        </component>
+        <component>
+            <componentCategory>SMSC</componentCategory>
+            <softwareVersion>I2014102015199423; B unknown 081008</softwareVersion>
+            <serialNumber>08DF1F0BA32A</serialNumber>
+        </component>
+    </components>
+    <margeURL>https://streaming.bose.com</margeURL>
+    <networkInfo type="SCM">
+        <macAddress>08DF1F0BA325</macAddress>
+        <ipAddress>192.168.178.28</ipAddress>
+    </networkInfo>
+    <networkInfo type="SMSC">
+        <macAddress>08DF1F0BA32A</macAddress>
+        <ipAddress>192.168.178.28</ipAddress>
+    </networkInfo>
+    <moduleType>scm</moduleType>
+    <variant>spotty</variant>
+    <variantMode>normal</variantMode>
+    <countryCode>EU</countryCode>
+    <regionCode></regionCode>
+</info>
