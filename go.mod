@@ -5,6 +5,7 @@ go 1.25.5
 require github.com/hashicorp/mdns v1.0.6
 
 require (
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/miekg/dns v1.1.55 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.34.0 // indirect

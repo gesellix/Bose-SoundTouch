@@ -4,17 +4,21 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 
 ## Features
 
-### ✅ Implemented
+### ✅ Implemented (85% Complete - 16/19 endpoints)
 - **HTTP Client with XML Support**: Complete client for SoundTouch Web API
 - **Device Information**: Get detailed device info via `/info` endpoint
-- **Device Name**: Get device name via `/name` endpoint
+- **Device Name**: Get device name via `/name` endpoint  
 - **Device Capabilities**: Get device capabilities via `/capabilities` endpoint
 - **Configured Presets**: Get preset configurations via `/presets` endpoint
 - **Now Playing Status**: Get current playback information via `/now_playing` endpoint
 - **Audio Sources**: Get available sources via `/sources` endpoint
 - **Media Controls**: Play, pause, stop, track navigation via `/key` endpoint
 - **Volume Management**: Get/set volume, incremental control via `/volume` endpoint
-- **Host:Port Parsing**: Enhanced CLI with automatic host:port parsing
+- **Bass Control**: Get/set bass levels (-9 to +9 range) via `/bass` endpoint
+- **Balance Control**: Get/set balance (-50 to +50 range) via `/balance` endpoint
+- **Clock/Time Management**: Get/set device time via `/clockTime` and `/clockDisplay` endpoints
+- **Network Information**: Get network details via `/networkInfo` endpoint
+- **Real-time WebSocket Events**: Live monitoring of device state changes
 - **UPnP/SSDP Discovery**: Automatic device discovery using Universal Plug and Play
 - **mDNS/Bonjour Discovery**: Multicast DNS device discovery support
 - **Cross-Platform**: Works on Windows, macOS, Linux, and WASM
@@ -22,13 +26,37 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 - **Flexible Configuration**: Support for .env files and environment variables
 - **Unified Discovery**: Combines UPnP, mDNS, and configured device lists
 - **Safety Features**: Volume warnings, increment limits, error validation
-- **System Management**: Clock/time settings, network information, device diagnostics
 
-### 🔄 Planned
-- Real-time WebSocket events
-- Preset management (create/update presets)
-- Web application interface
-- Multi-room zone support
+### 🔄 Remaining High Priority (15% - 3/19 endpoints)
+- **Device System**: POST /reboot for device restart
+- **Multiroom Support**: GET/POST /getZone, /setZone (if supported by device)
+
+### ❌ Not Supported by API
+- **Preset Creation**: POST /presets (officially not supported by SoundTouch API)
+
+## Recent Additions - WebSocket Events ⚡
+
+**NEW**: Real-time WebSocket support has been added! Monitor device state changes in real-time with comprehensive event handling.
+
+### Key Features:
+- 🎵 **Live Now Playing Updates**: Track changes, playback status, shuffle/repeat
+- 🔊 **Real-time Volume Changes**: Volume levels and mute status  
+- 🌐 **Connection Monitoring**: Network connectivity and signal strength
+- 📻 **Preset Notifications**: Preset updates and selections
+- 🏠 **Multiroom Events**: Zone membership changes
+- 🎚️ **Audio Settings**: Bass level adjustments
+- 🔄 **Auto-Reconnection**: Robust connection management
+- 🎛️ **Event Filtering**: Subscribe to specific event types
+- 📊 **Comprehensive Logging**: Debug and monitoring capabilities
+
+### CLI Demo:
+```bash
+# Quick start - auto-discover and monitor all events
+go run ./cmd/websocket-demo -discover
+
+# Monitor specific device with event filtering  
+go run ./cmd/websocket-demo -host 192.168.1.10 -filter nowPlaying,volume -verbose
+```
 
 ## Installation
 
@@ -92,6 +120,37 @@ soundtouch-cli -discover-all
 # Discover with custom timeout
 soundtouch-cli -discover -timeout 10s
 ```
+
+#### Real-time WebSocket Events
+
+Monitor device state changes in real-time using WebSocket connections:
+
+```bash
+# Auto-discover device and monitor all events
+go run ./cmd/websocket-demo -discover
+
+# Connect to specific device and monitor all events
+go run ./cmd/websocket-demo -host 192.168.1.10
+
+# Monitor only volume and now playing events
+go run ./cmd/websocket-demo -host 192.168.1.10 -filter volume,nowPlaying
+
+# Monitor for 5 minutes with verbose output
+go run ./cmd/websocket-demo -host 192.168.1.10 -duration 5m -verbose
+
+# Available event types for filtering:
+# nowPlaying, volume, connection, preset, zone, bass
+```
+
+**Supported WebSocket Events:**
+- 🎵 **Now Playing**: Track changes, playback status, shuffle/repeat settings
+- 🔊 **Volume**: Volume level and mute status changes
+- 🌐 **Connection**: Network connectivity and signal strength
+- 📻 **Preset**: Preset configuration updates
+- 🏠 **Zone**: Multiroom zone membership changes
+- 🎚️ **Bass**: Bass equalizer level adjustments
+
+See [docs/websocket-events.md](docs/websocket-events.md) for complete WebSocket documentation.
 
 #### Device Information
 ```bash
@@ -263,6 +322,359 @@ soundtouch-cli -host 192.168.1.10 -network-info
 ```
 
 ### Go Library Usage
+
+#### Basic HTTP Client Usage
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    
+    "github.com/gesellix/bose-soundtouch/pkg/client"
+)
+
+func main() {
+    // Create client
+    soundTouchClient := client.NewClientFromHost("192.168.1.10")
+    
+    // Get device information
+    deviceInfo, err := soundTouchClient.GetDeviceInfo()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Device: %s (%s)\n", deviceInfo.Name, deviceInfo.Type)
+    
+    // Get now playing
+    nowPlaying, err := soundTouchClient.GetNowPlaying()
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    if !nowPlaying.IsEmpty() {
+        fmt.Printf("Now Playing: %s by %s\n", nowPlaying.Track, nowPlaying.Artist)
+        fmt.Printf("Status: %s\n", nowPlaying.PlayStatus.String())
+    }
+    
+    // Volume control
+    volume, err := soundTouchClient.GetVolume()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Volume: %d\n", volume.ActualVolume)
+    
+    // Set volume safely (with warnings)
+    err = soundTouchClient.SetVolumeSafe(25)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Media controls
+    soundTouchClient.Play()
+    soundTouchClient.Pause()
+    soundTouchClient.VolumeUp()
+    
+    // Source selection
+    soundTouchClient.SelectSpotify()
+    soundTouchClient.SelectPreset(1)
+}
+```
+
+#### Real-time WebSocket Events
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+    "os/signal"
+    "syscall"
+    
+    "github.com/gesellix/bose-soundtouch/pkg/client"
+    "github.com/gesellix/bose-soundtouch/pkg/models"
+)
+
+func main() {
+    // Create SoundTouch client
+    soundTouchClient := client.NewClientFromHost("192.168.1.10")
+    
+    // Create WebSocket client
+    wsClient := soundTouchClient.NewWebSocketClient(nil)
+    
+    // Set up event handlers
+    wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
+        np := &event.NowPlaying
+        log.Printf("🎵 Now Playing: %s by %s", np.Track, np.Artist)
+        log.Printf("   Status: %s, Source: %s", np.PlayStatus.String(), np.Source)
+        
+        if np.HasTimeInfo() {
+            log.Printf("   Duration: %s", np.FormatDuration())
+        }
+    })
+    
+    wsClient.OnVolumeUpdated(func(event *models.VolumeUpdatedEvent) {
+        vol := &event.Volume
+        if vol.IsMuted() {
+            log.Println("🔇 Volume: Muted")
+        } else {
+            log.Printf("🔊 Volume: %d (%s)", vol.ActualVolume, 
+                models.GetVolumeLevelName(vol.ActualVolume))
+        }
+    })
+    
+    wsClient.OnConnectionState(func(event *models.ConnectionStateUpdatedEvent) {
+        cs := &event.ConnectionState
+        if cs.IsConnected() {
+            log.Printf("✅ Connected (Signal: %s)", cs.GetSignalStrength())
+        } else {
+            log.Printf("❌ Connection: %s", cs.State)
+        }
+    })
+    
+    wsClient.OnBassUpdated(func(event *models.BassUpdatedEvent) {
+        bass := &event.Bass
+        log.Printf("🎚️ Bass: %d", bass.ActualBass)
+    })
+    
+    // Handle unknown events for debugging
+    wsClient.OnUnknownEvent(func(event *models.WebSocketEvent) {
+        log.Printf("❓ Unknown event types: %v", event.GetEventTypes())
+    })
+    
+    // Connect to WebSocket
+    if err := wsClient.Connect(); err != nil {
+        log.Fatalf("Failed to connect: %v", err)
+    }
+    
+    log.Println("Connected! Listening for events... (Press Ctrl+C to stop)")
+    
+    // Set up graceful shutdown
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+    
+    // Wait for shutdown signal
+    <-sigChan
+    log.Println("Shutting down...")
+    
+    // Disconnect
+    if err := wsClient.Disconnect(); err != nil {
+        log.Printf("Error during disconnect: %v", err)
+    }
+    
+    log.Println("Disconnected successfully")
+}
+```
+
+#### Advanced WebSocket Configuration
+
+```go
+package main
+
+import (
+    "log"
+    "time"
+    
+    "github.com/gesellix/bose-soundtouch/pkg/client"
+    "github.com/gesellix/bose-soundtouch/pkg/models"
+)
+
+// Custom logger for WebSocket events
+type CustomLogger struct{}
+
+func (c *CustomLogger) Printf(format string, v ...interface{}) {
+    timestamp := time.Now().Format("15:04:05.000")
+    log.Printf("[%s] [WebSocket] %s", timestamp, fmt.Sprintf(format, v...))
+}
+
+func main() {
+    soundTouchClient := client.NewClientFromHost("192.168.1.10")
+    
+    // Custom WebSocket configuration
+    config := &client.WebSocketConfig{
+        ReconnectInterval:    3 * time.Second,  // Reconnect every 3 seconds
+        MaxReconnectAttempts: 5,                // Try 5 times before giving up
+        PingInterval:         15 * time.Second, // Ping every 15 seconds
+        PongTimeout:          5 * time.Second,  // Wait 5 seconds for pong
+        ReadBufferSize:       4096,             // 4KB read buffer
+        WriteBufferSize:      4096,             // 4KB write buffer
+        Logger:               &CustomLogger{},  // Custom logger
+    }
+    
+    wsClient := soundTouchClient.NewWebSocketClient(config)
+    
+    // Set up handlers for specific events only
+    wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
+        // Handle only now playing events
+        log.Printf("Track changed: %s", event.NowPlaying.GetDisplayTitle())
+    })
+    
+    // Connect with custom config
+    if err := wsClient.ConnectWithConfig(config); err != nil {
+        log.Fatal(err)
+    }
+    
+    // Keep running
+    wsClient.Wait()
+}
+```
+
+#### Device Discovery with WebSocket
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "time"
+    
+    "github.com/gesellix/bose-soundtouch/pkg/client"
+    "github.com/gesellix/bose-soundtouch/pkg/config"
+    "github.com/gesellix/bose-soundtouch/pkg/discovery"
+    "github.com/gesellix/bose-soundtouch/pkg/models"
+)
+
+func main() {
+    // Discover devices
+    cfg := &config.Config{
+        DiscoveryTimeout: 10 * time.Second,
+        CacheEnabled:     false,
+    }
+    
+    discoveryService := discovery.NewUnifiedDiscoveryService(cfg)
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    
+    devices, err := discoveryService.DiscoverDevices(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    if len(devices) == 0 {
+        log.Fatal("No devices found")
+    }
+    
+    // Connect to first device found
+    device := devices[0]
+    log.Printf("Connecting to: %s (%s:%d)", device.Name, device.Host, device.Port)
+    
+    clientConfig := client.ClientConfig{
+        Host: device.Host,
+        Port: device.Port,
+    }
+    
+    soundTouchClient := client.NewClient(clientConfig)
+    
+    // Test basic connectivity
+    deviceInfo, err := soundTouchClient.GetDeviceInfo()
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Printf("Connected to: %s", deviceInfo.Name)
+    
+    // Set up WebSocket monitoring
+    wsClient := soundTouchClient.NewWebSocketClient(nil)
+    
+    wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
+        log.Printf("[%s] Now Playing: %s", 
+            deviceInfo.Name, event.NowPlaying.GetDisplayTitle())
+    })
+    
+    if err := wsClient.Connect(); err != nil {
+        log.Fatal(err)
+    }
+    
+    log.Println("Monitoring events...")
+    wsClient.Wait()
+}
+```
+
+## Project Structure
+
+```
+Bose-SoundTouch/
+├── cmd/
+│   ├── soundtouch-cli/          # Main CLI tool (fully functional)
+│   ├── websocket-demo/          # WebSocket event monitoring demo
+│   ├── example-upnp/            # UPnP discovery examples
+│   ├── example-mdns/            # mDNS discovery examples
+│   └── mdns-scanner/            # Network scanning utility
+├── pkg/
+│   ├── client/                  # HTTP & WebSocket clients
+│   │   ├── client.go            # Main HTTP API client
+│   │   ├── websocket.go         # WebSocket event client
+│   │   └── *_test.go           # Comprehensive tests
+│   ├── models/                  # Typed XML models
+│   │   ├── websocket.go         # WebSocket event models
+│   │   ├── nowplaying.go        # Now playing models
+│   │   ├── volume.go            # Volume control models
+│   │   ├── bass.go              # Bass control models
+│   │   ├── balance.go           # Balance control models
+│   │   └── *.go                 # Other endpoint models
+│   ├── discovery/               # Device discovery
+│   │   ├── unified.go           # Unified discovery service
+│   │   ├── upnp.go              # UPnP/SSDP discovery
+│   │   └── mdns.go              # mDNS/Bonjour discovery
+│   └── config/                  # Configuration management
+└── docs/                        # Comprehensive documentation
+    ├── websocket-events.md      # WebSocket API documentation
+    ├── DISCOVERY.md             # Device discovery guide
+    └── API.md                   # HTTP API reference
+```
+
+## API Coverage Status
+
+| Endpoint | Method | Status | Description |
+|----------|--------|--------|-------------|
+| `/info` | GET | ✅ Complete | Device information and capabilities |
+| `/name` | GET | ✅ Complete | Device name |
+| `/capabilities` | GET | ✅ Complete | Device feature capabilities |
+| `/now_playing` | GET | ✅ Complete | Current playback status |
+| `/sources` | GET | ✅ Complete | Available audio sources |
+| `/sources` | POST | ✅ Complete | Select audio source |
+| `/key` | POST | ✅ Complete | Send key commands (24 commands) |
+| `/volume` | GET/POST | ✅ Complete | Volume control with safety features |
+| `/bass` | GET/POST | ✅ Complete | Bass control (-9 to +9) |
+| `/balance` | GET/POST | ✅ Complete | Balance control (-50 to +50) |
+| `/presets` | GET | ✅ Complete | Preset configurations (read-only) |
+| `/presets` | POST | ❌ Not Supported | **Officially not supported by SoundTouch API** |
+| `/clockTime` | GET/POST | ✅ Complete | Device time management |
+| `/clockDisplay` | GET/POST | ✅ Complete | Clock display settings |
+| `/networkInfo` | GET | ✅ Complete | Network connectivity information |
+| **WebSocket** | `/` | ✅ **NEW** | **Real-time event monitoring** |
+| **Discovery** | UPnP/mDNS | ✅ Complete | Device discovery services |
+| `/reboot` | POST | 🔄 Planned | Device restart |
+| `/getZone` | GET | 🔄 Planned | Multiroom zone info |
+| `/setZone` | POST | 🔄 Planned | Multiroom zone configuration |
+
+## Testing Coverage
+
+- **Unit Tests**: 150+ test cases covering all functionality
+- **Integration Tests**: Real device testing scenarios  
+- **Benchmark Tests**: Performance validation
+- **WebSocket Tests**: Comprehensive event handling tests
+- **Discovery Tests**: Multi-protocol device discovery tests
+
+```go
+// Run all tests
+go test ./... -v
+
+// Run specific test suites
+go test ./pkg/client -v -run TestWebSocket
+go test ./pkg/models -v -run TestWebSocket
+go test ./pkg/discovery -v
+
+// Run benchmarks
+go test ./pkg/client -bench=. 
+go test ./pkg/models -bench=.
+```
+
+## Quick Start Examples
+
+### Basic HTTP Client
 
 ```go
 package main

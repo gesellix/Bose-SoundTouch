@@ -63,15 +63,18 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 🔄 Next Priority (Remaining Endpoints)
 
 
-### **System Endpoints - MEDIUM PRIORITY**
-- `GET /clockTime`, `POST /clockTime` - Device time
-- `GET /clockDisplay`, `POST /clockDisplay` - Clock display
-- `GET /networkInfo` - Network information
+### **Remaining Endpoints - LOW PRIORITY**
 - `POST /reboot` - Device restart
+- `GET /getZone`, `POST /setZone` - Multiroom zones (if supported by device)
 
-### **Advanced Features - LOW PRIORITY**
-- `GET /getZone`, `POST /setZone` - Multiroom zones
-- `WebSocket /` - Real-time event streaming
+### **✅ Recently Completed**
+- `GET /clockTime`, `POST /clockTime` - Device time ✅ Complete
+- `GET /clockDisplay`, `POST /clockDisplay` - Clock display ✅ Complete
+- `GET /networkInfo` - Network information ✅ Complete
+- `WebSocket /` - Real-time event streaming ✅ Complete
+
+### **❌ Not Supported by API**
+- `POST /presets` - Preset creation (officially marked as "N/A" by Bose)
 
 ## 📊 Implementation Statistics
 
@@ -79,10 +82,11 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 |----------|-------------|-------|------------|
 | **Core Info Endpoints** | 6/6 | 6 | 100% |
 | **Control Endpoints** | 5/5 | 5 | 100% |
-| **System Endpoints** | 3/8 | 8 | 37.5% |
-| **Real-time Features** | 0/1 | 1 | 0% |
+| **System Endpoints** | 5/5 | 5 | 100% |
+| **Real-time Features** | 1/1 | 1 | 100% |
 | **Preset Management** | 1/1 | 1 | 100% |
-| **Overall Progress** | 14/20 | 20 | **70%** |
+| **~~Preset Creation~~** | ~~0/1~~ | ~~1~~ | **N/A - Not Supported by API** |
+| **Overall Progress** | 16/19 | 19 | **85%** |
 
 ## 🏆 Major Accomplishments
 
@@ -104,16 +108,28 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - ✅ Power, mute, rating, and playback mode controls
 - ✅ Real device integration testing
 
+### Phase 3: System & Advanced Features (COMPLETE)
+- ✅ Clock time management (GET/POST /clockTime)
+- ✅ Clock display settings (GET/POST /clockDisplay)
+- ✅ Network information (GET /networkInfo)
+- ✅ Real-time WebSocket events with comprehensive event types
+- ✅ Automatic reconnection and connection management
+- ✅ mDNS discovery support alongside UPnP
+- ✅ Unified discovery service combining multiple protocols
+
 ### Key Technical Achievements
 - **Complete Key Controls**: All 24 documented key commands implemented
 - **Source Selection**: Full source switching with convenience methods (-spotify, -bluetooth, -aux)
 - **Bass Control**: Complete bass management with validation and convenience methods
 - **Balance Control**: Stereo balance adjustment with left/right channel control
 - **Preset Management**: Complete preset analysis with helper methods (read-only by API design)
+- **Real-time Events**: WebSocket client with 12 event types and automatic reconnection
+- **System Management**: Clock time, display settings, and network information
 - **API Compliance**: Proper press+release key pattern implementation
 - **Safety First**: Volume warnings and limits for user protection
 - **User Experience**: Host:port parsing (e.g., `-host 192.168.1.100:8090`)
 - **CLI Enhancement**: Direct flags for common operations and audio control
+- **Discovery Excellence**: Multi-protocol discovery (UPnP + mDNS) with caching
 - **Real Device Testing**: Validated with SoundTouch 10 and SoundTouch 20
 - **Production Ready**: Comprehensive error handling and validation
 
@@ -124,6 +140,8 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **Volume Management**: 30+ test cases with edge cases
 - **Source Selection**: 30+ test cases for all source types and convenience methods
 - **Bass Control**: 30+ test cases for range validation and increment/decrement
+- **WebSocket Events**: 50+ test cases for event parsing, handling, and connection management
+- **System Endpoints**: 20+ test cases for clock, display, and network functionality
 - **Balance Control**: 30+ test cases for stereo balance adjustment and clamping
 - **Host Parsing**: 20+ test cases for various formats
 - **XML Models**: Comprehensive marshaling/unmarshaling tests
@@ -176,8 +194,8 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 1. **Remaining System Endpoints** - Device reboot, additional diagnostics
 
 ### Short Term (3-5 Sessions)
-4. **Preset Creation Research** - Investigate alternative approaches for preset writing
-5. **Error Enhancement** - More detailed error responses
+4. **Error Enhancement** - More detailed error responses
+5. **Documentation Updates** - Complete API coverage documentation
 6. **CLI Polish** - Additional convenience features
 
 ### Long Term (Future)

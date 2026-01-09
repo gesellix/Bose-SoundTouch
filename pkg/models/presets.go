@@ -7,12 +7,16 @@ import (
 )
 
 // Presets represents the response from /presets endpoint
+// Note: POST /presets is officially not supported by the SoundTouch API.
+// Presets can only be read, not created or modified via the API.
 type Presets struct {
 	XMLName xml.Name `xml:"presets"`
 	Preset  []Preset `xml:"preset"`
 }
 
 // Preset represents an individual preset
+// Presets are read-only via the API and can only be created/modified
+// through the SoundTouch app or physical device controls.
 type Preset struct {
 	XMLName     xml.Name     `xml:"preset"`
 	ID          int          `xml:"id,attr"`

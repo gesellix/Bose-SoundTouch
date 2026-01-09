@@ -29,7 +29,7 @@ This document describes the planning for a Golang-based API client for the Bose 
 - `GET/POST /bass` - Bass settings
 - `GET/POST /sources` - Available sources
 - `POST /select` - Select source
-- `GET/POST /presets` - Manage presets (1-6)
+- `GET /presets` - Read presets (1-6) - POST officially not supported
 - `WebSocket /` - Live updates for events
 
 ## Architecture Based on Modern Go Patterns
@@ -369,8 +369,8 @@ func (c Config) Validate() error
 - [ ] **Bass Control**
   - GET /bass - Get bass settings
   - POST /bass - Set bass level (-9 to +9)
-- [ ] **Preset Management (Write Operations)**
-  - POST /presets - Create/update presets
+- [x] **Preset Management (Read-Only)**
+  - ~~POST /presets - Create/update presets~~ - **Officially not supported by SoundTouch API**
 - [ ] **Advanced Features**
   - GET/POST /balance - Stereo balance (stereo devices)
   - GET/POST /clockTime - Device time management
