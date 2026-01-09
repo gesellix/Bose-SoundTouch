@@ -42,56 +42,63 @@ func parseHostPort(hostPort string, defaultPort int) (string, int) {
 
 func main() {
 	var (
-		host          = flag.String("host", "", "SoundTouch device host/IP address (can include port like host:8090)")
-		port          = flag.Int("port", 8090, "SoundTouch device port")
-		timeout       = flag.Duration("timeout", 10*time.Second, "Request timeout")
-		discover      = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
-		discoverAll   = flag.Bool("discover-all", false, "Discover all SoundTouch devices and show info")
-		info          = flag.Bool("info", false, "Get device information")
-		nowPlaying    = flag.Bool("nowplaying", false, "Get current playback status")
-		sources       = flag.Bool("sources", false, "Get available audio sources")
-		name          = flag.Bool("name", false, "Get device name")
-		capabilities  = flag.Bool("capabilities", false, "Get device capabilities")
-		presets       = flag.Bool("presets", false, "Get configured presets (requires -host)")
-		key           = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
-		play          = flag.Bool("play", false, "Send PLAY key command")
-		pause         = flag.Bool("pause", false, "Send PAUSE key command")
-		stop          = flag.Bool("stop", false, "Send STOP key command")
-		next          = flag.Bool("next", false, "Send NEXT_TRACK key command")
-		prev          = flag.Bool("prev", false, "Send PREV_TRACK key command")
-		volumeUp      = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
-		volumeDown    = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
-		power         = flag.Bool("power", false, "Send POWER key command")
-		mute          = flag.Bool("mute", false, "Send MUTE key command")
-		thumbsUp      = flag.Bool("thumbs-up", false, "Send THUMBS_UP key command")
-		thumbsDown    = flag.Bool("thumbs-down", false, "Send THUMBS_DOWN key command")
-		preset        = flag.Int("preset", 0, "Select preset (1-6)")
-		volume        = flag.Bool("volume", false, "Get current volume level")
-		setVolume     = flag.Int("set-volume", -1, "Set volume level (0-100)")
-		incVolume     = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
-		decVolume     = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
-		bass          = flag.Bool("bass", false, "Get current bass level")
-		setBass       = flag.Int("set-bass", -99, "Set bass level (-9 to +9)")
-		incBass       = flag.Int("inc-bass", 0, "Increase bass by amount (1-3, default: 1)")
-		decBass       = flag.Int("dec-bass", 0, "Decrease bass by amount (1-3, default: 1)")
-		balance       = flag.Bool("balance", false, "Get current balance level")
-		setBalance    = flag.Int("set-balance", -99, "Set balance level (-50 to +50)")
-		incBalance    = flag.Int("inc-balance", 0, "Increase balance by amount (1-10, default: 5)")
-		decBalance    = flag.Int("dec-balance", 0, "Decrease balance by amount (1-10, default: 5)")
-		selectSource  = flag.String("select-source", "", "Select audio source (SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC)")
-		sourceAccount = flag.String("source-account", "", "Source account for streaming services (optional)")
-		spotify       = flag.Bool("spotify", false, "Select Spotify source")
-		bluetooth     = flag.Bool("bluetooth", false, "Select Bluetooth source")
-		aux           = flag.Bool("aux", false, "Select AUX input source")
-		clockTime     = flag.Bool("clock-time", false, "Get device clock time")
-		setClockTime  = flag.String("set-clock-time", "", "Set device clock time (format: 'now' or Unix timestamp)")
-		clockDisplay  = flag.Bool("clock-display", false, "Get clock display settings")
-		enableClock   = flag.Bool("enable-clock", false, "Enable clock display")
-		disableClock  = flag.Bool("disable-clock", false, "Disable clock display")
-		clockFormat   = flag.String("clock-format", "", "Set clock display format (12, 24, auto)")
-		clockBright   = flag.Int("clock-brightness", -1, "Set clock display brightness (0-100)")
-		networkInfo   = flag.Bool("network-info", false, "Get network information")
-		help          = flag.Bool("help", false, "Show help")
+		host           = flag.String("host", "", "SoundTouch device host/IP address (can include port like host:8090)")
+		port           = flag.Int("port", 8090, "SoundTouch device port")
+		timeout        = flag.Duration("timeout", 10*time.Second, "Request timeout")
+		discover       = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
+		discoverAll    = flag.Bool("discover-all", false, "Discover all SoundTouch devices and show info")
+		info           = flag.Bool("info", false, "Get device information")
+		nowPlaying     = flag.Bool("nowplaying", false, "Get current playback status")
+		sources        = flag.Bool("sources", false, "Get available audio sources")
+		name           = flag.Bool("name", false, "Get device name")
+		capabilities   = flag.Bool("capabilities", false, "Get device capabilities")
+		presets        = flag.Bool("presets", false, "Get configured presets (requires -host)")
+		key            = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
+		play           = flag.Bool("play", false, "Send PLAY key command")
+		pause          = flag.Bool("pause", false, "Send PAUSE key command")
+		stop           = flag.Bool("stop", false, "Send STOP key command")
+		next           = flag.Bool("next", false, "Send NEXT_TRACK key command")
+		prev           = flag.Bool("prev", false, "Send PREV_TRACK key command")
+		volumeUp       = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
+		volumeDown     = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
+		power          = flag.Bool("power", false, "Send POWER key command")
+		mute           = flag.Bool("mute", false, "Send MUTE key command")
+		thumbsUp       = flag.Bool("thumbs-up", false, "Send THUMBS_UP key command")
+		thumbsDown     = flag.Bool("thumbs-down", false, "Send THUMBS_DOWN key command")
+		preset         = flag.Int("preset", 0, "Select preset (1-6)")
+		volume         = flag.Bool("volume", false, "Get current volume level")
+		setVolume      = flag.Int("set-volume", -1, "Set volume level (0-100)")
+		incVolume      = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
+		decVolume      = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
+		bass           = flag.Bool("bass", false, "Get current bass level")
+		setBass        = flag.Int("set-bass", -99, "Set bass level (-9 to +9)")
+		incBass        = flag.Int("inc-bass", 0, "Increase bass by amount (1-3, default: 1)")
+		decBass        = flag.Int("dec-bass", 0, "Decrease bass by amount (1-3, default: 1)")
+		balance        = flag.Bool("balance", false, "Get current balance level")
+		setBalance     = flag.Int("set-balance", -99, "Set balance level (-50 to +50)")
+		incBalance     = flag.Int("inc-balance", 0, "Increase balance by amount (1-10, default: 5)")
+		decBalance     = flag.Int("dec-balance", 0, "Decrease balance by amount (1-10, default: 5)")
+		selectSource   = flag.String("select-source", "", "Select audio source (SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC)")
+		sourceAccount  = flag.String("source-account", "", "Source account for streaming services (optional)")
+		spotify        = flag.Bool("spotify", false, "Select Spotify source")
+		bluetooth      = flag.Bool("bluetooth", false, "Select Bluetooth source")
+		aux            = flag.Bool("aux", false, "Select AUX input source")
+		clockTime      = flag.Bool("clock-time", false, "Get device clock time")
+		setClockTime   = flag.String("set-clock-time", "", "Set device clock time (format: 'now' or Unix timestamp)")
+		clockDisplay   = flag.Bool("clock-display", false, "Get clock display settings")
+		enableClock    = flag.Bool("enable-clock", false, "Enable clock display")
+		disableClock   = flag.Bool("disable-clock", false, "Disable clock display")
+		clockFormat    = flag.String("clock-format", "", "Set clock display format (12, 24, auto)")
+		clockBright    = flag.Int("clock-brightness", -1, "Set clock display brightness (0-100)")
+		networkInfo    = flag.Bool("network-info", false, "Get network information")
+		zone           = flag.Bool("zone", false, "Get current zone configuration")
+		zoneStatus     = flag.Bool("zone-status", false, "Get zone status for this device")
+		zoneMembers    = flag.Bool("zone-members", false, "List all devices in current zone")
+		createZone     = flag.String("create-zone", "", "Create zone with device IDs (comma-separated)")
+		addToZone      = flag.String("add-to-zone", "", "Add device to zone (format: deviceID@ip or deviceID)")
+		removeFromZone = flag.String("remove-from-zone", "", "Remove device from zone (device ID)")
+		dissolveZone   = flag.Bool("dissolve-zone", false, "Dissolve current zone (make standalone)")
+		help           = flag.Bool("help", false, "Show help")
 	)
 
 	flag.Parse()
@@ -102,7 +109,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && !*balance && *setBalance == -99 && *incBalance == 0 && *decBalance == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && !*clockTime && *setClockTime == "" && !*clockDisplay && !*enableClock && !*disableClock && *clockFormat == "" && *clockBright == -1 && !*networkInfo && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && !*balance && *setBalance == -99 && *incBalance == 0 && *decBalance == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && !*clockTime && *setClockTime == "" && !*clockDisplay && !*enableClock && !*disableClock && *clockFormat == "" && *clockBright == -1 && !*networkInfo && !*zone && !*zoneStatus && !*zoneMembers && *createZone == "" && *addToZone == "" && *removeFromZone == "" && !*dissolveZone && *host == "" {
 		printHelp()
 		return
 	}
@@ -264,6 +271,17 @@ func main() {
 		}
 		return
 	}
+
+	// Handle zone commands
+	if *zone || *zoneStatus || *zoneMembers || *createZone != "" || *addToZone != "" || *removeFromZone != "" || *dissolveZone {
+		if *host == "" {
+			log.Fatal("Host is required for zone commands. Use -host flag or -discover to find devices.")
+		}
+		if err := handleZoneCommands(finalHost, finalPort, *timeout, *zone, *zoneStatus, *zoneMembers, *createZone, *addToZone, *removeFromZone, *dissolveZone); err != nil {
+			log.Fatalf("Failed to execute zone command: %v", err)
+		}
+		return
+	}
 }
 
 func printHelp() {
@@ -337,6 +355,17 @@ func printHelp() {
 	fmt.Println("  -clock-brightness <0-100> Set clock brightness (requires -host)")
 	fmt.Println("  -network-info     Get network information (requires -host)")
 	fmt.Println()
+	fmt.Println("Zone Management:")
+	fmt.Println("  -zone             Get current zone configuration (requires -host)")
+	fmt.Println("  -zone-status      Get zone status for this device (requires -host)")
+	fmt.Println("  -zone-members     List all devices in current zone (requires -host)")
+	fmt.Println("  -create-zone <devices> Create zone with device IDs (comma-separated)")
+	fmt.Println("                    Format: masterID,memberID1,memberID2,...")
+	fmt.Println("  -add-to-zone <device> Add device to zone (requires -host)")
+	fmt.Println("                    Format: deviceID@ip or deviceID")
+	fmt.Println("  -remove-from-zone <deviceID> Remove device from zone (requires -host)")
+	fmt.Println("  -dissolve-zone    Dissolve current zone, make device standalone (requires -host)")
+	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  soundtouch-cli -discover")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -info")
@@ -361,6 +390,13 @@ func printHelp() {
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -clock-format 24")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -clock-brightness 75")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -network-info")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -zone")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -zone-status")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -zone-members")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -create-zone MASTER123,DEVICE456,DEVICE789")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -add-to-zone DEVICE456@192.168.1.11")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -remove-from-zone DEVICE456")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -dissolve-zone")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -play")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10:8090 -pause")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -volume-up")
@@ -1750,6 +1786,264 @@ func handleNetworkInfo(host string, port int, timeout time.Duration) error {
 	} else {
 		fmt.Printf("  ✗ No Ethernet\n")
 	}
+
+	return nil
+}
+
+// handleZoneCommands handles all zone management commands
+func handleZoneCommands(host string, port int, timeout time.Duration, getZone, getZoneStatus, getZoneMembers bool, createZone, addToZone, removeFromZone string, dissolveZone bool) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	// Handle get zone info
+	if getZone {
+		return handleGetZone(soundtouchClient)
+	}
+
+	// Handle get zone status
+	if getZoneStatus {
+		return handleGetZoneStatus(soundtouchClient)
+	}
+
+	// Handle get zone members
+	if getZoneMembers {
+		return handleGetZoneMembers(soundtouchClient)
+	}
+
+	// Handle create zone
+	if createZone != "" {
+		return handleCreateZone(soundtouchClient, createZone)
+	}
+
+	// Handle add to zone
+	if addToZone != "" {
+		return handleAddToZone(soundtouchClient, addToZone)
+	}
+
+	// Handle remove from zone
+	if removeFromZone != "" {
+		return handleRemoveFromZone(soundtouchClient, removeFromZone)
+	}
+
+	// Handle dissolve zone
+	if dissolveZone {
+		return handleDissolveZone(soundtouchClient)
+	}
+
+	return nil
+}
+
+// handleGetZone displays current zone configuration
+func handleGetZone(client *client.Client) error {
+	zone, err := client.GetZone()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Zone Configuration:\n")
+	fmt.Printf("  Master Device: %s\n", zone.Master)
+
+	if zone.IsStandalone() {
+		fmt.Printf("  Status: Standalone (no multiroom zone)\n")
+		fmt.Printf("  Total Devices: 1\n")
+	} else {
+		fmt.Printf("  Status: Active multiroom zone\n")
+		fmt.Printf("  Total Devices: %d\n", zone.GetTotalDeviceCount())
+		fmt.Printf("  Zone Members:\n")
+		for i, member := range zone.Members {
+			fmt.Printf("    %d. %s", i+1, member.DeviceID)
+			if member.IP != "" {
+				fmt.Printf(" (%s)", member.IP)
+			}
+			fmt.Printf("\n")
+		}
+	}
+
+	return nil
+}
+
+// handleGetZoneStatus displays zone status for this device
+func handleGetZoneStatus(client *client.Client) error {
+	status, err := client.GetZoneStatus()
+	if err != nil {
+		return err
+	}
+
+	// Get device info for context
+	deviceInfo, err := client.GetDeviceInfo()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Zone Status for %s (%s):\n", deviceInfo.Name, deviceInfo.DeviceID)
+	fmt.Printf("  Status: %s\n", status.String())
+
+	// Show additional zone info if in a zone
+	if status != models.ZoneStatusStandalone {
+		zone, err := client.GetZone()
+		if err == nil {
+			if status == models.ZoneStatusMaster {
+				fmt.Printf("  Zone Members: %d\n", len(zone.Members))
+			} else {
+				fmt.Printf("  Zone Master: %s\n", zone.Master)
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleGetZoneMembers lists all devices in the current zone
+func handleGetZoneMembers(client *client.Client) error {
+	members, err := client.GetZoneMembers()
+	if err != nil {
+		return err
+	}
+
+	zone, err := client.GetZone()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Zone Members:\n")
+	if len(members) == 1 {
+		fmt.Printf("  Device is standalone (not in a zone)\n")
+		fmt.Printf("  Device: %s\n", members[0])
+	} else {
+		fmt.Printf("  Total Devices: %d\n", len(members))
+		fmt.Printf("  Master: %s\n", zone.Master)
+		fmt.Printf("  Members:\n")
+		for i, memberID := range members {
+			if memberID == zone.Master {
+				fmt.Printf("    %d. %s (Master)\n", i+1, memberID)
+			} else {
+				// Find IP address if available
+				var ip string
+				if member, found := zone.GetMemberByDeviceID(memberID); found {
+					ip = member.IP
+				}
+				fmt.Printf("    %d. %s", i+1, memberID)
+				if ip != "" {
+					fmt.Printf(" (%s)", ip)
+				}
+				fmt.Printf("\n")
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleCreateZone creates a new multiroom zone
+func handleCreateZone(client *client.Client, deviceList string) error {
+	deviceIDs := strings.Split(deviceList, ",")
+	if len(deviceIDs) < 2 {
+		return fmt.Errorf("at least 2 devices required for zone creation (master + 1 member)")
+	}
+
+	// Clean up device IDs
+	for i := range deviceIDs {
+		deviceIDs[i] = strings.TrimSpace(deviceIDs[i])
+	}
+
+	masterID := deviceIDs[0]
+	memberIDs := deviceIDs[1:]
+
+	fmt.Printf("Creating zone with master %s and %d member(s)...\n", masterID, len(memberIDs))
+
+	err := client.CreateZone(masterID, memberIDs)
+	if err != nil {
+		return fmt.Errorf("failed to create zone: %w", err)
+	}
+
+	fmt.Printf("✓ Zone created successfully\n")
+	fmt.Printf("  Master: %s\n", masterID)
+	fmt.Printf("  Members: %s\n", strings.Join(memberIDs, ", "))
+
+	return nil
+}
+
+// handleAddToZone adds a device to the current zone
+func handleAddToZone(client *client.Client, deviceSpec string) error {
+	var deviceID, ipAddress string
+
+	// Parse device specification (deviceID@ip or just deviceID)
+	if strings.Contains(deviceSpec, "@") {
+		parts := strings.Split(deviceSpec, "@")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid device specification. Use format: deviceID@ip or deviceID")
+		}
+		deviceID = strings.TrimSpace(parts[0])
+		ipAddress = strings.TrimSpace(parts[1])
+	} else {
+		deviceID = strings.TrimSpace(deviceSpec)
+	}
+
+	if deviceID == "" {
+		return fmt.Errorf("device ID cannot be empty")
+	}
+
+	fmt.Printf("Adding device %s to zone", deviceID)
+	if ipAddress != "" {
+		fmt.Printf(" (IP: %s)", ipAddress)
+	}
+	fmt.Printf("...\n")
+
+	err := client.AddToZone(deviceID, ipAddress)
+	if err != nil {
+		return fmt.Errorf("failed to add device to zone: %w", err)
+	}
+
+	fmt.Printf("✓ Device %s added to zone successfully\n", deviceID)
+
+	return nil
+}
+
+// handleRemoveFromZone removes a device from the current zone
+func handleRemoveFromZone(client *client.Client, deviceID string) error {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return fmt.Errorf("device ID cannot be empty")
+	}
+
+	fmt.Printf("Removing device %s from zone...\n", deviceID)
+
+	err := client.RemoveFromZone(deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to remove device from zone: %w", err)
+	}
+
+	fmt.Printf("✓ Device %s removed from zone successfully\n", deviceID)
+
+	return nil
+}
+
+// handleDissolveZone dissolves the current zone
+func handleDissolveZone(client *client.Client) error {
+	fmt.Printf("Dissolving current zone (making device standalone)...\n")
+
+	err := client.DissolveZone()
+	if err != nil {
+		return fmt.Errorf("failed to dissolve zone: %w", err)
+	}
+
+	fmt.Printf("✓ Zone dissolved successfully - device is now standalone\n")
 
 	return nil
 }

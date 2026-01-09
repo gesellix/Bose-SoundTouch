@@ -724,3 +724,121 @@ func (c *Client) post(endpoint string, payload interface{}, result interface{}) 
 
 	return nil
 }
+
+// GetZone gets the current multiroom zone configuration
+func (c *Client) GetZone() (*models.ZoneInfo, error) {
+	var zone models.ZoneInfo
+	err := c.get("/getZone", &zone)
+	return &zone, err
+}
+
+// SetZone configures multiroom zone settings
+func (c *Client) SetZone(zoneRequest *models.ZoneRequest) error {
+	if err := zoneRequest.Validate(); err != nil {
+		return fmt.Errorf("invalid zone request: %w", err)
+	}
+
+	return c.post("/setZone", zoneRequest, nil)
+}
+
+// CreateZone creates a new multiroom zone with the specified master and members
+func (c *Client) CreateZone(masterDeviceID string, memberDeviceIDs []string) error {
+	zoneRequest := models.NewZoneRequest(masterDeviceID)
+
+	for _, deviceID := range memberDeviceIDs {
+		zoneRequest.AddMemberByDeviceID(deviceID)
+	}
+
+	return c.SetZone(zoneRequest)
+}
+
+// CreateZoneWithIPs creates a new multiroom zone with device IDs and IP addresses
+func (c *Client) CreateZoneWithIPs(masterDeviceID string, members map[string]string) error {
+	zoneRequest := models.NewZoneRequest(masterDeviceID)
+
+	for deviceID, ipAddress := range members {
+		zoneRequest.AddMember(deviceID, ipAddress)
+	}
+
+	return c.SetZone(zoneRequest)
+}
+
+// AddToZone adds a device to an existing zone
+func (c *Client) AddToZone(deviceID, ipAddress string) error {
+	// Get current zone configuration
+	currentZone, err := c.GetZone()
+	if err != nil {
+		return fmt.Errorf("failed to get current zone: %w", err)
+	}
+
+	// Convert to zone request and add member
+	zoneRequest := currentZone.ToZoneRequest()
+	zoneRequest.AddMember(deviceID, ipAddress)
+
+	return c.SetZone(zoneRequest)
+}
+
+// RemoveFromZone removes a device from the current zone
+func (c *Client) RemoveFromZone(deviceID string) error {
+	// Get current zone configuration
+	currentZone, err := c.GetZone()
+	if err != nil {
+		return fmt.Errorf("failed to get current zone: %w", err)
+	}
+
+	// Convert to zone request and remove member
+	zoneRequest := currentZone.ToZoneRequest()
+	zoneRequest.RemoveMember(deviceID)
+
+	return c.SetZone(zoneRequest)
+}
+
+// DissolveZone dissolves the current zone, making all devices standalone
+func (c *Client) DissolveZone() error {
+	// Get current zone configuration
+	currentZone, err := c.GetZone()
+	if err != nil {
+		return fmt.Errorf("failed to get current zone: %w", err)
+	}
+
+	// Create standalone configuration (master only, no members)
+	zoneRequest := models.NewZoneRequest(currentZone.Master)
+
+	return c.SetZone(zoneRequest)
+}
+
+// IsInZone checks if this device is part of a multiroom zone
+func (c *Client) IsInZone() (bool, error) {
+	zone, err := c.GetZone()
+	if err != nil {
+		return false, err
+	}
+
+	return !zone.IsStandalone(), nil
+}
+
+// GetZoneStatus returns the zone status for this device
+func (c *Client) GetZoneStatus() (models.ZoneStatus, error) {
+	zone, err := c.GetZone()
+	if err != nil {
+		return models.ZoneStatusStandalone, err
+	}
+
+	// Get device info to determine our device ID
+	deviceInfo, err := c.GetDeviceInfo()
+	if err != nil {
+		return models.ZoneStatusStandalone, fmt.Errorf("failed to get device info: %w", err)
+	}
+
+	return zone.GetZoneStatus(deviceInfo.DeviceID), nil
+}
+
+// GetZoneMembers returns all devices in the current zone
+func (c *Client) GetZoneMembers() ([]string, error) {
+	zone, err := c.GetZone()
+	if err != nil {
+		return nil, err
+	}
+
+	return zone.GetAllDeviceIDs(), nil
+}

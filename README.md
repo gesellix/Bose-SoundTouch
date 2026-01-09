@@ -4,7 +4,7 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 
 ## Features
 
-### ✅ Implemented (85% Complete - 16/19 endpoints)
+### ✅ Implemented (90% Complete - 18/20 endpoints)
 - **HTTP Client with XML Support**: Complete client for SoundTouch Web API
 - **Device Information**: Get detailed device info via `/info` endpoint
 - **Device Name**: Get device name via `/name` endpoint  
@@ -27,9 +27,14 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 - **Unified Discovery**: Combines UPnP, mDNS, and configured device lists
 - **Safety Features**: Volume warnings, increment limits, error validation
 
-### 🔄 Remaining High Priority (15% - 3/19 endpoints)
-- **Device System**: POST /reboot for device restart
-- **Multiroom Support**: GET/POST /getZone, /setZone (if supported by device)
+### ✅ Recently Completed - Zone Management
+- **Multiroom Support**: GET/POST /getZone, /setZone with comprehensive zone operations
+- **Zone Operations**: Create, modify, add members, remove members, dissolve zones
+- **Zone Status**: Query zone membership, master/slave status, device counting
+
+### 🔄 Remaining High Priority (10% - 2/20 endpoints)
+- **Device System**: POST /reboot for device restart  
+- **Advanced Zones**: Additional multiroom features (if supported by specific devices)
 
 ### ❌ Not Supported by API
 - **Preset Creation**: POST /presets (officially not supported by SoundTouch API)
@@ -644,30 +649,48 @@ Bose-SoundTouch/
 | `/clockTime` | GET/POST | ✅ Complete | Device time management |
 | `/clockDisplay` | GET/POST | ✅ Complete | Clock display settings |
 | `/networkInfo` | GET | ✅ Complete | Network connectivity information |
-| **WebSocket** | `/` | ✅ **NEW** | **Real-time event monitoring** |
+| **WebSocket** | `/` | ✅ Complete | **Real-time event monitoring** |
 | **Discovery** | UPnP/mDNS | ✅ Complete | Device discovery services |
+| `/getZone` | GET | ✅ **NEW** | **Multiroom zone information** |
+| `/setZone` | POST | ✅ **NEW** | **Zone creation and management** |
 | `/reboot` | POST | 🔄 Planned | Device restart |
-| `/getZone` | GET | 🔄 Planned | Multiroom zone info |
-| `/setZone` | POST | 🔄 Planned | Multiroom zone configuration |
+
+### Zone Management Features ✅ **NEW**
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Zone Information | ✅ Complete | Get current zone configuration |
+| Zone Status | ✅ Complete | Check master/slave status for device |
+| Zone Members | ✅ Complete | List all devices in zone |
+| Create Zone | ✅ Complete | Create multiroom zone with multiple devices |
+| Add to Zone | ✅ Complete | Add device to existing zone |
+| Remove from Zone | ✅ Complete | Remove device from zone |
+| Dissolve Zone | ✅ Complete | Break up zone, make devices standalone |
+| Zone Builder | ✅ Complete | Fluent API for zone construction |
+| Validation | ✅ Complete | IP validation, duplicate detection |
+| Error Handling | ✅ Complete | Comprehensive zone error types |
 
 ## Testing Coverage
 
-- **Unit Tests**: 150+ test cases covering all functionality
+- **Unit Tests**: 200+ test cases covering all functionality
 - **Integration Tests**: Real device testing scenarios  
 - **Benchmark Tests**: Performance validation
 - **WebSocket Tests**: Comprehensive event handling tests
+- **Zone Management Tests**: Complete multiroom functionality tests
 - **Discovery Tests**: Multi-protocol device discovery tests
 
 ```go
 // Run all tests
 go test ./... -v
 
-// Run specific test suites
+# Run specific test suites
 go test ./pkg/client -v -run TestWebSocket
 go test ./pkg/models -v -run TestWebSocket
+go test ./pkg/client -v -run TestZone
+go test ./pkg/models -v -run TestZone
 go test ./pkg/discovery -v
 
-// Run benchmarks
+# Run benchmarks
 go test ./pkg/client -bench=. 
 go test ./pkg/models -bench=.
 ```

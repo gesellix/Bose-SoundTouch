@@ -65,13 +65,13 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 
 ### **Remaining Endpoints - LOW PRIORITY**
 - `POST /reboot` - Device restart
-- `GET /getZone`, `POST /setZone` - Multiroom zones (if supported by device)
 
 ### **✅ Recently Completed**
 - `GET /clockTime`, `POST /clockTime` - Device time ✅ Complete
 - `GET /clockDisplay`, `POST /clockDisplay` - Clock display ✅ Complete
 - `GET /networkInfo` - Network information ✅ Complete
 - `WebSocket /` - Real-time event streaming ✅ Complete
+- `GET /getZone`, `POST /setZone` - Multiroom zone management ✅ Complete
 
 ### **❌ Not Supported by API**
 - `POST /presets` - Preset creation (officially marked as "N/A" by Bose)
@@ -85,8 +85,9 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 | **System Endpoints** | 5/5 | 5 | 100% |
 | **Real-time Features** | 1/1 | 1 | 100% |
 | **Preset Management** | 1/1 | 1 | 100% |
+| **Zone Management** | 2/2 | 2 | 100% |
 | **~~Preset Creation~~** | ~~0/1~~ | ~~1~~ | **N/A - Not Supported by API** |
-| **Overall Progress** | 16/19 | 19 | **85%** |
+| **Overall Progress** | 18/20 | 20 | **90%** |
 
 ## 🏆 Major Accomplishments
 
@@ -117,6 +118,14 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - ✅ mDNS discovery support alongside UPnP
 - ✅ Unified discovery service combining multiple protocols
 
+### Phase 4: Multiroom & Zone Management (COMPLETE)
+- ✅ Zone information retrieval (GET /getZone)
+- ✅ Zone configuration management (POST /setZone)
+- ✅ Complete zone operations (create, modify, add, remove, dissolve)
+- ✅ Zone status and membership queries
+- ✅ Comprehensive validation and error handling
+- ✅ CLI integration for all zone operations
+
 ### Key Technical Achievements
 - **Complete Key Controls**: All 24 documented key commands implemented
 - **Source Selection**: Full source switching with convenience methods (-spotify, -bluetooth, -aux)
@@ -124,6 +133,8 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **Balance Control**: Stereo balance adjustment with left/right channel control
 - **Preset Management**: Complete preset analysis with helper methods (read-only by API design)
 - **Real-time Events**: WebSocket client with 12 event types and automatic reconnection
+- **Zone Management**: Complete multiroom zone operations with validation
+- **Zone Status**: Query zone membership, master/slave status, device counting
 - **System Management**: Clock time, display settings, and network information
 - **API Compliance**: Proper press+release key pattern implementation
 - **Safety First**: Volume warnings and limits for user protection
