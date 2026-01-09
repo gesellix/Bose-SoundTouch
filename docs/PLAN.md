@@ -376,7 +376,6 @@ func (c Config) Validate() error
   - GET/POST /clockTime - Device time management
   - GET/POST /clockDisplay - Clock display settings
   - GET /networkInfo - Network diagnostics
-  - POST /reboot - Device restart
 
 ### Phase 4: WebSocket Real-time Events 📡
 - [ ] **Implement WebSocket Client**

@@ -32,9 +32,8 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 - **Zone Operations**: Create, modify, add members, remove members, dissolve zones
 - **Zone Status**: Query zone membership, master/slave status, device counting
 
-### 🔄 Remaining High Priority (10% - 2/20 endpoints)
-- **Device System**: POST /reboot for device restart  
-- **Advanced Zones**: Additional multiroom features (if supported by specific devices)
+### ✅ All High Priority Endpoints Complete
+All originally planned high-priority endpoints have been implemented. The API client now has comprehensive coverage of all available SoundTouch functionality.
 
 ### ❌ Not Supported by API
 - **Preset Creation**: POST /presets (officially not supported by SoundTouch API)
@@ -653,7 +652,6 @@ Bose-SoundTouch/
 | **Discovery** | UPnP/mDNS | ✅ Complete | Device discovery services |
 | `/getZone` | GET | ✅ **NEW** | **Multiroom zone information** |
 | `/setZone` | POST | ✅ **NEW** | **Zone creation and management** |
-| `/reboot` | POST | 🔄 Planned | Device restart |
 
 ### Zone Management Features ✅ **NEW**
 
