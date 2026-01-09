@@ -259,8 +259,7 @@ Retrieves device capabilities.
 ### GET /name ✅ **Implemented**
 Retrieves the device name.
 
-### POST /reboot 🔄 **Planned**
-Restarts the device.
+
 
 ## Error Handling
 

@@ -64,7 +64,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 
 
 ### **Remaining Endpoints - LOW PRIORITY**
-- `POST /reboot` - Device restart
+- ❌ `POST /reboot` - **Not available in official SoundTouch API**
 
 ### **✅ Recently Completed**
 - `GET /clockTime`, `POST /clockTime` - Device time ✅ Complete
@@ -202,7 +202,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 🎯 Current Focus Areas
 
 ### Immediate Next Steps (1-2 Sessions)
-1. **Remaining System Endpoints** - Device reboot, additional diagnostics
+1. **Additional System Diagnostics** - Extended device health monitoring
 
 ### Short Term (3-5 Sessions)
 4. **Error Enhancement** - More detailed error responses
