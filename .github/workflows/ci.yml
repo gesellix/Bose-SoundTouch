@@ -118,10 +118,11 @@ jobs:
         with:
           go-version-file: "go.mod"
 
+      - name: Install Gosec
+        run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+
       - name: Run Gosec Security Scanner
-        uses: securecodewarrior/github-action-gosec@master
-        with:
-          args: ./...
+        run: gosec ./...
 
       - name: Run Nancy vulnerability scanner
         run: |
