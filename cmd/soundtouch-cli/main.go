@@ -52,7 +52,7 @@ func main() {
 		sources       = flag.Bool("sources", false, "Get available audio sources")
 		name          = flag.Bool("name", false, "Get device name")
 		capabilities  = flag.Bool("capabilities", false, "Get device capabilities")
-		presets       = flag.Bool("presets", false, "Get configured presets")
+		presets       = flag.Bool("presets", false, "Get configured presets (requires -host)")
 		key           = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
 		play          = flag.Bool("play", false, "Send PLAY key command")
 		pause         = flag.Bool("pause", false, "Send PAUSE key command")

@@ -201,17 +201,15 @@ Retrieves the configured presets.
 </presets>
 ```
 
-### POST /presets 🔄 **Planned**
+### POST /presets ❌ **Not Supported**
 Creates or updates a preset.
 
-**Request XML:**
-```xml
-<preset id="1">
-  <ContentItem source="..." sourceAccount="..." location="...">
-    <itemName>Preset Name</itemName>
-  </ContentItem>
-</preset>
-```
+**Status**: According to the official Bose SoundTouch API documentation, POST operations on `/presets` are marked as "N/A" - this endpoint officially does not support preset creation or modification via API.
+
+**Alternative Methods**:
+- Use the official Bose SoundTouch mobile app
+- Use physical preset buttons on the device (long-press while content is playing)
+- Changes made via these methods will be visible through the GET endpoint
 
 ## Advanced Features
 

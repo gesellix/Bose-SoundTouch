@@ -126,6 +126,36 @@ func (c *Client) GetPresets() (*models.Presets, error) {
 	return &presets, nil
 }
 
+// GetNextAvailablePresetSlot returns the next available preset slot (1-6), or error if all are used
+func (c *Client) GetNextAvailablePresetSlot() (int, error) {
+	presets, err := c.GetPresets()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get presets: %w", err)
+	}
+
+	emptySlots := presets.GetEmptyPresetSlots()
+	if len(emptySlots) == 0 {
+		return 0, fmt.Errorf("all preset slots are occupied")
+	}
+
+	// Return the first available slot
+	return emptySlots[0], nil
+}
+
+// IsCurrentContentPresetable checks if the currently playing content can be saved as a preset
+func (c *Client) IsCurrentContentPresetable() (bool, error) {
+	nowPlaying, err := c.GetNowPlaying()
+	if err != nil {
+		return false, fmt.Errorf("failed to get now playing: %w", err)
+	}
+
+	if nowPlaying.IsEmpty() || nowPlaying.ContentItem == nil {
+		return false, nil
+	}
+
+	return nowPlaying.ContentItem.IsPresetable, nil
+}
+
 // SendKey sends a key press command to the device (press followed by release)
 func (c *Client) SendKey(keyValue string) error {
 	if !models.IsValidKey(keyValue) {

@@ -14,6 +14,7 @@ type Presets struct {
 
 // Preset represents an individual preset
 type Preset struct {
+	XMLName     xml.Name     `xml:"preset"`
 	ID          int          `xml:"id,attr"`
 	CreatedOn   *int64       `xml:"createdOn,attr,omitempty"`
 	UpdatedOn   *int64       `xml:"updatedOn,attr,omitempty"`
