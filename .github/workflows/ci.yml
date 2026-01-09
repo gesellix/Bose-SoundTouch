@@ -193,20 +193,22 @@ jobs:
               "github.com/gesellix/bose-soundtouch/pkg/client"
               "github.com/gesellix/bose-soundtouch/pkg/models"
               "github.com/gesellix/bose-soundtouch/pkg/discovery"
+              "github.com/gesellix/bose-soundtouch/pkg/config"
           )
 
           func main() {
               // Test basic client creation
-              c := client.New("192.168.1.100", 8090)
+              c := client.NewClientFromHost("192.168.1.100")
               fmt.Printf("Client created for %s\n", c.BaseURL())
 
               // Test models can be imported
-              var info models.Info
-              fmt.Printf("Info model available: %T\n", info)
+              var info models.DeviceInfo
+              fmt.Printf("DeviceInfo model available: %T\n", info)
 
               // Test discovery can be imported
-              var scanner discovery.Scanner
-              fmt.Printf("Scanner available: %T\n", scanner)
+              cfg := config.DefaultConfig()
+              service := discovery.NewUnifiedDiscoveryService(cfg)
+              fmt.Printf("Discovery service available: %T\n", service)
 
               fmt.Println("All imports successful!")
           }
