@@ -156,11 +156,31 @@ func TestKeyXMLUnmarshal(t *testing.T) {
 
 func TestIsValidKey(t *testing.T) {
 	validKeys := []string{
+		// Playback Controls
 		KeyPlay, KeyPause, KeyStop,
 		KeyPrevTrack, KeyNextTrack,
+
+		// Rating and Bookmark Controls
+		KeyThumbsUp, KeyThumbsDown, KeyBookmark,
+
+		// Power and System Controls
+		KeyPower, KeyMute,
+
+		// Volume Controls
 		KeyVolumeUp, KeyVolumeDown,
+
+		// Preset Controls
 		KeyPreset1, KeyPreset2, KeyPreset3,
 		KeyPreset4, KeyPreset5, KeyPreset6,
+
+		// Input Controls
+		KeyAuxInput,
+
+		// Shuffle Controls
+		KeyShuffleOff, KeyShuffleOn,
+
+		// Repeat Controls
+		KeyRepeatOff, KeyRepeatOne, KeyRepeatAll,
 	}
 
 	invalidKeys := []string{
@@ -189,11 +209,31 @@ func TestGetAllValidKeys(t *testing.T) {
 	keys := GetAllValidKeys()
 
 	expectedKeys := []string{
+		// Playback Controls
 		KeyPlay, KeyPause, KeyStop,
 		KeyPrevTrack, KeyNextTrack,
+
+		// Rating and Bookmark Controls
+		KeyThumbsUp, KeyThumbsDown, KeyBookmark,
+
+		// Power and System Controls
+		KeyPower, KeyMute,
+
+		// Volume Controls
 		KeyVolumeUp, KeyVolumeDown,
+
+		// Preset Controls
 		KeyPreset1, KeyPreset2, KeyPreset3,
 		KeyPreset4, KeyPreset5, KeyPreset6,
+
+		// Input Controls
+		KeyAuxInput,
+
+		// Shuffle Controls
+		KeyShuffleOff, KeyShuffleOn,
+
+		// Repeat Controls
+		KeyRepeatOff, KeyRepeatOne, KeyRepeatAll,
 	}
 
 	if len(keys) != len(expectedKeys) {

@@ -7,9 +7,9 @@ dist/
 *.dylib
 
 # CLI binaries (should be in build/ directory)
-soundtouch-cli
-example-mdns
-example-upnp
+#soundtouch-cli
+#example-mdns
+#example-upnp
 
 # Environment configuration
 .env

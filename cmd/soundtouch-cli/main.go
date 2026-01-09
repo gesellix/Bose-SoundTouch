@@ -53,7 +53,7 @@ func main() {
 		name         = flag.Bool("name", false, "Get device name")
 		capabilities = flag.Bool("capabilities", false, "Get device capabilities")
 		presets      = flag.Bool("presets", false, "Get configured presets")
-		key          = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, VOLUME_UP, VOLUME_DOWN, PRESET_1-6)")
+		key          = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
 		play         = flag.Bool("play", false, "Send PLAY key command")
 		pause        = flag.Bool("pause", false, "Send PAUSE key command")
 		stop         = flag.Bool("stop", false, "Send STOP key command")
@@ -61,6 +61,10 @@ func main() {
 		prev         = flag.Bool("prev", false, "Send PREV_TRACK key command")
 		volumeUp     = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
 		volumeDown   = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
+		power        = flag.Bool("power", false, "Send POWER key command")
+		mute         = flag.Bool("mute", false, "Send MUTE key command")
+		thumbsUp     = flag.Bool("thumbs-up", false, "Send THUMBS_UP key command")
+		thumbsDown   = flag.Bool("thumbs-down", false, "Send THUMBS_DOWN key command")
 		preset       = flag.Int("preset", 0, "Select preset (1-6)")
 		volume       = flag.Bool("volume", false, "Get current volume level")
 		setVolume    = flag.Int("set-volume", -1, "Set volume level (0-100)")
@@ -77,7 +81,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && *host == "" {
 		printHelp()
 		return
 	}
@@ -164,11 +168,11 @@ func main() {
 	}
 
 	// Handle key commands
-	if *key != "" || *play || *pause || *stop || *next || *prev || *volumeUp || *volumeDown || *preset > 0 {
+	if *key != "" || *play || *pause || *stop || *next || *prev || *volumeUp || *volumeDown || *power || *mute || *thumbsUp || *thumbsDown || *preset > 0 {
 		if *host == "" {
 			log.Fatal("Host is required for key commands. Use -host flag or -discover to find devices.")
 		}
-		if err := handleKeyCommands(finalHost, finalPort, *timeout, *key, *play, *pause, *stop, *next, *prev, *volumeUp, *volumeDown, *preset); err != nil {
+		if err := handleKeyCommands(finalHost, finalPort, *timeout, *key, *play, *pause, *stop, *next, *prev, *volumeUp, *volumeDown, *power, *mute, *thumbsUp, *thumbsDown, *preset); err != nil {
 			log.Fatalf("Failed to send key command: %v", err)
 		}
 		return
@@ -205,6 +209,10 @@ func printHelp() {
 	fmt.Println("  -capabilities     Get device capabilities (requires -host)")
 	fmt.Println("  -presets          Get configured presets (requires -host)")
 	fmt.Println("  -key <key>        Send key command (requires -host)")
+	fmt.Println("                    Available keys: PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK")
+	fmt.Println("                    THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE")
+	fmt.Println("                    VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT")
+	fmt.Println("                    SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL")
 	fmt.Println("  -play             Send PLAY key command (requires -host)")
 	fmt.Println("  -pause            Send PAUSE key command (requires -host)")
 	fmt.Println("  -stop             Send STOP key command (requires -host)")
@@ -212,6 +220,10 @@ func printHelp() {
 	fmt.Println("  -prev             Send PREV_TRACK key command (requires -host)")
 	fmt.Println("  -volume-up        Send VOLUME_UP key command (requires -host)")
 	fmt.Println("  -volume-down      Send VOLUME_DOWN key command (requires -host)")
+	fmt.Println("  -power            Send POWER key command (requires -host)")
+	fmt.Println("  -mute             Send MUTE key command (requires -host)")
+	fmt.Println("  -thumbs-up        Send THUMBS_UP key command (requires -host)")
+	fmt.Println("  -thumbs-down      Send THUMBS_DOWN key command (requires -host)")
 	fmt.Println("  -preset <1-6>     Select preset (requires -host)")
 	fmt.Println("  -volume           Get current volume level (requires -host)")
 	fmt.Println("  -set-volume <0-100> Set volume level (requires -host)")
@@ -234,6 +246,11 @@ func printHelp() {
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -volume-up")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -preset 1")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key STOP")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -power")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -mute")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -thumbs-up")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key SHUFFLE_ON")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key REPEAT_ALL")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -volume")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -set-volume 25")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -inc-volume 2")
@@ -816,7 +833,7 @@ func handlePresets(host string, port int, timeout time.Duration) error {
 	return nil
 }
 
-func handleKeyCommands(host string, port int, timeout time.Duration, key string, play, pause, stop, next, prev, volumeUp, volumeDown bool, preset int) error {
+func handleKeyCommands(host string, port int, timeout time.Duration, key string, play, pause, stop, next, prev, volumeUp, volumeDown, power, mute, thumbsUp, thumbsDown bool, preset int) error {
 	cfg, err := config.LoadFromEnv()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -872,6 +889,22 @@ func handleKeyCommands(host string, port int, timeout time.Duration, key string,
 		commandCount++
 		commandName = "VOLUME_DOWN"
 	}
+	if power {
+		commandCount++
+		commandName = "POWER"
+	}
+	if mute {
+		commandCount++
+		commandName = "MUTE"
+	}
+	if thumbsUp {
+		commandCount++
+		commandName = "THUMBS_UP"
+	}
+	if thumbsDown {
+		commandCount++
+		commandName = "THUMBS_DOWN"
+	}
 	if preset > 0 {
 		commandCount++
 		commandName = fmt.Sprintf("PRESET_%d", preset)
@@ -904,6 +937,14 @@ func handleKeyCommands(host string, port int, timeout time.Duration, key string,
 		err = soundtouchClient.VolumeUp()
 	} else if volumeDown {
 		err = soundtouchClient.VolumeDown()
+	} else if power {
+		err = soundtouchClient.SendKey(models.KeyPower)
+	} else if mute {
+		err = soundtouchClient.SendKey(models.KeyMute)
+	} else if thumbsUp {
+		err = soundtouchClient.SendKey(models.KeyThumbsUp)
+	} else if thumbsDown {
+		err = soundtouchClient.SendKey(models.KeyThumbsDown)
 	} else if preset > 0 {
 		err = soundtouchClient.SelectPreset(preset)
 	}

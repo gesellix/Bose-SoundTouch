@@ -45,19 +45,40 @@ Our implementation uses **"Gabbo"** as the default sender, which is the standard
 
 ## Available Key Commands
 
-### Media Controls
+### Playback Controls
 - `PLAY` - Start playback
-- `PAUSE` - Pause playback
-- `STOP` - Stop playback
-- `PREV_TRACK` - Previous track
-- `NEXT_TRACK` - Next track
+- `PAUSE` - Pause current playback
+- `STOP` - Stop current playback
+- `PREV_TRACK` - Go to previous track
+- `NEXT_TRACK` - Go to next track
+
+### Rating and Bookmark Controls
+- `THUMBS_UP` - Rate current content positively (Pandora, etc.)
+- `THUMBS_DOWN` - Rate current content negatively
+- `BOOKMARK` - Bookmark current content
+
+### Power and System Controls
+- `POWER` - Toggle device power state
+- `MUTE` - Toggle mute state
 
 ### Volume Controls
 - `VOLUME_UP` - Increase volume
 - `VOLUME_DOWN` - Decrease volume
 
-### Presets
+### Preset Controls
 - `PRESET_1` through `PRESET_6` - Select preset 1-6
+
+### Input Controls
+- `AUX_INPUT` - Switch to auxiliary input
+
+### Shuffle Controls
+- `SHUFFLE_OFF` - Turn shuffle mode off
+- `SHUFFLE_ON` - Turn shuffle mode on
+
+### Repeat Controls
+- `REPEAT_OFF` - Turn repeat mode off
+- `REPEAT_ONE` - Repeat current track
+- `REPEAT_ALL` - Repeat all tracks in playlist
 
 ## Client API
 

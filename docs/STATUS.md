@@ -1,8 +1,8 @@
 # Project Status Summary
 
-**Last Updated**: 2026-01-08  
+**Last Updated**: 2026-01-09  
 **Current Version**: Development  
-**Branch**: `main`  
+**Branch**: `main`
 
 ## 🎯 Project Overview
 
@@ -25,6 +25,11 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
   - Play, pause, stop, track navigation
   - Volume up/down via keys
   - Preset selection (1-6)
+  - Power and mute controls
+  - Thumbs up/down rating controls
+  - Bookmark controls
+  - Shuffle and repeat controls
+  - AUX input switching
   - Proper press+release pattern implementation
 - `GET /volume` - Get volume level ✅ Complete
 - `POST /volume` - Set volume level ✅ Complete
@@ -93,23 +98,26 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - ✅ Cross-platform builds
 
 ### Phase 2: Core Controls (COMPLETE)
-- ✅ Media control via key commands
+- ✅ Media control via key commands (24 total keys)
 - ✅ Volume management with safety
 - ✅ Host:port parsing enhancement
 - ✅ Press+release API compliance
+- ✅ Power, mute, rating, and playback mode controls
 - ✅ Real device integration testing
 
 ### Key Technical Achievements
+- **Complete Key Controls**: All 24 documented key commands implemented
 - **API Compliance**: Proper press+release key pattern implementation
 - **Safety First**: Volume warnings and limits for user protection
 - **User Experience**: Host:port parsing (e.g., `-host 192.168.1.100:8090`)
+- **CLI Enhancement**: Direct flags for common keys (-power, -mute, -thumbs-up)
 - **Real Device Testing**: Validated with SoundTouch 10 and SoundTouch 20
 - **Production Ready**: Comprehensive error handling and validation
 
 ## 🧪 Test Coverage
 
 ### Unit Tests
-- **Key Controls**: 15+ test cases including press+release pattern
+- **Key Controls**: 30+ test cases for all 24 key types including press+release pattern
 - **Volume Management**: 30+ test cases with edge cases
 - **Host Parsing**: 20+ test cases for various formats
 - **XML Models**: Comprehensive marshaling/unmarshaling tests
@@ -204,6 +212,9 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 📝 Notes
 
 ### Recent Major Updates
+- **2026-01-09**: Complete key controls implementation (24 keys total)
+- **2026-01-09**: Enhanced CLI with power, mute, thumbs up/down flags
+- **2026-01-09**: Comprehensive mDNS/Bonjour discovery with unified service
 - **2026-01-08**: Volume control implementation with safety features
 - **2026-01-08**: Key controls with proper press+release pattern
 - **2026-01-08**: Host:port parsing enhancement
@@ -213,6 +224,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - None currently blocking development
 - Volume may be affected by external sources (Spotify app, etc.)
 - Some devices may have slight API variations
+- mDNS discovery may fail in corporate networks (expected behavior)
 
 ### Development Notes
 - All major architectural decisions documented
