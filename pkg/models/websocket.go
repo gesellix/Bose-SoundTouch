@@ -77,45 +77,6 @@ type WebSocketEvent struct {
 	Timestamp              time.Time                    `json:"timestamp"` // Added by client for tracking
 }
 
-// WebSocketMessage represents a single event message within the updates
-type WebSocketMessage struct {
-	XMLName   xml.Name           `json:"-"`
-	EventType WebSocketEventType `json:"eventType"`
-	Content   interface{}        `json:"content"`
-}
-
-// GetEventType returns the event type based on the XML element name
-func (m *WebSocketMessage) GetEventType() WebSocketEventType {
-	switch m.XMLName.Local {
-	case "nowPlayingUpdated":
-		return EventTypeNowPlaying
-	case "volumeUpdated":
-		return EventTypeVolumeUpdated
-	case "connectionStateUpdated":
-		return EventTypeConnectionState
-	case "presetUpdated":
-		return EventTypePresetUpdated
-	case "zoneUpdated":
-		return EventTypeZoneUpdated
-	case "bassUpdated":
-		return EventTypeBassUpdated
-	case "clockTimeUpdated":
-		return EventTypeClockTimeUpdated
-	case "clockDisplayUpdated":
-		return EventTypeClockDisplayUpdated
-	case "nameUpdated":
-		return EventTypeNameUpdated
-	case "errorUpdated":
-		return EventTypeErrorUpdated
-	case "recentsUpdated":
-		return EventTypeRecentsUpdated
-	case "languageUpdated":
-		return EventTypeLanguageUpdated
-	default:
-		return EventTypeUnknown
-	}
-}
-
 // GetEvents returns all events present in this WebSocket event
 func (e *WebSocketEvent) GetEvents() []interface{} {
 	var events []interface{}

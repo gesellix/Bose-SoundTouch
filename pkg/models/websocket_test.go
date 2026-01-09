@@ -1,7 +1,6 @@
 package models
 
 import (
-	"encoding/xml"
 	"testing"
 	"time"
 )
@@ -33,38 +32,6 @@ func TestWebSocketEventType_String(t *testing.T) {
 			result := tt.event.String()
 			if result != tt.expected {
 				t.Errorf("WebSocketEventType.String() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestWebSocketMessage_GetEventType(t *testing.T) {
-	tests := []struct {
-		name     string
-		xmlName  xml.Name
-		expected WebSocketEventType
-	}{
-		{"NowPlaying", xml.Name{Local: "nowPlayingUpdated"}, EventTypeNowPlaying},
-		{"VolumeUpdated", xml.Name{Local: "volumeUpdated"}, EventTypeVolumeUpdated},
-		{"ConnectionState", xml.Name{Local: "connectionStateUpdated"}, EventTypeConnectionState},
-		{"PresetUpdated", xml.Name{Local: "presetUpdated"}, EventTypePresetUpdated},
-		{"ZoneUpdated", xml.Name{Local: "zoneUpdated"}, EventTypeZoneUpdated},
-		{"BassUpdated", xml.Name{Local: "bassUpdated"}, EventTypeBassUpdated},
-		{"ClockTimeUpdated", xml.Name{Local: "clockTimeUpdated"}, EventTypeClockTimeUpdated},
-		{"ClockDisplayUpdated", xml.Name{Local: "clockDisplayUpdated"}, EventTypeClockDisplayUpdated},
-		{"NameUpdated", xml.Name{Local: "nameUpdated"}, EventTypeNameUpdated},
-		{"ErrorUpdated", xml.Name{Local: "errorUpdated"}, EventTypeErrorUpdated},
-		{"RecentsUpdated", xml.Name{Local: "recentsUpdated"}, EventTypeRecentsUpdated},
-		{"LanguageUpdated", xml.Name{Local: "languageUpdated"}, EventTypeLanguageUpdated},
-		{"Unknown", xml.Name{Local: "unknownEvent"}, EventTypeUnknown},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			msg := WebSocketMessage{XMLName: tt.xmlName}
-			result := msg.GetEventType()
-			if result != tt.expected {
-				t.Errorf("WebSocketMessage.GetEventType() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
