@@ -42,63 +42,66 @@ func parseHostPort(hostPort string, defaultPort int) (string, int) {
 
 func main() {
 	var (
-		host           = flag.String("host", "", "SoundTouch device host/IP address (can include port like host:8090)")
-		port           = flag.Int("port", 8090, "SoundTouch device port")
-		timeout        = flag.Duration("timeout", 10*time.Second, "Request timeout")
-		discover       = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
-		discoverAll    = flag.Bool("discover-all", false, "Discover all SoundTouch devices and show info")
-		info           = flag.Bool("info", false, "Get device information")
-		nowPlaying     = flag.Bool("nowplaying", false, "Get current playback status")
-		sources        = flag.Bool("sources", false, "Get available audio sources")
-		name           = flag.Bool("name", false, "Get device name")
-		capabilities   = flag.Bool("capabilities", false, "Get device capabilities")
-		presets        = flag.Bool("presets", false, "Get configured presets (requires -host)")
-		key            = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
-		play           = flag.Bool("play", false, "Send PLAY key command")
-		pause          = flag.Bool("pause", false, "Send PAUSE key command")
-		stop           = flag.Bool("stop", false, "Send STOP key command")
-		next           = flag.Bool("next", false, "Send NEXT_TRACK key command")
-		prev           = flag.Bool("prev", false, "Send PREV_TRACK key command")
-		volumeUp       = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
-		volumeDown     = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
-		power          = flag.Bool("power", false, "Send POWER key command")
-		mute           = flag.Bool("mute", false, "Send MUTE key command")
-		thumbsUp       = flag.Bool("thumbs-up", false, "Send THUMBS_UP key command")
-		thumbsDown     = flag.Bool("thumbs-down", false, "Send THUMBS_DOWN key command")
-		preset         = flag.Int("preset", 0, "Select preset (1-6)")
-		volume         = flag.Bool("volume", false, "Get current volume level")
-		setVolume      = flag.Int("set-volume", -1, "Set volume level (0-100)")
-		incVolume      = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
-		decVolume      = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
-		bass           = flag.Bool("bass", false, "Get current bass level")
-		setBass        = flag.Int("set-bass", -99, "Set bass level (-9 to +9)")
-		incBass        = flag.Int("inc-bass", 0, "Increase bass by amount (1-3, default: 1)")
-		decBass        = flag.Int("dec-bass", 0, "Decrease bass by amount (1-3, default: 1)")
-		balance        = flag.Bool("balance", false, "Get current balance level")
-		setBalance     = flag.Int("set-balance", -99, "Set balance level (-50 to +50)")
-		incBalance     = flag.Int("inc-balance", 0, "Increase balance by amount (1-10, default: 5)")
-		decBalance     = flag.Int("dec-balance", 0, "Decrease balance by amount (1-10, default: 5)")
-		selectSource   = flag.String("select-source", "", "Select audio source (SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC)")
-		sourceAccount  = flag.String("source-account", "", "Source account for streaming services (optional)")
-		spotify        = flag.Bool("spotify", false, "Select Spotify source")
-		bluetooth      = flag.Bool("bluetooth", false, "Select Bluetooth source")
-		aux            = flag.Bool("aux", false, "Select AUX input source")
-		clockTime      = flag.Bool("clock-time", false, "Get device clock time")
-		setClockTime   = flag.String("set-clock-time", "", "Set device clock time (format: 'now' or Unix timestamp)")
-		clockDisplay   = flag.Bool("clock-display", false, "Get clock display settings")
-		enableClock    = flag.Bool("enable-clock", false, "Enable clock display")
-		disableClock   = flag.Bool("disable-clock", false, "Disable clock display")
-		clockFormat    = flag.String("clock-format", "", "Set clock display format (12, 24, auto)")
-		clockBright    = flag.Int("clock-brightness", -1, "Set clock display brightness (0-100)")
-		networkInfo    = flag.Bool("network-info", false, "Get network information")
-		zone           = flag.Bool("zone", false, "Get current zone configuration")
-		zoneStatus     = flag.Bool("zone-status", false, "Get zone status for this device")
-		zoneMembers    = flag.Bool("zone-members", false, "List all devices in current zone")
-		createZone     = flag.String("create-zone", "", "Create zone with device IDs (comma-separated)")
-		addToZone      = flag.String("add-to-zone", "", "Add device to zone (format: deviceID@ip or deviceID)")
-		removeFromZone = flag.String("remove-from-zone", "", "Remove device from zone (device ID)")
-		dissolveZone   = flag.Bool("dissolve-zone", false, "Dissolve current zone (make standalone)")
-		help           = flag.Bool("help", false, "Show help")
+		host             = flag.String("host", "", "SoundTouch device host/IP address (can include port like host:8090)")
+		port             = flag.Int("port", 8090, "SoundTouch device port")
+		timeout          = flag.Duration("timeout", 10*time.Second, "Request timeout")
+		discover         = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
+		discoverAll      = flag.Bool("discover-all", false, "Discover all SoundTouch devices and show info")
+		info             = flag.Bool("info", false, "Get device information")
+		nowPlaying       = flag.Bool("nowplaying", false, "Get current playback status")
+		sources          = flag.Bool("sources", false, "Get available audio sources")
+		name             = flag.Bool("name", false, "Get device name")
+		capabilities     = flag.Bool("capabilities", false, "Get device capabilities")
+		presets          = flag.Bool("presets", false, "Get configured presets (requires -host)")
+		key              = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
+		play             = flag.Bool("play", false, "Send PLAY key command")
+		pause            = flag.Bool("pause", false, "Send PAUSE key command")
+		stop             = flag.Bool("stop", false, "Send STOP key command")
+		next             = flag.Bool("next", false, "Send NEXT_TRACK key command")
+		prev             = flag.Bool("prev", false, "Send PREV_TRACK key command")
+		volumeUp         = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
+		volumeDown       = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
+		power            = flag.Bool("power", false, "Send POWER key command")
+		mute             = flag.Bool("mute", false, "Send MUTE key command")
+		thumbsUp         = flag.Bool("thumbs-up", false, "Send THUMBS_UP key command")
+		thumbsDown       = flag.Bool("thumbs-down", false, "Send THUMBS_DOWN key command")
+		preset           = flag.Int("preset", 0, "Select preset (1-6)")
+		volume           = flag.Bool("volume", false, "Get current volume level")
+		setVolume        = flag.Int("set-volume", -1, "Set volume level (0-100)")
+		incVolume        = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
+		decVolume        = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
+		bass             = flag.Bool("bass", false, "Get current bass level")
+		setBass          = flag.Int("set-bass", -99, "Set bass level (-9 to +9)")
+		incBass          = flag.Int("inc-bass", 0, "Increase bass by amount (1-3, default: 1)")
+		decBass          = flag.Int("dec-bass", 0, "Decrease bass by amount (1-3, default: 1)")
+		balance          = flag.Bool("balance", false, "Get current balance level")
+		setBalance       = flag.Int("set-balance", -99, "Set balance level (-50 to +50)")
+		incBalance       = flag.Int("inc-balance", 0, "Increase balance by amount (1-10, default: 5)")
+		decBalance       = flag.Int("dec-balance", 0, "Decrease balance by amount (1-10, default: 5)")
+		selectSource     = flag.String("select-source", "", "Select audio source (SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC)")
+		sourceAccount    = flag.String("source-account", "", "Source account for streaming services (optional)")
+		spotify          = flag.Bool("spotify", false, "Select Spotify source")
+		bluetooth        = flag.Bool("bluetooth", false, "Select Bluetooth source")
+		aux              = flag.Bool("aux", false, "Select AUX input source")
+		clockTime        = flag.Bool("clock-time", false, "Get device clock time")
+		setClockTime     = flag.String("set-clock-time", "", "Set device clock time (format: 'now' or Unix timestamp)")
+		clockDisplay     = flag.Bool("clock-display", false, "Get clock display settings")
+		enableClock      = flag.Bool("enable-clock", false, "Enable clock display")
+		disableClock     = flag.Bool("disable-clock", false, "Disable clock display")
+		clockFormat      = flag.String("clock-format", "", "Set clock display format (12, 24, auto)")
+		clockBright      = flag.Int("clock-brightness", -1, "Set clock display brightness (0-100)")
+		networkInfo      = flag.Bool("network-info", false, "Get network information")
+		zone             = flag.Bool("zone", false, "Get current zone configuration")
+		zoneStatus       = flag.Bool("zone-status", false, "Get zone status for this device")
+		zoneMembers      = flag.Bool("zone-members", false, "List all devices in current zone")
+		createZone       = flag.String("create-zone", "", "Create zone with device IDs (comma-separated)")
+		addToZone        = flag.String("add-to-zone", "", "Add device to zone (format: deviceID@ip or deviceID)")
+		removeFromZone   = flag.String("remove-from-zone", "", "Remove device from zone (device ID)")
+		dissolveZone     = flag.Bool("dissolve-zone", false, "Dissolve current zone (make standalone)")
+		setName          = flag.String("set-name", "", "Set device name")
+		bassCapabilities = flag.Bool("bass-capabilities", false, "Get bass capabilities")
+		trackInfo        = flag.Bool("track-info", false, "Get track information")
+		help             = flag.Bool("help", false, "Show help")
 	)
 
 	flag.Parse()
@@ -109,7 +112,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && !*balance && *setBalance == -99 && *incBalance == 0 && *decBalance == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && !*clockTime && *setClockTime == "" && !*clockDisplay && !*enableClock && !*disableClock && *clockFormat == "" && *clockBright == -1 && !*networkInfo && !*zone && !*zoneStatus && !*zoneMembers && *createZone == "" && *addToZone == "" && *removeFromZone == "" && !*dissolveZone && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && !*balance && *setBalance == -99 && *incBalance == 0 && *decBalance == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && !*clockTime && *setClockTime == "" && !*clockDisplay && !*enableClock && !*disableClock && *clockFormat == "" && *clockBright == -1 && !*networkInfo && !*zone && !*zoneStatus && !*zoneMembers && *createZone == "" && *addToZone == "" && *removeFromZone == "" && !*dissolveZone && *setName == "" && !*bassCapabilities && !*trackInfo && *host == "" {
 		printHelp()
 		return
 	}
@@ -282,6 +285,120 @@ func main() {
 		}
 		return
 	}
+
+	// Handle set name command
+	if *setName != "" {
+		if *host == "" {
+			log.Fatal("Host is required for set-name command. Use -host flag or -discover to find devices.")
+		}
+		if err := handleSetName(finalHost, finalPort, *timeout, *setName); err != nil {
+			log.Fatalf("Failed to set device name: %v", err)
+		}
+		return
+	}
+
+	// Handle bass capabilities command
+	if *bassCapabilities {
+		if *host == "" {
+			log.Fatal("Host is required for bass-capabilities command. Use -host flag or -discover to find devices.")
+		}
+		if err := handleBassCapabilities(finalHost, finalPort, *timeout); err != nil {
+			log.Fatalf("Failed to get bass capabilities: %v", err)
+		}
+		return
+	}
+
+	// Handle track info command
+	if *trackInfo {
+		if *host == "" {
+			log.Fatal("Host is required for track-info command. Use -host flag or -discover to find devices.")
+		}
+		if err := handleTrackInfo(finalHost, finalPort, *timeout); err != nil {
+			log.Fatalf("Failed to get track info: %v", err)
+		}
+		return
+	}
+}
+
+// handleSetName sets the device name
+func handleSetName(host string, port int, timeout time.Duration, name string) error {
+	config := client.ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: timeout,
+	}
+
+	client := client.NewClient(config)
+
+	fmt.Printf("Setting device name to '%s'...\n", name)
+
+	if err := client.SetName(name); err != nil {
+		return fmt.Errorf("failed to set device name: %w", err)
+	}
+
+	fmt.Println("✅ Device name set successfully")
+	return nil
+}
+
+// handleBassCapabilities gets the bass capabilities
+func handleBassCapabilities(host string, port int, timeout time.Duration) error {
+	config := client.ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: timeout,
+	}
+
+	client := client.NewClient(config)
+
+	capabilities, err := client.GetBassCapabilities()
+	if err != nil {
+		return fmt.Errorf("failed to get bass capabilities: %w", err)
+	}
+
+	fmt.Printf("Bass Capabilities:\n")
+	if capabilities.IsBassSupported() {
+		fmt.Printf("  Bass Control: ✅ Supported\n")
+		fmt.Printf("  Range: %d to %d\n", capabilities.GetMinLevel(), capabilities.GetMaxLevel())
+		fmt.Printf("  Default: %d\n", capabilities.GetDefaultLevel())
+	} else {
+		fmt.Printf("  Bass Control: ❌ Not supported\n")
+	}
+
+	return nil
+}
+
+// handleTrackInfo gets the track information
+func handleTrackInfo(host string, port int, timeout time.Duration) error {
+	config := client.ClientConfig{
+		Host:    host,
+		Port:    port,
+		Timeout: timeout,
+	}
+
+	client := client.NewClient(config)
+
+	trackInfo, err := client.GetTrackInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get track info: %w", err)
+	}
+
+	fmt.Printf("Track Information:\n")
+	fmt.Printf("  Source: %s\n", trackInfo.Source)
+	if trackInfo.Track != "" {
+		fmt.Printf("  Track: %s\n", trackInfo.Track)
+	}
+	if trackInfo.Artist != "" {
+		fmt.Printf("  Artist: %s\n", trackInfo.Artist)
+	}
+	if trackInfo.Album != "" {
+		fmt.Printf("  Album: %s\n", trackInfo.Album)
+	}
+	if trackInfo.StationName != "" {
+		fmt.Printf("  Station: %s\n", trackInfo.StationName)
+	}
+	fmt.Printf("  Play Status: %s\n", trackInfo.PlayStatus)
+
+	return nil
 }
 
 func printHelp() {
@@ -366,6 +483,11 @@ func printHelp() {
 	fmt.Println("  -remove-from-zone <deviceID> Remove device from zone (requires -host)")
 	fmt.Println("  -dissolve-zone    Dissolve current zone, make device standalone (requires -host)")
 	fmt.Println()
+	fmt.Println("New API Endpoints:")
+	fmt.Println("  -set-name <name>  Set device name (requires -host)")
+	fmt.Println("  -bass-capabilities Get bass capabilities (requires -host)")
+	fmt.Println("  -track-info       Get track information (requires -host)")
+	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  soundtouch-cli -discover")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -info")
@@ -397,6 +519,9 @@ func printHelp() {
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -add-to-zone DEVICE456@192.168.1.11")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -remove-from-zone DEVICE456")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -dissolve-zone")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -set-name 'Living Room Speaker'")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -bass-capabilities")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -track-info")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -play")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10:8090 -pause")
 	fmt.Println("  soundtouch-cli -host 192.168.1.10 -volume-up")

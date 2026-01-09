@@ -79,7 +79,7 @@ type WebSocketEvent struct {
 
 // WebSocketMessage represents a single event message within the updates
 type WebSocketMessage struct {
-	XMLName   xml.Name           `xml:",any"`
+	XMLName   xml.Name           `json:"-"`
 	EventType WebSocketEventType `json:"eventType"`
 	Content   interface{}        `json:"content"`
 }

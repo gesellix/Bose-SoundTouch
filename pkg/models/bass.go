@@ -153,3 +153,57 @@ func (b *Bass) IsFlat() bool {
 func (b *Bass) GetBassChangeNeeded() int {
 	return b.TargetBass - b.ActualBass
 }
+
+// BassCapabilities represents the response from /bassCapabilities endpoint
+type BassCapabilities struct {
+	XMLName       xml.Name `xml:"bassCapabilities"`
+	DeviceID      string   `xml:"deviceID,attr"`
+	BassAvailable bool     `xml:"bassAvailable"`
+	BassMin       int      `xml:"bassMin"`
+	BassMax       int      `xml:"bassMax"`
+	BassDefault   int      `xml:"bassDefault"`
+}
+
+// IsBassSupported returns true if bass control is supported
+func (bc *BassCapabilities) IsBassSupported() bool {
+	return bc.BassAvailable
+}
+
+// GetMinLevel returns the minimum bass level
+func (bc *BassCapabilities) GetMinLevel() int {
+	return bc.BassMin
+}
+
+// GetMaxLevel returns the maximum bass level
+func (bc *BassCapabilities) GetMaxLevel() int {
+	return bc.BassMax
+}
+
+// GetDefaultLevel returns the default bass level
+func (bc *BassCapabilities) GetDefaultLevel() int {
+	return bc.BassDefault
+}
+
+// ValidateLevel returns true if the level is within supported range
+func (bc *BassCapabilities) ValidateLevel(level int) bool {
+	return level >= bc.BassMin && level <= bc.BassMax
+}
+
+// ClampLevel clamps a level to the supported range
+func (bc *BassCapabilities) ClampLevel(level int) int {
+	if level < bc.BassMin {
+		return bc.BassMin
+	}
+	if level > bc.BassMax {
+		return bc.BassMax
+	}
+	return level
+}
+
+// String returns a human-readable string representation
+func (bc *BassCapabilities) String() string {
+	if !bc.BassAvailable {
+		return "Bass control not supported"
+	}
+	return fmt.Sprintf("Bass: %d to %d (default: %d)", bc.BassMin, bc.BassMax, bc.BassDefault)
+}

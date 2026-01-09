@@ -842,3 +842,27 @@ func (c *Client) GetZoneMembers() ([]string, error) {
 
 	return zone.GetAllDeviceIDs(), nil
 }
+
+// SetName sets the device name
+func (c *Client) SetName(name string) error {
+	nameRequest := models.Name{
+		XMLName: xml.Name{Local: "name"},
+		Value:   name,
+	}
+
+	return c.post("/name", nameRequest, nil)
+}
+
+// GetBassCapabilities retrieves the bass capabilities for the device
+func (c *Client) GetBassCapabilities() (*models.BassCapabilities, error) {
+	var bassCapabilities models.BassCapabilities
+	err := c.get("/bassCapabilities", &bassCapabilities)
+	return &bassCapabilities, err
+}
+
+// GetTrackInfo retrieves track information (duplicate of GetNowPlaying per official API)
+func (c *Client) GetTrackInfo() (*models.NowPlaying, error) {
+	var nowPlaying models.NowPlaying
+	err := c.get("/trackInfo", &nowPlaying)
+	return &nowPlaying, err
+}
