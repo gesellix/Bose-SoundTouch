@@ -296,6 +296,70 @@ func (c *Client) DecreaseVolume(amount int) (*models.Volume, error) {
 	return c.GetVolume()
 }
 
+// GetBass retrieves the current bass level from the /bass endpoint
+func (c *Client) GetBass() (*models.Bass, error) {
+	var bass models.Bass
+	err := c.get("/bass", &bass)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bass: %w", err)
+	}
+	return &bass, nil
+}
+
+// SetBass sets the bass level using the /bass endpoint
+func (c *Client) SetBass(level int) error {
+	if !models.ValidateBassLevel(level) {
+		return fmt.Errorf("invalid bass level: %d (must be between %d and %d)", level, models.BassLevelMin, models.BassLevelMax)
+	}
+
+	bassReq, err := models.NewBassRequest(level)
+	if err != nil {
+		return fmt.Errorf("failed to create bass request: %w", err)
+	}
+
+	return c.post("/bass", bassReq, nil)
+}
+
+// SetBassSafe sets bass with validation and clamping
+func (c *Client) SetBassSafe(level int) error {
+	clampedLevel := models.ClampBassLevel(level)
+	return c.SetBass(clampedLevel)
+}
+
+// IncreaseBass increases bass by the specified amount (with safety limits)
+func (c *Client) IncreaseBass(amount int) (*models.Bass, error) {
+	currentBass, err := c.GetBass()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current bass: %w", err)
+	}
+
+	newLevel := models.ClampBassLevel(currentBass.GetLevel() + amount)
+	err = c.SetBass(newLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set bass: %w", err)
+	}
+
+	// Return updated bass
+	return c.GetBass()
+}
+
+// DecreaseBass decreases bass by the specified amount (with safety limits)
+func (c *Client) DecreaseBass(amount int) (*models.Bass, error) {
+	currentBass, err := c.GetBass()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current bass: %w", err)
+	}
+
+	newLevel := models.ClampBassLevel(currentBass.GetLevel() - amount)
+	err = c.SetBass(newLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set bass: %w", err)
+	}
+
+	// Return updated bass
+	return c.GetBass()
+}
+
 // SelectSource selects an audio source using the /select endpoint
 func (c *Client) SelectSource(source string, sourceAccount string) error {
 	// Validate source parameter

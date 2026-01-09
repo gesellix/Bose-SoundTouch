@@ -126,7 +126,7 @@ Sets the volume.
 
 ## Bass Settings
 
-### GET /bass 🔄 **Planned**
+### GET /bass ✅ **Implemented**
 Retrieves the current bass settings.
 
 **Response XML:**
@@ -137,7 +137,7 @@ Retrieves the current bass settings.
 </bass>
 ```
 
-### POST /bass 🔄 **Planned**
+### POST /bass ✅ **Implemented**
 Sets the bass settings (-9 to +9).
 
 **Request XML:**

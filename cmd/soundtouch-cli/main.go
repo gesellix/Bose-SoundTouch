@@ -70,6 +70,10 @@ func main() {
 		setVolume     = flag.Int("set-volume", -1, "Set volume level (0-100)")
 		incVolume     = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
 		decVolume     = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
+		bass          = flag.Bool("bass", false, "Get current bass level")
+		setBass       = flag.Int("set-bass", -99, "Set bass level (-9 to +9)")
+		incBass       = flag.Int("inc-bass", 0, "Increase bass by amount (1-3, default: 1)")
+		decBass       = flag.Int("dec-bass", 0, "Decrease bass by amount (1-3, default: 1)")
 		selectSource  = flag.String("select-source", "", "Select audio source (SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC)")
 		sourceAccount = flag.String("source-account", "", "Source account for streaming services (optional)")
 		spotify       = flag.Bool("spotify", false, "Select Spotify source")
@@ -86,7 +90,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && *host == "" {
 		printHelp()
 		return
 	}
@@ -194,6 +198,17 @@ func main() {
 		return
 	}
 
+	// Handle bass commands
+	if *bass || *setBass != -99 || *incBass > 0 || *decBass > 0 {
+		if *host == "" {
+			log.Fatal("Host is required for bass commands. Use -host flag or -discover to find devices.")
+		}
+		if err := handleBassCommands(finalHost, finalPort, *timeout, *bass, *setBass, *incBass, *decBass); err != nil {
+			log.Fatalf("Failed to execute bass command: %v", err)
+		}
+		return
+	}
+
 	// Handle source selection commands
 	if *selectSource != "" || *spotify || *bluetooth || *aux {
 		if *host == "" {
@@ -246,6 +261,12 @@ func printHelp() {
 	fmt.Println("  -inc-volume <n>   Increase volume by amount (1-10, default: 2)")
 	fmt.Println("  -dec-volume <n>   Decrease volume by amount (1-10, default: 2)")
 	fmt.Println()
+	fmt.Println("Bass Control:")
+	fmt.Println("  -bass             Get current bass level (requires -host)")
+	fmt.Println("  -set-bass <-9-+9> Set bass level (requires -host)")
+	fmt.Println("  -inc-bass <n>     Increase bass by amount (1-3, default: 1)")
+	fmt.Println("  -dec-bass <n>     Decrease bass by amount (1-3, default: 1)")
+	fmt.Println()
 	fmt.Println("Source Selection:")
 	fmt.Println("  -select-source <source>  Select audio source (requires -host)")
 	fmt.Println("                          Available: SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC")
@@ -260,6 +281,8 @@ func printHelp() {
 	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -nowplaying")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -play")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-volume 50")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -bass")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-bass 3")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key NEXT_TRACK")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -preset 1")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -select-source SPOTIFY")
@@ -1155,4 +1178,104 @@ func handleSourceCommands(host string, port int, timeout time.Duration, selectSo
 	}
 
 	return nil
+}
+
+// handleBassCommands handles bass control commands
+func handleBassCommands(host string, port int, timeout time.Duration, getBass bool, setBass, incBass, decBass int) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	// Handle get bass
+	if getBass {
+		fmt.Printf("Getting current bass level from %s:%d...\n", host, port)
+		bass, err := soundtouchClient.GetBass()
+		if err != nil {
+			return fmt.Errorf("failed to get bass: %w", err)
+		}
+
+		fmt.Printf("Bass Level: %d (%s)\n", bass.GetLevel(), models.GetBassLevelName(bass.GetLevel()))
+		fmt.Printf("Category: %s\n", models.GetBassLevelCategory(bass.GetLevel()))
+		if !bass.IsAtTarget() {
+			fmt.Printf("Target: %d, Actual: %d (adjusting...)\n", bass.TargetBass, bass.ActualBass)
+		}
+		return nil
+	}
+
+	// Handle set bass
+	if setBass != -99 {
+		if !models.ValidateBassLevel(setBass) {
+			return fmt.Errorf("invalid bass level: %d (must be between %d and %d)", setBass, models.BassLevelMin, models.BassLevelMax)
+		}
+
+		fmt.Printf("Setting bass to %d on %s:%d...\n", setBass, host, port)
+		err := soundtouchClient.SetBass(setBass)
+		if err != nil {
+			return fmt.Errorf("failed to set bass: %w", err)
+		}
+
+		// Get updated bass level to confirm
+		bass, err := soundtouchClient.GetBass()
+		if err != nil {
+			fmt.Printf("✓ Bass set successfully\n")
+		} else {
+			fmt.Printf("✓ Bass set to %d (%s)\n", bass.GetLevel(), models.GetBassLevelName(bass.GetLevel()))
+		}
+		return nil
+	}
+
+	// Handle bass increase (with safety limits)
+	if incBass > 0 {
+		if incBass > 3 {
+			incBass = 3 // Safety limit
+		}
+		if incBass == 0 {
+			incBass = 1 // Default increment
+		}
+
+		fmt.Printf("Increasing bass by %d on %s:%d...\n", incBass, host, port)
+		bass, err := soundtouchClient.IncreaseBass(incBass)
+		if err != nil {
+			return fmt.Errorf("failed to increase bass: %w", err)
+		}
+
+		fmt.Printf("✓ Bass increased to %d (%s)\n", bass.GetLevel(), models.GetBassLevelName(bass.GetLevel()))
+		return nil
+	}
+
+	// Handle bass decrease
+	if decBass > 0 {
+		if decBass > 3 {
+			decBass = 3 // Safety limit for decrease
+		}
+		if decBass == 0 {
+			decBass = 1 // Default decrement
+		}
+
+		fmt.Printf("Decreasing bass by %d on %s:%d...\n", decBass, host, port)
+		bass, err := soundtouchClient.DecreaseBass(decBass)
+		if err != nil {
+			return fmt.Errorf("failed to decrease bass: %w", err)
+		}
+
+		fmt.Printf("✓ Bass decreased to %d (%s)\n", bass.GetLevel(), models.GetBassLevelName(bass.GetLevel()))
+		return nil
+	}
+
+	return fmt.Errorf("no bass command specified")
 }
