@@ -106,7 +106,7 @@ jobs:
           path: soundtouch-cli-*
 
   security:
-    name: Security Scan
+    name: Basic Security Check
     runs-on: ubuntu-latest
 
     steps:
@@ -118,16 +118,16 @@ jobs:
         with:
           go-version-file: "go.mod"
 
-      - name: Install Gosec
-        run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
-
-      - name: Run Gosec Security Scanner
-        run: gosec ./...
-
-      - name: Run Nancy vulnerability scanner
+      - name: Run basic vulnerability check
         run: |
-          go install github.com/sonatypecommunity/nancy@latest
-          go list -json -deps ./... | nancy sleuth
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Security scan reminder
+        run: |
+          echo "ℹ️ This is a basic security check for CI speed."
+          echo "For comprehensive security scanning, see the Security workflow:"
+          echo "https://github.com/${{ github.repository }}/actions/workflows/security.yml"
 
   docs:
     name: Documentation Check

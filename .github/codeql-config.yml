@@ -1,0 +1,74 @@
+# CodeQL configuration for enhanced security analysis
+# See: https://docs.github.com/en/code-security/codeql-cli/using-the-codeql-cli/creating-codeql-query-suites
+
+name: "Go Security Analysis"
+
+disable-default-queries: false
+
+queries:
+  # Include default security queries
+  - uses: security-extended
+  - uses: security-and-quality
+
+  # Additional Go-specific security queries
+  - name: go-security-extra
+    uses:
+      - go/bad-redirect-check
+      - go/clear-text-logging
+      - go/incorrect-integer-conversion
+      - go/log-injection
+      - go/missing-regexp-anchor
+      - go/path-injection
+      - go/request-forgery
+      - go/sensitive-package-import
+      - go/sql-injection
+      - go/uncontrolled-allocation-size
+      - go/unsafe-quoting
+      - go/useless-regexp-character-escape
+      - go/zip-slip
+
+# Configure paths to exclude from analysis
+paths-ignore:
+  - "**/*.pb.go"          # Generated protobuf files
+  - "**/*_gen.go"         # Generated code
+  - "**/vendor/**"        # Vendor dependencies
+  - "**/build/**"         # Build artifacts
+  - "**/scripts/**"       # Build scripts
+  - "**/*_test.go"        # Test files (optional - remove if you want to analyze tests)
+
+# Configure paths to include (if not specified, all Go files are included)
+paths:
+  - "cmd/**/*.go"
+  - "pkg/**/*.go"
+  - "*.go"
+
+# Query filters to reduce noise
+query-filters:
+  - exclude:
+      id: go/unused-variable
+      reason: "Can be noisy in development"
+  - exclude:
+      id: go/hardcoded-credentials
+      reason: "Will be handled by separate secret scanning"
+
+# Configuration for specific query packs
+packs:
+  # Use the official CodeQL Go queries
+  - codeql/go-queries
+
+  # Additional community query packs for enhanced security
+  - codeql/go-queries@~0.0.0  # Latest version
+
+# Custom configuration for specific queries
+query-config:
+  go/path-injection:
+    # Configure severity levels
+    severity: "error"
+  go/sql-injection:
+    severity: "error"
+  go/request-forgery:
+    severity: "warning"
+  go/log-injection:
+    severity: "warning"
+  go/clear-text-logging:
+    severity: "note"

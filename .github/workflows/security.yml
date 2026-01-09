@@ -1,0 +1,172 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  vulnerability-scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install security scanning tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/sonatypecommunity/nancy@latest
+
+      - name: Run govulncheck (Official Go vulnerability scanner)
+        run: |
+          echo "::group::Running govulncheck"
+          govulncheck ./...
+          echo "::endgroup::"
+
+      - name: Run Nancy vulnerability scanner
+        run: |
+          echo "::group::Running Nancy dependency scanner"
+          go list -json -deps ./... | nancy sleuth
+          echo "::endgroup::"
+
+      - name: Upload vulnerability scan results
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vulnerability-scan-results
+          path: |
+            vulnerability-report.json
+            nancy-report.json
+
+  static-analysis:
+    name: Static Security Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install static analysis tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck security analysis
+        run: |
+          echo "::group::Running staticcheck"
+          staticcheck ./...
+          echo "::endgroup::"
+
+      - name: Run Semgrep security analysis
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/golang
+          generateSarif: "1"
+        continue-on-error: true
+
+      - name: Upload Semgrep SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        continue-on-error: true
+
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          config-file: ./.github/codeql-config.yml
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:go"
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          allow-ghsas: GHSA-xxxx-xxxx-xxxx  # Add specific allowlisted advisories if needed
+          deny-licenses: GPL-2.0, LGPL-2.0  # Add licenses to deny if needed
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [vulnerability-scan, static-analysis, codeql-analysis]
+    if: always()
+
+    steps:
+      - name: Security scan summary
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.vulnerability-scan.result }}" == "success" ]]; then
+            echo "✅ **Vulnerability Scan**: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Vulnerability Scan**: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.static-analysis.result }}" == "success" ]]; then
+            echo "✅ **Static Analysis**: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Static Analysis**: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.codeql-analysis.result }}" == "success" ]]; then
+            echo "✅ **CodeQL Analysis**: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **CodeQL Analysis**: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For detailed results, check the individual job logs above." >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail on security issues
+        if: needs.vulnerability-scan.result == 'failure' || needs.static-analysis.result == 'failure' || needs.codeql-analysis.result == 'failure'
+        run: |
+          echo "Security scan detected issues. Please review the results above."
+          exit 1
