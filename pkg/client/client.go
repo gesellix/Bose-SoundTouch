@@ -296,6 +296,77 @@ func (c *Client) DecreaseVolume(amount int) (*models.Volume, error) {
 	return c.GetVolume()
 }
 
+// SelectSource selects an audio source using the /select endpoint
+func (c *Client) SelectSource(source string, sourceAccount string) error {
+	// Validate source parameter
+	if source == "" {
+		return fmt.Errorf("source cannot be empty")
+	}
+
+	// Create ContentItem for source selection
+	contentItem := &models.ContentItem{
+		Source:        source,
+		SourceAccount: sourceAccount,
+		ItemName:      source, // Use source as default item name
+	}
+
+	// For certain sources, we might want to customize the item name
+	switch source {
+	case "SPOTIFY":
+		contentItem.ItemName = "Spotify"
+	case "BLUETOOTH":
+		contentItem.ItemName = "Bluetooth"
+	case "AUX":
+		contentItem.ItemName = "AUX Input"
+	case "TUNEIN":
+		contentItem.ItemName = "TuneIn"
+	case "PANDORA":
+		contentItem.ItemName = "Pandora"
+	case "AMAZON":
+		contentItem.ItemName = "Amazon Music"
+	case "IHEARTRADIO":
+		contentItem.ItemName = "iHeartRadio"
+	case "STORED_MUSIC":
+		contentItem.ItemName = "Stored Music"
+	}
+
+	return c.post("/select", contentItem, nil)
+}
+
+// SelectSourceFromItem selects an audio source using a SourceItem
+func (c *Client) SelectSourceFromItem(sourceItem *models.SourceItem) error {
+	if sourceItem == nil {
+		return fmt.Errorf("sourceItem cannot be nil")
+	}
+
+	return c.SelectSource(sourceItem.Source, sourceItem.SourceAccount)
+}
+
+// SelectSpotify is a convenience method to select Spotify source
+func (c *Client) SelectSpotify(sourceAccount string) error {
+	return c.SelectSource("SPOTIFY", sourceAccount)
+}
+
+// SelectBluetooth is a convenience method to select Bluetooth source
+func (c *Client) SelectBluetooth() error {
+	return c.SelectSource("BLUETOOTH", "")
+}
+
+// SelectAux is a convenience method to select AUX input
+func (c *Client) SelectAux() error {
+	return c.SelectSource("AUX", "")
+}
+
+// SelectTuneIn is a convenience method to select TuneIn source
+func (c *Client) SelectTuneIn(sourceAccount string) error {
+	return c.SelectSource("TUNEIN", sourceAccount)
+}
+
+// SelectPandora is a convenience method to select Pandora source
+func (c *Client) SelectPandora(sourceAccount string) error {
+	return c.SelectSource("PANDORA", sourceAccount)
+}
+
 // Ping checks if the device is reachable by calling /info
 func (c *Client) Ping() error {
 	_, err := c.GetDeviceInfo()

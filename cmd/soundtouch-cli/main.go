@@ -42,35 +42,40 @@ func parseHostPort(hostPort string, defaultPort int) (string, int) {
 
 func main() {
 	var (
-		host         = flag.String("host", "", "SoundTouch device host/IP address (can include port like host:8090)")
-		port         = flag.Int("port", 8090, "SoundTouch device port")
-		timeout      = flag.Duration("timeout", 10*time.Second, "Request timeout")
-		discover     = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
-		discoverAll  = flag.Bool("discover-all", false, "Discover all SoundTouch devices and show info")
-		info         = flag.Bool("info", false, "Get device information")
-		nowPlaying   = flag.Bool("nowplaying", false, "Get current playback status")
-		sources      = flag.Bool("sources", false, "Get available audio sources")
-		name         = flag.Bool("name", false, "Get device name")
-		capabilities = flag.Bool("capabilities", false, "Get device capabilities")
-		presets      = flag.Bool("presets", false, "Get configured presets")
-		key          = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
-		play         = flag.Bool("play", false, "Send PLAY key command")
-		pause        = flag.Bool("pause", false, "Send PAUSE key command")
-		stop         = flag.Bool("stop", false, "Send STOP key command")
-		next         = flag.Bool("next", false, "Send NEXT_TRACK key command")
-		prev         = flag.Bool("prev", false, "Send PREV_TRACK key command")
-		volumeUp     = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
-		volumeDown   = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
-		power        = flag.Bool("power", false, "Send POWER key command")
-		mute         = flag.Bool("mute", false, "Send MUTE key command")
-		thumbsUp     = flag.Bool("thumbs-up", false, "Send THUMBS_UP key command")
-		thumbsDown   = flag.Bool("thumbs-down", false, "Send THUMBS_DOWN key command")
-		preset       = flag.Int("preset", 0, "Select preset (1-6)")
-		volume       = flag.Bool("volume", false, "Get current volume level")
-		setVolume    = flag.Int("set-volume", -1, "Set volume level (0-100)")
-		incVolume    = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
-		decVolume    = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
-		help         = flag.Bool("help", false, "Show help")
+		host          = flag.String("host", "", "SoundTouch device host/IP address (can include port like host:8090)")
+		port          = flag.Int("port", 8090, "SoundTouch device port")
+		timeout       = flag.Duration("timeout", 10*time.Second, "Request timeout")
+		discover      = flag.Bool("discover", false, "Discover SoundTouch devices via UPnP")
+		discoverAll   = flag.Bool("discover-all", false, "Discover all SoundTouch devices and show info")
+		info          = flag.Bool("info", false, "Get device information")
+		nowPlaying    = flag.Bool("nowplaying", false, "Get current playback status")
+		sources       = flag.Bool("sources", false, "Get available audio sources")
+		name          = flag.Bool("name", false, "Get device name")
+		capabilities  = flag.Bool("capabilities", false, "Get device capabilities")
+		presets       = flag.Bool("presets", false, "Get configured presets")
+		key           = flag.String("key", "", "Send key command (PLAY, PAUSE, STOP, PREV_TRACK, NEXT_TRACK, THUMBS_UP, THUMBS_DOWN, BOOKMARK, POWER, MUTE, VOLUME_UP, VOLUME_DOWN, PRESET_1-6, AUX_INPUT, SHUFFLE_OFF, SHUFFLE_ON, REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)")
+		play          = flag.Bool("play", false, "Send PLAY key command")
+		pause         = flag.Bool("pause", false, "Send PAUSE key command")
+		stop          = flag.Bool("stop", false, "Send STOP key command")
+		next          = flag.Bool("next", false, "Send NEXT_TRACK key command")
+		prev          = flag.Bool("prev", false, "Send PREV_TRACK key command")
+		volumeUp      = flag.Bool("volume-up", false, "Send VOLUME_UP key command")
+		volumeDown    = flag.Bool("volume-down", false, "Send VOLUME_DOWN key command")
+		power         = flag.Bool("power", false, "Send POWER key command")
+		mute          = flag.Bool("mute", false, "Send MUTE key command")
+		thumbsUp      = flag.Bool("thumbs-up", false, "Send THUMBS_UP key command")
+		thumbsDown    = flag.Bool("thumbs-down", false, "Send THUMBS_DOWN key command")
+		preset        = flag.Int("preset", 0, "Select preset (1-6)")
+		volume        = flag.Bool("volume", false, "Get current volume level")
+		setVolume     = flag.Int("set-volume", -1, "Set volume level (0-100)")
+		incVolume     = flag.Int("inc-volume", 0, "Increase volume by amount (1-10, default: 2)")
+		decVolume     = flag.Int("dec-volume", 0, "Decrease volume by amount (1-10, default: 2)")
+		selectSource  = flag.String("select-source", "", "Select audio source (SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC)")
+		sourceAccount = flag.String("source-account", "", "Source account for streaming services (optional)")
+		spotify       = flag.Bool("spotify", false, "Select Spotify source")
+		bluetooth     = flag.Bool("bluetooth", false, "Select Bluetooth source")
+		aux           = flag.Bool("aux", false, "Select AUX input source")
+		help          = flag.Bool("help", false, "Show help")
 	)
 
 	flag.Parse()
@@ -81,7 +86,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && *host == "" {
 		printHelp()
 		return
 	}
@@ -188,6 +193,17 @@ func main() {
 		}
 		return
 	}
+
+	// Handle source selection commands
+	if *selectSource != "" || *spotify || *bluetooth || *aux {
+		if *host == "" {
+			log.Fatal("Host is required for source selection. Use -host flag or -discover to find devices.")
+		}
+		if err := handleSourceCommands(finalHost, finalPort, *timeout, *selectSource, *sourceAccount, *spotify, *bluetooth, *aux); err != nil {
+			log.Fatalf("Failed to select source: %v", err)
+		}
+		return
+	}
 }
 
 func printHelp() {
@@ -227,18 +243,28 @@ func printHelp() {
 	fmt.Println("  -preset <1-6>     Select preset (requires -host)")
 	fmt.Println("  -volume           Get current volume level (requires -host)")
 	fmt.Println("  -set-volume <0-100> Set volume level (requires -host)")
-	fmt.Println("  -inc-volume <1-10>  Increase volume by amount (requires -host, default: 2)")
-	fmt.Println("  -dec-volume <1-10>  Decrease volume by amount (requires -host, default: 2)")
-	fmt.Println("  -help             Show this help message")
+	fmt.Println("  -inc-volume <n>   Increase volume by amount (1-10, default: 2)")
+	fmt.Println("  -dec-volume <n>   Decrease volume by amount (1-10, default: 2)")
+	fmt.Println()
+	fmt.Println("Source Selection:")
+	fmt.Println("  -select-source <source>  Select audio source (requires -host)")
+	fmt.Println("                          Available: SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC")
+	fmt.Println("  -source-account <account> Source account for streaming services (optional)")
+	fmt.Println("  -spotify          Select Spotify source (requires -host)")
+	fmt.Println("  -bluetooth        Select Bluetooth source (requires -host)")
+	fmt.Println("  -aux              Select AUX input source (requires -host)")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  soundtouch-cli -discover")
-	fmt.Println("  soundtouch-cli -discover-all")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -info")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -info")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -nowplaying")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -sources")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -name")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -nowplaying")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -play")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-volume 50")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key NEXT_TRACK")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -preset 1")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -select-source SPOTIFY")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -bluetooth")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -aux")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -capabilities")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -presets")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -play")
@@ -1059,4 +1085,74 @@ func handleVolumeCommands(host string, port int, timeout time.Duration, getVolum
 	}
 
 	return fmt.Errorf("no volume command specified")
+}
+
+// handleSourceCommands handles source selection commands
+func handleSourceCommands(host string, port int, timeout time.Duration, selectSource, sourceAccount string, spotify, bluetooth, aux bool) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	c := client.NewClient(clientConfig)
+
+	// Handle convenience flags first
+	if spotify {
+		fmt.Printf("Selecting Spotify source...\n")
+		err := c.SelectSpotify(sourceAccount)
+		if err != nil {
+			return fmt.Errorf("failed to select Spotify: %w", err)
+		}
+		fmt.Println("✓ Spotify source selected successfully")
+		return nil
+	}
+
+	if bluetooth {
+		fmt.Printf("Selecting Bluetooth source...\n")
+		err := c.SelectBluetooth()
+		if err != nil {
+			return fmt.Errorf("failed to select Bluetooth: %w", err)
+		}
+		fmt.Println("✓ Bluetooth source selected successfully")
+		return nil
+	}
+
+	if aux {
+		fmt.Printf("Selecting AUX input source...\n")
+		err := c.SelectAux()
+		if err != nil {
+			return fmt.Errorf("failed to select AUX: %w", err)
+		}
+		fmt.Println("✓ AUX input source selected successfully")
+		return nil
+	}
+
+	// Handle generic source selection
+	if selectSource != "" {
+		fmt.Printf("Selecting source: %s", selectSource)
+		if sourceAccount != "" {
+			fmt.Printf(" (account: %s)", sourceAccount)
+		}
+		fmt.Printf("...\n")
+
+		err := c.SelectSource(selectSource, sourceAccount)
+		if err != nil {
+			return fmt.Errorf("failed to select source %s: %w", selectSource, err)
+		}
+		fmt.Printf("✓ Source %s selected successfully\n", selectSource)
+	}
+
+	return nil
 }

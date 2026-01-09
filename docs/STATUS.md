@@ -63,9 +63,9 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 🔄 Next Priority (Remaining Endpoints)
 
 ### **Control Endpoints - HIGH PRIORITY**
-- `POST /select` - Audio source selection
 - `GET /bass`, `POST /bass` - Bass control (-9 to +9)
 - `POST /presets` - Create/update presets
+
 
 ### **System Endpoints - MEDIUM PRIORITY**  
 - `GET /balance`, `POST /balance` - Stereo balance
@@ -83,10 +83,10 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 | Category | Implemented | Total | Percentage |
 |----------|-------------|-------|------------|
 | **Core Info Endpoints** | 6/6 | 6 | 100% |
-| **Control Endpoints** | 2/5 | 5 | 40% |
+| **Control Endpoints** | 3/5 | 5 | 60% |
 | **System Endpoints** | 1/8 | 8 | 12.5% |
 | **Real-time Features** | 0/1 | 1 | 0% |
-| **Overall Progress** | 9/20 | 20 | **45%** |
+| **Overall Progress** | 10/20 | 20 | **50%** |
 
 ## 🏆 Major Accomplishments
 
@@ -100,6 +100,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ### Phase 2: Core Controls (COMPLETE)
 - ✅ Media control via key commands (24 total keys)
 - ✅ Volume management with safety
+- ✅ Source selection with convenience methods
 - ✅ Host:port parsing enhancement
 - ✅ Press+release API compliance
 - ✅ Power, mute, rating, and playback mode controls
@@ -107,10 +108,11 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 
 ### Key Technical Achievements
 - **Complete Key Controls**: All 24 documented key commands implemented
+- **Source Selection**: Full source switching with convenience methods (-spotify, -bluetooth, -aux)
 - **API Compliance**: Proper press+release key pattern implementation
 - **Safety First**: Volume warnings and limits for user protection
 - **User Experience**: Host:port parsing (e.g., `-host 192.168.1.100:8090`)
-- **CLI Enhancement**: Direct flags for common keys (-power, -mute, -thumbs-up)
+- **CLI Enhancement**: Direct flags for common operations and source selection
 - **Real Device Testing**: Validated with SoundTouch 10 and SoundTouch 20
 - **Production Ready**: Comprehensive error handling and validation
 
@@ -119,6 +121,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ### Unit Tests
 - **Key Controls**: 30+ test cases for all 24 key types including press+release pattern
 - **Volume Management**: 30+ test cases with edge cases
+- **Source Selection**: 30+ test cases for all source types and convenience methods
 - **Host Parsing**: 20+ test cases for various formats
 - **XML Models**: Comprehensive marshaling/unmarshaling tests
 - **HTTP Client**: Mock server tests with real response data
@@ -126,7 +129,8 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ### Integration Tests
 - **Real Devices**: SoundTouch 10 (192.168.178.28) and SoundTouch 20 (192.168.178.35)
 - **All Endpoints**: Validated against actual hardware
-- **Error Scenarios**: Network timeouts, invalid responses
+- **Source Selection**: Tested with Spotify, TuneIn, and other available sources
+- **Error Scenarios**: Network timeouts, invalid responses, invalid sources
 - **Safety Features**: Volume limits tested on real devices
 
 ## 📚 Documentation Status
@@ -163,9 +167,8 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 🎯 Current Focus Areas
 
 ### Immediate Next Steps (1-2 Sessions)
-1. **Source Selection** - `POST /select` endpoint
-2. **Bass Control** - `GET/POST /bass` endpoints  
-3. **Preset Management** - `POST /presets` endpoint
+1. **Bass Control** - `GET/POST /bass` endpoints  
+2. **Preset Management** - `POST /presets` endpoint
 
 ### Short Term (3-5 Sessions)
 4. **System Endpoints** - Clock, network info, balance
@@ -212,6 +215,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 📝 Notes
 
 ### Recent Major Updates
+- **2026-01-09**: Source selection implementation with convenience methods
 - **2026-01-09**: Complete key controls implementation (24 keys total)
 - **2026-01-09**: Enhanced CLI with power, mute, thumbs up/down flags
 - **2026-01-09**: Comprehensive mDNS/Bonjour discovery with unified service
@@ -235,4 +239,4 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ---
 
 **Status**: 🟢 **Healthy Development** - Core functionality complete, ready for next phase
-**Next Session Focus**: Source selection and bass control endpoints
+**Next Session Focus**: Bass control and preset management endpoints

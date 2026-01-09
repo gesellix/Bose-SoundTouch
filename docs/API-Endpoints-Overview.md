@@ -173,7 +173,7 @@ Retrieves the available audio sources.
 - `AUX`
 - `STORED_MUSIC`
 
-### POST /select 🔄 **Planned**
+### POST /select ✅ **Implemented**
 Selects an audio source.
 
 **Request XML:**
