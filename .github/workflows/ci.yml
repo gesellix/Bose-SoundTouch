@@ -2,74 +2,70 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21', '1.22', '1.23']
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go-version }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
 
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ matrix.go-version }}-
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.mod') }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Download dependencies
-      run: go mod download
+      - name: Download dependencies
+        run: go mod download
 
-    - name: Verify dependencies
-      run: go mod verify
+      - name: Verify dependencies
+        run: go mod verify
 
-    - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out ./...
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
 
-    - name: Upload coverage to Codecov
-      if: matrix.go-version == '1.23'
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.out
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
 
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v4
-      with:
-        version: latest
-        args: --timeout=5m
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
 
   build:
     name: Build
@@ -84,89 +80,89 @@ jobs:
             goarch: arm64
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
 
-    - name: Build CLI
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-      run: |
-        output_name="soundtouch-cli-${{ matrix.goos }}-${{ matrix.goarch }}"
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          output_name="${output_name}.exe"
-        fi
-        go build -o "$output_name" ./cmd/soundtouch-cli
+      - name: Build CLI
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          output_name="soundtouch-cli-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            output_name="${output_name}.exe"
+          fi
+          go build -o "$output_name" ./cmd/soundtouch-cli
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: soundtouch-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: soundtouch-cli-*
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: soundtouch-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: soundtouch-cli-*
 
   security:
     name: Security Scan
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
 
-    - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: ./...
+      - name: Run Gosec Security Scanner
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: ./...
 
-    - name: Run Nancy vulnerability scanner
-      run: |
-        go install github.com/sonatypecommunity/nancy@latest
-        go list -json -deps ./... | nancy sleuth
+      - name: Run Nancy vulnerability scanner
+        run: |
+          go install github.com/sonatypecommunity/nancy@latest
+          go list -json -deps ./... | nancy sleuth
 
   docs:
     name: Documentation Check
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Check documentation links
-      uses: gaurav-nelson/github-action-markdown-link-check@v1
-      with:
-        use-quiet-mode: 'yes'
-        use-verbose-mode: 'yes'
-        config-file: '.github/markdown-link-check.json'
+      - name: Check documentation links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: "yes"
+          use-verbose-mode: "yes"
+          config-file: ".github/markdown-link-check.json"
 
-    - name: Validate API documentation
-      run: |
-        # Check that all documented endpoints exist in code
-        echo "Validating API documentation consistency..."
+      - name: Validate API documentation
+        run: |
+          # Check that all documented endpoints exist in code
+          echo "Validating API documentation consistency..."
 
-        # Extract endpoint patterns from cookbook
-        if [ -f "docs/API-COOKBOOK.md" ]; then
-          echo "✓ API Cookbook exists"
-        else
-          echo "✗ API Cookbook missing"
-          exit 1
-        fi
+          # Extract endpoint patterns from cookbook
+          if [ -f "docs/API-COOKBOOK.md" ]; then
+            echo "✓ API Cookbook exists"
+          else
+            echo "✗ API Cookbook missing"
+            exit 1
+          fi
 
-        # Check getting started guide
-        if [ -f "docs/GETTING-STARTED.md" ]; then
-          echo "✓ Getting Started guide exists"
-        else
-          echo "✗ Getting Started guide missing"
-          exit 1
-        fi
+          # Check getting started guide
+          if [ -f "docs/GETTING-STARTED.md" ]; then
+            echo "✓ Getting Started guide exists"
+          else
+            echo "✗ Getting Started guide missing"
+            exit 1
+          fi
 
   integration:
     name: Integration Test
@@ -174,50 +170,50 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
 
-    - name: Test CLI build and help
-      run: |
-        go build -o soundtouch-cli ./cmd/soundtouch-cli
-        ./soundtouch-cli -help
+      - name: Test CLI build and help
+        run: |
+          go build -o soundtouch-cli ./cmd/soundtouch-cli
+          ./soundtouch-cli -help
 
-    - name: Test library imports
-      run: |
-        cat > test_import.go << 'EOF'
-        package main
+      - name: Test library imports
+        run: |
+          cat > test_import.go << 'EOF'
+          package main
 
-        import (
-            "fmt"
-            "github.com/gesellix/bose-soundtouch/pkg/client"
-            "github.com/gesellix/bose-soundtouch/pkg/models"
-            "github.com/gesellix/bose-soundtouch/pkg/discovery"
-        )
+          import (
+              "fmt"
+              "github.com/gesellix/bose-soundtouch/pkg/client"
+              "github.com/gesellix/bose-soundtouch/pkg/models"
+              "github.com/gesellix/bose-soundtouch/pkg/discovery"
+          )
 
-        func main() {
-            // Test basic client creation
-            c := client.New("192.168.1.100", 8090)
-            fmt.Printf("Client created for %s\n", c.BaseURL())
+          func main() {
+              // Test basic client creation
+              c := client.New("192.168.1.100", 8090)
+              fmt.Printf("Client created for %s\n", c.BaseURL())
 
-            // Test models can be imported
-            var info models.Info
-            fmt.Printf("Info model available: %T\n", info)
+              // Test models can be imported
+              var info models.Info
+              fmt.Printf("Info model available: %T\n", info)
 
-            // Test discovery can be imported
-            var scanner discovery.Scanner
-            fmt.Printf("Scanner available: %T\n", scanner)
+              // Test discovery can be imported
+              var scanner discovery.Scanner
+              fmt.Printf("Scanner available: %T\n", scanner)
 
-            fmt.Println("All imports successful!")
-        }
-        EOF
+              fmt.Println("All imports successful!")
+          }
+          EOF
 
-        go run test_import.go
-        rm test_import.go
+          go run test_import.go
+          rm test_import.go
 
   notify:
     name: Notify Status
@@ -226,35 +222,35 @@ jobs:
     if: always()
 
     steps:
-    - name: Check overall status
-      run: |
-        if [[ "${{ needs.test.result }}" == "success" && \
-              "${{ needs.lint.result }}" == "success" && \
-              "${{ needs.build.result }}" == "success" && \
-              "${{ needs.security.result }}" == "success" && \
-              "${{ needs.docs.result }}" == "success" ]]; then
-          echo "✅ All CI checks passed!"
-          echo "status=success" >> $GITHUB_OUTPUT
-        else
-          echo "❌ Some CI checks failed"
-          echo "status=failure" >> $GITHUB_OUTPUT
-          exit 1
-        fi
-      id: status
+      - name: Check overall status
+        run: |
+          if [[ "${{ needs.test.result }}" == "success" && \
+                "${{ needs.lint.result }}" == "success" && \
+                "${{ needs.build.result }}" == "success" && \
+                "${{ needs.security.result }}" == "success" && \
+                "${{ needs.docs.result }}" == "success" ]]; then
+            echo "✅ All CI checks passed!"
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Some CI checks failed"
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+        id: status
 
-    - name: Update commit status
-      if: always()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const state = '${{ steps.status.outputs.status }}' === 'success' ? 'success' : 'failure';
-          const description = state === 'success' ? 'All checks passed' : 'Some checks failed';
+      - name: Update commit status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const state = '${{ steps.status.outputs.status }}' === 'success' ? 'success' : 'failure';
+            const description = state === 'success' ? 'All checks passed' : 'Some checks failed';
 
-          github.rest.repos.createCommitStatus({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            sha: context.sha,
-            state: state,
-            description: description,
-            context: 'CI Pipeline'
-          });
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: state,
+              description: description,
+              context: 'CI Pipeline'
+            });
