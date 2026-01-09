@@ -1,14 +1,17 @@
 #!/bin/bash
 
-# Bose SoundTouch Go Library - Release Preparation Script
-# This script prepares everything needed for a GitHub release
+# Bose SoundTouch Go Library - Local Release Preparation Script
+# This script prepares everything needed for a local release build
+# Note: GitHub workflows handle automated releases on tag push
 
 set -e
 
 VERSION=${1:-"v1.0.0"}
 GITHUB_REPO="gesellix/bose-soundtouch"
 
-echo "🚀 Preparing release $VERSION for $GITHUB_REPO"
+echo "🚀 Preparing local release build $VERSION for $GITHUB_REPO"
+echo "💡 Note: This is for local testing. Use 'git tag && git push --tags' for automated release"
+echo ""
 
 # Verify we're in the right directory
 if [ ! -f "go.mod" ] || [ ! -d "pkg/client" ]; then
@@ -39,24 +42,51 @@ echo "✅ All tests passed"
 echo "🔨 Building CLI for multiple platforms..."
 mkdir -p build/releases
 
-# Build for common platforms
+# Build for common platforms (same as CI)
 PLATFORMS=(
     "linux/amd64"
     "linux/arm64"
+    "linux/arm"
     "darwin/amd64"
     "darwin/arm64"
     "windows/amd64"
+    "freebsd/amd64"
 )
 
-for platform in "${PLATFORMS[@]}"; do
+GOARM_VALUES=(
+    ""  # linux/amd64
+    ""  # linux/arm64
+    "7" # linux/arm
+    ""  # darwin/amd64
+    ""  # darwin/arm64
+    ""  # windows/amd64
+    ""  # freebsd/amd64
+)
+
+for i in "${!PLATFORMS[@]}"; do
+    platform="${PLATFORMS[$i]}"
+    goarm="${GOARM_VALUES[$i]}"
+
     IFS="/" read -r GOOS GOARCH <<< "$platform"
-    OUTPUT_NAME="soundtouch-cli-$VERSION-$GOOS-$GOARCH"
+
+    ARCH_SUFFIX="$GOOS-$GOARCH"
+    if [[ "$goarm" != "" ]]; then
+        ARCH_SUFFIX="${ARCH_SUFFIX}v$goarm"
+    fi
+
+    OUTPUT_NAME="soundtouch-cli-$VERSION-$ARCH_SUFFIX"
     if [ "$GOOS" = "windows" ]; then
         OUTPUT_NAME="$OUTPUT_NAME.exe"
     fi
 
-    echo "  Building for $GOOS/$GOARCH..."
-    GOOS=$GOOS GOARCH=$GOARCH go build -o "build/releases/$OUTPUT_NAME" ./cmd/soundtouch-cli
+    echo "  Building for $GOOS/$GOARCH${goarm:+v$goarm}..."
+
+    env_vars="GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0"
+    if [[ "$goarm" != "" ]]; then
+        env_vars="$env_vars GOARM=$goarm"
+    fi
+
+    eval "$env_vars go build -ldflags='-s -w -X main.version=$VERSION' -o 'build/releases/$OUTPUT_NAME' ./cmd/soundtouch-cli"
 done
 
 echo "✅ Built CLI for all platforms"
@@ -83,6 +113,7 @@ A comprehensive Go library for controlling Bose SoundTouch speakers with 100% AP
 - **Production Ready**: Connection pooling, error handling, circuit breakers, monitoring
 - **Excellent Documentation**: 4000+ lines including Getting Started, Cookbook, Troubleshooting, and Deployment guides
 - **CLI Tool**: Full-featured command-line interface with all endpoints
+- **CI/CD Pipeline**: Automated testing, linting, security scans, and releases
 
 ## 🚀 Quick Start
 
@@ -162,7 +193,19 @@ MIT License - see [LICENSE](LICENSE) file.
 ## 🙏 Acknowledgments
 
 Built with real hardware testing and community feedback. Special thanks to the Bose developer community.
-EOF
+
+        ## 🏗️ Supported Platforms
+
+        This release includes pre-built binaries for:
+        - Linux (amd64, arm64, armv7)
+        - macOS (Intel & Apple Silicon)
+        - Windows (amd64)
+        - FreeBSD (amd64)
+
+        ## 🔐 Checksums
+
+        SHA256 checksums are provided to verify download integrity.
+        EOF
 
 echo "✅ Generated release notes"
 
@@ -173,11 +216,17 @@ echo ""
 echo "📦 Files ready for release:"
 ls -la build/releases/
 echo ""
-echo "📋 Next steps:"
+echo "📋 Next steps for automated release:"
 echo "1. Push any remaining commits: git push origin main"
 echo "2. Create and push tag: git tag $VERSION && git push origin $VERSION"
-echo "3. Create GitHub release with files in build/releases/"
-echo "4. Use build/RELEASE_NOTES.md as release description"
+echo "3. GitHub Actions will automatically:"
+echo "   - Run full CI pipeline (tests, linting, security)"
+echo "   - Build binaries for all platforms"
+echo "   - Generate checksums and release notes"
+echo "   - Create GitHub release with all assets"
 echo ""
-echo "🔗 Release URL will be: https://github.com/$GITHUB_REPO/releases/tag/$VERSION"
+echo "🔗 Release will be at: https://github.com/$GITHUB_REPO/releases/tag/$VERSION"
+echo "📊 Monitor CI at: https://github.com/$GITHUB_REPO/actions"
+echo ""
+echo "🧪 Local build completed - use for testing before tagging!"
 EOF

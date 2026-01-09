@@ -1,0 +1,230 @@
+# golangci-lint configuration for Bose SoundTouch Go Library
+# See: https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  skip-dirs:
+    - vendor
+    - build
+    - scripts
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_gen\\.go$"
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
+
+linters:
+  enable:
+    # Default linters
+    - errcheck       # Check for unchecked errors
+    - gosimple       # Simplify code
+    - govet          # Vet examines Go source code
+    - ineffassign    # Detect ineffectual assignments
+    - staticcheck    # Go static analysis
+    - typecheck      # Parse and type-check Go code
+    - unused         # Check for unused constants, variables, functions and types
+
+    # Additional useful linters for production code
+    - gofmt          # Check whether code was gofmt-ed
+    - goimports      # Check import sorting
+    - misspell       # Find commonly misspelled English words
+    - unconvert      # Remove unnecessary type conversions
+    - unparam        # Report unused function parameters
+    - gocyclo        # Compute cyclomatic complexities
+    - gocritic       # Most opinionated Go source code linter
+    - gosec          # Inspect source code for security problems
+    - exportloopref  # Check for pointers to enclosing loop variables
+    - nolintlint     # Reports ill-formed or insufficient nolint directives
+    - revive         # Fast, configurable, extensible, flexible, and beautiful linter
+    - stylecheck     # Stylecheck is a replacement for golint
+    - whitespace     # Tool for detection of leading and trailing whitespace
+    - wsl            # Whitespace Linter - Forces you to use empty lines
+    - predeclared    # Find code that shadows one of Go's predeclared identifiers
+    - thelper        # Detect golang test helpers without t.Helper() call
+    - tparallel      # Detect inappropriate usage of t.Parallel() method in tests
+    - bodyclose      # Check whether HTTP response body is closed successfully
+    - nilerr         # Find the code that returns nil even if it checks that the error is not nil
+    - nilnil         # Check that there is no simultaneous return of nil error and an invalid value
+    - errchkjson     # Check types passed to the json encoding functions
+    - errorlint      # Find code that will cause problems with the error wrapping scheme
+    - contextcheck   # Check the function whether use a non-inherited context
+
+  disable:
+    - gocognit       # Can be too strict for some cases
+    - funlen         # Function length can vary based on complexity
+    - lll            # Line length limit - we'll handle this with gofmt
+    - gomnd          # Magic numbers detector - can be overly aggressive
+    - exhaustive     # Can be too strict for enums
+    - testpackage    # Not always necessary to put tests in separate package
+    - wrapcheck      # Error wrapping can be context-dependent
+    - nlreturn       # Can conflict with other formatting preferences
+    - gofumpt        # Use standard gofmt instead
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+    exclude-functions:
+      - (*os.File).Close
+      - (*bytes.Buffer).Write
+      - (*bytes.Buffer).WriteString
+
+  govet:
+    check-shadowing: true
+    enable-all: true
+    disable:
+      - fieldalignment  # Can be overly aggressive
+
+  gocyclo:
+    min-complexity: 15
+
+  gocritic:
+    enabled-checks:
+      - appendAssign
+      - argOrder
+      - assignOp
+      - badCond
+      - boolExprSimplify
+      - builtinShadow
+      - captLocal
+      - caseOrder
+      - defaultCaseOrder
+      - dupArg
+      - dupBranchBody
+      - dupCase
+      - dupSubExpr
+      - elseif
+      - emptyFallthrough
+      - equalFold
+      - exitAfterDefer
+      - flagDeref
+      - flagName
+      - hexLiteral
+      - indexAlloc
+      - initClause
+      - methodExprCall
+      - nestingReduce
+      - newDeref
+      - nilValReturn
+      - offBy1
+      - paramTypeCombine
+      - ptrToRefParam
+      - rangeExprCopy
+      - rangeValCopy
+      - regexpMust
+      - singleCaseSwitch
+      - sloppyLen
+      - stringXbytes
+      - switchTrue
+      - typeAssertChain
+      - typeSwitchVar
+      - underef
+      - unlambda
+      - unslice
+      - valSwap
+      - weakCond
+      - yodaStyleExpr
+
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked - handled by errcheck
+    config:
+      G301: "0755"  # Poor file permissions
+      G302: "0755"  # Poor file permissions
+      G306: "0755"  # Poor file permissions
+
+  revive:
+    rules:
+      - name: var-naming
+        arguments: [["ID", "URL", "HTTP", "JSON", "XML", "API", "UUID", "SQL"], []]
+      - name: exported
+        arguments: [true]
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: empty-block
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: superfluous-else
+      - name: time-naming
+      - name: unexported-return
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: var-declaration
+      - name: waitgroup-by-value
+
+  stylecheck:
+    checks: ["all", "-ST1003"]  # Disable ST1003 (should not use underscores in Go names)
+
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+  wsl:
+    strict-append: true
+    allow-assign-and-call: true
+    allow-assign-and-anything: false
+    allow-multiline-assign: true
+    force-case-trailing-whitespace: 0
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gosec       # Security issues less critical in tests
+        - gocritic    # Can be overly strict for test code
+        - wsl         # Whitespace less critical in tests
+        - gocyclo     # Complexity less critical in tests
+
+    # Exclude specific rules for generated files
+    - path: ".*\\.pb\\.go$"
+      linters:
+        - all
+
+    # Exclude some staticcheck messages
+    - linters:
+        - staticcheck
+      text: "SA9003:"  # Empty branch
+
+    # Exclude some gosimple messages
+    - linters:
+        - gosimple
+      text: "S1002:"  # Omit comparison with boolean constant
+
+    # Allow main functions to not check errors in examples
+    - path: cmd/.*\.go
+      text: "Error return value of.*is not checked"
+      linters:
+        - errcheck
+
+    # Allow long lines in CLI help text and similar
+    - path: cmd/.*\.go
+      text: "Line is.*characters"
+      linters:
+        - lll
+
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+severity:
+  default-severity: error
+  case-sensitive: false

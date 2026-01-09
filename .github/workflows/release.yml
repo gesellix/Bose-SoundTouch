@@ -1,0 +1,400 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Validate tag format
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          TAG_NAME="${{ github.event.inputs.tag }}"
+        else
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+        fi
+
+        echo "Tag name: $TAG_NAME"
+
+        # Validate semantic versioning format
+        if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+          echo "❌ Invalid tag format: $TAG_NAME"
+          echo "Expected format: v1.2.3 or v1.2.3-beta.1"
+          exit 1
+        fi
+
+        # Extract version without 'v' prefix
+        VERSION=${TAG_NAME#v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+        # Check if prerelease (contains hyphen)
+        if [[ "$TAG_NAME" =~ - ]]; then
+          echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          echo "📦 Prerelease detected: $TAG_NAME"
+        else
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          echo "🚀 Stable release detected: $TAG_NAME"
+        fi
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run tests before release
+      run: |
+        echo "Running final tests before release..."
+        go test -v ./...
+        echo "✅ All tests passed"
+
+  build:
+    name: Build Release Binaries
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: freebsd
+            goarch: amd64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        GOARM: ${{ matrix.goarm }}
+        CGO_ENABLED: 0
+      run: |
+        # Determine output filename
+        BINARY_NAME="soundtouch-cli"
+        ARCH_SUFFIX="${{ matrix.goos }}-${{ matrix.goarch }}"
+
+        if [[ "${{ matrix.goarm }}" != "" ]]; then
+          ARCH_SUFFIX="${ARCH_SUFFIX}v${{ matrix.goarm }}"
+        fi
+
+        if [[ "${{ matrix.goos }}" == "windows" ]]; then
+          OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}.exe"
+        else
+          OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}"
+        fi
+
+        echo "Building: $OUTPUT_NAME"
+
+        # Build with optimizations and version info
+        go build \
+          -ldflags="-s -w -X main.version=v${{ needs.validate.outputs.version }} -X main.commit=${{ github.sha }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          -o "$OUTPUT_NAME" \
+          ./cmd/soundtouch-cli
+
+        # Verify binary was created and is executable
+        ls -la "$OUTPUT_NAME"
+        file "$OUTPUT_NAME"
+
+        echo "binary_name=$OUTPUT_NAME" >> $GITHUB_OUTPUT
+      id: build
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.build.outputs.binary_name }}
+        path: ${{ steps.build.outputs.binary_name }}
+        retention-days: 1
+
+  checksums:
+    name: Generate Checksums
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./binaries
+
+    - name: Generate checksums
+      run: |
+        cd binaries
+
+        # Flatten directory structure (artifacts are in subdirs)
+        find . -name "soundtouch-cli-*" -exec mv {} . \;
+
+        # Remove empty directories
+        find . -type d -empty -delete
+
+        # Generate SHA256 checksums
+        sha256sum soundtouch-cli-* > checksums.sha256
+
+        # Generate SHA512 checksums
+        sha512sum soundtouch-cli-* > checksums.sha512
+
+        echo "📋 Generated checksums:"
+        cat checksums.sha256
+
+        # Verify all expected files are present
+        EXPECTED_COUNT=7  # Based on build matrix
+        ACTUAL_COUNT=$(ls soundtouch-cli-* | wc -l)
+
+        if [[ $ACTUAL_COUNT -ne $EXPECTED_COUNT ]]; then
+          echo "❌ Expected $EXPECTED_COUNT binaries, found $ACTUAL_COUNT"
+          ls -la
+          exit 1
+        fi
+
+        echo "✅ All $ACTUAL_COUNT binaries present"
+
+    - name: Upload checksums
+      uses: actions/upload-artifact@v4
+      with:
+        name: checksums
+        path: |
+          binaries/checksums.sha256
+          binaries/checksums.sha512
+        retention-days: 1
+
+    - name: Upload all release assets
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-assets
+        path: binaries/
+        retention-days: 1
+
+  create_release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, checksums]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download release assets
+      uses: actions/download-artifact@v4
+      with:
+        name: release-assets
+        path: ./release-assets
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        TAG_NAME="${GITHUB_REF#refs/tags/}"
+        VERSION="${TAG_NAME#v}"
+
+        # Generate comprehensive release notes
+        cat > release_notes.md << EOF
+        # Bose SoundTouch Go Library $TAG_NAME
+
+        A comprehensive Go library for controlling Bose SoundTouch speakers with 100% API coverage, real-time WebSocket events, and production-ready features.
+
+        ## 🎯 Key Features
+
+        - **100% API Coverage**: All 19 official endpoints + 6 useful extensions (25 total)
+        - **Real-time Events**: WebSocket support with auto-reconnect and comprehensive event handling
+        - **Multiroom Control**: Complete zone management and coordination
+        - **Production Ready**: Connection pooling, error handling, circuit breakers, monitoring
+        - **Excellent Documentation**: 4000+ lines including Getting Started, Cookbook, Troubleshooting, and Deployment guides
+        - **CLI Tool**: Full-featured command-line interface with all endpoints
+
+        ## 🚀 Quick Start
+
+        \`\`\`bash
+        go get github.com/gesellix/bose-soundtouch@$TAG_NAME
+        \`\`\`
+
+        \`\`\`go
+        package main
+
+        import (
+            "fmt"
+            "log"
+
+            "github.com/gesellix/bose-soundtouch/pkg/client"
+        )
+
+        func main() {
+            // Create client
+            c := client.New("192.168.1.100", 8090)
+
+            // Get device info
+            info, err := c.GetInfo()
+            if err != nil {
+                log.Fatal(err)
+            }
+
+            fmt.Printf("Device: %s\\n", info.Name)
+        }
+        \`\`\`
+
+        ## 📚 Documentation
+
+        - [Getting Started Guide](docs/GETTING-STARTED.md) - 10-minute tutorial from discovery to WebSocket monitoring
+        - [API Cookbook](docs/API-COOKBOOK.md) - 1000+ lines of real-world patterns and examples
+        - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Systematic issue resolution
+        - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment examples (Docker, K8s, systemd)
+
+        ## 🔧 CLI Tool
+
+        Download the CLI tool for your platform from the assets below:
+
+        \`\`\`bash
+        # Quick device discovery
+        ./soundtouch-cli -discover
+
+        # Get device information
+        ./soundtouch-cli -host 192.168.1.100 -info
+
+        # Monitor real-time events
+        ./soundtouch-cli -host 192.168.1.100 -nowplaying
+        \`\`\`
+
+        ## 🧪 Tested Hardware
+
+        - Bose SoundTouch 10
+        - Bose SoundTouch 20
+        - All core functionality validated on real devices
+
+        ## 📈 What's New in $TAG_NAME
+
+        $(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD 2>/dev/null || echo "- Initial release with complete feature set")
+
+        ## 🏗️ Supported Platforms
+
+        This release includes pre-built binaries for:
+        - Linux (amd64, arm64, armv7)
+        - macOS (Intel & Apple Silicon)
+        - Windows (amd64)
+        - FreeBSD (amd64)
+
+        ## 🔐 Checksums
+
+        SHA256 checksums are provided in \`checksums.sha256\` to verify download integrity.
+
+        ## 🤝 Contributing
+
+        Contributions welcome! See our documentation for examples and patterns.
+
+        ## 📄 License
+
+        MIT License - see [LICENSE](LICENSE) file.
+        EOF
+
+        echo "release_notes_file=release_notes.md" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: "Bose SoundTouch Go Library ${{ github.ref_name }}"
+        body_path: ${{ steps.release_notes.outputs.release_notes_file }}
+        draft: false
+        prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
+        files: |
+          release-assets/soundtouch-cli-*
+          release-assets/checksums.sha256
+          release-assets/checksums.sha512
+        fail_on_unmatched_files: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update_release:
+    name: Update Existing Release
+    runs-on: ubuntu-latest
+    needs: [validate, checksums]
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+    - name: Download release assets
+      uses: actions/download-artifact@v4
+      with:
+        name: release-assets
+        path: ./release-assets
+
+    - name: Upload additional assets to existing release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.event.release.tag_name }}
+        files: |
+          release-assets/soundtouch-cli-*
+          release-assets/checksums.sha256
+          release-assets/checksums.sha512
+        fail_on_unmatched_files: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Post-Release Notifications
+    runs-on: ubuntu-latest
+    needs: [validate, create_release]
+    if: always() && (needs.create_release.result == 'success' || needs.update_release.result == 'success')
+
+    steps:
+    - name: Notify success
+      run: |
+        echo "🎉 Release ${{ needs.validate.outputs.version }} completed successfully!"
+        echo "📦 Binaries built for 7 platforms"
+        echo "🔐 Checksums generated and verified"
+        echo "📋 Release notes automatically generated"
+        echo ""
+        echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+        echo ""
+        echo "Next steps:"
+        echo "- Monitor download metrics"
+        echo "- Update documentation if needed"
+        echo "- Announce to community (see scripts/post-release.md)"

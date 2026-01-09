@@ -1,0 +1,135 @@
+# Dependabot configuration for Bose SoundTouch Go Library
+# See: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Go modules dependency updates
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "gesellix"
+    assignees:
+      - "gesellix"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "go"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: "auto"
+    allow:
+      # Allow all dependency types
+      - dependency-type: "all"
+    ignore:
+      # Ignore major version updates for stable dependencies (manual review preferred)
+      - dependency-name: "github.com/gorilla/websocket"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "github.com/hashicorp/mdns"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Group Go standard library and toolchain updates
+      golang:
+        patterns:
+          - "golang.org/*"
+        update-types:
+          - "patch"
+          - "minor"
+      # Group testing dependencies
+      testing:
+        patterns:
+          - "*test*"
+          - "*mock*"
+          - "*assert*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  # GitHub Actions workflow dependency updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "gesellix"
+    assignees:
+      - "gesellix"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: "auto"
+    allow:
+      - dependency-type: "all"
+    groups:
+      # Group actions from the same organization
+      actions-core:
+        patterns:
+          - "actions/*"
+        update-types:
+          - "patch"
+          - "minor"
+      # Group setup actions
+      setup-actions:
+        patterns:
+          - "*setup-*"
+        update-types:
+          - "patch"
+          - "minor"
+      # Group security-related actions
+      security-actions:
+        patterns:
+          - "*security*"
+          - "*scan*"
+          - "securecodewarrior/*"
+          - "codecov/*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  # Docker dependencies (if we add Dockerfiles in the future)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "gesellix"
+    assignees:
+      - "gesellix"
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: "auto"
+    allow:
+      - dependency-type: "all"
+    # Only check if Dockerfile exists
+    ignore:
+      # Ignore base image major updates (requires manual testing)
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

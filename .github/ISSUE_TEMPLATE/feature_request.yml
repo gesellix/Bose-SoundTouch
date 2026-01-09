@@ -1,0 +1,205 @@
+name: Feature Request
+description: Suggest an idea or enhancement for this project
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please provide as much detail as possible to help us understand your request and its potential impact.
+
+  - type: input
+    id: version
+    attributes:
+      label: Library Version
+      description: What version of the library are you currently using?
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: Is your feature request related to a problem? Please describe what you're trying to accomplish.
+      placeholder: "I'm always frustrated when... / I need to be able to... / Currently it's not possible to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see implemented.
+      placeholder: "I would like to see... / A new function that... / An option to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered.
+      placeholder: "I considered... / Another approach could be... / Workaround I'm currently using..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature affect?
+      multiple: true
+      options:
+        - "Client Library (pkg/client)"
+        - "WebSocket Events"
+        - "Device Discovery"
+        - "CLI Tool"
+        - "Models/XML Parsing"
+        - "Documentation"
+        - "Examples"
+        - "New API Endpoint"
+        - "Performance Optimization"
+        - "Developer Experience"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device-compatibility
+    attributes:
+      label: Device Compatibility
+      description: Which Bose SoundTouch devices should this feature support?
+      multiple: true
+      options:
+        - "All SoundTouch devices"
+        - "SoundTouch 10"
+        - "SoundTouch 20"
+        - "SoundTouch 30"
+        - "SoundTouch Portable"
+        - "SoundTouch Wave"
+        - "Other (specify in description)"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - "Low - Nice to have"
+        - "Medium - Would improve my workflow"
+        - "High - Important for my use case"
+        - "Critical - Blocking my project"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api-type
+    attributes:
+      label: API Type (if applicable)
+      description: What type of API enhancement is this?
+      options:
+        - "Not applicable"
+        - "New Bose SoundTouch endpoint"
+        - "Enhancement to existing endpoint"
+        - "Client library improvement"
+        - "WebSocket event enhancement"
+        - "Discovery enhancement"
+        - "CLI command addition"
+    validations:
+      required: false
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case / User Story
+      description: Describe your specific use case or user story
+      placeholder: |
+        As a [type of user], I want to [goal] so that [benefit].
+
+        Example: As a home automation developer, I want to create custom zones so that I can group speakers dynamically based on user preferences.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example-api
+    attributes:
+      label: Desired API Example
+      description: Show how you'd like the API to work (if applicable)
+      render: go
+      placeholder: |
+        // Example of how you envision using this feature
+        client := soundtouch.New("192.168.1.100", 8090)
+
+        // Your desired API call
+        result, err := client.NewFeature(options)
+        if err != nil {
+            // handle error
+        }
+
+        // Use the result
+        fmt.Println(result)
+    validations:
+      required: false
+
+  - type: textarea
+    id: technical-details
+    attributes:
+      label: Technical Details
+      description: Any technical considerations, constraints, or implementation ideas?
+      placeholder: |
+        - Should this be backward compatible?
+        - Any performance considerations?
+        - Integration with existing features?
+        - External dependencies needed?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation
+      description: Are you willing to help implement this feature?
+      options:
+        - label: "I can help implement this feature"
+        - label: "I can provide testing/feedback"
+        - label: "I can help with documentation"
+        - label: "I need someone else to implement this"
+
+  - type: textarea
+    id: research
+    attributes:
+      label: Research & References
+      description: Have you found any relevant resources, similar implementations, or Bose documentation?
+      placeholder: |
+        - Links to relevant documentation
+        - Similar features in other libraries
+        - Bose SoundTouch API references
+        - Related GitHub issues or discussions
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: "I have searched for existing issues and feature requests"
+          required: true
+        - label: "I have checked the [API Cookbook](docs/API-COOKBOOK.md) for existing functionality"
+          required: true
+        - label: "This feature is related to Bose SoundTouch functionality"
+          required: true
+        - label: "I have considered backward compatibility"
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this feature request, you agree to follow our Code of Conduct
+      options:
+        - label: "I agree to follow this project's Code of Conduct"
+          required: true
