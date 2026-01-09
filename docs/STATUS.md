@@ -66,8 +66,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - `POST /presets` - Create/update presets
 
 
-### **System Endpoints - MEDIUM PRIORITY**  
-- `GET /balance`, `POST /balance` - Stereo balance
+### **System Endpoints - MEDIUM PRIORITY**
 - `GET /clockTime`, `POST /clockTime` - Device time
 - `GET /clockDisplay`, `POST /clockDisplay` - Clock display
 - `GET /networkInfo` - Network information
@@ -82,10 +81,10 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 | Category | Implemented | Total | Percentage |
 |----------|-------------|-------|------------|
 | **Core Info Endpoints** | 6/6 | 6 | 100% |
-| **Control Endpoints** | 4/5 | 5 | 80% |
-| **System Endpoints** | 1/8 | 8 | 12.5% |
+| **Control Endpoints** | 5/5 | 5 | 100% |
+| **System Endpoints** | 3/8 | 8 | 37.5% |
 | **Real-time Features** | 0/1 | 1 | 0% |
-| **Overall Progress** | 11/20 | 20 | **55%** |
+| **Overall Progress** | 14/20 | 20 | **70%** |
 
 ## 🏆 Major Accomplishments
 
@@ -101,6 +100,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - ✅ Volume management with safety
 - ✅ Source selection with convenience methods
 - ✅ Bass control with range validation (-9 to +9)
+- ✅ Balance control with stereo adjustment (-50 to +50)
 - ✅ Host:port parsing enhancement
 - ✅ Press+release API compliance
 - ✅ Power, mute, rating, and playback mode controls
@@ -110,6 +110,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **Complete Key Controls**: All 24 documented key commands implemented
 - **Source Selection**: Full source switching with convenience methods (-spotify, -bluetooth, -aux)
 - **Bass Control**: Complete bass management with validation and convenience methods
+- **Balance Control**: Stereo balance adjustment with left/right channel control
 - **API Compliance**: Proper press+release key pattern implementation
 - **Safety First**: Volume warnings and limits for user protection
 - **User Experience**: Host:port parsing (e.g., `-host 192.168.1.100:8090`)
@@ -124,6 +125,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **Volume Management**: 30+ test cases with edge cases
 - **Source Selection**: 30+ test cases for all source types and convenience methods
 - **Bass Control**: 30+ test cases for range validation and increment/decrement
+- **Balance Control**: 30+ test cases for stereo balance adjustment and clamping
 - **Host Parsing**: 20+ test cases for various formats
 - **XML Models**: Comprehensive marshaling/unmarshaling tests
 - **HTTP Client**: Mock server tests with real response data
@@ -133,8 +135,9 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **All Endpoints**: Validated against actual hardware
 - **Source Selection**: Tested with Spotify, TuneIn, and other available sources
 - **Bass Control**: Tested bass adjustment, validation, and device-specific behavior
+- **Balance Control**: Tested stereo balance (device-dependent feature)
 - **Error Scenarios**: Network timeouts, invalid responses, invalid sources
-- **Safety Features**: Volume and bass limits tested on real devices
+- **Safety Features**: Volume, bass, and balance limits tested on real devices
 
 ## 📚 Documentation Status
 
@@ -170,7 +173,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 🎯 Current Focus Areas
 
 ### Immediate Next Steps (1-2 Sessions)
-1. **Preset Management** - `POST /presets` endpoint
+1. **Clock/Time Management** - `GET/POST /clockTime` and `/clockDisplay` endpoints
 
 ### Short Term (3-5 Sessions)
 4. **System Endpoints** - Clock, network info, balance
@@ -217,6 +220,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 ## 📝 Notes
 
 ### Recent Major Updates
+- **2026-01-09**: Balance control implementation completing audio management trilogy
 - **2026-01-09**: Bass control implementation with range validation and convenience methods
 - **2026-01-09**: Source selection implementation with convenience methods
 - **2026-01-09**: Complete key controls implementation (24 keys total)
@@ -241,5 +245,5 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 
 ---
 
-**Status**: 🟢 **Healthy Development** - Core functionality complete, ready for next phase
-**Next Session Focus**: Preset management endpoint
+**Status**: 🟢 **Healthy Development** - Audio controls complete (70% overall), ready for system endpoints
+**Next Session Focus**: Clock and time management endpoints

@@ -221,10 +221,10 @@ Retrieves multiroom zone information.
 ### POST /setZone 🔄 **Planned**
 Configures multiroom zones.
 
-### GET /balance 🔄 **Planned**
+### GET /balance ✅ **Implemented**
 Retrieves balance settings (stereo devices).
 
-### POST /balance 🔄 **Planned**
+### POST /balance ✅ **Implemented**
 Sets balance settings.
 
 ### GET /clockTime 🔄 **Planned**

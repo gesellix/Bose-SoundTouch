@@ -360,6 +360,70 @@ func (c *Client) DecreaseBass(amount int) (*models.Bass, error) {
 	return c.GetBass()
 }
 
+// GetBalance retrieves the current balance level from the /balance endpoint
+func (c *Client) GetBalance() (*models.Balance, error) {
+	var balance models.Balance
+	err := c.get("/balance", &balance)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get balance: %w", err)
+	}
+	return &balance, nil
+}
+
+// SetBalance sets the balance level using the /balance endpoint
+func (c *Client) SetBalance(level int) error {
+	if !models.ValidateBalanceLevel(level) {
+		return fmt.Errorf("invalid balance level: %d (must be between %d and %d)", level, models.BalanceLevelMin, models.BalanceLevelMax)
+	}
+
+	balanceReq, err := models.NewBalanceRequest(level)
+	if err != nil {
+		return fmt.Errorf("failed to create balance request: %w", err)
+	}
+
+	return c.post("/balance", balanceReq, nil)
+}
+
+// SetBalanceSafe sets balance with validation and clamping
+func (c *Client) SetBalanceSafe(level int) error {
+	clampedLevel := models.ClampBalanceLevel(level)
+	return c.SetBalance(clampedLevel)
+}
+
+// IncreaseBalance increases balance by the specified amount (with safety limits)
+func (c *Client) IncreaseBalance(amount int) (*models.Balance, error) {
+	currentBalance, err := c.GetBalance()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current balance: %w", err)
+	}
+
+	newLevel := models.ClampBalanceLevel(currentBalance.GetLevel() + amount)
+	err = c.SetBalance(newLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set balance: %w", err)
+	}
+
+	// Return updated balance
+	return c.GetBalance()
+}
+
+// DecreaseBalance decreases balance by the specified amount (with safety limits)
+func (c *Client) DecreaseBalance(amount int) (*models.Balance, error) {
+	currentBalance, err := c.GetBalance()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current balance: %w", err)
+	}
+
+	newLevel := models.ClampBalanceLevel(currentBalance.GetLevel() - amount)
+	err = c.SetBalance(newLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set balance: %w", err)
+	}
+
+	// Return updated balance
+	return c.GetBalance()
+}
+
 // SelectSource selects an audio source using the /select endpoint
 func (c *Client) SelectSource(source string, sourceAccount string) error {
 	// Validate source parameter

@@ -74,6 +74,10 @@ func main() {
 		setBass       = flag.Int("set-bass", -99, "Set bass level (-9 to +9)")
 		incBass       = flag.Int("inc-bass", 0, "Increase bass by amount (1-3, default: 1)")
 		decBass       = flag.Int("dec-bass", 0, "Decrease bass by amount (1-3, default: 1)")
+		balance       = flag.Bool("balance", false, "Get current balance level")
+		setBalance    = flag.Int("set-balance", -99, "Set balance level (-50 to +50)")
+		incBalance    = flag.Int("inc-balance", 0, "Increase balance by amount (1-10, default: 5)")
+		decBalance    = flag.Int("dec-balance", 0, "Decrease balance by amount (1-10, default: 5)")
 		selectSource  = flag.String("select-source", "", "Select audio source (SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC)")
 		sourceAccount = flag.String("source-account", "", "Source account for streaming services (optional)")
 		spotify       = flag.Bool("spotify", false, "Select Spotify source")
@@ -90,7 +94,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && !*balance && *setBalance == -99 && *incBalance == 0 && *decBalance == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && *host == "" {
 		printHelp()
 		return
 	}
@@ -209,6 +213,17 @@ func main() {
 		return
 	}
 
+	// Handle balance commands
+	if *balance || *setBalance != -99 || *incBalance > 0 || *decBalance > 0 {
+		if *host == "" {
+			log.Fatal("Host is required for balance commands. Use -host flag or -discover to find devices.")
+		}
+		if err := handleBalanceCommands(finalHost, finalPort, *timeout, *balance, *setBalance, *incBalance, *decBalance); err != nil {
+			log.Fatalf("Failed to execute balance command: %v", err)
+		}
+		return
+	}
+
 	// Handle source selection commands
 	if *selectSource != "" || *spotify || *bluetooth || *aux {
 		if *host == "" {
@@ -267,6 +282,12 @@ func printHelp() {
 	fmt.Println("  -inc-bass <n>     Increase bass by amount (1-3, default: 1)")
 	fmt.Println("  -dec-bass <n>     Decrease bass by amount (1-3, default: 1)")
 	fmt.Println()
+	fmt.Println("Balance Control:")
+	fmt.Println("  -balance          Get current balance level (requires -host)")
+	fmt.Println("  -set-balance <-50-+50> Set balance level (requires -host)")
+	fmt.Println("  -inc-balance <n>  Increase balance by amount (1-10, default: 5)")
+	fmt.Println("  -dec-balance <n>  Decrease balance by amount (1-10, default: 5)")
+	fmt.Println()
 	fmt.Println("Source Selection:")
 	fmt.Println("  -select-source <source>  Select audio source (requires -host)")
 	fmt.Println("                          Available: SPOTIFY, BLUETOOTH, AUX, TUNEIN, PANDORA, AMAZON, IHEARTRADIO, STORED_MUSIC")
@@ -283,6 +304,8 @@ func printHelp() {
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-volume 50")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -bass")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-bass 3")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -balance")
+	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-balance 10")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key NEXT_TRACK")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -preset 1")
 	fmt.Println("  soundtouch-cli -host 192.168.1.100 -select-source SPOTIFY")
@@ -1278,4 +1301,106 @@ func handleBassCommands(host string, port int, timeout time.Duration, getBass bo
 	}
 
 	return fmt.Errorf("no bass command specified")
+}
+
+// handleBalanceCommands handles balance control commands
+func handleBalanceCommands(host string, port int, timeout time.Duration, getBalance bool, setBalance, incBalance, decBalance int) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	// Handle get balance
+	if getBalance {
+		fmt.Printf("Getting current balance level from %s:%d...\n", host, port)
+		balance, err := soundtouchClient.GetBalance()
+		if err != nil {
+			return fmt.Errorf("failed to get balance: %w", err)
+		}
+
+		fmt.Printf("Balance Level: %d (%s)\n", balance.GetLevel(), models.GetBalanceLevelName(balance.GetLevel()))
+		fmt.Printf("Category: %s\n", models.GetBalanceLevelCategory(balance.GetLevel()))
+		left, right := balance.GetLeftRightPercentage()
+		fmt.Printf("Left/Right: %d%%/%d%%\n", left, right)
+		if !balance.IsAtTarget() {
+			fmt.Printf("Target: %d, Actual: %d (adjusting...)\n", balance.TargetBalance, balance.ActualBalance)
+		}
+		return nil
+	}
+
+	// Handle set balance
+	if setBalance != -99 {
+		if !models.ValidateBalanceLevel(setBalance) {
+			return fmt.Errorf("invalid balance level: %d (must be between %d and %d)", setBalance, models.BalanceLevelMin, models.BalanceLevelMax)
+		}
+
+		fmt.Printf("Setting balance to %d on %s:%d...\n", setBalance, host, port)
+		err := soundtouchClient.SetBalance(setBalance)
+		if err != nil {
+			return fmt.Errorf("failed to set balance: %w", err)
+		}
+
+		// Get updated balance level to confirm
+		balance, err := soundtouchClient.GetBalance()
+		if err != nil {
+			fmt.Printf("✓ Balance set successfully\n")
+		} else {
+			fmt.Printf("✓ Balance set to %d (%s)\n", balance.GetLevel(), models.GetBalanceLevelName(balance.GetLevel()))
+		}
+		return nil
+	}
+
+	// Handle balance increase (with safety limits)
+	if incBalance > 0 {
+		if incBalance > 10 {
+			incBalance = 10 // Safety limit
+		}
+		if incBalance == 0 {
+			incBalance = 5 // Default increment
+		}
+
+		fmt.Printf("Increasing balance by %d on %s:%d...\n", incBalance, host, port)
+		balance, err := soundtouchClient.IncreaseBalance(incBalance)
+		if err != nil {
+			return fmt.Errorf("failed to increase balance: %w", err)
+		}
+
+		fmt.Printf("✓ Balance increased to %d (%s)\n", balance.GetLevel(), models.GetBalanceLevelName(balance.GetLevel()))
+		return nil
+	}
+
+	// Handle balance decrease
+	if decBalance > 0 {
+		if decBalance > 10 {
+			decBalance = 10 // Safety limit for decrease
+		}
+		if decBalance == 0 {
+			decBalance = 5 // Default decrement
+		}
+
+		fmt.Printf("Decreasing balance by %d on %s:%d...\n", decBalance, host, port)
+		balance, err := soundtouchClient.DecreaseBalance(decBalance)
+		if err != nil {
+			return fmt.Errorf("failed to decrease balance: %w", err)
+		}
+
+		fmt.Printf("✓ Balance decreased to %d (%s)\n", balance.GetLevel(), models.GetBalanceLevelName(balance.GetLevel()))
+		return nil
+	}
+
+	return fmt.Errorf("no balance command specified")
 }
