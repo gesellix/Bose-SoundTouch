@@ -495,6 +495,96 @@ func (c *Client) SelectPandora(sourceAccount string) error {
 	return c.SelectSource("PANDORA", sourceAccount)
 }
 
+// GetClockTime retrieves the device's current time from the /clockTime endpoint
+func (c *Client) GetClockTime() (*models.ClockTime, error) {
+	var clockTime models.ClockTime
+	err := c.get("/clockTime", &clockTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get clock time: %w", err)
+	}
+	return &clockTime, nil
+}
+
+// SetClockTime sets the device's time via the /clockTime endpoint
+func (c *Client) SetClockTime(request *models.ClockTimeRequest) error {
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid clock time request: %w", err)
+	}
+
+	err := c.post("/clockTime", request, nil)
+	if err != nil {
+		return fmt.Errorf("failed to set clock time: %w", err)
+	}
+	return nil
+}
+
+// SetClockTimeNow sets the device's time to the current system time
+func (c *Client) SetClockTimeNow() error {
+	request := models.NewClockTimeRequest(time.Now())
+	return c.SetClockTime(request)
+}
+
+// GetClockDisplay retrieves clock display settings from the /clockDisplay endpoint
+func (c *Client) GetClockDisplay() (*models.ClockDisplay, error) {
+	var clockDisplay models.ClockDisplay
+	err := c.get("/clockDisplay", &clockDisplay)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get clock display settings: %w", err)
+	}
+	return &clockDisplay, nil
+}
+
+// SetClockDisplay configures clock display settings via the /clockDisplay endpoint
+func (c *Client) SetClockDisplay(request *models.ClockDisplayRequest) error {
+	if err := request.Validate(); err != nil {
+		return fmt.Errorf("invalid clock display request: %w", err)
+	}
+
+	if !request.HasChanges() {
+		return fmt.Errorf("no changes specified in clock display request")
+	}
+
+	err := c.post("/clockDisplay", request, nil)
+	if err != nil {
+		return fmt.Errorf("failed to set clock display: %w", err)
+	}
+	return nil
+}
+
+// EnableClockDisplay enables the clock display with default settings
+func (c *Client) EnableClockDisplay() error {
+	request := models.NewClockDisplayRequest().SetEnabled(true)
+	return c.SetClockDisplay(request)
+}
+
+// DisableClockDisplay disables the clock display
+func (c *Client) DisableClockDisplay() error {
+	request := models.NewClockDisplayRequest().SetEnabled(false)
+	return c.SetClockDisplay(request)
+}
+
+// SetClockDisplayBrightness sets the clock display brightness (0-100)
+func (c *Client) SetClockDisplayBrightness(brightness int) error {
+	request := models.NewClockDisplayRequest().SetBrightness(brightness)
+	return c.SetClockDisplay(request)
+}
+
+// SetClockDisplayFormat sets the clock display format (12/24 hour)
+func (c *Client) SetClockDisplayFormat(format models.ClockFormat) error {
+	request := models.NewClockDisplayRequest().SetFormat(format)
+	return c.SetClockDisplay(request)
+}
+
+// GetNetworkInfo retrieves network information from the /networkInfo endpoint
+func (c *Client) GetNetworkInfo() (*models.NetworkInformation, error) {
+	var networkInfo models.NetworkInformation
+	err := c.get("/networkInfo", &networkInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get network info: %w", err)
+	}
+	return &networkInfo, nil
+}
+
 // Ping checks if the device is reachable by calling /info
 func (c *Client) Ping() error {
 	_, err := c.GetDeviceInfo()

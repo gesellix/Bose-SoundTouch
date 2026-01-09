@@ -193,8 +193,8 @@ go test ./pkg/models/...
 ### Integration Testing
 
 Tested with real SoundTouch devices:
-- **SoundTouch 10** (192.168.178.28:8090) ✅
-- **SoundTouch 20** (192.168.178.35:8090) ✅
+- **SoundTouch 10** (192.168.1.10:8090) ✅
+- **SoundTouch 20** (192.168.1.11:8090) ✅
 
 All key commands successfully sent and executed on both devices.
 

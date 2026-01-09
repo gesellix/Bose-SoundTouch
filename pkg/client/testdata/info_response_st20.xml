@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<info deviceID="1234567890AB">
+<info deviceID="ABCD1234EFGH">
     <name>My SoundTouch Device</name>
     <type>SoundTouch 20</type>
     <margeAccountUUID>3230304</margeAccountUUID>
@@ -25,12 +25,12 @@
     </components>
     <margeURL>https://streaming.bose.com</margeURL>
     <networkInfo type="SCM">
-        <macAddress>1234567890AB</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <macAddress>AA:BB:CC:DD:EE:FF</macAddress>
+        <ipAddress>192.168.1.10</ipAddress>
     </networkInfo>
     <networkInfo type="SMSC">
-        <macAddress>1234567890AC</macAddress>
-        <ipAddress>192.168.1.101</ipAddress>
+        <macAddress>AA:BB:CC:DD:EE:01</macAddress>
+        <ipAddress>192.168.1.10</ipAddress>
     </networkInfo>
     <moduleType>scm</moduleType>
     <variant>spotty</variant>

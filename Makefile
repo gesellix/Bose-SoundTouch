@@ -120,7 +120,7 @@ dev-discover: build-cli
 dev-info: build-cli
 	@echo "Getting device info (requires -host flag)..."
 	@if [ -z "$(HOST)" ]; then \
-		echo "Usage: make dev-info HOST=192.168.1.100"; \
+		echo "Usage: make dev-info HOST=192.168.1.10"; \
 		exit 1; \
 	fi
 	$(BUILD_DIR)/$(BINARY_NAME) -host $(HOST) -info
@@ -231,7 +231,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make dev-discover"
-	@echo "  make dev-info HOST=192.168.1.100"
+	@echo "  make dev-info HOST=192.168.1.10"
 	@echo "  make dev-mdns"
 	@echo "  make dev-mdns-verbose"
 	@echo "  make dev-mdns-timeout TIMEOUT=10s"

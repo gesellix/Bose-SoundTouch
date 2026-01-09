@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<capabilities deviceID="A81B6A536A98">
+<capabilities deviceID="ABCD1234EFGH">
     <networkConfig>
         <dualMode>true</dualMode>
         <wsapiproxy>true</wsapiproxy>

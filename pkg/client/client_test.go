@@ -102,16 +102,16 @@ func TestGetDeviceInfo_Success(t *testing.T) {
 	}
 
 	// Verify response parsing
-	if deviceInfo.DeviceID != "A81B6A536A98" {
-		t.Errorf("Expected DeviceID 'A81B6A536A98', got '%s'", deviceInfo.DeviceID)
+	if deviceInfo.DeviceID != "ABCD1234EFGH" {
+		t.Errorf("Expected DeviceID 'ABCD1234EFGH', got '%s'", deviceInfo.DeviceID)
 	}
 
 	if deviceInfo.Type != "SoundTouch 10" {
 		t.Errorf("Expected Type 'SoundTouch 10', got '%s'", deviceInfo.Type)
 	}
 
-	if deviceInfo.Name != "Sound Machinechen" {
-		t.Errorf("Expected Name 'Sound Machinechen', got '%s'", deviceInfo.Name)
+	if deviceInfo.Name != "My SoundTouch Device" {
+		t.Errorf("Expected Name 'My SoundTouch Device', got '%s'", deviceInfo.Name)
 	}
 
 	if deviceInfo.MargeAccountUUID != "3230304" {
@@ -147,8 +147,8 @@ func TestGetDeviceInfo_Success(t *testing.T) {
 		if net.Type != "SCM" {
 			t.Errorf("Expected first network type 'SCM', got '%s'", net.Type)
 		}
-		if net.IPAddress != "192.168.178.35" {
-			t.Errorf("Expected IP address '192.168.178.35', got '%s'", net.IPAddress)
+		if net.IPAddress != "192.168.1.10" {
+			t.Errorf("Expected IP address '192.168.1.10', got '%s'", net.IPAddress)
 		}
 	}
 }
@@ -693,7 +693,7 @@ func TestClient_GetName(t *testing.T) {
 			name:          "valid device name",
 			responseFile:  "name_response.xml",
 			expectedError: false,
-			expectedName:  "Sound Machinechen",
+			expectedName:  "My SoundTouch Device",
 		},
 	}
 
@@ -783,7 +783,7 @@ func TestClient_GetCapabilities(t *testing.T) {
 			name:           "valid capabilities",
 			responseFile:   "capabilities_response.xml",
 			expectedError:  false,
-			expectedDevice: "A81B6A536A98",
+			expectedDevice: "ABCD1234EFGH",
 			hasLRStereo:    true,
 			hasDualMode:    true,
 			hasWSAPIProxy:  true,

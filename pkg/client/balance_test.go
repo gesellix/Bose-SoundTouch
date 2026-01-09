@@ -22,50 +22,50 @@ func TestClient_GetBalance(t *testing.T) {
 		{
 			name: "Valid balance response",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<balance deviceID="1234567890AB">
+<balance deviceID="ABCD1234EFGH">
   <targetbalance>15</targetbalance>
   <actualbalance>15</actualbalance>
 </balance>`,
 			wantError:         false,
 			wantTargetBalance: 15,
 			wantActualBalance: 15,
-			wantDeviceID:      "1234567890AB",
+			wantDeviceID:      "ABCD1234EFGH",
 		},
 		{
 			name: "Negative balance response",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<balance deviceID="1234567890AB">
+<balance deviceID="ABCD1234EFGH">
   <targetbalance>-25</targetbalance>
   <actualbalance>-25</actualbalance>
 </balance>`,
 			wantError:         false,
 			wantTargetBalance: -25,
 			wantActualBalance: -25,
-			wantDeviceID:      "1234567890AB",
+			wantDeviceID:      "ABCD1234EFGH",
 		},
 		{
 			name: "Zero balance response",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<balance deviceID="1234567890AB">
+<balance deviceID="ABCD1234EFGH">
   <targetbalance>0</targetbalance>
   <actualbalance>0</actualbalance>
 </balance>`,
 			wantError:         false,
 			wantTargetBalance: 0,
 			wantActualBalance: 0,
-			wantDeviceID:      "1234567890AB",
+			wantDeviceID:      "ABCD1234EFGH",
 		},
 		{
 			name: "Balance adjustment in progress",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<balance deviceID="1234567890AB">
+<balance deviceID="ABCD1234EFGH">
   <targetbalance>30</targetbalance>
   <actualbalance>20</actualbalance>
 </balance>`,
 			wantError:         false,
 			wantTargetBalance: 30,
 			wantActualBalance: 20,
-			wantDeviceID:      "1234567890AB",
+			wantDeviceID:      "ABCD1234EFGH",
 		},
 	}
 
@@ -335,12 +335,12 @@ func TestClient_IncreaseBalance(t *testing.T) {
 					var response string
 					if getCallCount == 1 {
 						// First call - return current balance
-						response = `<balance deviceID="1234567890AB"><targetbalance>` +
+						response = `<balance deviceID="ABCD1234EFGH"><targetbalance>` +
 							fmt.Sprintf("%d", tt.currentBalance) + `</targetbalance><actualbalance>` +
 							fmt.Sprintf("%d", tt.currentBalance) + `</actualbalance></balance>`
 					} else {
 						// Second call - return new balance level
-						response = `<balance deviceID="1234567890AB"><targetbalance>` +
+						response = `<balance deviceID="ABCD1234EFGH"><targetbalance>` +
 							fmt.Sprintf("%d", tt.expectedNewBalance) + `</targetbalance><actualbalance>` +
 							fmt.Sprintf("%d", tt.expectedNewBalance) + `</actualbalance></balance>`
 					}
@@ -422,12 +422,12 @@ func TestClient_DecreaseBalance(t *testing.T) {
 					var response string
 					if getCallCount == 1 {
 						// First call - return current balance
-						response = `<balance deviceID="1234567890AB"><targetbalance>` +
+						response = `<balance deviceID="ABCD1234EFGH"><targetbalance>` +
 							fmt.Sprintf("%d", tt.currentBalance) + `</targetbalance><actualbalance>` +
 							fmt.Sprintf("%d", tt.currentBalance) + `</actualbalance></balance>`
 					} else {
 						// Second call - return new balance level
-						response = `<balance deviceID="1234567890AB"><targetbalance>` +
+						response = `<balance deviceID="ABCD1234EFGH"><targetbalance>` +
 							fmt.Sprintf("%d", tt.expectedNewBalance) + `</targetbalance><actualbalance>` +
 							fmt.Sprintf("%d", tt.expectedNewBalance) + `</actualbalance></balance>`
 					}

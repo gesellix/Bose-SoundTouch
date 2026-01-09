@@ -22,11 +22,10 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 - **Flexible Configuration**: Support for .env files and environment variables
 - **Unified Discovery**: Combines UPnP, mDNS, and configured device lists
 - **Safety Features**: Volume warnings, increment limits, error validation
+- **System Management**: Clock/time settings, network information, device diagnostics
 
 ### 🔄 Planned
 - Real-time WebSocket events
-- Source management (switching between Spotify, Bluetooth, etc.)
-- Bass control
 - Preset management (create/update presets)
 - Web application interface
 - Multi-room zone support
@@ -65,7 +64,7 @@ MDNS_ENABLED=true
 
 # Preferred Devices (alternative to UPnP)
 # Format: name@host:port;name@host:port;...
-PREFERRED_DEVICES="Living Room@192.168.1.100;Kitchen@192.168.1.101;192.168.1.102:8091"
+PREFERRED_DEVICES="Living Room@192.168.1.10;Kitchen@192.168.1.11;192.168.1.12:8091"
 
 # HTTP Client Settings
 HTTP_TIMEOUT=10s
@@ -97,20 +96,20 @@ soundtouch-cli -discover -timeout 10s
 #### Device Information
 ```bash
 # Get device information by IP address
-soundtouch-cli -host 192.168.1.100 -info
+soundtouch-cli -host 192.168.1.10 -info
 
 # With custom port and timeout
-soundtouch-cli -host 192.168.1.100 -port 8090 -timeout 15s -info
+soundtouch-cli -host 192.168.1.10 -port 8090 -timeout 15s -info
 ```
 
 #### Now Playing Status
 ```bash
 # Get current playback information
-soundtouch-cli -host 192.168.1.100 -nowplaying
+soundtouch-cli -host 192.168.1.10 -nowplaying
 
 # Example output:
 # Now Playing:
-#   Device ID: A81B6A536A98
+#   Device ID: ABCD1234EFGH
 #   Source: SPOTIFY
 #   Status: Playing
 #   Title: In Between Breaths - Paris Unplugged
@@ -125,11 +124,11 @@ soundtouch-cli -host 192.168.1.100 -nowplaying
 #### Audio Sources
 ```bash
 # Get available audio sources
-soundtouch-cli -host 192.168.1.100:8090 -sources
+soundtouch-cli -host 192.168.1.10:8090 -sources
 
 # Example output:
 # Audio Sources:
-#   Device ID: A81B6A536A98
+#   Device ID: ABCD1234EFGH
 #   Total Sources: 14
 #   Ready Sources: 5
 #
@@ -149,64 +148,64 @@ soundtouch-cli -host 192.168.1.100:8090 -sources
 #### Media Controls
 ```bash
 # Basic playback controls
-soundtouch-cli -host 192.168.1.100:8090 -play
-soundtouch-cli -host 192.168.1.100:8090 -pause
-soundtouch-cli -host 192.168.1.100:8090 -stop
+soundtouch-cli -host 192.168.1.10:8090 -play
+soundtouch-cli -host 192.168.1.10:8090 -pause
+soundtouch-cli -host 192.168.1.10:8090 -stop
 
 # Track navigation
-soundtouch-cli -host 192.168.1.100:8090 -next
-soundtouch-cli -host 192.168.1.100:8090 -prev
+soundtouch-cli -host 192.168.1.10:8090 -next
+soundtouch-cli -host 192.168.1.10:8090 -prev
 
 # Volume controls (key-based)
-soundtouch-cli -host 192.168.1.100:8090 -volume-up
-soundtouch-cli -host 192.168.1.100:8090 -volume-down
+soundtouch-cli -host 192.168.1.10:8090 -volume-up
+soundtouch-cli -host 192.168.1.10:8090 -volume-down
 
 # Preset selection
-soundtouch-cli -host 192.168.1.100:8090 -preset 1
-soundtouch-cli -host 192.168.1.100:8090 -preset 6
+soundtouch-cli -host 192.168.1.10:8090 -preset 1
+soundtouch-cli -host 192.168.1.10:8090 -preset 6
 
 # Generic key command
-soundtouch-cli -host 192.168.1.100:8090 -key STOP
+soundtouch-cli -host 192.168.1.10:8090 -key STOP
 ```
 
 #### Volume Management
 ```bash
 # Get current volume
-soundtouch-cli -host 192.168.1.100:8090 -volume
+soundtouch-cli -host 192.168.1.10:8090 -volume
 
 # Example output:
 # Current Volume:
-#   Device ID: A81B6A536A98
+#   Device ID: ABCD1234EFGH
 #   Current Level: 50 (Medium)
 #   Target Level: 50
 #   Muted: false
 
 # Set specific volume (0-100, shows warning for >30)
-soundtouch-cli -host 192.168.1.100:8090 -set-volume 25
-soundtouch-cli -host 192.168.1.100:8090 -set-volume 0  # Mute
+soundtouch-cli -host 192.168.1.10:8090 -set-volume 25
+soundtouch-cli -host 192.168.1.10:8090 -set-volume 0  # Mute
 
 # Incremental volume control
-soundtouch-cli -host 192.168.1.100:8090 -inc-volume 3
-soundtouch-cli -host 192.168.1.100:8090 -dec-volume 5
+soundtouch-cli -host 192.168.1.10:8090 -inc-volume 3
+soundtouch-cli -host 192.168.1.10:8090 -dec-volume 5
 ```
 
 #### Device Name
 ```bash
 # Get device name
-soundtouch-cli -host 192.168.1.100 -name
+soundtouch-cli -host 192.168.1.10 -name
 
 # Example output:
-# Device Name: Sound Machinechen
+# Device Name: My SoundTouch
 ```
 
 #### Device Capabilities
 ```bash
 # Get device capabilities
-soundtouch-cli -host 192.168.1.100 -capabilities
+soundtouch-cli -host 192.168.1.10 -capabilities
 
 # Example output:
 # Device Capabilities:
-#   Device ID: A81B6A536A98
+#   Device ID: ABCD1234EFGH
 #
 # System Features:
 #   • Power Saving Disabled
@@ -226,7 +225,7 @@ soundtouch-cli -host 192.168.1.100 -capabilities
 #### Configured Presets
 ```bash
 # Get configured presets
-soundtouch-cli -host 192.168.1.100 -presets
+soundtouch-cli -host 192.168.1.10 -presets
 
 # Example output:
 # Configured Presets:
@@ -241,6 +240,26 @@ soundtouch-cli -host 192.168.1.100 -presets
 #   Artwork: https://i.scdn.co/image/...
 #
 # Most Recent: Preset 4 (Movie Soundtrack)
+```
+
+#### System Information
+```bash
+# Get device clock time
+soundtouch-cli -host 192.168.1.10 -clock-time
+
+# Set device time to current system time
+soundtouch-cli -host 192.168.1.10 -set-clock-time now
+
+# Get clock display settings
+soundtouch-cli -host 192.168.1.10 -clock-display
+
+# Configure clock display
+soundtouch-cli -host 192.168.1.10 -enable-clock
+soundtouch-cli -host 192.168.1.10 -clock-format 24
+soundtouch-cli -host 192.168.1.10 -clock-brightness 75
+
+# Get network information
+soundtouch-cli -host 192.168.1.10 -network-info
 ```
 
 ### Go Library Usage
@@ -260,7 +279,7 @@ import (
 
 func main() {
     // Option 1: Connect to known device
-    soundtouchClient := client.NewClientFromHost("192.168.1.100")
+    soundtouchClient := client.NewClientFromHost("192.168.1.10")
     
     deviceInfo, err := soundtouchClient.GetDeviceInfo()
     if err != nil {
@@ -396,7 +415,7 @@ go test -v ./pkg/client
 go test -v ./pkg/discovery
 
 # Test with real devices
-make dev-info HOST=192.168.1.100
+make dev-info HOST=192.168.1.10
 
 # Test device discovery
 make dev-discover
@@ -432,8 +451,12 @@ The SoundTouch Web API uses HTTP with XML payloads. Key endpoints include:
 - `GET /sources` - Available audio sources ✅ Implemented
 - `POST /key` - Send key commands (play, pause, etc.) ✅ Implemented
 - `GET/POST /volume` - Volume control ✅ Implemented
-- `POST /select` - Source selection
-- `GET/POST /bass` - Bass control
+- `GET/POST /bass` - Bass control ✅ Implemented
+- `GET/POST /balance` - Stereo balance control ✅ Implemented
+- `POST /select` - Source selection ✅ Implemented
+- `GET/POST /clockTime` - Device time management ✅ Implemented
+- `GET/POST /clockDisplay` - Clock display settings ✅ Implemented
+- `GET /networkInfo` - Network information ✅ Implemented
 - WebSocket `/` - Real-time event stream
 
 For complete API documentation, see:
@@ -462,16 +485,16 @@ The `PREFERRED_DEVICES` environment variable supports multiple formats:
 
 ```bash
 # Host only (uses default port 8090)
-PREFERRED_DEVICES="192.168.1.100"
+PREFERRED_DEVICES="192.168.1.10"
 
 # Host with port
-PREFERRED_DEVICES="192.168.1.100:8091"
+PREFERRED_DEVICES="192.168.1.10:8091"
 
 # Named device
-PREFERRED_DEVICES="Living Room@192.168.1.100"
+PREFERRED_DEVICES="Living Room@192.168.1.10"
 
 # Multiple devices
-PREFERRED_DEVICES="Living Room@192.168.1.100;Kitchen@192.168.1.101:8091"
+PREFERRED_DEVICES="Living Room@192.168.1.10;Kitchen@192.168.1.11:8091"
 ```
 
 ## Supported Devices
@@ -486,8 +509,8 @@ Should work with all SoundTouch series devices that support the Web API.
 
 ### SoundTouch 10 Response
 ```xml
-<info deviceID="A81B6A536A98">
-    <name>Sound Machinechen</name>
+<info deviceID="ABCD1234EFGH">
+    <name>My SoundTouch Device</name>
     <type>SoundTouch 10</type>
     <moduleType>sm2</moduleType>
     <variant>rhino</variant>
@@ -502,7 +525,7 @@ Should work with all SoundTouch series devices that support the Web API.
 
 ### SoundTouch 20 Response
 ```xml
-<info deviceID="1234567890AB">
+<info deviceID="ABCD1234EFGH">
     <name>My SoundTouch Device</name>
     <type>SoundTouch 20</type>
     <moduleType>scm</moduleType>

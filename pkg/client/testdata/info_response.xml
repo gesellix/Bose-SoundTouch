@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<info deviceID="A81B6A536A98">
-    <name>Sound Machinechen</name>
+<info deviceID="ABCD1234EFGH">
+    <name>My SoundTouch Device</name>
     <type>SoundTouch 10</type>
     <margeAccountUUID>3230304</margeAccountUUID>
     <components>
@@ -17,12 +17,12 @@
     </components>
     <margeURL>https://streaming.bose.com</margeURL>
     <networkInfo type="SCM">
-        <macAddress>A81B6A536A98</macAddress>
-        <ipAddress>192.168.178.35</ipAddress>
+        <macAddress>AA:BB:CC:DD:EE:FF</macAddress>
+        <ipAddress>192.168.1.10</ipAddress>
     </networkInfo>
     <networkInfo type="SMSC">
-        <macAddress>A81B6A849D99</macAddress>
-        <ipAddress>192.168.178.35</ipAddress>
+        <macAddress>AA:BB:CC:DD:EE:FF</macAddress>
+        <ipAddress>192.168.1.10</ipAddress>
     </networkInfo>
     <moduleType>sm2</moduleType>
     <variant>rhino</variant>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<networkInfo wifiProfileCount="3">
+<interfaces>
+<interface type="ETHERNET_INTERFACE" name="eth0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" state="NETWORK_ETHERNET_CONNECTED"/>
+</interfaces>
+</networkInfo>

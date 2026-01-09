@@ -83,6 +83,14 @@ func main() {
 		spotify       = flag.Bool("spotify", false, "Select Spotify source")
 		bluetooth     = flag.Bool("bluetooth", false, "Select Bluetooth source")
 		aux           = flag.Bool("aux", false, "Select AUX input source")
+		clockTime     = flag.Bool("clock-time", false, "Get device clock time")
+		setClockTime  = flag.String("set-clock-time", "", "Set device clock time (format: 'now' or Unix timestamp)")
+		clockDisplay  = flag.Bool("clock-display", false, "Get clock display settings")
+		enableClock   = flag.Bool("enable-clock", false, "Enable clock display")
+		disableClock  = flag.Bool("disable-clock", false, "Disable clock display")
+		clockFormat   = flag.String("clock-format", "", "Set clock display format (12, 24, auto)")
+		clockBright   = flag.Int("clock-brightness", -1, "Set clock display brightness (0-100)")
+		networkInfo   = flag.Bool("network-info", false, "Get network information")
 		help          = flag.Bool("help", false, "Show help")
 	)
 
@@ -94,7 +102,7 @@ func main() {
 	}
 
 	// If no specific action is requested, show help
-	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && !*balance && *setBalance == -99 && *incBalance == 0 && *decBalance == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && *host == "" {
+	if !*discover && !*discoverAll && !*info && !*nowPlaying && !*sources && !*name && !*capabilities && !*presets && *key == "" && !*play && !*pause && !*stop && !*next && !*prev && !*volumeUp && !*volumeDown && !*power && !*mute && !*thumbsUp && !*thumbsDown && *preset == 0 && !*volume && *setVolume == -1 && *incVolume == 0 && *decVolume == 0 && !*bass && *setBass == -99 && *incBass == 0 && *decBass == 0 && !*balance && *setBalance == -99 && *incBalance == 0 && *decBalance == 0 && *selectSource == "" && !*spotify && !*bluetooth && !*aux && !*clockTime && *setClockTime == "" && !*clockDisplay && !*enableClock && !*disableClock && *clockFormat == "" && *clockBright == -1 && !*networkInfo && *host == "" {
 		printHelp()
 		return
 	}
@@ -234,6 +242,28 @@ func main() {
 		}
 		return
 	}
+
+	// Handle clock/time commands
+	if *clockTime || *setClockTime != "" || *clockDisplay || *enableClock || *disableClock || *clockFormat != "" || *clockBright != -1 {
+		if *host == "" {
+			log.Fatal("Host is required for clock/time commands. Use -host flag or -discover to find devices.")
+		}
+		if err := handleClockCommands(finalHost, finalPort, *timeout, *clockTime, *setClockTime, *clockDisplay, *enableClock, *disableClock, *clockFormat, *clockBright); err != nil {
+			log.Fatalf("Failed to execute clock command: %v", err)
+		}
+		return
+	}
+
+	// Handle network info command
+	if *networkInfo {
+		if *host == "" {
+			log.Fatal("Host is required for network info command. Use -host flag or -discover to find devices.")
+		}
+		if err := handleNetworkInfo(finalHost, finalPort, *timeout); err != nil {
+			log.Fatalf("Failed to get network info: %v", err)
+		}
+		return
+	}
 }
 
 func printHelp() {
@@ -296,38 +326,56 @@ func printHelp() {
 	fmt.Println("  -bluetooth        Select Bluetooth source (requires -host)")
 	fmt.Println("  -aux              Select AUX input source (requires -host)")
 	fmt.Println()
+	fmt.Println("System Information:")
+	fmt.Println("  -clock-time       Get device clock time (requires -host)")
+	fmt.Println("  -set-clock-time <time> Set device clock time (requires -host)")
+	fmt.Println("                    Use 'now' for current time or Unix timestamp")
+	fmt.Println("  -clock-display    Get clock display settings (requires -host)")
+	fmt.Println("  -enable-clock     Enable clock display (requires -host)")
+	fmt.Println("  -disable-clock    Disable clock display (requires -host)")
+	fmt.Println("  -clock-format <fmt> Set clock format: 12, 24, auto (requires -host)")
+	fmt.Println("  -clock-brightness <0-100> Set clock brightness (requires -host)")
+	fmt.Println("  -network-info     Get network information (requires -host)")
+	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  soundtouch-cli -discover")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -info")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -nowplaying")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -play")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-volume 50")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -bass")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-bass 3")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -balance")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -set-balance 10")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key NEXT_TRACK")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -preset 1")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -select-source SPOTIFY")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -bluetooth")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -aux")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -capabilities")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -presets")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -play")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -pause")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -volume-up")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -preset 1")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key STOP")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -power")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -mute")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -thumbs-up")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key SHUFFLE_ON")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -key REPEAT_ALL")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -volume")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100:8090 -set-volume 25")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -inc-volume 2")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -dec-volume 3")
-	fmt.Println("  soundtouch-cli -host 192.168.1.100 -port 8090 -info")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -info")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10:8090 -nowplaying")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -play")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -set-volume 50")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -bass")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -set-bass 3")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -balance")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -set-balance 10")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -key NEXT_TRACK")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -preset 1")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -select-source SPOTIFY")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -bluetooth")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -aux")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -capabilities")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -presets")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -clock-time")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -set-clock-time now")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -clock-display")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -enable-clock")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -clock-format 24")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -clock-brightness 75")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -network-info")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -play")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10:8090 -pause")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -volume-up")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10:8090 -preset 1")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -key STOP")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -power")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -mute")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -thumbs-up")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -key SHUFFLE_ON")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -key REPEAT_ALL")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -volume")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10:8090 -set-volume 25")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -inc-volume 2")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -dec-volume 3")
+	fmt.Println("  soundtouch-cli -host 192.168.1.10 -port 8090 -info")
 }
 
 func handleDiscovery(showInfo bool, timeout time.Duration) error {
@@ -1403,4 +1451,305 @@ func handleBalanceCommands(host string, port int, timeout time.Duration, getBala
 	}
 
 	return fmt.Errorf("no balance command specified")
+}
+
+// handleClockCommands handles all clock/time related commands
+func handleClockCommands(host string, port int, timeout time.Duration, getClockTime bool, setClockTime string, getClockDisplay, enableClock, disableClock bool, clockFormat string, clockBright int) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	// Configure client with custom timeout
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	// Get clock time
+	if getClockTime {
+		fmt.Printf("Getting clock time from %s:%d...\n", host, port)
+		clockTime, err := soundtouchClient.GetClockTime()
+		if err != nil {
+			return fmt.Errorf("failed to get clock time: %w", err)
+		}
+
+		fmt.Printf("Device Clock Time:\n")
+		if !clockTime.IsEmpty() {
+			fmt.Printf("  Time: %s\n", clockTime.GetTimeString())
+			if clockTime.GetUTC() > 0 {
+				fmt.Printf("  UTC Timestamp: %d\n", clockTime.GetUTC())
+			}
+			if clockTime.GetZone() != "" {
+				fmt.Printf("  Timezone: %s\n", clockTime.GetZone())
+			}
+		} else {
+			fmt.Printf("  No time data available\n")
+		}
+		return nil
+	}
+
+	// Set clock time
+	if setClockTime != "" {
+		fmt.Printf("Setting clock time on %s:%d...\n", host, port)
+		if setClockTime == "now" {
+			err = soundtouchClient.SetClockTimeNow()
+		} else {
+			// Try to parse as Unix timestamp
+			if timestamp, parseErr := strconv.ParseInt(setClockTime, 10, 64); parseErr == nil {
+				request := models.NewClockTimeRequestUTC(timestamp)
+				err = soundtouchClient.SetClockTime(request)
+			} else {
+				return fmt.Errorf("invalid time format: use 'now' or Unix timestamp")
+			}
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to set clock time: %w", err)
+		}
+
+		fmt.Printf("✓ Clock time set successfully\n")
+		return nil
+	}
+
+	// Get clock display settings
+	if getClockDisplay {
+		fmt.Printf("Getting clock display settings from %s:%d...\n", host, port)
+		clockDisplay, err := soundtouchClient.GetClockDisplay()
+		if err != nil {
+			return fmt.Errorf("failed to get clock display settings: %w", err)
+		}
+
+		fmt.Printf("Clock Display Settings:\n")
+		if clockDisplay.GetDeviceID() != "" {
+			fmt.Printf("  Device ID: %s\n", clockDisplay.GetDeviceID())
+		}
+		fmt.Printf("  Enabled: %v\n", clockDisplay.IsEnabled())
+		fmt.Printf("  Format: %s\n", clockDisplay.GetFormatDescription())
+		fmt.Printf("  Brightness: %d%% (%s)\n", clockDisplay.GetBrightness(), clockDisplay.GetBrightnessLevel())
+		fmt.Printf("  Auto-Dim: %v\n", clockDisplay.IsAutoDimEnabled())
+		if clockDisplay.GetTimeZone() != "" {
+			fmt.Printf("  Timezone: %s\n", clockDisplay.GetTimeZone())
+		}
+		return nil
+	}
+
+	// Enable clock display
+	if enableClock {
+		fmt.Printf("Enabling clock display on %s:%d...\n", host, port)
+		err = soundtouchClient.EnableClockDisplay()
+		if err != nil {
+			return fmt.Errorf("failed to enable clock display: %w", err)
+		}
+		fmt.Printf("✓ Clock display enabled\n")
+		return nil
+	}
+
+	// Disable clock display
+	if disableClock {
+		fmt.Printf("Disabling clock display on %s:%d...\n", host, port)
+		err = soundtouchClient.DisableClockDisplay()
+		if err != nil {
+			return fmt.Errorf("failed to disable clock display: %w", err)
+		}
+		fmt.Printf("✓ Clock display disabled\n")
+		return nil
+	}
+
+	// Set clock format
+	if clockFormat != "" {
+		fmt.Printf("Setting clock format to %s on %s:%d...\n", clockFormat, host, port)
+
+		var format models.ClockFormat
+		switch clockFormat {
+		case "12":
+			format = models.ClockFormat12Hour
+		case "24":
+			format = models.ClockFormat24Hour
+		case "auto":
+			format = models.ClockFormatAuto
+		default:
+			return fmt.Errorf("invalid clock format: use '12', '24', or 'auto'")
+		}
+
+		err = soundtouchClient.SetClockDisplayFormat(format)
+		if err != nil {
+			return fmt.Errorf("failed to set clock format: %w", err)
+		}
+		fmt.Printf("✓ Clock format set to %s\n", clockFormat)
+		return nil
+	}
+
+	// Set clock brightness
+	if clockBright != -1 {
+		if clockBright < 0 || clockBright > 100 {
+			return fmt.Errorf("brightness must be between 0 and 100")
+		}
+
+		fmt.Printf("Setting clock brightness to %d%% on %s:%d...\n", clockBright, host, port)
+		err = soundtouchClient.SetClockDisplayBrightness(clockBright)
+		if err != nil {
+			return fmt.Errorf("failed to set clock brightness: %w", err)
+		}
+		fmt.Printf("✓ Clock brightness set to %d%%\n", clockBright)
+		return nil
+	}
+
+	return fmt.Errorf("no clock command specified")
+}
+
+// handleNetworkInfo handles network information retrieval
+func handleNetworkInfo(host string, port int, timeout time.Duration) error {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Override config with command line arguments if provided
+	if timeout > 0 {
+		cfg.HTTPTimeout = timeout
+	}
+
+	// Configure client with custom timeout
+	clientConfig := client.ClientConfig{
+		Host:      host,
+		Port:      port,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}
+
+	soundtouchClient := client.NewClient(clientConfig)
+
+	fmt.Printf("Getting network information from %s:%d...\n", host, port)
+	networkInfo, err := soundtouchClient.GetNetworkInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get network info: %w", err)
+	}
+
+	fmt.Printf("Network Information:\n")
+
+	if networkInfo.GetWifiProfileCount() > 0 {
+		fmt.Printf("  WiFi Profiles: %d\n", networkInfo.GetWifiProfileCount())
+	}
+
+	interfaces := networkInfo.GetInterfaces()
+	if len(interfaces) > 0 {
+		fmt.Printf("  Total Interfaces: %d\n", len(interfaces))
+
+		activeInterfaces := networkInfo.GetActiveInterfaces()
+		fmt.Printf("  Active Interfaces: %d\n\n", len(activeInterfaces))
+
+		for i, iface := range interfaces {
+			fmt.Printf("Interface %d:\n", i+1)
+			fmt.Printf("  • Type: %s", iface.GetType())
+			if iface.GetName() != "" {
+				fmt.Printf(" (%s)", iface.GetName())
+			}
+			fmt.Printf("\n")
+
+			if iface.GetMacAddress() != "" {
+				fmt.Printf("  • MAC Address: %s", iface.GetMacAddress())
+				if !iface.ValidateMAC() {
+					fmt.Printf(" (invalid)")
+				}
+				fmt.Printf("\n")
+			}
+
+			if iface.GetIPAddress() != "" {
+				fmt.Printf("  • IP Address: %s", iface.GetIPAddress())
+				if !iface.ValidateIP() {
+					fmt.Printf(" (invalid)")
+				}
+				fmt.Printf("\n")
+			}
+
+			fmt.Printf("  • State: %s", iface.GetStateDescription())
+			if iface.IsConnected() {
+				fmt.Printf(" ✓")
+			}
+			fmt.Printf("\n")
+
+			// WiFi-specific information
+			if iface.IsWiFi() {
+				if iface.GetSSID() != "" {
+					fmt.Printf("  • SSID: %s\n", iface.GetSSID())
+				}
+
+				if iface.GetSignal() != "" {
+					fmt.Printf("  • Signal: %s (%d%%)\n",
+						iface.GetSignalDescription(),
+						iface.GetSignalQuality())
+				}
+
+				if iface.GetFrequencyKHz() > 0 {
+					fmt.Printf("  • Frequency: %s (%s)\n",
+						iface.FormatFrequency(),
+						iface.GetFrequencyBand())
+				}
+
+				if iface.GetMode() != "" {
+					fmt.Printf("  • Mode: %s\n", iface.GetModeDescription())
+				}
+			}
+
+			// Network summary
+			summary := iface.GetNetworkSummary()
+			if summary != "" {
+				fmt.Printf("  • Summary: %s\n", summary)
+			}
+
+			fmt.Printf("\n")
+		}
+	} else {
+		fmt.Printf("  No network interfaces found\n")
+	}
+
+	// Connected interface details
+	if connectedWifi := networkInfo.GetConnectedWiFiInterface(); connectedWifi != nil {
+		fmt.Printf("Active WiFi Connection:\n")
+		fmt.Printf("  • Network: %s\n", connectedWifi.GetNetworkSummary())
+		fmt.Printf("  • Interface: %s\n", connectedWifi.GetName())
+		fmt.Printf("  • IP Address: %s\n", connectedWifi.GetIPAddress())
+		fmt.Printf("\n")
+	}
+
+	if connectedEthernet := networkInfo.GetConnectedEthernetInterface(); connectedEthernet != nil {
+		fmt.Printf("Active Ethernet Connection:\n")
+		fmt.Printf("  • Interface: %s\n", connectedEthernet.GetName())
+		fmt.Printf("  • IP Address: %s\n", connectedEthernet.GetIPAddress())
+		fmt.Printf("\n")
+	}
+
+	// Connectivity Summary
+	fmt.Printf("Connectivity Summary:\n")
+	if networkInfo.HasWiFi() {
+		fmt.Printf("  ✓ WiFi Available")
+		if networkInfo.GetConnectedWiFiInterface() != nil {
+			fmt.Printf(" (Connected)")
+		}
+		fmt.Printf("\n")
+	} else {
+		fmt.Printf("  ✗ No WiFi\n")
+	}
+
+	if networkInfo.HasEthernet() {
+		fmt.Printf("  ✓ Ethernet Available")
+		if networkInfo.GetConnectedEthernetInterface() != nil {
+			fmt.Printf(" (Connected)")
+		}
+		fmt.Printf("\n")
+	} else {
+		fmt.Printf("  ✗ No Ethernet\n")
+	}
+
+	return nil
 }

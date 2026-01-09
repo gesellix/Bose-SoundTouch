@@ -131,7 +131,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **HTTP Client**: Mock server tests with real response data
 
 ### Integration Tests
-- **Real Devices**: SoundTouch 10 (192.168.178.28) and SoundTouch 20 (192.168.178.35)
+- **Real Devices**: SoundTouch 10 (192.168.1.10) and SoundTouch 20 (192.168.1.11)
 - **All Endpoints**: Validated against actual hardware
 - **Source Selection**: Tested with Spotify, TuneIn, and other available sources
 - **Bass Control**: Tested bass adjustment, validation, and device-specific behavior

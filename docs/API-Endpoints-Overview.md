@@ -227,16 +227,16 @@ Retrieves balance settings (stereo devices).
 ### POST /balance ✅ **Implemented**
 Sets balance settings.
 
-### GET /clockTime 🔄 **Planned**
+### GET /clockTime ✅ **Implemented**
 Retrieves the device time.
 
-### POST /clockTime 🔄 **Planned**
+### POST /clockTime ✅ **Implemented**
 Sets the device time.
 
-### GET /clockDisplay 🔄 **Planned**
+### GET /clockDisplay ✅ **Implemented**
 Retrieves clock display settings.
 
-### POST /clockDisplay 🔄 **Planned**
+### POST /clockDisplay ✅ **Implemented**
 Configures the clock display.
 
 ## WebSocket Connection
@@ -252,7 +252,7 @@ Establishes a persistent connection for live updates.
 
 ## Network and System
 
-### GET /networkInfo 🔄 **Planned**
+### GET /networkInfo ✅ **Implemented**
 Retrieves network information.
 
 ### GET /capabilities ✅ **Implemented**

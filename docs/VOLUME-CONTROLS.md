@@ -21,7 +21,7 @@ Retrieves the current volume level and mute status from the device.
 
 **Response Format:**
 ```xml
-<volume deviceID="A81B6A536A98">
+<volume deviceID="ABCD1234EFGH">
   <targetvolume>50</targetvolume>
   <actualvolume>50</actualvolume>
   <muteenabled>false</muteenabled>
@@ -152,7 +152,7 @@ soundtouch-cli -host 192.168.1.100:8090 -volume
 **Output:**
 ```
 Current Volume:
-  Device ID: A81B6A536A98
+  Device ID: ABCD1234EFGH
   Current Level: 50 (Medium)
   Target Level: 50
   Muted: false
@@ -211,8 +211,8 @@ go test ./pkg/models/volume*
 ### Integration Testing
 
 Tested with real SoundTouch devices:
-- **SoundTouch 10** (192.168.178.28:8090) ✅
-- **SoundTouch 20** (192.168.178.35:8090) ✅
+- **SoundTouch 10** (192.168.1.10:8090) ✅
+- **SoundTouch 20** (192.168.1.11:8090) ✅
 
 All volume operations successfully tested on both devices.
 

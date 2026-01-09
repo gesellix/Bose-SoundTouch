@@ -21,50 +21,50 @@ func TestClient_GetBass(t *testing.T) {
 		{
 			name: "Valid bass response",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>3</targetbass>
   <actualbass>3</actualbass>
 </bass>`,
 			wantError:      false,
 			wantTargetBass: 3,
 			wantActualBass: 3,
-			wantDeviceID:   "1234567890AB",
+			wantDeviceID:   "ABCD1234EFGH",
 		},
 		{
 			name: "Negative bass response",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>-5</targetbass>
   <actualbass>-5</actualbass>
 </bass>`,
 			wantError:      false,
 			wantTargetBass: -5,
 			wantActualBass: -5,
-			wantDeviceID:   "1234567890AB",
+			wantDeviceID:   "ABCD1234EFGH",
 		},
 		{
 			name: "Zero bass response",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>0</targetbass>
   <actualbass>0</actualbass>
 </bass>`,
 			wantError:      false,
 			wantTargetBass: 0,
 			wantActualBass: 0,
-			wantDeviceID:   "1234567890AB",
+			wantDeviceID:   "ABCD1234EFGH",
 		},
 		{
 			name: "Bass adjustment in progress",
 			serverResponse: `<?xml version="1.0" encoding="UTF-8" ?>
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>6</targetbass>
   <actualbass>4</actualbass>
 </bass>`,
 			wantError:      false,
 			wantTargetBass: 6,
 			wantActualBass: 4,
-			wantDeviceID:   "1234567890AB",
+			wantDeviceID:   "ABCD1234EFGH",
 		},
 	}
 
@@ -333,7 +333,7 @@ func TestClient_IncreaseBass(t *testing.T) {
 					getCallCount++
 					// Return current bass level
 					response := `<?xml version="1.0" encoding="UTF-8" ?>
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>` + string(rune(tt.currentBass+48)) + `</targetbass>
   <actualbass>` + string(rune(tt.currentBass+48)) + `</actualbass>
 </bass>`
@@ -341,14 +341,14 @@ func TestClient_IncreaseBass(t *testing.T) {
 						// First call - return current bass
 						if tt.currentBass >= 0 && tt.currentBass <= 9 {
 							response = `<?xml version="1.0" encoding="UTF-8" ?>
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>` + string(rune(tt.currentBass+'0')) + `</targetbass>
   <actualbass>` + string(rune(tt.currentBass+'0')) + `</actualbass>
 </bass>`
 						} else {
 							// Handle negative numbers
 							response = `<?xml version="1.0" encoding="UTF-8" ?>
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>` + string(rune(-tt.currentBass+'0')) + `</targetbass>
   <actualbass>` + string(rune(-tt.currentBass+'0')) + `</actualbass>
 </bass>`

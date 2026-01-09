@@ -22,7 +22,7 @@ The Bose SoundTouch Go client provides comprehensive bass control functionality 
 
 **Response Format:**
 ```xml
-<bass deviceID="1234567890AB">
+<bass deviceID="ABCD1234EFGH">
   <targetbass>3</targetbass>
   <actualbass>3</actualbass>
 </bass>

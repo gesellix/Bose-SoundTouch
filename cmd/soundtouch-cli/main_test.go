@@ -14,16 +14,16 @@ func TestParseHostPort(t *testing.T) {
 	}{
 		{
 			name:        "IPv4 with port",
-			input:       "192.168.1.100:8090",
+			input:       "192.168.1.10:8090",
 			defaultPort: 8080,
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8090,
 		},
 		{
 			name:        "IPv4 without port",
-			input:       "192.168.1.100",
+			input:       "192.168.1.10",
 			defaultPort: 8080,
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8080,
 		},
 		{
@@ -63,30 +63,30 @@ func TestParseHostPort(t *testing.T) {
 		},
 		{
 			name:        "invalid port - non-numeric",
-			input:       "192.168.1.100:abc",
+			input:       "192.168.1.10:abc",
 			defaultPort: 8080,
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8080,
 		},
 		{
 			name:        "invalid port - too high",
-			input:       "192.168.1.100:99999",
+			input:       "192.168.1.10:99999",
 			defaultPort: 8080,
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8080,
 		},
 		{
 			name:        "invalid port - zero",
-			input:       "192.168.1.100:0",
+			input:       "192.168.1.10:0",
 			defaultPort: 8080,
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8080,
 		},
 		{
 			name:        "invalid port - negative",
-			input:       "192.168.1.100:-1",
+			input:       "192.168.1.10:-123",
 			defaultPort: 8080,
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8080,
 		},
 		{
@@ -112,9 +112,9 @@ func TestParseHostPort(t *testing.T) {
 		},
 		{
 			name:        "standard SoundTouch default",
-			input:       "192.168.178.28:8090",
+			input:       "192.168.1.10",
 			defaultPort: 8090,
-			wantHost:    "192.168.178.28",
+			wantHost:    "192.168.1.10",
 			wantPort:    8090,
 		},
 		{
@@ -133,9 +133,9 @@ func TestParseHostPort(t *testing.T) {
 		},
 		{
 			name:        "real SoundTouch device example",
-			input:       "192.168.178.35:8090",
+			input:       "192.168.1.10:8090",
 			defaultPort: 8080,
-			wantHost:    "192.168.178.35",
+			wantHost:    "192.168.1.10",
 			wantPort:    8090,
 		},
 		{
@@ -192,18 +192,18 @@ func TestParseHostPortSoundTouchScenarios(t *testing.T) {
 	}{
 		{
 			name:        "typical_cli_usage",
-			input:       "192.168.1.100:8090",
+			input:       "192.168.1.10:8091",
 			defaultPort: 8090,
 			description: "User specifies full host:port",
-			wantHost:    "192.168.1.100",
-			wantPort:    8090,
+			wantHost:    "192.168.1.10",
+			wantPort:    8091,
 		},
 		{
 			name:        "discovery_result_host_only",
-			input:       "192.168.1.100",
+			input:       "192.168.1.10",
 			defaultPort: 8090,
 			description: "Discovery returns IP, CLI uses default port",
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8090,
 		},
 		{
@@ -224,10 +224,10 @@ func TestParseHostPortSoundTouchScenarios(t *testing.T) {
 		},
 		{
 			name:        "invalid_port_fallback",
-			input:       "192.168.1.100:invalid",
+			input:       "192.168.1.10:invalid",
 			defaultPort: 8090,
 			description: "Malformed port should fallback to default",
-			wantHost:    "192.168.1.100",
+			wantHost:    "192.168.1.10",
 			wantPort:    8090,
 		},
 	}
