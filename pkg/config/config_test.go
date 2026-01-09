@@ -17,6 +17,10 @@ func TestDefaultConfig(t *testing.T) {
 		t.Error("Expected UPnP to be enabled by default")
 	}
 
+	if !config.MDNSEnabled {
+		t.Error("Expected mDNS to be enabled by default")
+	}
+
 	if config.HTTPTimeout != 10*time.Second {
 		t.Errorf("Expected HTTP timeout 10s, got %v", config.HTTPTimeout)
 	}
@@ -63,6 +67,7 @@ func TestLoadFromEnv_WithEnvVars(t *testing.T) {
 	// Set test environment variables
 	os.Setenv("DISCOVERY_TIMEOUT", "15s")
 	os.Setenv("UPNP_ENABLED", "false")
+	os.Setenv("MDNS_ENABLED", "false")
 	os.Setenv("HTTP_TIMEOUT", "20s")
 	os.Setenv("USER_AGENT", "Test-Client/1.0")
 	os.Setenv("CACHE_ENABLED", "false")
@@ -81,6 +86,10 @@ func TestLoadFromEnv_WithEnvVars(t *testing.T) {
 
 	if config.UPnPEnabled {
 		t.Error("Expected UPnP to be disabled")
+	}
+
+	if config.MDNSEnabled {
+		t.Error("Expected mDNS to be disabled")
 	}
 
 	if config.HTTPTimeout != 20*time.Second {
@@ -409,6 +418,7 @@ func clearTestEnvVars() {
 	envVars := []string{
 		"DISCOVERY_TIMEOUT",
 		"UPNP_ENABLED",
+		"MDNS_ENABLED",
 		"HTTP_TIMEOUT",
 		"USER_AGENT",
 		"CACHE_ENABLED",

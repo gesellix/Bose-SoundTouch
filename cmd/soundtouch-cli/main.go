@@ -256,7 +256,7 @@ func handleDiscovery(showInfo bool, timeout time.Duration) error {
 		cfg.DiscoveryTimeout = timeout
 	}
 
-	discoveryService := discovery.NewDiscoveryServiceWithConfig(cfg)
+	discoveryService := discovery.NewUnifiedDiscoveryService(cfg)
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.DiscoveryTimeout+5*time.Second)
 	defer cancel()
 
@@ -286,7 +286,7 @@ func handleDiscovery(showInfo bool, timeout time.Duration) error {
 				}
 			}
 		} else {
-			fmt.Printf("     Source: UPnP Discovery\n")
+			fmt.Printf("     Source: Network Discovery (UPnP/mDNS)\n")
 		}
 
 		if showInfo {

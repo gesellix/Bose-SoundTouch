@@ -15,11 +15,12 @@ A modern Go library and CLI tool for interacting with Bose SoundTouch devices vi
 - **Media Controls**: Play, pause, stop, track navigation via `/key` endpoint
 - **Volume Management**: Get/set volume, incremental control via `/volume` endpoint
 - **Host:Port Parsing**: Enhanced CLI with automatic host:port parsing
-- **UPnP Discovery**: Automatic device discovery on local network
+- **UPnP/SSDP Discovery**: Automatic device discovery using Universal Plug and Play
+- **mDNS/Bonjour Discovery**: Multicast DNS device discovery support
 - **Cross-Platform**: Works on Windows, macOS, Linux, and WASM
 - **CLI Tool**: Command-line interface for testing and control operations
 - **Flexible Configuration**: Support for .env files and environment variables
-- **Hybrid Discovery**: Combines UPnP discovery with configured device lists
+- **Unified Discovery**: Combines UPnP, mDNS, and configured device lists
 - **Safety Features**: Volume warnings, increment limits, error validation
 
 ### 🔄 Planned
@@ -60,6 +61,7 @@ Example `.env` configuration:
 # Discovery Settings
 DISCOVERY_TIMEOUT=5s
 UPNP_ENABLED=true
+MDNS_ENABLED=true
 
 # Preferred Devices (alternative to UPnP)
 # Format: name@host:port;name@host:port;...
@@ -73,12 +75,23 @@ USER_AGENT="Bose-SoundTouch-Go-Client/1.0"
 ### CLI Usage
 
 #### Device Discovery
+
+The library supports multiple discovery methods automatically:
+- **Configuration**: Manually specified devices in `.env` file (fastest, most reliable)
+- **UPnP/SSDP**: Universal Plug and Play discovery (widely supported)
+- **mDNS/Bonjour**: Multicast DNS discovery (Apple ecosystem friendly)
+
+See [docs/DISCOVERY.md](docs/DISCOVERY.md) for detailed information.
+
 ```bash
-# Discover SoundTouch devices (combines UPnP + configured devices)
+# Discover SoundTouch devices (combines UPnP, mDNS + configured devices)
 soundtouch-cli -discover
 
 # Discover and show detailed info for all devices
 soundtouch-cli -discover-all
+
+# Discover with custom timeout
+soundtouch-cli -discover -timeout 10s
 ```
 
 #### Device Information
@@ -256,8 +269,9 @@ func main() {
     
     fmt.Printf("Device: %s (%s)\n", deviceInfo.Name, deviceInfo.Type)
 
-    // Option 2: Discover devices automatically
-    discoveryService := discovery.NewDiscoveryService(5 * time.Second)
+    // Option 2: Discover devices automatically (unified: UPnP + mDNS + config)
+    cfg, _ := config.LoadFromEnv()
+    discoveryService := discovery.NewUnifiedDiscoveryService(cfg)
     ctx := context.Background()
     
     devices, err := discoveryService.DiscoverDevices(ctx)
@@ -345,7 +359,7 @@ func main() {
 │   └── soundtouch-cli/     # CLI application
 ├── pkg/
 │   ├── client/             # HTTP client with XML support
-│   ├── discovery/          # UPnP SSDP device discovery
+│   ├── discovery/          # Device discovery (UPnP/SSDP + mDNS/Bonjour)
 │   └── models/             # XML data models
 ├── docs/                   # Documentation
 └── build/                  # Build artifacts
@@ -383,6 +397,12 @@ go test -v ./pkg/discovery
 
 # Test with real devices
 make dev-info HOST=192.168.1.100
+
+# Test device discovery
+make dev-discover
+
+# Test mDNS discovery example
+make dev-mdns
 ```
 
 ### Development Commands
@@ -429,7 +449,8 @@ The application supports configuration through `.env` files and environment vari
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DISCOVERY_TIMEOUT` | `5s` | Timeout for device discovery |
-| `UPNP_ENABLED` | `true` | Enable/disable UPnP discovery |
+| `UPNP_ENABLED` | `true` | Enable/disable UPnP/SSDP discovery |
+| `MDNS_ENABLED` | `true` | Enable/disable mDNS/Bonjour discovery |
 | `PREFERRED_DEVICES` | (empty) | Semicolon-separated list of devices |
 | `HTTP_TIMEOUT` | `10s` | HTTP client timeout |
 | `CACHE_ENABLED` | `true` | Enable device caching |

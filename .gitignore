@@ -6,6 +6,11 @@ dist/
 *.so
 *.dylib
 
+# CLI binaries (should be in build/ directory)
+soundtouch-cli
+example-mdns
+example-upnp
+
 # Environment configuration
 .env
 .env.local

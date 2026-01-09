@@ -17,6 +17,7 @@ type Config struct {
 	// Discovery settings
 	DiscoveryTimeout time.Duration `env:"DISCOVERY_TIMEOUT" default:"5s"`
 	UPnPEnabled      bool          `env:"UPNP_ENABLED" default:"true"`
+	MDNSEnabled      bool          `env:"MDNS_ENABLED" default:"true"`
 
 	// Preferred devices from .env file
 	PreferredDevices []DeviceConfig `env:"PREFERRED_DEVICES"`
@@ -42,6 +43,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		DiscoveryTimeout: 5 * time.Second,
 		UPnPEnabled:      true,
+		MDNSEnabled:      true,
 		PreferredDevices: []DeviceConfig{},
 		HTTPTimeout:      10 * time.Second,
 		UserAgent:        "Bose-SoundTouch-Go-Client/1.0",
@@ -68,6 +70,10 @@ func LoadFromEnv() (*Config, error) {
 
 	if upnp := os.Getenv("UPNP_ENABLED"); upnp != "" {
 		config.UPnPEnabled = upnp == "true" || upnp == "1"
+	}
+
+	if mdns := os.Getenv("MDNS_ENABLED"); mdns != "" {
+		config.MDNSEnabled = mdns == "true" || mdns == "1"
 	}
 
 	if timeout := os.Getenv("HTTP_TIMEOUT"); timeout != "" {
