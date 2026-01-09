@@ -142,16 +142,16 @@ soundtouch-cli -host 192.168.1.100 -aux
 
 ```bash
 # Check available sources first
-soundtouch-cli -host 192.168.178.28 -sources
+soundtouch-cli -host 192.168.1.100 -sources
 
 # Select Spotify with account
-soundtouch-cli -host 192.168.178.28 -spotify -source-account "gesellix"
+soundtouch-cli -host 192.168.1.100 -spotify -source-account "your_account"
 
 # Select TuneIn
-soundtouch-cli -host 192.168.178.28 -select-source TUNEIN
+soundtouch-cli -host 192.168.1.100 -select-source TUNEIN
 
 # Select AUX input
-soundtouch-cli -host 192.168.178.28 -aux
+soundtouch-cli -host 192.168.1.100 -aux
 ```
 
 ### CLI Flags
@@ -185,12 +185,12 @@ soundtouch-cli -host 192.168.1.100 -sources
 This shows account names for each source:
 ```
 Ready Sources:
-  • gesellix+spotify@gmail.com (gesellix) [Remote, Multiroom, Streaming]
+  • user+spotify@example.com (user) [Remote, Multiroom, Streaming]
 ```
 
 In this example:
-- Full account: `gesellix+spotify@gmail.com`
-- Short account: `gesellix` (often works better)
+- Full account: `user+spotify@example.com`
+- Short account: `user` (often works better)
 
 ## Integration Examples
 

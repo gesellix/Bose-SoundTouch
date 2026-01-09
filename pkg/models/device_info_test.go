@@ -155,7 +155,7 @@ func TestCapabilities_UnmarshalXML(t *testing.T) {
 
 func TestCapabilities_HostedWifiConfig(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
-<capabilities deviceID="08DF1F0BA325">
+<capabilities deviceID="1234567890AB">
     <networkConfig>
         <hostedWifiConfigWebPage hostedBy="BCO" generation="1" port="80">true</hostedWifiConfigWebPage>
         <wsapiproxy>false</wsapiproxy>

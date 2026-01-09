@@ -502,8 +502,8 @@ Should work with all SoundTouch series devices that support the Web API.
 
 ### SoundTouch 20 Response
 ```xml
-<info deviceID="08DF1F0BA325">
-    <name>A Sound Machine</name>
+<info deviceID="1234567890AB">
+    <name>My SoundTouch Device</name>
     <type>SoundTouch 20</type>
     <moduleType>scm</moduleType>
     <variant>spotty</variant>
