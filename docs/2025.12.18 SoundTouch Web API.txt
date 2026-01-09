@@ -1,0 +1,1426 @@
+BOSE SOUNDTOUCH WEB API
+Bose Corporation
+Version 1.0
+Contents
+1
+
+Document Version History
+
+3
+
+2
+
+Acronyms and Definitions
+
+3
+
+3
+
+Legal Notice
+
+3
+
+4
+
+Overview
+
+3
+
+Special types used by the SoundTouch Web API
+
+3
+
+5
+
+General Status and Errors
+
+5
+
+6
+
+API Methods/URLs
+
+6
+
+6.1
+
+/key
+
+6
+
+6.2
+
+/select
+
+6
+
+6.3
+
+/sources
+
+7
+
+6.4
+
+/bassCapabilities
+
+8
+
+6.5
+
+/bass
+
+8
+
+6.6
+
+/getZone
+
+9
+
+6.7
+
+/setZone
+
+9
+
+6.8
+
+/addZoneSlave
+
+9
+
+6.9
+
+/removeZoneSlave
+
+10
+
+4.1
+
+6.10 /now playing
+
+10
+
+6.11 /trackInfo
+
+11
+
+6.12 /volume
+
+11
+
+6.13 /presets
+
+12
+
+6.14 /info
+
+12
+
+6.15 /name
+
+13
+
+6.16 /capabilities
+
+14
+
+6.17 /audiodspcontrols
+
+14
+
+6.18 /audioproducttonecontrols
+
+15
+1
+
+Contents (cont’d.)
+6.19 /audioproductlevelcontrols
+7
+
+15
+
+WebSockets
+
+16
+
+WebSocket Asynchronous Notifications
+
+16
+
+7.1
+7.1.1
+
+PresetsChangedNotifyUI
+
+17
+
+7.1.2
+
+RecentsUpdatedNotifyUI
+
+18
+
+7.1.3
+
+AcctModeChangedNotifyUI
+
+18
+
+7.1.4
+
+ErrorNotification
+
+19
+
+7.1.5
+
+NowPlayingChange
+
+19
+
+7.1.6
+
+VolumeChange
+
+19
+
+7.1.7
+
+BassChange
+
+19
+
+7.1.8
+
+ZoneMapChange
+
+20
+
+7.1.9
+
+SWUpdateStatusChange
+
+21
+
+7.1.10 SiteSurveyResultsChange
+
+21
+
+7.1.11 SourcesChange
+
+21
+
+7.1.12 NowSelectionChange
+
+22
+
+7.1.13 NetworkConnectionStatus
+
+22
+
+7.1.14 InfoChange, e.g., the device name changed
+
+22
+
+8 BOSE SOUNDTOUCH WEB API TERMS OF USE
+
+23
+
+ADDENDUM A – MINIMUM TERMS FOR EULA
+
+30
+
+2
+
+1
+
+Document Version History
+Version
+Release
+Date
+January 7,
+1.0.0
+• Initial Release
+2026
+
+2
+
+Acronyms and Definitions
+Acronyms
+
+Expanded Term
+
+Definition
+
+API
+
+Application
+Programming Interface
+
+A definition for how to interact with and use a
+software component
+
+REST
+
+Representational State
+Transfer
+
+A common type of web service API that is
+modeled around resources
+
+WAPI
+
+Web API
+
+An API made available by a web server
+
+SSDP
+
+Simple Services
+Discovery Protocol
+
+A discovery protocol that uses unicast and
+multicast over UDP
+
+MDNS
+
+Multicast Domain Name
+System
+
+A type of discovery protocol that requires zero
+configuration
+
+Bonjour
+
+Apple’s implementation of MDNS
+
+3 Legal Notice
+By using the SoundTouch Materials, you are agreeing to BOSE SOUNDTOUCH WEB API TERMS OF
+USE, INCLUDING THE MINIMUM TERMS FOR EULA found at Section 8 and Addendum A herein.
+4
+
+Overview
+
+These commands are the primary interface to command and control a Bose SoundTouch.
+They are sent over HTTP on port 8090 to the SoundTouch device you would like to
+connect to using the GET and POST methods.
+4.1
+
+Special types used by the SoundTouch WAPI
+
+ART_STATUS {
+INVALID
+SHOW_DEFAULT_IMAGE
+DOWNLOADING
+IMAGE_PRESENT
+}
+BOOL: "true" or "false"
+INT: a 32-bit integer
+3
+
+IPADDR: an IP address, represented as a string
+KEY_VALUE {
+PLAY
+PAUSE
+STOP
+PREV_TRACK
+NEXT_TRACK
+THUMBS_UP
+THUMBS_DOWN
+BOOKMARK
+POWER
+MUTE
+VOLUME_UP
+VOLUME_DOWN
+PRESET_1
+PRESET_2
+PRESET_3
+PRESET_4
+PRESET_5
+PRESET_6
+AUX_INPUT
+SHUFFLE_OFF
+SHUFFLE_ON
+REPEAT_OFF
+REPEAT_ONE
+REPEAT_ALL
+PLAY_PAUSE
+ADD_FAVORITE
+REMOVE_FAVORITE
+
+INVALID_KEY
+}
+KEY_STAT
+E { press
+release
+}
+MACADDR: a MAC address, upcased, represented as a string
+PLAY_STATUS {
+PLAY_STATE
+PAUSE_STATE
+STOP_STATE
+BUFFERING_STATE
+4
+
+INVALID_PLAY_STATUS
+}
+PRESET_ID: An integer, 1 through 6 inclusive
+SOURCE_STATUS {
+UNAVAILABLE
+READY
+}
+AUDIO_MODE {
+AUDIO_MODE_DIRECT
+AUDIO_MODE_NORMAL
+AUDIO_MODE_DIALOG
+AUDIO_MODE_NIGHT
+}
+STRING: any valid XML-escaped string
+UINT: a 32-bit unsigned integer
+UINT64: a 64-bit unsigned integer
+URL: a URL, encoded as a string
+Any get* command results in a HTTP GET command
+Any set* command results in a HTTP POST command, i.e. requires a payload
+
+5
+
+General Status and Errors
+
+For calls that do not have a special return payload, the default response is:
+<status>$STRING</status>
+
+For calls that can produce errors, the error response is:
+<errors deviceID="$STRING">
+<error value="$INT" name="$STRING"
+severity="$STRING">$STRING</error> ...
+</errors>
+
+5
+
+For malformed requests, i.e., wrong value the response is:
+<error>XML parse error (1:116): Error reading Attributes.</error>
+
+<errors deviceID="D05FB8A9591D"><error value="1019"
+name="CLIENT_XML_ERROR" severity="Unknown">1019</error></errors>
+
+6
+6.1
+
+API Methods/URLs
+/key
+
+Description: Keys are used as a simple means to interact with the SoundTouch speaker.
+For a full listing of supported keys please see the list under KEY VALUE in section 4.1
+Send a remote button press to the device
+GET:
+N/A
+POST:
+<key state="$KEY_STATE" sender="$KEY_SENDER">$KEY_VALUE</key>
+In general, it is good practice to send 2 discrete HTTP POST calls, the first using “press”
+as the key state, and the second using “release” as the key state. Doing so simulates
+both the press and release action of clicking a key. Possible values for “$KEY STATE” are
+“press” or “release”.
+The back to back message bodies will look like the following:
+<key state="press" sender="Gabbo">$KEY_VALUE</key>
+
+<key state="release" sender="Gabbo">$KEY_VALUE</key>
+
+6.2
+
+/select
+
+Description:
+6
+
+Use this /select API to select any of the available sources. Sources available via this
+/select API will vary based on product and on the SoundTouch account. Use the
+/sources API to query the availability for the device.
+GET:
+N/A
+POST:
+Examples:
+Sources available via this /select API will vary based on product.
+Use the /sources API to view the availability for the
+device. Below are some samples for Product,
+Bluetooth and AUX
+<ContentItem source="AUX" sourceAccount="AUX"></ContentItem>
+
+<ContentItem source="AUX" sourceAccount="AUX3"></ContentItem>
+
+<ContentItem source="BLUETOOTH"></ContentItem>
+
+<ContentItem source="PRODUCT" sourceAccount="TV"></ContentItem>
+
+6.3
+
+/sources
+
+Description:
+List
+
+all
+
+available
+
+content
+
+sources GET:
+
+<sources deviceID="$MACADDR">
+<sourceItem source="$SOURCE" sourceAccount="$STRING"
+status="$SOURCE_STATUS">$STRING</sourceItem>
+...
+</sources>
+
+7
+
+POST:
+N/A
+6.4
+
+/bassCapabilities
+
+Description: Some speakers do not support the ability to customize the bass levels, use
+this to find out whether bass customization is supported
+Get or set bassCapabilities
+GET:
+
+<bassCapabilities deviceID="$MACADDR">
+<bassAvailable>$BOOL</bassAvailable>
+<bassMin>$INT</bassMin>
+<bassMax>$INT</bassMax>
+<bassDefault>$INT</bassDefault>
+</bassCapabilties>
+POST:
+N/A
+6.5
+
+/bass
+
+Description: Sets or gets the current bass setting for a particular speaker. This may or
+may not be a supported capability, use the /bassCapabilities to find out whether a speaker
+supports bass configuration Get or set bass
+GET:
+<bass deviceID="$MACADDR">
+<targetbass>$INT</targetbass>
+<actualbass>$INT</actualbass>
+</bass>
+POST:
+<bass>$INT</bass>
+
+8
+
+6.6
+
+/getZone
+
+Description:
+Gets the current state of the multi-room zone from particular
+device GET:
+
+<zone master="$MACADDR">
+<member
+ipaddress="$MASTER_IPADDR">"$MASTER_MACAD
+DR"</member>
+<member
+ipaddress="$SLAVE1_IPADDR">"$SLAVE1_MACADDR
+"</member> ...
+</zone>
+
+6.7
+
+/setZone
+
+Description: Creates a
+multi-room zone
+GET:
+N/A
+POST:
+<zone master="$MACADDR"
+senderIPAddress="$IPADDR"> <member
+ipaddress="$IPADDR">$MACADDR</me
+mber> ...
+</zone>
+
+6.8
+
+/addZoneSlave
+
+Description:
+Add a slave to a “play everywhere” zone
+GET:
+N/A
+POST:
+
+9
+
+<zone master="$MACADDR">
+<member
+ipaddress="$IPADDR">$MACADDR</me
+mber> ...
+</zone>
+6.9
+
+/removeZoneSlave
+
+Description:
+Take a slave out of a “play everywhere” zone
+GET:
+N/A
+POST:
+<zone master="$MACADDR">
+<member
+ipaddress="$IPADDR">$MACADDR</me
+mber> ...
+</zone>
+
+6.10
+
+/now playing
+
+Description:
+Gets all info about the currently playing media
+
+GET:
+
+<nowPlaying deviceID="$MACADDR" source="$SOURCE">
+<ContentItem source="$SOURCE" location="$STRING" sourceAccount="$STRING"
+isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+<track>$STRING</track>
+<artist>$STRING</artist>
+<album>$STRING</album>
+<stationName>$STRING</stationName>
+<art artImageStatus="$ART_STATUS">$URL</art>
+<playStatus>$PLAY_STATUS</playStatus>
+<description>$STRING</description>
+<stationLocation>$STRING</stationLocation>
+10
+
+</nowPlaying>
+POST:
+N/A
+6.11
+
+/trackInfo
+
+Description: Get
+track information
+GET:
+
+<nowPlaying deviceID="$MACADDR" source="$SOURCE">
+<ContentItem source="$SOURCE" location="$STRING"
+sourceAccount="$STRING" isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+<track>$STRING</track>
+<artist>$STRING</artist>
+<album>$STRING</album>
+<stationName>$STRING</stationName>
+<art artImageStatus="$ART_STATUS">$URL</art>
+<playStatus>$PLAY_STATUS</playStatus>
+<description>$STRING</description>
+<stationLocation>$STRING</stationLocation>
+</nowPlaying>
+POST:
+N/A
+6.12
+
+/volume
+
+Description:
+Get or Set the volume and mute status for this SoundTouch
+device Volume ranges between 0, 100 inclusive.
+GET:
+<volume deviceID="$MACADDR">
+<targetvolume>$INT</targetvolume>
+
+11
+
+<actualvolume>$INT</actualvolume>
+<muteenabled>$BOOL</muteenabled>
+</volume>
+POST:
+The muteenabled setting is applied first, if present. The system will be unmuted if the
+volume value is larger than the current volume setting.
+<volume>$INT<muteenabled>$BOOL</muteenabled></volume>
+
+6.13
+
+/presets
+
+Description: Presets are a core part of the SoundTouch ecosystem. A preset is used to
+set and recall a specific music stream supported by the SoundTouch speaker
+List of current Presets
+GET:
+
+<presets>
+<preset id="$PRESET_ID" createdOn="$UINT64" updateOn="$UINT64">
+<ContentItem source="$SOURCE" location="$STRING"
+sourceAccount="$STRING" isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+</preset>
+...
+</presets>
+POST:
+N/A
+6.14
+
+/info
+
+Description:
+Get device information; mostly static device info such as device id,
+type, IP address (per component if applicable), cloud account ID,
+
+12
+
+software version, product version and component type and version
+GET:
+
+<info deviceID="$MACADDR">
+<name>$STRING</name>
+<type>$STRING</type>
+<margeAccountUUID>$STRING</margeAccountUUID>
+<components>
+<component>
+<componentCategory>$STRING</componentCategory>
+<softwareVersion>$STRING</softwareVersion>
+<serialNumber>$STRING</serialNumber>
+</component
+> ...
+</components>
+<margeURL>$URL</margeURL>
+<networkInfo type="$STRING">
+<macAddress>$MACADDR</macAddress>
+<ipAddress>$IPADDR</ipAddress>
+</networkInfo>
+...
+</info>
+POST:
+N/A
+6.15
+
+/name
+
+Description:
+
+Set
+
+the device name
+GET:
+N/A
+POST:
+<name>$STRING</name>
+
+13
+
+6.16
+
+/capabilities
+
+Description:
+Retrieve specific system capabilities. Listed in the reply to GET of this URL may be
+optional additional URLs. Clients should only attempt to access such URLs if they
+are present in this reply.
+For each capability, this reply provides a unique name to be used in identification, the url
+to be used for access, and optionally other related information to be used by the
+client.
+GET:
+<capabilities
+deviceID="$MACADDR"> ...
+<capability name="$STRING" url="/$STRING" info="$STRING"/>
+<capability name="$STRING" url="/$STRING"
+info="$STRING"/> ...
+</capabilities>
+POST:
+N/A
+6.17
+
+/audiodspcontrols
+
+Description:
+Accesses the system DSP settings.
+Only available if audiodspcontrols is listed in the reply to GET /capabilities.
+supportedaudiomodes conveys the set of audiomode values that are supported by
+the system and are accepted by POST.
+GET:
+<audiodspcontrols audiomode="$AUDIO_MODE" videosyncaudiodelay="0"
+supportedaudiomodes="$AUDIO_MODE|$AUDIO_MODE..."/>
+POST:
+If audiomode or videosyncaudiodelay are not included in the POST, they would not be
+changed.
+
+14
+
+<audiodspcontrols audiomode="$AUDIO_MODE" videosyncaudiodelay="$UINT"/>
+
+6.18
+
+/audioproducttonecontrols
+
+Description:
+Accesses the system bass and treble settings.
+Only available if audioproducttonecontrols is listed in the reply to GET /capabilities.
+minValue, maxValue and step convey the restrictions imposed on the POST value.
+GET:
+<audioproducttonecontrols>
+<bass value="$INT" minValue="$INT" maxValue="$INT" step="$UINT"/>
+<treble value="$INT" minValue="$INT" maxValue="$INT" step="$UINT"/>
+</audioproducttonecontrols>
+POST:
+If bass or treble are not included in the POST, they would not be changed.
+<audioproducttonecontrols>
+<bass value="$INT" />
+<treble value="$INT" />
+</audioproducttonecontrols>
+
+6.19
+
+/audioproductlevelcontrols
+
+Description:
+Accesses the system front-center and rear-surround level settings.
+Only available if audioproductlevelcontrols is listed in the reply to GET /capabilities.
+minValue, maxValue and step convey the restrictions imposed on the POST value.
+GET:
+<audioproductlevelcontrols>
+<frontCenterSpeakerLevel value="$INT" minValue="$INT" maxValue="$INT"
+step="$UINT"/>
+<rearSurroundSpeakersLevel value="$INT" minValue="$INT" maxValue="$INT"
+step="$UINT"/> </audioproductlevelcontrols>
+
+15
+
+POST:
+If frontCenterSpeakerLevel or rearSurroundSpeakersLevel are not included in the POST,
+they would not be changed.
+<audioproductlevelcontrols>
+<frontCenterSpeakerLevel value="$INT" />
+<rearSurroundSpeakersLevel value="$INT" />
+</audioproductlevelcontrols>
+
+7
+
+WebSockets
+Notifications are server initiated WebSocket messages which inform client(s) of
+changes in SoundTouch device. They serve to keep clients in sync with the
+server. They are sent over HTTP on port 8080 via a WebSocket connection
+which is initiated from a WebSocket client. The WebSocket connection offers an
+advantage over HTTP because it allows for bidirectional communication, which
+allows for asynchronous notifications to be initiated from the server side
+(SoundTouch device) to the client connection.
+
+7.1
+
+WebSocket Asynchronous Notifications
+
+After a successful WebSocket connection has been established, the simplest thing a client
+can do is to listen for the asynchronous notifications that are published by the SoundTouch
+device.
+The incomplete example below shows examples of a single update notification describing
+what changed on the SoundTouch device. This will help inform the client, if it is interested,
+to perform a new request for the updated values. In some cases the notification does not
+contain the changed information, but for convenience, in other cases it may. Creating the
+websocket:
+When creating a client websocket connection, be sure to specify the protocol as “gabbo”.
+An example javascript example is shown below.
+socket = new WebSocket("ws://$IP", "gabbo")
+Examples:
+<updates deviceID="$MACADDR">
+</updates>
+
+16
+
+<updates deviceID="$MACADDR">
+<volume>
+<targetvolume>$INT</targetvolume>
+<actualvolume>$INT</actualvolume>
+</volume>
+</updates>
+
+7.1.1 PresetsChangedNotifyUI
+Description: When a preset is changed in any way like added, cleared, or modified the
+SoundTouch speaker will send this asynchronous notification. This is a signal for the
+WAPI client to request the new list of presets via the /presets API
+<updates deviceID="$MACADDR">
+<presetsUpdated>
+<presets>
+<preset id="$INT">
+<ContentItem source="$SOURCE" location="$STRING" sourceAccount=""
+isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+</preset>
+<preset id="$INT">
+<ContentItem source="$SOURCE" location="$STRING"
+sourceAccount="$STRING" isPresetable="$BOOL">
+<itemName>STRING</itemName>
+</ContentItem>
+</preset>
+<preset id="$INT">
+<ContentItem source="$SOURCE" location="$STRING"
+sourceAccount="STRING" isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+</preset>
+<preset id="$INT" createdOn="$UINT64" updatedOn="$UINT64">
+<ContentItem source="$SOURCE" location="$STRING" sourceAccount=""
+isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+</preset>
+</presets>
+</presetsUpdated>
+</updates>
+
+17
+
+7.1.2 RecentsUpdatedNotifyUI
+Description: When the recents list is changed in any way like a recent is added, removed,
+or moved within the list, the SoundTouch speaker will send this asynchronous notification.
+This is a signal for the WAPI client to request the new list of recents via the /recents API
+<updates deviceID=’$MACADDR’>
+<recentsUpdated>
+<recents>
+<recent deviceID="$MACADDR" utcTime="$UINT64">
+<contentItem source="$SOURCE" location="$STRING"
+sourceAccount="$STRING" isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</contentItem>
+</recent>
+<recent deviceID="$MACADDR" utcTime="$UINT64">
+<contentItem source="$SOURCE" location="$STRING" sourceAccount=""
+isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</contentItem>
+</recent>
+<recent deviceID="$MACADDR" utcTime="$UINT64">
+<contentItem source="$SOURCE" location="$STRING" sourceAccount=""
+isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</contentItem>
+</recent>
+</recents>
+</recentsUpdated>
+</updates>
+
+7.1.3 AcctModeChangedNotifyUI
+Description: When the SoundTouch speaker’s association with a cloud account changes
+then this asynchronous notification will be sent
+<updates deviceID=’$MACADDR’>
+<acctModeUpdated>
+</acctModeUpdated>
+</updates>"
+
+18
+
+7.1.4 ErrorNotification
+ErrorNotification
+
+7.1.5 NowPlayingChange
+<updates deviceID="$MACADDR">
+<nowPlayingUpdated><nowPlaying deviceID="$MACADDR" source="$SOURCE">
+<ContentItem source="$SOURCE" location="$STRING" sourceAccount=""
+isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+<track/>
+<artist/>
+<album/>
+<stationName>$STRING</stationName>
+<art artImageStatus="$ART_STATUS">$URL</art>
+<playStatus>$PLAY_STATUS</playStatus>
+<description>$STRING</description>
+<stationLocation>$STRING</stationLocation>
+</nowPlaying>
+</nowPlayingUpdated>
+</updates>
+
+7.1.6 VolumeChange
+<updates deviceID="$MACADDR">
+<volumeUpdated/>
+</updates>
+
+7.1.7 BassChange
+<updates deviceID="$MACADDR">
+<bassUpdated/>
+</updates>
+
+19
+
+7.1.8 ZoneMapChange
+<updates deviceID="$MACADDR">
+<zoneUpdated/>
+</updates>
+
+* Slave device joining a zone
+
+<updates deviceID="slave $MACADDR">
+<zoneUpdated/>
+</updates>
+<updates deviceID="slave $MACADDR">
+<volumeUpdated/>
+</updates>
+<updates deviceID="slave $MACADDR">
+<volumeUpdated/>
+</updates>
+<updates deviceID="slave $MACADDR">
+<nowPlayingUpdated/>
+</updates>
+
+* Slave device leaving a zone
+
+<updates deviceID="slave $MACADDR">
+<zoneUpdated/>
+</updates>
+<updates deviceID="slave $MACADDR">
+<nowPlayingUpdated/>
+</updates>
+
+* Master device notifies any time a slave device joins its zone
+
+<updates deviceID="slave $MACADDR">
+<zoneUpdated/>
+</updates>
+
+20
+
+<updates deviceID="slave $MACADDR">
+<nowPlayingUpdated/>
+</updates>
+
+* Master device notifies any time a slave device leaves its zone
+
+<updates deviceID="$MACADDR">
+<zoneUpdated/>
+</updates>
+<updates deviceID="$MACADDR">
+<zoneUpdated/>
+</updates>
+
+7.1.9 SWUpdateStatusChange
+Description: While this may happen in general, it is not important and there is no need to
+take any action when this is received
+<updates deviceID="$MACADDR">
+<swUpdateStatusUpdated/>
+</updates>
+
+7.1.10SiteSurveyResultsChange
+Description: While this may happen in general, it is not important and there is no need to
+take any action when this is received
+<updates deviceID="$MACADDR">
+<siteSurveyResultsUpdated/>
+</updates>
+
+7.1.11 SourcesChange
+<updates deviceID="$MACADDR">
+<sourcesUpdated/>
+</updates>
+
+21
+
+7.1.12NowSelectionChange
+<updates deviceID="$MACADDR">
+<nowSelectionUpdated>
+<preset id="$INT">
+<ContentItem source="$SOURCE" location="$STRING"
+sourceAccount="$STRING" isPresetable="$BOOL">
+<itemName>$STRING</itemName>
+</ContentItem>
+</preset>
+</nowSelectionUpdated>
+</updates>
+
+7.1.13NetworkConnectionStatus
+<updates deviceID="$MACADDR">
+<connectionStateUpdated/>
+</updates>
+
+7.1.14InfoChange, e.g., the device name changed
+<updates deviceID="$MACADDR">
+<infoUpdated/>
+</updates>
+
+22
+
+8
+
+BOSE SOUNDTOUCH WEB API TERMS OF USE
+
+Effective January 7, 2026
+
+These Terms of Use (“Terms”) are a legal agreement between you (“you/your/Licensee”) and Bose
+Corporation located at 100 The Mountain Road, Framingham, Massachusetts 01701 on behalf of
+itself and its Affiliates (“Bose/we/our”), each, a “Party” and collectively the “Parties”.
+The Terms apply to your use of the Bose SoundTouch Materials defined below. By using the
+SoundTouch Materials, you agree to be bound by the Terms. If you do not agree with and accept the
+Terms, you may not use the SoundTouch Materials. If you are accepting these Terms on behalf of an
+entity or organization, you agree that you have appropriate authority to agree on behalf of such
+entity or organization, and references to you/Licensee shall include and refer to such party.
+
+1. Definitions
+1.1.
+
+“Affiliate” of a Party means an entity controlling, controlled by or under common control
+with such Party.
+
+1.2.
+
+“Applicable Law” means all laws, rules and regulations of any jurisdiction applicable to
+either party’s performance or exercise of rights under these Terms including without
+limitation laws regarding privacy, the import or export of data or software, or local laws.
+
+1.3.
+
+“Application” means any form of Licensee’s software that interoperates with Compatible
+Bose Products via the SoundTouch Web API (e.g., device firmware, personal computer
+software, mobile device application software, Cloud Service software, etc.).
+
+1.4.
+
+“Bose Marks” means the trademarks ‘Bose’ and ‘SoundTouch’ as word marks only and not
+logos.
+
+1.5.
+
+“Cloud Service” means any internet-based services made available by Licensee to its endusers (e.g., music or content-based service, data service, alarm or notification-based
+service, etc.).
+
+1.6.
+
+“Compatible Bose Products” means any internet or Bluetooth connected consumer
+electronic product that is manufactured by or on behalf of Bose that is compatible with the
+SoundTouch Web API.
+
+1.7.
+
+“Connection” means your integration of the SoundTouch Web API in connection with your
+Application.
+
+1.8.
+
+“Intellectual Property” means (a) trade secrets, know-how, and confidential information of
+any nature; (b) copyrights, works of authorship and derivative works; (c) patents, ideas,
+inventions and improvements, (d) trademarks, trade dress, service marks, and logos; (d)
+23
+
+mask works; (e) governmental applications or registrations for any of the foregoing items; (f)
+any other form of rights or property now or hereafter recognized as intellectual property rights
+or intellectual property under the laws of any governmental jurisdiction; and (g) any tangible
+instances or copies of any of the foregoing items.
+1.9.
+1.10.
+
+“SoundTouch Documentation” means any specifications, reference designs, software,
+sample code or other materials made available by Bose in connection with the SoundTouch
+Web API.
+“SoundTouch Materials” means the SoundTouch Web API and/or SoundTouch
+Documentation.
+
+1.11. “SoundTouch Web API” means collectively the application programming interface which
+enables interoperability between Compatible Bose Products and Licensee’s Application(s).
+
+2. Grant of License.
+License to SoundTouch Materials. Subject to the Terms, Bose grants you a limited, world-wide,
+royalty-free, revocable, non-assignable, non-exclusive and non-sublicensable license to use the
+SoundTouch Materials for the sole and exclusive purpose of developing Connection(s) and
+distributing your Applications.
+For Third Parties. This license extends to third parties who provide services to you for the purposes
+of developing Connection(s) and/or distributing the Applications (collectively, “Authorized Third
+Parties”). You agree that you shall be responsible for the Authorized Third Parties’ compliance with
+these Terms, and that you shall be liable to Bose for any acts or omissions by Authorized Third
+Parties that would constitute a breach of these Terms if done by you.
+3. End-User Agreements and Disclosures. You may distribute Applications under the end-user
+licensing terms of your choice (“EULA”), provided the EULA satisfies at a minimum the following
+conditions set forth in Addendum A. You agree that the EULA is solely between you and the enduser and conforms to Applicable Law, and Bose shall not be responsible for, and shall not have any
+liability whatsoever under, any EULA or any breach by you or any end-user of any of the terms of any
+EULA. In any distribution of the Application, you will retain and reproduce in their entirety any
+disclaimers, copyright notices, or other proprietary notices, if any, provided with the SoundTouch
+Materials.
+
+4. Trademarks.
+License To Bose Marks. Subject to the Terms, Bose hereby grants you a world-wide, revocable,
+limited, royalty-free, non-exclusive, non-transferable license to use the Bose Marks in connection
+with the marketing and/or distribution of the Connection/Application solely as follows:
+
+24
+
+(a) You may only use Bose Marks within your Application name as an object and not as a
+subject.
+Example:
+
+“The Bose SoundTouch Controller” is prohibited.
+“Controller for Bose SoundTouch systems” is acceptable.
+
+(b) The Bose Marks are adjectives only. Do not pluralize Bose Marks or use them as other parts
+of speech.
+The license to use Bose Marks is revocable by Bose separately from the license to the SoundTouch
+Materials. Bose may, at any time, request in writing specimens of any or all uses of the Bose Marks
+to assess the level of consistency and quality of use.
+5. Bose’s Ownership and Restrictions on Use.
+Bose’s Ownership. The SoundTouch Materials, inclusive of any rights to modifications, derivative
+works, or improvements, and all rights therein, are and shall remain the sole and exclusive property
+of Bose. You agree not to use or attempt to use the SoundTouch Materials in violation or
+contravention of any Applicable Law.
+Disclaimer for Mission Critical Systems. You agree that the SoundTouch Materials and the
+Compatible Bose Products are not fault-tolerant and are not designed, manufactured or intended
+for any uses requiring fail-safe, emergency, or mission critical performance in which the failure of
+the SoundTouch Web API or the Compatible Bose Products could lead to death, personal injury, or
+physical or environmental damage (collectively, “Mission Critical Systems”). This
+acknowledgement applies, without limitation, to any use of the SoundTouch Web API or
+Compatible Bose Products by you or end-users in association with life support systems, or in
+clinical or diagnostic applications, or in any emergency or mission-critical mechanical systems. As
+between the Parties, use of the SoundTouch Materials or Compatible Bose Products in association
+with any Mission Critical Systems shall be at your sole risk. You shall indemnify Bose, its Affiliates,
+and its and their respective officers, directors and employees, against any claims or damages that
+may be incurred by Bose as result of any use of the SoundTouch Web API in association with any
+Mission Critical Systems.
+Prohibited Conduct. You will only use the SoundTouch Materials for your own activities related to
+your use and distribution of Connections/Applications for Compatible Bose Products. You will not
+use the SoundTouch Materials to:
+▪
+▪
+
+▪
+
+Implement functionality that blocks or otherwise interferes with the normal functionality of
+the SoundTouch Web API or the Compatible Bose Products.
+Aggregate control of Compatible Bose Products, services, or end-user data across multiple
+households except to the extent the SoundTouch Web API permits control of multiple
+homes in a single Bose customer account.
+Commit any acts or omissions constituting infringement of third-party rights, including but
+not limited to any rights in Intellectual Property and rights of publicity or privacy, or the
+making of threats or incitement of violence, or the distribution of spam or any pornographic
+or obscene content.
+
+25
+
+▪
+
+▪
+
+▪
+▪
+▪
+
+6.
+
+Commit any act or omission that has the effect of introducing any viruses, worms, defects,
+Trojan horses, malware or any other code of a destructive or intrusively monitoring function
+to Bose Compatible Products or to the networks systems of Bose or its affiliates.
+Access or control any end-user accounts or any devices linked to any end-user accounts in
+a fashion that could cause any harm, damage, or loss, or disable, circumvent or avoid any
+security device, mechanism, protocol or procedure established by Bose, or permit others
+to do any of the foregoing.
+Engage in, or encourages others to engage, in any misleading, fraudulent, improper,
+unlawful or dishonest act relating to this program.
+Use the SoundTouch Web API to process or store any data that is subject to the
+International Traffic in Arms Regulations maintained by the Department of State.
+Violate any Applicable Law or permit the use of the SoundTouch Materials to encourage or
+promote illegal activity.
+Licensee’s Ownership and No Liability.
+
+Your Ownership. Bose agrees that it obtains no right, title or interest from you under these Terms in or to
+your Application(s) if considered exclusively of the incorporated SoundTouch Web API itself.
+Transmitted Content. You agree that you are solely responsible for (and that Bose has no responsibility
+for) any data, content, or other item (“Transmitted Content”) that you create, transmit or display
+through any Connection/Application or any Compatible Bose Product, and for the consequences of
+your actions (including any loss or damage which Bose or any third party may suffer) by doing so. In
+addition, you give Bose a perpetual, irrevocable, worldwide, sublicensable, royalty-free, and nonexclusive license and right to use Transmitted Content to display, perform or provide such content for
+the benefit of the end-users of the Application and the Bose Compatible Products, and you shall ensure
+that you have the necessary rights to grant such license to Bose.
+No Liability of Bose. You shall be solely responsible for (and Bose has no responsibility for) all technical
+support of the Applications for end users. You shall be solely responsible for (and Bose has no
+responsibility for) any breach of your obligations under these Terms, any applicable third party contract
+or terms of service, or any Applicable Law, and for the consequences (including any loss or damage
+which Bose or any third party may suffer) of any such breach.
+7. Term and Termination.
+Term. The “Term” refers to the period of time from when you accept these Terms until termination as set
+forth below.
+Termination by Bose. Bose may, for any reason or no reason, terminate, or at its option suspend, these
+Terms and/or your use and access of the SoundTouch Materials and Bose Marks effective upon thirty
+(30) days written notice; provided however that Bose may terminate immediately effective upon notice
+in the event that (a) your Application is deemed to infringe any rights in Intellectual Property held by
+Bose or by any third parties; (b) Licensee engages in any action which disparages Bose or any of its
+Affiliates or otherwise devalues the name, logos, trademarks, goodwill, or reputation of Bose or any of
+26
+
+its Affiliates; (c) Licensee brings or threatens to bring any claim of infringement of rights in Intellectual
+Property against Bose or any of its Affiliates (including any cross-claim or counterclaim); or (d) If you or
+any of your Applications violate the provisions of Sections 4 or 5 above. Upon termination by Bose, you
+shall have a period of three (3) months following the effective date of termination to use the
+SoundTouch Materials and the Bose Marks to deliver services to your end users via the Application(s).
+However, if Bose has the right to immediately terminate, then you shall have a period of thirty (30) days
+in which to use the SoundTouch Materials and the Bose Marks to deliver services to your end users via
+your Application(s).
+
+Suspension. In the event that Bose gives notice of suspension, you must immediately cease all use of
+the SoundTouch Materials in connection with your Application(s) until such time as Bose has agreed in
+writing to allow you begin use of the SoundTouch Materials.
+
+Revocation. Bose reserves the right to effectuate any termination or suspension by means of revocation
+of authorization keys or other technical security measures.
+
+Termination by Licensee. You may terminate by ceasing to use the SoundTouch Materials and removing
+all SoundTouch Web API code from your Application(s).
+
+8. Updates and Modifications.
+To the SoundTouch Materials. Bose may, at its sole discretion, update or modify the SoundTouch
+Materials. You agree that Bose has no obligation to update or modify the SoundTouch Materials, or to
+provide any support or maintenance of the SoundTouch Web API. You understand that updates or
+modifications to the SoundTouch Materials may: (a) alter, remove or restrict previously existing
+functionality; and/or (b) require you to update or modify your Application to continue to use the
+functionality.
+To these Terms. Bose may, at its sole discretion, make changes to these Terms. In the event of any
+such changes, you will be responsible for reviewing the modified Terms, which will be effective upon
+first posting by Bose to https://assets.bosecreative.com/transform/1922c5c8-2852-4f57-81014fc6cd93b150/SoundTouch-Web-API or upon other notice, and use of the SoundTouch Materials
+following any such notification constitutes acceptance.
+9. Licensee Warranties.
+You represent and warrant to Bose that (a) You have full right and authority to develop and distribute
+the Applications, including any necessary third party licenses or consents; (b) the Applications shall
+not infringe any rights in intellectual property or any other proprietary rights held by any third parties; (c)
+Your use and distribution of the Applications and performance under these Terms shall comply with
+27
+
+any Applicable Law; and (d) You will not engage in any activity with the SoundTouch Web API that
+involves data-mining conducted on Compatible Bose Products or the services or products of Bose’s
+third party licensors and suppliers, or otherwise interferes with, disrupts, damages, or accesses in an
+unauthorized manner the servers, networks, or other properties or services of any third party.
+10. Indemnity.
+You shall defend, indemnify and hold harmless Bose, its Affiliates and each of their respective officers,
+directors, employees, agents, advertisers, resellers, licensors and partners from and against any and
+all claims, suits, losses, damages (actual or consequential), liabilities, costs, fees and expenses
+(including reasonable attorneys' fees) arising directly or indirectly out of or otherwise related to any
+claims that: (a) any Applications infringe any third party rights in Intellectual Property; (b) allege
+personal injury or damages to real or personal property arising directly or indirectly from the use of any
+Applications; (c) allege Bose’s use of the Licensee Marks or Transmitted Content (in a manner contrary
+to any guidelines or restrictions provided to Bose) violate any third party rights; and/or (d) use or
+distribution of any Applications by you or your distributors/resellers in violation of any Applicable Law.
+11. Disclaimer. THE SOUNDTOUCH MATERIALS ARE PROVIDED “AS IS” AND “AS AVAILABLE”
+WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION
+ANY WARRANTIES OF MERCHANTABILITY, ACCURACY, FITNESS FOR A PARTICULAR PURPOSE, TITLE
+OR NON-INFRINGEMENT, AND BOSE EXPRESSLY DISCLAIMS ALL WARRANTIES AND CONDITIONS OF
+ANY KIND, EXPRESS OR IMPLIED, TO THE EXTENT ALLOWED BY APPLICABLE LAW. YOUR USE OF THE
+SOUNDTOUCH MATERIALS IS AT YOUR SOLE DISCRETION AND RISK, AND YOU ARE SOLELY
+RESPONSIBLE FOR ANY DAMAGE TO ANY SYSTEM OR DEVICE OR PERSONS WHICH MAY ARISE FROM
+SUCH USE AND FOR ANY CLAIMS BY ANY END USER OF YOUR APPLICATIONS. BOSE MAKES NO
+WARRANTY OR GUARANTEE THAT YOUR USE WILL BE UNINTERRUPTED, TIMELY, OR ERROR FREE, OR
+THAT ANY ERRORS IN THE SOUNDTOUCH MATERIALS WILL BE CORRECTED. THIS SECTION SHALL
+APPLY IN ADDITION TO ANY DISCLAIMERS OR OTHER PROVISION RELATING TO LIMITED LIABILITY.
+12. Limitation of Liability. IN NO EVENT AND UNDER NO LEGAL THEORY, WHETHER IN TORT
+(INCLUDING NEGLIGENCE AND PRODUCT LIABILITY), CONTRACT, WARRANTY, OR OTHERWISE, WILL
+BOSE OR ANY OF ITS AFFILIATES BE LIABLE FOR ANY DAMAGES, INCLUDING ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR EXEMPLARY DAMAGES ARISING OUT OF OR RELATED
+TO THIS AGREEMENT, THE USE OF THE SOUNDTOUCH MATERIALS, ANY OF YOUR APPLICATIONS, OR
+BOSE COMPATIBLE PRODUCTS OR ANY INABILITY TO USE THE ANY OF THE FOREGOING, (INCLUDING
+WITHOUT LIMITATION LOSS OF GOODWILL, BUSINESS INTERRUPTION, LOST PROFITS OR DATA,
+FAILURE OR MALFUNCTION OF ANY COMPUTER OR ELECTRONIC SYSTEM, OR ANY OTHER
+COMMERCIAL DAMAGES OR LOSSES), EVEN IF BOSE OR ANY OF ITS AFFILIATES HAS BEEN ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGES. IN THE EVENT THAT THE FOREGOING LIMITATION IS NOT
+ENFORCEABLE WITHIN ANY APPLICABLE JURISDICTION, IN NO EVENT SHALL BOSE'S TOTAL LIABLITY
+TO YOU UNDER THIS AGREEMENT FOR ANY DAMAGES EXCEED THE GREATER OF (A) THE AMOUNT
+YOU PAID BOSE IN CONNECTION WITH THIS AGREEMENT AND (B) THE AMOUNT OF TEN DOLLARS
+($10.00). THE FOREGOING LIMITATIONS SHALL APPLY EVEN IF ANY REMEDY GRANTED HEREIN FAILS
+OF ITS ESSENTIAL PURPOSE. This Section shall apply in addition to any other disclaimers or provision
+relating to limited liability. Some states do not allow the limitation or exclusion of incidental or
+consequential damages, and where applicable the above limitations or exclusions shall apply to the
+maximum extent permitted by Applicable Law.
+
+28
+
+13. Survival. The provisions of Sections 10 through 14 shall survive any expiration or termination of
+this Agreement. In addition, any provision which by its essence and context is reasonably intended to
+survive beyond termination or expiration of this Agreement shall so survive.
+14. Miscellaneous
+Entire Agreement. These Terms constitute the entire agreement between Bose and you in regard to the
+SoundTouch Materials and supersede any other prior and contemporaneous agreements relating
+thereto.
+Assignment. The rights and obligations hereunder may not be assigned, delegated or transferred by
+you without the prior written consent of Bose, which may be withheld at the sole discretion of Bose.
+No Third-Party Beneficiaries. Bose’s Affiliates and its and their respective licensors shall be third party
+beneficiaries of these Terms. Other than as expressly set forth herein, no other person or entity will be
+a third-party beneficiary.
+Jurisdiction, Venue and Choice of Law. These Terms will be governed by and construed according to
+the laws of the Commonwealth of Massachusetts, without reference to its conflict of laws provisions.
+The parties irrevocably agree to submit to the personal and exclusive jurisdiction of the state and
+federal courts located in the City of Boston, Massachusetts.
+Waiver. The failure of Bose to exercise or enforce any right or provision will not constitute a waiver of
+such right or provision. No waiver shall be effective unless made in writing and signed by the party
+against whom the waiver may be asserted.
+Severability. If any provision is found by a court of competent jurisdiction to be invalid or
+unenforceable, then that provision will be removed and the remaining provisions will remain in full
+force and effect to the fullest extent allowed by Applicable Law.
+Government Use. Licensee agrees that the SoundTouch Materials are a “Commercial Item”,
+consisting of “commercial computer software”, and “commercial computer software documentation”
+as defined by Applicable Law. Any use of the SoundTouch Materials by the U.S. Government shall be
+governed by these Terms.
+Equitable Remedies. You acknowledge that your breach of the license or use restrictions in these
+Terms may cause Bose irreparable harm. You agree that, in addition to any other rights or remedies
+available under Applicable Law, Bose shall have the right to immediate injunctive relief in the event of
+any such breach.
+Relationship of the Parties. Notwithstanding anything to the contrary, at all times, the status of the
+Parties shall be solely that of independent contractors to one another, and the Parties shall not be
+deemed “partners” in any legal sense of the term. These Terms and the transactions contemplated
+hereunder shall not be construed as creating the relationship of employer and employee, principal and
+agent, franchisor and franchisee, joint venturers, co-partners, affiliates or any other similar
+relationship, the existence of which is expressly denied.
+
+29
+
+No Publicity. Neither Party will issue any press release, publicity or other public disclosure relating to
+the relationship of the Parties without the other Party's prior written consent.
+Addendum A
+Minimum Terms for EULA
+
+1. Acknowledgement. You and the end-user shall acknowledge that the EULA is concluded between
+you and the end-user only, and not with Bose, and that you, and not Bose, is solely responsible for
+the Application and the content thereof. Your EULA must state that Bose does not in any way endorse,
+approve of, or sponsor the Application.
+
+2. Scope of License. The license granted to the end-user for the Application shall be limited to a nontransferable license to use the Application on a Compatible Bose Product that the end-user owns or
+controls.
+
+3. Maintenance and Support. You shall be solely responsible for providing any maintenance and
+support services with respect to the Application, as specified in the EULA, or as required under
+applicable law. You and the end-user shall acknowledge that Bose has no obligation whatsoever to
+furnish any maintenance and support services with respect to the Application.
+
+4. Warranty. You shall be solely responsible for any product warranties, whether express or implied
+by law, to the extent not effectively disclaimed. You and the end-user shall acknowledge that Bose
+will have no warranty obligation whatsoever with respect to the Application, and any other claims,
+losses, liabilities, damages, costs or expenses attributable to any failure to conform to any warranty
+will be your sole responsibility.
+
+5. Product Claims. You and the end-user shall acknowledge that you, not Bose, is responsible for
+addressing any claims of the end-user or any third party relating to the Application or the end-user's
+possession and/or use of the Application, including, but not limited to (i) product liability claims; (ii)
+any claim that the Application fails to conform to any applicable legal or regulatory requirement; and
+(iii) claims arising under consumer protection or similar legislation.
+
+6. Intellectual Property Rights. You and the end-user shall acknowledge that, in the event of any third
+party claim that the Application or the end-user's possession and use of the Application infringes
+that third party's intellectual property rights, you, not Bose, will be solely responsible for the
+investigation, defense, settlement and discharge of any such intellectual property infringement
+claim.
+30
+
+7. Developer Name and Address. You shall state in the EULA your name and address, and the contact
+information (telephone number; E-mail address) to which any end-user questions, complaints or
+claims with respect to the Application should be directed.
+
+8. Third Party Beneficiaries. You and the end-user shall acknowledge and agree that Bose, Bose's
+affiliates, and its and their respective licensors are third party beneficiaries of the EULA
+(collectively, “Beneficiaries”). The EULA shall require that, upon the end-user's acceptance of the
+terms and conditions of the EULA, the Beneficiaries will have the right (and will be deemed to have
+accepted the right) to enforce the EULA against the end-user as a third party beneficiary thereof.
+
+9. Trademark Attribution. You shall print “Bose and SoundTouch are trademarks of Bose
+Corporation.
+
+31
+
+
