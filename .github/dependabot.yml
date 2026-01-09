@@ -18,13 +18,10 @@ updates:
       - "gesellix"
     commit-message:
       prefix: "deps"
-      prefix-development: "deps-dev"
       include: "scope"
     labels:
       - "dependencies"
       - "go"
-    pull-request-branch-name:
-      separator: "/"
     rebase-strategy: "auto"
     allow:
       # Allow all dependency types
@@ -40,18 +37,6 @@ updates:
       golang:
         patterns:
           - "golang.org/*"
-        update-types:
-          - "patch"
-          - "minor"
-      # Group testing dependencies
-      testing:
-        patterns:
-          - "*test*"
-          - "*mock*"
-          - "*assert*"
-        update-types:
-          - "patch"
-          - "minor"
 
   # GitHub Actions workflow dependency updates
   - package-ecosystem: "github-actions"
@@ -73,8 +58,6 @@ updates:
       - "dependencies"
       - "github-actions"
       - "ci"
-    pull-request-branch-name:
-      separator: "/"
     rebase-strategy: "auto"
     allow:
       - dependency-type: "all"
@@ -83,16 +66,10 @@ updates:
       actions-core:
         patterns:
           - "actions/*"
-        update-types:
-          - "patch"
-          - "minor"
       # Group setup actions
       setup-actions:
         patterns:
           - "*setup-*"
-        update-types:
-          - "patch"
-          - "minor"
       # Group security-related actions
       security-actions:
         patterns:
@@ -100,36 +77,3 @@ updates:
           - "*scan*"
           - "securecodewarrior/*"
           - "codecov/*"
-        update-types:
-          - "patch"
-          - "minor"
-
-  # Docker dependencies (if we add Dockerfiles in the future)
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 2
-    reviewers:
-      - "gesellix"
-    assignees:
-      - "gesellix"
-    commit-message:
-      prefix: "docker"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "docker"
-    pull-request-branch-name:
-      separator: "/"
-    rebase-strategy: "auto"
-    allow:
-      - dependency-type: "all"
-    # Only check if Dockerfile exists
-    ignore:
-      # Ignore base image major updates (requires manual testing)
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
