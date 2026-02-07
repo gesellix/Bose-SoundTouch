@@ -1,3 +1,5 @@
+// Package main provides a demo client for the SoundTouch service API,
+// demonstrating how to interact with devices and retrieve media information.
 package main
 
 import (

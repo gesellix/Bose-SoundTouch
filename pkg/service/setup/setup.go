@@ -4,7 +4,6 @@ package setup
 import (
 	"encoding/xml"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 
@@ -119,7 +118,59 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		SSHSuccess: false,
 	}
 
-	// 0. Populate from datastore if available
+	// Populate device info from datastore and live info
+	m.populateDeviceInfo(summary, deviceIP)
+
+	// 1. Initial planned config
+	plannedCfg := PrivateCfg{
+		MargeServerUrl:             fmt.Sprintf("%s/marge", targetURL),
+		StatsServerUrl:             targetURL,
+		SwUpdateUrl:                fmt.Sprintf("%s/updates/soundtouch", targetURL),
+		UsePandoraProductionServer: true,
+		IsZeroconfEnabled:          true,
+		SaveMargeCustomerReport:    false,
+		BmxRegistryUrl:             fmt.Sprintf("%s/bmx/registry/v1/services", targetURL),
+	}
+
+	// 2. Check SSH and read current config
+	currentConfig, err := m.checkCurrentConfig(summary, deviceIP)
+	if err == nil && currentConfig != "" {
+		summary.CurrentConfig = currentConfig
+		fmt.Printf("Current config from %s (length: %d):\n%q\n", deviceIP, len(currentConfig), currentConfig)
+
+		// Parse current config
+		var currentCfg PrivateCfg
+		if xml.Unmarshal([]byte(currentConfig), &currentCfg) == nil {
+			summary.ParsedCurrentConfig = &currentCfg
+
+			if proxyURL == "" {
+				proxyURL = targetURL
+			}
+
+			// Apply options if provided
+			if options != nil {
+				m.applyProxyOptions(&plannedCfg, proxyURL, options, &currentCfg)
+			}
+		}
+	}
+	// Note: CurrentConfig is set by checkCurrentConfig in all cases (success or failure)
+
+	xmlContent, err := xml.MarshalIndent(plannedCfg, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal planned XML: %w", err)
+	}
+
+	summary.PlannedConfig = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + string(xmlContent)
+
+	// 3. Check for remote services files
+	m.checkRemoteServices(summary, deviceIP)
+
+	return summary, nil
+}
+
+// populateDeviceInfo fills in device information from datastore and live info
+func (m *Manager) populateDeviceInfo(summary *MigrationSummary, deviceIP string) {
+	// Populate from datastore if available
 	if m.DataStore != nil {
 		devices, err := m.DataStore.ListAllDevices()
 		if err == nil {
@@ -135,14 +186,11 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 
 				break
 			}
-		} else {
-			log.Printf("Warning: failed to list devices from datastore: %v", err)
 		}
 	}
 
-	// 0a. Supplement with live info from :8090/info
-	infoXML, err := m.GetLiveDeviceInfo(deviceIP)
-	if err == nil {
+	// Supplement with live info from :8090/info
+	if infoXML, err := m.GetLiveDeviceInfo(deviceIP); err == nil {
 		if infoXML.Name != "" {
 			summary.DeviceName = infoXML.Name
 		}
@@ -158,119 +206,83 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		if infoXML.SoftwareVer != "" {
 			summary.FirmwareVersion = infoXML.SoftwareVer
 		}
-	} else {
-		log.Printf("Warning: %v", err)
 	}
+}
 
-	// 1. Initial planned config
-	plannedCfg := PrivateCfg{
-		MargeServerUrl:             fmt.Sprintf("%s/marge", targetURL),
-		StatsServerUrl:             targetURL,
-		SwUpdateUrl:                fmt.Sprintf("%s/updates/soundtouch", targetURL),
-		UsePandoraProductionServer: true,
-		IsZeroconfEnabled:          true,
-		SaveMargeCustomerReport:    false,
-		BmxRegistryUrl:             fmt.Sprintf("%s/bmx/registry/v1/services", targetURL),
-	}
-
-	// 2. Check SSH and read current config
-	var currentConfig string
-
+// checkCurrentConfig reads and validates the current speaker configuration
+func (m *Manager) checkCurrentConfig(summary *MigrationSummary, deviceIP string) (string, error) {
 	path := SoundTouchSdkPrivateCfgPath
 	client := ssh.NewClient(deviceIP)
 
 	// Check if .original exists
 	if _, checkErr := client.Run(fmt.Sprintf("[ -f %s.original ]", path)); checkErr == nil {
-		originalConfig, _ := client.Run(fmt.Sprintf("cat %s.original", path))
-		if originalConfig != "" {
+		if originalConfig, _ := client.Run(fmt.Sprintf("cat %s.original", path)); originalConfig != "" {
 			summary.OriginalConfig = originalConfig
 		}
 	}
 
-	// Check file details
-	fileInfo, _ := client.Run(fmt.Sprintf("ls -l %s", path))
-	if fileInfo != "" {
-		fmt.Printf("File info for %s: %s\n", path, fileInfo)
-	}
-
-	// Try cat
+	// Try to read current config
 	config, err := client.Run(fmt.Sprintf("cat %s", path))
 	if err == nil && config != "" {
-		currentConfig = config
 		summary.SSHSuccess = true
-		summary.CurrentConfig = currentConfig
-		fmt.Printf("Current config from %s at %s (length: %d):\n%q\n", deviceIP, path, len(currentConfig), currentConfig)
+		return config, nil
+	}
 
-		// Parse current config
-		var currentCfg PrivateCfg
-		if xml.Unmarshal([]byte(currentConfig), &currentCfg) == nil {
-			summary.ParsedCurrentConfig = &currentCfg
+	// Fallback: try base64 if cat returned empty string but file has size > 0
+	if config == "" {
+		if fileInfo, _ := client.Run(fmt.Sprintf("ls -l %s", path)); fileInfo != "" {
+			if b64Config, configErr := client.Run(fmt.Sprintf("base64 %s", path)); configErr == nil && b64Config != "" {
+				// File exists but couldn't read content properly
+				summary.SSHSuccess = true
+				summary.CurrentConfig = fmt.Sprintf("Error reading config: %v", err)
 
-			if proxyURL == "" {
-				proxyURL = targetURL
+				return "", fmt.Errorf("config file exists but couldn't read content")
 			}
+		}
+	}
 
-			// Apply options if provided
-			if options != nil {
-				// Marge
-				if options["marge"] == "original" {
-					plannedCfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
-				}
-				// Stats
-				if options["stats"] == "original" {
-					plannedCfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)
-				}
-				// SwUpdate
-				if options["sw_update"] == "original" {
-					plannedCfg.SwUpdateUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.SwUpdateUrl)
-				}
-				// BMX
-				if options["bmx"] == "original" {
-					plannedCfg.BmxRegistryUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.BmxRegistryUrl)
-				}
-			} else if proxyURL != "" {
-				// Default to proxy everything if proxyURL is explicitly provided but no options
-				// (Maintain backward compatibility for now if needed, but we'll probably always pass options from UI)
-				// Actually, if proxyURL is set but no options, let's keep the previous behavior of proxying all.
-				plannedCfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
-				plannedCfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)
-				plannedCfg.SwUpdateUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.SwUpdateUrl)
-				plannedCfg.BmxRegistryUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.BmxRegistryUrl)
-			}
+	// If SSH failed or file couldn't be read, check if SSH connection works at all
+	if _, sshErr := client.Run("ls /"); sshErr == nil {
+		summary.SSHSuccess = true
+		if err != nil {
+			summary.CurrentConfig = fmt.Sprintf("Error reading config: %v", err)
+		} else {
+			summary.CurrentConfig = config // Might be empty
 		}
 	} else {
-		// Fallback: try base64 if cat returned empty string but file has size > 0
-		if config == "" && fileInfo != "" {
-			fmt.Printf("Cat returned empty for %s, trying base64\n", path)
-
-			b64Config, configErr := client.Run(fmt.Sprintf("base64 %s", path))
-			if configErr == nil && b64Config != "" {
-				fmt.Printf("Base64 output for %s (length %d)\n", path, len(b64Config))
-			}
-		}
-
-		// If SSH failed or file couldn't be read
-		if _, sshErr := client.Run("ls /"); sshErr == nil {
-			summary.SSHSuccess = true
-			if err != nil {
-				summary.CurrentConfig = fmt.Sprintf("Error reading config: %v", err)
-			} else {
-				summary.CurrentConfig = config // Might be empty
-			}
-		} else {
-			summary.SSHSuccess = false
-			summary.CurrentConfig = fmt.Sprintf("SSH connection failed: %v", sshErr)
-		}
+		summary.SSHSuccess = false
+		summary.CurrentConfig = fmt.Sprintf("SSH connection failed: %v", sshErr)
 	}
 
-	xmlContent, err := xml.MarshalIndent(plannedCfg, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal planned XML: %w", err)
+	return "", err
+}
+
+// applyProxyOptions modifies planned config based on proxy options
+func (m *Manager) applyProxyOptions(plannedCfg *PrivateCfg, proxyURL string, options map[string]string, currentCfg *PrivateCfg) {
+	if proxyURL == "" || currentCfg == nil {
+		return
 	}
 
-	summary.PlannedConfig = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + string(xmlContent)
+	if options["marge"] == "original" && currentCfg.MargeServerUrl != "" {
+		plannedCfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
+	}
 
-	// 3. Check for remote services files
+	if options["stats"] == "original" && currentCfg.StatsServerUrl != "" {
+		plannedCfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)
+	}
+
+	if options["sw_update"] == "original" && currentCfg.SwUpdateUrl != "" {
+		plannedCfg.SwUpdateUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.SwUpdateUrl)
+	}
+
+	if options["bmx"] == "original" && currentCfg.BmxRegistryUrl != "" {
+		plannedCfg.BmxRegistryUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.BmxRegistryUrl)
+	}
+}
+
+// checkRemoteServices checks for remote services files on the device
+func (m *Manager) checkRemoteServices(summary *MigrationSummary, deviceIP string) {
+	client := ssh.NewClient(deviceIP)
 	locations := []string{
 		"/etc/remote_services",
 		"/mnt/nv/remote_services",
@@ -278,8 +290,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	}
 
 	for _, loc := range locations {
-		_, err := client.Run(fmt.Sprintf("[ -e %s ]", loc))
-		if err == nil {
+		if _, err := client.Run(fmt.Sprintf("[ -e %s ]", loc)); err == nil {
 			summary.RemoteServicesFound = append(summary.RemoteServicesFound, loc)
 
 			summary.RemoteServicesEnabled = true
@@ -288,8 +299,6 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 			}
 		}
 	}
-
-	return summary, nil
 }
 
 // MigrateSpeaker configures the speaker at the given IP to use this soundcork service.
@@ -324,21 +333,7 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 			}
 
 			if options != nil {
-				if options["marge"] == "original" {
-					cfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
-				}
-
-				if options["stats"] == "original" {
-					cfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)
-				}
-
-				if options["sw_update"] == "original" {
-					cfg.SwUpdateUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.SwUpdateUrl)
-				}
-
-				if options["bmx"] == "original" {
-					cfg.BmxRegistryUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.BmxRegistryUrl)
-				}
+				m.applyProxyOptions(&cfg, proxyURL, options, &currentCfg)
 			} else if proxyURL != "" {
 				cfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
 				cfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)

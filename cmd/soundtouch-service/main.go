@@ -1,3 +1,5 @@
+// Package main provides the SoundTouch service daemon that acts as a proxy and management
+// interface for Bose SoundTouch devices, providing Marge service emulation and device discovery.
 package main
 
 import (

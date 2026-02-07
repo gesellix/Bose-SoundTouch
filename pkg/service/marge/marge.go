@@ -1,3 +1,5 @@
+// Package marge provides XML generation and data management for the Marge service,
+// which handles SoundTouch device configuration, presets, recents, and account management.
 package marge
 
 import (
@@ -12,8 +14,10 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
+// DateStr is a fixed timestamp used in XML responses for consistency.
 const DateStr = "2012-09-19T12:43:00.000+00:00"
 
+// SourceProviders returns a list of available media source providers.
 func SourceProviders() []models.SourceProvider {
 	providers := make([]models.SourceProvider, len(constants.Providers))
 	for i, name := range constants.Providers {
@@ -28,11 +32,13 @@ func SourceProviders() []models.SourceProvider {
 	return providers
 }
 
+// SourceProvidersXML represents the XML structure for source providers.
 type SourceProvidersXML struct {
 	XMLName   xml.Name                `xml:"sourceProviders"`
 	Providers []models.SourceProvider `xml:"sourceProvider"`
 }
 
+// SourceProvidersToXML converts source providers to XML format.
 func SourceProvidersToXML() ([]byte, error) {
 	sp := SourceProvidersXML{
 		Providers: SourceProviders(),
@@ -46,6 +52,7 @@ func SourceProvidersToXML() ([]byte, error) {
 	return append([]byte(xml.Header), data...), nil
 }
 
+// ConfiguredSourceToXML converts a configured source to XML format.
 func ConfiguredSourceToXML(cs models.ConfiguredSource) ([]byte, error) {
 	type SourceXML struct {
 		XMLName    xml.Name `xml:"source"`
@@ -89,6 +96,7 @@ func ConfiguredSourceToXML(cs models.ConfiguredSource) ([]byte, error) {
 	return xml.Marshal(sxml)
 }
 
+// GetConfiguredSourceXML returns the XML representation of a configured source as a string.
 func GetConfiguredSourceXML(cs models.ConfiguredSource) string {
 	providerID := 0
 
@@ -103,6 +111,7 @@ func GetConfiguredSourceXML(cs models.ConfiguredSource) string {
 		cs.ID, DateStr, cs.Secret, cs.SourceKeyAccount, providerID, cs.DisplayName, DateStr, cs.SourceKeyAccount)
 }
 
+// PresetsToXML converts account presets to XML format for Marge responses.
 func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	presets, err := ds.GetPresets(account)
 	if err != nil {
@@ -126,19 +135,11 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<name>%s</name>`, p.Name)
 
 		// Content Item Source
-		found := false
-
 		for _, s := range sources {
 			if s.ID == p.SourceID || (s.SourceKeyType == p.Source && s.SourceKeyAccount == p.SourceAccount) {
 				res += GetConfiguredSourceXML(s)
-				found = true
-
 				break
 			}
-		}
-
-		if !found {
-			// This might happen if source is not found
 		}
 
 		res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
@@ -150,6 +151,7 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	return append([]byte(xml.Header), []byte(res)...), nil
 }
 
+// RecentsToXML converts account recent items to XML format for Marge responses.
 func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	recents, err := ds.GetRecents(account)
 	if err != nil {
@@ -179,19 +181,11 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<name>%s</name>`, r.Name)
 
 		// Content Item Source
-		found := false
-
 		for _, s := range sources {
 			if s.ID == r.SourceID || (s.SourceKeyType == r.Source && s.SourceKeyAccount == r.SourceAccount) {
 				res += GetConfiguredSourceXML(s)
-				found = true
-
 				break
 			}
-		}
-
-		if !found {
-			// This might happen if source is not found
 		}
 
 		res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
@@ -203,14 +197,17 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	return append([]byte(xml.Header), []byte(res)...), nil
 }
 
+// ProviderSettingsToXML generates provider settings XML for the specified account.
 func ProviderSettingsToXML(account string) string {
 	return fmt.Sprintf(`<providerSettings><providerSetting><boseId>%s</boseId><keyName>ELIGIBLE_FOR_TRIAL</keyName><value>true</value><providerId>14</providerId></providerSetting></providerSettings>`, account)
 }
 
+// SoftwareUpdateToXML generates software update configuration XML.
 func SoftwareUpdateToXML() string {
 	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><software_update><softwareUpdateLocation></softwareUpdateLocation></software_update>`
 }
 
+// AccountFullToXML generates a complete account XML with devices, presets, and recents.
 func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	devicesDir := ds.AccountDevicesDir(account)
 
@@ -275,7 +272,8 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	return []byte(res), nil
 }
 
-func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber int, sourceXML []byte) ([]byte, error) {
+// UpdatePreset updates or creates a preset for the specified account and device.
+func UpdatePreset(ds *datastore.DataStore, account, _ string, presetNumber int, sourceXML []byte) ([]byte, error) {
 	sources, err := ds.GetConfiguredSources(account)
 	if err != nil {
 		return nil, err
@@ -351,6 +349,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	return append([]byte(xml.Header), []byte(res)...), nil
 }
 
+// AddRecent adds or updates a recent item for the specified account and device.
 func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte) ([]byte, error) {
 	sources, err := ds.GetConfiguredSources(account)
 	if err != nil {
@@ -476,6 +475,7 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 	return append([]byte(xml.Header), []byte(res)...)
 }
 
+// AddDeviceToAccount adds a new device to the specified account.
 func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte) ([]byte, error) {
 	var newDeviceElem struct {
 		DeviceID string `xml:"deviceid,attr"`
@@ -506,6 +506,7 @@ func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 	return append([]byte(xml.Header), []byte(res)...), nil
 }
 
+// RemoveDeviceFromAccount removes a device from the specified account.
 func RemoveDeviceFromAccount(ds *datastore.DataStore, account, device string) error {
 	return ds.RemoveDevice(account, device)
 }

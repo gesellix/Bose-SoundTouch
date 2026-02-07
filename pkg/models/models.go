@@ -1,14 +1,19 @@
+// Package models defines data structures used for Bose SoundTouch API communication
+// and service management. It includes types for BMX (Bose Media eXchange) services,
+// device information, presets, recents, and other core data models.
 package models
 
 import (
 	"encoding/xml"
 )
 
+// Link represents a navigational link with URL and client usage preferences.
 type Link struct {
 	Href              string `json:"href" xml:"href,attr"`
 	UseInternalClient string `json:"useInternalClient,omitempty" xml:"useInternalClient,attr,omitempty"`
 }
 
+// Links contains various navigation links used by BMX services.
 type Links struct {
 	BmxLogout               *Link `json:"bmx_logout,omitempty" xml:"bmx_logout,omitempty"`
 	BmxNavigate             *Link `json:"bmx_navigate,omitempty" xml:"bmx_navigate,omitempty"`
@@ -22,6 +27,7 @@ type Links struct {
 	BmxTrack                *Link `json:"bmx_track,omitempty" xml:"bmx_track,omitempty"`
 }
 
+// IconSet represents a collection of icons with different sizes for media content.
 type IconSet struct {
 	DefaultAlbumArt string `json:"defaultAlbumArt,omitempty" xml:"defaultAlbumArt,omitempty"`
 	LargeSvg        string `json:"largeSvg" xml:"largeSvg"`
@@ -30,6 +36,7 @@ type IconSet struct {
 	SmallSvg        string `json:"smallSvg" xml:"smallSvg"`
 }
 
+// Asset represents a media asset with URL and content type information.
 type Asset struct {
 	Color            string  `json:"color" xml:"color"`
 	Description      string  `json:"description" xml:"description"`
@@ -38,11 +45,13 @@ type Asset struct {
 	ShortDescription string  `json:"shortDescription,omitempty" xml:"shortDescription,omitempty"`
 }
 
+// Id represents an identifier structure used in various API responses.
 type Id struct {
 	Name  string `json:"name" xml:"name"`
 	Value int    `json:"value" xml:"value"`
 }
 
+// BmxService represents a Bose Media eXchange service configuration.
 type BmxService struct {
 	Links               *Links                 `json:"_links,omitempty" xml:"links,omitempty"`
 	AskAdapter          bool                   `json:"askAdapter" xml:"askAdapter"`
@@ -54,12 +63,14 @@ type BmxService struct {
 	ID                  Id                     `json:"id" xml:"id"`
 }
 
+// BmxResponse represents a response from BMX services.
 type BmxResponse struct {
 	Links         *Links    `json:"_links,omitempty" xml:"links,omitempty"`
 	AskAgainAfter int       `json:"askAgainAfter" xml:"askAgainAfter"`
 	BmxServices   []Service `json:"bmx_services" xml:"bmx_services>service"`
 }
 
+// Stream represents audio stream information including URL and format details.
 type Stream struct {
 	Links             *Links `json:"_links,omitempty" xml:"links,omitempty"`
 	BufferingTimeout  int    `json:"bufferingTimeout,omitempty" xml:"bufferingTimeout,omitempty"`
@@ -69,6 +80,7 @@ type Stream struct {
 	StreamUrl         string `json:"streamUrl" xml:"streamUrl"`
 }
 
+// Audio represents audio content metadata including format and quality information.
 type Audio struct {
 	HasPlaylist bool     `json:"hasPlaylist" xml:"hasPlaylist"`
 	IsRealtime  bool     `json:"isRealtime" xml:"isRealtime"`
@@ -77,6 +89,7 @@ type Audio struct {
 	Streams     []Stream `json:"streams" xml:"streams>stream"`
 }
 
+// BmxPlaybackResponse represents a playback response from BMX services.
 type BmxPlaybackResponse struct {
 	Links  *Links `json:"_links,omitempty" xml:"links,omitempty"`
 	Artist struct {
@@ -92,12 +105,14 @@ type BmxPlaybackResponse struct {
 	RepeatDisabled  bool   `json:"repeat_disabled,omitempty" xml:"repeatDisabled,omitempty"`
 }
 
+// Track represents track information for media playback.
 type Track struct {
 	Links      *Links `json:"_links,omitempty" xml:"links,omitempty"`
 	IsSelected bool   `json:"isSelected" xml:"isSelected"`
 	Name       string `json:"name" xml:"name"`
 }
 
+// BmxPodcastInfoResponse represents podcast information from BMX services.
 type BmxPodcastInfoResponse struct {
 	Links           *Links  `json:"_links,omitempty" xml:"links,omitempty"`
 	Name            string  `json:"name" xml:"name"`
@@ -107,6 +122,7 @@ type BmxPodcastInfoResponse struct {
 	Tracks          []Track `json:"tracks" xml:"tracks>track"`
 }
 
+// SourceProvider represents a media source provider configuration.
 type SourceProvider struct {
 	ID        int    `json:"id" xml:"id,attr"`
 	CreatedOn string `json:"created_on" xml:"createdOn"`
@@ -114,6 +130,7 @@ type SourceProvider struct {
 	UpdatedOn string `json:"updated_on" xml:"updatedOn"`
 }
 
+// ServiceContentItem represents a media content item with source and location details.
 type ServiceContentItem struct {
 	ID            string `json:"id" xml:"id,attr"`
 	Name          string `json:"name" xml:"itemName"`
@@ -125,6 +142,7 @@ type ServiceContentItem struct {
 	IsPresetable  string `json:"is_presetable,omitempty" xml:"isPresetable,attr,omitempty"`
 }
 
+// ServicePreset represents a user-defined preset for quick access to media content.
 type ServicePreset struct {
 	ServiceContentItem
 	ContainerArt string `json:"container_art" xml:"containerArt"`
@@ -132,6 +150,7 @@ type ServicePreset struct {
 	UpdatedOn    string `json:"updated_on" xml:"updatedOn"`
 }
 
+// ServiceRecent represents recently played media content.
 type ServiceRecent struct {
 	ServiceContentItem
 	DeviceID     string `json:"device_id" xml:"deviceid"`
@@ -139,6 +158,7 @@ type ServiceRecent struct {
 	ContainerArt string `json:"container_art,omitempty" xml:"containerArt,omitempty"`
 }
 
+// ConfiguredSource represents a configured media source with authentication details.
 type ConfiguredSource struct {
 	DisplayName      string `json:"display_name" xml:"sourcename"`
 	ID               string `json:"id" xml:"id,attr"`
@@ -148,6 +168,7 @@ type ConfiguredSource struct {
 	SourceKeyAccount string `json:"source_key_account" xml:"username"`
 }
 
+// ServiceDeviceInfo represents information about a SoundTouch device.
 type ServiceDeviceInfo struct {
 	DeviceID            string `json:"device_id" xml:"deviceID,attr"`
 	ProductCode         string `json:"product_code" xml:"type"`
@@ -158,6 +179,7 @@ type ServiceDeviceInfo struct {
 	Name                string `json:"name" xml:"name"`
 }
 
+// CustomerSupportDevice represents device information for customer support purposes.
 type CustomerSupportDevice struct {
 	ID              string `xml:"id,attr"`
 	SerialNumber    string `xml:"serialnumber"`
@@ -169,6 +191,7 @@ type CustomerSupportDevice struct {
 	} `xml:"product"`
 }
 
+// CustomerSupportRequest represents a customer support request with device and configuration details.
 type CustomerSupportRequest struct {
 	XMLName        xml.Name              `xml:"device-data"`
 	Device         CustomerSupportDevice `xml:"device"`
@@ -183,6 +206,7 @@ type CustomerSupportRequest struct {
 	} `xml:"diagnostic-data"`
 }
 
+// UsageStats represents usage statistics for the service.
 type UsageStats struct {
 	DeviceID   string                 `json:"deviceId" xml:"deviceId"`
 	AccountID  string                 `json:"accountId" xml:"accountId"`
@@ -191,6 +215,7 @@ type UsageStats struct {
 	Parameters map[string]interface{} `json:"parameters" xml:"parameters"`
 }
 
+// ErrorStats represents error statistics for monitoring and debugging.
 type ErrorStats struct {
 	DeviceID     string `json:"deviceId" xml:"deviceId"`
 	ErrorCode    string `json:"errorCode" xml:"errorCode"`
@@ -199,6 +224,7 @@ type ErrorStats struct {
 	Details      string `json:"details,omitempty" xml:"details,omitempty"`
 }
 
+// DeviceEvent represents an event that occurred on a device.
 type DeviceEvent struct {
 	Type     string                 `json:"type"`
 	Time     string                 `json:"time"`

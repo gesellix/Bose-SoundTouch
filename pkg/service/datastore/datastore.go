@@ -28,6 +28,7 @@ type DataStore struct {
 }
 
 // NewDataStore creates a new DataStore.
+// NewDataStore creates a new DataStore instance with the specified data directory.
 func NewDataStore(dataDir string) *DataStore {
 	if dataDir == "" {
 		dataDir = "data"
@@ -39,18 +40,22 @@ func NewDataStore(dataDir string) *DataStore {
 	}
 }
 
+// AccountDir returns the directory path for a specific account.
 func (ds *DataStore) AccountDir(account string) string {
 	return filepath.Join(ds.DataDir, account)
 }
 
+// AccountDevicesDir returns the devices directory path for a specific account.
 func (ds *DataStore) AccountDevicesDir(account string) string {
 	return filepath.Join(ds.DataDir, account, constants.DevicesDir)
 }
 
+// AccountDeviceDir returns the directory path for a specific device within an account.
 func (ds *DataStore) AccountDeviceDir(account, device string) string {
 	return filepath.Join(ds.AccountDevicesDir(account), device)
 }
 
+// GetDeviceInfo retrieves device information for the specified account and device.
 func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDeviceInfo, error) {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.DeviceInfoFile)
 
@@ -245,6 +250,7 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 	return deviceInfo, nil
 }
 
+// GetPresets retrieves all presets for the specified account.
 func (ds *DataStore) GetPresets(account string) ([]models.ServicePreset, error) {
 	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
 
@@ -297,6 +303,7 @@ func (ds *DataStore) GetPresets(account string) ([]models.ServicePreset, error) 
 	return presets, nil
 }
 
+// SavePresets saves the preset list for the specified account.
 func (ds *DataStore) SavePresets(account string, presets []models.ServicePreset) error {
 	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
 
@@ -350,6 +357,7 @@ func (ds *DataStore) SavePresets(account string, presets []models.ServicePreset)
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
+// GetRecents retrieves all recent items for the specified account.
 func (ds *DataStore) GetRecents(account string) ([]models.ServiceRecent, error) {
 	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
 
@@ -402,6 +410,7 @@ func (ds *DataStore) GetRecents(account string) ([]models.ServiceRecent, error) 
 	return recents, nil
 }
 
+// SaveRecents saves the recent items list for the specified account.
 func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent) error {
 	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
 
@@ -460,6 +469,7 @@ func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent)
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
+// SaveDeviceInfo saves device information for the specified account and device.
 func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.ServiceDeviceInfo) error {
 	if device == "" {
 		return fmt.Errorf("device ID/name cannot be empty")
@@ -541,11 +551,13 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
+// RemoveDevice removes a device and all its data from the specified account.
 func (ds *DataStore) RemoveDevice(account, device string) error {
 	dir := ds.AccountDeviceDir(account, device)
 	return os.RemoveAll(dir)
 }
 
+// GetConfiguredSources retrieves all configured sources for the specified account.
 func (ds *DataStore) GetConfiguredSources(account string) ([]models.ConfiguredSource, error) {
 	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
 
@@ -595,6 +607,7 @@ func (ds *DataStore) GetConfiguredSources(account string) ([]models.ConfiguredSo
 	return sources, nil
 }
 
+// SaveConfiguredSources saves the configured sources list for the specified account.
 func (ds *DataStore) SaveConfiguredSources(account string, sources []models.ConfiguredSource) error {
 	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -641,6 +654,7 @@ func (ds *DataStore) SaveConfiguredSources(account string, sources []models.Conf
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
+// Initialize creates the necessary directory structure for the datastore.
 func (ds *DataStore) Initialize() error {
 	// Ensure base data directory exists
 	if err := os.MkdirAll(ds.DataDir, 0755); err != nil {
@@ -661,6 +675,7 @@ func (ds *DataStore) Initialize() error {
 	return nil
 }
 
+// GetETagForPresets returns the ETag (modification time) for the presets file.
 func (ds *DataStore) GetETagForPresets(account string) int64 {
 	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
 
@@ -672,6 +687,7 @@ func (ds *DataStore) GetETagForPresets(account string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
+// GetETagForSources returns the ETag (modification time) for the sources file.
 func (ds *DataStore) GetETagForSources(account string) int64 {
 	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
 
@@ -683,6 +699,7 @@ func (ds *DataStore) GetETagForSources(account string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
+// GetETagForRecents returns the ETag (modification time) for the recents file.
 func (ds *DataStore) GetETagForRecents(account string) int64 {
 	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
 
@@ -694,6 +711,7 @@ func (ds *DataStore) GetETagForRecents(account string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
+// GetETagForAccount returns the highest ETag among presets, sources, and recents for the account.
 func (ds *DataStore) GetETagForAccount(account string) int64 {
 	e1 := ds.GetETagForPresets(account)
 	e2 := ds.GetETagForSources(account)
@@ -711,6 +729,7 @@ func (ds *DataStore) GetETagForAccount(account string) int64 {
 	return maxETag
 }
 
+// SaveUsageStats saves usage statistics to the datastore.
 func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "usage")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -728,6 +747,7 @@ func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 	return os.WriteFile(path, data, 0644)
 }
 
+// SaveErrorStats saves error statistics to the datastore.
 func (ds *DataStore) SaveErrorStats(stats models.ErrorStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "error")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -745,6 +765,7 @@ func (ds *DataStore) SaveErrorStats(stats models.ErrorStats) error {
 	return os.WriteFile(path, data, 0644)
 }
 
+// AddDeviceEvent adds a device event to the in-memory event store.
 func (ds *DataStore) AddDeviceEvent(deviceID string, event models.DeviceEvent) {
 	ds.eventMutex.Lock()
 	defer ds.eventMutex.Unlock()
@@ -760,6 +781,7 @@ func (ds *DataStore) AddDeviceEvent(deviceID string, event models.DeviceEvent) {
 	ds.deviceEvents[deviceID] = events
 }
 
+// GetDeviceEvents retrieves all events for the specified device.
 func (ds *DataStore) GetDeviceEvents(deviceID string) []models.DeviceEvent {
 	ds.eventMutex.RLock()
 	defer ds.eventMutex.RUnlock()
