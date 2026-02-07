@@ -20,6 +20,7 @@ var bmxServicesJSON []byte
 //go:embed soundcork/swupdate.xml
 var swUpdateXML []byte
 
+// HandleRoot returns the root endpoint response.
 func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
 	if !strings.Contains(accept, "text/html") && (strings.Contains(accept, "application/json") || accept == "*/*" || accept == "") {
@@ -33,6 +34,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(indexHTML)
 }
 
+// HandleMedia returns a handler for serving media files.
 func (s *Server) HandleMedia() http.HandlerFunc {
 	subFS, _ := fs.Sub(mediaFS, "soundcork/media")
 

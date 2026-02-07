@@ -35,12 +35,14 @@ func main() {
 		log.Fatalf("Failed to fetch devices: %v", err)
 	}
 
-	defer func() { _ = resp.Body.Close() }()
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		_ = resp.Body.Close()
+
 		log.Fatalf("Failed to read response body: %v", err)
 	}
+
+	_ = resp.Body.Close()
 
 	var devices []map[string]interface{}
 	if err := json.Unmarshal(body, &devices); err != nil {

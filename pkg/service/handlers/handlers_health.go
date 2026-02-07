@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
+// HandleHealth returns the health status of the service.
+func (s *Server) HandleHealth(w http.ResponseWriter, _ *http.Request) {
 	version := "0.0.1"
 	vcsRevision := ""
 	vcsTime := ""
@@ -49,5 +50,9 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(status)
+
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

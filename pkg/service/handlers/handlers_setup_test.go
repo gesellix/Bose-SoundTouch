@@ -31,8 +31,8 @@ func TestProxySettingsAPI(t *testing.T) {
 	}
 
 	var settings map[string]bool
-	if err := json.NewDecoder(res.Body).Decode(&settings); err != nil {
-		t.Fatalf("GET: Failed to decode response: %v", err)
+	if decodeErr := json.NewDecoder(res.Body).Decode(&settings); decodeErr != nil {
+		t.Fatalf("GET: Failed to decode response: %v", decodeErr)
 	}
 
 	if settings["redact"] != true || settings["log_body"] != false {
@@ -44,7 +44,11 @@ func TestProxySettingsAPI(t *testing.T) {
 		"redact":   false,
 		"log_body": true,
 	}
-	body, _ := json.Marshal(update)
+
+	body, err := json.Marshal(update)
+	if err != nil {
+		t.Fatalf("Failed to marshal update data: %v", err)
+	}
 
 	res, err = http.Post(ts.URL+"/setup/proxy-settings", "application/json", bytes.NewBuffer(body))
 	if err != nil {

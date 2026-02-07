@@ -64,5 +64,5 @@ type reverseProxy struct {
 func (p *reverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Simplified proxy for testing
 	w.WriteHeader(http.StatusAccepted) // Custom status to identify proxy hit in tests
-	w.Write([]byte("Proxied to " + p.target.String()))
+	_, _ = w.Write([]byte("Proxied to " + p.target.String()))
 }

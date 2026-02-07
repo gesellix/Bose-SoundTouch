@@ -1,3 +1,4 @@
+// Package proxy provides a logging reverse proxy used for speaker traffic debugging.
 package proxy
 
 import (
@@ -25,7 +26,8 @@ type LoggingProxy struct {
 	MaxBodySize int64
 }
 
-func NewLoggingProxy(targetURL string, redact bool) *LoggingProxy {
+// NewLoggingProxy creates a lightweight logger for HTTP requests/responses.
+func NewLoggingProxy(_ string, redact bool) *LoggingProxy {
 	// targetURL logic should be handled by the caller or we can parse it here
 	return &LoggingProxy{
 		Redact:      redact,
@@ -34,6 +36,7 @@ func NewLoggingProxy(targetURL string, redact bool) *LoggingProxy {
 	}
 }
 
+// LogRequest prints an abbreviated request with optional header/body redaction.
 func (lp *LoggingProxy) LogRequest(r *http.Request) {
 	headers := formatHeaders(r.Header, lp.Redact)
 
@@ -57,6 +60,7 @@ func (lp *LoggingProxy) LogRequest(r *http.Request) {
 	log.Printf("[PROXY_REQ] %s %s\n  Headers:\n%s\n  Body: %s", r.Method, r.URL.String(), headers, bodyStr)
 }
 
+// LogResponse prints an abbreviated response with optional header/body redaction.
 func (lp *LoggingProxy) LogResponse(r *http.Response) {
 	headers := formatHeaders(r.Header, lp.Redact)
 

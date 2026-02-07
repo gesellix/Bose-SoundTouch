@@ -9,6 +9,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 )
 
+// HandleProxyRequest handles requests to the logging proxy.
 func (s *Server) HandleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	targetURLStr := strings.TrimPrefix(r.URL.Path, "/proxy/")
 	if targetURLStr == "" {

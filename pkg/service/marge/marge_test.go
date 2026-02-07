@@ -11,8 +11,12 @@ import (
 )
 
 func TestMargeXML(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "marge-test-*")
-	defer os.RemoveAll(tempDir)
+	tempDir, err := os.MkdirTemp("", "marge-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 	account := "123"
@@ -61,8 +65,12 @@ func TestMargeXML(t *testing.T) {
 }
 
 func TestAddRecent_TimestampPreservation(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "marge-timestamp-test-*")
-	defer os.RemoveAll(tempDir)
+	tempDir, err := os.MkdirTemp("", "marge-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 	account := "test-acc"
@@ -91,7 +99,7 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
     <contentItemType>station</contentItemType>
 </recent>`)
 
-	_, err := AddRecent(ds, account, device, sourceXML)
+	_, err = AddRecent(ds, account, device, sourceXML)
 	if err != nil {
 		t.Fatalf("AddRecent failed: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
+// HandleUsageStats handles Marge usage stats uploads.
 func (s *Server) HandleUsageStats(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -48,6 +49,7 @@ func (s *Server) HandleUsageStats(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleErrorStats handles Marge error stats uploads.
 func (s *Server) HandleErrorStats(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

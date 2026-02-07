@@ -12,6 +12,9 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
+const normalizedEtag = "Etag"
+const caseSensitiveETag = "ETag"
+
 func TestMargeETags(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-etag-test-*")
 
@@ -48,7 +51,7 @@ func TestMargeETags(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		etag := res.Header.Get("ETag")
+		etag := res.Header.Get(caseSensitiveETag)
 		_ = res.Body.Close()
 
 		if etag == "" {
@@ -77,7 +80,7 @@ func TestMargeETags(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		etag := res.Header.Get("ETag")
+		etag := res.Header.Get(caseSensitiveETag)
 		_ = res.Body.Close()
 
 		if etag == "" {
@@ -105,7 +108,7 @@ func TestMargeETags(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		etag := res.Header.Get("ETag")
+		etag := res.Header.Get(caseSensitiveETag)
 		_ = res.Body.Close()
 
 		req, _ := http.NewRequest("GET", ts.URL+"/marge/streaming/sourceproviders", nil)
@@ -131,7 +134,7 @@ func TestMargeETags(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		etag := res.Header.Get("ETag")
+		etag := res.Header.Get(caseSensitiveETag)
 		_ = res.Body.Close()
 
 		if etag == "" {
@@ -179,7 +182,7 @@ func TestMargeETags(t *testing.T) {
 		found := false
 
 		for k := range w.Header() {
-			if k == "ETag" {
+			if k == caseSensitiveETag {
 				found = true
 				break
 			}
@@ -204,9 +207,9 @@ func TestMargeETags(t *testing.T) {
 		pyProxy.ModifyResponse = func(res *http.Response) error {
 			// Generic Header Restoration:
 			// Move Etag to ETag
-			if etags, ok := res.Header["Etag"]; ok {
-				delete(res.Header, "Etag")
-				res.Header["ETag"] = etags
+			if etags, ok := res.Header[normalizedEtag]; ok {
+				delete(res.Header, normalizedEtag)
+				res.Header[caseSensitiveETag] = etags
 			}
 
 			return nil
@@ -216,15 +219,17 @@ func TestMargeETags(t *testing.T) {
 		resp := &http.Response{
 			Header: make(http.Header),
 		}
-		resp.Header["Etag"] = []string{"test-etag"}
+		resp.Header[normalizedEtag] = []string{"test-etag"}
 		_ = pyProxy.ModifyResponse(resp)
 
-		if _, ok := resp.Header["Etag"]; !ok {
+		//nolint:canonicalheader
+		if _, ok := resp.Header[caseSensitiveETag]; !ok {
 			t.Errorf("ModifyResponse did not normalize ETag casing. Headers: %v", resp.Header)
 		}
 
-		// Negative check: ensure 'Etag' is gone
-		if _, ok := resp.Header["Etag"]; ok {
+		// Negative check: ensure 'Etag' is gone (net/http canonicalizes ETag to Etag)
+		// but since we deleted it and set ETag specifically, it should NOT be there.
+		if _, ok := resp.Header[normalizedEtag]; ok {
 			t.Error("Etag header still present after normalization")
 		}
 	})
@@ -253,15 +258,17 @@ func TestMargeETags(t *testing.T) {
 		h := make(http.Header)
 
 		// 1. Set canonicalizes to "Etag" (Standard Go behavior)
-		h.Set("ETag", "v1")
+		h.Set(caseSensitiveETag, "v1")
 
-		if _, ok := h["Etag"]; !ok {
+		if _, ok := h[normalizedEtag]; !ok {
 			t.Errorf("Expected key 'Etag' in map after Set('ETag'), but got: %v", h)
 		}
 
-		if _, ok := h["Etag"]; ok {
+		//nolint:canonicalheader
+		if _, ok := h[caseSensitiveETag]; ok {
 			// In Go's map, "ETag" and "Etag" are different keys.
 			// Set() uses CanonicalHeaderKey which produces "Etag" (lowercase 't').
+			// So "ETag" should NOT be present in the map if we used Set("ETag").
 			t.Errorf("Did not expect exact key 'ETag' in map after Set('ETag') because Go canonicalizes to 'Etag'")
 		}
 

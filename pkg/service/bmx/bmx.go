@@ -1,3 +1,5 @@
+// Package bmx implements minimal helper calls to public TuneIn endpoints
+// and wraps them into Bose-compatible response models.
 package bmx
 
 import (
@@ -14,11 +16,14 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
+// TuneIn endpoint templates used to resolve station and stream URLs.
 const (
 	TuneInDescribe = "https://opml.radiotime.com/describe.ashx?id=%s"
 	TuneInStream   = "http://opml.radiotime.com/Tune.ashx?id=%s&formats=mp3,aac,ogg"
 )
 
+// TuneInPlayback resolves a live radio station and returns a Bose-compatible
+// playback response with primary stream and variants.
 func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, stationID)
 
@@ -45,8 +50,8 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 		} `xml:"body"`
 	}
 
-	if err := xml.Unmarshal(body, &opml); err != nil {
-		return nil, err
+	if unmarshalErr := xml.Unmarshal(body, &opml); unmarshalErr != nil {
+		return nil, unmarshalErr
 	}
 
 	station := opml.Body.Outline.Station
@@ -123,7 +128,8 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	return response, nil
 }
 
-func TuneInPodcastInfo(podcastID string, encodedName string) (*models.BmxPodcastInfoResponse, error) {
+// TuneInPodcastInfo returns minimal podcast/episode metadata for UI selection.
+func TuneInPodcastInfo(podcastID, encodedName string) (*models.BmxPodcastInfoResponse, error) {
 	// Bose app sometimes sends non-standard base64, so try both standard and URL-safe
 	nameBytes, err := base64.URLEncoding.DecodeString(encodedName)
 	if err != nil {
@@ -158,6 +164,8 @@ func TuneInPodcastInfo(podcastID string, encodedName string) (*models.BmxPodcast
 	return response, nil
 }
 
+// TuneInPlaybackPodcast resolves an on-demand podcast episode and returns
+// a playback response suitable for SoundTouch devices.
 func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, podcastID)
 
@@ -187,8 +195,8 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 		} `xml:"body"`
 	}
 
-	if err := xml.Unmarshal(body, &opml); err != nil {
-		return nil, err
+	if unmarshalErr := xml.Unmarshal(body, &opml); unmarshalErr != nil {
+		return nil, unmarshalErr
 	}
 
 	topic := opml.Body.Outline.Topic
@@ -272,6 +280,8 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 	return response, nil
 }
 
+// PlayCustomStream builds a playback response from a base64-encoded JSON blob
+// with fields streamUrl, imageUrl, and name.
 func PlayCustomStream(data string) (*models.BmxPlaybackResponse, error) {
 	// Bose app sometimes sends non-standard base64, so try both standard and URL-safe
 	jsonStr, err := base64.URLEncoding.DecodeString(data)

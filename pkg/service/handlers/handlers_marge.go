@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// HandleMargeSourceProviders returns the Marge source providers.
 func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Request) {
 	etag := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	if r.Header.Get("If-None-Match") == etag {
@@ -31,6 +32,7 @@ func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Reque
 	_, _ = w.Write(data)
 }
 
+// HandleMargeAccountFull returns the full Marge account information.
 func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
@@ -51,10 +53,12 @@ func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(data)
 }
 
-func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
+// HandleMargePowerOn handles the Marge power on request.
+func (s *Server) HandleMargePowerOn(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleMargeSoftwareUpdate returns the Marge software update information.
 func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Request) {
 	etag := "default-embedded"
 	if r.Header.Get("If-None-Match") == etag {
@@ -72,6 +76,7 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// HandleMargePresets returns the Marge presets for a device.
 func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
@@ -92,6 +97,7 @@ func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// HandleMargeUpdatePreset updates a Marge preset.
 func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
@@ -123,6 +129,7 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 	_, _ = w.Write(data)
 }
 
+// HandleMargeAddRecent adds a recent item to Marge.
 func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
@@ -146,6 +153,7 @@ func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// HandleMargeAddDevice adds a device to a Marge account.
 func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
@@ -165,6 +173,7 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// HandleMargeRemoveDevice removes a device from a Marge account.
 func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
@@ -178,6 +187,7 @@ func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request)
 	_, _ = w.Write([]byte(`{"ok": true}`))
 }
 
+// HandleMargeProviderSettings returns Marge provider settings.
 func (s *Server) HandleMargeProviderSettings(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
@@ -185,7 +195,8 @@ func (s *Server) HandleMargeProviderSettings(w http.ResponseWriter, r *http.Requ
 	_, _ = w.Write([]byte(marge.ProviderSettingsToXML(account)))
 }
 
-func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, r *http.Request) {
+// HandleMargeStreamingToken returns a streaming token for the device.
+func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, _ *http.Request) {
 	// Simple mock token for offline use.
 	// In a real production environment, this would be a JWT or similar signed token.
 	// Some speakers might expect a specific format; soundcork uses a distinctive prefix
@@ -195,6 +206,7 @@ func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleMargeCustomerSupport handles Marge customer support uploads.
 func (s *Server) HandleMargeCustomerSupport(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

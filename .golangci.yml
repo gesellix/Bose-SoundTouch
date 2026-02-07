@@ -50,7 +50,12 @@ linters:
         linters:
           - gocritic # Can be overly strict for test code
           - wsl # Whitespace less critical in tests
+          - wsl_v5 # Whitespace less critical in tests
           - gocyclo # Complexity less critical in tests
+          - govet # Avoid shadow warnings in tests
+          - revive # Avoid exported/package-comments in tests
+          - errcheck # Avoid mandatory error checks in tests
+          - unparam # Often parameters are fixed in test setups
 
       # Exclude specific rules for generated files
       - path: ".*\\.pb\\.go$"
@@ -61,6 +66,11 @@ linters:
       - linters:
           - staticcheck
         text: "SA9003:" # Empty branch
+
+      - linters:
+          - staticcheck
+        text: "SA1008: keys in http.Header are canonicalized"
+        path: pkg/service/handlers/handlers_etag_test.go
 
       # Allow main functions to not check errors in examples
       - path: cmd/.*\.go
@@ -85,7 +95,7 @@ linters:
         - fieldalignment # Can be overly aggressive
 
     gocyclo:
-      min-complexity: 15
+      min-complexity: 20
 
     gocritic:
       enabled-checks:

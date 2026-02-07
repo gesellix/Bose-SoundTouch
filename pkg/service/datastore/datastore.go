@@ -1,3 +1,4 @@
+// Package datastore provides a simple XML-based datastore for SoundTouch devices.
 package datastore
 
 import (
@@ -19,12 +20,14 @@ func exists(path string) bool {
 	return err == nil
 }
 
+// DataStore represents the device and configuration storage.
 type DataStore struct {
 	DataDir      string
 	eventMutex   sync.RWMutex
 	deviceEvents map[string][]models.DeviceEvent
 }
 
+// NewDataStore creates a new DataStore.
 func NewDataStore(dataDir string) *DataStore {
 	if dataDir == "" {
 		dataDir = "data"
@@ -104,16 +107,7 @@ func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDevic
 
 // ListAllDevices returns a list of all devices in all accounts.
 func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
-	dirs := []string{}
-	if exists(ds.DataDir) {
-		dirs = append(dirs, ds.DataDir)
-	}
-	// Also check soundcork-go/data if it's different and exists
-	altDir := "soundcork-go/data"
-	if ds.DataDir != altDir && exists(altDir) {
-		dirs = append(dirs, altDir)
-	}
-
+	dirs := ds.getPossibleDataDirs()
 	if len(dirs) == 0 {
 		return []models.ServiceDeviceInfo{}, nil
 	}
@@ -132,47 +126,71 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 				continue
 			}
 
-			devicesDir := filepath.Join(dir, acc.Name(), constants.DevicesDir)
-
-			deviceEntries, err := os.ReadDir(devicesDir)
-			if err != nil {
-				continue
-			}
-
-			for _, dev := range deviceEntries {
-				var (
-					info *models.ServiceDeviceInfo
-					err  error
-				)
-
-				if !dev.IsDir() {
-					if dev.Name() == constants.DeviceInfoFile {
-						// Special case for DeviceInfo.xml directly in devicesDir
-						path := filepath.Join(devicesDir, constants.DeviceInfoFile)
-						info, err = ds.parseDeviceInfoFile(path)
-					}
-				} else {
-					path := filepath.Join(devicesDir, dev.Name(), constants.DeviceInfoFile)
-					info, err = ds.parseDeviceInfoFile(path)
+			accDevices := ds.listDevicesInAccount(dir, acc.Name())
+			for _, info := range accDevices {
+				key := info.DeviceID
+				if key == "" {
+					key = info.IPAddress
 				}
 
-				if err == nil && info != nil {
-					// Use a unique key for deduplication
-					key := info.DeviceID
-					if key == "" {
-						key = info.IPAddress
-					}
-
-					if !seenIDs[key] {
-						devices = append(devices, *info)
-						seenIDs[key] = true
-					}
+				if !seenIDs[key] {
+					devices = append(devices, info)
+					seenIDs[key] = true
 				}
 			}
 		}
 	}
 
 	return devices, nil
+}
+
+func (ds *DataStore) getPossibleDataDirs() []string {
+	dirs := []string{}
+	if exists(ds.DataDir) {
+		dirs = append(dirs, ds.DataDir)
+	}
+
+	// Also check soundcork-go/data if it's different and exists
+	altDir := "soundcork-go/data"
+	if ds.DataDir != altDir && exists(altDir) {
+		dirs = append(dirs, altDir)
+	}
+
+	return dirs
+}
+
+func (ds *DataStore) listDevicesInAccount(baseDir, accountName string) []models.ServiceDeviceInfo {
+	devices := []models.ServiceDeviceInfo{}
+	devicesDir := filepath.Join(baseDir, accountName, constants.DevicesDir)
+
+	deviceEntries, err := os.ReadDir(devicesDir)
+	if err != nil {
+		return devices
+	}
+
+	for _, dev := range deviceEntries {
+		var (
+			info *models.ServiceDeviceInfo
+			err  error
+		)
+
+		if !dev.IsDir() {
+			if dev.Name() == constants.DeviceInfoFile {
+				// Special case for DeviceInfo.xml directly in devicesDir
+				path := filepath.Join(devicesDir, constants.DeviceInfoFile)
+				info, err = ds.parseDeviceInfoFile(path)
+			}
+		} else {
+			path := filepath.Join(devicesDir, dev.Name(), constants.DeviceInfoFile)
+			info, err = ds.parseDeviceInfoFile(path)
+		}
+
+		if err == nil && info != nil {
+			devices = append(devices, *info)
+		}
+	}
+
+	return devices
 }
 
 func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo, error) {
@@ -257,7 +275,9 @@ func (ds *DataStore) GetPresets(account string) ([]models.ServicePreset, error) 
 	}
 
 	presets := []models.ServicePreset{}
-	for _, p := range presetsWrap.Presets {
+
+	for i := range presetsWrap.Presets {
+		p := &presetsWrap.Presets[i]
 		presets = append(presets, models.ServicePreset{
 			ServiceContentItem: models.ServiceContentItem{
 				ID:            p.ID,
@@ -302,7 +322,9 @@ func (ds *DataStore) SavePresets(account string, presets []models.ServicePreset)
 
 	var px PresetsXML
 
-	for _, p := range presets {
+	for i := range presets {
+		p := &presets[i]
+
 		var pxml PresetXML
 
 		pxml.ID = p.ID
@@ -358,7 +380,9 @@ func (ds *DataStore) GetRecents(account string) ([]models.ServiceRecent, error) 
 	}
 
 	recents := []models.ServiceRecent{}
-	for _, r := range recentsWrap.Recents {
+
+	for i := range recentsWrap.Recents {
+		r := &recentsWrap.Recents[i]
 		recents = append(recents, models.ServiceRecent{
 			ServiceContentItem: models.ServiceContentItem{
 				ID:            r.ID,
@@ -403,7 +427,9 @@ func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent)
 
 	var rx RecentsXML
 
-	for _, r := range recents {
+	for i := range recents {
+		r := &recents[i]
+
 		var rxml RecentXML
 
 		rxml.ID = r.ID
@@ -434,7 +460,7 @@ func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent)
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
-func (ds *DataStore) SaveDeviceInfo(account string, device string, info *models.ServiceDeviceInfo) error {
+func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.ServiceDeviceInfo) error {
 	if device == "" {
 		return fmt.Errorf("device ID/name cannot be empty")
 	}
@@ -515,7 +541,7 @@ func (ds *DataStore) SaveDeviceInfo(account string, device string, info *models.
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
-func (ds *DataStore) RemoveDevice(account string, device string) error {
+func (ds *DataStore) RemoveDevice(account, device string) error {
 	dir := ds.AccountDeviceDir(account, device)
 	return os.RemoveAll(dir)
 }
@@ -673,16 +699,16 @@ func (ds *DataStore) GetETagForAccount(account string) int64 {
 	e2 := ds.GetETagForSources(account)
 	e3 := ds.GetETagForRecents(account)
 
-	max := e1
-	if e2 > max {
-		max = e2
+	maxETag := e1
+	if e2 > maxETag {
+		maxETag = e2
 	}
 
-	if e3 > max {
-		max = e3
+	if e3 > maxETag {
+		maxETag = e3
 	}
 
-	return max
+	return maxETag
 }
 
 func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {

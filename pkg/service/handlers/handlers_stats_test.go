@@ -16,7 +16,8 @@ func TestStatsHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 	s := &Server{ds: ds}

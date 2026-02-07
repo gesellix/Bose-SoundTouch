@@ -115,7 +115,9 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	}
 
 	res := `<presets>`
-	for _, p := range presets {
+
+	for i := range presets {
+		p := &presets[i]
 		res += fmt.Sprintf(`<preset buttonNumber="%s">`, p.ID)
 		res += fmt.Sprintf(`<containerArt>%s</containerArt>`, p.ContainerArt)
 		res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, p.Type)
@@ -161,7 +163,9 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 
 	res := `<recents>`
 
-	for _, r := range recents {
+	for i := range recents {
+		r := &recents[i]
+
 		lastPlayed := ""
 		if sec, err := strconv.ParseInt(r.UtcTime, 10, 64); err == nil {
 			lastPlayed = time.Unix(sec, 0).Format(time.RFC3339)
@@ -174,6 +178,7 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<location>%s</location>`, r.Location)
 		res += fmt.Sprintf(`<name>%s</name>`, r.Name)
 
+		// Content Item Source
 		found := false
 
 		for _, s := range sources {
@@ -186,6 +191,7 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		}
 
 		if !found {
+			// This might happen if source is not found
 		}
 
 		res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
@@ -217,37 +223,37 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	lastDeviceID := ""
 
 	for _, entry := range entries {
-		if entry.IsDir() {
-			deviceID := entry.Name()
-			lastDeviceID = deviceID
-
-			info, err := ds.GetDeviceInfo(account, deviceID)
-			if err != nil {
-				continue
-			}
-
-			res += fmt.Sprintf(`<device deviceid="%s">`, deviceID)
-			res += fmt.Sprintf(`<attachedProduct product_code="%s"><components/><productlabel>%s</productlabel><serialnumber>%s</serialnumber></attachedProduct>`,
-				info.ProductCode, info.ProductCode, info.ProductSerialNumber)
-			res += fmt.Sprintf(`<createdOn>%s</createdOn>`, DateStr)
-			res += fmt.Sprintf(`<firmwareVersion>%s</firmwareVersion>`, info.FirmwareVersion)
-			res += fmt.Sprintf(`<ipaddress>%s</ipaddress>`, info.IPAddress)
-			res += fmt.Sprintf(`<name>%s</name>`, info.Name)
-
-			presets, _ := PresetsToXML(ds, account)
-			if len(presets) > len(xml.Header) {
-				res += string(presets[len(xml.Header):]) // strip header
-			}
-
-			recents, _ := RecentsToXML(ds, account)
-			if len(recents) > len(xml.Header) {
-				res += string(recents[len(xml.Header):]) // strip header
-			}
-
-			res += fmt.Sprintf(`<serialnumber>%s</serialnumber>`, info.DeviceSerialNumber)
-			res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
-			res += `</device>`
+		if !entry.IsDir() {
+			continue
 		}
+
+		deviceID := entry.Name()
+		lastDeviceID = deviceID
+
+		info, err := ds.GetDeviceInfo(account, deviceID)
+		if err != nil {
+			continue
+		}
+
+		res += fmt.Sprintf(`<device deviceid="%s">`, deviceID)
+		res += fmt.Sprintf(`<attachedProduct product_code="%s"><components/><productlabel>%s</productlabel><serialnumber>%s</serialnumber></attachedProduct>`,
+			info.ProductCode, info.ProductCode, info.ProductSerialNumber)
+		res += fmt.Sprintf(`<createdOn>%s</createdOn>`, DateStr)
+		res += fmt.Sprintf(`<firmwareVersion>%s</firmwareVersion>`, info.FirmwareVersion)
+		res += fmt.Sprintf(`<ipaddress>%s</ipaddress>`, info.IPAddress)
+		res += fmt.Sprintf(`<name>%s</name>`, info.Name)
+
+		presets, _ := PresetsToXML(ds, account)
+		if len(presets) > len(xml.Header) {
+			res += string(presets[len(xml.Header):]) // strip header
+		}
+
+		recents, _ := RecentsToXML(ds, account)
+		if len(recents) > len(xml.Header) {
+			res += string(recents[len(xml.Header):]) // strip header
+		}
+
+		res += `</device>`
 	}
 
 	res += `</devices><mode>global</mode><preferredLanguage>en</preferredLanguage>`
@@ -269,7 +275,7 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	return []byte(res), nil
 }
 
-func UpdatePreset(ds *datastore.DataStore, account string, device string, presetNumber int, sourceXML []byte) ([]byte, error) {
+func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber int, sourceXML []byte) ([]byte, error) {
 	sources, err := ds.GetConfiguredSources(account)
 	if err != nil {
 		return nil, err
@@ -345,7 +351,7 @@ func UpdatePreset(ds *datastore.DataStore, account string, device string, preset
 	return append([]byte(xml.Header), []byte(res)...), nil
 }
 
-func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML []byte) ([]byte, error) {
+func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte) ([]byte, error) {
 	sources, err := ds.GetConfiguredSources(account)
 	if err != nil {
 		return nil, err
@@ -367,39 +373,23 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 		return nil, err
 	}
 
-	var matchingSrc *models.ConfiguredSource
-
-	for _, s := range sources {
-		if s.ID == newRecentElem.SourceID {
-			matchingSrc = &s
-			break
-		}
-	}
-
+	matchingSrc := findMatchingSource(sources, newRecentElem.SourceID)
 	if matchingSrc == nil {
 		return nil, fmt.Errorf("invalid account/source")
 	}
 
-	utcTime := time.Now().Unix()
-
-	if newRecentElem.LastPlayedAt != "" {
-		if t, err := time.Parse(time.RFC3339, newRecentElem.LastPlayedAt); err == nil {
-			utcTime = t.Unix()
-		}
-	}
+	utcTime := parseLastPlayedAt(newRecentElem.LastPlayedAt)
 
 	// Find existing
 	var recentObj *models.ServiceRecent
 
 	createdOn := DateStr
 
-	for i, r := range recents {
+	for i := range recents {
+		r := &recents[i]
 		if r.Source == matchingSrc.SourceKeyType && r.Location == newRecentElem.Location && r.SourceAccount == matchingSrc.SourceKeyAccount {
 			recents[i].UtcTime = strconv.FormatInt(utcTime, 10)
 			recentObj = &recents[i]
-			// Moving to front means we need to handle its original createdOn
-			// In bose emulation, we often use fixed dates, but let's try to be consistent
-			// If we had a real createdOn, we'd use it here.
 
 			// Move to front
 			recents = append([]models.ServiceRecent{*recentObj}, append(recents[:i], recents[i+1:]...)...)
@@ -409,27 +399,7 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 	}
 
 	if recentObj == nil {
-		maxID := 0
-		for _, r := range recents {
-			if id, err := strconv.Atoi(r.ID); err == nil && id > maxID {
-				maxID = id
-			}
-		}
-
-		recentObj = &models.ServiceRecent{
-			ServiceContentItem: models.ServiceContentItem{
-				ID:            strconv.Itoa(maxID + 1),
-				Name:          newRecentElem.Name,
-				Source:        matchingSrc.SourceKeyType,
-				Type:          newRecentElem.ContentItemType,
-				Location:      newRecentElem.Location,
-				SourceAccount: matchingSrc.SourceKeyAccount,
-				SourceID:      newRecentElem.SourceID,
-				IsPresetable:  "true",
-			},
-			DeviceID: device,
-			UtcTime:  strconv.FormatInt(utcTime, 10),
-		}
+		recentObj = createNewRecent(recents, newRecentElem.Name, matchingSrc, newRecentElem.ContentItemType, newRecentElem.Location, device, utcTime)
 		createdOn = time.Now().Format(time.RFC3339)
 
 		recents = append([]models.ServiceRecent{*recentObj}, recents...)
@@ -442,6 +412,56 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 		return nil, err
 	}
 
+	return formatRecentResponse(recentObj, matchingSrc, createdOn, utcTime), nil
+}
+
+func findMatchingSource(sources []models.ConfiguredSource, sourceID string) *models.ConfiguredSource {
+	for _, s := range sources {
+		if s.ID == sourceID {
+			return &s
+		}
+	}
+
+	return nil
+}
+
+func parseLastPlayedAt(lastPlayedAt string) int64 {
+	utcTime := time.Now().Unix()
+
+	if lastPlayedAt != "" {
+		if t, err := time.Parse(time.RFC3339, lastPlayedAt); err == nil {
+			utcTime = t.Unix()
+		}
+	}
+
+	return utcTime
+}
+
+func createNewRecent(recents []models.ServiceRecent, name string, matchingSrc *models.ConfiguredSource, contentItemType, location, device string, utcTime int64) *models.ServiceRecent {
+	maxID := 0
+	for j := range recents {
+		if id, err := strconv.Atoi(recents[j].ID); err == nil && id > maxID {
+			maxID = id
+		}
+	}
+
+	return &models.ServiceRecent{
+		ServiceContentItem: models.ServiceContentItem{
+			ID:            strconv.Itoa(maxID + 1),
+			Name:          name,
+			Source:        matchingSrc.SourceKeyType,
+			Type:          contentItemType,
+			Location:      location,
+			SourceAccount: matchingSrc.SourceKeyAccount,
+			SourceID:      matchingSrc.ID,
+			IsPresetable:  "true",
+		},
+		DeviceID: device,
+		UtcTime:  strconv.FormatInt(utcTime, 10),
+	}
+}
+
+func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.ConfiguredSource, createdOn string, utcTime int64) []byte {
 	lastPlayed := time.Unix(utcTime, 0).Format(time.RFC3339)
 	res := fmt.Sprintf(`<recent id="%s">`, recentObj.ID)
 	res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, recentObj.Type)
@@ -453,7 +473,7 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 	res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
 	res += `</recent>`
 
-	return append([]byte(xml.Header), []byte(res)...), nil
+	return append([]byte(xml.Header), []byte(res)...)
 }
 
 func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte) ([]byte, error) {
@@ -486,6 +506,6 @@ func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 	return append([]byte(xml.Header), []byte(res)...), nil
 }
 
-func RemoveDeviceFromAccount(ds *datastore.DataStore, account string, device string) error {
+func RemoveDeviceFromAccount(ds *datastore.DataStore, account, device string) error {
 	return ds.RemoveDevice(account, device)
 }

@@ -17,7 +17,11 @@ func TestPlayCustomStream(t *testing.T) {
 		ImageURL:  "image.png",
 		Name:      "Stream Name",
 	}
-	jsonBytes, _ := json.Marshal(dataObj)
+
+	jsonBytes, err := json.Marshal(dataObj)
+	if err != nil {
+		t.Fatalf("Failed to marshal test data: %v", err)
+	}
 
 	// Test Standard Base64
 	dataStd := base64.StdEncoding.EncodeToString(jsonBytes)

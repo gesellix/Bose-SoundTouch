@@ -1,3 +1,4 @@
+// Package ssh provides simple SSH operations used during device setup and migration.
 package ssh
 
 import (
@@ -56,7 +57,6 @@ func (c *Client) getConfig() *ssh.ClientConfig {
 			ssh.KeyAlgoRSASHA256,
 			ssh.KeyAlgoRSASHA512,
 			ssh.KeyAlgoRSA,
-			ssh.KeyAlgoDSA,
 			ssh.KeyAlgoECDSA256,
 			ssh.KeyAlgoECDSA384,
 			ssh.KeyAlgoECDSA521,
@@ -73,13 +73,15 @@ func (c *Client) Run(command string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to dial: %w", err)
 	}
-	defer client.Close()
+
+	defer func() { _ = client.Close() }()
 
 	session, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+
+	defer func() { _ = session.Close() }()
 
 	output, err := session.CombinedOutput(command)
 
@@ -96,13 +98,15 @@ func (c *Client) UploadContent(content []byte, remotePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to dial: %w", err)
 	}
-	defer client.Close()
+
+	defer func() { _ = client.Close() }()
 
 	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+
+	defer func() { _ = session.Close() }()
 
 	// Use a pipe to write content to the remote command's stdin
 	stdin, err := session.StdinPipe()
@@ -120,13 +124,14 @@ func (c *Client) UploadContent(content []byte, remotePath string) error {
 	cmd := fmt.Sprintf("cat > %s", remotePath)
 
 	// Start the command
-	if err := session.Start(cmd); err != nil {
-		return fmt.Errorf("failed to start upload command: %w", err)
+	startErr := session.Start(cmd)
+	if startErr != nil {
+		return fmt.Errorf("failed to start upload command: %w", startErr)
 	}
 
 	// Write content and close stdin
 	_, err = stdin.Write(content)
-	stdin.Close()
+	_ = stdin.Close()
 
 	if err != nil {
 		return fmt.Errorf("failed to write content to stdin: %w", err)
@@ -134,7 +139,8 @@ func (c *Client) UploadContent(content []byte, remotePath string) error {
 
 	// Read stderr in case of failure
 	stderrBuf := new(strings.Builder)
-	go io.Copy(stderrBuf, stderr)
+
+	go func() { _, _ = io.Copy(stderrBuf, stderr) }()
 
 	// Wait for the command to finish
 	if err := session.Wait(); err != nil {

@@ -1,5 +1,7 @@
+// Package constants defines file names, directories, and common values used by the service layer.
 package constants
 
+// Providers lists known source provider identifiers used by Bose SoundTouch.
 var Providers = []string{
 	"PANDORA",
 	"INTERNET_RADIO",
@@ -41,6 +43,7 @@ var Providers = []string{
 	"SIRIUSXM_EVEREST",
 }
 
+// Common file and path constants used by the datastore and setup logic.
 const (
 	DevicesDir     = "devices"
 	DeviceInfoFile = "DeviceInfo.xml"

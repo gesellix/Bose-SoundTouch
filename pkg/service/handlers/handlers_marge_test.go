@@ -61,19 +61,28 @@ func TestMargeSoftwareUpdate(t *testing.T) {
 }
 
 func TestMargeAccountFull(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
-	defer os.RemoveAll(tempDir)
+	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
 	deviceID := "ABCDE"
 	accountDir := filepath.Join(tempDir, account)
+
 	deviceDir := filepath.Join(accountDir, "devices", deviceID)
-	os.MkdirAll(deviceDir, 0755)
+	err = os.MkdirAll(deviceDir, 0755)
+
+	if err != nil {
+		t.Fatalf("Failed to create device dir: %v", err)
+	}
 
 	// Mock DeviceInfo.xml
-	os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(`
 		<info deviceID="ABCDE">
 			<name>Test Speaker</name>
 			<type>SoundTouch 20</type>
@@ -89,7 +98,9 @@ func TestMargeAccountFull(t *testing.T) {
 				<ipAddress>192.168.1.100</ipAddress>
 			</networkInfo>
 		</info>
-	`), 0644)
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write DeviceInfo.xml: %v", err)
+	}
 
 	r, _ := setupRouter("http://localhost:8001", ds)
 
@@ -114,14 +125,23 @@ func TestMargeAccountFull(t *testing.T) {
 }
 
 func TestMargePresets(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
-	defer os.RemoveAll(tempDir)
+	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+
 	accountDir := filepath.Join(tempDir, account)
-	os.MkdirAll(accountDir, 0755)
+	err = os.MkdirAll(accountDir, 0755)
+
+	if err != nil {
+		t.Fatalf("Failed to create account dir: %v", err)
+	}
 
 	r, _ := setupRouter("http://localhost:8001", ds)
 
@@ -129,7 +149,7 @@ func TestMargePresets(t *testing.T) {
 	defer ts.Close()
 
 	// Mock Sources.xml and Presets.xml
-	os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
 		<sources>
 			<source id="123" type="Audio">
 				<createdOn>2012-09-19T12:43:00.000+00:00</createdOn>
@@ -142,8 +162,11 @@ func TestMargePresets(t *testing.T) {
 				<username></username>
 			</source>
 		</sources>
-	`), 0644)
-	os.WriteFile(filepath.Join(accountDir, "Presets.xml"), []byte(`
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write Sources.xml: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(accountDir, "Presets.xml"), []byte(`
 		<presets>
 			<preset id="1">
 				<ContentItem source="TUNEIN" type="station" location="/station/s123" sourceAccount="" isPresetable="true">
@@ -152,7 +175,9 @@ func TestMargePresets(t *testing.T) {
 				</ContentItem>
 			</preset>
 		</presets>
-	`), 0644)
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write Presets.xml: %v", err)
+	}
 
 	res, err := http.Get(ts.URL + "/marge/accounts/" + account + "/devices/any/presets")
 	if err != nil {
@@ -165,31 +190,49 @@ func TestMargePresets(t *testing.T) {
 		t.Errorf("Expected status OK, got %v", res.Status)
 	}
 
-	body, _ := io.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
 	if !strings.Contains(string(body), "Test Station") {
 		t.Errorf("Response missing preset data: %s", string(body))
 	}
 }
 
 func TestMargeUpdatePreset(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
-	defer os.RemoveAll(tempDir)
+	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+
 	accountDir := filepath.Join(tempDir, account)
-	os.MkdirAll(accountDir, 0755)
+	err = os.MkdirAll(accountDir, 0755)
+
+	if err != nil {
+		t.Fatalf("Failed to create account dir: %v", err)
+	}
 
 	// Mock Sources.xml
-	os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
 		<sources>
 			<source id="SRC1" type="Audio">
 				<sourcename>TUNEIN</sourcename>
 			</source>
 		</sources>
-	`), 0644)
-	os.WriteFile(filepath.Join(accountDir, "Presets.xml"), []byte(`<presets></presets>`), 0644)
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write Sources.xml: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(accountDir, "Presets.xml"), []byte(`<presets></presets>`), 0644); err != nil {
+		t.Fatalf("Failed to write Presets.xml: %v", err)
+	}
 
 	r, _ := setupRouter("http://localhost:8001", ds)
 
@@ -224,25 +267,39 @@ func TestMargeUpdatePreset(t *testing.T) {
 	}
 }
 
-func TestMargeAddRecent(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
-	defer os.RemoveAll(tempDir)
+func TestMargeDeviceInfo(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+
 	accountDir := filepath.Join(tempDir, account)
-	os.MkdirAll(accountDir, 0755)
+	err = os.MkdirAll(accountDir, 0755)
+
+	if err != nil {
+		t.Fatalf("Failed to create account dir: %v", err)
+	}
 
 	// Mock Sources.xml
-	os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
 		<sources>
 			<source id="SRC1" type="Audio">
 				<sourcename>TUNEIN</sourcename>
 			</source>
 		</sources>
-	`), 0644)
-	os.WriteFile(filepath.Join(accountDir, "Recents.xml"), []byte(`<recents></recents>`), 0644)
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write Sources.xml: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(accountDir, "Recents.xml"), []byte(`<recents></recents>`), 0644); err != nil {
+		t.Fatalf("Failed to write Recents.xml: %v", err)
+	}
 
 	r, _ := setupRouter("http://localhost:8001", ds)
 
@@ -276,14 +333,23 @@ func TestMargeAddRecent(t *testing.T) {
 }
 
 func TestMargeAddRemoveDevice(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
-	defer os.RemoveAll(tempDir)
+	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+
 	accountDir := filepath.Join(tempDir, account)
-	os.MkdirAll(accountDir, 0755)
+	err = os.MkdirAll(accountDir, 0755)
+
+	if err != nil {
+		t.Fatalf("Failed to create account dir: %v", err)
+	}
 
 	r, _ := setupRouter("http://localhost:8001", ds)
 
@@ -313,7 +379,7 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res.Body.Close()
+	_ = res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("AddDevice: Expected status OK, got %v", res.Status)
@@ -332,7 +398,7 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res.Body.Close()
+	_ = res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("RemoveDevice: Expected status OK, got %v", res.Status)
@@ -362,8 +428,12 @@ func TestMargePowerOn(t *testing.T) {
 }
 
 func TestMargeAdvancedFeatures(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
-	defer os.RemoveAll(tempDir)
+	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
 
@@ -431,7 +501,7 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		res.Body.Close()
+		_ = res.Body.Close()
 
 		if res.StatusCode != http.StatusOK {
 			t.Errorf("Expected status OK, got %v", res.Status)

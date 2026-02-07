@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// HandleGetDeviceEvents returns the event log for a device.
 func (s *Server) HandleGetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceId")
 	if deviceID == "" {
@@ -21,5 +22,9 @@ func (s *Server) HandleGetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

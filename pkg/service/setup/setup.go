@@ -1,3 +1,4 @@
+// Package setup contains speaker migration and configuration helpers.
 package setup
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/ssh"
 )
 
+// SoundTouchSdkPrivateCfgPath is the path to the speaker's private configuration file on device.
 const SoundTouchSdkPrivateCfgPath = "/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml"
 
 // PrivateCfg represents the SoundTouchSdkPrivateCfg XML structure.
@@ -82,7 +84,8 @@ func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch info from %s: %w", infoURL, err)
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }()
 
 	var infoXML DeviceInfoXML
 	if err := xml.NewDecoder(resp.Body).Decode(&infoXML); err != nil {
@@ -107,12 +110,10 @@ func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 }
 
 // GetMigrationSummary returns a summary of the current and planned state of the speaker.
-func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyURL string, options map[string]string) (*MigrationSummary, error) {
+func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, options map[string]string) (*MigrationSummary, error) {
 	if targetURL == "" {
 		targetURL = m.ServerURL
 	}
-
-	client := ssh.NewClient(deviceIP)
 
 	summary := &MigrationSummary{
 		SSHSuccess: false,
@@ -123,14 +124,16 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 		devices, err := m.DataStore.ListAllDevices()
 		if err == nil {
 			for _, d := range devices {
-				if d.IPAddress == deviceIP {
-					summary.DeviceName = d.Name
-					summary.DeviceModel = d.ProductCode
-					summary.DeviceSerial = d.DeviceSerialNumber
-					summary.FirmwareVersion = d.FirmwareVersion
-
-					break
+				if d.IPAddress != deviceIP {
+					continue
 				}
+
+				summary.DeviceName = d.Name
+				summary.DeviceModel = d.ProductCode
+				summary.DeviceSerial = d.DeviceSerialNumber
+				summary.FirmwareVersion = d.FirmwareVersion
+
+				break
 			}
 		} else {
 			log.Printf("Warning: failed to list devices from datastore: %v", err)
@@ -174,10 +177,10 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 	var currentConfig string
 
 	path := SoundTouchSdkPrivateCfgPath
-	client = ssh.NewClient(deviceIP)
+	client := ssh.NewClient(deviceIP)
 
 	// Check if .original exists
-	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", path)); err == nil {
+	if _, checkErr := client.Run(fmt.Sprintf("[ -f %s.original ]", path)); checkErr == nil {
 		originalConfig, _ := client.Run(fmt.Sprintf("cat %s.original", path))
 		if originalConfig != "" {
 			summary.OriginalConfig = originalConfig
@@ -240,8 +243,8 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 		if config == "" && fileInfo != "" {
 			fmt.Printf("Cat returned empty for %s, trying base64\n", path)
 
-			b64Config, err := client.Run(fmt.Sprintf("base64 %s", path))
-			if err == nil && b64Config != "" {
+			b64Config, configErr := client.Run(fmt.Sprintf("base64 %s", path))
+			if configErr == nil && b64Config != "" {
 				fmt.Printf("Base64 output for %s (length %d)\n", path, len(b64Config))
 			}
 		}
@@ -290,7 +293,7 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 }
 
 // MigrateSpeaker configures the speaker at the given IP to use this soundcork service.
-func (m *Manager) MigrateSpeaker(deviceIP string, targetURL string, proxyURL string, options map[string]string) error {
+func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options map[string]string) error {
 	if targetURL == "" {
 		targetURL = m.ServerURL
 	}
@@ -400,11 +403,12 @@ func (m *Manager) BackupConfig(deviceIP string) error {
 	}
 
 	// Try to copy on the device first (more reliable), ensuring filesystem is writable
-	if output, err := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath)); err == nil {
+	output, cpErr := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath))
+	if cpErr == nil {
 		return nil
-	} else {
-		fmt.Printf("Direct cp failed: %v (output: %s), falling back to cat+upload\n", err, output)
 	}
+
+	fmt.Printf("Direct cp failed: %v (output: %s), falling back to cat+upload\n", cpErr, output)
 
 	// Fallback to cat + upload
 	config, err := client.Run(fmt.Sprintf("cat %s", remotePath))

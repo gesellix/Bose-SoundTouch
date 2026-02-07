@@ -1,3 +1,4 @@
+// Package handlers provides HTTP handlers for the SoundTouch service.
 package handlers
 
 import (
@@ -10,7 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (s *Server) HandleBMXRegistry(w http.ResponseWriter, r *http.Request) {
+// HandleBMXRegistry returns the BMX service registry.
+func (s *Server) HandleBMXRegistry(w http.ResponseWriter, _ *http.Request) {
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:8000"
@@ -24,6 +26,7 @@ func (s *Server) HandleBMXRegistry(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(content))
 }
 
+// HandleTuneInPlayback returns TuneIn playback information.
 func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 	stationID := chi.URLParam(r, "stationID")
 
@@ -34,9 +37,14 @@ func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
+// HandleTuneInPodcastInfo returns TuneIn podcast information.
 func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request) {
 	podcastID := chi.URLParam(r, "podcastID")
 	encodedName := r.URL.Query().Get("encoded_name")
@@ -48,9 +56,14 @@ func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
+// HandleTuneInPlaybackPodcast returns TuneIn podcast playback information.
 func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Request) {
 	podcastID := chi.URLParam(r, "podcastID")
 
@@ -61,9 +74,14 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
+// HandleOrionPlayback returns Orion playback information.
 func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
 	data := chi.URLParam(r, "data")
 
@@ -74,5 +92,9 @@ func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 )
 
+// Server handles HTTP requests for the SoundTouch service.
 type Server struct {
 	ds           *datastore.DataStore
 	sm           *setup.Manager
@@ -21,7 +22,8 @@ type Server struct {
 	proxyLogBody bool
 }
 
-func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact bool, proxyLogBody bool) *Server {
+// NewServer creates a new SoundTouch service server.
+func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody bool) *Server {
 	return &Server{
 		ds:           ds,
 		sm:           sm,
@@ -32,6 +34,9 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 	}
 }
 
+// DiscoverDevices starts a background device discovery process.
+//
+//nolint:contextcheck
 func (s *Server) DiscoverDevices(ctx context.Context) {
 	s.discovering = true
 
@@ -55,63 +60,64 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 	}
 
 	for _, d := range devices {
-		log.Printf("Discovered Bose device: %s at %s (Serial: %s)", d.Name, d.Host, d.SerialNo)
+		s.handleDiscoveredDevice(*d)
+	}
+}
 
-		// 1. Check if we already have this device by serial number (best identifier)
-		var existingID string // The directory name used for this device
+func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
+	log.Printf("Discovered Bose device: %s at %s (Serial: %s)", d.Name, d.Host, d.SerialNo)
 
-		allDevices, _ := s.ds.ListAllDevices()
-		for _, known := range allDevices {
-			if d.SerialNo != "" && (known.DeviceID == d.SerialNo || known.DeviceSerialNumber == d.SerialNo) {
-				existingID = known.DeviceID
-				if existingID == "" {
-					existingID = known.IPAddress
-				}
+	// 1. Check if we already have this device by serial number (best identifier)
+	existingID := s.findExistingDeviceID(d)
 
-				break
-			}
-		}
+	// Use SerialNo if available, otherwise fallback to IP for the datastore directory name
+	if d.SerialNo == "" {
+		// If serial is missing from discovery, try to fetch it from :8090/info
+		log.Printf("Serial number missing for %s at %s, attempting live info fetch...", d.Name, d.Host)
 
-		// Use SerialNo if available, otherwise fallback to IP for the datastore directory name
-		deviceID := d.SerialNo
-		if deviceID == "" {
-			// If serial is missing from discovery, try to fetch it from :8090/info
-			log.Printf("Serial number missing for %s at %s, attempting live info fetch...", d.Name, d.Host)
-
-			liveInfo, err := s.sm.GetLiveDeviceInfo(d.Host)
-			if err == nil && liveInfo.SerialNumber != "" {
-				d.SerialNo = liveInfo.SerialNumber
-				log.Printf("Successfully retrieved serial number %s for %s via live info", d.SerialNo, d.Host)
-			}
-		}
-
-		deviceID = d.SerialNo
-		if deviceID == "" {
-			deviceID = d.Host
-		}
-
-		// 2. If we found it by serial but it was stored under an IP-based directory,
-		// we should ideally migrate it, but for now, we'll just ensure the Serial one is used.
-		// If the IP changed for a known serial, SaveDeviceInfo will overwrite the old IP info
-		// if deviceID == existingBySerial.DeviceID.
-
-		info := &models.ServiceDeviceInfo{
-			DeviceID:           d.SerialNo,
-			Name:               d.Name,
-			IPAddress:          d.Host,
-			DeviceSerialNumber: d.SerialNo,
-			ProductCode:        d.ModelID,
-			FirmwareVersion:    "0.0.0", // Unknown from discovery
-		}
-
-		// If we had an IP-based entry and now have a Serial, clean up the IP-based entry
-		if d.SerialNo != "" && existingID != "" && existingID != d.SerialNo {
-			log.Printf("Device %s previously known as %s, migrating to serial-based ID %s", d.Name, existingID, d.SerialNo)
-			_ = s.ds.RemoveDevice("default", existingID)
-		}
-
-		if err := s.ds.SaveDeviceInfo("default", deviceID, info); err != nil {
-			log.Printf("Failed to save device info: %v", err)
+		liveInfo, err := s.sm.GetLiveDeviceInfo(d.Host)
+		if err == nil && liveInfo.SerialNumber != "" {
+			d.SerialNo = liveInfo.SerialNumber
+			log.Printf("Successfully retrieved serial number %s for %s via live info", d.SerialNo, d.Host)
 		}
 	}
+
+	deviceID := d.SerialNo
+	if deviceID == "" {
+		deviceID = d.Host
+	}
+
+	info := &models.ServiceDeviceInfo{
+		DeviceID:           d.SerialNo,
+		Name:               d.Name,
+		IPAddress:          d.Host,
+		DeviceSerialNumber: d.SerialNo,
+		ProductCode:        d.ModelID,
+		FirmwareVersion:    "0.0.0", // Unknown from discovery
+	}
+
+	// If we had an IP-based entry and now have a Serial, clean up the IP-based entry
+	if d.SerialNo != "" && existingID != "" && existingID != d.SerialNo {
+		log.Printf("Device %s previously known as %s, migrating to serial-based ID %s", d.Name, existingID, d.SerialNo)
+		_ = s.ds.RemoveDevice("default", existingID)
+	}
+
+	if err := s.ds.SaveDeviceInfo("default", deviceID, info); err != nil {
+		log.Printf("Failed to save device info: %v", err)
+	}
+}
+
+func (s *Server) findExistingDeviceID(d models.DiscoveredDevice) string {
+	allDevices, _ := s.ds.ListAllDevices()
+	for _, known := range allDevices {
+		if d.SerialNo != "" && (known.DeviceID == d.SerialNo || known.DeviceSerialNumber == d.SerialNo) {
+			if known.DeviceID != "" {
+				return known.DeviceID
+			}
+
+			return known.IPAddress
+		}
+	}
+
+	return ""
 }

@@ -15,7 +15,7 @@ func TestGetLiveDeviceInfo(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/xml")
-		fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
+		_, _ = fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
 <info deviceID="08DF1F0BA325">
     <name>Test Speaker</name>
     <type>SoundTouch 20</type>
@@ -81,7 +81,7 @@ func TestGetMigrationSummary_WithProxyOptions(t *testing.T) {
 	// Setup a mock server for live info
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
-		fmt.Fprint(w, `<info deviceID="123"><name>Test</name></info>`)
+		_, _ = fmt.Fprint(w, `<info deviceID="123"><name>Test</name></info>`)
 	}))
 	defer server.Close()
 
