@@ -19,6 +19,7 @@ A comprehensive Go library and CLI tool for controlling Bose SoundTouch devices 
 - 📻 **Content Navigation**: Browse and search TuneIn, Pandora, Spotify, local music
 - 🎙️ **Station Management**: Add and play radio stations without presets
 - 🖥️ **CLI Tool**: Comprehensive command-line interface
+- 🌐 **SoundTouch Service**: Emulate Bose services and proxy device traffic (offline support)
 - 🔒 **Production Ready**: Extensive testing with real SoundTouch hardware
 - 🌐 **Cross-Platform**: Windows, macOS, Linux support
 
@@ -26,9 +27,10 @@ A comprehensive Go library and CLI tool for controlling Bose SoundTouch devices 
 
 ### Installation
 
-#### Install CLI Tool
+#### Install CLI and Service Tools
 ```bash
 go install github.com/gesellix/bose-soundtouch/cmd/soundtouch-cli@latest
+go install github.com/gesellix/bose-soundtouch/cmd/soundtouch-service@latest
 ```
 
 #### Add Library to Your Project
@@ -72,6 +74,24 @@ soundtouch-cli --host 192.168.1.100 speaker beep
 # Real-time monitoring
 soundtouch-cli --host 192.168.1.100 events subscribe
 ```
+
+### Service Usage
+
+The `soundtouch-service` provides a REST API and can emulate Bose backend services (BMX/Marge), which is useful for offline device usage or custom service integration.
+
+#### Start the Service
+```bash
+# Start with default settings (port 8000)
+soundtouch-service
+```
+
+#### Key Service Features
+- **Device Discovery**: Automatically scans and lists Bose devices.
+- **Service Emulation**: Emulates Bose BMX and Marge services.
+- **Logging Proxy**: Intercept and log traffic between your device and the service.
+- **Embedded Web UI**: Management interface available at `http://localhost:8000/`.
+
+See [docs/SOUNDTOUCH-SERVICE.md](docs/SOUNDTOUCH-SERVICE.md) for detailed configuration and API usage.
 
 ### Library Usage
 

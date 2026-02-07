@@ -1,0 +1,175 @@
+{
+  "_links": {
+    "bmx_services_availability": {
+      "href": "../servicesAvailability"
+    }
+  },
+  "askAgainAfter": 1230482,
+  "bmx_services": [
+    {
+      "_links": {
+        "bmx_navigate": {
+          "href": "/v1/navigate"
+        },
+        "bmx_token": {
+          "href": "/v1/token"
+        },
+        "self": {
+          "href": "/"
+        }
+      },
+      "askAdapter": false,
+      "assets": {
+        "color": "#000000",
+        "description": "With TuneIn on SoundTouch, listen to more than 100,000 stations and the hottest podcasts, plus live games, concerts and shows from around the world. However, you cannot access your Favorites and Premium content on your existing TuneIn account at this time.",
+        "icons": {
+          "defaultAlbumArt": "{MEDIA_SERVER}/tunein-default-album-art.png",
+          "largeSvg": "{MEDIA_SERVER}/tunein-smallSvg.svg",
+          "monochromePng": "{MEDIA_SERVER}/tunein-monochromePng.png",
+          "monochromeSvg": "{MEDIA_SERVER}/tunein-monochromeSvg.svg",
+          "smallSvg": "{MEDIA_SERVER}/tunein-smallSvg.svg"
+        },
+        "name": "TuneIn"
+      },
+      "authenticationModel": {
+        "anonymousAccount": {
+          "autoCreate": true,
+          "enabled": true
+        }
+      },
+      "baseUrl": "{BMX_SERVER}/bmx/tunein",
+      "id": {
+        "name": "TUNEIN",
+        "value": 25
+      },
+      "streamTypes": [
+        "liveRadio",
+        "onDemand"
+      ]
+    },
+    {
+      "_links": {
+        "bmx_token": {
+          "href": "/token"
+        },
+        "self": {
+          "href": "/"
+        }
+      },
+      "askAdapter": false,
+      "assets": {
+        "color": "#000000",
+        "description": "Custom radio stations with BMX.",
+        "icons": {
+          "largeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
+          "monochromePng": "{MEDIA_SERVER}/orion-monochrome_v2.png",
+          "monochromeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
+          "smallSvg": "{MEDIA_SERVER}/orion-monochrome.svg"
+        },
+        "name": "Custom Stations"
+      },
+      "authenticationModel": {
+        "anonymousAccount": {
+          "autoCreate": true,
+          "enabled": true
+        }
+      },
+      "baseUrl": "{BMX_SERVER}/core02/svc-bmx-adapter-orion/prod/orion",
+      "id": {
+        "name": "LOCAL_INTERNET_RADIO",
+        "value": 11
+      },
+      "streamTypes": [
+        "liveRadio"
+      ]
+    },
+    {
+      "_links": {
+        "bmx_availability": {
+          "href": "/availability"
+        },
+        "bmx_logout": {
+          "href": "/logout"
+        },
+        "bmx_navigate": {
+          "href": "/navigate/"
+        },
+        "bmx_token": {
+          "href": "/token"
+        },
+        "self": {
+          "href": "/"
+        }
+      },
+      "askAdapter": false,
+      "assets": {
+        "color": "#004b85",
+        "description": "Over 200 channels including commercial-free music, plus play-by-play and sports talk, world class news, comedy, exclusive entertainment and more.",
+        "icons": {
+          "largeSvg": "{MEDIA_SERVER}/SiriusXM_Logo_Color.svg",
+          "monochromePng": "{MEDIA_SERVER}/siriusxm-monochromePng.png",
+          "monochromeSvg": "{MEDIA_SERVER}/SiriusXM_Logo_Mono.svg",
+          "smallSvg": "{MEDIA_SERVER}/SiriusXM_Logo_Color.svg"
+        },
+        "name": "SiriusXM",
+        "shortDescription": "Over 200 channels including commercial-free music, plus play-by-play and sports talk, world class news, comedy, exclusive entertainment and more."
+      },
+      "authenticationModel": {
+        "loginPageProvider": "BOSE"
+      },
+      "baseUrl": "{BMX_SERVER}/core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter",
+      "id": {
+        "name": "SIRIUSXM_EVEREST",
+        "value": 38
+      },
+      "signupUrl": "https://streaming.siriusxm.com/?/flepz=true&campaign=bose30#_frmAccountLookup",
+      "streamTypes": [
+        "liveRadio",
+        "onDemand"
+      ]
+    },
+    {
+      "_links": {
+        "bmx_availability": {
+          "href": "/availability"
+        },
+        "bmx_navigate": {
+          "href": "/navigate"
+        },
+        "bmx_token": {
+          "href": "{BMX_SERVER}/soundtouch-msp-token-proxy/RADIOPLAYER/token"
+        },
+        "self": {
+          "href": "/"
+        }
+      },
+      "askAdapter": false,
+      "assets": {
+        "color": "#cc0033",
+        "description": "Radio for you, from your country. Radioplayer is a unique broadcaster owned service, with higher quality streams, full content (including all live sport), and thousands of catch-up programs and podcasts. Radioplayer is available in UK, Germany, Canada, Austria, Belgium, Denmark, Ireland, Italy, Norway, Spain and Switzerland.",
+        "icons": {
+          "largeSvg": "https://donpvpd81xeci.cloudfront.net/icons/small.svg",
+          "monochromePng": "https://donpvpd81xeci.cloudfront.net/icons/monochrome.png",
+          "monochromeSvg": "https://donpvpd81xeci.cloudfront.net/icons/monochrome.svg",
+          "smallSvg": "https://donpvpd81xeci.cloudfront.net/icons/small.svg"
+        },
+        "name": "Radioplayer"
+      },
+      "authenticationModel": {
+        "anonymousAccount": {
+          "autoCreate": false,
+          "enabled": true
+        }
+      },
+      "baseUrl": "https://boserp.radioapi.io",
+      "id": {
+        "name": "RADIOPLAYER",
+        "value": 35
+      },
+      "streamTypes": [
+        "liveRadio",
+        "onDemand"
+      ]
+    }
+  ]
+}

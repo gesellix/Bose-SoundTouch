@@ -113,100 +113,87 @@ jobs:
             ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.mod') }}-${{ hashFiles('**/go.sum') }}
 
-      - name: Build binary
+      - name: Build binaries
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: 0
         run: |
-          # Determine output filename
-          BINARY_NAME="soundtouch-cli"
+          # Common variables
           ARCH_SUFFIX="${{ matrix.goos }}-${{ matrix.goarch }}"
-
           if [[ "${{ matrix.goarm }}" != "" ]]; then
             ARCH_SUFFIX="${ARCH_SUFFIX}v${{ matrix.goarm }}"
           fi
 
-          if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}.exe"
-          else
-            OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}"
-          fi
+          # Function to build a binary
+          build_binary() {
+            local BINARY_NAME=$1
+            local CMD_PATH=$2
+            local OUTPUT_NAME
 
-          echo "Building: $OUTPUT_NAME"
+            if [[ "${{ matrix.goos }}" == "windows" ]]; then
+              OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}.exe"
+            else
+              OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}"
+            fi
 
-          # Debug: Show current state
-          echo "Working directory: $(pwd)"
-          echo "Go version: $(go version)"
-          echo "Files before build:"
-          ls -la
+            echo "Building $BINARY_NAME: $OUTPUT_NAME"
 
-          # Debug: Show Go cache and module cache
-          echo "Go build cache location: $(go env GOCACHE)"
-          echo "Go module cache location: $(go env GOMODCACHE)"
-          echo "Go build cache contents:"
-          ls -la "$(go env GOCACHE)" 2>/dev/null || echo "Cache directory not accessible"
-          echo "Go module cache contents (top level):"
-          ls -la "$(go env GOMODCACHE)" 2>/dev/null || echo "Module cache directory not accessible"
+            # Ensure clean build environment for this binary
+            rm -f "$OUTPUT_NAME" "$OUTPUT_NAME.sha256" "$OUTPUT_NAME.sha512"
 
-          # Ensure clean build environment
-          rm -f "$OUTPUT_NAME" "$OUTPUT_NAME.sha256" "$OUTPUT_NAME.sha512"
-          go clean -cache
+            if ! go build \
+              -ldflags="-s -w" \
+              -o "$OUTPUT_NAME" \
+              "$CMD_PATH"; then
+              echo "❌ Build failed for $BINARY_NAME"
+              exit 1
+            fi
 
-          # Build with optimizations (using debug.BuildInfo for version info)
-          if ! go build \
-            -ldflags="-s -w" \
-            -o "$OUTPUT_NAME" \
-            ./cmd/soundtouch-cli; then
-            echo "❌ Build failed"
-            echo "Files after failed build:"
-            ls -la
-            exit 1
-          fi
+            # Verify binary was created
+            ls -la "$OUTPUT_NAME"
+            echo "$BINARY_NAME=$OUTPUT_NAME" >> $GITHUB_OUTPUT
+          }
 
-          # Debug: Show post-build state
-          echo "Files after successful build:"
-          ls -la
-
-          # Verify binary was created and is executable
-          ls -la "$OUTPUT_NAME"
-          file "$OUTPUT_NAME"
-
-          echo "binary_name=$OUTPUT_NAME" >> $GITHUB_OUTPUT
+          # Build CLI
+          build_binary "soundtouch-cli" "./cmd/soundtouch-cli"
+          
+          # Build Service
+          build_binary "soundtouch-service" "./cmd/soundtouch-service"
         id: build
 
-      - name: Generate individual checksum
+      - name: Generate individual checksums
         run: |
-          OUTPUT_NAME="${{ steps.build.outputs.binary_name }}"
+          CLI_NAME="${{ steps.build.outputs.soundtouch-cli }}"
+          SVC_NAME="${{ steps.build.outputs.soundtouch-service }}"
 
           # Use atomic operations to avoid conflicts
           TEMP_DIR=$(mktemp -d)
 
-          echo "Building checksums for: $OUTPUT_NAME"
-          echo "Matrix: ${{ matrix.goos }}-${{ matrix.goarch }}"
+          generate_checksums() {
+            local FILE=$1
+            echo "Building checksums for: $FILE"
+            sha256sum "$FILE" > "${TEMP_DIR}/$(basename "$FILE").sha256"
+            sha512sum "$FILE" > "${TEMP_DIR}/$(basename "$FILE").sha512"
+            mv "${TEMP_DIR}/$(basename "$FILE").sha256" "$FILE.sha256"
+            mv "${TEMP_DIR}/$(basename "$FILE").sha512" "$FILE.sha512"
+          }
 
-          # Generate checksums in temp directory first
-          sha256sum "$OUTPUT_NAME" > "${TEMP_DIR}/$(basename "$OUTPUT_NAME").sha256"
-          sha512sum "$OUTPUT_NAME" > "${TEMP_DIR}/$(basename "$OUTPUT_NAME").sha512"
-
-          # Move to final location atomically
-          mv "${TEMP_DIR}/$(basename "$OUTPUT_NAME").sha256" "$OUTPUT_NAME.sha256"
-          mv "${TEMP_DIR}/$(basename "$OUTPUT_NAME").sha512" "$OUTPUT_NAME.sha512"
+          generate_checksums "$CLI_NAME"
+          generate_checksums "$SVC_NAME"
 
           # Cleanup
           rm -rf "$TEMP_DIR"
-
           echo "✅ Checksums generated successfully"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ steps.build.outputs.binary_name }}
+          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm }}
           path: |
-            ${{ steps.build.outputs.binary_name }}
-            ${{ steps.build.outputs.binary_name }}.sha256
-            ${{ steps.build.outputs.binary_name }}.sha512
+            soundtouch-cli-v*
+            soundtouch-service-v*
           retention-days: 1
 
   checksums:
@@ -226,13 +213,13 @@ jobs:
 
           # Debug: Show the downloaded structure
           echo "📁 Downloaded artifact structure:"
-          find . -type f -name "soundtouch-cli-*"
+          ls -R
 
           # Create a collection directory to avoid naming conflicts
           mkdir -p release-files
 
           # Move all files from subdirectories to the collection directory
-          find . -mindepth 2 -type f -name "soundtouch-cli-*" -exec mv {} release-files/ \;
+          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" \) -exec mv {} release-files/ \;
 
           # Remove empty directories
           find . -type d -empty -delete
@@ -242,20 +229,20 @@ jobs:
 
           # Debug: Show flattened structure
           echo "📁 Flattened structure:"
-          ls -la soundtouch-cli-* || echo "No files found matching pattern"
+          ls -la soundtouch-* || echo "No files found matching pattern"
 
           # Generate combined checksums (exclude individual .sha256/.sha512 files)
-          if ls soundtouch-cli-v* 1> /dev/null 2>&1; then
+          if ls soundtouch-* 1> /dev/null 2>&1; then
             # Only checksum the actual binaries, not the .sha256/.sha512 files
-            ls soundtouch-cli-v* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
-            ls soundtouch-cli-v* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
+            ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
+            ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
 
             echo "📋 Generated combined checksums:"
             cat checksums.sha256
 
             # Verify all expected files are present (binaries only, not checksum files)
-            EXPECTED_COUNT=7  # Based on build matrix
-            ACTUAL_COUNT=$(ls soundtouch-cli-v* | grep -v '\.sha256$' | grep -v '\.sha512$' | wc -l)
+            EXPECTED_COUNT=14  # 7 platforms * 2 binaries
+            ACTUAL_COUNT=$(ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | wc -l)
 
             if [[ $ACTUAL_COUNT -ne $EXPECTED_COUNT ]]; then
               echo "❌ Expected $EXPECTED_COUNT binaries, found $ACTUAL_COUNT"
@@ -369,19 +356,20 @@ jobs:
           - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Systematic issue resolution
           - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment examples (Docker, K8s, systemd)
 
-          ## 🔧 CLI Tool
+          ## 🔧 CLI & Service Tools
 
-          Download the CLI tool for your platform from the assets below:
+          Download the tools for your platform from the assets below:
 
+          ### CLI Tool
           \`\`\`bash
           # Quick device discovery
           ./soundtouch-cli -discover
+          \`\`\`
 
-          # Get device information
-          ./soundtouch-cli -host 192.168.1.100 -info
-
-          # Monitor real-time events
-          ./soundtouch-cli -host 192.168.1.100 -nowplaying
+          ### SoundTouch Service
+          \`\`\`bash
+          # Start the service
+          ./soundtouch-service
           \`\`\`
 
           ## 🧪 Tested Hardware
@@ -401,6 +389,8 @@ jobs:
           - macOS (Intel & Apple Silicon)
           - Windows (amd64)
           - FreeBSD (amd64)
+
+          Both `soundtouch-cli` and `soundtouch-service` are included.
 
           ## 🔐 Checksums
 
@@ -454,6 +444,7 @@ jobs:
           prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
           files: |
             release-assets/soundtouch-cli-v*
+            release-assets/soundtouch-service-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
           fail_on_unmatched_files: true
@@ -479,6 +470,7 @@ jobs:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
             release-assets/soundtouch-cli-v*
+            release-assets/soundtouch-service-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
           fail_on_unmatched_files: true
@@ -495,7 +487,7 @@ jobs:
       - name: Notify success
         run: |
           echo "🎉 Release ${{ needs.validate.outputs.version }} completed successfully!"
-          echo "📦 Binaries built for 7 platforms"
+          echo "📦 Binaries built for 7 platforms (CLI and Service)"
           echo "🔐 Checksums generated and verified"
           echo "📋 Release notes automatically generated"
           echo ""

@@ -1,0 +1,9 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Morse 'S' (drei Punkte) -->
+  <circle cx="8" cy="10" r="3" fill="#0055aa"/>
+  <circle cx="16" cy="10" r="3" fill="#0055aa"/>
+  <circle cx="24" cy="10" r="3" fill="#0055aa"/>
+
+  <!-- Morse 'T' (ein langer Strich) -->
+  <rect x="5" y="18" width="22" height="6" rx="2" fill="#ffcc00"/>
+</svg>

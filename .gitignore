@@ -13,6 +13,7 @@ dist/
 
 # Root-level binary executables (exclude built binaries in root)
 /soundtouch-cli
+/soundtouch-service
 /example-mdns
 /example-upnp
 /example-unified
