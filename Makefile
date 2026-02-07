@@ -20,6 +20,8 @@ EXAMPLE_UPNP_NAME=example-upnp
 EXAMPLE_UPNP_PATH=./cmd/$(EXAMPLE_UPNP_NAME)
 SCANNER_NAME=mdns-scanner
 SCANNER_PATH=./cmd/$(SCANNER_NAME)
+FAVICON_GEN_NAME=favicon-gen
+FAVICON_GEN_PATH=./cmd/$(FAVICON_GEN_NAME)
 BUILD_DIR=./build
 
 # Version info
@@ -27,7 +29,7 @@ BUILD_DIR=./build
 
 all: check build
 
-build: build-cli build-service build-examples
+build: build-cli build-service build-examples build-favicon-gen
 
 build-cli:
 	@echo "Building $(BINARY_NAME)..."
@@ -47,6 +49,11 @@ build-examples:
 	$(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME) $(EXAMPLE_UPNP_PATH)
 	@echo "Building $(SCANNER_NAME)..."
 	$(GOBUILD) -o $(BUILD_DIR)/$(SCANNER_NAME) $(SCANNER_PATH)
+
+build-favicon-gen:
+	@echo "Building $(FAVICON_GEN_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) -o $(BUILD_DIR)/$(FAVICON_GEN_NAME) $(FAVICON_GEN_PATH)
 
 build-all: build-linux build-darwin build-windows build-examples-all
 
@@ -226,6 +233,7 @@ help:
 	@echo "  build         - Build the CLI tool, service, and examples"
 	@echo "  build-cli     - Build only the CLI tool"
 	@echo "  build-service - Build only the service"
+	@echo "  build-favicon-gen - Build the favicon generator"
 	@echo "  build-examples - Build only the example programs"
 	@echo "  build-all     - Build for all platforms"
 	@echo "  test          - Run tests"
