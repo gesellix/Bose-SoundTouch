@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -44,6 +45,7 @@ func main() {
 	if dataDir == "" {
 		dataDir = "data"
 	}
+
 	ds := datastore.NewDataStore(dataDir)
 	if err := ds.Initialize(); err != nil {
 		log.Printf("Warning: Failed to initialize datastore: %v", err)
@@ -56,6 +58,7 @@ func main() {
 		if hostname == "" {
 			hostname = "localhost"
 		}
+
 		serverURL = "http://" + strings.ToLower(hostname) + ":" + port
 	}
 
@@ -81,11 +84,13 @@ func main() {
 		currentLp := proxy.NewLoggingProxy(target.String(), redact)
 		currentLp.LogBody = logBody
 		currentLp.LogResponse(res)
+
 		return nil
 	}
 	originalPyDirector := pyProxy.Director
 	pyProxy.Director = func(req *http.Request) {
 		originalPyDirector(req)
+
 		currentLp := proxy.NewLoggingProxy(target.String(), redact)
 		currentLp.LogBody = logBody
 		currentLp.LogRequest(req)
@@ -94,7 +99,7 @@ func main() {
 	// Phase 5: Device Discovery
 	go func() {
 		for {
-			server.DiscoverDevices()
+			server.DiscoverDevices(context.Background())
 			time.Sleep(5 * time.Minute)
 		}
 	}()

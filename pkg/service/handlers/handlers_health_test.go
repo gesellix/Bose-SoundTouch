@@ -30,11 +30,13 @@ func TestHealthEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %v", res.Status)
 	}
+
 	if ct := res.Header.Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("expected application/json content type, got %s", ct)
 	}
@@ -43,12 +45,15 @@ func TestHealthEndpoint(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&hr); err != nil {
 		t.Fatalf("failed to decode health response: %v", err)
 	}
+
 	if hr.Status != "up" {
 		t.Fatalf("expected status 'up', got %q", hr.Status)
 	}
+
 	if hr.Timestamp == "" {
 		t.Error("expected non-empty timestamp")
 	}
+
 	if hr.Version == "" {
 		t.Error("expected non-empty version")
 	}

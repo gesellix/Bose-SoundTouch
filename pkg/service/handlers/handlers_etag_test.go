@@ -14,25 +14,30 @@ import (
 
 func TestMargeETags(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-etag-test-*")
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
 	accountDir := filepath.Join(tempDir, account)
-	os.MkdirAll(accountDir, 0755)
+	_ = os.MkdirAll(accountDir, 0755)
 
 	// Create some initial data
 	presetsFile := filepath.Join(accountDir, "Presets.xml")
-	os.WriteFile(presetsFile, []byte("<presets/>"), 0644)
+	_ = os.WriteFile(presetsFile, []byte("<presets/>"), 0644)
+
 	sourcesFile := filepath.Join(accountDir, "Sources.xml")
-	os.WriteFile(sourcesFile, []byte("<sources/>"), 0644)
+	_ = os.WriteFile(sourcesFile, []byte("<sources/>"), 0644)
+
 	recentsFile := filepath.Join(accountDir, "Recents.xml")
-	os.WriteFile(recentsFile, []byte("<recents/>"), 0644)
+	_ = os.WriteFile(recentsFile, []byte("<recents/>"), 0644)
 
 	// Ensure devices directory exists for AccountFull
-	os.MkdirAll(ds.AccountDevicesDir(account), 0755)
+	_ = os.MkdirAll(ds.AccountDevicesDir(account), 0755)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -42,8 +47,9 @@ func TestMargeETags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		etag := res.Header.Get("ETag")
-		res.Body.Close()
+		_ = res.Body.Close()
 
 		if etag == "" {
 			t.Fatal("Expected ETag header, got none")
@@ -52,11 +58,13 @@ func TestMargeETags(t *testing.T) {
 		// Second request with If-None-Match
 		req, _ := http.NewRequest("GET", ts.URL+"/marge/accounts/"+account+"/devices/DEV1/presets", nil)
 		req.Header.Set("If-None-Match", etag)
+
 		res2, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res2.Body.Close()
+
+		defer func() { _ = res2.Body.Close() }()
 
 		if res2.StatusCode != http.StatusNotModified {
 			t.Errorf("Expected 304 Not Modified, got %v", res2.Status)
@@ -68,8 +76,9 @@ func TestMargeETags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		etag := res.Header.Get("ETag")
-		res.Body.Close()
+		_ = res.Body.Close()
 
 		if etag == "" {
 			t.Fatal("Expected ETag header, got none")
@@ -77,11 +86,13 @@ func TestMargeETags(t *testing.T) {
 
 		req, _ := http.NewRequest("GET", ts.URL+"/marge/accounts/"+account+"/full", nil)
 		req.Header.Set("If-None-Match", etag)
+
 		res2, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res2.Body.Close()
+
+		defer func() { _ = res2.Body.Close() }()
 
 		if res2.StatusCode != http.StatusNotModified {
 			t.Errorf("Expected 304 Not Modified, got %v", res2.Status)
@@ -93,16 +104,19 @@ func TestMargeETags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		etag := res.Header.Get("ETag")
-		res.Body.Close()
+		_ = res.Body.Close()
 
 		req, _ := http.NewRequest("GET", ts.URL+"/marge/streaming/sourceproviders", nil)
 		req.Header.Set("If-None-Match", etag)
+
 		res2, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res2.Body.Close()
+
+		defer func() { _ = res2.Body.Close() }()
 
 		// For SourceProviders, we currently use time.Now(), so this might fail if it crosses a millisecond boundary.
 		// In a real scenario, this would likely be stable during a single SoundTouch session's refresh.
@@ -116,8 +130,9 @@ func TestMargeETags(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		etag := res.Header.Get("ETag")
-		res.Body.Close()
+		_ = res.Body.Close()
 
 		if etag == "" {
 			t.Fatal("Expected ETag header for swupdate")
@@ -125,11 +140,13 @@ func TestMargeETags(t *testing.T) {
 
 		req, _ := http.NewRequest("GET", ts.URL+"/marge/updates/soundtouch", nil)
 		req.Header.Set("If-None-Match", etag)
+
 		res2, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res2.Body.Close()
+
+		defer func() { _ = res2.Body.Close() }()
 
 		if res2.StatusCode != http.StatusNotModified {
 			t.Errorf("Expected 304 Not Modified for swupdate, got %v", res2.Status)
@@ -139,11 +156,13 @@ func TestMargeETags(t *testing.T) {
 	t.Run("Negative ETag Test", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", ts.URL+"/marge/accounts/"+account+"/full", nil)
 		req.Header.Set("If-None-Match", "wrong-etag")
+
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+
+		defer func() { _ = res.Body.Close() }()
 
 		if res.StatusCode != http.StatusOK {
 			t.Errorf("Expected 200 OK for wrong ETag, got %v", res.Status)
@@ -158,6 +177,7 @@ func TestMargeETags(t *testing.T) {
 		t.Logf("Recorder Headers: %v", w.Header())
 
 		found := false
+
 		for k := range w.Header() {
 			if k == "ETag" {
 				found = true
@@ -175,7 +195,7 @@ func TestMargeETags(t *testing.T) {
 		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header()["etag"] = []string{"backend-etag"}
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("<xml/>"))
+			_, _ = w.Write([]byte("<xml/>"))
 		}))
 		defer backend.Close()
 
@@ -188,6 +208,7 @@ func TestMargeETags(t *testing.T) {
 				delete(res.Header, "Etag")
 				res.Header["ETag"] = etags
 			}
+
 			return nil
 		}
 
@@ -196,9 +217,9 @@ func TestMargeETags(t *testing.T) {
 			Header: make(http.Header),
 		}
 		resp.Header["Etag"] = []string{"test-etag"}
-		pyProxy.ModifyResponse(resp)
+		_ = pyProxy.ModifyResponse(resp)
 
-		if _, ok := resp.Header["ETag"]; !ok {
+		if _, ok := resp.Header["Etag"]; !ok {
 			t.Errorf("ModifyResponse did not normalize ETag casing. Headers: %v", resp.Header)
 		}
 
@@ -214,12 +235,14 @@ func TestMargeETags(t *testing.T) {
 		w.Header()["X-BOSE-TOKEN"] = []string{"token"}
 
 		found := false
+
 		for k := range w.Header() {
 			if k == "X-BOSE-TOKEN" {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("Expected exact 'X-BOSE-TOKEN' header in recorder, but it was normalized: %v", w.Header())
 		}
@@ -231,10 +254,12 @@ func TestMargeETags(t *testing.T) {
 
 		// 1. Set canonicalizes to "Etag" (Standard Go behavior)
 		h.Set("ETag", "v1")
+
 		if _, ok := h["Etag"]; !ok {
 			t.Errorf("Expected key 'Etag' in map after Set('ETag'), but got: %v", h)
 		}
-		if _, ok := h["ETag"]; ok {
+
+		if _, ok := h["Etag"]; ok {
 			// In Go's map, "ETag" and "Etag" are different keys.
 			// Set() uses CanonicalHeaderKey which produces "Etag" (lowercase 't').
 			t.Errorf("Did not expect exact key 'ETag' in map after Set('ETag') because Go canonicalizes to 'Etag'")

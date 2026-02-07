@@ -38,9 +38,11 @@ func (lp *LoggingProxy) LogRequest(r *http.Request) {
 	headers := formatHeaders(r.Header, lp.Redact)
 
 	bodyStr := "[HIDDEN]"
+
 	if lp.LogBody && shouldLogBody(r.Header.Get("Content-Type")) {
 		if r.Body != nil {
 			bodyBytes, _ := io.ReadAll(r.Body)
+
 			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			if int64(len(bodyBytes)) > lp.MaxBodySize {
 				bodyStr = string(bodyBytes[:lp.MaxBodySize]) + "... [TRUNCATED]"
@@ -59,9 +61,11 @@ func (lp *LoggingProxy) LogResponse(r *http.Response) {
 	headers := formatHeaders(r.Header, lp.Redact)
 
 	bodyStr := "[HIDDEN]"
+
 	if lp.LogBody && shouldLogBody(r.Header.Get("Content-Type")) {
 		if r.Body != nil {
 			bodyBytes, _ := io.ReadAll(r.Body)
+
 			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			if int64(len(bodyBytes)) > lp.MaxBodySize {
 				bodyStr = string(bodyBytes[:lp.MaxBodySize]) + "... [TRUNCATED]"
@@ -86,8 +90,10 @@ func formatHeaders(h http.Header, redact bool) string {
 		if redact && isSensitive(k) {
 			val = "[REDACTED]"
 		}
+
 		sb.WriteString(fmt.Sprintf("    %s: %s\n", k, val))
 	}
+
 	return strings.TrimSuffix(sb.String(), "\n")
 }
 
@@ -97,11 +103,13 @@ func isSensitive(header string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 func shouldLogBody(contentType string) bool {
 	contentType = strings.ToLower(contentType)
+
 	return strings.Contains(contentType, "xml") ||
 		strings.Contains(contentType, "json") ||
 		strings.Contains(contentType, "text") ||

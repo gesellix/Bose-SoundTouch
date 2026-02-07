@@ -13,7 +13,8 @@ func TestDataStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := NewDataStore(tempDir)
 	account := "test-account"
@@ -24,6 +25,7 @@ func TestDataStore(t *testing.T) {
 		DeviceID: device,
 		Name:     "Test Speaker",
 	}
+
 	err = ds.SaveDeviceInfo(account, device, info)
 	if err != nil {
 		t.Errorf("SaveDeviceInfo failed: %v", err)
@@ -33,6 +35,7 @@ func TestDataStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("GetDeviceInfo failed: %v", err)
 	}
+
 	if loadedInfo.Name != info.Name {
 		t.Errorf("Expected name %s, got %s", info.Name, loadedInfo.Name)
 	}
@@ -45,6 +48,7 @@ func TestDataStore(t *testing.T) {
 			},
 		},
 	}
+
 	err = ds.SavePresets(account, presets)
 	if err != nil {
 		t.Errorf("SavePresets failed: %v", err)
@@ -54,7 +58,8 @@ func TestDataStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("GetPresets failed: %v", err)
 	}
-	if len(loadedPresets) != 1 || loadedPresets[0].ServiceContentItem.Name != "Preset 1" {
+
+	if len(loadedPresets) != 1 || loadedPresets[0].Name != "Preset 1" {
 		t.Errorf("Unexpected presets: %+v", loadedPresets)
 	}
 
@@ -66,6 +71,7 @@ func TestDataStore(t *testing.T) {
 			},
 		},
 	}
+
 	err = ds.SaveRecents(account, recents)
 	if err != nil {
 		t.Errorf("SaveRecents failed: %v", err)
@@ -75,7 +81,8 @@ func TestDataStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("GetRecents failed: %v", err)
 	}
-	if len(loadedRecents) != 1 || loadedRecents[0].ServiceContentItem.Name != "Recent 1" {
+
+	if len(loadedRecents) != 1 || loadedRecents[0].Name != "Recent 1" {
 		t.Errorf("Unexpected recents: %+v", loadedRecents)
 	}
 
@@ -91,29 +98,35 @@ func TestListAllDevices_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := NewDataStore(tempDir)
 
 	// Case 1: DataDir does not exist
-	os.RemoveAll(tempDir)
+	_ = os.RemoveAll(tempDir)
+
 	devices, err := ds.ListAllDevices()
 	if err != nil {
 		t.Errorf("ListAllDevices should not return error when DataDir does not exist, got %v", err)
 	}
+
 	if devices == nil || len(devices) != 0 {
 		t.Errorf("Expected empty slice when DataDir does not exist, got %+v", devices)
 	}
 
 	// Case 2: DataDir is empty
-	os.MkdirAll(tempDir, 0755)
+	_ = os.MkdirAll(tempDir, 0755)
+
 	devices, err = ds.ListAllDevices()
 	if err != nil {
 		t.Errorf("ListAllDevices failed on empty dir: %v", err)
 	}
+
 	if devices == nil {
 		t.Errorf("Expected empty slice (not nil) when no devices exist")
 	}
+
 	if len(devices) != 0 {
 		t.Errorf("Expected 0 devices, got %d", len(devices))
 	}
@@ -124,7 +137,8 @@ func TestListAllDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := NewDataStore(tempDir)
 	account := "default"
@@ -163,7 +177,8 @@ func TestListAllDevices_EmptyDeviceID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := NewDataStore(tempDir)
 	account := "default"
@@ -179,6 +194,7 @@ func TestListAllDevices_EmptyDeviceID(t *testing.T) {
 	if key == "" {
 		key = "127.0.0.1"
 	}
+
 	err = ds.SaveDeviceInfo(account, key, info)
 	if err != nil {
 		t.Fatalf("SaveDeviceInfo failed: %v", err)
@@ -203,7 +219,8 @@ func TestListAllDevices_MultipleEmptyIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := NewDataStore(tempDir)
 	account := "default"
@@ -225,6 +242,7 @@ func TestListAllDevices_MultipleEmptyIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveDeviceInfo 1 failed: %v", err)
 	}
+
 	err = ds.SaveDeviceInfo(account, info2.IPAddress, info2)
 	if err != nil {
 		t.Fatalf("SaveDeviceInfo 2 failed: %v", err)
@@ -245,15 +263,16 @@ func TestListAllDevices_MalformedXML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := NewDataStore(tempDir)
 	account := "default"
 	deviceID := "malformed-device"
 
 	dir := ds.AccountDeviceDir(account, deviceID)
-	os.MkdirAll(dir, 0755)
-	os.WriteFile(filepath.Join(dir, "DeviceInfo.xml"), []byte("<info>not even closed"), 0644)
+	_ = os.MkdirAll(dir, 0755)
+	_ = os.WriteFile(filepath.Join(dir, "DeviceInfo.xml"), []byte("<info>not even closed"), 0644)
 
 	devices, err := ds.ListAllDevices()
 	if err != nil {
@@ -267,7 +286,9 @@ func TestListAllDevices_MalformedXML(t *testing.T) {
 
 func TestConfiguredSources(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "datastore-sources-*")
-	defer os.RemoveAll(tempDir)
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
 	ds := NewDataStore(tempDir)
 	account := "test-acc"
 
@@ -321,14 +342,17 @@ func TestConfiguredSources(t *testing.T) {
 			SourceKeyAccount: "user3",
 		},
 	}
+
 	err = ds.SaveConfiguredSources(account, sources2)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	loadedSources2, err := ds.GetConfiguredSources(account)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if loadedSources2[0].ID == "" {
 		t.Error("Expected auto-assigned ID for source with empty ID")
 	}

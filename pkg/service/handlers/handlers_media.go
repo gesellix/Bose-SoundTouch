@@ -24,16 +24,18 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
 	if !strings.Contains(accept, "text/html") && (strings.Contains(accept, "application/json") || accept == "*/*" || accept == "") {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"Bose": "Can't Brick Us", "service": "Go/Chi"}`)
+		_, _ = fmt.Fprintf(w, `{"Bose": "Can't Brick Us", "service": "Go/Chi"}`)
+
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(indexHTML)
+	_, _ = w.Write(indexHTML)
 }
 
 func (s *Server) HandleMedia() http.HandlerFunc {
 	subFS, _ := fs.Sub(mediaFS, "soundcork/media")
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		fs := http.StripPrefix("/media/", http.FileServer(http.FS(subFS)))
 		fs.ServeHTTP(w, r)

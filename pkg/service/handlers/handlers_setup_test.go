@@ -10,6 +10,7 @@ import (
 
 func TestProxySettingsAPI(t *testing.T) {
 	r, server := setupRouter("http://localhost:8001", nil)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -22,7 +23,8 @@ func TestProxySettingsAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("GET: Expected status OK, got %v", res.Status)
@@ -43,11 +45,13 @@ func TestProxySettingsAPI(t *testing.T) {
 		"log_body": true,
 	}
 	body, _ := json.Marshal(update)
+
 	res, err = http.Post(ts.URL+"/setup/proxy-settings", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("POST: Expected status OK, got %v", res.Status)
@@ -58,10 +62,17 @@ func TestProxySettingsAPI(t *testing.T) {
 		t.Errorf("POST: Server state did not update: redact=%v, logBody=%v", server.proxyRedact, server.proxyLogBody)
 	}
 
-	// 3. Verify GET reflects new state
-	res, _ = http.Get(ts.URL + "/setup/proxy-settings")
-	defer res.Body.Close()
-	json.NewDecoder(res.Body).Decode(&settings)
+	res, err = http.Get(ts.URL + "/setup/proxy-settings")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = res.Body.Close() }()
+
+	if err := json.NewDecoder(res.Body).Decode(&settings); err != nil {
+		t.Fatalf("GET (after update): Failed to decode response: %v", err)
+	}
+
 	if settings["redact"] != false || settings["log_body"] != true {
 		t.Errorf("GET (after update): Unexpected settings: %+v", settings)
 	}

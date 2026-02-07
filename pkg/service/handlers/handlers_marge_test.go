@@ -15,6 +15,7 @@ import (
 
 func TestMargeSourceProviders(t *testing.T) {
 	r, _ := setupRouter("http://localhost:8001", nil)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -22,7 +23,8 @@ func TestMargeSourceProviders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -36,6 +38,7 @@ func TestMargeSourceProviders(t *testing.T) {
 
 func TestMargeSoftwareUpdate(t *testing.T) {
 	r, _ := setupRouter("http://localhost:8001", nil)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -43,7 +46,8 @@ func TestMargeSoftwareUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -59,6 +63,7 @@ func TestMargeSoftwareUpdate(t *testing.T) {
 func TestMargeAccountFull(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
@@ -87,6 +92,7 @@ func TestMargeAccountFull(t *testing.T) {
 	`), 0644)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -94,7 +100,8 @@ func TestMargeAccountFull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -109,6 +116,7 @@ func TestMargeAccountFull(t *testing.T) {
 func TestMargePresets(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
@@ -116,6 +124,7 @@ func TestMargePresets(t *testing.T) {
 	os.MkdirAll(accountDir, 0755)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -149,7 +158,8 @@ func TestMargePresets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -164,6 +174,7 @@ func TestMargePresets(t *testing.T) {
 func TestMargeUpdatePreset(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
@@ -181,6 +192,7 @@ func TestMargeUpdatePreset(t *testing.T) {
 	os.WriteFile(filepath.Join(accountDir, "Presets.xml"), []byte(`<presets></presets>`), 0644)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -197,7 +209,8 @@ func TestMargeUpdatePreset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
@@ -214,6 +227,7 @@ func TestMargeUpdatePreset(t *testing.T) {
 func TestMargeAddRecent(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
@@ -231,6 +245,7 @@ func TestMargeAddRecent(t *testing.T) {
 	os.WriteFile(filepath.Join(accountDir, "Recents.xml"), []byte(`<recents></recents>`), 0644)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -246,7 +261,8 @@ func TestMargeAddRecent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -262,6 +278,7 @@ func TestMargeAddRecent(t *testing.T) {
 func TestMargeAddRemoveDevice(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
@@ -269,6 +286,7 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 	os.MkdirAll(accountDir, 0755)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -294,6 +312,9 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	res.Body.Close()
+
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("AddDevice: Expected status OK, got %v", res.Status)
 	}
@@ -305,10 +326,14 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 
 	// 2. Remove Device
 	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/marge/accounts/"+account+"/devices/NEWDEV", nil)
+
 	res, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	res.Body.Close()
+
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("RemoveDevice: Expected status OK, got %v", res.Status)
 	}
@@ -320,6 +345,7 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 
 func TestMargePowerOn(t *testing.T) {
 	r, _ := setupRouter("http://localhost:8001", nil)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -327,7 +353,8 @@ func TestMargePowerOn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -337,9 +364,11 @@ func TestMargePowerOn(t *testing.T) {
 func TestMargeAdvancedFeatures(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "soundcork-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -348,9 +377,13 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		defer func() { _ = res.Body.Close() }()
+
 		if res.StatusCode != http.StatusOK {
 			t.Errorf("Expected status OK, got %v", res.Status)
 		}
+
 		body, _ := io.ReadAll(res.Body)
 		if !strings.Contains(string(body), "<boseId>123</boseId>") {
 			t.Errorf("Response body missing account ID: %s", body)
@@ -362,9 +395,13 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		defer func() { _ = res.Body.Close() }()
+
 		if res.StatusCode != http.StatusOK {
 			t.Errorf("Expected status OK, got %v", res.Status)
 		}
+
 		token := res.Header.Get("Authorization")
 		if !strings.HasPrefix(token, "Bearer soundcork-local-token-") {
 			t.Errorf("Invalid token header: %s", token)
@@ -388,10 +425,14 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 				</device-landscape>
 			</diagnostic-data>
 		</device-data>`
+
 		res, err := http.Post(ts.URL+"/marge/streaming/support/customersupport", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(payload))
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		res.Body.Close()
+
 		if res.StatusCode != http.StatusOK {
 			t.Errorf("Expected status OK, got %v", res.Status)
 		}
@@ -399,15 +440,19 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		// Verify event was recorded
 		events := ds.GetDeviceEvents("587A628A4042")
 		found := false
+
 		for _, e := range events {
 			if e.Type == "customer-support-upload" {
 				found = true
+
 				if e.Data["firmware"] != "27.0.6" {
 					t.Errorf("Expected firmware 27.0.6, got %v", e.Data["firmware"])
 				}
+
 				break
 			}
 		}
+
 		if !found {
 			t.Error("Customer support event not found in event log")
 		}

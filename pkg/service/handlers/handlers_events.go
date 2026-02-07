@@ -15,11 +15,11 @@ func (s *Server) HandleGetDeviceEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events := s.ds.GetDeviceEvents(deviceID)
-	
+
 	resp := map[string]interface{}{
 		"events": events,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }

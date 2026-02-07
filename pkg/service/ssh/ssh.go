@@ -68,19 +68,21 @@ func (c *Client) getConfig() *ssh.ClientConfig {
 // Run executes a command on the remote host and returns the combined stdout and stderr.
 func (c *Client) Run(command string) (string, error) {
 	config := c.getConfig()
+
 	client, err := ssh.Dial("tcp", c.Host+":22", config)
 	if err != nil {
-		return "", fmt.Errorf("failed to dial: %v", err)
+		return "", fmt.Errorf("failed to dial: %w", err)
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return "", fmt.Errorf("failed to create session: %v", err)
+		return "", fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
 
 	output, err := session.CombinedOutput(command)
+
 	return string(output), err
 }
 
@@ -89,28 +91,29 @@ func (c *Client) Run(command string) (string, error) {
 // For larger files, a proper SCP or SFTP implementation would be better.
 func (c *Client) UploadContent(content []byte, remotePath string) error {
 	config := c.getConfig()
+
 	client, err := ssh.Dial("tcp", c.Host+":22", config)
 	if err != nil {
-		return fmt.Errorf("failed to dial: %v", err)
+		return fmt.Errorf("failed to dial: %w", err)
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return fmt.Errorf("failed to create session: %v", err)
+		return fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
 
 	// Use a pipe to write content to the remote command's stdin
 	stdin, err := session.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stdin pipe: %v", err)
+		return fmt.Errorf("failed to get stdin pipe: %w", err)
 	}
 
 	// Capture stderr to get better error messages
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stderr pipe: %v", err)
+		return fmt.Errorf("failed to get stderr pipe: %w", err)
 	}
 
 	// Read content from stdin and write to the remote file
@@ -118,14 +121,15 @@ func (c *Client) UploadContent(content []byte, remotePath string) error {
 
 	// Start the command
 	if err := session.Start(cmd); err != nil {
-		return fmt.Errorf("failed to start upload command: %v", err)
+		return fmt.Errorf("failed to start upload command: %w", err)
 	}
 
 	// Write content and close stdin
 	_, err = stdin.Write(content)
 	stdin.Close()
+
 	if err != nil {
-		return fmt.Errorf("failed to write content to stdin: %v", err)
+		return fmt.Errorf("failed to write content to stdin: %w", err)
 	}
 
 	// Read stderr in case of failure
@@ -134,7 +138,7 @@ func (c *Client) UploadContent(content []byte, remotePath string) error {
 
 	// Wait for the command to finish
 	if err := session.Wait(); err != nil {
-		return fmt.Errorf("failed to finish upload: %v (stderr: %s)", err, stderrBuf.String())
+		return fmt.Errorf("failed to finish upload: %w (stderr: %s)", err, stderrBuf.String())
 	}
 
 	return nil

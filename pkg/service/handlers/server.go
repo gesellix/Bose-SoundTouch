@@ -32,15 +32,22 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 	}
 }
 
-func (s *Server) DiscoverDevices() {
+func (s *Server) DiscoverDevices(ctx context.Context) {
 	s.discovering = true
+
 	defer func() { s.discovering = false }()
 
 	log.Println("Scanning for Bose devices...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+
+	if ctx == nil {
+		var cancel context.CancelFunc
+
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+	}
 
 	svc := discovery.NewService(10 * time.Second)
+
 	devices, err := svc.DiscoverDevices(ctx)
 	if err != nil {
 		log.Printf("Discovery error: %v", err)
@@ -60,6 +67,7 @@ func (s *Server) DiscoverDevices() {
 				if existingID == "" {
 					existingID = known.IPAddress
 				}
+
 				break
 			}
 		}
@@ -69,6 +77,7 @@ func (s *Server) DiscoverDevices() {
 		if deviceID == "" {
 			// If serial is missing from discovery, try to fetch it from :8090/info
 			log.Printf("Serial number missing for %s at %s, attempting live info fetch...", d.Name, d.Host)
+
 			liveInfo, err := s.sm.GetLiveDeviceInfo(d.Host)
 			if err == nil && liveInfo.SerialNumber != "" {
 				d.SerialNo = liveInfo.SerialNumber
@@ -98,7 +107,7 @@ func (s *Server) DiscoverDevices() {
 		// If we had an IP-based entry and now have a Serial, clean up the IP-based entry
 		if d.SerialNo != "" && existingID != "" && existingID != d.SerialNo {
 			log.Printf("Device %s previously known as %s, migrating to serial-based ID %s", d.Name, existingID, d.SerialNo)
-			s.ds.RemoveDevice("default", existingID)
+			_ = s.ds.RemoveDevice("default", existingID)
 		}
 
 		if err := s.ds.SaveDeviceInfo("default", deviceID, info); err != nil {

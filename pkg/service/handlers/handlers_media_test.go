@@ -10,6 +10,7 @@ import (
 
 func TestRootEndpoint(t *testing.T) {
 	r, _ := setupRouter("http://localhost:8001", nil)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -21,7 +22,8 @@ func TestRootEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -40,6 +42,7 @@ func TestRootEndpoint(t *testing.T) {
 
 func TestRootEndpointJSON(t *testing.T) {
 	r, _ := setupRouter("http://localhost:8001", nil)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -51,7 +54,8 @@ func TestRootEndpointJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)
@@ -63,6 +67,7 @@ func TestRootEndpointJSON(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(res.Body)
+
 	expected := `{"Bose": "Can't Brick Us", "service": "Go/Chi"}`
 	if strings.TrimSpace(string(body)) != expected {
 		t.Errorf("Expected body %s, got %s", expected, string(body))
@@ -71,6 +76,7 @@ func TestRootEndpointJSON(t *testing.T) {
 
 func TestStaticMedia(t *testing.T) {
 	r, _ := setupRouter("http://localhost:8001", nil)
+
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -79,7 +85,8 @@ func TestStaticMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK, got %v", res.Status)

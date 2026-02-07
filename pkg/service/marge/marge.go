@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
-	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
 const DateStr = "2012-09-19T12:43:00.000+00:00"
@@ -24,6 +24,7 @@ func SourceProviders() []models.SourceProvider {
 			UpdatedOn: DateStr,
 		}
 	}
+
 	return providers
 }
 
@@ -36,10 +37,12 @@ func SourceProvidersToXML() ([]byte, error) {
 	sp := SourceProvidersXML{
 		Providers: SourceProviders(),
 	}
+
 	data, err := xml.MarshalIndent(sp, "", "    ")
 	if err != nil {
 		return nil, err
 	}
+
 	return append([]byte(xml.Header), data...), nil
 }
 
@@ -62,6 +65,7 @@ func ConfiguredSourceToXML(cs models.ConfiguredSource) ([]byte, error) {
 	}
 
 	providerID := 0
+
 	for i, p := range constants.Providers {
 		if p == cs.SourceKeyType {
 			providerID = i + 1
@@ -87,12 +91,14 @@ func ConfiguredSourceToXML(cs models.ConfiguredSource) ([]byte, error) {
 
 func GetConfiguredSourceXML(cs models.ConfiguredSource) string {
 	providerID := 0
+
 	for i, p := range constants.Providers {
 		if p == cs.SourceKeyType {
 			providerID = i + 1
 			break
 		}
 	}
+
 	return fmt.Sprintf(`<source id="%s" type="Audio"><createdOn>%s</createdOn><credential type="token">%s</credential><name>%s</name><sourceproviderid>%d</sourceproviderid><sourcename>%s</sourcename><sourcesettings></sourcesettings><updatedOn>%s</updatedOn><username>%s</username></source>`,
 		cs.ID, DateStr, cs.Secret, cs.SourceKeyAccount, providerID, cs.DisplayName, DateStr, cs.SourceKeyAccount)
 }
@@ -102,6 +108,7 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	sources, err := ds.GetConfiguredSources(account)
 	if err != nil {
 		return nil, err
@@ -118,13 +125,16 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 
 		// Content Item Source
 		found := false
+
 		for _, s := range sources {
 			if s.ID == p.SourceID || (s.SourceKeyType == p.Source && s.SourceKeyAccount == p.SourceAccount) {
 				res += GetConfiguredSourceXML(s)
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			// This might happen if source is not found
 		}
@@ -132,6 +142,7 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
 		res += `</preset>`
 	}
+
 	res += `</presets>`
 
 	return append([]byte(xml.Header), []byte(res)...), nil
@@ -142,12 +153,14 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	sources, err := ds.GetConfiguredSources(account)
 	if err != nil {
 		return nil, err
 	}
 
 	res := `<recents>`
+
 	for _, r := range recents {
 		lastPlayed := ""
 		if sec, err := strconv.ParseInt(r.UtcTime, 10, 64); err == nil {
@@ -162,19 +175,23 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<name>%s</name>`, r.Name)
 
 		found := false
+
 		for _, s := range sources {
 			if s.ID == r.SourceID || (s.SourceKeyType == r.Source && s.SourceKeyAccount == r.SourceAccount) {
 				res += GetConfiguredSourceXML(s)
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 		}
 
 		res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
 		res += `</recent>`
 	}
+
 	res += `</recents>`
 
 	return append([]byte(xml.Header), []byte(res)...), nil
@@ -190,6 +207,7 @@ func SoftwareUpdateToXML() string {
 
 func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	devicesDir := ds.AccountDevicesDir(account)
+
 	entries, err := os.ReadDir(devicesDir)
 	if err != nil {
 		return nil, err
@@ -197,10 +215,12 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 
 	res := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><account id="%s"><accountStatus>OK</accountStatus><devices>`, account)
 	lastDeviceID := ""
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			deviceID := entry.Name()
 			lastDeviceID = deviceID
+
 			info, err := ds.GetDeviceInfo(account, deviceID)
 			if err != nil {
 				continue
@@ -229,19 +249,23 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 			res += `</device>`
 		}
 	}
+
 	res += `</devices><mode>global</mode><preferredLanguage>en</preferredLanguage>`
 	res += ProviderSettingsToXML(account)
 
 	if lastDeviceID != "" {
 		sources, _ := ds.GetConfiguredSources(account)
+
 		res += `<sources>`
 		for _, s := range sources {
 			res += GetConfiguredSourceXML(s)
 		}
+
 		res += `</sources>`
 	}
 
 	res += `</account>`
+
 	return []byte(res), nil
 }
 
@@ -250,6 +274,7 @@ func UpdatePreset(ds *datastore.DataStore, account string, device string, preset
 	if err != nil {
 		return nil, err
 	}
+
 	presets, err := ds.GetPresets(account)
 	if err != nil {
 		return nil, err
@@ -267,12 +292,14 @@ func UpdatePreset(ds *datastore.DataStore, account string, device string, preset
 	}
 
 	var matchingSrc *models.ConfiguredSource
+
 	for _, s := range sources {
 		if s.ID == newPresetElem.SourceID {
 			matchingSrc = &s
 			break
 		}
 	}
+
 	if matchingSrc == nil {
 		return nil, fmt.Errorf("invalid account/source")
 	}
@@ -297,6 +324,7 @@ func UpdatePreset(ds *datastore.DataStore, account string, device string, preset
 	for len(presets) < presetNumber {
 		presets = append(presets, models.ServicePreset{})
 	}
+
 	presets[presetNumber-1] = presetObj
 
 	if err := ds.SavePresets(account, presets); err != nil {
@@ -322,6 +350,7 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 	if err != nil {
 		return nil, err
 	}
+
 	recents, err := ds.GetRecents(account)
 	if err != nil {
 		return nil, err
@@ -339,17 +368,20 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 	}
 
 	var matchingSrc *models.ConfiguredSource
+
 	for _, s := range sources {
 		if s.ID == newRecentElem.SourceID {
 			matchingSrc = &s
 			break
 		}
 	}
+
 	if matchingSrc == nil {
 		return nil, fmt.Errorf("invalid account/source")
 	}
 
 	utcTime := time.Now().Unix()
+
 	if newRecentElem.LastPlayedAt != "" {
 		if t, err := time.Parse(time.RFC3339, newRecentElem.LastPlayedAt); err == nil {
 			utcTime = t.Unix()
@@ -358,7 +390,9 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 
 	// Find existing
 	var recentObj *models.ServiceRecent
+
 	createdOn := DateStr
+
 	for i, r := range recents {
 		if r.Source == matchingSrc.SourceKeyType && r.Location == newRecentElem.Location && r.SourceAccount == matchingSrc.SourceKeyAccount {
 			recents[i].UtcTime = strconv.FormatInt(utcTime, 10)
@@ -369,6 +403,7 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 
 			// Move to front
 			recents = append([]models.ServiceRecent{*recentObj}, append(recents[:i], recents[i+1:]...)...)
+
 			break
 		}
 	}
@@ -380,6 +415,7 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 				maxID = id
 			}
 		}
+
 		recentObj = &models.ServiceRecent{
 			ServiceContentItem: models.ServiceContentItem{
 				ID:            strconv.Itoa(maxID + 1),
@@ -395,6 +431,7 @@ func AddRecent(ds *datastore.DataStore, account string, device string, sourceXML
 			UtcTime:  strconv.FormatInt(utcTime, 10),
 		}
 		createdOn = time.Now().Format(time.RFC3339)
+
 		recents = append([]models.ServiceRecent{*recentObj}, recents...)
 		if len(recents) > 10 {
 			recents = recents[:10]

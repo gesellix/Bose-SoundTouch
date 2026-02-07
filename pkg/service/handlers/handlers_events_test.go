@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -47,7 +47,9 @@ func TestEventLog(t *testing.T) {
 		var resp struct {
 			Events []models.DeviceEvent `json:"events"`
 		}
-		json.NewDecoder(w.Body).Decode(&resp)
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
 
 		if len(resp.Events) != 1 {
 			t.Fatalf("Expected 1 event, got %d", len(resp.Events))

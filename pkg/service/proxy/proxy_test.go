@@ -58,6 +58,7 @@ func TestShouldLogBody(t *testing.T) {
 
 func TestLoggingProxy_LogRequest(t *testing.T) {
 	os.Setenv("LOG_PROXY_BODY", "true")
+
 	defer os.Unsetenv("LOG_PROXY_BODY")
 
 	lp := NewLoggingProxy("http://example.com", true)

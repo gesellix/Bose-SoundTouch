@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
 func TestMargeXML(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "marge-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 	account := "123"
 	device := "ABC"
@@ -22,17 +23,18 @@ func TestMargeXML(t *testing.T) {
 		DeviceID: device,
 		Name:     "Living Room",
 	}
-	ds.SaveDeviceInfo(account, device, info)
+	_ = ds.SaveDeviceInfo(account, device, info)
 
 	// Save empty presets/recents to avoid index out of range when stripping header
-	ds.SavePresets(account, []models.ServicePreset{})
-	ds.SaveRecents(account, []models.ServiceRecent{})
+	_ = ds.SavePresets(account, []models.ServicePreset{})
+	_ = ds.SaveRecents(account, []models.ServiceRecent{})
 
 	// Test SourceProvidersToXML
 	xmlData, err := SourceProvidersToXML()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !strings.Contains(string(xmlData), "<sourceProviders>") {
 		t.Errorf("Expected <sourceProviders>, got %s", string(xmlData))
 	}
@@ -42,9 +44,11 @@ func TestMargeXML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if !strings.Contains(string(fullXML), `id="123"`) {
 		t.Errorf("Expected account id 123, got %s", string(fullXML))
 	}
+
 	if !strings.Contains(string(fullXML), "Living Room") {
 		t.Errorf("Expected device name Living Room, got %s", string(fullXML))
 	}
@@ -59,6 +63,7 @@ func TestMargeXML(t *testing.T) {
 func TestAddRecent_TimestampPreservation(t *testing.T) {
 	tempDir, _ := os.MkdirTemp("", "marge-timestamp-test-*")
 	defer os.RemoveAll(tempDir)
+
 	ds := datastore.NewDataStore(tempDir)
 	account := "test-acc"
 	device := "test-dev"
@@ -66,8 +71,8 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 	// 1. Setup configured sources
 	// We need a Sources.xml file in the account directory
 	sourcesPath := ds.AccountDir(account)
-	os.MkdirAll(sourcesPath, 0755)
-	ds.SaveConfiguredSources(account, []models.ConfiguredSource{
+	_ = os.MkdirAll(sourcesPath, 0755)
+	_ = ds.SaveConfiguredSources(account, []models.ConfiguredSource{
 		{
 			ID:               "101",
 			DisplayName:      "Test Source",
@@ -75,7 +80,7 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 			SourceKeyAccount: "test-user",
 		},
 	})
-	ds.SaveRecents(account, []models.ServiceRecent{})
+	_ = ds.SaveRecents(account, []models.ServiceRecent{})
 
 	// 2. Add an initial recent
 	sourceXML := []byte(`
@@ -85,6 +90,7 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
     <location>station-1</location>
     <contentItemType>station</contentItemType>
 </recent>`)
+
 	_, err := AddRecent(ds, account, device, sourceXML)
 	if err != nil {
 		t.Fatalf("AddRecent failed: %v", err)
@@ -94,6 +100,7 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 	if len(recents) != 1 {
 		t.Fatalf("Expected 1 recent, got %d", len(recents))
 	}
+
 	originalCreatedOn := recents[0].UtcTime // It's stored in UtcTime field (unix string) in models.ServiceRecent but the AddRecent return XML uses <createdOn> tag which is DateStr or Now depending on logic.
 	// Actually let's check what AddRecent returns.
 

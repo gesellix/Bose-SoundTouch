@@ -42,6 +42,7 @@ func (s *Server) HandleUsageStats(w http.ResponseWriter, r *http.Request) {
 	if event.Time == "" {
 		event.Time = time.Now().Format(time.RFC3339)
 	}
+
 	s.ds.AddDeviceEvent(stats.DeviceID, event)
 
 	w.WriteHeader(http.StatusOK)
@@ -81,6 +82,7 @@ func (s *Server) HandleErrorStats(w http.ResponseWriter, r *http.Request) {
 	if event.Time == "" {
 		event.Time = time.Now().Format(time.RFC3339)
 	}
+
 	s.ds.AddDeviceEvent(stats.DeviceID, event)
 
 	w.WriteHeader(http.StatusOK)

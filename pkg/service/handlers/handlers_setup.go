@@ -15,23 +15,24 @@ func (s *Server) HandleListDiscoveredDevices(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(devices)
+	_ = json.NewEncoder(w).Encode(devices)
 }
 
 func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
-	go s.DiscoverDevices()
+	go s.DiscoverDevices(r.Context())
+
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(`{"status": "Discovery started"}`))
 }
 
 func (s *Server) HandleGetDiscoveryStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"discovering": s.discovering})
+	_ = json.NewEncoder(w).Encode(map[string]bool{"discovering": s.discovering})
 }
 
 func (s *Server) HandleGetSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"server_url": s.serverURL,
 		"proxy_url":  s.proxyURL,
 	})
@@ -51,7 +52,7 @@ func (s *Server) HandleGetDeviceInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(info)
+	_ = json.NewEncoder(w).Encode(info)
 }
 
 func (s *Server) HandleGetMigrationSummary(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +66,7 @@ func (s *Server) HandleGetMigrationSummary(w http.ResponseWriter, r *http.Reques
 	proxyURL := r.URL.Query().Get("proxy_url")
 
 	options := make(map[string]string)
+
 	for k, v := range r.URL.Query() {
 		if len(v) > 0 && (k == "marge" || k == "stats" || k == "sw_update" || k == "bmx") {
 			options[k] = v[0]
@@ -78,7 +80,7 @@ func (s *Server) HandleGetMigrationSummary(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summary)
+	_ = json.NewEncoder(w).Encode(summary)
 }
 
 func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +88,8 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 	if deviceIP == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"})
+
 		return
 	}
 
@@ -94,6 +97,7 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 	proxyURL := r.URL.Query().Get("proxy_url")
 
 	options := make(map[string]string)
+
 	for k, v := range r.URL.Query() {
 		if len(v) > 0 && (k == "marge" || k == "stats" || k == "sw_update" || k == "bmx") {
 			options[k] = v[0]
@@ -103,12 +107,13 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 	if err := s.sm.MigrateSpeaker(deviceIP, targetURL, proxyURL, options); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()})
+
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Migration started"})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Migration started"})
 }
 
 func (s *Server) HandleEnsureRemoteServices(w http.ResponseWriter, r *http.Request) {
@@ -116,19 +121,21 @@ func (s *Server) HandleEnsureRemoteServices(w http.ResponseWriter, r *http.Reque
 	if deviceIP == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"})
+
 		return
 	}
 
 	if err := s.sm.EnsureRemoteServices(deviceIP); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()})
+
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Remote services ensured"})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Remote services ensured"})
 }
 
 func (s *Server) HandleBackupConfig(w http.ResponseWriter, r *http.Request) {
@@ -136,24 +143,26 @@ func (s *Server) HandleBackupConfig(w http.ResponseWriter, r *http.Request) {
 	if deviceIP == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"})
+
 		return
 	}
 
 	if err := s.sm.BackupConfig(deviceIP); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()})
+
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Backup created"})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Backup created"})
 }
 
 func (s *Server) HandleGetProxySettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{
+	_ = json.NewEncoder(w).Encode(map[string]bool{
 		"redact":   s.proxyRedact,
 		"log_body": s.proxyLogBody,
 	})
@@ -173,5 +182,5 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 	s.proxyLogBody = settings.LogBody
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Proxy settings updated"})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Proxy settings updated"})
 }

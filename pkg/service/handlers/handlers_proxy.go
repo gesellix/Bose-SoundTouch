@@ -54,6 +54,7 @@ func (s *Server) HandleProxyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 
 		lp.LogResponse(res)
+
 		return nil
 	}
 

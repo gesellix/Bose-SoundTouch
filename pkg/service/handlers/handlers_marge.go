@@ -25,13 +25,15 @@ func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header()["ETag"] = []string{etag}
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	etag := strconv.FormatInt(s.ds.GetETagForAccount(account), 10)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
@@ -43,9 +45,10 @@ func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header()["ETag"] = []string{etag}
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
@@ -63,14 +66,15 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 	w.Header()["ETag"] = []string{etag}
 
 	if len(swUpdateXML) > 0 {
-		w.Write(swUpdateXML)
+		_, _ = w.Write(swUpdateXML)
 	} else {
-		w.Write([]byte(marge.SoftwareUpdateToXML()))
+		_, _ = w.Write([]byte(marge.SoftwareUpdateToXML()))
 	}
 }
 
 func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	etag := strconv.FormatInt(s.ds.GetETagForPresets(account), 10)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
@@ -82,9 +86,10 @@ func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header()["ETag"] = []string{etag}
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request) {
@@ -95,23 +100,27 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 	w.Header()["ETag"] = []string{etag}
 
 	presetNumberStr := chi.URLParam(r, "presetNumber")
+
 	presetNumber, err := strconv.Atoi(presetNumberStr)
 	if err != nil {
 		http.Error(w, "Invalid preset number", http.StatusBadRequest)
 		return
 	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusInternalServerError)
 		return
 	}
+
 	data, err := marge.UpdatePreset(s.ds, account, device, presetNumber, body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/xml")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
@@ -126,46 +135,54 @@ func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read body", http.StatusInternalServerError)
 		return
 	}
+
 	data, err := marge.AddRecent(s.ds, account, device, body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/xml")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusInternalServerError)
 		return
 	}
+
 	data, err := marge.AddDeviceToAccount(s.ds, account, body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/xml")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	device := chi.URLParam(r, "device")
 	if err := marge.RemoveDeviceFromAccount(s.ds, account, device); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"ok": true}`))
+	_, _ = w.Write([]byte(`{"ok": true}`))
 }
 
 func (s *Server) HandleMargeProviderSettings(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	w.Header().Set("Content-Type", "application/xml")
-	w.Write([]byte(marge.ProviderSettingsToXML(account)))
+	_, _ = w.Write([]byte(marge.ProviderSettingsToXML(account)))
 }
 
 func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, r *http.Request) {

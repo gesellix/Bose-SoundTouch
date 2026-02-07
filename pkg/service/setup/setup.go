@@ -77,24 +77,26 @@ func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 		infoURL = fmt.Sprintf("http://%s/info", deviceIP)
 		_ = host
 	}
+
 	resp, err := http.Get(infoURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch info from %s: %v", infoURL, err)
+		return nil, fmt.Errorf("failed to fetch info from %s: %w", infoURL, err)
 	}
 	defer resp.Body.Close()
 
 	var infoXML DeviceInfoXML
 	if err := xml.NewDecoder(resp.Body).Decode(&infoXML); err != nil {
-		return nil, fmt.Errorf("failed to decode info XML from %s: %v", infoURL, err)
+		return nil, fmt.Errorf("failed to decode info XML from %s: %w", infoURL, err)
 	}
 
 	for _, comp := range infoXML.Components {
-		if comp.Category == "SCM" {
+		switch comp.Category {
+		case "SCM":
 			infoXML.SoftwareVer = comp.SoftwareVersion
 			if infoXML.SerialNumber == "" {
 				infoXML.SerialNumber = comp.SerialNumber
 			}
-		} else if comp.Category == "PackagedProduct" {
+		case "PackagedProduct":
 			if infoXML.SerialNumber == "" {
 				infoXML.SerialNumber = comp.SerialNumber
 			}
@@ -109,6 +111,7 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 	if targetURL == "" {
 		targetURL = m.ServerURL
 	}
+
 	client := ssh.NewClient(deviceIP)
 
 	summary := &MigrationSummary{
@@ -125,6 +128,7 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 					summary.DeviceModel = d.ProductCode
 					summary.DeviceSerial = d.DeviceSerialNumber
 					summary.FirmwareVersion = d.FirmwareVersion
+
 					break
 				}
 			}
@@ -139,12 +143,15 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 		if infoXML.Name != "" {
 			summary.DeviceName = infoXML.Name
 		}
+
 		if infoXML.Type != "" {
 			summary.DeviceModel = infoXML.Type
 		}
+
 		if infoXML.SerialNumber != "" {
 			summary.DeviceSerial = infoXML.SerialNumber
 		}
+
 		if infoXML.SoftwareVer != "" {
 			summary.FirmwareVersion = infoXML.SoftwareVer
 		}
@@ -165,6 +172,7 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 
 	// 2. Check SSH and read current config
 	var currentConfig string
+
 	path := SoundTouchSdkPrivateCfgPath
 	client = ssh.NewClient(deviceIP)
 
@@ -231,6 +239,7 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 		// Fallback: try base64 if cat returned empty string but file has size > 0
 		if config == "" && fileInfo != "" {
 			fmt.Printf("Cat returned empty for %s, trying base64\n", path)
+
 			b64Config, err := client.Run(fmt.Sprintf("base64 %s", path))
 			if err == nil && b64Config != "" {
 				fmt.Printf("Base64 output for %s (length %d)\n", path, len(b64Config))
@@ -253,8 +262,9 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 
 	xmlContent, err := xml.MarshalIndent(plannedCfg, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal planned XML: %v", err)
+		return nil, fmt.Errorf("failed to marshal planned XML: %w", err)
 	}
+
 	summary.PlannedConfig = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + string(xmlContent)
 
 	// 3. Check for remote services files
@@ -268,6 +278,7 @@ func (m *Manager) GetMigrationSummary(deviceIP string, targetURL string, proxyUR
 		_, err := client.Run(fmt.Sprintf("[ -e %s ]", loc))
 		if err == nil {
 			summary.RemoteServicesFound = append(summary.RemoteServicesFound, loc)
+
 			summary.RemoteServicesEnabled = true
 			if loc != "/tmp/remote_services" {
 				summary.RemoteServicesPersistent = true
@@ -283,6 +294,7 @@ func (m *Manager) MigrateSpeaker(deviceIP string, targetURL string, proxyURL str
 	if targetURL == "" {
 		targetURL = m.ServerURL
 	}
+
 	if err := m.EnsureRemoteServices(deviceIP); err != nil {
 		// Log but continue migration? Or fail? The requirement is "to ensure stable 'remote_services'"
 		// Let's log it.
@@ -312,12 +324,15 @@ func (m *Manager) MigrateSpeaker(deviceIP string, targetURL string, proxyURL str
 				if options["marge"] == "original" {
 					cfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
 				}
+
 				if options["stats"] == "original" {
 					cfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)
 				}
+
 				if options["sw_update"] == "original" {
 					cfg.SwUpdateUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.SwUpdateUrl)
 				}
+
 				if options["bmx"] == "original" {
 					cfg.BmxRegistryUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.BmxRegistryUrl)
 				}
@@ -332,7 +347,7 @@ func (m *Manager) MigrateSpeaker(deviceIP string, targetURL string, proxyURL str
 
 	xmlContent, err := xml.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal XML: %v", err)
+		return fmt.Errorf("failed to marshal XML: %w", err)
 	}
 
 	// Add XML header
@@ -341,6 +356,7 @@ func (m *Manager) MigrateSpeaker(deviceIP string, targetURL string, proxyURL str
 	// 0. Backup original config if it doesn't exist
 	remotePath := SoundTouchSdkPrivateCfgPath
 	rwCmd := "(rw || mount -o remount,rw /)"
+
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
 		fmt.Printf("Backing up original config to %s.original\n", remotePath)
 		// Try to copy existing config to .original, ensuring filesystem is writable
@@ -361,12 +377,12 @@ func (m *Manager) MigrateSpeaker(deviceIP string, targetURL string, proxyURL str
 	// Actually, let's call rw before UploadContent here.
 	_, _ = client.Run(rwCmd)
 	if err := client.UploadContent(xmlContent, remotePath); err != nil {
-		return fmt.Errorf("failed to upload config: %v", err)
+		return fmt.Errorf("failed to upload config: %w", err)
 	}
 
 	// 2. Reboot the speaker (requires 'rw' command first to make filesystem writable)
 	if _, err := client.Run(fmt.Sprintf("%s && reboot", rwCmd)); err != nil {
-		return fmt.Errorf("failed to reboot speaker: %v", err)
+		return fmt.Errorf("failed to reboot speaker: %w", err)
 	}
 
 	return nil
@@ -393,13 +409,13 @@ func (m *Manager) BackupConfig(deviceIP string) error {
 	// Fallback to cat + upload
 	config, err := client.Run(fmt.Sprintf("cat %s", remotePath))
 	if err != nil || config == "" {
-		return fmt.Errorf("failed to read current config: %v", err)
+		return fmt.Errorf("failed to read current config: %w", err)
 	}
 
 	// Ensure rw before upload fallback
 	_, _ = client.Run(rwCmd)
 	if err := client.UploadContent([]byte(config), remotePath+".original"); err != nil {
-		return fmt.Errorf("failed to upload backup config: %v", err)
+		return fmt.Errorf("failed to upload backup config: %w", err)
 	}
 
 	return nil

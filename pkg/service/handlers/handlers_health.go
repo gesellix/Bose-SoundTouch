@@ -17,6 +17,7 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		if info.Main.Version != "" && info.Main.Version != "(devel)" {
 			version = info.Main.Version
 		}
+
 		for _, setting := range info.Settings {
 			switch setting.Key {
 			case "vcs.revision":
@@ -37,14 +38,16 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	if vcsRevision != "" {
 		status["vcs_revision"] = vcsRevision
 	}
+
 	if vcsTime != "" {
 		status["vcs_time"] = vcsTime
 	}
+
 	if vcsModified != "" {
 		status["vcs_modified"] = vcsModified
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status)
 }

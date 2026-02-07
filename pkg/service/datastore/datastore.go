@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 )
 
 func exists(path string) bool {
@@ -29,6 +29,7 @@ func NewDataStore(dataDir string) *DataStore {
 	if dataDir == "" {
 		dataDir = "data"
 	}
+
 	return &DataStore{
 		DataDir:      dataDir,
 		deviceEvents: make(map[string][]models.DeviceEvent),
@@ -49,6 +50,7 @@ func (ds *DataStore) AccountDeviceDir(account, device string) string {
 
 func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDeviceInfo, error) {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.DeviceInfoFile)
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -82,10 +84,11 @@ func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDevic
 	}
 
 	for _, comp := range info.Components {
-		if comp.Category == "SCM" {
+		switch comp.Category {
+		case "SCM":
 			deviceInfo.FirmwareVersion = comp.SoftwareVersion
 			deviceInfo.DeviceSerialNumber = comp.SerialNumber
-		} else if comp.Category == "PackagedProduct" {
+		case "PackagedProduct":
 			deviceInfo.ProductSerialNumber = comp.SerialNumber
 		}
 	}
@@ -130,14 +133,17 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 			}
 
 			devicesDir := filepath.Join(dir, acc.Name(), constants.DevicesDir)
+
 			deviceEntries, err := os.ReadDir(devicesDir)
 			if err != nil {
 				continue
 			}
 
 			for _, dev := range deviceEntries {
-				var info *models.ServiceDeviceInfo
-				var err error
+				var (
+					info *models.ServiceDeviceInfo
+					err  error
+				)
 
 				if !dev.IsDir() {
 					if dev.Name() == constants.DeviceInfoFile {
@@ -156,6 +162,7 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 					if key == "" {
 						key = info.IPAddress
 					}
+
 					if !seenIDs[key] {
 						devices = append(devices, *info)
 						seenIDs[key] = true
@@ -202,10 +209,11 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 	}
 
 	for _, comp := range info.Components {
-		if comp.Category == "SCM" {
+		switch comp.Category {
+		case "SCM":
 			deviceInfo.FirmwareVersion = comp.SoftwareVersion
 			deviceInfo.DeviceSerialNumber = comp.SerialNumber
-		} else if comp.Category == "PackagedProduct" {
+		case "PackagedProduct":
 			deviceInfo.ProductSerialNumber = comp.SerialNumber
 		}
 	}
@@ -221,6 +229,7 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 
 func (ds *DataStore) GetPresets(account string) ([]models.ServicePreset, error) {
 	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -292,8 +301,10 @@ func (ds *DataStore) SavePresets(account string, presets []models.ServicePreset)
 	}
 
 	var px PresetsXML
+
 	for _, p := range presets {
 		var pxml PresetXML
+
 		pxml.ID = p.ID
 		pxml.CreatedOn = p.CreatedOn
 		pxml.UpdatedOn = p.UpdatedOn
@@ -313,11 +324,13 @@ func (ds *DataStore) SavePresets(account string, presets []models.ServicePreset)
 	}
 
 	header := []byte(xml.Header)
+
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
 func (ds *DataStore) GetRecents(account string) ([]models.ServiceRecent, error) {
 	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -389,8 +402,10 @@ func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent)
 	}
 
 	var rx RecentsXML
+
 	for _, r := range recents {
 		var rxml RecentXML
+
 		rxml.ID = r.ID
 		rxml.DeviceID = r.DeviceID
 		rxml.UtcTime = r.UtcTime
@@ -398,10 +413,12 @@ func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent)
 		rxml.ContentItem.Type = r.Type
 		rxml.ContentItem.Location = r.Location
 		rxml.ContentItem.SourceAccount = r.SourceAccount
+
 		rxml.ContentItem.IsPresetable = r.IsPresetable
 		if rxml.ContentItem.IsPresetable == "" {
 			rxml.ContentItem.IsPresetable = "true"
 		}
+
 		rxml.ContentItem.ItemName = r.Name
 		rxml.ContentItem.ContainerArt = r.ContainerArt
 		rx.Recents = append(rx.Recents, rxml)
@@ -413,6 +430,7 @@ func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent)
 	}
 
 	header := []byte(xml.Header)
+
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
@@ -420,10 +438,12 @@ func (ds *DataStore) SaveDeviceInfo(account string, device string, info *models.
 	if device == "" {
 		return fmt.Errorf("device ID/name cannot be empty")
 	}
+
 	dir := ds.AccountDeviceDir(account, device)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
+
 	path := filepath.Join(dir, constants.DeviceInfoFile)
 
 	type ComponentXML struct {
@@ -451,10 +471,12 @@ func (ds *DataStore) SaveDeviceInfo(account string, device string, info *models.
 	// Python: f"{type} {module_type}"
 	devType := info.ProductCode
 	moduleType := ""
+
 	for i := 0; i < len(info.ProductCode); i++ {
 		if info.ProductCode[i] == ' ' {
 			devType = info.ProductCode[:i]
 			moduleType = info.ProductCode[i+1:]
+
 			break
 		}
 	}
@@ -489,6 +511,7 @@ func (ds *DataStore) SaveDeviceInfo(account string, device string, info *models.
 	}
 
 	header := []byte(xml.Header)
+
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
@@ -499,6 +522,7 @@ func (ds *DataStore) RemoveDevice(account string, device string) error {
 
 func (ds *DataStore) GetConfiguredSources(account string) ([]models.ConfiguredSource, error) {
 	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -522,13 +546,16 @@ func (ds *DataStore) GetConfiguredSources(account string) ([]models.ConfiguredSo
 	}
 
 	var sources []models.ConfiguredSource
+
 	lastID := 100001
+
 	for _, s := range sourcesWrap.Sources {
 		id := s.ID
 		if id == "" {
 			id = strconv.Itoa(lastID)
 			lastID++
 		}
+
 		sources = append(sources, models.ConfiguredSource{
 			DisplayName:      s.DisplayName,
 			ID:               id,
@@ -544,7 +571,9 @@ func (ds *DataStore) GetConfiguredSources(account string) ([]models.ConfiguredSo
 
 func (ds *DataStore) SaveConfiguredSources(account string, sources []models.ConfiguredSource) error {
 	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
-	os.MkdirAll(filepath.Dir(path), 0755)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
 
 	type sourceXML struct {
 		DisplayName string `xml:"displayName,attr"`
@@ -563,6 +592,7 @@ func (ds *DataStore) SaveConfiguredSources(account string, sources []models.Conf
 	}
 
 	wrap := sourcesWrap{}
+
 	for _, s := range sources {
 		sx := sourceXML{
 			DisplayName: s.DisplayName,
@@ -581,6 +611,7 @@ func (ds *DataStore) SaveConfiguredSources(account string, sources []models.Conf
 	}
 
 	header := []byte(xml.Header)
+
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
@@ -606,28 +637,34 @@ func (ds *DataStore) Initialize() error {
 
 func (ds *DataStore) GetETagForPresets(account string) int64 {
 	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return 0
 	}
+
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
 func (ds *DataStore) GetETagForSources(account string) int64 {
 	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return 0
 	}
+
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
 func (ds *DataStore) GetETagForRecents(account string) int64 {
 	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return 0
 	}
+
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
@@ -635,37 +672,50 @@ func (ds *DataStore) GetETagForAccount(account string) int64 {
 	e1 := ds.GetETagForPresets(account)
 	e2 := ds.GetETagForSources(account)
 	e3 := ds.GetETagForRecents(account)
+
 	max := e1
 	if e2 > max {
 		max = e2
 	}
+
 	if e3 > max {
 		max = e3
 	}
+
 	return max
 }
 
 func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "usage")
-	os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
 	filename := fmt.Sprintf("%d_%s.json", time.Now().UnixNano(), stats.DeviceID)
 	path := filepath.Join(dir, filename)
+
 	data, err := json.MarshalIndent(stats, "", "  ")
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(path, data, 0644)
 }
 
 func (ds *DataStore) SaveErrorStats(stats models.ErrorStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "error")
-	os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
 	filename := fmt.Sprintf("%d_%s.json", time.Now().UnixNano(), stats.DeviceID)
 	path := filepath.Join(dir, filename)
+
 	data, err := json.MarshalIndent(stats, "", "  ")
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(path, data, 0644)
 }
 
@@ -680,6 +730,7 @@ func (ds *DataStore) AddDeviceEvent(deviceID string, event models.DeviceEvent) {
 	if len(events) > 100 {
 		events = events[len(events)-100:]
 	}
+
 	ds.deviceEvents[deviceID] = events
 }
 
@@ -695,5 +746,6 @@ func (ds *DataStore) GetDeviceEvents(deviceID string) []models.DeviceEvent {
 	// Return a copy to avoid race conditions if the caller modifies it
 	copiedEvents := make([]models.DeviceEvent, len(events))
 	copy(copiedEvents, events)
+
 	return copiedEvents
 }

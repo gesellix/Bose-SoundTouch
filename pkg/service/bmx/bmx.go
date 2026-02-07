@@ -21,11 +21,13 @@ const (
 
 func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, stationID)
+
 	resp, err := http.Get(describeURL)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -50,11 +52,13 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	station := opml.Body.Outline.Station
 
 	streamReq := fmt.Sprintf(TuneInStream, stationID)
+
 	streamResp, err := http.Get(streamReq)
 	if err != nil {
 		return nil, err
 	}
-	defer streamResp.Body.Close()
+
+	defer func() { _ = streamResp.Body.Close() }()
 
 	streamBody, err := io.ReadAll(streamResp.Body)
 	if err != nil {
@@ -76,11 +80,13 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	bmxReporting := "/v1/report?" + bmxReportingQS.Encode()
 
 	var streams []models.Stream
+
 	for _, sURL := range streamURLList {
 		sURL = strings.TrimSpace(sURL)
 		if sURL == "" {
 			continue
 		}
+
 		streams = append(streams, models.Stream{
 			Links: &models.Links{
 				BmxReporting: &models.Link{Href: bmxReporting},
@@ -123,9 +129,11 @@ func TuneInPodcastInfo(podcastID string, encodedName string) (*models.BmxPodcast
 	if err != nil {
 		nameBytes, err = base64.StdEncoding.DecodeString(encodedName)
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	name := string(nameBytes)
 
 	track := models.Track{
@@ -152,11 +160,13 @@ func TuneInPodcastInfo(podcastID string, encodedName string) (*models.BmxPodcast
 
 func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, podcastID)
+
 	resp, err := http.Get(describeURL)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -184,11 +194,13 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 	topic := opml.Body.Outline.Topic
 
 	streamReq := fmt.Sprintf(TuneInStream, podcastID)
+
 	streamResp, err := http.Get(streamReq)
 	if err != nil {
 		return nil, err
 	}
-	defer streamResp.Body.Close()
+
+	defer func() { _ = streamResp.Body.Close() }()
 
 	streamBody, err := io.ReadAll(streamResp.Body)
 	if err != nil {
@@ -210,11 +222,13 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 	bmxReporting := "/v1/report?" + bmxReportingQS.Encode()
 
 	var streams []models.Stream
+
 	for _, sURL := range streamURLList {
 		sURL = strings.TrimSpace(sURL)
 		if sURL == "" {
 			continue
 		}
+
 		streams = append(streams, models.Stream{
 			Links: &models.Links{
 				BmxReporting: &models.Link{Href: bmxReporting},
@@ -264,6 +278,7 @@ func PlayCustomStream(data string) (*models.BmxPlaybackResponse, error) {
 	if err != nil {
 		jsonStr, err = base64.StdEncoding.DecodeString(data)
 	}
+
 	if err != nil {
 		return nil, err
 	}

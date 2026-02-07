@@ -15,11 +15,13 @@ import (
 func main() {
 	// 1. Trigger a discovery scan
 	fmt.Println("Triggering discovery scan...")
+
 	resp, err := http.Post("http://localhost:8000/setup/discover", "application/json", nil)
 	if err != nil {
 		log.Fatalf("Failed to trigger discovery: %v\nMake sure soundtouch-service is running on localhost:8000", err)
 	}
-	resp.Body.Close()
+
+	_ = resp.Body.Close()
 
 	// Wait a bit for discovery to find some devices
 	fmt.Println("Waiting 5 seconds for discovery...")
@@ -27,11 +29,13 @@ func main() {
 
 	// 2. List discovered devices
 	fmt.Println("Fetching discovered devices...")
+
 	resp, err = http.Get("http://localhost:8000/setup/devices")
 	if err != nil {
 		log.Fatalf("Failed to fetch devices: %v", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -49,6 +53,7 @@ func main() {
 	}
 
 	fmt.Printf("Discovered %d devices:\n", len(devices))
+
 	for _, d := range devices {
 		fmt.Printf("- %s (IP: %s, Model: %s)\n", d["name"], d["ip_address"], d["product_code"])
 	}

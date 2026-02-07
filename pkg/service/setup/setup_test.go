@@ -13,6 +13,7 @@ func TestGetLiveDeviceInfo(t *testing.T) {
 		if r.URL.Path != "/info" {
 			t.Errorf("Expected to request /info, got %s", r.URL.Path)
 		}
+
 		w.Header().Set("Content-Type", "application/xml")
 		fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
 <info deviceID="08DF1F0BA325">
@@ -34,8 +35,8 @@ func TestGetLiveDeviceInfo(t *testing.T) {
 	host := server.Listener.Addr().String()
 
 	manager := NewManager("http://localhost:8000", nil)
-	info, err := manager.GetLiveDeviceInfo(host)
 
+	info, err := manager.GetLiveDeviceInfo(host)
 	if err != nil {
 		t.Fatalf("Failed to get live device info: %v", err)
 	}
@@ -43,9 +44,11 @@ func TestGetLiveDeviceInfo(t *testing.T) {
 	if info.Name != "Test Speaker" {
 		t.Errorf("Expected Name 'Test Speaker', got '%s'", info.Name)
 	}
+
 	if info.SoftwareVer != "19.0.5" {
 		t.Errorf("Expected SoftwareVer '19.0.5', got '%s'", info.SoftwareVer)
 	}
+
 	if info.SerialNumber != "08DF1F0BA325" {
 		t.Errorf("Expected SerialNumber '08DF1F0BA325', got '%s'", info.SerialNumber)
 	}
@@ -65,6 +68,7 @@ func TestGetMigrationSummary_SSHFailure(t *testing.T) {
 		if summary.SSHSuccess {
 			t.Errorf("Expected SSHSuccess to be false for closed port, got true")
 		}
+
 		if summary.CurrentConfig == "" {
 			t.Errorf("Expected CurrentConfig to contain error message, got empty string")
 		}
