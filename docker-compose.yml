@@ -1,0 +1,15 @@
+services:
+  soundtouch-service:
+    build: .
+    container_name: soundtouch-service
+    # network_mode: host # Linux only, required for discovery
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATA_DIR=/app/data
+      - LOG_PROXY_BODY=false
+      - REDACT_PROXY_LOGS=true
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

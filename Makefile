@@ -12,6 +12,8 @@ GOFMT=gofmt
 # Build parameters
 BINARY_NAME=soundtouch-cli
 BINARY_PATH=./cmd/$(BINARY_NAME)
+SERVICE_NAME=soundtouch-service
+SERVICE_PATH=./cmd/$(SERVICE_NAME)
 EXAMPLE_MDNS_NAME=example-mdns
 EXAMPLE_MDNS_PATH=./cmd/$(EXAMPLE_MDNS_NAME)
 EXAMPLE_UPNP_NAME=example-upnp
@@ -25,12 +27,17 @@ BUILD_DIR=./build
 
 all: check build
 
-build: build-cli build-examples
+build: build-cli build-service build-examples
 
 build-cli:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(BINARY_PATH)
+
+build-service:
+	@echo "Building $(SERVICE_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME) $(SERVICE_PATH)
 
 build-examples:
 	@echo "Building $(EXAMPLE_MDNS_NAME)..."
@@ -47,17 +54,21 @@ build-linux:
 	@echo "Building for Linux..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(BINARY_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-linux-amd64 $(SERVICE_PATH)
 
 build-darwin:
 	@echo "Building for macOS..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(BINARY_PATH)
 	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(BINARY_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-amd64 $(SERVICE_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-arm64 $(SERVICE_PATH)
 
 build-windows:
 	@echo "Building for Windows..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(BINARY_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-windows-amd64.exe $(SERVICE_PATH)
 
 build-examples-all:
 	@echo "Building examples for all platforms..."
@@ -107,6 +118,18 @@ tidy:
 dev: build-cli
 	@echo "Starting development CLI..."
 	$(BUILD_DIR)/$(BINARY_NAME) -help
+
+dev-service: build-service
+	@echo "Starting development service..."
+	$(BUILD_DIR)/$(SERVICE_NAME)
+
+dev-service-proxy: build-service
+	@echo "Starting development service with proxy..."
+	@if [ -z "$(PROXY_URL)" ]; then \
+		echo "Usage: make dev-service-proxy PROXY_URL=http://localhost:8001"; \
+		exit 1; \
+	fi
+	PYTHON_BACKEND_URL=$(PROXY_URL) $(BUILD_DIR)/$(SERVICE_NAME)
 
 dev-discover: build-cli
 	@echo "Running device discovery..."
@@ -164,9 +187,10 @@ dev-scan-http: build-examples
 	@echo "Scanning for HTTP mDNS services..."
 	$(BUILD_DIR)/$(SCANNER_NAME) -service _http._tcp -v
 
-install: build-cli
-	@echo "Installing $(BINARY_NAME) to $(GOPATH)/bin..."
+install: build-cli build-service
+	@echo "Installing binaries to $(GOPATH)/bin..."
 	cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
+	cp $(BUILD_DIR)/$(SERVICE_NAME) $(GOPATH)/bin/
 
 clean:
 	@echo "Cleaning..."
@@ -177,7 +201,7 @@ clean:
 release: clean check build-all
 	@echo "Creating release archive..."
 	@mkdir -p $(BUILD_DIR)/release
-	@for binary in $(BUILD_DIR)/$(BINARY_NAME)-*; do \
+	@for binary in $(BUILD_DIR)/$(BINARY_NAME)-* $(BUILD_DIR)/$(SERVICE_NAME)-*; do \
 		if [ -f "$$binary" ]; then \
 			cp "$$binary" $(BUILD_DIR)/release/; \
 		fi \
@@ -186,16 +210,22 @@ release: clean check build-all
 
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t soundtouch-go:$(VERSION) .
+	docker build -t soundtouch-service .
 
-docker-dev: docker-build
-	@echo "Running development container..."
-	docker run --rm -it --network host soundtouch-go:$(VERSION)
+docker-run-host:
+	@echo "Running Docker container..."
+	@echo "Note: --network host is used for discovery (Linux only). For macOS/Windows use port mapping."
+	docker run --rm -it --network host -v $$(pwd)/data:/app/data soundtouch-service
+
+docker-run-ports:
+	@echo "Running Docker container with port mapping (discovery will be manual)..."
+	docker run --rm -it -p 8000:8000 -v $$(pwd)/data:/app/data soundtouch-service
 
 help:
 	@echo "Available targets:"
-	@echo "  build         - Build the CLI tool and examples"
+	@echo "  build         - Build the CLI tool, service, and examples"
 	@echo "  build-cli     - Build only the CLI tool"
+	@echo "  build-service - Build only the service"
 	@echo "  build-examples - Build only the example programs"
 	@echo "  build-all     - Build for all platforms"
 	@echo "  test          - Run tests"
@@ -206,6 +236,8 @@ help:
 	@echo "  lint          - Run golangci-lint"
 	@echo "  tidy          - Tidy dependencies"
 	@echo "  dev           - Build and show CLI help"
+	@echo "  dev-service   - Build and run service locally"
+	@echo "  dev-service-proxy - Build and run service with proxy (PROXY_URL=url required)"
 	@echo "  dev-discover  - Build and run device discovery"
 	@echo "  dev-info      - Build and get device info (HOST=ip required)"
 	@echo "  dev-mdns      - Build and run mDNS discovery example"
@@ -217,14 +249,17 @@ help:
 	@echo "  dev-scan-all     - Scan all mDNS services on network"
 	@echo "  dev-scan-soundtouch - Scan specifically for SoundTouch mDNS services"
 	@echo "  dev-scan-http    - Scan for HTTP mDNS services"
-	@echo "  install       - Install binary to GOPATH/bin"
+	@echo "  install       - Install binaries to GOPATH/bin"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  release       - Create release binaries"
 	@echo "  docker-build  - Build Docker image"
-	@echo "  docker-dev    - Run development container"
+	@echo "  docker-run-host  - Run container with host networking (Linux discovery)"
+	@echo "  docker-run-ports - Run container with port mapping (macOS/Windows/No discovery)"
 	@echo "  help          - Show this help message"
 	@echo ""
 	@echo "Examples:"
+	@echo "  make dev-service"
+	@echo "  make dev-service-proxy PROXY_URL=http://192.168.1.50:8001"
 	@echo "  make dev-discover"
 	@echo "  make dev-info HOST=192.168.1.10"
 	@echo "  make dev-mdns"

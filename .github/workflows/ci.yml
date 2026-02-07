@@ -218,10 +218,51 @@ jobs:
           go run test_import.go
           rm test_import.go
 
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=pr
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   notify:
     name: Notify Status
     runs-on: ubuntu-latest
-    needs: [test, lint, build, security, docs]
+    needs: [test, lint, build, security, docs, docker]
     if: always()
     permissions:
       statuses: write
@@ -234,7 +275,8 @@ jobs:
                 "${{ needs.lint.result }}" == "success" && \
                 "${{ needs.build.result }}" == "success" && \
                 "${{ needs.security.result }}" == "success" && \
-                "${{ needs.docs.result }}" == "success" ]]; then
+                "${{ needs.docs.result }}" == "success" && \
+                "${{ needs.docker.result }}" == "success" ]]; then
             echo "✅ All CI checks passed!"
             echo "status=success" >> $GITHUB_OUTPUT
           else
@@ -244,6 +286,7 @@ jobs:
             echo "Build: ${{ needs.build.result }}"
             echo "Security: ${{ needs.security.result }}"
             echo "Docs: ${{ needs.docs.result }}"
+            echo "Docker: ${{ needs.docker.result }}"
             echo "status=failure" >> $GITHUB_OUTPUT
           fi
         id: status

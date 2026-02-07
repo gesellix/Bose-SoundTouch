@@ -1,0 +1,33 @@
+# .dockerignore
+
+# Exclude large firmware files and archives
+firmware/
+data/
+
+# Exclude local build artifacts
+build/
+soundtouch-cli
+soundtouch-service
+
+# Exclude Go specific files that aren't needed for build context
+# (go.mod and go.sum ARE needed, but other local stuff isn't)
+.cache/
+vendor/
+
+# Exclude IDE and system files
+.idea/
+.vscode/
+.DS_Store
+
+# Exclude Git history
+.git/
+.gitignore
+
+# Exclude documentation and other non-essential files for the binary build
+docs/
+examples/
+scripts/
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+LICENSE
+README.md

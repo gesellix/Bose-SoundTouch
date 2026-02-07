@@ -97,12 +97,68 @@ The `soundtouch-service` is a local server that emulates Bose's cloud services, 
 # Install the service
 go install github.com/gesellix/bose-soundtouch/cmd/soundtouch-service@latest
 
-# Start with default settings (http://localhost:8000)
+# Start with default settings (http://localhost:8000, proxying to http://localhost:8001)
 soundtouch-service
 
 # Or configure with environment variables
-PORT=9000 DATA_DIR=/my/data soundtouch-service
+PORT=9000 PYTHON_BACKEND_URL=http://your-python-backend:8001 DATA_DIR=/my/data soundtouch-service
 ```
+
+#### Running with Docker
+
+You can also run the SoundTouch service using Docker or Docker Compose.
+
+> **Note for macOS and Windows users**: The `--net host` option is only supported on Linux. On macOS and Windows, service discovery (mDNS, UPnP) will not work automatically within the container. You will need to manually enter your device's IP address in the management UI, and the service will communicate with it directly.
+
+##### Using Docker
+
+**Linux (with host networking for discovery):**
+```bash
+docker run -d \
+  --name soundtouch-service \
+  --network host \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/gesellix/bose-soundtouch:latest
+```
+
+**macOS / Windows (with port mapping):**
+```bash
+docker run -d \
+  --name soundtouch-service \
+  -p 8000:8000 \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/gesellix/bose-soundtouch:latest
+```
+
+##### Using Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  soundtouch-service:
+    image: ghcr.io/gesellix/bose-soundtouch:latest
+    container_name: soundtouch-service
+    # Linux users: use host networking for device discovery
+    # network_mode: host
+    # macOS/Windows users: use port mapping (discovery will be manual)
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+```
+
+And run:
+
+```bash
+docker-compose up -d
+```
+
+> **Note**: `--network host` is required for device discovery via UPnP and mDNS to work correctly within the container.
 
 #### Device Migration Example
 
