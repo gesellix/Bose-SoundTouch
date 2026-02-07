@@ -449,3 +449,35 @@ func (m *Manager) EnsureRemoteServices(deviceIP string) error {
 
 	return fmt.Errorf("failed to enable remote services in any of the locations: %v", locations)
 }
+
+// RemoveRemoteServices removes remote services from the device by deleting the known remote_services files.
+func (m *Manager) RemoveRemoteServices(deviceIP string) error {
+	client := ssh.NewClient(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+
+	locations := []string{
+		"/etc/remote_services",
+		"/mnt/nv/remote_services",
+		"/tmp/remote_services",
+	}
+
+	var errors []error
+
+	for _, loc := range locations {
+		// Try to make filesystem writable and remove the file
+		_, err := client.Run(fmt.Sprintf("%s && rm -f %s", rwCmd, loc))
+		if err != nil {
+			// If rw && rm failed, try just rm (e.g. for /tmp)
+			_, err = client.Run(fmt.Sprintf("rm -f %s", loc))
+			if err != nil {
+				errors = append(errors, fmt.Errorf("failed to remove %s: %w", loc, err))
+			}
+		}
+	}
+
+	if len(errors) == len(locations) {
+		return fmt.Errorf("failed to remove remote services from any location: %v", errors)
+	}
+
+	return nil
+}

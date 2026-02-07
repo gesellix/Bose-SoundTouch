@@ -165,6 +165,7 @@ func main() {
 		r.Get("/summary/{deviceIP}", server.HandleGetMigrationSummary)
 		r.Post("/migrate/{deviceIP}", server.HandleMigrateDevice)
 		r.Post("/ensure-remote-services/{deviceIP}", server.HandleEnsureRemoteServices)
+		r.Post("/remove-remote-services/{deviceIP}", server.HandleRemoveRemoteServices)
 		r.Post("/backup/{deviceIP}", server.HandleBackupConfig)
 		r.Get("/proxy-settings", server.HandleGetProxySettings)
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)

@@ -48,6 +48,8 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 	r.Route("/setup", func(r chi.Router) {
 		r.Get("/proxy-settings", server.HandleGetProxySettings)
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)
+		r.Post("/ensure-remote-services/{deviceIP}", server.HandleEnsureRemoteServices)
+		r.Post("/remove-remote-services/{deviceIP}", server.HandleRemoveRemoteServices)
 	})
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

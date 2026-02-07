@@ -119,7 +119,8 @@
         </div>
         <div style="margin-top: 15px;">
             <button id="confirm-migrate-btn" style="background-color: #4CAF50; color: white; border: none; padding: 10px 20px;">Confirm Migration & Reboot</button>
-            <button id="ensure-remote-btn" style="background-color: #2196F3; color: white; border: none; padding: 10px 20px;">Ensure Persistent Remote Services</button>
+            <button id="ensure-remote-btn" style="background-color: #2196F3; color: white; border: none; padding: 10px 20px;">Enable Persistent Remote Services</button>
+            <button id="remove-remote-btn" style="background-color: #f44336; color: white; border: none; padding: 10px 20px;">Remove Persistent Remote Services</button>
             <button onclick="document.getElementById('migration-summary').style.display='none'" style="padding: 10px 20px;">Cancel</button>
         </div>
     </div>
@@ -346,6 +347,10 @@
                 remoteBtn.onclick = () => ensureRemoteServices(ip);
                 remoteBtn.disabled = !summary.ssh_success;
 
+                const removeRemoteBtn = document.getElementById('remove-remote-btn');
+                removeRemoteBtn.onclick = () => removeRemoteServices(ip);
+                removeRemoteBtn.disabled = !summary.ssh_success || !summary.remote_services_enabled;
+
                 const backupBtn = document.getElementById('backup-config-btn');
                 backupBtn.onclick = () => backupConfig(ip);
                 backupBtn.disabled = !summary.ssh_success || !!summary.original_config;
@@ -435,6 +440,38 @@
             } catch (error) {
                 statusDiv.style.backgroundColor = '#ffcccc';
                 statusDiv.innerHTML = 'Error ensuring remote services for ' + ip + ': ' + error;
+            }
+        }
+
+        async function removeRemoteServices(ip) {
+            if (!ip) {
+                alert('Please enter a valid IP address.');
+                return;
+            }
+            if (!confirm('Are you sure you want to remove remote services from ' + ip + '?')) {
+                return;
+            }
+            const summaryDiv = document.getElementById('migration-summary');
+            summaryDiv.style.display = 'none';
+
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.display = 'block';
+            statusDiv.style.backgroundColor = '#ffffcc';
+            statusDiv.innerHTML = 'Removing remote services for ' + ip + '...';
+
+            try {
+                const response = await fetch('/setup/remove-remote-services/' + ip, { method: 'POST' });
+                const result = await response.json();
+                if (result.ok) {
+                    statusDiv.style.backgroundColor = '#ccffcc';
+                    statusDiv.innerHTML = 'Successfully removed remote services from ' + ip + '.';
+                } else {
+                    statusDiv.style.backgroundColor = '#ffcccc';
+                    statusDiv.innerHTML = 'Failed to remove remote services for ' + ip + ': ' + (result.message || 'Unknown error');
+                }
+            } catch (error) {
+                statusDiv.style.backgroundColor = '#ffcccc';
+                statusDiv.innerHTML = 'Error removing remote services for ' + ip + ': ' + error;
             }
         }
 

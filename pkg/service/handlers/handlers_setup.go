@@ -190,6 +190,41 @@ func (s *Server) HandleEnsureRemoteServices(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// HandleRemoveRemoteServices removes remote services configuration from a device.
+func (s *Server) HandleRemoveRemoteServices(w http.ResponseWriter, r *http.Request) {
+	deviceIP := chi.URLParam(r, "deviceIP")
+	if deviceIP == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"}); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	if err := s.sm.RemoveRemoteServices(deviceIP); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Remote services removed"}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
 // HandleBackupConfig creates a backup of the device configuration.
 func (s *Server) HandleBackupConfig(w http.ResponseWriter, r *http.Request) {
 	deviceIP := chi.URLParam(r, "deviceIP")
