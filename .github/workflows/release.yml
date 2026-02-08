@@ -159,7 +159,7 @@ jobs:
 
           # Build CLI
           build_binary "soundtouch-cli" "./cmd/soundtouch-cli"
-          
+
           # Build Service
           build_binary "soundtouch-service" "./cmd/soundtouch-service"
         id: build
@@ -203,9 +203,10 @@ jobs:
     needs: [validate, build]
 
     steps:
-      - name: Download all artifacts
+      - name: Download binary artifacts
         uses: actions/download-artifact@v7
         with:
+          pattern: binaries-*
           path: ./binaries
 
       - name: Generate checksums
