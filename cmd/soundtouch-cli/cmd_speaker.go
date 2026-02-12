@@ -171,6 +171,7 @@ func playNotification(c *cli.Context) error {
 		} else {
 			PrintError(fmt.Sprintf("Failed to play notification beep: %v", err))
 		}
+
 		return err
 	}
 
