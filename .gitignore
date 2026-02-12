@@ -60,6 +60,7 @@ Thumbs.db
 *.pid
 *.seed
 *.pid.lock
+.output.txt
 
 # Runtime data
 pids

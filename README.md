@@ -616,6 +616,11 @@ If you discover new endpoints, features, or improvements through this library, p
 - 💡 **Feature Requests**: [Start a discussion](https://github.com/gesellix/bose-soundtouch/discussions)
 - ❓ **Questions**: Check [existing discussions](https://github.com/gesellix/bose-soundtouch/discussions)
 - 📖 **Documentation**: Browse the [docs/](docs/) directory
+- 🔍 **New Discoveries**: See [Undocumented Community Features](docs/UNDOCUMENTED-COMMUNITY-FEATURES.md) for advanced API research
+- 🌐 **Upstream Analysis**: [Upstream URLs & Domains](docs/UPSTREAM-URLS-ANALYSIS.md) for cloud dependency research
+- 🔧 **Redirection Guide**: [Device Redirect Methods](docs/DEVICE-REDIRECT-METHODS.md) for custom service setup
+- 🐣 **Initial Setup**: [Device Initial Setup Variants](docs/DEVICE-INITIAL-SETUP.md) for out-of-the-box configuration
+- 📜 **Logging & Debugging**: [Device Logging Guide](docs/DEVICE-LOGGING.md) for accessing system and traffic logs
 
 ---
 
