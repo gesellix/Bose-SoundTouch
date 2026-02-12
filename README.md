@@ -131,6 +131,8 @@ docker run --rm -it \
   ghcr.io/gesellix/bose-soundtouch:latest
 ```
 
+> **Note**: The hostnames configured via `SERVER_URL` and `HTTPS_SERVER_URL` are automatically added as Subject Alternative Names (SAN) to the generated TLS certificate, ensuring valid SSL connections.
+
 Alternatively, without explicit server URLs:
 ```bash
 docker run -d \
@@ -164,6 +166,8 @@ services:
       - ./data:/app/data
     restart: unless-stopped
 ```
+
+> **Note**: Hostnames from `SERVER_URL` and `HTTPS_SERVER_URL` are automatically included in the TLS certificate's Subject Alternative Names (SAN).
 
 And run:
 
