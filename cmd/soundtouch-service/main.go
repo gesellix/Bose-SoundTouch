@@ -124,16 +124,29 @@ func loadConfig() serviceConfig {
 
 	hostname = strings.ToLower(hostname)
 
-	domains := []string{
-		"streaming.bose.com",
-		"updates.bose.com",
-		"stats.bose.com",
-		"bmx.bose.com",
-		"content.api.bose.io",
-		setup.TestDomain,
-		hostname,
-		"localhost",
-		"127.0.0.1",
+	domainsMap := map[string]bool{
+		"streaming.bose.com":  true,
+		"updates.bose.com":    true,
+		"stats.bose.com":      true,
+		"bmx.bose.com":        true,
+		"content.api.bose.io": true,
+		setup.TestDomain:      true,
+		hostname:              true,
+		"localhost":           true,
+		"127.0.0.1":           true,
+	}
+
+	if u, err := url.Parse(serverURL); err == nil && u.Hostname() != "" {
+		domainsMap[strings.ToLower(u.Hostname())] = true
+	}
+
+	if u, err := url.Parse(httpsServerURL); err == nil && u.Hostname() != "" {
+		domainsMap[strings.ToLower(u.Hostname())] = true
+	}
+
+	domains := make([]string, 0, len(domainsMap))
+	for d := range domainsMap {
+		domains = append(domains, d)
 	}
 
 	return serviceConfig{
