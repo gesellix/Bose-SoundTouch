@@ -123,6 +123,16 @@ docker run -d \
 
 **macOS / Windows (with port mapping):**
 ```bash
+docker run --rm -it \
+  -p 8000:8000 -p 8443:8443 \
+  -v $(pwd)/data:/app/data \
+  --env SERVER_URL=http://soundtouch.local:8000 \
+  --env HTTPS_SERVER_URL=https://soundtouch.local:8443 \
+  ghcr.io/gesellix/bose-soundtouch:latest
+```
+
+Alternatively, without explicit server URLs:
+```bash
 docker run -d \
   --name soundtouch-service \
   -p 8000:8000 \
@@ -144,8 +154,11 @@ services:
     # macOS/Windows users: use port mapping (discovery will be manual)
     ports:
       - "8000:8000"
+      - "8443:8443"
     environment:
       - PORT=8000
+      - SERVER_URL=http://soundtouch.local:8000
+      - HTTPS_SERVER_URL=https://soundtouch.local:8443
       - DATA_DIR=/app/data
     volumes:
       - ./data:/app/data
