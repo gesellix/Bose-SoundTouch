@@ -8,8 +8,11 @@ import (
 	"strings"
 )
 
-//go:embed index.html
+//go:embed web/index.html
 var indexHTML []byte
+
+//go:embed web/css/* web/js/*
+var webFS embed.FS
 
 //go:embed soundcork/media/*
 var mediaFS embed.FS
@@ -32,6 +35,14 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	_, _ = w.Write(indexHTML)
+}
+
+// HandleWeb returns a handler for serving web resources.
+func (s *Server) HandleWeb() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fs := http.FileServer(http.FS(webFS))
+		fs.ServeHTTP(w, r)
+	}
 }
 
 // HandleMedia returns a handler for serving media files.

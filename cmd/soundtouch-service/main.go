@@ -9,9 +9,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/service/crypto"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
@@ -64,12 +66,72 @@ func main() {
 		serverURL = "http://" + strings.ToLower(hostname) + ":" + port
 	}
 
-	sm := setup.NewManager(serverURL, ds)
+	httpsServerURL := os.Getenv("HTTPS_SERVER_URL")
+	if httpsServerURL == "" {
+		// Guess HTTPS server URL
+		hostname, _ := os.Hostname()
+		if hostname == "" {
+			hostname = "localhost"
+		}
+
+		// Re-fetch httpsPort as it is defined later in the code, but let's move it up or just use the logic
+		guessHTTPSPort := os.Getenv("HTTPS_PORT")
+		if guessHTTPSPort == "" {
+			guessHTTPSPort = "8443"
+		}
+
+		httpsServerURL = "https://" + strings.ToLower(hostname) + ":" + guessHTTPSPort
+	}
+
+	cm := crypto.NewCertificateManager(filepath.Join(dataDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		log.Printf("Warning: Failed to ensure CA: %v", err)
+	}
+
+	sm := setup.NewManager(serverURL, ds, cm)
 
 	redact := os.Getenv("REDACT_PROXY_LOGS") != "false"
 	logBody := os.Getenv("LOG_PROXY_BODY") == "true"
 
 	server := handlers.NewServer(ds, sm, serverURL, redact, logBody)
+
+	// Phase 11: Setup HTTPS if CA and certificates are available
+	httpsPort := os.Getenv("HTTPS_PORT")
+	if httpsPort == "" {
+		// We don't default to 443 because it usually requires root,
+		// and we want the service to start out-of-the-box for developers.
+		// However, 443 is needed for the device to connect via /etc/hosts without a port.
+		httpsPort = "8443"
+	}
+
+	httpsAddr := bindAddr + ":" + httpsPort
+	if bindAddr == "" {
+		httpsAddr = ":" + httpsPort
+	}
+
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "localhost"
+	}
+
+	hostname = strings.ToLower(hostname)
+
+	domains := []string{
+		"streaming.bose.com",
+		"updates.bose.com",
+		"stats.bose.com",
+		"bmx.bose.com",
+		"content.api.bose.io",
+		setup.TestDomain,
+		hostname,
+		"localhost",
+		"127.0.0.1",
+	}
+
+	tlsConfig, err := cm.GetServerTLSConfig(domains)
+	if err != nil {
+		log.Printf("Warning: Failed to setup TLS: %v", err)
+	}
 
 	pyProxy := httputil.NewSingleHostReverseProxy(target)
 	pyProxy.ModifyResponse = func(res *http.Response) error {
@@ -107,6 +169,9 @@ func main() {
 	}()
 
 	r := chi.NewRouter()
+
+	// Update HTTPS server handler if it was initialized
+	// (Deferred logic in Phase 11 will use this 'r')
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
@@ -118,8 +183,9 @@ func main() {
 		server.HandleMedia()(w, r)
 	})
 
-	// Phase 2: Static file serving for /media
+	// Phase 2: Static file serving for /media and /web
 	r.Get("/media/*", server.HandleMedia())
+	r.Get("/web/*", server.HandleWeb())
 
 	// Phase 3: BMX endpoints
 	r.Route("/bmx", func(r chi.Router) {
@@ -167,6 +233,9 @@ func main() {
 		r.Post("/ensure-remote-services/{deviceIP}", server.HandleEnsureRemoteServices)
 		r.Post("/remove-remote-services/{deviceIP}", server.HandleRemoveRemoteServices)
 		r.Post("/backup/{deviceIP}", server.HandleBackupConfig)
+		r.Post("/test-connection/{deviceIP}", server.HandleTestConnection)
+		r.Post("/test-hosts/{deviceIP}", server.HandleTestHostsRedirection)
+		r.Get("/ca.crt", server.HandleGetCACert)
 		r.Get("/proxy-settings", server.HandleGetProxySettings)
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
@@ -177,6 +246,23 @@ func main() {
 		pyProxy.ServeHTTP(w, r)
 	})
 
-	log.Printf("Go service starting on %s, proxying to %s", addr, targetURL)
+	log.Printf("Go service starting on %s, proxying to %s", serverURL, targetURL)
+
+	if tlsConfig != nil {
+		httpsServer := &http.Server{
+			Addr:      httpsAddr,
+			Handler:   r,
+			TLSConfig: tlsConfig,
+		}
+
+		log.Printf("Go service starting HTTPS on %s", httpsServerURL)
+
+		go func() {
+			if err := httpsServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				log.Printf("HTTPS server error: %v", err)
+			}
+		}()
+	}
+
 	log.Fatal(http.ListenAndServe(addr, r))
 }

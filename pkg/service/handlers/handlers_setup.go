@@ -3,7 +3,9 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 
+	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -126,6 +128,7 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 
 	targetURL := r.URL.Query().Get("target_url")
 	proxyURL := r.URL.Query().Get("proxy_url")
+	method := setup.MigrationMethod(r.URL.Query().Get("method"))
 
 	options := make(map[string]string)
 
@@ -135,7 +138,7 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.sm.MigrateSpeaker(deviceIP, targetURL, proxyURL, options); err != nil {
+	if err := s.sm.MigrateSpeaker(deviceIP, targetURL, proxyURL, options, method); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 
@@ -273,6 +276,21 @@ func (s *Server) HandleGetProxySettings(w http.ResponseWriter, _ *http.Request) 
 	}
 }
 
+// HandleGetCACert returns the Root CA certificate.
+func (s *Server) HandleGetCACert(w http.ResponseWriter, _ *http.Request) {
+	caCertPath := s.sm.Crypto.GetCACertPath()
+
+	content, err := os.ReadFile(caCertPath)
+	if err != nil {
+		http.Error(w, "Failed to read CA certificate", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Header().Set("Content-Disposition", "attachment; filename=soundtouch-ca.crt")
+	_, _ = w.Write(content)
+}
+
 // HandleUpdateProxySettings updates the proxy settings.
 func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
@@ -293,4 +311,75 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+// HandleTestHostsRedirection performs a preliminary check for /etc/hosts redirection.
+func (s *Server) HandleTestHostsRedirection(w http.ResponseWriter, r *http.Request) {
+	deviceIP := chi.URLParam(r, "deviceIP")
+	if deviceIP == "" {
+		http.Error(w, "Device IP is required", http.StatusBadRequest)
+		return
+	}
+
+	targetURL := r.URL.Query().Get("target_url")
+	if targetURL == "" {
+		targetURL = s.serverURL
+	}
+
+	output, err := s.sm.TestHostsRedirection(deviceIP, targetURL)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK) // Return 200 but ok: false so UI can show the output
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":      false,
+			"message": err.Error(),
+			"output":  output,
+		})
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":      true,
+		"message": "Hosts redirection test successful",
+		"output":  output,
+	})
+}
+
+// HandleTestConnection performs a connection check from the device to the server.
+func (s *Server) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
+	deviceIP := chi.URLParam(r, "deviceIP")
+	if deviceIP == "" {
+		http.Error(w, "Device IP is required", http.StatusBadRequest)
+		return
+	}
+
+	targetURL := r.URL.Query().Get("target_url")
+	if targetURL == "" {
+		http.Error(w, "Target URL is required", http.StatusBadRequest)
+		return
+	}
+
+	useExplicitCA := r.URL.Query().Get("use_explicit_ca") == "true"
+
+	output, err := s.sm.TestConnection(deviceIP, targetURL, useExplicitCA)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK) // Return 200 but ok: false so UI can show the output
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":      false,
+			"message": err.Error(),
+			"output":  output,
+		})
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":      true,
+		"message": "Connection test successful",
+		"output":  output,
+	})
 }

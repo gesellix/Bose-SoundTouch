@@ -1,0 +1,11 @@
+body { font-family: sans-serif; margin: 20px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; }
+button { padding: 5px 10px; cursor: pointer; }
+.status { margin-top: 10px; padding: 10px; border: 1px solid #ccc; display: none; }
+.summary-box { margin-top: 20px; padding: 15px; border: 1px solid #aaa; background-color: #f9f9f9; display: none; }
+pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; }
+.diff-container { display: flex; gap: 10px; }
+.diff-pane { flex: 1; min-width: 0; }
+.config-header { font-weight: bold; margin-bottom: 5px; display: block; }

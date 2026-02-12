@@ -52,6 +52,7 @@ This method uses the standard Linux hosts file to redirect traffic at the networ
 ### Technical Details
 - **File Path**: `/etc/hosts`
 - **Mechanism**: Overrides DNS resolution for Bose domains to point to a local IP.
+- **Resolution Order**: SoundTouch devices use the standard Linux Name Service Switch (`/etc/nsswitch.conf`). The default configuration (`hosts: files dns`) ensures that `/etc/hosts` is consulted *before* any external DNS lookups. This makes the redirection highly reliable for all system processes, including `curl`, `BoseApp`, and `IoT`.
 
 ### Implementation
 Requires SSH access. Add entries for the target domains:
@@ -136,7 +137,9 @@ On some newer firmware versions, even if you change the `<margeServerUrl>` in th
 ### Scenario C: `/etc/hosts` + Custom CA (The "Clean Deep Redirect")
 If you use `/etc/hosts` to point `streaming.bose.com` to a local IP and want to avoid binary patching.
 *   **Requirement 1**: Your local server must handle HTTPS (port 443).
-*   **Requirement 2**: You must inject your Root CA into the device's trust store (see [Option 1](#option-1-custom-ca-certificate-recommended) below).
+*   **Requirement 2**: You must inject your Root CA into the device's trust store.
+*   **Automated Tool**: The `soundtouch-service` now supports this via the `/setup/migrate/{deviceIP}?method=hosts` endpoint.
+*   **CA Download**: You can download the auto-generated Root CA from `http://<your-server>:8000/setup/ca.crt`.
 *   **Benefit**: Maintains system integrity (no binary changes) and full end-to-end encryption.
 
 ### Scenario D: `/etc/hosts` + Binary Patching (The "Legacy Deep Redirect")
@@ -150,6 +153,7 @@ For developers creating a completely isolated "dark" environment (no internet at
 1.  **XML**: Point all URLs to local services.
 2.  **Binary Patch**: Neutralize `IsItBose` to allow non-Bose domains/IPs.
 3.  **`/etc/hosts`**: Redirect hardcoded domains that aren't exposed in the XML (like analytics or NTP) to prevent leakage to the real Bose cloud.
+4.  **Process Instrumentation**: Use [SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook) to monitor and override internal behavior in real-time.
 
 ---
 

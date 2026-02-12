@@ -595,6 +595,13 @@ This project builds upon the excellent work of several community projects:
 - **Key Contributions**: Extensive API endpoint documentation, real-world usage patterns
 - **License**: MIT License
 
+### SoundTouch Hook 🪝
+- **Project**: [Bose SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook)
+- **Author**: Adrian Böckenkamp
+- **Our Implementation**: This project provides a powerful framework for intercepting and hooking into internal device processes using `LD_PRELOAD`. It was instrumental in verifying internal function calls and understanding how the device validates cloud domains.
+- **Key Contributions**: Reverse engineering framework, process hooking, cross-compilation toolchain
+- **License**: GPL-3.0 License
+
 ### Community Ecosystem
 
 These projects together form a comprehensive ecosystem for SoundTouch device management:
@@ -603,6 +610,7 @@ These projects together form a comprehensive ecosystem for SoundTouch device man
 - **SoundCork**: Python-based service interception and cloud replacement  
 - **SoundTouch Plus**: Home Assistant integration with extensive device support
 - **ÜberBöse**: API research and advanced endpoint discovery
+- **SoundTouch Hook**: Advanced reverse engineering and process instrumentation
 
 We are grateful to these projects and their maintainers for paving the way and providing the foundation that made this comprehensive Go implementation possible. The SoundTouch community's collaborative approach to reverse engineering and documentation has been invaluable.
 
@@ -621,6 +629,7 @@ If you discover new endpoints, features, or improvements through this library, p
 - 🔧 **Redirection Guide**: [Device Redirect Methods](docs/DEVICE-REDIRECT-METHODS.md) for custom service setup
 - 🐣 **Initial Setup**: [Device Initial Setup Variants](docs/DEVICE-INITIAL-SETUP.md) for out-of-the-box configuration
 - 📜 **Logging & Debugging**: [Device Logging Guide](docs/DEVICE-LOGGING.md) for accessing system and traffic logs
+- 🔒 **HTTPS & CA Setup**: [HTTPS & Custom CA Guide](docs/HTTPS-SETUP.md) for secure `/etc/hosts` redirection
 
 ---
 

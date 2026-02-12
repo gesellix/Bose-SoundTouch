@@ -16,8 +16,9 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 	r := chi.NewRouter()
 	r.Get("/", server.HandleRoot)
 
-	// Setup media directory for tests
+	// Setup media and web directories for tests
 	r.Get("/media/*", server.HandleMedia())
+	r.Get("/web/*", server.HandleWeb())
 
 	// Setup BMX for tests
 	r.Route("/bmx", func(r chi.Router) {
@@ -50,6 +51,10 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)
 		r.Post("/ensure-remote-services/{deviceIP}", server.HandleEnsureRemoteServices)
 		r.Post("/remove-remote-services/{deviceIP}", server.HandleRemoveRemoteServices)
+		r.Post("/migrate/{deviceIP}", server.HandleMigrateDevice)
+		r.Post("/test-connection/{deviceIP}", server.HandleTestConnection)
+		r.Post("/test-hosts/{deviceIP}", server.HandleTestHostsRedirection)
+		r.Get("/ca.crt", server.HandleGetCACert)
 	})
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

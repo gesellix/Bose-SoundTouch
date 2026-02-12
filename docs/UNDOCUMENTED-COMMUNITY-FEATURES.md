@@ -43,3 +43,4 @@ The SoundTouch device firmware has a case-sensitivity bug regarding HTTP `ETag` 
 - [ÜberBöse API Spec](https://github.com/julius-d/ueberboese-api)
 - [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)
 - [IsItBose Regex Research](https://github.com/deborahgu/soundcork/issues/62#issuecomment-3610563908)
+- [SoundTouch Hook Repo](https://github.com/CodeFinder2/bose-soundtouch-hook)
