@@ -706,32 +706,56 @@ func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, erro
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
 
-	// 1. Parse targetURL to get IP for /etc/hosts
-	parsedURL, err := url.Parse(targetURL)
+	hostIP, parsedURL, err := m.parseTargetURLAndResolveIP(targetURL, client)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse target URL: %w", err)
+		return "", err
 	}
-
-	hostName := parsedURL.Hostname()
-	if hostName == "" || hostName == "localhost" {
-		return "", fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
-	}
-
-	hostIP := m.resolveIP(hostName, client)
 
 	testDomain := TestDomain
 	testEntry := fmt.Sprintf("%s\t%s", hostIP, testDomain)
 
-	// 2. Add temporary entry to /etc/hosts
+	if addErr := m.addTemporaryHostEntry(client, deviceIP, testDomain, testEntry, rwCmd); addErr != nil {
+		return "", addErr
+	}
+
+	defer m.cleanupTemporaryHostEntry(client, testDomain, rwCmd)
+
+	output, err := m.runHTTPRedirectionTest(client, parsedURL, testDomain)
+	if err != nil {
+		return output, err
+	}
+
+	httpsOutput, httpsErr := m.runHTTPSRedirectionTest(client, testDomain)
+
+	combinedOutput := output + "\n---\n" + httpsOutput
+	if httpsErr != nil {
+		return combinedOutput, fmt.Errorf("hosts redirection HTTPS test failed: %w", httpsErr)
+	}
+
+	return combinedOutput, nil
+}
+
+func (m *Manager) parseTargetURLAndResolveIP(targetURL string, client SSHClient) (string, *url.URL, error) {
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to parse target URL: %w", err)
+	}
+
+	hostName := parsedURL.Hostname()
+	if hostName == "" || hostName == "localhost" {
+		return "", nil, fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
+	}
+
+	return m.resolveIP(hostName, client), parsedURL, nil
+}
+
+func (m *Manager) addTemporaryHostEntry(client SSHClient, deviceIP, testDomain, testEntry, rwCmd string) error {
 	hostsContent, err := client.Run("cat /etc/hosts")
 	if err != nil {
-		return "", fmt.Errorf("failed to read /etc/hosts: %w", err)
+		return fmt.Errorf("failed to read /etc/hosts: %w", err)
 	}
 
 	if strings.Contains(hostsContent, testDomain) {
-		// Even if it's there, let's make sure it's correct (pointing to the current hostIP)
-		// but for now, if it's there, we just assume it's okay or from a previous failed cleanup.
-		// Let's remove it and re-add to be sure.
 		lines := strings.Split(hostsContent, "\n")
 
 		var newLines []string
@@ -749,47 +773,45 @@ func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, erro
 	}
 
 	_, _ = client.Run(rwCmd)
-	// Ensure hostsContent ends with a newline if not empty
+
 	if hostsContent != "" && !strings.HasSuffix(hostsContent, "\n") {
 		hostsContent += "\n"
 	}
 
 	newHostsContent := hostsContent + testEntry + "\n"
-	if err := client.UploadContent([]byte(newHostsContent), "/etc/hosts"); err != nil {
-		return "", fmt.Errorf("failed to add test entry to /etc/hosts: %w", err)
+	if uploadErr := client.UploadContent([]byte(newHostsContent), "/etc/hosts"); uploadErr != nil {
+		return fmt.Errorf("failed to add test entry to /etc/hosts: %w", uploadErr)
 	}
 
 	fmt.Printf("Updated /etc/hosts on %s with test entry:\n%s\n", deviceIP, newHostsContent)
 
-	defer func() {
-		// Clean up test entry
-		currentContent, _ := client.Run("cat /etc/hosts")
-		lines := strings.Split(currentContent, "\n")
+	return nil
+}
 
-		var newLines []string
+func (m *Manager) cleanupTemporaryHostEntry(client SSHClient, testDomain, rwCmd string) {
+	currentContent, _ := client.Run("cat /etc/hosts")
+	lines := strings.Split(currentContent, "\n")
 
-		for _, line := range lines {
-			if line != "" && !strings.Contains(line, testDomain) {
-				newLines = append(newLines, line)
-			}
+	var newLines []string
+
+	for _, line := range lines {
+		if line != "" && !strings.Contains(line, testDomain) {
+			newLines = append(newLines, line)
 		}
+	}
 
-		finalContent := strings.Join(newLines, "\n")
-		if len(newLines) > 0 {
-			finalContent += "\n"
-		}
+	finalContent := strings.Join(newLines, "\n")
+	if len(newLines) > 0 {
+		finalContent += "\n"
+	}
 
-		_, _ = client.Run(rwCmd)
-		_ = client.UploadContent([]byte(finalContent), "/etc/hosts")
-	}()
+	_, _ = client.Run(rwCmd)
+	_ = client.UploadContent([]byte(finalContent), "/etc/hosts")
+}
 
-	// 3. Test connection to the fake domain
-	// 3a. HTTP (for simplicity of redirection test)
-	// We use the health check endpoint on the same port but with the fake domain
+func (m *Manager) runHTTPRedirectionTest(client SSHClient, parsedURL *url.URL, testDomain string) (string, error) {
 	httpTestURL := fmt.Sprintf("http://%s:%s/health", testDomain, parsedURL.Port())
-	if parsedURL.Port() == "" {
-		httpTestURL = fmt.Sprintf("http://%s/health", testDomain)
-	} else if parsedURL.Port() == "80" {
+	if parsedURL.Port() == "" || parsedURL.Port() == "80" {
 		httpTestURL = fmt.Sprintf("http://%s/health", testDomain)
 	}
 
@@ -800,7 +822,10 @@ func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, erro
 		return output, fmt.Errorf("hosts redirection HTTP test failed: %w", err)
 	}
 
-	// 3b. HTTPS (to verify TLS reachability)
+	return output, nil
+}
+
+func (m *Manager) runHTTPSRedirectionTest(client SSHClient, testDomain string) (string, error) {
 	httpsPort := os.Getenv("HTTPS_PORT")
 	if httpsPort == "" {
 		httpsPort = "8443"
@@ -811,16 +836,14 @@ func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, erro
 		httpsTestURL = fmt.Sprintf("https://%s/health", testDomain)
 	}
 
-	// We now include the testDomain in our SSL certificate.
-	// We use the local CA certificate to verify the connection.
 	caPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
 	if err != nil {
-		return output, fmt.Errorf("failed to read CA cert for HTTPS test: %w", err)
+		return "", fmt.Errorf("failed to read CA cert for HTTPS test: %w", err)
 	}
 
 	caPath := "/tmp/soundtouch-test-ca.crt"
 	if err := client.UploadContent(caPEM, caPath); err != nil {
-		return output, fmt.Errorf("failed to upload temporary CA for HTTPS test: %w", err)
+		return "", fmt.Errorf("failed to upload temporary CA for HTTPS test: %w", err)
 	}
 
 	defer func() {
@@ -829,12 +852,7 @@ func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, erro
 
 	httpsCmd := fmt.Sprintf("curl -v -s -L --cacert %s %s", caPath, httpsTestURL)
 
-	httpsOutput, httpsErr := client.Run(httpsCmd)
-	if httpsErr != nil {
-		return output + "\n---\n" + httpsOutput, fmt.Errorf("hosts redirection HTTPS test failed: %w", httpsErr)
-	}
-
-	return output + "\n---\n" + httpsOutput, nil
+	return client.Run(httpsCmd)
 }
 
 // TestConnection performs a connection check from the device to the server.

@@ -330,21 +330,27 @@ func (s *Server) HandleTestHostsRedirection(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK) // Return 200 but ok: false so UI can show the output
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"ok":      false,
 			"message": err.Error(),
 			"output":  output,
-		})
+		}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+
+	if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok":      true,
 		"message": "Hosts redirection test successful",
 		"output":  output,
-	})
+	}); encodeErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 // HandleTestConnection performs a connection check from the device to the server.
@@ -367,19 +373,25 @@ func (s *Server) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK) // Return 200 but ok: false so UI can show the output
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"ok":      false,
 			"message": err.Error(),
 			"output":  output,
-		})
+		}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+
+	if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok":      true,
 		"message": "Connection test successful",
 		"output":  output,
-	})
+	}); encodeErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }

@@ -1,3 +1,4 @@
+// Package crypto provides tools for managing Root CAs and generating SSL certificates.
 package crypto
 
 import (
@@ -164,8 +165,8 @@ func (cm *CertificateManager) GenerateCA() error {
 	}
 
 	certPath := cm.GetCACertPath()
-	if err := os.MkdirAll(cm.CertsDir, 0755); err != nil {
-		return err
+	if mkdirErr := os.MkdirAll(cm.CertsDir, 0755); mkdirErr != nil {
+		return mkdirErr
 	}
 
 	certOut, err := os.Create(certPath)
@@ -173,8 +174,8 @@ func (cm *CertificateManager) GenerateCA() error {
 		return err
 	}
 
-	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
-		return err
+	if encodeErr := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); encodeErr != nil {
+		return encodeErr
 	}
 
 	certOut.Close()
