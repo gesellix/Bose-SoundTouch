@@ -230,12 +230,12 @@ func TestCheckCACertTrusted(t *testing.T) {
 
 	m := NewManager("http://localhost:8000", nil, cm)
 
-	// Mock SSH to return "found" for grep
+	// Test 1: Found via label
 	m.NewSSH = func(host string) SSHClient {
 		return &mockSSH{
 			runFunc: func(command string) (string, error) {
-				if strings.HasPrefix(command, "grep -F") {
-					return "found", nil
+				if strings.HasPrefix(command, "grep -F") && strings.Contains(command, CALabel) {
+					return CALabel, nil
 				}
 				return "", nil
 			},
@@ -244,12 +244,33 @@ func TestCheckCACertTrusted(t *testing.T) {
 
 	summary := &MigrationSummary{}
 	m.checkCACertTrusted(summary, "192.168.1.10")
-
 	if !summary.CACertTrusted {
-		t.Errorf("Expected CACertTrusted to be true, got false")
+		t.Errorf("Expected CACertTrusted to be true when label is found")
 	}
 
-	// Mock SSH to return "not found" (error) for grep
+	// Test 2: Found via data snippet (label missing)
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if strings.HasPrefix(command, "grep -F") {
+					if strings.Contains(command, CALabel) {
+						return "", fmt.Errorf("not found")
+					}
+					// Searching for cert data
+					return "found data", nil
+				}
+				return "", nil
+			},
+		}
+	}
+
+	summary = &MigrationSummary{}
+	m.checkCACertTrusted(summary, "192.168.1.10")
+	if !summary.CACertTrusted {
+		t.Errorf("Expected CACertTrusted to be true when cert data is found")
+	}
+
+	// Test 3: Not found
 	m.NewSSH = func(host string) SSHClient {
 		return &mockSSH{
 			runFunc: func(command string) (string, error) {
@@ -263,9 +284,8 @@ func TestCheckCACertTrusted(t *testing.T) {
 
 	summary = &MigrationSummary{}
 	m.checkCACertTrusted(summary, "192.168.1.10")
-
 	if summary.CACertTrusted {
-		t.Errorf("Expected CACertTrusted to be false, got true")
+		t.Errorf("Expected CACertTrusted to be false when nothing is found")
 	}
 }
 
@@ -549,6 +569,68 @@ func TestMigrateViaHosts_SkipCAIfTrusted(t *testing.T) {
 	}
 	if foundCAInjection {
 		t.Errorf("Expected CA injection to be skipped when already trusted")
+	}
+}
+
+func TestTrustCACert(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "trust-ca-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://localhost:8000", nil, cm)
+
+	runCalls := []string{}
+	uploadCalls := []string{}
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if strings.HasPrefix(command, "[ -f") {
+					return "", fmt.Errorf("file not found")
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				uploadCalls = append(uploadCalls, remotePath)
+				return nil
+			},
+		}
+	}
+
+	err = m.TrustCACert("192.168.1.10")
+	if err != nil {
+		t.Fatalf("TrustCACert failed: %v", err)
+	}
+
+	// Verify CA backup and injection
+	foundBackup := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "cp /etc/pki/tls/certs/ca-bundle.crt /etc/pki/tls/certs/ca-bundle.crt.original") {
+			foundBackup = true
+		}
+	}
+
+	if !foundBackup {
+		t.Errorf("Expected ca-bundle.crt backup")
+	}
+
+	// Verify CA upload
+	foundUpload := false
+	for _, path := range uploadCalls {
+		if path == "/etc/pki/tls/certs/ca-bundle.crt" {
+			foundUpload = true
+			break
+		}
+	}
+	if !foundUpload {
+		t.Errorf("Expected updated bundle to be uploaded to /etc/pki/tls/certs/ca-bundle.crt")
 	}
 }
 

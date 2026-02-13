@@ -203,6 +203,8 @@ async function showSummary(ip) {
             const caTrustStatus = document.getElementById('ca-trust-status');
             caTrustStatus.innerText = summary.ca_cert_trusted ? '✅ Yes' : '❌ No';
             caTrustStatus.style.color = summary.ca_cert_trusted ? 'green' : 'red';
+            document.getElementById('trust-ca-btn').style.display = summary.ca_cert_trusted ? 'none' : 'inline-block';
+            document.getElementById('trust-ca-btn').onclick = () => trustCA(ip);
         } else {
             remoteStatus.innerText = '❓ Unknown';
             remoteStatus.style.color = 'gray';
@@ -305,6 +307,33 @@ async function migrate(ip) {
     } catch (error) {
         statusDiv.style.backgroundColor = '#ffcccc';
         statusDiv.innerHTML = 'Error migrating ' + ip + ': ' + error;
+    }
+}
+
+async function trustCA(ip) {
+    if (!ip) {
+        alert('Please enter a valid IP address.');
+        return;
+    }
+    const statusDiv = document.getElementById('status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.backgroundColor = '#ffffcc';
+    statusDiv.innerHTML = 'Injecting Root CA into shared trust store on ' + ip + '...';
+
+    try {
+        const response = await fetch('/setup/trust-ca/' + ip, { method: 'POST' });
+        const result = await response.json();
+        if (result.ok) {
+            statusDiv.style.backgroundColor = '#ccffcc';
+            statusDiv.innerHTML = 'Successfully injected Root CA on ' + ip + '.';
+            showSummary(ip); // Refresh to update status
+        } else {
+            statusDiv.style.backgroundColor = '#ffcccc';
+            statusDiv.innerHTML = 'Failed to trust CA on ' + ip + ': ' + (result.message || 'Unknown error');
+        }
+    } catch (error) {
+        statusDiv.style.backgroundColor = '#ffcccc';
+        statusDiv.innerHTML = 'Error trusting CA on ' + ip + ': ' + error;
     }
 }
 

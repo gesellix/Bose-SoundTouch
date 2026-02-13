@@ -380,6 +380,16 @@ func (m *Manager) checkCACertTrusted(summary *MigrationSummary, deviceIP string)
 		return
 	}
 
+	client := m.NewSSH(deviceIP)
+	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
+
+	// First, check for the label
+	output, err := client.Run(fmt.Sprintf("grep -F %q %s", CALabel, bundlePath))
+	if err == nil && strings.Contains(output, CALabel) {
+		summary.CACertTrusted = true
+		return
+	}
+
 	caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
 	if err != nil {
 		return
@@ -402,8 +412,6 @@ func (m *Manager) checkCACertTrusted(summary *MigrationSummary, deviceIP string)
 		return
 	}
 
-	client := m.NewSSH(deviceIP)
-	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
 	// Use grep to check for the certificate data in the bundle
 	_, err = client.Run(fmt.Sprintf("grep -F %q %s", certData, bundlePath))
 	if err == nil {
@@ -568,6 +576,69 @@ func (m *Manager) EnsureRemoteServices(deviceIP string) error {
 	return fmt.Errorf("failed to enable remote services in any of the locations: %v", locations)
 }
 
+// TrustCACert injects the local CA certificate into the device's shared trust store.
+func (m *Manager) TrustCACert(deviceIP string) error {
+	client := m.NewSSH(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+
+	caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
+	if err != nil {
+		return fmt.Errorf("failed to read CA certificate: %w", err)
+	}
+
+	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
+	_, _ = client.Run(rwCmd)
+
+	// Backup bundle if it doesn't exist
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", bundlePath)); err != nil {
+		_, _ = client.Run(fmt.Sprintf("cp %s %s.original", bundlePath, bundlePath))
+	}
+
+	// Check if the label already exists in the bundle
+	bundleContent, _ := client.Run(fmt.Sprintf("cat %s", bundlePath))
+	if strings.Contains(bundleContent, CALabel) {
+		// Label found, let's replace the whole block between labels if we used them,
+		// or just remove the lines containing the label and re-append.
+		// For simplicity, let's remove everything between CALabel tags if we had them,
+		// but since we only had one line before, let's just remove lines containing CALabel
+		// and the cert data if possible.
+		// A better way is to rebuild the bundle without our CA.
+		lines := strings.Split(bundleContent, "\n")
+
+		var newLines []string
+
+		inOurCA := false
+
+		for _, line := range lines {
+			if strings.Contains(line, CALabel) {
+				inOurCA = !inOurCA
+				continue
+			}
+
+			if !inOurCA {
+				newLines = append(newLines, line)
+			}
+		}
+
+		bundleContent = strings.Join(newLines, "\n")
+		if bundleContent != "" && !strings.HasSuffix(bundleContent, "\n") {
+			bundleContent += "\n"
+		}
+	} else if bundleContent != "" && !strings.HasSuffix(bundleContent, "\n") {
+		bundleContent += "\n"
+	}
+
+	// Append with labels
+	labeledCert := fmt.Sprintf("\n%s\n%s%s\n", CALabel, string(caCertPEM), CALabel)
+	newBundleContent := bundleContent + labeledCert
+
+	if err := client.UploadContent([]byte(newBundleContent), bundlePath); err != nil {
+		return fmt.Errorf("failed to update bundle: %w", err)
+	}
+
+	return nil
+}
+
 func (m *Manager) migrateViaHosts(deviceIP, targetURL string) error {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
@@ -630,29 +701,8 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) error {
 	m.checkCACertTrusted(summary, deviceIP)
 
 	if !summary.CACertTrusted {
-		caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
-		if err != nil {
-			return fmt.Errorf("failed to read CA certificate: %w", err)
-		}
-
-		// Append to bundle
-		bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
-		_, _ = client.Run(rwCmd)
-
-		// Backup bundle if it doesn't exist
-		if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", bundlePath)); err != nil {
-			_, _ = client.Run(fmt.Sprintf("cp %s %s.original", bundlePath, bundlePath))
-		}
-
-		// We use session.Run for append or similar, but client.Run uses CombinedOutput.
-		// Let's use a temporary file and append it.
-		tmpCertPath := "/tmp/local-ca.crt"
-		if err := client.UploadContent(caCertPEM, tmpCertPath); err != nil {
-			return fmt.Errorf("failed to upload CA cert to tmp: %w", err)
-		}
-
-		if _, err := client.Run(fmt.Sprintf("%s && cat %s >> %s && rm %s", rwCmd, tmpCertPath, bundlePath, tmpCertPath)); err != nil {
-			return fmt.Errorf("failed to append CA cert to bundle: %w", err)
+		if err := m.TrustCACert(deviceIP); err != nil {
+			return err
 		}
 	} else {
 		fmt.Printf("CA certificate already trusted on %s, skipping injection\n", deviceIP)
@@ -700,6 +750,9 @@ func (m *Manager) RemoveRemoteServices(deviceIP string) error {
 
 // TestDomain is the fake domain used for preliminary redirection tests.
 const TestDomain = "custom-test-api.bose.fake"
+
+// CALabel is the label used to identify the local CA certificate in the trust store.
+const CALabel = "# Soundcork Local Root CA"
 
 // TestHostsRedirection performs a preliminary check to see if /etc/hosts redirection works.
 func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, error) {
@@ -815,7 +868,7 @@ func (m *Manager) runHTTPRedirectionTest(client SSHClient, parsedURL *url.URL, t
 		httpTestURL = fmt.Sprintf("http://%s/health", testDomain)
 	}
 
-	cmd := fmt.Sprintf("curl -v -s -L %s", httpTestURL)
+	cmd := fmt.Sprintf("curl --max-time 15 --connect-timeout 10 -v -s -L %s", httpTestURL)
 
 	output, err := client.Run(cmd)
 	if err != nil {
@@ -850,7 +903,7 @@ func (m *Manager) runHTTPSRedirectionTest(client SSHClient, testDomain string) (
 		_, _ = client.Run("rm " + caPath)
 	}()
 
-	httpsCmd := fmt.Sprintf("curl -v -s -L --cacert %s %s", caPath, httpsTestURL)
+	httpsCmd := fmt.Sprintf("curl --max-time 15 --connect-timeout 10 -v -s -L --cacert %s %s", caPath, httpsTestURL)
 
 	return client.Run(httpsCmd)
 }
@@ -878,7 +931,7 @@ func (m *Manager) TestConnection(deviceIP, targetURL string, useExplicitCA bool)
 		}()
 	}
 
-	cmd := fmt.Sprintf("curl -v -s -L %s", targetURL)
+	cmd := fmt.Sprintf("curl --max-time 15 --connect-timeout 10 -v -s -L %s", targetURL)
 	if useExplicitCA {
 		cmd += " --cacert " + caPath
 	}
