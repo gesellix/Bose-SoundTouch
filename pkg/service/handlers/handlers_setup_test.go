@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gesellix/bose-soundtouch/pkg/service/crypto"
+	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 )
@@ -97,7 +97,7 @@ func TestMigrationAndCA(t *testing.T) {
 
 	ds := datastore.NewDataStore(tempDir)
 	_ = ds.Initialize()
-	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	_ = cm.EnsureCA()
 
 	sm := setup.NewManager("http://localhost:8000", ds, cm)

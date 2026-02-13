@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gesellix/bose-soundtouch/pkg/service/crypto"
+	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/ssh"
 )
@@ -70,12 +70,12 @@ type SSHClient interface {
 type Manager struct {
 	ServerURL string
 	DataStore *datastore.DataStore
-	Crypto    *crypto.CertificateManager
+	Crypto    *certmanager.CertificateManager
 	NewSSH    func(host string) SSHClient
 }
 
 // NewManager creates a new Manager with the given base server URL.
-func NewManager(serverURL string, ds *datastore.DataStore, cm *crypto.CertificateManager) *Manager {
+func NewManager(serverURL string, ds *datastore.DataStore, cm *certmanager.CertificateManager) *Manager {
 	return &Manager{
 		ServerURL: serverURL,
 		DataStore: ds,

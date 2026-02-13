@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gesellix/bose-soundtouch/pkg/service/crypto"
+	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
@@ -173,8 +173,8 @@ func initDataStore(dataDir string) *datastore.DataStore {
 	return ds
 }
 
-func initCertificateManager(dataDir string) *crypto.CertificateManager {
-	cm := crypto.NewCertificateManager(filepath.Join(dataDir, "certs"))
+func initCertificateManager(dataDir string) *certmanager.CertificateManager {
+	cm := certmanager.NewCertificateManager(filepath.Join(dataDir, "certs"))
 	if err := cm.EnsureCA(); err != nil {
 		log.Printf("Warning: Failed to ensure CA: %v", err)
 	}

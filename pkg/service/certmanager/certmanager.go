@@ -1,5 +1,5 @@
-// Package crypto provides tools for managing Root CAs and generating SSL certificates.
-package crypto
+// Package certmanager provides tools for managing Root CAs and generating SSL certificates.
+package certmanager
 
 import (
 	"crypto/rand"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gesellix/bose-soundtouch/pkg/service/crypto"
+	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 )
 
 type mockSSH struct {
@@ -38,7 +38,7 @@ func TestMigrateViaHosts(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	if err := cm.EnsureCA(); err != nil {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestCheckCACertTrusted(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	if err := cm.EnsureCA(); err != nil {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestTestConnection(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	if err := cm.EnsureCA(); err != nil {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
@@ -383,7 +383,7 @@ func TestTestHostsRedirection(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	if err := cm.EnsureCA(); err != nil {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
@@ -530,7 +530,7 @@ func TestMigrateViaHosts_SkipCAIfTrusted(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	if err := cm.EnsureCA(); err != nil {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
@@ -579,7 +579,7 @@ func TestTrustCACert(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cm := crypto.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	if err := cm.EnsureCA(); err != nil {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
