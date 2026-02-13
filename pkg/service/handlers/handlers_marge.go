@@ -36,7 +36,9 @@ func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Reque
 func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
-	etag := strconv.FormatInt(s.ds.GetETagForAccount(account), 10)
+	device := r.URL.Query().Get("device")
+
+	etag := strconv.FormatInt(s.ds.GetETagForAccount(account, device), 10)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
@@ -79,14 +81,15 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 // HandleMargePresets returns the Marge presets for a device.
 func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+	device := chi.URLParam(r, "device")
 
-	etag := strconv.FormatInt(s.ds.GetETagForPresets(account), 10)
+	etag := strconv.FormatInt(s.ds.GetETagForPresets(account, device), 10)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 
-	data, err := marge.PresetsToXML(s.ds, account)
+	data, err := marge.PresetsToXML(s.ds, account, device)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -102,7 +105,7 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
 
-	etag := strconv.FormatInt(s.ds.GetETagForPresets(account), 10)
+	etag := strconv.FormatInt(s.ds.GetETagForPresets(account, device), 10)
 	w.Header()["ETag"] = []string{etag}
 
 	presetNumberStr := chi.URLParam(r, "presetNumber")
@@ -134,7 +137,7 @@ func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
 
-	etag := strconv.FormatInt(s.ds.GetETagForRecents(account), 10)
+	etag := strconv.FormatInt(s.ds.GetETagForRecents(account, device), 10)
 	w.Header()["ETag"] = []string{etag}
 
 	body, err := io.ReadAll(r.Body)

@@ -135,12 +135,14 @@ func TestMargePresets(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+	deviceID := "any"
 
 	accountDir := filepath.Join(tempDir, account)
-	err = os.MkdirAll(accountDir, 0755)
+	deviceDir := filepath.Join(accountDir, "devices", deviceID)
+	err = os.MkdirAll(deviceDir, 0755)
 
 	if err != nil {
-		t.Fatalf("Failed to create account dir: %v", err)
+		t.Fatalf("Failed to create device dir: %v", err)
 	}
 
 	r, _ := setupRouter("http://localhost:8001", ds)
@@ -149,24 +151,17 @@ func TestMargePresets(t *testing.T) {
 	defer ts.Close()
 
 	// Mock Sources.xml and Presets.xml
-	if err := os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(`
 		<sources>
-			<source id="123" type="Audio">
-				<createdOn>2012-09-19T12:43:00.000+00:00</createdOn>
-				<credential type="token"></credential>
-				<name>TUNEIN</name>
-				<sourceproviderid>1</sourceproviderid>
-				<sourcename>TUNEIN</sourcename>
-				<sourcesettings></sourcesettings>
-				<updatedOn>2012-09-19T12:43:00.000+00:00</updatedOn>
-				<username></username>
+			<source id="123" displayName="TUNEIN" secret="" secretType="Audio">
+				<sourceKey type="TUNEIN" account=""/>
 			</source>
 		</sources>
 	`), 0644); err != nil {
 		t.Fatalf("Failed to write Sources.xml: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(accountDir, "Presets.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(deviceDir, "Presets.xml"), []byte(`
 		<presets>
 			<preset id="1">
 				<ContentItem source="TUNEIN" type="station" location="/station/s123" sourceAccount="" isPresetable="true">
@@ -211,26 +206,28 @@ func TestMargeUpdatePreset(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+	deviceID := "DEV1"
 
 	accountDir := filepath.Join(tempDir, account)
-	err = os.MkdirAll(accountDir, 0755)
+	deviceDir := filepath.Join(accountDir, "devices", deviceID)
+	err = os.MkdirAll(deviceDir, 0755)
 
 	if err != nil {
-		t.Fatalf("Failed to create account dir: %v", err)
+		t.Fatalf("Failed to create device dir: %v", err)
 	}
 
 	// Mock Sources.xml
-	if err := os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(`
 		<sources>
-			<source id="SRC1" type="Audio">
-				<sourcename>TUNEIN</sourcename>
+			<source id="SRC1" displayName="TUNEIN" secret="" secretType="Audio">
+				<sourceKey type="TUNEIN" account=""/>
 			</source>
 		</sources>
 	`), 0644); err != nil {
 		t.Fatalf("Failed to write Sources.xml: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(accountDir, "Presets.xml"), []byte(`<presets></presets>`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(deviceDir, "Presets.xml"), []byte(`<presets></presets>`), 0644); err != nil {
 		t.Fatalf("Failed to write Presets.xml: %v", err)
 	}
 
@@ -248,7 +245,7 @@ func TestMargeUpdatePreset(t *testing.T) {
 			<containerArt>http://example.com/new.jpg</containerArt>
 		</preset>`
 
-	res, err := http.Post(ts.URL+"/marge/accounts/"+account+"/devices/DEV1/presets/1", "application/xml", strings.NewReader(payload))
+	res, err := http.Post(ts.URL+"/marge/accounts/"+account+"/devices/"+deviceID+"/presets/1", "application/xml", strings.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +258,7 @@ func TestMargeUpdatePreset(t *testing.T) {
 	}
 
 	// Verify file was saved
-	presetData, _ := os.ReadFile(filepath.Join(accountDir, "Presets.xml"))
+	presetData, _ := os.ReadFile(filepath.Join(deviceDir, "Presets.xml"))
 	if !strings.Contains(string(presetData), "New Preset") {
 		t.Error("Preset was not saved to datastore")
 	}
@@ -278,26 +275,28 @@ func TestMargeDeviceInfo(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+	deviceID := "DEV1"
 
 	accountDir := filepath.Join(tempDir, account)
-	err = os.MkdirAll(accountDir, 0755)
+	deviceDir := filepath.Join(accountDir, "devices", deviceID)
+	err = os.MkdirAll(deviceDir, 0755)
 
 	if err != nil {
-		t.Fatalf("Failed to create account dir: %v", err)
+		t.Fatalf("Failed to create device dir: %v", err)
 	}
 
 	// Mock Sources.xml
-	if err := os.WriteFile(filepath.Join(accountDir, "Sources.xml"), []byte(`
+	if err := os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(`
 		<sources>
-			<source id="SRC1" type="Audio">
-				<sourcename>TUNEIN</sourcename>
+			<source id="SRC1" displayName="TUNEIN" secret="" secretType="Audio">
+				<sourceKey type="TUNEIN" account=""/>
 			</source>
 		</sources>
 	`), 0644); err != nil {
 		t.Fatalf("Failed to write Sources.xml: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(accountDir, "Recents.xml"), []byte(`<recents></recents>`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(deviceDir, "Recents.xml"), []byte(`<recents></recents>`), 0644); err != nil {
 		t.Fatalf("Failed to write Recents.xml: %v", err)
 	}
 
@@ -314,7 +313,7 @@ func TestMargeDeviceInfo(t *testing.T) {
 			<contentItemType>station</contentItemType>
 		</recent>`
 
-	res, err := http.Post(ts.URL+"/marge/accounts/"+account+"/devices/DEV1/recents", "application/xml", strings.NewReader(payload))
+	res, err := http.Post(ts.URL+"/marge/accounts/"+account+"/devices/"+deviceID+"/recents", "application/xml", strings.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +325,7 @@ func TestMargeDeviceInfo(t *testing.T) {
 	}
 
 	// Verify file was saved
-	recentData, _ := os.ReadFile(filepath.Join(accountDir, "Recents.xml"))
+	recentData, _ := os.ReadFile(filepath.Join(deviceDir, "Recents.xml"))
 	if !strings.Contains(string(recentData), "Recent Station") {
 		t.Error("Recent was not saved to datastore")
 	}

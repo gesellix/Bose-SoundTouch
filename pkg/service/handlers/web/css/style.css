@@ -9,3 +9,28 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
 .diff-container { display: flex; gap: 10px; }
 .diff-pane { flex: 1; min-width: 0; }
 .config-header { font-weight: bold; margin-bottom: 5px; display: block; }
+
+/* Tabs */
+.tabs { margin-top: 20px; }
+.tab-buttons { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 20px; }
+.tab-btn { background: #f8f8f8; border: 1px solid #ddd; border-bottom: none; padding: 10px 20px; margin-right: 5px; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+.tab-btn:hover { background: #eee; }
+.tab-btn.active { background: white; border-bottom: 2px solid #2196F3; font-weight: bold; }
+.tab-content { display: none; padding: 10px; }
+.tab-content.active { display: block; }
+
+.device-selection {
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f0f7ff;
+    border-radius: 4px;
+    border: 1px solid #d0e0f0;
+}
+.device-selection label {
+    font-weight: bold;
+    margin-right: 10px;
+}
+.device-selection select {
+    padding: 5px;
+    min-width: 250px;
+}

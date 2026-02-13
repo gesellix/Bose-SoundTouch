@@ -46,12 +46,22 @@ async function fetchDevices() {
         const response = await fetch('/setup/devices');
         const devices = await response.json();
         const container = document.getElementById('device-list');
+        const syncSelector = document.getElementById('sync-device-list');
+        const migrationSelector = document.getElementById('migration-device-list');
 
         if (devices.length === 0) {
-            container.innerHTML = 'No devices found.';
+            container.innerHTML = 'No devices known yet.';
         } else {
-            let html = '<table><tr><th>Name</th><th>IP Address</th><th>Model</th><th>Serial Number</th><th>Firmware</th><th>Action</th></tr>';
+            let html = '<table><tr><th>Name</th><th>IP Address</th><th>Model</th><th>Serial Number</th><th>Firmware</th><th>Method</th><th>Action</th></tr>';
+
+            // Clear and repopulate selectors
+            const currentSyncVal = syncSelector.value;
+            const currentMigrationVal = migrationSelector.value;
+            syncSelector.innerHTML = '<option value="">-- Select a device --</option>';
+            migrationSelector.innerHTML = '<option value="">-- Select a device --</option>';
+
             devices.forEach(d => {
+                const methodLabel = d.discovery_method === 'manual' ? '👤 Manual' : '🔍 Auto';
                 html += `
                     <tr id="device-row-${d.ip_address.replace(/\./g, '-')}">
                         <td class="col-name">${d.name}</td>
@@ -59,12 +69,29 @@ async function fetchDevices() {
                         <td class="col-model">${d.product_code}</td>
                         <td class="col-serial">${d.device_serial_number}</td>
                         <td class="col-firmware">${d.firmware_version || '0.0.0'}</td>
-                        <td><button onclick="showSummary('${d.ip_address}')">Prepare Migration</button></td>
+                        <td class="col-method">${methodLabel}</td>
+                        <td>
+                            <button onclick="prepareSync('${d.ip_address}')">Sync Data</button>
+                            <button onclick="prepareMigration('${d.ip_address}')">Migrate</button>
+                        </td>
                     </tr>
                 `;
+
+                const optSync = document.createElement('option');
+                optSync.value = d.ip_address;
+                optSync.textContent = `${d.name} (${d.ip_address})`;
+                syncSelector.appendChild(optSync);
+
+                const optMigrate = document.createElement('option');
+                optMigrate.value = d.ip_address;
+                optMigrate.textContent = `${d.name} (${d.ip_address})`;
+                migrationSelector.appendChild(optMigrate);
             });
             html += '</table>';
             container.innerHTML = html;
+
+            if (currentSyncVal) syncSelector.value = currentSyncVal;
+            if (currentMigrationVal) migrationSelector.value = currentMigrationVal;
 
             // Asynchronously fetch live info for each device
             devices.forEach(d => updateDeviceInfo(d.ip_address));
@@ -74,15 +101,125 @@ async function fetchDevices() {
     }
 }
 
+function prepareSync(ip) {
+    document.getElementById('sync-device-list').value = ip;
+    openTab(null, 'tab-sync');
+}
+
+function prepareMigration(ip) {
+    document.getElementById('migration-device-list').value = ip;
+    openTab(null, 'tab-migration');
+    showSummary(ip);
+}
+
+function openTab(evt, tabId) {
+    const tabcontents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < tabcontents.length; i++) {
+        tabcontents[i].className = tabcontents[i].className.replace(" active", "");
+    }
+
+    const tablinks = document.getElementsByClassName("tab-btn");
+    for (let i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+    }
+
+    const content = document.getElementById(tabId);
+    if (content) {
+        content.className += " active";
+    }
+    
+    if (evt) {
+        evt.currentTarget.className += " active";
+    } else {
+        // Find the button that corresponds to the tabId and activate it
+        for (let i = 0; i < tablinks.length; i++) {
+            const onclick = tablinks[i].getAttribute('onclick');
+            if (onclick && onclick.includes(tabId)) {
+                tablinks[i].className += " active";
+                break;
+            }
+        }
+    }
+}
+
+async function startSync() {
+    const ip = document.getElementById('sync-device-list').value;
+    if (!ip) {
+        alert('Please select a device first');
+        return;
+    }
+
+    const status = document.getElementById('sync-status');
+    const results = document.getElementById('sync-results');
+    const log = document.getElementById('sync-log');
+
+    status.style.display = 'block';
+    status.style.backgroundColor = '#eef';
+    status.textContent = 'Syncing data from ' + ip + '...';
+    results.style.display = 'none';
+    log.innerHTML = '';
+
+    try {
+        const response = await fetch('/setup/sync/' + ip, { method: 'POST' });
+        if (response.ok) {
+            status.style.backgroundColor = '#dfd';
+            status.textContent = '✅ Sync completed successfully!';
+            results.style.display = 'block';
+            log.innerHTML = 'Data fetched and saved to local datastore.\nPresets: OK\nRecents: OK\nSources: OK';
+        } else {
+            const err = await response.text();
+            throw new Error(err);
+        }
+    } catch (error) {
+        status.style.backgroundColor = '#fdd';
+        status.textContent = '❌ Sync failed: ' + error.message;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    fetchSettings();
+    fetchDevices();
+    triggerDiscovery();
+
+    document.getElementById('sync-now-btn').onclick = startSync;
+});
+
+
+async function addManualDevice() {
+    const ip = document.getElementById('add-manual-ip').value.trim();
+    if (!ip) {
+        alert('Please enter an IP address');
+        return;
+    }
+
+    try {
+        const response = await fetch('/setup/devices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip: ip })
+        });
+
+        if (response.ok) {
+            document.getElementById('add-manual-ip').value = '';
+            fetchDevices();
+        } else {
+            const err = await response.text();
+            alert('Failed to add device: ' + err);
+        }
+    } catch (error) {
+        alert('Error adding device: ' + error.message);
+    }
+}
+
 async function triggerDiscovery() {
     const indicator = document.getElementById('discovery-indicator');
-    indicator.style.display = 'inline';
+    if (indicator) indicator.style.display = 'inline';
     try {
         await fetch('/setup/discover', { method: 'POST' });
         pollDiscoveryStatus();
     } catch (error) {
         console.error('Failed to trigger discovery', error);
-        indicator.style.display = 'none';
+        if (indicator) indicator.style.display = 'none';
     }
 }
 
@@ -94,12 +231,12 @@ async function pollDiscoveryStatus() {
         if (data.discovering) {
             setTimeout(pollDiscoveryStatus, 2000);
         } else {
-            indicator.style.display = 'none';
+            if (indicator) indicator.style.display = 'none';
             fetchDevices();
         }
     } catch (error) {
         console.error('Failed to check discovery status', error);
-        indicator.style.display = 'none';
+        if (indicator) indicator.style.display = 'none';
     }
 }
 
@@ -112,10 +249,17 @@ async function updateDeviceInfo(ip) {
         const rowId = 'device-row-' + ip.replace(/\./g, '-');
         const row = document.getElementById(rowId);
         if (row) {
-            if (info.name) row.querySelector('.col-name').innerText = info.name;
-            if (info.type) row.querySelector('.col-model').innerText = info.type;
-            if (info.serialNumber) row.querySelector('.col-serial').innerText = info.serialNumber;
-            if (info.softwareVersion) row.querySelector('.col-firmware').innerText = info.softwareVersion;
+            const nameEl = row.querySelector('.col-name');
+            if (nameEl && info.name) nameEl.innerText = info.name;
+            
+            const modelEl = row.querySelector('.col-model');
+            if (modelEl && info.type) modelEl.innerText = info.type;
+            
+            const serialEl = row.querySelector('.col-serial');
+            if (serialEl && info.serialNumber) serialEl.innerText = info.serialNumber;
+            
+            const firmwareEl = row.querySelector('.col-firmware');
+            if (firmwareEl && info.softwareVersion) firmwareEl.innerText = info.softwareVersion;
         }
     } catch (error) {
         console.warn('Failed to fetch live info for ' + ip, error);
@@ -124,7 +268,7 @@ async function updateDeviceInfo(ip) {
 
 async function showSummary(ip) {
     if (!ip) {
-        alert('Please enter a valid IP address.');
+        document.getElementById('migration-summary').style.display = 'none';
         return;
     }
     const targetUrl = document.getElementById('target-domain').value;
@@ -162,10 +306,17 @@ async function showSummary(ip) {
         const rowId = 'device-row-' + ip.replace(/\./g, '-');
         const row = document.getElementById(rowId);
         if (row) {
-            if (summary.device_name) row.querySelector('.col-name').innerText = summary.device_name;
-            if (summary.device_model) row.querySelector('.col-model').innerText = summary.device_model;
-            if (summary.device_serial) row.querySelector('.col-serial').innerText = summary.device_serial;
-            if (summary.firmware_version) row.querySelector('.col-firmware').innerText = summary.firmware_version;
+            const nameEl = row.querySelector('.col-name');
+            if (nameEl && summary.device_name) nameEl.innerText = summary.device_name;
+            
+            const modelEl = row.querySelector('.col-model');
+            if (modelEl && summary.device_model) modelEl.innerText = summary.device_model;
+            
+            const serialEl = row.querySelector('.col-serial');
+            if (serialEl && summary.device_serial) serialEl.innerText = summary.device_serial;
+            
+            const firmwareEl = row.querySelector('.col-firmware');
+            if (firmwareEl && summary.firmware_version) firmwareEl.innerText = summary.firmware_version;
         }
 
         document.getElementById('ssh-status').innerText = summary.ssh_success ? '✅ Success' : '❌ Failed';

@@ -132,7 +132,9 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 			}
 
 			accDevices := ds.listDevicesInAccount(dir, acc.Name())
-			for _, info := range accDevices {
+			for i := range accDevices {
+				info := accDevices[i]
+
 				key := info.DeviceID
 				if key == "" {
 					key = info.IPAddress
@@ -219,6 +221,7 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 			Type      string `xml:"type,attr"`
 			IPAddress string `xml:"ipAddress"`
 		} `xml:"networkInfo"`
+		DiscoveryMethod string `xml:"discoveryMethod"`
 	}
 
 	if err := xml.Unmarshal(data, &info); err != nil {
@@ -226,9 +229,10 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 	}
 
 	deviceInfo := &models.ServiceDeviceInfo{
-		DeviceID:    info.DeviceID,
-		ProductCode: fmt.Sprintf("%s %s", info.Type, info.ModuleType),
-		Name:        info.Name,
+		DeviceID:        info.DeviceID,
+		ProductCode:     fmt.Sprintf("%s %s", info.Type, info.ModuleType),
+		Name:            info.Name,
+		DiscoveryMethod: info.DiscoveryMethod,
 	}
 
 	for _, comp := range info.Components {
@@ -250,9 +254,9 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 	return deviceInfo, nil
 }
 
-// GetPresets retrieves all presets for the specified account.
-func (ds *DataStore) GetPresets(account string) ([]models.ServicePreset, error) {
-	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
+// GetPresets retrieves all presets for the specified account and device.
+func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset, error) {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -303,9 +307,9 @@ func (ds *DataStore) GetPresets(account string) ([]models.ServicePreset, error) 
 	return presets, nil
 }
 
-// SavePresets saves the preset list for the specified account.
-func (ds *DataStore) SavePresets(account string, presets []models.ServicePreset) error {
-	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
+// SavePresets saves the preset list for the specified account and device.
+func (ds *DataStore) SavePresets(account, device string, presets []models.ServicePreset) error {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 
 	type PresetXML struct {
 		ID          string `xml:"id,attr"`
@@ -357,9 +361,9 @@ func (ds *DataStore) SavePresets(account string, presets []models.ServicePreset)
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
-// GetRecents retrieves all recent items for the specified account.
-func (ds *DataStore) GetRecents(account string) ([]models.ServiceRecent, error) {
-	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
+// GetRecents retrieves all recent items for the specified account and device.
+func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent, error) {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -410,9 +414,9 @@ func (ds *DataStore) GetRecents(account string) ([]models.ServiceRecent, error) 
 	return recents, nil
 }
 
-// SaveRecents saves the recent items list for the specified account.
-func (ds *DataStore) SaveRecents(account string, recents []models.ServiceRecent) error {
-	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
+// SaveRecents saves the recent items list for the specified account and device.
+func (ds *DataStore) SaveRecents(account, device string, recents []models.ServiceRecent) error {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
 
 	type RecentXML struct {
 		ID          string `xml:"id,attr"`
@@ -494,13 +498,14 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	}
 
 	type InfoXML struct {
-		XMLName     xml.Name         `xml:"info"`
-		DeviceID    string           `xml:"deviceID,attr"`
-		Name        string           `xml:"name"`
-		Type        string           `xml:"type"`
-		ModuleType  string           `xml:"moduleType"`
-		Components  []ComponentXML   `xml:"components>component"`
-		NetworkInfo []NetworkInfoXML `xml:"networkInfo"`
+		XMLName         xml.Name         `xml:"info"`
+		DeviceID        string           `xml:"deviceID,attr"`
+		Name            string           `xml:"name"`
+		Type            string           `xml:"type"`
+		ModuleType      string           `xml:"moduleType"`
+		Components      []ComponentXML   `xml:"components>component"`
+		NetworkInfo     []NetworkInfoXML `xml:"networkInfo"`
+		DiscoveryMethod string           `xml:"discoveryMethod,omitempty"`
 	}
 
 	// Parsing product code back to type and moduleType (best effort)
@@ -539,6 +544,7 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 				IPAddress: info.IPAddress,
 			},
 		},
+		DiscoveryMethod: info.DiscoveryMethod,
 	}
 
 	data, err := xml.MarshalIndent(ix, "", "    ")
@@ -557,9 +563,9 @@ func (ds *DataStore) RemoveDevice(account, device string) error {
 	return os.RemoveAll(dir)
 }
 
-// GetConfiguredSources retrieves all configured sources for the specified account.
-func (ds *DataStore) GetConfiguredSources(account string) ([]models.ConfiguredSource, error) {
-	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
+// GetConfiguredSources retrieves all configured sources for the specified account and device.
+func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.ConfiguredSource, error) {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -567,81 +573,52 @@ func (ds *DataStore) GetConfiguredSources(account string) ([]models.ConfiguredSo
 	}
 
 	var sourcesWrap struct {
-		Sources []struct {
-			DisplayName string `xml:"displayName,attr"`
-			ID          string `xml:"id,attr"`
-			Secret      string `xml:"secret,attr"`
-			SecretType  string `xml:"secretType,attr"`
-			SourceKey   struct {
-				Account string `xml:"account,attr"`
-				Type    string `xml:"type,attr"`
-			} `xml:"sourceKey"`
-		} `xml:"source"`
+		Sources []models.ConfiguredSource `xml:"source"`
 	}
 
 	if err := xml.Unmarshal(data, &sourcesWrap); err != nil {
 		return nil, fmt.Errorf("malformed sources XML at %s: %w", path, err)
 	}
 
-	var sources []models.ConfiguredSource
-
-	lastID := 100001
-
-	for _, s := range sourcesWrap.Sources {
-		id := s.ID
-		if id == "" {
-			id = strconv.Itoa(lastID)
-			lastID++
+	for i := range sourcesWrap.Sources {
+		s := &sourcesWrap.Sources[i]
+		if s.ID == "" {
+			s.ID = strconv.Itoa(100001 + i)
 		}
-
-		sources = append(sources, models.ConfiguredSource{
-			DisplayName:      s.DisplayName,
-			ID:               id,
-			Secret:           s.Secret,
-			SecretType:       s.SecretType,
-			SourceKeyType:    s.SourceKey.Type,
-			SourceKeyAccount: s.SourceKey.Account,
-		})
+		// Sync legacy fields
+		s.SourceKeyType = s.SourceKey.Type
+		s.SourceKeyAccount = s.SourceKey.Account
 	}
 
-	return sources, nil
+	return sourcesWrap.Sources, nil
 }
 
-// SaveConfiguredSources saves the configured sources list for the specified account.
-func (ds *DataStore) SaveConfiguredSources(account string, sources []models.ConfiguredSource) error {
-	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
+// SaveConfiguredSources saves the configured sources list for the specified account and device.
+func (ds *DataStore) SaveConfiguredSources(account, device string, sources []models.ConfiguredSource) error {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 
-	type sourceXML struct {
-		DisplayName string `xml:"displayName,attr"`
-		ID          string `xml:"id,attr"`
-		Secret      string `xml:"secret,attr"`
-		SecretType  string `xml:"secretType,attr"`
-		SourceKey   struct {
-			Account string `xml:"account,attr"`
-			Type    string `xml:"type,attr"`
-		} `xml:"sourceKey"`
-	}
-
 	type sourcesWrap struct {
-		XMLName xml.Name    `xml:"sources"`
-		Sources []sourceXML `xml:"source"`
+		XMLName xml.Name                  `xml:"sources"`
+		Sources []models.ConfiguredSource `xml:"source"`
 	}
 
-	wrap := sourcesWrap{}
-
-	for _, s := range sources {
-		sx := sourceXML{
-			DisplayName: s.DisplayName,
-			ID:          s.ID,
-			Secret:      s.Secret,
-			SecretType:  s.SecretType,
+	// Ensure SourceKey is populated from legacy fields if necessary before saving
+	for i := range sources {
+		s := &sources[i]
+		if s.SourceKey.Type == "" && s.SourceKeyType != "" {
+			s.SourceKey.Type = s.SourceKeyType
 		}
-		sx.SourceKey.Account = s.SourceKeyAccount
-		sx.SourceKey.Type = s.SourceKeyType
-		wrap.Sources = append(wrap.Sources, sx)
+
+		if s.SourceKey.Account == "" && s.SourceKeyAccount != "" {
+			s.SourceKey.Account = s.SourceKeyAccount
+		}
+	}
+
+	wrap := sourcesWrap{
+		Sources: sources,
 	}
 
 	data, err := xml.MarshalIndent(wrap, "", "    ")
@@ -675,9 +652,9 @@ func (ds *DataStore) Initialize() error {
 	return nil
 }
 
-// GetETagForPresets returns the ETag (modification time) for the presets file.
-func (ds *DataStore) GetETagForPresets(account string) int64 {
-	path := filepath.Join(ds.AccountDir(account), constants.PresetsFile)
+// GetETagForPresets returns the ETag (modification time) for the presets file for a specific device.
+func (ds *DataStore) GetETagForPresets(account, device string) int64 {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -687,9 +664,9 @@ func (ds *DataStore) GetETagForPresets(account string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
-// GetETagForSources returns the ETag (modification time) for the sources file.
-func (ds *DataStore) GetETagForSources(account string) int64 {
-	path := filepath.Join(ds.AccountDir(account), constants.SourcesFile)
+// GetETagForSources returns the ETag (modification time) for the sources file for a specific device.
+func (ds *DataStore) GetETagForSources(account, device string) int64 {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -699,9 +676,9 @@ func (ds *DataStore) GetETagForSources(account string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
-// GetETagForRecents returns the ETag (modification time) for the recents file.
-func (ds *DataStore) GetETagForRecents(account string) int64 {
-	path := filepath.Join(ds.AccountDir(account), constants.RecentsFile)
+// GetETagForRecents returns the ETag (modification time) for the recents file for a specific device.
+func (ds *DataStore) GetETagForRecents(account, device string) int64 {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
 
 	info, err := os.Stat(path)
 	if err != nil {
@@ -711,11 +688,11 @@ func (ds *DataStore) GetETagForRecents(account string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
-// GetETagForAccount returns the highest ETag among presets, sources, and recents for the account.
-func (ds *DataStore) GetETagForAccount(account string) int64 {
-	e1 := ds.GetETagForPresets(account)
-	e2 := ds.GetETagForSources(account)
-	e3 := ds.GetETagForRecents(account)
+// GetETagForAccount returns the highest ETag among presets, sources, and recents for the account and device.
+func (ds *DataStore) GetETagForAccount(account, device string) int64 {
+	e1 := ds.GetETagForPresets(account, device)
+	e2 := ds.GetETagForSources(account, device)
+	e3 := ds.GetETagForRecents(account, device)
 
 	maxETag := e1
 	if e2 > maxETag {

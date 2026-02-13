@@ -8,149 +8,193 @@
 </head>
 <body>
     <h1>Soundcork Management</h1>
-    <h2>Discovered Devices <span id="discovery-indicator" style="font-size: 0.5em; vertical-align: middle; display: none;">🔍 Scanning...</span></h2>
-    <div id="device-list">Loading devices...</div>
 
-    <div id="manual-entry" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
-        <h3>Manual Entry</h3>
-        <input type="text" id="manual-ip" placeholder="Device IP (e.g. 192.168.1.100)">
-        <button onclick="showSummary(document.getElementById('manual-ip').value)">Check Migration</button>
-
-        <h3 style="margin-top: 20px;">Settings</h3>
-        <div style="margin-bottom: 10px;">
-            <label for="target-domain">Target Domain:</label>
-            <input type="text" id="target-domain" placeholder="http://localhost:8000" style="width: 300px;">
-            <span style="font-size: 0.8em; color: #666;">(This URL will be used for standard services)</span>
+    <div class="tabs">
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="openTab(event, 'tab-devices')">1. Devices</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-sync')">2. Data Sync</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-migration')">3. Migration</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-settings')">4. Settings</button>
         </div>
-        <div style="margin-bottom: 10px;">
-            <label for="proxy-domain">Proxy Domain:</label>
-            <input type="text" id="proxy-domain" placeholder="http://localhost:8000" style="width: 300px;">
-            <span style="font-size: 0.8em; color: #666;">(This URL will be used to proxy upstream Bose services)</span>
-        </div>
-        <div style="margin-bottom: 10px;">
-            Proxy Logging:
-            <label><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
-            <label style="margin-left: 15px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
-        </div>
-    </div>
 
-    <div id="status" class="status"></div>
-
-    <div id="migration-summary" class="summary-box">
-        <h3>Migration Summary for <span id="summary-ip"></span></h3>
-        <p>SSH Connection: <span id="ssh-status"></span></p>
-        <p id="original-config-status" style="display: none;">Backup: ✅ Found .original config at <code>/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original</code> <button onclick="toggleOriginalConfig()">Show Original Config</button></p>
-        <p id="no-original-config-status" style="display: none;">Backup: ❌ Not found <button id="backup-config-btn">Backup Config Now</button></p>
-        <p>Remote Services Enabled: <span id="remote-services-status"></span> <span id="remote-services-found" style="font-size: 0.8em; color: #666;"></span></p>
-        <p>Local Root CA Trusted: <span id="ca-trust-status"></span> <button id="trust-ca-btn" style="display: none; background-color: #607D8B; color: white; border: none; padding: 2px 8px; font-size: 0.8em; margin-left: 10px;">Trust CA Now</button></p>
-
-        <div id="connection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #eefbff;">
-            <strong>HTTPS Connection Test:</strong><br>
-            <span style="font-size: 0.85em; color: #555;">Verify the device can reach the server over HTTPS.</span>
-            <div style="margin-top: 10px;">
-                URL: <code id="test-url"></code>
+        <!-- Tab 1: Devices -->
+        <div id="tab-devices" class="tab-content active">
+            <h2>Known Devices <span id="discovery-indicator" style="font-size: 0.5em; vertical-align: middle; display: none;">🔍 Scanning...</span></h2>
+            <div id="device-list">Loading devices...</div>
+            <div style="margin-top: 20px;">
+                <button onclick="triggerDiscovery()">Scan Again</button>
+                <input type="text" id="add-manual-ip" placeholder="Manual IP (e.g. 192.168.1.100)" style="margin-left: 20px; padding: 4px;">
+                <button onclick="addManualDevice()">Add Device</button>
             </div>
-            <div style="margin-top: 10px;">
-                <button id="test-connection-explicit-btn" style="background-color: #607D8B; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test with Explicit CA.crt</button>
-                <button id="test-connection-trusted-btn" style="background-color: #607D8B; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test with Shared Trust Store</button>
-            </div>
-            <div id="test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
-        <div id="hosts-redirection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #fff4e6; display: none;">
-            <strong>Preliminary /etc/hosts Test:</strong><br>
-            <span style="font-size: 0.85em; color: #555;">Verify the device's /etc/hosts mechanism before full migration.</span>
-            <div style="margin-top: 10px;">
-                Domain: <code>custom-test-api.bose.fake</code>
+        <!-- Tab 2: Data Sync -->
+        <div id="tab-sync" class="tab-content">
+            <h2>Initial Data Sync</h2>
+            <p>Before migrating, fetch your presets, recents, and configured sources from the device to ensure they are available locally.</p>
+            <div class="device-selection">
+                <label for="sync-device-list">Device:</label>
+                <select id="sync-device-list">
+                    <option value="">-- Select a device --</option>
+                </select>
+                <button id="sync-now-btn">Start Sync</button>
             </div>
-            <div style="margin-top: 10px;">
-                <button id="test-hosts-btn" style="background-color: #FF9800; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test Hosts Redirection</button>
+            <div id="sync-status" class="status"></div>
+            <div id="sync-results" style="margin-top: 20px; display: none;">
+                <h3>Sync Results</h3>
+                <div id="sync-log" style="font-family: monospace; background: #f4f4f4; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
             </div>
-            <div id="hosts-test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
         </div>
 
-        <div style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;">
-            <label for="migration-method"><strong>Migration Method:</strong></label>
-            <select id="migration-method" onchange="toggleMigrationMethod()">
-                <option value="xml">XML Configuration (Recommended - redirects specific services)</option>
-                <option value="hosts">/etc/hosts + Root CA (Advanced - global redirection)</option>
-            </select>
-        </div>
-
-        <div id="original-config-pane" style="display: none; margin-bottom: 20px;">
-            <span class="config-header">Original Config (Backup)</span>
-            <pre id="original-config-content"></pre>
-        </div>
-
-        <div id="service-options" style="margin-bottom: 20px; display: none;">
-            <h4>Service Implementations</h4>
-            <table>
-                <tr><th>Service</th><th>Original URL</th><th>Implementation</th></tr>
-                <tr>
-                    <td>Marge (Streaming)</td>
-                    <td id="orig-marge">loading...</td>
-                    <td>
-                        <select id="opt-marge" onchange="refreshSummary()">
-                            <option value="soundcork">Soundcork (Go/Python)</option>
-                            <option value="original">Original (Proxy via soundcork-go)</option>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Stats</td>
-                    <td id="orig-stats">loading...</td>
-                    <td>
-                        <select id="opt-stats" onchange="refreshSummary()">
-                            <option value="soundcork">Soundcork (Go/Python)</option>
-                            <option value="original">Original (Proxy via soundcork-go)</option>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Software Update</td>
-                    <td id="orig-sw_update">loading...</td>
-                    <td>
-                        <select id="opt-sw_update" onchange="refreshSummary()">
-                            <option value="soundcork">Soundcork (Go/Python)</option>
-                            <option value="original">Original (Proxy via soundcork-go)</option>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <td>BMX (Registry)</td>
-                    <td id="orig-bmx">loading...</td>
-                    <td>
-                        <select id="opt-bmx" onchange="refreshSummary()">
-                            <option value="soundcork">Soundcork (Go/Python)</option>
-                            <option value="original">Original (Proxy via soundcork-go)</option>
-                        </select>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <div class="diff-container">
-            <div id="xml-diff-pane" class="diff-pane">
-                <span class="config-header">Current Config (on Speaker)</span>
-                <pre id="current-config"></pre>
+        <!-- Tab 3: Migration -->
+        <div id="tab-migration" class="tab-content">
+            <h2>Device Migration</h2>
+            <div class="device-selection">
+                <label for="migration-device-list">Device:</label>
+                <select id="migration-device-list" onchange="showSummary(this.value)">
+                    <option value="">-- Select a device --</option>
+                </select>
             </div>
-            <div id="planned-xml-pane" class="diff-pane">
-                <span class="config-header">Planned Config (Soundcork)</span>
-                <pre id="planned-config"></pre>
-            </div>
-            <div id="planned-hosts-pane" class="diff-pane" style="display: none;">
-                <span class="config-header">Planned /etc/hosts Entries</span>
-                <pre id="planned-hosts"></pre>
-                <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                    <strong>Note:</strong> This method also injects the local Root CA into <code>/etc/pki/tls/certs/ca-bundle.crt</code> to enable secure HTTPS communication.
+
+            <div id="status" class="status"></div>
+
+            <div id="migration-summary" class="summary-box" style="display: none;">
+                <h3>Migration Summary for <span id="summary-ip"></span></h3>
+                <p>SSH Connection: <span id="ssh-status"></span></p>
+                <p id="original-config-status" style="display: none;">Backup: ✅ Found .original config at <code>/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original</code> <button onclick="toggleOriginalConfig()">Show Original Config</button></p>
+                <p id="no-original-config-status" style="display: none;">Backup: ❌ Not found <button id="backup-config-btn">Backup Config Now</button></p>
+                <p>Remote Services Enabled: <span id="remote-services-status"></span> <span id="remote-services-found" style="font-size: 0.8em; color: #666;"></span></p>
+                <p>Local Root CA Trusted: <span id="ca-trust-status"></span> <button id="trust-ca-btn" style="display: none; background-color: #607D8B; color: white; border: none; padding: 2px 8px; font-size: 0.8em; margin-left: 10px;">Trust CA Now</button></p>
+
+                <div id="connection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #eefbff;">
+                    <strong>HTTPS Connection Test:</strong><br>
+                    <span style="font-size: 0.85em; color: #555;">Verify the device can reach the server over HTTPS.</span>
+                    <div style="margin-top: 10px;">
+                        URL: <code id="test-url"></code>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button id="test-connection-explicit-btn" style="background-color: #607D8B; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test with Explicit CA.crt</button>
+                        <button id="test-connection-trusted-btn" style="background-color: #607D8B; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test with Shared Trust Store</button>
+                    </div>
+                    <div id="test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
+                </div>
+
+                <div id="hosts-redirection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #fff4e6; display: none;">
+                    <strong>Preliminary /etc/hosts Test:</strong><br>
+                    <span style="font-size: 0.85em; color: #555;">Verify the device's /etc/hosts mechanism before full migration.</span>
+                    <div style="margin-top: 10px;">
+                        Domain: <code>custom-test-api.bose.fake</code>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button id="test-hosts-btn" style="background-color: #FF9800; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test Hosts Redirection</button>
+                    </div>
+                    <div id="hosts-test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
+                </div>
+
+                <div style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;">
+                    <label for="migration-method"><strong>Migration Method:</strong></label>
+                    <select id="migration-method" onchange="toggleMigrationMethod()">
+                        <option value="xml">XML Configuration (Recommended - redirects specific services)</option>
+                        <option value="hosts">/etc/hosts + Root CA (Advanced - global redirection)</option>
+                    </select>
+                </div>
+
+                <div id="original-config-pane" style="display: none; margin-bottom: 20px;">
+                    <span class="config-header">Original Config (Backup)</span>
+                    <pre id="original-config-content"></pre>
+                </div>
+
+                <div id="service-options" style="margin-bottom: 20px; display: none;">
+                    <h4>Service Implementations</h4>
+                    <table>
+                        <tr><th>Service</th><th>Original URL</th><th>Implementation</th></tr>
+                        <tr>
+                            <td>Marge (Streaming)</td>
+                            <td id="orig-marge">loading...</td>
+                            <td>
+                                <select id="opt-marge" onchange="refreshSummary()">
+                                    <option value="soundcork">Soundcork (Go/Python)</option>
+                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Stats</td>
+                            <td id="orig-stats">loading...</td>
+                            <td>
+                                <select id="opt-stats" onchange="refreshSummary()">
+                                    <option value="soundcork">Soundcork (Go/Python)</option>
+                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Software Update</td>
+                            <td id="orig-sw_update">loading...</td>
+                            <td>
+                                <select id="opt-sw_update" onchange="refreshSummary()">
+                                    <option value="soundcork">Soundcork (Go/Python)</option>
+                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>BMX (Registry)</td>
+                            <td id="orig-bmx">loading...</td>
+                            <td>
+                                <select id="opt-bmx" onchange="refreshSummary()">
+                                    <option value="soundcork">Soundcork (Go/Python)</option>
+                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="diff-container">
+                    <div id="xml-diff-pane" class="diff-pane">
+                        <span class="config-header">Current Config (on Speaker)</span>
+                        <pre id="current-config"></pre>
+                    </div>
+                    <div id="planned-xml-pane" class="diff-pane">
+                        <span class="config-header">Planned Config (Soundcork)</span>
+                        <pre id="planned-config"></pre>
+                    </div>
+                    <div id="planned-hosts-pane" class="diff-pane" style="display: none;">
+                        <span class="config-header">Planned /etc/hosts Entries</span>
+                        <pre id="planned-hosts"></pre>
+                        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                            <strong>Note:</strong> This method also injects the local Root CA into <code>/etc/pki/tls/certs/ca-bundle.crt</code> to enable secure HTTPS communication.
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button id="confirm-migrate-btn" style="background-color: #4CAF50; color: white; border: none; padding: 10px 20px;">Confirm Migration & Reboot</button>
+                    <button id="ensure-remote-btn" style="background-color: #2196F3; color: white; border: none; padding: 10px 20px;">Enable Persistent Remote Services</button>
+                    <button id="remove-remote-btn" style="background-color: #f44336; color: white; border: none; padding: 10px 20px;">Remove Persistent Remote Services</button>
+                    <button onclick="document.getElementById('migration-summary').style.display='none'" style="padding: 10px 20px;">Cancel</button>
                 </div>
             </div>
         </div>
-        <div style="margin-top: 15px;">
-            <button id="confirm-migrate-btn" style="background-color: #4CAF50; color: white; border: none; padding: 10px 20px;">Confirm Migration & Reboot</button>
-            <button id="ensure-remote-btn" style="background-color: #2196F3; color: white; border: none; padding: 10px 20px;">Enable Persistent Remote Services</button>
-            <button id="remove-remote-btn" style="background-color: #f44336; color: white; border: none; padding: 10px 20px;">Remove Persistent Remote Services</button>
-            <button onclick="document.getElementById('migration-summary').style.display='none'" style="padding: 10px 20px;">Cancel</button>
+
+        <!-- Tab 4: Settings -->
+        <div id="tab-settings" class="tab-content">
+            <h2>System Settings</h2>
+            <div style="margin-bottom: 20px;">
+                <label for="target-domain">Target Domain:</label>
+                <input type="text" id="target-domain" placeholder="http://localhost:8000" style="width: 300px;">
+                <span style="font-size: 0.8em; color: #666;">(This URL will be used for standard services)</span>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label for="proxy-domain">Proxy Domain:</label>
+                <input type="text" id="proxy-domain" placeholder="http://localhost:8000" style="width: 300px;">
+                <span style="font-size: 0.8em; color: #666;">(This URL will be used to proxy upstream Bose services)</span>
+            </div>
+            <div style="margin-bottom: 20px;">
+                Proxy Logging:
+                <label><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
+                <label style="margin-left: 15px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
+            </div>
         </div>
     </div>
 

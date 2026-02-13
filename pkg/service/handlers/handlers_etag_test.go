@@ -23,17 +23,19 @@ func TestMargeETags(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 
 	account := "12345"
+	deviceID := "DEV1"
 	accountDir := filepath.Join(tempDir, account)
-	_ = os.MkdirAll(accountDir, 0755)
+	deviceDir := filepath.Join(accountDir, "devices", deviceID)
+	_ = os.MkdirAll(deviceDir, 0755)
 
 	// Create some initial data
-	presetsFile := filepath.Join(accountDir, "Presets.xml")
+	presetsFile := filepath.Join(deviceDir, "Presets.xml")
 	_ = os.WriteFile(presetsFile, []byte("<presets/>"), 0644)
 
-	sourcesFile := filepath.Join(accountDir, "Sources.xml")
+	sourcesFile := filepath.Join(deviceDir, "Sources.xml")
 	_ = os.WriteFile(sourcesFile, []byte("<sources/>"), 0644)
 
-	recentsFile := filepath.Join(accountDir, "Recents.xml")
+	recentsFile := filepath.Join(deviceDir, "Recents.xml")
 	_ = os.WriteFile(recentsFile, []byte("<recents/>"), 0644)
 
 	// Ensure devices directory exists for AccountFull

@@ -112,13 +112,13 @@ func GetConfiguredSourceXML(cs models.ConfiguredSource) string {
 }
 
 // PresetsToXML converts account presets to XML format for Marge responses.
-func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
-	presets, err := ds.GetPresets(account)
+func PresetsToXML(ds *datastore.DataStore, account, device string) ([]byte, error) {
+	presets, err := ds.GetPresets(account, device)
 	if err != nil {
 		return nil, err
 	}
 
-	sources, err := ds.GetConfiguredSources(account)
+	sources, err := ds.GetConfiguredSources(account, device)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,8 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<name>%s</name>`, p.Name)
 
 		// Content Item Source
-		for _, s := range sources {
+		for j := range sources {
+			s := sources[j]
 			if s.ID == p.SourceID || (s.SourceKeyType == p.Source && s.SourceKeyAccount == p.SourceAccount) {
 				res += GetConfiguredSourceXML(s)
 				break
@@ -152,13 +153,13 @@ func PresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 }
 
 // RecentsToXML converts account recent items to XML format for Marge responses.
-func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
-	recents, err := ds.GetRecents(account)
+func RecentsToXML(ds *datastore.DataStore, account, device string) ([]byte, error) {
+	recents, err := ds.GetRecents(account, device)
 	if err != nil {
 		return nil, err
 	}
 
-	sources, err := ds.GetConfiguredSources(account)
+	sources, err := ds.GetConfiguredSources(account, device)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +182,8 @@ func RecentsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<name>%s</name>`, r.Name)
 
 		// Content Item Source
-		for _, s := range sources {
+		for j := range sources {
+			s := sources[j]
 			if s.ID == r.SourceID || (s.SourceKeyType == r.Source && s.SourceKeyAccount == r.SourceAccount) {
 				res += GetConfiguredSourceXML(s)
 				break
@@ -240,12 +242,12 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		res += fmt.Sprintf(`<ipaddress>%s</ipaddress>`, info.IPAddress)
 		res += fmt.Sprintf(`<name>%s</name>`, info.Name)
 
-		presets, _ := PresetsToXML(ds, account)
+		presets, _ := PresetsToXML(ds, account, deviceID)
 		if len(presets) > len(xml.Header) {
 			res += string(presets[len(xml.Header):]) // strip header
 		}
 
-		recents, _ := RecentsToXML(ds, account)
+		recents, _ := RecentsToXML(ds, account, deviceID)
 		if len(recents) > len(xml.Header) {
 			res += string(recents[len(xml.Header):]) // strip header
 		}
@@ -257,11 +259,11 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	res += ProviderSettingsToXML(account)
 
 	if lastDeviceID != "" {
-		sources, _ := ds.GetConfiguredSources(account)
+		sources, _ := ds.GetConfiguredSources(account, lastDeviceID)
 
 		res += `<sources>`
-		for _, s := range sources {
-			res += GetConfiguredSourceXML(s)
+		for j := range sources {
+			res += GetConfiguredSourceXML(sources[j])
 		}
 
 		res += `</sources>`
@@ -273,13 +275,13 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 }
 
 // UpdatePreset updates or creates a preset for the specified account and device.
-func UpdatePreset(ds *datastore.DataStore, account, _ string, presetNumber int, sourceXML []byte) ([]byte, error) {
-	sources, err := ds.GetConfiguredSources(account)
+func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber int, sourceXML []byte) ([]byte, error) {
+	sources, err := ds.GetConfiguredSources(account, device)
 	if err != nil {
 		return nil, err
 	}
 
-	presets, err := ds.GetPresets(account)
+	presets, err := ds.GetPresets(account, device)
 	if err != nil {
 		return nil, err
 	}
@@ -297,9 +299,9 @@ func UpdatePreset(ds *datastore.DataStore, account, _ string, presetNumber int, 
 
 	var matchingSrc *models.ConfiguredSource
 
-	for _, s := range sources {
-		if s.ID == newPresetElem.SourceID {
-			matchingSrc = &s
+	for i := range sources {
+		if sources[i].ID == newPresetElem.SourceID {
+			matchingSrc = &sources[i]
 			break
 		}
 	}
@@ -331,7 +333,7 @@ func UpdatePreset(ds *datastore.DataStore, account, _ string, presetNumber int, 
 
 	presets[presetNumber-1] = presetObj
 
-	if err := ds.SavePresets(account, presets); err != nil {
+	if err := ds.SavePresets(account, device, presets); err != nil {
 		return nil, err
 	}
 
@@ -351,12 +353,12 @@ func UpdatePreset(ds *datastore.DataStore, account, _ string, presetNumber int, 
 
 // AddRecent adds or updates a recent item for the specified account and device.
 func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte) ([]byte, error) {
-	sources, err := ds.GetConfiguredSources(account)
+	sources, err := ds.GetConfiguredSources(account, device)
 	if err != nil {
 		return nil, err
 	}
 
-	recents, err := ds.GetRecents(account)
+	recents, err := ds.GetRecents(account, device)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +409,7 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 		}
 	}
 
-	if err := ds.SaveRecents(account, recents); err != nil {
+	if err := ds.SaveRecents(account, device, recents); err != nil {
 		return nil, err
 	}
 
@@ -415,9 +417,9 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 }
 
 func findMatchingSource(sources []models.ConfiguredSource, sourceID string) *models.ConfiguredSource {
-	for _, s := range sources {
-		if s.ID == sourceID {
-			return &s
+	for i := range sources {
+		if sources[i].ID == sourceID {
+			return &sources[i]
 		}
 	}
 

@@ -270,6 +270,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 
 	r.Route("/setup", func(r chi.Router) {
 		r.Get("/devices", server.HandleListDiscoveredDevices)
+		r.Post("/devices", server.HandleAddManualDevice)
 		r.Post("/discover", server.HandleTriggerDiscovery)
 		r.Get("/discovery-status", server.HandleGetDiscoveryStatus)
 		r.Get("/settings", server.HandleGetSettings)
@@ -280,6 +281,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Post("/ensure-remote-services/{deviceIP}", server.HandleEnsureRemoteServices)
 		r.Post("/remove-remote-services/{deviceIP}", server.HandleRemoveRemoteServices)
 		r.Post("/backup/{deviceIP}", server.HandleBackupConfig)
+		r.Post("/sync/{deviceIP}", server.HandleInitialSync)
 		r.Post("/test-connection/{deviceIP}", server.HandleTestConnection)
 		r.Post("/test-hosts/{deviceIP}", server.HandleTestHostsRedirection)
 		r.Get("/ca.crt", server.HandleGetCACert)

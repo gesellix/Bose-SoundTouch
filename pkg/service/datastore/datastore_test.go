@@ -49,12 +49,12 @@ func TestDataStore(t *testing.T) {
 		},
 	}
 
-	err = ds.SavePresets(account, presets)
+	err = ds.SavePresets(account, device, presets)
 	if err != nil {
 		t.Errorf("SavePresets failed: %v", err)
 	}
 
-	loadedPresets, err := ds.GetPresets(account)
+	loadedPresets, err := ds.GetPresets(account, device)
 	if err != nil {
 		t.Errorf("GetPresets failed: %v", err)
 	}
@@ -72,12 +72,12 @@ func TestDataStore(t *testing.T) {
 		},
 	}
 
-	err = ds.SaveRecents(account, recents)
+	err = ds.SaveRecents(account, device, recents)
 	if err != nil {
 		t.Errorf("SaveRecents failed: %v", err)
 	}
 
-	loadedRecents, err := ds.GetRecents(account)
+	loadedRecents, err := ds.GetRecents(account, device)
 	if err != nil {
 		t.Errorf("GetRecents failed: %v", err)
 	}
@@ -294,29 +294,37 @@ func TestConfiguredSources(t *testing.T) {
 
 	sources := []models.ConfiguredSource{
 		{
-			DisplayName:      "Source 1",
-			ID:               "101",
-			Secret:           "secret1",
-			SecretType:       "type1",
+			DisplayName: "Source 1",
+			ID:          "101",
+			Secret:      "secret1",
+			SecretType:  "type1",
+			SourceKey: struct {
+				Type    string `xml:"type,attr"`
+				Account string `xml:"account,attr"`
+			}{Type: "TUNEIN", Account: "user1"},
 			SourceKeyType:    "TUNEIN",
 			SourceKeyAccount: "user1",
 		},
 		{
-			DisplayName:      "Source 2",
-			ID:               "102",
-			Secret:           "secret2",
-			SecretType:       "type2",
+			DisplayName: "Source 2",
+			ID:          "102",
+			Secret:      "secret2",
+			SecretType:  "type2",
+			SourceKey: struct {
+				Type    string `xml:"type,attr"`
+				Account string `xml:"account,attr"`
+			}{Type: "PANDORA", Account: "user2"},
 			SourceKeyType:    "PANDORA",
 			SourceKeyAccount: "user2",
 		},
 	}
 
-	err := ds.SaveConfiguredSources(account, sources)
+	err := ds.SaveConfiguredSources(account, "any", sources)
 	if err != nil {
 		t.Fatalf("SaveConfiguredSources failed: %v", err)
 	}
 
-	loadedSources, err := ds.GetConfiguredSources(account)
+	loadedSources, err := ds.GetConfiguredSources(account, "any")
 	if err != nil {
 		t.Fatalf("GetConfiguredSources failed: %v", err)
 	}
@@ -343,12 +351,12 @@ func TestConfiguredSources(t *testing.T) {
 		},
 	}
 
-	err = ds.SaveConfiguredSources(account, sources2)
+	err = ds.SaveConfiguredSources(account, "any", sources2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	loadedSources2, err := ds.GetConfiguredSources(account)
+	loadedSources2, err := ds.GetConfiguredSources(account, "any")
 	if err != nil {
 		t.Fatal(err)
 	}

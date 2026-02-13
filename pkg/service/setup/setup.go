@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
@@ -247,7 +250,8 @@ func (m *Manager) populateDeviceInfo(summary *MigrationSummary, deviceIP string)
 	if m.DataStore != nil {
 		devices, err := m.DataStore.ListAllDevices()
 		if err == nil {
-			for _, d := range devices {
+			for i := range devices {
+				d := devices[i]
 				if d.IPAddress != deviceIP {
 					continue
 				}
@@ -983,4 +987,189 @@ func (m *Manager) resolveIP(host string, client SSHClient) string {
 	}
 
 	return ips[0].String()
+}
+
+// SyncDeviceData fetches presets, recents and sources from the device and saves them to the datastore.
+func (m *Manager) SyncDeviceData(deviceIP string) error {
+	// 1. Fetch info to get Serial Number (account identifier)
+	info, err := m.GetLiveDeviceInfo(deviceIP)
+	if err != nil {
+		return fmt.Errorf("failed to get device info: %w", err)
+	}
+
+	accountID := "default"
+
+	deviceID := info.SerialNumber
+	if deviceID == "" {
+		deviceID = deviceIP
+	}
+
+	// 2. Fetch Presets from :8090
+	m.syncPresets(deviceIP, accountID, deviceID)
+
+	// 3. Fetch Recents from :8090
+	m.syncRecents(deviceIP, accountID, deviceID)
+
+	// 4. Fetch Sources
+	m.syncSources(deviceIP, accountID, deviceID)
+
+	return nil
+}
+
+func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
+	presetsURL := fmt.Sprintf("http://%s:8090/presets", deviceIP)
+	if _, _, splitErr := net.SplitHostPort(deviceIP); splitErr == nil {
+		presetsURL = fmt.Sprintf("http://%s/presets", deviceIP)
+	}
+
+	resp, err := http.Get(presetsURL)
+	if err != nil {
+		return
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var ps models.Presets
+	if decodeErr := xml.NewDecoder(resp.Body).Decode(&ps); decodeErr != nil {
+		return
+	}
+
+	var servicePresets []models.ServicePreset
+
+	for _, p := range ps.Preset {
+		if p.ContentItem == nil {
+			continue
+		}
+
+		createdOn := ""
+		if p.CreatedOn != nil {
+			createdOn = strconv.FormatInt(*p.CreatedOn, 10)
+		}
+
+		updatedOn := ""
+		if p.UpdatedOn != nil {
+			updatedOn = strconv.FormatInt(*p.UpdatedOn, 10)
+		}
+
+		servicePresets = append(servicePresets, models.ServicePreset{
+			ServiceContentItem: models.ServiceContentItem{
+				ID:            strconv.Itoa(p.ID),
+				Name:          p.ContentItem.ItemName,
+				Source:        p.ContentItem.Source,
+				Type:          p.ContentItem.Type,
+				Location:      p.ContentItem.Location,
+				SourceAccount: p.ContentItem.SourceAccount,
+				SourceID:      "", // Preset doesn't have SourceID in ContentItem usually
+				IsPresetable:  strconv.FormatBool(p.ContentItem.IsPresetable),
+			},
+			ContainerArt: p.ContentItem.ContainerArt,
+			CreatedOn:    createdOn,
+			UpdatedOn:    updatedOn,
+		})
+	}
+
+	_ = m.DataStore.SavePresets(accountID, deviceID, servicePresets)
+}
+
+func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
+	recentsURL := fmt.Sprintf("http://%s:8090/recents", deviceIP)
+	if _, _, splitErr := net.SplitHostPort(deviceIP); splitErr == nil {
+		recentsURL = fmt.Sprintf("http://%s/recents", deviceIP)
+	}
+
+	resp, err := http.Get(recentsURL)
+	if err != nil {
+		return
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var rr models.RecentsResponse
+	if decodeErr := xml.NewDecoder(resp.Body).Decode(&rr); decodeErr != nil {
+		return
+	}
+
+	var serviceRecents []models.ServiceRecent
+
+	for _, r := range rr.Items {
+		if r.ContentItem == nil {
+			continue
+		}
+
+		serviceRecents = append(serviceRecents, models.ServiceRecent{
+			ServiceContentItem: models.ServiceContentItem{
+				ID:            r.ID,
+				Name:          r.ContentItem.ItemName,
+				Source:        r.ContentItem.Source,
+				Type:          r.ContentItem.Type,
+				Location:      r.ContentItem.Location,
+				SourceAccount: r.ContentItem.SourceAccount,
+				SourceID:      "", // RecentsResponseItem doesn't have SourceID usually
+				IsPresetable:  strconv.FormatBool(r.ContentItem.IsPresetable),
+			},
+			DeviceID:     r.DeviceID,
+			UtcTime:      strconv.FormatInt(r.UTCTime, 10),
+			ContainerArt: r.ContentItem.ContainerArt,
+		})
+	}
+
+	_ = m.DataStore.SaveRecents(accountID, deviceID, serviceRecents)
+}
+
+func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
+	client := m.NewSSH(deviceIP)
+
+	sourcesXML, err := client.Run("cat /mnt/nv/BoseApp-Persistence/1/Sources.xml")
+	if err == nil && sourcesXML != "" {
+		var srs struct {
+			Sources []models.ConfiguredSource `xml:"source"`
+		}
+		if xmlErr := xml.Unmarshal([]byte(sourcesXML), &srs); xmlErr == nil {
+			// After unmarshaling from SSH, ensure legacy fields are synced for internal use
+			for i := range srs.Sources {
+				s := &srs.Sources[i]
+				s.SourceKeyType = s.SourceKey.Type
+				s.SourceKeyAccount = s.SourceKey.Account
+			}
+
+			_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, srs.Sources)
+
+			return
+		}
+	}
+
+	// Fallback to :8090/sources
+	sourcesURL := fmt.Sprintf("http://%s:8090/sources", deviceIP)
+	if _, _, splitErr := net.SplitHostPort(deviceIP); splitErr == nil {
+		sourcesURL = fmt.Sprintf("http://%s/sources", deviceIP)
+	}
+
+	resp, err := http.Get(sourcesURL)
+	if err != nil {
+		return
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var srs models.Sources
+	if decodeErr := xml.NewDecoder(resp.Body).Decode(&srs); decodeErr == nil {
+		var configuredSources []models.ConfiguredSource
+
+		for _, s := range srs.SourceItem {
+			cs := models.ConfiguredSource{
+				DisplayName: s.DisplayName,
+				ID:          s.Source,
+				SecretType:  string(s.Status),
+			}
+			cs.SourceKey.Type = s.Source
+			cs.SourceKey.Account = s.SourceAccount
+			// Also set legacy fields for now
+			cs.SourceKeyType = s.Source
+			cs.SourceKeyAccount = s.SourceAccount
+
+			configuredSources = append(configuredSources, cs)
+		}
+
+		_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, configuredSources)
+	}
 }

@@ -30,8 +30,8 @@ func TestMargeXML(t *testing.T) {
 	_ = ds.SaveDeviceInfo(account, device, info)
 
 	// Save empty presets/recents to avoid index out of range when stripping header
-	_ = ds.SavePresets(account, []models.ServicePreset{})
-	_ = ds.SaveRecents(account, []models.ServiceRecent{})
+	_ = ds.SavePresets(account, device, []models.ServicePreset{})
+	_ = ds.SaveRecents(account, device, []models.ServiceRecent{})
 
 	// Test SourceProvidersToXML
 	xmlData, err := SourceProvidersToXML()
@@ -78,17 +78,20 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 
 	// 1. Setup configured sources
 	// We need a Sources.xml file in the account directory
-	sourcesPath := ds.AccountDir(account)
-	_ = os.MkdirAll(sourcesPath, 0755)
-	_ = ds.SaveConfiguredSources(account, []models.ConfiguredSource{
-		{
-			ID:               "101",
-			DisplayName:      "Test Source",
-			SourceKeyType:    "TUNEIN",
-			SourceKeyAccount: "test-user",
-		},
-	})
-	_ = ds.SaveRecents(account, []models.ServiceRecent{})
+	deviceDir := ds.AccountDeviceDir(account, device)
+	_ = os.MkdirAll(deviceDir, 0755)
+	src := models.ConfiguredSource{
+		ID:          "101",
+		DisplayName: "Test Source",
+		SecretType:  "Audio",
+	}
+	src.SourceKey.Type = "TUNEIN"
+	src.SourceKey.Account = "test-user"
+	src.SourceKeyType = "TUNEIN"
+	src.SourceKeyAccount = "test-user"
+
+	_ = ds.SaveConfiguredSources(account, device, []models.ConfiguredSource{src})
+	_ = ds.SaveRecents(account, device, []models.ServiceRecent{})
 
 	// 2. Add an initial recent
 	sourceXML := []byte(`
@@ -104,7 +107,7 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 		t.Fatalf("AddRecent failed: %v", err)
 	}
 
-	recents, _ := ds.GetRecents(account)
+	recents, _ := ds.GetRecents(account, device)
 	if len(recents) != 1 {
 		t.Fatalf("Expected 1 recent, got %d", len(recents))
 	}
@@ -126,7 +129,7 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 		t.Errorf("Expected preserved DateStr in createdOn, got XML: %s", string(respXML))
 	}
 
-	recents, _ = ds.GetRecents(account)
+	recents, _ = ds.GetRecents(account, device)
 	if len(recents) != 1 {
 		t.Errorf("Expected still 1 recent, got %d", len(recents))
 	}

@@ -160,12 +160,19 @@ type ServiceRecent struct {
 
 // ConfiguredSource represents a configured media source with authentication details.
 type ConfiguredSource struct {
-	DisplayName      string `json:"display_name" xml:"sourcename"`
-	ID               string `json:"id" xml:"id,attr"`
-	Secret           string `json:"secret" xml:"credential"`
-	SecretType       string `json:"secret_type" xml:"credential_type,attr"`
-	SourceKeyType    string `json:"source_key_type" xml:"sourceproviderid"`
-	SourceKeyAccount string `json:"source_key_account" xml:"username"`
+	DisplayName string `json:"display_name" xml:"displayName,attr"`
+	ID          string `json:"id" xml:"id,attr"`
+	Secret      string `json:"secret" xml:"secret,attr"`
+	SecretType  string `json:"secret_type" xml:"secretType,attr"`
+	SourceKey   struct {
+		Type    string `xml:"type,attr"`
+		Account string `xml:"account,attr"`
+	} `json:"source_key" xml:"sourceKey"`
+
+	// Legacy fields for backward compatibility in code if needed,
+	// though it's better to update the code to use SourceKey.
+	SourceKeyType    string `json:"source_key_type" xml:"-"`
+	SourceKeyAccount string `json:"source_key_account" xml:"-"`
 }
 
 // ServiceDeviceInfo represents information about a SoundTouch device.
@@ -177,6 +184,7 @@ type ServiceDeviceInfo struct {
 	FirmwareVersion     string `json:"firmware_version" xml:"softwareVersion"`
 	IPAddress           string `json:"ip_address" xml:"ipAddress"`
 	Name                string `json:"name" xml:"name"`
+	DiscoveryMethod     string `json:"discovery_method,omitempty"`
 }
 
 // CustomerSupportDevice represents device information for customer support purposes.

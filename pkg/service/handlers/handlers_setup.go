@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
 )
@@ -25,9 +27,53 @@ func (s *Server) HandleListDiscoveredDevices(w http.ResponseWriter, _ *http.Requ
 	}
 }
 
+// HandleAddManualDevice adds a device manually by IP.
+func (s *Server) HandleAddManualDevice(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IP string `json:"ip"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if body.IP == "" {
+		http.Error(w, "IP address is required", http.StatusBadRequest)
+		return
+	}
+
+	// Try to get live info
+	liveInfo, err := s.sm.GetLiveDeviceInfo(body.IP)
+	if err != nil {
+		// Even if we can't get live info, we might want to add it?
+		// But usually we need at least the serial for proper account management.
+		http.Error(w, "Failed to reach device at "+body.IP+": "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	// Reuse handleDiscoveredDevice logic via a fake models.DiscoveredDevice
+	d := models.DiscoveredDevice{
+		Name:            liveInfo.Name,
+		Host:            body.IP,
+		ModelID:         liveInfo.Type,
+		SerialNo:        liveInfo.SerialNumber,
+		DiscoveryMethod: "manual",
+	}
+
+	s.handleDiscoveredDevice(d)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
 // HandleTriggerDiscovery triggers a new device discovery scan.
-func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
-	go s.DiscoverDevices(r.Context())
+func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, _ *http.Request) {
+	//nolint:contextcheck
+	go s.DiscoverDevices(context.Background())
 
 	w.WriteHeader(http.StatusAccepted)
 	_, _ = w.Write([]byte(`{"status": "Discovery started"}`))
@@ -386,6 +432,23 @@ func (s *Server) HandleTestHostsRedirection(w http.ResponseWriter, r *http.Reque
 	}); encodeErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+// HandleInitialSync fetches presets, recents and sources from the device and saves them to the datastore.
+func (s *Server) HandleInitialSync(w http.ResponseWriter, r *http.Request) {
+	deviceIP := chi.URLParam(r, "deviceIP")
+	if deviceIP == "" {
+		http.Error(w, "Missing deviceIP", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.sm.SyncDeviceData(deviceIP); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"ok": true}`))
 }
 
 // HandleTestConnection performs a connection check from the device to the server.

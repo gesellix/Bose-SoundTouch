@@ -44,16 +44,18 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 
 	log.Println("Scanning for Bose devices...")
 
+	// Use background context if none provided or if it's likely a request context
 	if ctx == nil {
-		var cancel context.CancelFunc
-
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		ctx = context.Background()
 	}
+
+	// Always wrap in a timeout to prevent hanging forever
+	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 
 	svc := discovery.NewService(10 * time.Second)
 
-	devices, err := svc.DiscoverDevices(ctx)
+	devices, err := svc.DiscoverDevices(discoveryCtx)
 	if err != nil {
 		log.Printf("Discovery error: %v", err)
 		return
@@ -94,6 +96,7 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 		DeviceSerialNumber: d.SerialNo,
 		ProductCode:        d.ModelID,
 		FirmwareVersion:    "0.0.0", // Unknown from discovery
+		DiscoveryMethod:    d.DiscoveryMethod,
 	}
 
 	// If we had an IP-based entry and now have a Serial, clean up the IP-based entry
@@ -109,7 +112,8 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 
 func (s *Server) findExistingDeviceID(d models.DiscoveredDevice) string {
 	allDevices, _ := s.ds.ListAllDevices()
-	for _, known := range allDevices {
+	for i := range allDevices {
+		known := allDevices[i]
 		if d.SerialNo != "" && (known.DeviceID == d.SerialNo || known.DeviceSerialNumber == d.SerialNo) {
 			if known.DeviceID != "" {
 				return known.DeviceID
