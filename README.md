@@ -1,6 +1,6 @@
-# Bose SoundTouch API Client
+# Bose SoundTouch Toolkit
 
-A comprehensive Go library and CLI tool for controlling Bose SoundTouch devices via their Web API.
+A comprehensive solution for controlling and preserving Bose SoundTouch devices, including a Go library, CLI tool, and a local service for cloud emulation.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/gesellix/bose-soundtouch.svg)](https://pkg.go.dev/github.com/gesellix/bose-soundtouch)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gesellix/bose-soundtouch)](https://goreportcard.com/report/github.com/gesellix/bose-soundtouch)
@@ -42,165 +42,46 @@ go get github.com/gesellix/bose-soundtouch
 
 ### CLI Usage
 
-#### Discover Devices
+Find SoundTouch devices on your network:
 ```bash
-# Find SoundTouch devices on your network
 soundtouch-cli discover devices
 ```
 
-# Control a Device
+Control a device (replace `192.168.1.100` with your speaker's IP):
 ```bash
-# Basic device information
-soundtouch-cli --host 192.168.1.100 info get
+# Basic information
+soundtouch-cli --host 192.168.1.100 info
 
 # Media controls
 soundtouch-cli --host 192.168.1.100 play start
 soundtouch-cli --host 192.168.1.100 volume set --level 50
-soundtouch-cli --host 192.168.1.100 source select --source SPOTIFY
 
 # Preset management
 soundtouch-cli --host 192.168.1.100 preset list
-soundtouch-cli --host 192.168.1.100 preset store-current --slot 1
-soundtouch-cli --host 192.168.1.100 preset select --slot 1
-
-# Browse and discover content
-soundtouch-cli --host 192.168.1.100 browse tunein
-soundtouch-cli --host 192.168.1.100 station search-tunein --query "jazz"
-soundtouch-cli --host 192.168.1.100 station add --source TUNEIN --token <token> --name "Jazz Radio"
-
-# Speaker notifications (ST-10 only)
-soundtouch-cli --host 192.168.1.100 speaker tts --text "Welcome home" --app-key YOUR_KEY
-soundtouch-cli --host 192.168.1.100 speaker url --url "https://example.com/doorbell.mp3" --app-key YOUR_KEY
-soundtouch-cli --host 192.168.1.100 speaker beep
-
-# Real-time monitoring
-soundtouch-cli --host 192.168.1.100 events subscribe
 ```
 
-### SoundTouch Service
+For full CLI documentation, see [docs/CLI-REFERENCE.md](docs/CLI-REFERENCE.md).
 
-The `soundtouch-service` is a local server that emulates Bose's cloud services, enabling offline operation and custom integrations. This is particularly valuable as Bose has announced the discontinuation of cloud support in May 2026.
+### SoundTouch Service (Cloud Shutdown Protection)
 
-#### Key Features
+The `soundtouch-service` is a local server that emulates Bose's cloud services. This is critical for keeping your speakers functional after the **Bose Cloud Shutdown in May 2026**.
 
-- **🏠 Local Service Emulation**: Complete BMX (Bose Media eXchange) and Marge service implementation
-- **🔧 Device Migration**: Seamlessly migrate devices from Bose cloud to local services  
-- **📊 Traffic Proxying**: Inspect and log all device communications for debugging
-- **🌐 Web Management UI**: Browser-based interface for device management
-- **💾 Persistent Data**: Store device configurations, presets, and usage statistics
-- **🔍 Auto-Discovery**: Automatically detect and configure SoundTouch devices
-- **🔒 Offline Operation**: Continue using full device functionality without internet
+#### Key Features:
+- **🏠 Local Emulation**: BMX and Marge service implementation
+- **🔧 Device Migration**: Seamlessly transition devices to local control
+- **🌐 Web Management UI**: Easy browser-based setup and management
+- **💾 Persistent Data**: Store presets, recents, and sources locally
 
-#### Quick Start
-
+#### Quick Start:
 ```bash
-# Install the service
-go install github.com/gesellix/bose-soundtouch/cmd/soundtouch-service@latest
-
-# Start with default settings (http://localhost:8000, proxying to http://localhost:8001)
+# Start the service
 soundtouch-service
-
-# Or configure with environment variables
-PORT=9000 PYTHON_BACKEND_URL=http://your-python-backend:8001 DATA_DIR=/my/data soundtouch-service
 ```
+Open `http://localhost:8000` in your browser to manage your devices.
 
-#### Running with Docker
+For a comprehensive guide on transitioning your system, see the [Bose Cloud Shutdown: Survival Guide](docs/CLOUD-SHUTDOWN-GUIDE.md).
 
-You can also run the SoundTouch service using Docker or Docker Compose.
-
-> **Note for macOS and Windows users**: The `--net host` option is only supported on Linux. On macOS and Windows, service discovery (mDNS, UPnP) will not work automatically within the container. You will need to manually enter your device's IP address in the management UI, and the service will communicate with it directly.
-
-##### Using Docker
-
-**Linux (with host networking for discovery):**
-```bash
-docker run -d \
-  --name soundtouch-service \
-  --network host \
-  -v $(pwd)/data:/app/data \
-  ghcr.io/gesellix/bose-soundtouch:latest
-```
-
-**macOS / Windows (with port mapping):**
-```bash
-docker run --rm -it \
-  -p 8000:8000 -p 8443:8443 \
-  -v $(pwd)/data:/app/data \
-  --env SERVER_URL=http://soundtouch.local:8000 \
-  --env HTTPS_SERVER_URL=https://soundtouch.local:8443 \
-  ghcr.io/gesellix/bose-soundtouch:latest
-```
-
-> **Note**: The hostnames configured via `SERVER_URL` and `HTTPS_SERVER_URL` are automatically added as Subject Alternative Names (SAN) to the generated TLS certificate, ensuring valid SSL connections.
-
-Alternatively, without explicit server URLs:
-```bash
-docker run -d \
-  --name soundtouch-service \
-  -p 8000:8000 \
-  -v $(pwd)/data:/app/data \
-  ghcr.io/gesellix/bose-soundtouch:latest
-```
-
-##### Using Docker Compose
-
-Create a `docker-compose.yml` file:
-
-```yaml
-services:
-  soundtouch-service:
-    image: ghcr.io/gesellix/bose-soundtouch:latest
-    container_name: soundtouch-service
-    # Linux users: use host networking for device discovery
-    # network_mode: host
-    # macOS/Windows users: use port mapping (discovery will be manual)
-    ports:
-      - "8000:8000"
-      - "8443:8443"
-    environment:
-      - PORT=8000
-      - SERVER_URL=http://soundtouch.local:8000
-      - HTTPS_SERVER_URL=https://soundtouch.local:8443
-      - DATA_DIR=/app/data
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-```
-
-> **Note**: Hostnames from `SERVER_URL` and `HTTPS_SERVER_URL` are automatically included in the TLS certificate's Subject Alternative Names (SAN).
-
-And run:
-
-```bash
-docker-compose up -d
-```
-
-> **Note**: `--network host` is required for device discovery via UPnP and mDNS to work correctly within the container.
-
-#### Device Migration Example
-
-```bash
-# 1. Start the service
-soundtouch-service
-
-# 2. Open web UI at http://localhost:8000
-# 3. Discover your devices
-# 4. Click "Migrate" to configure devices to use local services
-
-# Or use the API directly:
-curl -X POST http://localhost:8000/setup/migrate/192.168.1.100
-```
-
-#### Service Endpoints
-
-- **Web UI**: `http://localhost:8000/` - Device management interface
-- **Discovery**: `GET /setup/devices` - List discovered devices
-- **Migration**: `POST /setup/migrate/{deviceIP}` - Switch device to local services
-- **BMX Services**: `/bmx/*` - Music service emulation (TuneIn, etc.)
-- **Marge Services**: `/marge/*` - Account and device management
-- **Proxy**: `/proxy/*` - Traffic inspection and debugging
-
-See [docs/SOUNDTOUCH-SERVICE.md](docs/SOUNDTOUCH-SERVICE.md) for detailed configuration and API reference.
+Detailed service configuration and Docker instructions can be found in [docs/SOUNDTOUCH-SERVICE.md](docs/SOUNDTOUCH-SERVICE.md).
 
 ### Library Usage
 

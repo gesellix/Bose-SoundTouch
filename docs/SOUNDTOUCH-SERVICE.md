@@ -49,10 +49,64 @@ cd Bose-SoundTouch
 go build -o soundtouch-service ./cmd/soundtouch-service
 ```
 
-### Docker (coming soon)
+### Docker Support
+
+You can run the SoundTouch service using Docker or Docker Compose. 
+
+> **Note for macOS and Windows users**: The `--net host` option is only supported on Linux. On macOS and Windows, service discovery (mDNS, UPnP) will not work automatically within the container. You will need to manually enter your device's IP address in the management UI, and the service will communicate with it directly.
+
+#### Using Docker
+
+**Linux (with host networking for discovery):**
 ```bash
-# Docker support planned for future release
-docker run -p 8000:8000 gesellix/soundtouch-service
+docker run -d \
+  --name soundtouch-service \
+  --network host \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/gesellix/bose-soundtouch:latest
+```
+
+**macOS / Windows (with port mapping):**
+```bash
+docker run --rm -it \
+  -p 8000:8000 -p 8443:8443 \
+  -v $(pwd)/data:/app/data \
+  --env SERVER_URL=http://soundtouch.local:8000 \
+  --env HTTPS_SERVER_URL=https://soundtouch.local:8443 \
+  ghcr.io/gesellix/bose-soundtouch:latest
+```
+
+> **Note**: The hostnames configured via `SERVER_URL` and `HTTPS_SERVER_URL` are automatically added as Subject Alternative Names (SAN) to the generated TLS certificate, ensuring valid SSL connections.
+
+#### Using Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  soundtouch-service:
+    image: ghcr.io/gesellix/bose-soundtouch:latest
+    container_name: soundtouch-service
+    # Linux users: use host networking for device discovery
+    # network_mode: host
+    # macOS/Windows users: use port mapping (discovery will be manual)
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+    environment:
+      - PORT=8000
+      - SERVER_URL=http://soundtouch.local:8000
+      - HTTPS_SERVER_URL=https://soundtouch.local:8443
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+```
+
+And run:
+
+```bash
+docker-compose up -d
 ```
 
 ## Quick Start
@@ -80,15 +134,17 @@ Use the web interface or API to migrate devices from Bose cloud services to your
 
 The service can be configured via environment variables or command-line flags:
 
-| Variable | Flag | Description | Default |
-|----------|------|-------------|---------|
-| `PORT` | `--port` | Port to bind the service to | `8000` |
-| `BIND_ADDR` | `--bind` | Network interface to bind to | all (ipv4 and ipv6) |
-| `DATA_DIR` | `--data-dir` | Directory for persistent data | `./data` |
-| `SERVER_URL` | `--server-url` | External URL of this service | `http://<hostname>:8000` |
-| `REDACT_PROXY_LOGS` | `--redact-logs` | Redact sensitive data in proxy logs | `true` |
-| `LOG_PROXY_BODY` | `--log-bodies` | Log full request/response bodies | `false` |
-| `DISCOVERY_INTERVAL` | `--discovery-interval` | Device discovery interval | `5m` |
+| Variable             | Flag                   | Description                                      | Default                   |
+|----------------------|------------------------|--------------------------------------------------|---------------------------|
+| `PORT`               | `--port`               | Port to bind the service to                      | `8000`                    |
+| `BIND_ADDR`          | `--bind`               | Network interface to bind to                     | all (ipv4 and ipv6)       |
+| `DATA_DIR`           | `--data-dir`           | Directory for persistent data                    | `./data`                  |
+| `SERVER_URL`         | `--server-url`         | External URL of this service                     | `http://<hostname>:8000`  |
+| `HTTPS_SERVER_URL`   | `--https-server-url`   | External HTTPS URL                               | `https://<hostname>:8443` |
+| `PYTHON_BACKEND_URL` |                        | URL for Python-based service components (legacy) |                           |
+| `REDACT_PROXY_LOGS`  | `--redact-logs`        | Redact sensitive data in proxy logs              | `true`                    |
+| `LOG_PROXY_BODY`     | `--log-bodies`         | Log full request/response bodies                 | `false`                   |
+| `DISCOVERY_INTERVAL` | `--discovery-interval` | Device discovery interval                        | `5m`                      |
 
 ### Configuration Examples
 
@@ -382,6 +438,29 @@ find data/events/ -name "*.log" -mtime +30 -delete
 # Clean old statistics (older than 90 days)
 find data/stats/ -name "*.json" -mtime +90 -delete
 ```
+
+## API Endpoints
+
+### Management UI
+- **URL**: `http://localhost:8000/` or `http://localhost:8000/web/`
+- **Description**: Browser-based guided flow for discovery, data sync, and migration.
+
+### Setup API
+- `GET /setup/devices`: List all known (auto-discovered and manual) devices.
+- `POST /setup/devices`: Manually add a device by IP.
+- `POST /setup/discover`: Trigger a new network discovery scan.
+- `GET /setup/discovery-status`: Check if a scan is currently in progress.
+- `POST /setup/sync/{deviceIP}`: Fetch presets, recents, and sources from a device.
+- `GET /setup/summary/{deviceIP}`: Get a detailed migration readiness summary.
+- `POST /setup/migrate/{deviceIP}`: Migrate a device using the specified method (XML/Hosts).
+- `GET /setup/ca.crt`: Download the Root CA certificate for manual installation.
+
+### Emulated Services
+- `/bmx/registry/v1/services`: BMX service registry.
+- `/bmx/tunein/v1/*`: TuneIn radio emulation.
+- `/marge/accounts/*`: Account and device management.
+- `/marge/updates/soundtouch`: Software update emulation.
+- `/proxy/*`: Logging proxy for original Bose services.
 
 ## Troubleshooting
 
