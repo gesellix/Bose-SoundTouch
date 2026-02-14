@@ -441,6 +441,7 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 
 	out, err := m.EnsureRemoteServices(deviceIP)
 	logs += "Ensuring remote services:\n" + out + "\n"
+
 	if err != nil {
 		// Log but continue migration? Or fail? The requirement is "to ensure stable 'remote_services'"
 		// Let's log it.
@@ -459,10 +460,11 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 
 	// If we have a proxyURL and can read current config, use it
 	client := m.NewSSH(deviceIP)
-	if currentConfig, err := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); err == nil && currentConfig != "" {
+	if curCfg, curCfgErr := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); curCfgErr == nil && curCfg != "" {
 		logs += "Read current configuration\n"
+
 		var currentCfg PrivateCfg
-		if xml.Unmarshal([]byte(currentConfig), &currentCfg) == nil {
+		if xml.Unmarshal([]byte(curCfg), &currentCfg) == nil {
 			if proxyURL == "" {
 				proxyURL = targetURL
 			}
@@ -490,8 +492,8 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 	remotePath := SoundTouchSdkPrivateCfgPath
 	rwCmd := "(rw || mount -o remount,rw /)"
 
-	if out, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
-		logs += fmt.Sprintf("Backing up original config to %s.original (check: %s)\n", remotePath, out)
+	if backupOut, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
+		logs += fmt.Sprintf("Backing up original config to %s.original (check: %s)\n", remotePath, backupOut)
 		fmt.Printf("Backing up original config to %s.original\n", remotePath)
 		// Try to copy existing config to .original, ensuring filesystem is writable
 		if output, err := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath)); err != nil {
@@ -518,10 +520,12 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 	// but UploadContent is a separate method. We should probably add rw to UploadContent or call it before.
 	// Actually, let's call rw before UploadContent here.
 	out, _ = client.Run(rwCmd)
+
 	logs += rwCmd + ": " + out + "\n"
 	if err := client.UploadContent(xmlContent, remotePath); err != nil {
 		return logs, fmt.Errorf("failed to upload config: %w", err)
 	}
+
 	logs += "Uploaded new configuration to " + remotePath + "\n"
 
 	return logs, nil
@@ -549,6 +553,7 @@ func (m *Manager) BackupConfig(deviceIP string) (string, error) {
 
 	// Fallback to cat + upload
 	config, err := client.Run(fmt.Sprintf("cat %s", remotePath))
+
 	logs += "cat " + remotePath + ": " + config + "\n"
 	if err != nil || config == "" {
 		return logs, fmt.Errorf("failed to read current config: %w", err)
@@ -556,6 +561,7 @@ func (m *Manager) BackupConfig(deviceIP string) (string, error) {
 
 	// Ensure rw before upload fallback
 	out, _ := client.Run(rwCmd)
+
 	logs += rwCmd + ": " + out + "\n"
 	if err := client.UploadContent([]byte(config), remotePath+".original"); err != nil {
 		return logs, fmt.Errorf("failed to upload backup config: %w", err)
@@ -580,16 +586,19 @@ func (m *Manager) EnsureRemoteServices(deviceIP string) (string, error) {
 	}
 
 	var logs string
+
 	for _, loc := range locations {
 		// Try to make filesystem writable for each location that might need it
 		// Combining rw && touch ensures it's attempted in the same sequence
 		out, err := client.Run(fmt.Sprintf("%s && touch %s", rwCmd, loc))
+
 		logs += fmt.Sprintf("touch %s (with rw): %s\n", loc, out)
 		if err == nil {
 			return logs, nil
 		}
 		// If rw && touch failed, try just touch (e.g. for /tmp which doesn't need rw)
 		out, err = client.Run(fmt.Sprintf("touch %s", loc))
+
 		logs += fmt.Sprintf("touch %s: %s\n", loc, out)
 		if err == nil {
 			return logs, nil
@@ -616,13 +625,14 @@ func (m *Manager) TrustCACert(deviceIP string) (string, error) {
 	logs += rwCmd + ": " + out + "\n"
 
 	// Backup bundle if it doesn't exist
-	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", bundlePath)); err != nil {
+	if _, backupErr := client.Run(fmt.Sprintf("[ -f %s.original ]", bundlePath)); backupErr != nil {
 		out, _ := client.Run(fmt.Sprintf("cp %s %s.original", bundlePath, bundlePath))
 		logs += fmt.Sprintf("cp %s %s.original: %s\n", bundlePath, bundlePath, out)
 	}
 
 	// Check if the label already exists in the bundle
 	bundleContent, err := client.Run(fmt.Sprintf("cat %s", bundlePath))
+
 	logs += "cat " + bundlePath + " (check existing)\n"
 	if err != nil {
 		return logs, fmt.Errorf("failed to read bundle: %w", err)
@@ -704,6 +714,7 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 	}
 
 	hostsContent, err := client.Run("cat /etc/hosts")
+
 	logs += "cat /etc/hosts: " + hostsContent + "\n"
 	if err != nil {
 		return logs, fmt.Errorf("failed to read /etc/hosts: %w", err)
@@ -735,6 +746,7 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 	}
 
 	logs += "Uploaded updated /etc/hosts\n"
+
 	fmt.Printf("Updated /etc/hosts on %s:\n%s\n", deviceIP, hostsContent)
 
 	// 4. Inject CA Certificate
@@ -743,12 +755,14 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 
 	if !summary.CACertTrusted {
 		out, err := m.TrustCACert(deviceIP)
+
 		logs += "Trusting CA:\n" + out + "\n"
 		if err != nil {
 			return logs, err
 		}
 	} else {
 		logs += "CA certificate already trusted, skipping injection\n"
+
 		fmt.Printf("CA certificate already trusted on %s, skipping injection\n", deviceIP)
 	}
 
@@ -768,6 +782,7 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		logs += fmt.Sprintf("Reverting %s from backup\n", remotePath)
 		fmt.Printf("Reverting %s from backup\n", remotePath)
 		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, remotePath, remotePath))
+
 		logs += fmt.Sprintf("cp %s.original %s: %s\n", remotePath, remotePath, out)
 		if err != nil {
 			return logs, fmt.Errorf("failed to revert %s: %w", remotePath, err)
@@ -782,6 +797,7 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		logs += fmt.Sprintf("Reverting %s from backup\n", hostsPath)
 		fmt.Printf("Reverting %s from backup\n", hostsPath)
 		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, hostsPath, hostsPath))
+
 		logs += fmt.Sprintf("cp %s.original %s: %s\n", hostsPath, hostsPath, out)
 		if err != nil {
 			// Don't return error here, try to continue with other reverts
@@ -794,14 +810,19 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 	if bundleContent, err := client.Run(fmt.Sprintf("cat %s", bundlePath)); err == nil && strings.Contains(bundleContent, CALabel) {
 		logs += fmt.Sprintf("Removing local CA certificate from %s\n", bundlePath)
 		fmt.Printf("Removing local CA certificate from %s\n", bundlePath)
+
 		lines := strings.Split(bundleContent, "\n")
+
 		var newLines []string
+
 		inOurCA := false
+
 		for _, line := range lines {
 			if strings.Contains(line, CALabel) {
 				inOurCA = !inOurCA
 				continue
 			}
+
 			if !inOurCA {
 				newLines = append(newLines, line)
 			}
@@ -813,6 +834,7 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		}
 
 		out, _ := client.Run(rwCmd)
+
 		logs += rwCmd + ": " + out + "\n"
 		if err := client.UploadContent([]byte(bundleContent), bundlePath); err != nil {
 			logs += "Warning: failed to remove CA from " + bundlePath + ": " + err.Error() + "\n"
@@ -836,16 +858,20 @@ func (m *Manager) RemoveRemoteServices(deviceIP string) (string, error) {
 		"/tmp/remote_services",
 	}
 
-	var logs string
-	var errors []error
+	var (
+		logs   string
+		errors []error
+	)
 
 	for _, loc := range locations {
 		// Try to make filesystem writable and remove the file
 		out, err := client.Run(fmt.Sprintf("%s && rm -v %s", rwCmd, loc))
+
 		logs += fmt.Sprintf("Removing %s: %s\n", loc, out)
 		if err != nil {
 			// If rw && rm failed, try just rm (e.g. for /tmp)
 			out, err = client.Run(fmt.Sprintf("rm -v %s", loc))
+
 			logs += fmt.Sprintf("Fallback removing %s: %s\n", loc, out)
 			if err != nil {
 				errors = append(errors, fmt.Errorf("failed to remove %s: %w", loc, err))
@@ -866,6 +892,7 @@ func (m *Manager) Reboot(deviceIP string) (string, error) {
 	rwCmd := "(rw || mount -o remount,rw /)"
 
 	fmt.Printf("Rebooting speaker at %s\n", deviceIP)
+
 	out, err := client.Run(fmt.Sprintf("%s && reboot", rwCmd))
 	if err != nil {
 		return out, fmt.Errorf("failed to reboot speaker: %w", err)
