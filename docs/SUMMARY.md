@@ -15,8 +15,8 @@
 
 ### Useful Links
 * [Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md)
-* [Raspberry Pi Installer](../../scripts/raspberry-pi/README.md)
-* [Updating the Service](../../scripts/raspberry-pi/README.md#updating-to-a-new-version)
+* [Raspberry Pi Installer](../scripts/raspberry-pi/README.md)
+* [Updating the Service](../scripts/raspberry-pi/README.md#updating-to-a-new-version)
 * [CLI Reference](guides/CLI-REFERENCE.md)
 
 ## Technical Reference

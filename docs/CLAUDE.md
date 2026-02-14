@@ -4,9 +4,9 @@
 
 This document contains important development guidelines for working on the Bose SoundTouch project. Please also read the following documentation:
 
-- **[PLAN.md](PLAN.md)** - Project planning and roadmap
+- **[PLAN.md](archive/PLAN.md)** - Project planning and roadmap
 - **[PROJECT-PATTERNS.md](PROJECT-PATTERNS.md)** - Project structure and design patterns
-- **[API-Endpoints-Overview.md](API-Endpoints-Overview.md)** - API endpoints overview
+- **[API-ENDPOINTS.md](reference/API-ENDPOINTS.md)** - API endpoints overview
 - **[SoundTouch Web API.pdf](2025.12.18%20SoundTouch%20Web%20API.pdf)** - Official API documentation
 
 ## Development Guidelines
@@ -95,4 +95,3 @@ When creating test data for API endpoints, prefer real device responses over hyp
 - **Documentation**: Completely in English for international accessibility
 - Conduct regular code reviews
 - Consider performance from the beginning
-

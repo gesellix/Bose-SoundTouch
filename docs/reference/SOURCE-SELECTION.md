@@ -345,10 +345,10 @@ The implementation follows the official SoundTouch API:
 
 ## Related Documentation
 
-- **[API Endpoints Overview](API-Endpoints-Overview.md)** - Complete API reference
-- **[Sources](../pkg/models/sources.go)** - Source model implementation  
-- **[Now Playing](../pkg/models/nowplaying.go)** - ContentItem model
-- **[Client Usage Examples](../cmd/soundtouch-cli/main.go)** - CLI implementation reference
+- **[API Endpoints Overview](API-ENDPOINTS.md)** - Complete API reference
+- **[Sources](../../pkg/models/sources.go)** - Source model implementation  
+- **[Now Playing](../../pkg/models/nowplaying.go)** - ContentItem model
+- **[Client Usage Examples](../../cmd/soundtouch-cli/main.go)** - CLI implementation reference
 
 ---
 

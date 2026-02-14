@@ -1248,6 +1248,6 @@ SOUNDTOUCH_DISCOVERY_TIMEOUT=10s
 ## See Also
 
 - [Getting Started Guide](GETTING-STARTED.md) - Basic setup and usage
-- [WebSocket Events](websocket-events.md) - Real-time monitoring
-- [Zone Management](zone-management.md) - Multi-room setup
-- [API Endpoints](API-Endpoints-Overview.md) - Complete API reference
+- [WebSocket Events](../reference/WEBSOCKET-EVENTS.md) - Real-time monitoring
+- [Zone Management](../reference/ZONE-MANAGEMENT.md) - Multi-room setup
+- [API Endpoints](../reference/API-ENDPOINTS.md) - Complete API reference

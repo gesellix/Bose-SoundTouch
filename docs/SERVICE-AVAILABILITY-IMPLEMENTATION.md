@@ -23,7 +23,7 @@ This document summarizes the implementation of the `/serviceAvailability` endpoi
 ### Modified Files
 
 1. **`pkg/client/client.go`** - Added `GetServiceAvailability()` method
-2. **`docs/API-Endpoints-Overview.md`** - Updated implementation status
+2. **`docs/reference/API-ENDPOINTS.md`** - Updated implementation status
 3. **`docs/UNIMPLEMENTED-ENDPOINTS.md`** - Marked as implemented
 
 ## API Interface

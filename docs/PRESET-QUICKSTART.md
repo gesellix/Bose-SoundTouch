@@ -332,11 +332,11 @@ soundtouch-cli --host 192.168.1.100 info
 
 ## Next Steps
 
-- 📖 [Complete CLI Reference](CLI-REFERENCE.md)
-- 🔧 [Full Implementation Guide](preset-store.md)
-- 📡 [WebSocket Events Documentation](websocket-events.md)
+- 📖 [Complete CLI Reference](guides/CLI-REFERENCE.md)
+- 🔧 [Full Implementation Guide](reference/PRESET-MANAGEMENT.md)
+- 📡 [WebSocket Events Documentation](reference/WEBSOCKET-EVENTS.md)
 - 💻 [Preset Management Example](../examples/preset-management/)
-- 📚 [API Endpoints Overview](API-Endpoints-Overview.md)
+- 📚 [API Endpoints Overview](reference/API-ENDPOINTS.md)
 
 ## Need Help?
 
