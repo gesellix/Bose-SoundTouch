@@ -40,11 +40,15 @@ Open your web browser and navigate to the service's web interface:
 To migrate your speakers, the service needs SSH access. You can enable it by:
 1. Creating an empty file named `remote_services` on a USB stick.
 2. Inserting the USB stick into the SoundTouch speaker's service port.
-3. Rebooting the speaker.
+3. Rebooting the speaker (unplug/replug).
+
+**Verify SSH Access:**
+- Confirm the device responds to SSH without a password: `ssh -oHostKeyAlgorithms=+ssh-rsa root@<IP>`
+- Or use the **Migration** tab in the Web UI to see if the device shows a "✅ Success" status for SSH.
 Once enabled, you can log in as `root` (no password).
 
 #### 4. Setup Through the Web UI
-The web interface handles the entire process in a guided flow. Before proceeding, we strongly recommend reviewing the [Migration & Safety Guide](MIGRATION-SAFETY-GUIDE.md).
+The web interface handles the entire process in a guided flow. Before proceeding, we strongly recommend reviewing the [Migration & Safety Guide](MIGRATION-SAFETY.md).
 
 *   **Step 1: Settings**: Configure your server's IP or domain. This ensures the speakers know where to find the local services.
 *   **Step 2: Devices**: The service automatically scans for SoundTouch devices on your network. If a device is not found, you can manually add its IP address.

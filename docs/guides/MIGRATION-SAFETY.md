@@ -19,11 +19,14 @@ Before you proceed with the actual migration, follow these steps:
     - Insert the USB stick into the SoundTouch speaker's **SERVICE** port.
     - Reboot the speaker (unplug and replug).
     - The speaker will now allow SSH connections as `root` with no password.
+    - **Verify**: Run `ssh -oHostKeyAlgorithms=+ssh-rsa root@<SPEAKER-IP>` to confirm access. (Note: older devices may require enabling `ssh-rsa` support).
 2.  **Network Isolation (Optional but Recommended)**: Ensure the device is on a stable wired connection if possible, or a dedicated 2.4GHz SSID to avoid drops during SSH operations.
 3.  **Initial Discovery & Sync**: 
     - Run `soundtouch-cli discover devices` to ensure connectivity.
     - Use the Web UI or CLI to "Sync" the device. This will automatically backup your presets and system configuration files to your local server.
-4.  **Validate SSH Access**: Confirm the device responds to SSH without a password (the service handles this, but a manual check with `ssh root@<IP>` is a good sanity check).
+4.  **Validate SSH Access**: Confirm the device responds to SSH without a password. 
+    - In the Web UI **Migration** tab, select your speaker and verify that the "SSH Connection" status shows ✅ Success.
+    - This toolkit automatically handles the necessary SSH parameters (ciphers and key exchanges) required by older Bose firmware.
 5.  **Use XML Migration First**: The `XML` migration method is less invasive than the `Hosts` method. It only changes the application config and doesn't require modifying the system's DNS/CA trust store if you don't need full HTTPS interception initially.
 6.  **Monitor Logs**: Run the `soundtouch-service` with `DEBUG` or `INFO` logging to see the step-by-step progress of the migration.
 

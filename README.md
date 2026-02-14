@@ -61,7 +61,7 @@ soundtouch-cli --host 192.168.1.100 volume set --level 50
 soundtouch-cli --host 192.168.1.100 preset list
 ```
 
-For full CLI documentation, see [docs/CLI-REFERENCE.md](docs/CLI-REFERENCE.md).
+For full CLI documentation, see [docs/guides/CLI-REFERENCE.md](docs/guides/CLI-REFERENCE.md).
 
 ### SoundTouch Service (Cloud Shutdown Protection)
 
@@ -82,11 +82,11 @@ soundtouch-service
 ```
 Open `http://localhost:8000` in your browser to manage your devices. Documentation is also available directly through the web interface.
 
-For a comprehensive guide on transitioning your system, see the [Bose Cloud Shutdown: Survival Guide](docs/CLOUD-SHUTDOWN-GUIDE.md).
+For a comprehensive guide on transitioning your system, see the [Bose Cloud Shutdown: Survival Guide](docs/guides/SURVIVAL-GUIDE.md).
 
-Detailed service configuration and Docker instructions can be found in [docs/SOUNDTOUCH-SERVICE.md](docs/SOUNDTOUCH-SERVICE.md).
+Detailed service configuration and Docker instructions can be found in [docs/guides/SOUNDTOUCH-SERVICE.md](docs/guides/SOUNDTOUCH-SERVICE.md).
 
-For professional migration tips and safety measures, see the [Migration & Safety Guide](docs/MIGRATION-SAFETY-GUIDE.md).
+For professional migration tips and safety measures, see the [Migration & Safety Guide](docs/guides/MIGRATION-SAFETY.md).
 
 ### Library Usage
 
