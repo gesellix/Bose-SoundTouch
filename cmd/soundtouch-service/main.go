@@ -140,6 +140,7 @@ func main() {
 
 			// Load settings from datastore
 			persisted, err := ds.GetSettings()
+
 			settingsExist := err == nil && persisted.ServerURL != ""
 			if persisted.ServerURL != "" {
 				config.serverURL = persisted.ServerURL
@@ -154,7 +155,7 @@ func main() {
 			}
 
 			if persisted.DiscoveryInterval != "" {
-				if d, err := time.ParseDuration(persisted.DiscoveryInterval); err == nil {
+				if d, durErr := time.ParseDuration(persisted.DiscoveryInterval); durErr == nil {
 					config.discoveryInterval = d
 				}
 			}
@@ -195,6 +196,7 @@ func main() {
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryDisabled)
 			server.SetShortcuts(persisted.Shortcuts)
+
 			for path, status := range persisted.Shortcuts {
 				log.Printf("Warning: configured shortcut: %s -> %d", path, status)
 			}
@@ -207,12 +209,20 @@ func main() {
 			if err != nil {
 				log.Printf("Warning: Failed to load patterns from %s: %v", patternsPath, err)
 			}
+
 			if len(patterns) == 0 {
 				log.Printf("Creating default patterns at %s", patternsPath)
+
 				patterns = proxy.DefaultPatterns()
-				data, _ := json.MarshalIndent(patterns, "", "  ")
-				_ = os.WriteFile(patternsPath, data, 0644)
+
+				patternsData, jsonErr := json.MarshalIndent(patterns, "", "  ")
+				if jsonErr != nil {
+					log.Printf("Warning: Failed to marshal default patterns: %v", jsonErr)
+				} else {
+					_ = os.WriteFile(patternsPath, patternsData, 0644)
+				}
 			}
+
 			if len(patterns) > 0 {
 				recorder.Patterns = patterns
 			}
