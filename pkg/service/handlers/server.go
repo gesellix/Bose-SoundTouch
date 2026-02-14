@@ -27,6 +27,7 @@ type Server struct {
 	recordEnabled     bool
 	discoveryInterval time.Duration
 	discoveryDisabled bool
+	shortcuts         map[string]int
 	recorder          *proxy.Recorder
 	Version           string
 	Commit            string
@@ -64,6 +65,22 @@ func (s *Server) SetDiscoverySettings(interval time.Duration, disabled bool) {
 
 	s.discoveryInterval = interval
 	s.discoveryDisabled = disabled
+}
+
+// SetShortcuts sets the request shortcuts for the server.
+func (s *Server) SetShortcuts(shortcuts map[string]int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.shortcuts = shortcuts
+}
+
+// GetShortcuts returns the current request shortcuts.
+func (s *Server) GetShortcuts() map[string]int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.shortcuts
 }
 
 // GetDiscoverySettings returns the current discovery settings.

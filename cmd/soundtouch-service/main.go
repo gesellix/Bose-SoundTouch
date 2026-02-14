@@ -165,16 +165,19 @@ func main() {
 
 			if !settingsExist {
 				log.Printf("Creating default settings.json in %s", config.dataDir)
-				_ = ds.SaveSettings(datastore.Settings{
-					ServerURL:          config.serverURL,
-					ProxyURL:           config.targetURL,
-					HTTPServerURL:      config.httpsServerURL,
-					RedactLogs:         config.redact,
-					LogBodies:          config.logBody,
-					RecordInteractions: config.record,
-					DiscoveryInterval:  config.discoveryInterval.String(),
-					DiscoveryDisabled:  false,
-				})
+				persisted.ServerURL = config.serverURL
+				persisted.ProxyURL = config.targetURL
+				persisted.HTTPServerURL = config.httpsServerURL
+				persisted.RedactLogs = config.redact
+				persisted.LogBodies = config.logBody
+				persisted.RecordInteractions = config.record
+				persisted.DiscoveryInterval = config.discoveryInterval.String()
+				persisted.DiscoveryDisabled = false
+				persisted.Shortcuts = map[string]int{
+					"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
+					"/sw.js": http.StatusNotFound,
+				}
+				_ = ds.SaveSettings(persisted)
 			}
 
 			// Recalculate domains if settings changed
@@ -191,6 +194,10 @@ func main() {
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryDisabled)
+			server.SetShortcuts(persisted.Shortcuts)
+			for path, status := range persisted.Shortcuts {
+				log.Printf("Warning: configured shortcut: %s -> %d", path, status)
+			}
 
 			recorder := proxy.NewRecorder(config.dataDir)
 			recorder.Redact = config.redact
@@ -440,6 +447,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(server.ShortcutMiddleware)
 	r.Use(server.RecordMiddleware)
 
 	r.Get("/", server.HandleRoot)
