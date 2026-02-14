@@ -784,4 +784,4 @@ docker-compose up  # Mock devices + web app
 - [UPnP Device Architecture](http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.0.pdf) 
 - [Go Embed Directive](https://pkg.go.dev/embed)
 - [Gorilla WebSocket](https://github.com/gorilla/websocket)
-- [PROJECT-PATTERNS.md](./PROJECT-PATTERNS.md) - Detailed pattern documentation
+- [PROJECT-PATTERNS.md](../PROJECT-PATTERNS.md) - Detailed pattern documentation

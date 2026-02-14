@@ -418,10 +418,10 @@ soundtouch-cli -host <discovered-ip> -bass  # Verify final state
 
 ## Related Documentation
 
-- **[API Endpoints Overview](API-Endpoints-Overview.md)** - Complete API reference
+- **[API Endpoints Overview](API-ENDPOINTS.md)** - Complete API reference
 - **[Volume Controls](VOLUME-CONTROLS.md)** - Related audio control documentation
-- **[Client Usage Examples](../cmd/soundtouch-cli/main.go)** - CLI implementation reference
-- **[Models](../pkg/models/bass.go)** - Bass model implementation
+- **[Client Usage Examples](../../cmd/soundtouch-cli/main.go)** - CLI implementation reference
+- **[Models](../../pkg/models/bass.go)** - Bass model implementation
 
 ## API Compliance
 

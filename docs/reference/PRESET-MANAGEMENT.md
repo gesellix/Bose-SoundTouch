@@ -366,7 +366,7 @@ This implementation now provides the full preset management lifecycle:
 
 ## Related Documentation
 
-- [API Endpoints Overview](API-Endpoints-Overview.md) - Complete API reference
+- [API Endpoints Overview](API-ENDPOINTS.md) - Complete API reference
 - [Volume Controls](VOLUME-CONTROLS.md) - Volume management
 - [Key Controls](KEY-CONTROLS.md) - Media control commands
 - [Source Selection](SOURCE-SELECTION.md) - Audio source management

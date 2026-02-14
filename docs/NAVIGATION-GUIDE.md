@@ -895,4 +895,4 @@ For additional help:
 
 ---
 
-*This guide covers the complete navigation and station management functionality. For preset management, see [PRESET-MANAGEMENT.md](PRESET-MANAGEMENT.md).*
+*This guide covers the complete navigation and station management functionality. For preset management, see [PRESET-MANAGEMENT.md](reference/PRESET-MANAGEMENT.md).*

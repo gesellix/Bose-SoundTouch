@@ -74,7 +74,7 @@ If you have a managed switch or a router capable of port mirroring, you can use 
 ### "IsItBose" Validation Failures
 If the device fails to connect to your custom service despite correct configuration, it may be failing the internal `IsItBose` regex check.
 -   **Evidence**: Look for SSL handshake failures or "Unauthorized" errors in your service logs.
--   **Solution**: See the [Binary Patching section in DEVICE-REDIRECT-METHODS.md](DEVICE-REDIRECT-METHODS.md#method-3-binary-patching).
+-   **Solution**: See the [Binary Patching section in DEVICE-REDIRECT-METHODS.md](analysis/DEVICE-REDIRECT-METHODS.md#method-3-binary-patching).
 
 ### Disappearing Sources (TuneIn/Local Radio)
 If `TUNEIN` or `LOCAL_INTERNET_RADIO` sources disappear after a reboot in an offline environment.
