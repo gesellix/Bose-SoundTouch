@@ -20,11 +20,12 @@ var sensitiveHeaders = []string{
 
 // LoggingProxy wraps a ReverseProxy to provide instrumentation.
 type LoggingProxy struct {
-	Proxy       *httputil.ReverseProxy
-	Redact      bool
-	LogBody     bool
-	MaxBodySize int64
-	Recorder    *Recorder
+	Proxy         *httputil.ReverseProxy
+	Redact        bool
+	LogBody       bool
+	RecordEnabled bool
+	MaxBodySize   int64
+	Recorder      *Recorder
 }
 
 // NewLoggingProxy creates a lightweight logger for HTTP requests/responses.
@@ -89,7 +90,7 @@ func (lp *LoggingProxy) LogResponse(r *http.Response) {
 
 	log.Printf("[PROXY_RES] %d %s\n  Headers:\n%s\n  Body: %s", r.StatusCode, r.Request.URL.String(), headers, bodyStr)
 
-	if lp.Recorder != nil {
+	if lp.Recorder != nil && lp.RecordEnabled {
 		_ = lp.Recorder.Record("upstream", r.Request, r)
 	}
 }

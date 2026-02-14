@@ -20,6 +20,7 @@ async function fetchProxySettings() {
         const settings = await response.json();
         document.getElementById('proxy-redact').checked = settings.redact;
         document.getElementById('proxy-log-body').checked = settings.log_body;
+        document.getElementById('proxy-record').checked = settings.record;
     } catch (error) {
         console.error('Failed to fetch proxy settings', error);
     }
@@ -28,7 +29,8 @@ async function fetchProxySettings() {
 async function updateProxySettings() {
     const settings = {
         redact: document.getElementById('proxy-redact').checked,
-        log_body: document.getElementById('proxy-log-body').checked
+        log_body: document.getElementById('proxy-log-body').checked,
+        record: document.getElementById('proxy-record').checked
     };
     try {
         await fetch('/setup/proxy-settings', {
@@ -127,7 +129,7 @@ function openTab(evt, tabId) {
     if (content) {
         content.className += " active";
     }
-    
+
     if (evt) {
         evt.currentTarget.className += " active";
     } else {
@@ -251,13 +253,13 @@ async function updateDeviceInfo(ip) {
         if (row) {
             const nameEl = row.querySelector('.col-name');
             if (nameEl && info.name) nameEl.innerText = info.name;
-            
+
             const modelEl = row.querySelector('.col-model');
             if (modelEl && info.type) modelEl.innerText = info.type;
-            
+
             const serialEl = row.querySelector('.col-serial');
             if (serialEl && info.serialNumber) serialEl.innerText = info.serialNumber;
-            
+
             const firmwareEl = row.querySelector('.col-firmware');
             if (firmwareEl && info.softwareVersion) firmwareEl.innerText = info.softwareVersion;
         }
@@ -308,13 +310,13 @@ async function showSummary(ip) {
         if (row) {
             const nameEl = row.querySelector('.col-name');
             if (nameEl && summary.device_name) nameEl.innerText = summary.device_name;
-            
+
             const modelEl = row.querySelector('.col-model');
             if (modelEl && summary.device_model) modelEl.innerText = summary.device_model;
-            
+
             const serialEl = row.querySelector('.col-serial');
             if (serialEl && summary.device_serial) serialEl.innerText = summary.device_serial;
-            
+
             const firmwareEl = row.querySelector('.col-firmware');
             if (firmwareEl && summary.firmware_version) firmwareEl.innerText = summary.firmware_version;
         }

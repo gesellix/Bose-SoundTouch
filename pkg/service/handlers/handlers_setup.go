@@ -351,6 +351,7 @@ func (s *Server) HandleGetProxySettings(w http.ResponseWriter, _ *http.Request) 
 	if err := json.NewEncoder(w).Encode(map[string]bool{
 		"redact":   s.proxyRedact,
 		"log_body": s.proxyLogBody,
+		"record":   s.recordEnabled,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -377,6 +378,7 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 	var settings struct {
 		Redact  bool `json:"redact"`
 		LogBody bool `json:"log_body"`
+		Record  bool `json:"record"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -385,6 +387,7 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 
 	s.proxyRedact = settings.Redact
 	s.proxyLogBody = settings.LogBody
+	s.recordEnabled = settings.Record
 
 	w.Header().Set("Content-Type", "application/json")
 

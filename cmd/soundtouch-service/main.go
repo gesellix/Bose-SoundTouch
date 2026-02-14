@@ -30,7 +30,7 @@ func main() {
 	ds := initDataStore(config.dataDir)
 	cm := initCertificateManager(config.dataDir)
 	sm := setup.NewManager(config.serverURL, ds, cm)
-	server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody)
+	server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 
 	recorder := proxy.NewRecorder(config.dataDir)
 	recorder.Redact = config.redact
@@ -48,7 +48,7 @@ func main() {
 		log.Printf("Warning: Failed to setup TLS: %v", err)
 	}
 
-	pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody, recorder)
+	pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody, recorder, server)
 
 	startDeviceDiscovery(server)
 
@@ -74,6 +74,7 @@ type serviceConfig struct {
 	httpsAddr      string
 	redact         bool
 	logBody        bool
+	record         bool
 	domains        []string
 }
 
@@ -88,6 +89,7 @@ func loadConfig() serviceConfig {
 	fHttpsServerURL := flag.String("https-server-url", "", "External HTTPS URL (env: HTTPS_SERVER_URL)")
 	fRedact := flag.String("redact-logs", "", "Redact sensitive data in proxy logs (true/false, env: REDACT_PROXY_LOGS)")
 	fLogBody := flag.String("log-bodies", "", "Log full request/response bodies (true/false, env: LOG_PROXY_BODY)")
+	fRecord := flag.String("record-interactions", "", "Record HTTP interactions to disk (true/false, env: RECORD_INTERACTIONS)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of soundtouch-service:\n")
@@ -214,6 +216,12 @@ func loadConfig() serviceConfig {
 	}
 	logBody := logBodyVal == "true"
 
+	recordVal := *fRecord
+	if recordVal == "" {
+		recordVal = os.Getenv("RECORD_INTERACTIONS")
+	}
+	record := recordVal != "false"
+
 	return serviceConfig{
 		port:           port,
 		bindAddr:       bindAddr,
@@ -225,6 +233,7 @@ func loadConfig() serviceConfig {
 		httpsAddr:      httpsAddr,
 		redact:         redact,
 		logBody:        logBody,
+		record:         record,
 		domains:        domains,
 	}
 }
@@ -247,7 +256,7 @@ func initCertificateManager(dataDir string) *certmanager.CertificateManager {
 	return cm
 }
 
-func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Recorder) *httputil.ReverseProxy {
+func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Recorder, server *handlers.Server) *httputil.ReverseProxy {
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		log.Fatalf("Failed to parse target URL: %v", err)
@@ -262,6 +271,7 @@ func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Re
 
 		currentLp := proxy.NewLoggingProxy(target.String(), redact)
 		currentLp.LogBody = logBody
+		currentLp.RecordEnabled = server.GetRecordEnabled()
 		currentLp.SetRecorder(recorder)
 		currentLp.LogResponse(res)
 
@@ -274,6 +284,7 @@ func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Re
 
 		currentLp := proxy.NewLoggingProxy(target.String(), redact)
 		currentLp.LogBody = logBody
+		currentLp.RecordEnabled = server.GetRecordEnabled()
 		currentLp.SetRecorder(recorder)
 		currentLp.LogRequest(req)
 	}

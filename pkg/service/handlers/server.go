@@ -14,31 +14,38 @@ import (
 
 // Server handles HTTP requests for the SoundTouch service.
 type Server struct {
-	ds           *datastore.DataStore
-	sm           *setup.Manager
-	serverURL    string
-	proxyURL     string
-	discovering  bool
-	proxyRedact  bool
-	proxyLogBody bool
-	recorder     *proxy.Recorder
+	ds            *datastore.DataStore
+	sm            *setup.Manager
+	serverURL     string
+	proxyURL      string
+	discovering   bool
+	proxyRedact   bool
+	proxyLogBody  bool
+	recordEnabled bool
+	recorder      *proxy.Recorder
 }
 
 // NewServer creates a new SoundTouch service server.
-func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody bool) *Server {
+func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled bool) *Server {
 	return &Server{
-		ds:           ds,
-		sm:           sm,
-		serverURL:    serverURL,
-		proxyURL:     serverURL,
-		proxyRedact:  proxyRedact,
-		proxyLogBody: proxyLogBody,
+		ds:            ds,
+		sm:            sm,
+		serverURL:     serverURL,
+		proxyURL:      serverURL,
+		proxyRedact:   proxyRedact,
+		proxyLogBody:  proxyLogBody,
+		recordEnabled: recordEnabled,
 	}
 }
 
 // SetRecorder sets the recorder for the server.
 func (s *Server) SetRecorder(r *proxy.Recorder) {
 	s.recorder = r
+}
+
+// GetRecordEnabled returns whether recording is enabled.
+func (s *Server) GetRecordEnabled() bool {
+	return s.recordEnabled
 }
 
 // DiscoverDevices starts a background device discovery process.
