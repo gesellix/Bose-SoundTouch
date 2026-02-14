@@ -135,18 +135,19 @@ Use the web interface or API to migrate devices from Bose cloud services to your
 
 The service can be configured via environment variables or command-line flags:
 
-| Variable              | Flag                    | Description                                      | Default                   |
-|-----------------------|-------------------------|--------------------------------------------------|---------------------------|
-| `PORT`                | `--port`                | Port to bind the service to                      | `8000`                    |
-| `BIND_ADDR`           | `--bind`                | Network interface to bind to                     | all (ipv4 and ipv6)       |
-| `DATA_DIR`            | `--data-dir`            | Directory for persistent data                    | `./data`                  |
-| `SERVER_URL`          | `--server-url`          | External URL of this service                     | `http://<hostname>:8000`  |
-| `HTTPS_SERVER_URL`    | `--https-server-url`    | External HTTPS URL                               | `https://<hostname>:8443` |
-| `PYTHON_BACKEND_URL`  |                         | URL for Python-based service components (legacy) |                           |
-| `REDACT_PROXY_LOGS`   | `--redact-logs`         | Redact sensitive data in proxy logs              | `true`                    |
-| `LOG_PROXY_BODY`      | `--log-bodies`          | Log full request/response bodies                 | `false`                   |
-| `RECORD_INTERACTIONS` | `--record-interactions` | Record HTTP interactions to disk                 | `true`                    |
-| `DISCOVERY_INTERVAL`  | `--discovery-interval`  | Device discovery interval                        | `5m`                      |
+| Variable                           | Flag                       | Description                                      | Default                   |
+|------------------------------------|----------------------------|--------------------------------------------------|---------------------------|
+| `PORT`                             | `--port`, `-p`             | HTTP port to bind the service to                 | `8000`                    |
+| `BIND_ADDR`                        | `--bind`                   | Network interface to bind to                     | all (ipv4 and ipv6)       |
+| `DATA_DIR`                         | `--data-dir`               | Directory for persistent data                    | `./data`                  |
+| `SERVER_URL`                       | `--server-url`, `-s`       | External URL of this service                     | `http://<hostname>:8000`  |
+| `HTTPS_PORT`                       | `--https-port`             | HTTPS port to bind the service to                | `8443`                    |
+| `HTTPS_SERVER_URL`                 | `--https-server-url`, `-S` | External HTTPS URL                               | `https://<hostname>:8443` |
+| `PYTHON_BACKEND_URL`, `TARGET_URL` | `--target-url`             | URL for Python-based service components (legacy) | `http://localhost:8001`   |
+| `REDACT_PROXY_LOGS`                | `--redact-logs`            | Redact sensitive data in proxy logs              | `true`                    |
+| `LOG_PROXY_BODY`                   | `--log-bodies`             | Log full request/response bodies                 | `false`                   |
+| `RECORD_INTERACTIONS`              | `--record-interactions`    | Record HTTP interactions to disk                 | `true`                    |
+| `DISCOVERY_INTERVAL`               | `--discovery-interval`     | Device discovery interval                        | `5m`                      |
 
 ### Configuration Examples
 

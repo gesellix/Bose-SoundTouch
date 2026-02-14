@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -23,85 +24,206 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/urfave/cli/v2"
 )
 
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
+func updateBuildInfo() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
+
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				commit = setting.Value
+			case "vcs.time":
+				if t, err := time.Parse(time.RFC3339, setting.Value); err == nil {
+					date = t.Format("2006-01-02_15:04:05")
+				}
+			}
+		}
+	}
+}
+
 func main() {
-	config := loadConfig()
-	ds := initDataStore(config.dataDir)
-	cm := initCertificateManager(config.dataDir)
-	sm := setup.NewManager(config.serverURL, ds, cm)
-	server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
+	updateBuildInfo()
 
-	recorder := proxy.NewRecorder(config.dataDir)
-	recorder.Redact = config.redact
-	patternsPath := filepath.Join(config.dataDir, "patterns.json")
+	app := &cli.App{
+		Name:  "soundtouch-service",
+		Usage: "Local service for Bose SoundTouch cloud emulation and management",
+		Description: `⠎⠕⠥⠝⠙⠤⠞⠕⠥⠉⠓ A local server that emulates Bose cloud services (BMX, Marge).
+   It enables offline operation, device migration, and HTTP interaction recording.`,
+		Version: version,
+		Authors: []*cli.Author{
+			{
+				Name: "Tobias Gesellchen, and the Bose-SoundTouch Contributors",
+			},
+		},
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "port",
+				Aliases: []string{"p"},
+				Usage:   "HTTP port to bind the service to",
+				Value:   "8000",
+				EnvVars: []string{"PORT"},
+			},
+			&cli.StringFlag{
+				Name:    "bind",
+				Usage:   "Network interface to bind to",
+				EnvVars: []string{"BIND_ADDR"},
+			},
+			&cli.StringFlag{
+				Name:    "target-url",
+				Usage:   "URL for Python-based service components (legacy)",
+				Value:   "http://localhost:8001",
+				EnvVars: []string{"PYTHON_BACKEND_URL", "TARGET_URL"},
+			},
+			&cli.StringFlag{
+				Name:    "data-dir",
+				Usage:   "Directory for persistent data",
+				Value:   "data",
+				EnvVars: []string{"DATA_DIR"},
+			},
+			&cli.StringFlag{
+				Name:    "server-url",
+				Aliases: []string{"s"},
+				Usage:   "External URL of this service",
+				EnvVars: []string{"SERVER_URL"},
+			},
+			&cli.StringFlag{
+				Name:    "https-port",
+				Usage:   "HTTPS port to bind the service to",
+				Value:   "8443",
+				EnvVars: []string{"HTTPS_PORT"},
+			},
+			&cli.StringFlag{
+				Name:    "https-server-url",
+				Aliases: []string{"S"},
+				Usage:   "External HTTPS URL",
+				EnvVars: []string{"HTTPS_SERVER_URL"},
+			},
+			&cli.BoolFlag{
+				Name:    "redact-logs",
+				Usage:   "Redact sensitive data in proxy logs",
+				Value:   true,
+				EnvVars: []string{"REDACT_PROXY_LOGS"},
+			},
+			&cli.BoolFlag{
+				Name:    "log-bodies",
+				Usage:   "Log full request/response bodies",
+				EnvVars: []string{"LOG_PROXY_BODY"},
+			},
+			&cli.BoolFlag{
+				Name:    "record-interactions",
+				Usage:   "Record HTTP interactions to disk",
+				Value:   true,
+				EnvVars: []string{"RECORD_INTERACTIONS"},
+			},
+			&cli.StringFlag{
+				Name:    "discovery-interval",
+				Usage:   "Device discovery interval",
+				Value:   "5m",
+				EnvVars: []string{"DISCOVERY_INTERVAL"},
+			},
+		},
+		Action: func(c *cli.Context) error {
+			config := loadConfig(c)
+			ds := initDataStore(config.dataDir)
+			cm := initCertificateManager(config.dataDir)
+			sm := setup.NewManager(config.serverURL, ds, cm)
+			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 
-	patterns, err := proxy.LoadPatterns(patternsPath)
-	if err == nil && len(patterns) > 0 {
-		recorder.Patterns = patterns
-	} else if err != nil {
-		log.Printf("Warning: Failed to load patterns from %s: %v", patternsPath, err)
+			recorder := proxy.NewRecorder(config.dataDir)
+			recorder.Redact = config.redact
+			patternsPath := filepath.Join(config.dataDir, "patterns.json")
+
+			patterns, err := proxy.LoadPatterns(patternsPath)
+			if err == nil && len(patterns) > 0 {
+				recorder.Patterns = patterns
+			} else if err != nil {
+				log.Printf("Warning: Failed to load patterns from %s: %v", patternsPath, err)
+			}
+
+			server.SetRecorder(recorder)
+
+			tlsConfig, err := cm.GetServerTLSConfig(config.domains)
+			if err != nil {
+				log.Printf("Warning: Failed to setup TLS: %v", err)
+			}
+
+			pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody, recorder, server)
+
+			startDeviceDiscovery(server, config.discoveryInterval)
+
+			r := setupRouter(server, pyProxy)
+
+			log.Printf("Go service starting on %s, proxying to %s", config.serverURL, config.targetURL)
+
+			if tlsConfig != nil {
+				startHTTPSServer(config.httpsAddr, r, tlsConfig, config.httpsServerURL)
+			}
+
+			return http.ListenAndServe(config.addr, r)
+		},
+		Commands: []*cli.Command{
+			{
+				Name:    "version",
+				Aliases: []string{"v"},
+				Usage:   "Show detailed version information",
+				Action:  showVersionInfo,
+			},
+		},
 	}
 
-	server.SetRecorder(recorder)
-
-	tlsConfig, err := cm.GetServerTLSConfig(config.domains)
-	if err != nil {
-		log.Printf("Warning: Failed to setup TLS: %v", err)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
 	}
+}
 
-	pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody, recorder, server)
+func showVersionInfo(_ *cli.Context) error {
+	fmt.Printf("%s version %s\n", os.Args[0], version)
+	fmt.Printf("Build commit: %s\n", commit)
+	fmt.Printf("Build date: %s\n", date)
+	fmt.Printf("Go version: %s\n", runtime.Version())
+	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 
-	startDeviceDiscovery(server)
-
-	r := setupRouter(server, pyProxy)
-
-	log.Printf("Go service starting on %s, proxying to %s", config.serverURL, config.targetURL)
-
-	if tlsConfig != nil {
-		startHTTPSServer(config.httpsAddr, r, tlsConfig, config.httpsServerURL)
-	}
-
-	log.Fatal(http.ListenAndServe(config.addr, r))
+	return nil
 }
 
 type serviceConfig struct {
-	port           string
-	bindAddr       string
-	addr           string
-	targetURL      string
-	dataDir        string
-	serverURL      string
-	httpsServerURL string
-	httpsAddr      string
-	redact         bool
-	logBody        bool
-	record         bool
-	domains        []string
+	port              string
+	bindAddr          string
+	addr              string
+	targetURL         string
+	dataDir           string
+	serverURL         string
+	httpsServerURL    string
+	httpsAddr         string
+	redact            bool
+	logBody           bool
+	record            bool
+	discoveryInterval time.Duration
+	domains           []string
 }
 
-func loadConfig() serviceConfig {
-	// Define flags
-	fPort, fBindAddr, fTargetURL, fDataDir, fServerURL, fHTTPSPort, fHTTPSServerURL, fRedact, fLogBody, fRecord := defineFlags()
-
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of soundtouch-service:\n")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nConfiguration can also be set via environment variables.\n")
-	}
-
-	flag.Parse()
-
-	port := getEnvOrDefault("PORT", *fPort, "8000")
-	bindAddr := getEnvOrDefault("BIND_ADDR", *fBindAddr, "")
+func loadConfig(c *cli.Context) serviceConfig {
+	port := c.String("port")
+	bindAddr := c.String("bind")
 
 	addr := bindAddr + ":" + port
 	if bindAddr == "" {
 		addr = ":" + port
 	}
 
-	targetURL := getEnvOrDefault("PYTHON_BACKEND_URL", *fTargetURL, "http://localhost:8001")
-	dataDir := getEnvOrDefault("DATA_DIR", *fDataDir, "data")
+	targetURL := c.String("target-url")
+	dataDir := c.String("data-dir")
 
 	hostname, _ := os.Hostname()
 	if hostname == "" {
@@ -110,76 +232,53 @@ func loadConfig() serviceConfig {
 
 	hostname = strings.ToLower(hostname)
 
-	serverURL := getEnvOrDefault("SERVER_URL", *fServerURL, "")
+	serverURL := c.String("server-url")
 	if serverURL == "" {
 		serverURL = "http://" + hostname + ":" + port
 	}
 
-	httpsPort := getEnvOrDefault("HTTPS_PORT", *fHTTPSPort, "8443")
+	httpsPort := c.String("https-port")
 
 	httpsAddr := bindAddr + ":" + httpsPort
 	if bindAddr == "" {
 		httpsAddr = ":" + httpsPort
 	}
 
-	httpsServerURL := getEnvOrDefault("HTTPS_SERVER_URL", *fHTTPSServerURL, "")
+	httpsServerURL := c.String("https-server-url")
 	if httpsServerURL == "" {
 		httpsServerURL = "https://" + hostname + ":" + httpsPort
 	}
 
 	domains := getDomains(serverURL, httpsServerURL, hostname)
 
-	redactVal := getEnvOrDefault("REDACT_PROXY_LOGS", *fRedact, "")
-	redact := redactVal != "false"
+	redact := c.Bool("redact-logs")
+	logBody := c.Bool("log-bodies")
+	record := c.Bool("record-interactions")
 
-	logBodyVal := getEnvOrDefault("LOG_PROXY_BODY", *fLogBody, "")
-	logBody := logBodyVal == "true"
+	discoveryIntervalStr := c.String("discovery-interval")
 
-	recordVal := getEnvOrDefault("RECORD_INTERACTIONS", *fRecord, "")
-	record := recordVal != "false"
+	discoveryInterval, err := time.ParseDuration(discoveryIntervalStr)
+	if err != nil {
+		log.Printf("Warning: Failed to parse discovery interval %s, using default 5m: %v", discoveryIntervalStr, err)
+
+		discoveryInterval = 5 * time.Minute
+	}
 
 	return serviceConfig{
-		port:           port,
-		bindAddr:       bindAddr,
-		addr:           addr,
-		targetURL:      targetURL,
-		dataDir:        dataDir,
-		serverURL:      serverURL,
-		httpsServerURL: httpsServerURL,
-		httpsAddr:      httpsAddr,
-		redact:         redact,
-		logBody:        logBody,
-		record:         record,
-		domains:        domains,
+		port:              port,
+		bindAddr:          bindAddr,
+		addr:              addr,
+		targetURL:         targetURL,
+		dataDir:           dataDir,
+		serverURL:         serverURL,
+		httpsServerURL:    httpsServerURL,
+		httpsAddr:         httpsAddr,
+		redact:            redact,
+		logBody:           logBody,
+		record:            record,
+		discoveryInterval: discoveryInterval,
+		domains:           domains,
 	}
-}
-
-func defineFlags() (port, bind, target, data, server, httpsPort, httpsServer, redact, logBody, record *string) {
-	port = flag.String("port", "", "Port to bind the service to (env: PORT)")
-	bind = flag.String("bind", "", "Network interface to bind to (env: BIND_ADDR)")
-	target = flag.String("target-url", "", "URL for Python-based service components (env: PYTHON_BACKEND_URL)")
-	data = flag.String("data-dir", "", "Directory for persistent data (env: DATA_DIR)")
-	server = flag.String("server-url", "", "External URL of this service (env: SERVER_URL)")
-	httpsPort = flag.String("https-port", "", "HTTPS port to bind the service to (env: HTTPS_PORT)")
-	httpsServer = flag.String("https-server-url", "", "External HTTPS URL (env: HTTPS_SERVER_URL)")
-	redact = flag.String("redact-logs", "", "Redact sensitive data in proxy logs (true/false, env: REDACT_PROXY_LOGS)")
-	logBody = flag.String("log-bodies", "", "Log full request/response bodies (true/false, env: LOG_PROXY_BODY)")
-	record = flag.String("record-interactions", "", "Record HTTP interactions to disk (true/false, env: RECORD_INTERACTIONS)")
-
-	return
-}
-
-func getEnvOrDefault(envKey, flagVal, defaultVal string) string {
-	if flagVal != "" {
-		return flagVal
-	}
-
-	val := os.Getenv(envKey)
-	if val != "" {
-		return val
-	}
-
-	return defaultVal
 }
 
 func getDomains(serverURL, httpsServerURL, hostname string) []string {
@@ -265,11 +364,11 @@ func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Re
 	return pyProxy
 }
 
-func startDeviceDiscovery(server *handlers.Server) {
+func startDeviceDiscovery(server *handlers.Server, interval time.Duration) {
 	go func() {
 		for {
 			server.DiscoverDevices(context.Background())
-			time.Sleep(5 * time.Minute)
+			time.Sleep(interval)
 		}
 	}()
 }

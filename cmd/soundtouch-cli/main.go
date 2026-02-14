@@ -104,7 +104,7 @@ func main() {
 		Version: version,
 		Authors: []*cli.Author{
 			{
-				Name: "Tobias Gesellchen, and the SoundTouch CLI Contributors",
+				Name: "Tobias Gesellchen, and the Bose-SoundTouch Contributors",
 			},
 		},
 		Flags: CommonFlags,

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -331,7 +332,7 @@ func PrintWarning(message string) {
 
 // showVersionInfo displays detailed version information including build details
 func showVersionInfo(_ *cli.Context) error {
-	fmt.Printf("soundtouch-cli version %s\n", version)
+	fmt.Printf("%s version %s\n", os.Args[0], version)
 	fmt.Printf("Build commit: %s\n", commit)
 	fmt.Printf("Build date: %s\n", date)
 	fmt.Printf("Go version: %s\n", runtime.Version())
