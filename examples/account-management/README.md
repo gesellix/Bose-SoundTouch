@@ -149,4 +149,4 @@ After configuring accounts:
 3. Use `browse` commands to explore content
 4. Use `play` commands to start playback
 
-See the [CLI Reference](../../docs/CLI-REFERENCE.md) for complete documentation.
+See the [CLI Reference](../../docs/guides/CLI-REFERENCE.md) for complete documentation.

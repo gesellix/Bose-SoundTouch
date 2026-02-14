@@ -149,8 +149,8 @@ jobs:
           # Check that all documented endpoints exist in code
           echo "Validating API documentation consistency..."
 
-          # Extract endpoint patterns from cookbook
-          if [ -f "docs/API-COOKBOOK.md" ]; then
+          # Check API cookbook
+          if [ -f "docs/reference/API-COOKBOOK.md" ]; then
             echo "✓ API Cookbook exists"
           else
             echo "✗ API Cookbook missing"
@@ -158,7 +158,7 @@ jobs:
           fi
 
           # Check getting started guide
-          if [ -f "docs/GETTING-STARTED.md" ]; then
+          if [ -f "docs/guides/GETTING-STARTED.md" ]; then
             echo "✓ Getting Started guide exists"
           else
             echo "✗ Getting Started guide missing"

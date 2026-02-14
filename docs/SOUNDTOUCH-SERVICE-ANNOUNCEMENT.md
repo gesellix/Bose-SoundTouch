@@ -144,10 +144,10 @@ LOG_PROXY_BODY=true soundtouch-service
 
 ## 📚 Documentation
 
-- **[Complete Service Guide](SOUNDTOUCH-SERVICE.md)**: Comprehensive setup and configuration
-- **[API Reference](SOUNDTOUCH-SERVICE.md#api-reference)**: Full endpoint documentation
-- **[Migration Guide](SOUNDTOUCH-SERVICE.md#device-migration)**: Step-by-step device migration
-- **[Troubleshooting](SOUNDTOUCH-SERVICE.md#troubleshooting)**: Common issues and solutions
+- **[Complete Service Guide](guides/SOUNDTOUCH-SERVICE.md)**: Comprehensive setup and configuration
+- **[API Reference](guides/SOUNDTOUCH-SERVICE.md#api-reference)**: Full endpoint documentation
+- **[Migration Guide](guides/SOUNDTOUCH-SERVICE.md#device-migration)**: Step-by-step device migration
+- **[Troubleshooting](guides/SOUNDTOUCH-SERVICE.md#troubleshooting)**: Common issues and solutions
 
 ## 🤝 Contributing
 
@@ -172,9 +172,9 @@ The collaborative spirit of reverse engineering and documentation in the SoundTo
 ## 🔗 Links
 
 - **[Main Repository](https://github.com/gesellix/bose-soundtouch)**
-- **[Service Documentation](SOUNDTOUCH-SERVICE.md)**
-- **[CLI Documentation](CLI-REFERENCE.md)**
-- **[Getting Started Guide](GETTING-STARTED.md)**
+- **[Service Documentation](guides/SOUNDTOUCH-SERVICE.md)**
+- **[CLI Documentation](guides/CLI-REFERENCE.md)**
+- **[Getting Started Guide](guides/GETTING-STARTED.md)**
 - **[SoundCork Project](https://github.com/deborahgu/soundcork)**
 - **[ÜberBöse API](https://github.com/julius-d/ueberboese-api)**
 

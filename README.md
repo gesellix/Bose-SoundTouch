@@ -379,19 +379,19 @@ This library supports all Bose SoundTouch-compatible devices, including:
 ## Documentation
 
 - 📖 [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
-- 📚 [API Reference](docs/API-Endpoints-Overview.md) - Complete endpoint documentation
-- 🔧 [CLI Reference](docs/CLI-REFERENCE.md) - Command-line tool guide
-- 🌐 [SoundTouch Service Guide](docs/SOUNDTOUCH-SERVICE.md) - Local service setup and migration
-- 🎯 [Getting Started](docs/GETTING-STARTED.md) - Detailed setup and usage
+- 📚 [API Reference](docs/reference/API-ENDPOINTS.md) - Complete endpoint documentation
+- 🔧 [CLI Reference](docs/guides/CLI-REFERENCE.md) - Command-line tool guide
+- 🌐 [SoundTouch Service Guide](docs/guides/SOUNDTOUCH-SERVICE.md) - Local service setup and migration
+- 🎯 [Getting Started](docs/guides/GETTING-STARTED.md) - Detailed setup and usage
 - 📻 [Preset Quick Start](docs/PRESET-QUICKSTART.md) - Favorite content management
 - 🧭 [Navigation Guide](docs/NAVIGATION-GUIDE.md) - Content browsing and station management
 - 📋 [Navigation API Reference](docs/API-NAVIGATION-REFERENCE.md) - Navigation API documentation
-- ⚙️ [Advanced Features](docs/SYSTEM-ENDPOINTS.md) - Advanced functionality
-- 🏠 [Multiroom Setup](docs/zone-management.md) - Zone configuration guide
-- ⚡ [WebSocket Events](docs/websocket-events.md) - Real-time event handling
-- 🔔 [Speaker Notifications](docs/SPEAKER_ENDPOINT.md) - TTS and audio notifications guide
-- 🔍 [Device Discovery](docs/DISCOVERY.md) - Discovery configuration
-- 🛠️ [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- ⚙️ [Advanced Features](docs/reference/SYSTEM-ENDPOINTS.md) - Advanced functionality
+- 🏠 [Multiroom Setup](docs/reference/ZONE-MANAGEMENT.md) - Zone configuration guide
+- ⚡ [WebSocket Events](docs/reference/WEBSOCKET-EVENTS.md) - Real-time event handling
+- 🔔 [Speaker Notifications](docs/reference/SPEAKER-ENDPOINT.md) - TTS and audio notifications guide
+- 🔍 [Device Discovery](docs/reference/DISCOVERY.md) - Discovery configuration
+- 🛠️ [Troubleshooting](docs/guides/TROUBLESHOOTING.md) - Common issues and solutions
 
 ## Development
 
@@ -528,11 +528,11 @@ If you discover new endpoints, features, or improvements through this library, p
 - ❓ **Questions**: Check [existing discussions](https://github.com/gesellix/bose-soundtouch/discussions)
 - 📖 **Documentation**: Browse the [docs/](docs/) directory
 - 🔍 **New Discoveries**: See [Undocumented Community Features](docs/UNDOCUMENTED-COMMUNITY-FEATURES.md) for advanced API research
-- 🌐 **Upstream Analysis**: [Upstream URLs & Domains](docs/UPSTREAM-URLS-ANALYSIS.md) for cloud dependency research
-- 🔧 **Redirection Guide**: [Device Redirect Methods](docs/DEVICE-REDIRECT-METHODS.md) for custom service setup
-- 🐣 **Initial Setup**: [Device Initial Setup Variants](docs/DEVICE-INITIAL-SETUP.md) for out-of-the-box configuration
+- 🌐 **Upstream Analysis**: [Upstream URLs & Domains](docs/analysis/UPSTREAM-URLS.md) for cloud dependency research
+- 🔧 **Redirection Guide**: [Device Redirect Methods](docs/analysis/DEVICE-REDIRECT-METHODS.md) for custom service setup
+- 🐣 **Initial Setup**: [Device Initial Setup Variants](docs/guides/DEVICE-INITIAL-SETUP.md) for out-of-the-box configuration
 - 📜 **Logging & Debugging**: [Device Logging Guide](docs/DEVICE-LOGGING.md) for accessing system and traffic logs
-- 🔒 **HTTPS & CA Setup**: [HTTPS & Custom CA Guide](docs/HTTPS-SETUP.md) for secure `/etc/hosts` redirection
+- 🔒 **HTTPS & CA Setup**: [HTTPS & Custom CA Guide](docs/guides/HTTPS-SETUP.md) for secure `/etc/hosts` redirection
 
 ---
 

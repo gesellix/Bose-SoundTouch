@@ -256,10 +256,10 @@ Error: All preset slots are occupied
 
 ## Related Documentation
 
-- [CLI Reference](../../docs/CLI-REFERENCE.md) - Command-line usage
+- [CLI Reference](../../docs/guides/CLI-REFERENCE.md) - Command-line usage
 - [Preset Implementation Guide](../../docs/preset-store.md) - Technical details
-- [WebSocket Events](../../docs/websocket-events.md) - Real-time event handling
-- [API Reference](../../docs/API-Endpoints-Overview.md) - Complete API documentation
+- [WebSocket Events](../../docs/reference/WEBSOCKET-EVENTS.md) - Real-time event handling
+- [API Reference](../../docs/reference/API-ENDPOINTS.md) - Complete API documentation
 
 ## Use Cases
 

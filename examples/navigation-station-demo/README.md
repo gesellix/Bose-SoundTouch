@@ -275,10 +275,10 @@ go run ./cmd/soundtouch-cli --host 192.168.1.100 info
 
 ## Related Documentation
 
-- [CLI Reference](../../docs/CLI-REFERENCE.md) - Browse and station commands
-- [Navigation Guide](../../docs/NAVIGATION-GUIDE.md) - Comprehensive navigation documentation
+- [CLI Reference](../../docs/guides/CLI-REFERENCE.md) - Browse and station commands
+- [Navigation Guide](../../docs/guides/SURVIVAL-GUIDE.md) - Comprehensive navigation documentation
 - [Navigation API Reference](../../docs/API-NAVIGATION-REFERENCE.md) - Technical API details
-- [WebSocket Events](../../docs/websocket-events.md) - Real-time event handling
+- [WebSocket Events](../../docs/reference/WEBSOCKET-EVENTS.md) - Real-time event handling
 
 ## Use Cases
 

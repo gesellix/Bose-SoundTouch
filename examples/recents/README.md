@@ -252,8 +252,8 @@ go run main.go -host 192.168.1.100 -type unknown
 
 This recents data is useful for:
 - [Preset Management](../preset-management/) - Finding presetable content to save
-- [Content Selection](../../docs/SOURCE-SELECTION.md) - Understanding usage patterns
-- [Navigation](../../docs/NAVIGATION-GUIDE.md) - Quickly accessing recently played content
+- [Content Selection](../../docs/reference/SOURCE-SELECTION.md) - Understanding usage patterns
+- [Navigation](../../docs/guides/SURVIVAL-GUIDE.md) - Quickly accessing recently played content
 
 ## Related CLI Commands
 
@@ -274,6 +274,6 @@ soundtouch-cli --host 192.168.1.100 recents latest
 ## API Documentation
 
 For complete API documentation, see:
-- [API Reference](../../docs/API-Endpoints-Overview.md)
-- [CLI Reference](../../docs/CLI-REFERENCE.md)
+- [API Reference](../../docs/reference/API-ENDPOINTS.md)
+- [CLI Reference](../../docs/guides/CLI-REFERENCE.md)
 - [Recents Models](../../pkg/models/recents.go)
