@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -31,6 +33,7 @@ func main() {
 	server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody)
 
 	recorder := proxy.NewRecorder(config.dataDir)
+	recorder.Redact = config.redact
 	patternsPath := filepath.Join(config.dataDir, "patterns.json")
 	patterns, err := proxy.LoadPatterns(patternsPath)
 	if err == nil && len(patterns) > 0 {
@@ -75,29 +78,63 @@ type serviceConfig struct {
 }
 
 func loadConfig() serviceConfig {
-	port := os.Getenv("PORT")
+	// Define flags
+	fPort := flag.String("port", "", "Port to bind the service to (env: PORT)")
+	fBindAddr := flag.String("bind", "", "Network interface to bind to (env: BIND_ADDR)")
+	fTargetURL := flag.String("target-url", "", "URL for Python-based service components (env: PYTHON_BACKEND_URL)")
+	fDataDir := flag.String("data-dir", "", "Directory for persistent data (env: DATA_DIR)")
+	fServerURL := flag.String("server-url", "", "External URL of this service (env: SERVER_URL)")
+	fHttpsPort := flag.String("https-port", "", "HTTPS port to bind the service to (env: HTTPS_PORT)")
+	fHttpsServerURL := flag.String("https-server-url", "", "External HTTPS URL (env: HTTPS_SERVER_URL)")
+	fRedact := flag.String("redact-logs", "", "Redact sensitive data in proxy logs (true/false, env: REDACT_PROXY_LOGS)")
+	fLogBody := flag.String("log-bodies", "", "Log full request/response bodies (true/false, env: LOG_PROXY_BODY)")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of soundtouch-service:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nConfiguration can also be set via environment variables.\n")
+	}
+
+	flag.Parse()
+
+	port := *fPort
+	if port == "" {
+		port = os.Getenv("PORT")
+	}
 	if port == "" {
 		port = "8000"
 	}
 
-	bindAddr := os.Getenv("BIND_ADDR")
+	bindAddr := *fBindAddr
+	if bindAddr == "" {
+		bindAddr = os.Getenv("BIND_ADDR")
+	}
 
 	addr := bindAddr + ":" + port
 	if bindAddr == "" {
 		addr = ":" + port
 	}
 
-	targetURL := os.Getenv("PYTHON_BACKEND_URL")
+	targetURL := *fTargetURL
+	if targetURL == "" {
+		targetURL = os.Getenv("PYTHON_BACKEND_URL")
+	}
 	if targetURL == "" {
 		targetURL = "http://localhost:8001"
 	}
 
-	dataDir := os.Getenv("DATA_DIR")
+	dataDir := *fDataDir
+	if dataDir == "" {
+		dataDir = os.Getenv("DATA_DIR")
+	}
 	if dataDir == "" {
 		dataDir = "data"
 	}
 
-	serverURL := os.Getenv("SERVER_URL")
+	serverURL := *fServerURL
+	if serverURL == "" {
+		serverURL = os.Getenv("SERVER_URL")
+	}
 	if serverURL == "" {
 		hostname, _ := os.Hostname()
 		if hostname == "" {
@@ -107,7 +144,10 @@ func loadConfig() serviceConfig {
 		serverURL = "http://" + strings.ToLower(hostname) + ":" + port
 	}
 
-	httpsPort := os.Getenv("HTTPS_PORT")
+	httpsPort := *fHttpsPort
+	if httpsPort == "" {
+		httpsPort = os.Getenv("HTTPS_PORT")
+	}
 	if httpsPort == "" {
 		httpsPort = "8443"
 	}
@@ -117,7 +157,10 @@ func loadConfig() serviceConfig {
 		httpsAddr = ":" + httpsPort
 	}
 
-	httpsServerURL := os.Getenv("HTTPS_SERVER_URL")
+	httpsServerURL := *fHttpsServerURL
+	if httpsServerURL == "" {
+		httpsServerURL = os.Getenv("HTTPS_SERVER_URL")
+	}
 	if httpsServerURL == "" {
 		hostname, _ := os.Hostname()
 		if hostname == "" {
@@ -159,6 +202,18 @@ func loadConfig() serviceConfig {
 		domains = append(domains, d)
 	}
 
+	redactVal := *fRedact
+	if redactVal == "" {
+		redactVal = os.Getenv("REDACT_PROXY_LOGS")
+	}
+	redact := redactVal != "false"
+
+	logBodyVal := *fLogBody
+	if logBodyVal == "" {
+		logBodyVal = os.Getenv("LOG_PROXY_BODY")
+	}
+	logBody := logBodyVal == "true"
+
 	return serviceConfig{
 		port:           port,
 		bindAddr:       bindAddr,
@@ -168,8 +223,8 @@ func loadConfig() serviceConfig {
 		serverURL:      serverURL,
 		httpsServerURL: httpsServerURL,
 		httpsAddr:      httpsAddr,
-		redact:         os.Getenv("REDACT_PROXY_LOGS") != "false",
-		logBody:        os.Getenv("LOG_PROXY_BODY") == "true",
+		redact:         redact,
+		logBody:        logBody,
 		domains:        domains,
 	}
 }

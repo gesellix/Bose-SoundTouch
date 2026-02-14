@@ -200,6 +200,54 @@ func TestRecorder_Record_Sanitization_Account(t *testing.T) {
 	if !strings.Contains(contentStr, "GET /marge/accounts/{{accountId}}/full") {
 		t.Errorf("Expected sanitized URL in .http file, got:\n%s", contentStr)
 	}
+	if !strings.Contains(contentStr, "// accountId: 12345") {
+		t.Errorf("Expected accountId comment in .http file, got:\n%s", contentStr)
+	}
+}
+
+func TestRecorder_Record_Redaction(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "recorder-redaction-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	r := NewRecorder(tmpDir)
+	r.Redact = true
+
+	req := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Path: "/test",
+		},
+		Header: make(http.Header),
+	}
+	req.Header.Set("Authorization", "Bearer sensitive-token")
+	req.Header.Set("Cookie", "session=secret")
+	req.Header.Set("X-Normal", "public-info")
+
+	err = r.Record("self", req, nil)
+	if err != nil {
+		t.Fatalf("Record failed: %v", err)
+	}
+
+	expectedDir := filepath.Join(tmpDir, "interactions", r.SessionID, "self", "test")
+	files, _ := os.ReadDir(expectedDir)
+	content, _ := os.ReadFile(filepath.Join(expectedDir, files[0].Name()))
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "Authorization: [REDACTED]") {
+		t.Errorf("Expected Authorization header to be redacted, got:\n%s", contentStr)
+	}
+	if strings.Contains(contentStr, "sensitive-token") {
+		t.Errorf("Sensitive token still present in content:\n%s", contentStr)
+	}
+	if !strings.Contains(contentStr, "Cookie: [REDACTED]") {
+		t.Errorf("Expected Cookie header to be redacted, got:\n%s", contentStr)
+	}
+	if !strings.Contains(contentStr, "X-Normal: public-info") {
+		t.Errorf("Expected normal header to be present, got:\n%s", contentStr)
+	}
 }
 
 func isDigit(c byte) bool {

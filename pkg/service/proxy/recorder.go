@@ -20,6 +20,7 @@ type Recorder struct {
 	SessionID  string
 	SessionDir string
 	Patterns   PathPatterns
+	Redact     bool
 	counter    uint64
 	variables  map[string]string
 	mu         sync.Mutex
@@ -82,8 +83,16 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 	}
 
 	buf.WriteString(fmt.Sprintf("### %s %s\n", req.Method, displayURL))
+	for orig, repl := range replacements {
+		key := strings.Trim(repl, "{}")
+		buf.WriteString(fmt.Sprintf("// %s: %s\n", key, orig))
+	}
 	buf.WriteString(fmt.Sprintf("%s %s\n", req.Method, displayURL))
 	for k, vv := range req.Header {
+		if r.Redact && isSensitive(k) {
+			buf.WriteString(fmt.Sprintf("%s: [REDACTED]\n", k))
+			continue
+		}
 		for _, v := range vv {
 			val := v
 			for orig, repl := range replacements {
@@ -110,6 +119,10 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 		buf.WriteString(fmt.Sprintf("    // Response: %d %s\n", res.StatusCode, http.StatusText(res.StatusCode)))
 		buf.WriteString("    // Headers:\n")
 		for k, vv := range res.Header {
+			if r.Redact && isSensitive(k) {
+				buf.WriteString(fmt.Sprintf("    // %s: [REDACTED]\n", k))
+				continue
+			}
 			for _, v := range vv {
 				buf.WriteString(fmt.Sprintf("    // %s: %s\n", k, v))
 			}

@@ -11,6 +11,7 @@ The service provides:
 - **📊 Traffic Proxying**: Inspect and log all device communications for debugging
 - **🌐 Web Management UI**: Browser-based interface for device management
 - **💾 Persistent Data**: Store device configurations, presets, and usage statistics
+- **📝 HTTP Recording**: Persist all interactions as re-playable `.http` files
 - **🔍 Auto-Discovery**: Automatically detect and configure SoundTouch devices
 - **🔒 Offline Operation**: Continue using full device functionality without internet
 
@@ -365,6 +366,48 @@ The web management interface provides a comprehensive dashboard for managing you
 3. **Troubleshooting**: Use the debug tools to diagnose device connectivity issues
 4. **Log Analysis**: Enable detailed logging for development and troubleshooting
 
+## HTTP Interaction Recording
+
+The service automatically records all HTTP interactions (both those handled locally and those proxied upstream) as `.http` files. These files are compatible with the [IntelliJ IDEA HTTP Client](https://www.jetbrains.com/help/idea/exploring-http-syntax.html).
+
+### Key Features
+
+- **Session Grouping**: All interactions from a single server session are stored in a dedicated directory named `{timestamp}-{pid}`.
+- **Chronological Order**: Files are prefixed with a sequential number (e.g., `0001-`, `0002-`) to preserve the exact order of requests across the entire session.
+- **Path-Based Structure**: Recordings are organized into subdirectories based on their URL path for better discoverability.
+- **Automatic Sanitization**: Variable path segments like IP addresses, Device IDs, and Account IDs are automatically identified and replaced with placeholders (e.g., `{{ip}}`, `{{deviceId}}`). The original values are preserved as comments at the top of the recorded `.http` files for easy identification.
+- **Re-playability**: An `http-client.env.json` file is generated for each session, allowing you to re-play the recorded requests immediately in IntelliJ IDEA.
+
+### Configuration
+
+#### Redaction
+
+By default, the service redacts sensitive information from the recorded `.http` files, including:
+- `Authorization` headers
+- `Cookie` headers
+- `X-Bose-Token` headers
+
+This behavior is controlled by the `--redact-logs` flag or the `REDACT_PROXY_LOGS` environment variable.
+
+#### Custom Patterns
+
+The service uses regex patterns to identify variable segments in URL paths. These patterns are loaded from `data/patterns.json`. You can add custom patterns to this file to support additional variable segments:
+
+```json
+[
+  {
+    "name": "MyVariable",
+    "regexp": "^[0-9]{5}$",
+    "replacement": "{myVar}"
+  }
+]
+```
+
+Variables found via these patterns will be:
+1. Used as directory names in the `interactions/` folder.
+2. Parameterized as `{{myVar}}` within the `.http` files.
+3. Added to the `http-client.env.json` file with their actual values.
+
 ## Persistent Data
 
 ### Data Directory Structure
@@ -383,6 +426,15 @@ data/
 │       ├── Sources.xml
 │       ├── Presets.xml
 │       └── Recents.xml
+├── interactions/
+│   └── {SESSION_ID}/
+│       ├── self/
+│       │   └── {PATH}/
+│       │       └── {SEQ}-{TIME}-{METHOD}.http
+│       ├── upstream/
+│       │   └── {PATH}/
+│       │       └── {SEQ}-{TIME}-{METHOD}.http
+│       └── http-client.env.json
 ├── stats/
 │   ├── usage/
 │   │   └── *.json
@@ -410,6 +462,14 @@ data/
 
 #### Events (`events/`)
 - **device_events_*.log**: Device event history and debugging logs
+
+#### HTTP Interactions (`interactions/`)
+- **{SESSION_ID}/**: A unique directory per server run (format: `YYYYMMDD-HHMMSS-PID`).
+- **self/**: Requests handled directly by the service.
+- **upstream/**: Requests proxied to external Bose services.
+- **{PATH}/**: Nested subdirectories reflecting the URL path (sanitized).
+- **http-client.env.json**: IntelliJ IDEA HTTP Client environment file with session variables.
+- **{SEQ}-{TIME}-{METHOD}.http**: Individual interaction recordings in standard HTTP Client format.
 
 ### Data Management
 
