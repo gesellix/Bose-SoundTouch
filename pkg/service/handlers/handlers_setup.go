@@ -184,11 +184,12 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.sm.MigrateSpeaker(deviceIP, targetURL, proxyURL, options, method); err != nil {
+	output, err := s.sm.MigrateSpeaker(deviceIP, targetURL, proxyURL, options, method)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 
-		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()}); encodeErr != nil {
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 			return
 		}
@@ -198,7 +199,43 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Migration started"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Migration started", "output": output}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleRevertMigration reverts the migration for a device.
+func (s *Server) HandleRevertMigration(w http.ResponseWriter, r *http.Request) {
+	deviceIP := chi.URLParam(r, "deviceIP")
+	if deviceIP == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"}); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	output, err := s.sm.RevertMigration(deviceIP)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Revert started", "output": output}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -219,11 +256,12 @@ func (s *Server) HandleTrustCACert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.sm.TrustCACert(deviceIP); err != nil {
+	output, err := s.sm.TrustCACert(deviceIP)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 
-		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()}); encodeErr != nil {
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 			return
 		}
@@ -233,7 +271,7 @@ func (s *Server) HandleTrustCACert(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Root CA trusted"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Root CA trusted", "output": output}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -254,11 +292,12 @@ func (s *Server) HandleEnsureRemoteServices(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := s.sm.EnsureRemoteServices(deviceIP); err != nil {
+	output, err := s.sm.EnsureRemoteServices(deviceIP)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 
-		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()}); encodeErr != nil {
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 			return
 		}
@@ -268,7 +307,7 @@ func (s *Server) HandleEnsureRemoteServices(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Remote services ensured"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Remote services enabled", "output": output}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -289,11 +328,12 @@ func (s *Server) HandleRemoveRemoteServices(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := s.sm.RemoveRemoteServices(deviceIP); err != nil {
+	output, err := s.sm.RemoveRemoteServices(deviceIP)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 
-		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()}); encodeErr != nil {
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 			return
 		}
@@ -303,7 +343,7 @@ func (s *Server) HandleRemoveRemoteServices(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Remote services removed"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Remote services removed", "output": output}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -324,11 +364,12 @@ func (s *Server) HandleBackupConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.sm.BackupConfig(deviceIP); err != nil {
+	output, err := s.sm.BackupConfig(deviceIP)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 
-		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error()}); encodeErr != nil {
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 			return
 		}
@@ -338,7 +379,7 @@ func (s *Server) HandleBackupConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Backup created"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Config backed up", "output": output}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -452,6 +493,42 @@ func (s *Server) HandleInitialSync(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"ok": true}`))
+}
+
+// HandleRebootDevice reboots a device.
+func (s *Server) HandleRebootDevice(w http.ResponseWriter, r *http.Request) {
+	deviceIP := chi.URLParam(r, "deviceIP")
+	if deviceIP == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device IP is required"}); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	output, err := s.sm.Reboot(deviceIP)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Reboot started", "output": output}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 // HandleTestConnection performs a connection check from the device to the server.

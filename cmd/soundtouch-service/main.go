@@ -428,6 +428,8 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Get("/info/{deviceIP}", server.HandleGetDeviceInfo)
 		r.Get("/summary/{deviceIP}", server.HandleGetMigrationSummary)
 		r.Post("/migrate/{deviceIP}", server.HandleMigrateDevice)
+		r.Post("/revert/{deviceIP}", server.HandleRevertMigration)
+		r.Post("/reboot/{deviceIP}", server.HandleRebootDevice)
 		r.Post("/trust-ca/{deviceIP}", server.HandleTrustCACert)
 		r.Post("/ensure-remote-services/{deviceIP}", server.HandleEnsureRemoteServices)
 		r.Post("/remove-remote-services/{deviceIP}", server.HandleRemoveRemoteServices)

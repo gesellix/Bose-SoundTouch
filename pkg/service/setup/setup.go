@@ -424,7 +424,7 @@ func (m *Manager) checkCACertTrusted(summary *MigrationSummary, deviceIP string)
 }
 
 // MigrateSpeaker configures the speaker at the given IP to use this soundcork service.
-func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options map[string]string, method MigrationMethod) error {
+func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options map[string]string, method MigrationMethod) (string, error) {
 	if targetURL == "" {
 		targetURL = m.ServerURL
 	}
@@ -437,7 +437,11 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 		return m.migrateViaHosts(deviceIP, targetURL)
 	}
 
-	if err := m.EnsureRemoteServices(deviceIP); err != nil {
+	var logs string
+
+	out, err := m.EnsureRemoteServices(deviceIP)
+	logs += "Ensuring remote services:\n" + out + "\n"
+	if err != nil {
 		// Log but continue migration? Or fail? The requirement is "to ensure stable 'remote_services'"
 		// Let's log it.
 		fmt.Printf("Warning: failed to ensure remote services: %v\n", err)
@@ -456,6 +460,7 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 	// If we have a proxyURL and can read current config, use it
 	client := m.NewSSH(deviceIP)
 	if currentConfig, err := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); err == nil && currentConfig != "" {
+		logs += "Read current configuration\n"
 		var currentCfg PrivateCfg
 		if xml.Unmarshal([]byte(currentConfig), &currentCfg) == nil {
 			if proxyURL == "" {
@@ -475,7 +480,7 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 
 	xmlContent, err := xml.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal XML: %w", err)
+		return logs, fmt.Errorf("failed to marshal XML: %w", err)
 	}
 
 	// Add XML header
@@ -485,74 +490,85 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 	remotePath := SoundTouchSdkPrivateCfgPath
 	rwCmd := "(rw || mount -o remount,rw /)"
 
-	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
+	if out, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
+		logs += fmt.Sprintf("Backing up original config to %s.original (check: %s)\n", remotePath, out)
 		fmt.Printf("Backing up original config to %s.original\n", remotePath)
 		// Try to copy existing config to .original, ensuring filesystem is writable
 		if output, err := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath)); err != nil {
+			logs += fmt.Sprintf("Warning: failed to cp backup config: %v (output: %s)\n", err, output)
 			fmt.Printf("Warning: failed to cp backup config: %v (output: %s)\n", err, output)
 			// Fallback to manual upload if cp failed (might not have cp?)
 			if config, err := client.Run(fmt.Sprintf("cat %s", remotePath)); err == nil && config != "" {
 				if err := client.UploadContent([]byte(config), remotePath+".original"); err != nil {
+					logs += "Warning: failed to upload backup config: " + err.Error() + "\n"
 					fmt.Printf("Warning: failed to upload backup config: %v\n", err)
+				} else {
+					logs += "Uploaded backup config via fallback\n"
 				}
 			}
+		} else {
+			logs += "Copied backup config to .original\n"
 		}
+	} else {
+		logs += "Backup .original already exists\n"
 	}
 
 	// 1. Upload the configuration (rw is handled by calling it before if needed, but UploadContent uses cat > which needs rw)
 	// We'll wrap the upload in a way that EnsureRemoteServices and others might benefit,
 	// but UploadContent is a separate method. We should probably add rw to UploadContent or call it before.
 	// Actually, let's call rw before UploadContent here.
-	_, _ = client.Run(rwCmd)
+	out, _ = client.Run(rwCmd)
+	logs += rwCmd + ": " + out + "\n"
 	if err := client.UploadContent(xmlContent, remotePath); err != nil {
-		return fmt.Errorf("failed to upload config: %w", err)
+		return logs, fmt.Errorf("failed to upload config: %w", err)
 	}
+	logs += "Uploaded new configuration to " + remotePath + "\n"
 
-	// 2. Reboot the speaker (requires 'rw' command first to make filesystem writable)
-	if _, err := client.Run(fmt.Sprintf("%s && reboot", rwCmd)); err != nil {
-		return fmt.Errorf("failed to reboot speaker: %w", err)
-	}
-
-	return nil
+	return logs, nil
 }
 
 // BackupConfig creates a backup of the current configuration on the speaker.
-func (m *Manager) BackupConfig(deviceIP string) error {
+func (m *Manager) BackupConfig(deviceIP string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	remotePath := SoundTouchSdkPrivateCfgPath
 	rwCmd := "(rw || mount -o remount,rw /)"
 
 	// Check if .original already exists
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err == nil {
-		return fmt.Errorf("backup already exists at %s.original", remotePath)
+		return "", fmt.Errorf("backup already exists at %s.original", remotePath)
 	}
 
 	// Try to copy on the device first (more reliable), ensuring filesystem is writable
 	output, cpErr := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath))
 	if cpErr == nil {
-		return nil
+		return output, nil
 	}
 
+	logs := output + "\n"
 	fmt.Printf("Direct cp failed: %v (output: %s), falling back to cat+upload\n", cpErr, output)
 
 	// Fallback to cat + upload
 	config, err := client.Run(fmt.Sprintf("cat %s", remotePath))
+	logs += "cat " + remotePath + ": " + config + "\n"
 	if err != nil || config == "" {
-		return fmt.Errorf("failed to read current config: %w", err)
+		return logs, fmt.Errorf("failed to read current config: %w", err)
 	}
 
 	// Ensure rw before upload fallback
-	_, _ = client.Run(rwCmd)
+	out, _ := client.Run(rwCmd)
+	logs += rwCmd + ": " + out + "\n"
 	if err := client.UploadContent([]byte(config), remotePath+".original"); err != nil {
-		return fmt.Errorf("failed to upload backup config: %w", err)
+		return logs, fmt.Errorf("failed to upload backup config: %w", err)
 	}
 
-	return nil
+	logs += "Uploaded backup to " + remotePath + ".original\n"
+
+	return logs, nil
 }
 
 // EnsureRemoteServices ensures that remote services are enabled on the device.
 // It tries to create an empty file in one of the known valid locations.
-func (m *Manager) EnsureRemoteServices(deviceIP string) error {
+func (m *Manager) EnsureRemoteServices(deviceIP string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
 
@@ -563,43 +579,55 @@ func (m *Manager) EnsureRemoteServices(deviceIP string) error {
 		"/tmp/remote_services",
 	}
 
+	var logs string
 	for _, loc := range locations {
 		// Try to make filesystem writable for each location that might need it
 		// Combining rw && touch ensures it's attempted in the same sequence
-		_, err := client.Run(fmt.Sprintf("%s && touch %s", rwCmd, loc))
+		out, err := client.Run(fmt.Sprintf("%s && touch %s", rwCmd, loc))
+		logs += fmt.Sprintf("touch %s (with rw): %s\n", loc, out)
 		if err == nil {
-			return nil
+			return logs, nil
 		}
 		// If rw && touch failed, try just touch (e.g. for /tmp which doesn't need rw)
-		_, err = client.Run(fmt.Sprintf("touch %s", loc))
+		out, err = client.Run(fmt.Sprintf("touch %s", loc))
+		logs += fmt.Sprintf("touch %s: %s\n", loc, out)
 		if err == nil {
-			return nil
+			return logs, nil
 		}
 	}
 
-	return fmt.Errorf("failed to enable remote services in any of the locations: %v", locations)
+	return logs, fmt.Errorf("failed to enable remote services in any of the locations: %v", locations)
 }
 
 // TrustCACert injects the local CA certificate into the device's shared trust store.
-func (m *Manager) TrustCACert(deviceIP string) error {
+func (m *Manager) TrustCACert(deviceIP string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
 
+	var logs string
+
 	caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
 	if err != nil {
-		return fmt.Errorf("failed to read CA certificate: %w", err)
+		return "", fmt.Errorf("failed to read CA certificate: %w", err)
 	}
 
 	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
-	_, _ = client.Run(rwCmd)
+	out, _ := client.Run(rwCmd)
+	logs += rwCmd + ": " + out + "\n"
 
 	// Backup bundle if it doesn't exist
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", bundlePath)); err != nil {
-		_, _ = client.Run(fmt.Sprintf("cp %s %s.original", bundlePath, bundlePath))
+		out, _ := client.Run(fmt.Sprintf("cp %s %s.original", bundlePath, bundlePath))
+		logs += fmt.Sprintf("cp %s %s.original: %s\n", bundlePath, bundlePath, out)
 	}
 
 	// Check if the label already exists in the bundle
-	bundleContent, _ := client.Run(fmt.Sprintf("cat %s", bundlePath))
+	bundleContent, err := client.Run(fmt.Sprintf("cat %s", bundlePath))
+	logs += "cat " + bundlePath + " (check existing)\n"
+	if err != nil {
+		return logs, fmt.Errorf("failed to read bundle: %w", err)
+	}
+
 	if strings.Contains(bundleContent, CALabel) {
 		// Label found, let's replace the whole block between labels if we used them,
 		// or just remove the lines containing the label and re-append.
@@ -637,29 +665,34 @@ func (m *Manager) TrustCACert(deviceIP string) error {
 	newBundleContent := bundleContent + labeledCert
 
 	if err := client.UploadContent([]byte(newBundleContent), bundlePath); err != nil {
-		return fmt.Errorf("failed to update bundle: %w", err)
+		return logs, fmt.Errorf("failed to update bundle: %w", err)
 	}
 
-	return nil
+	logs += "Uploaded updated bundle to " + bundlePath + "\n"
+
+	return logs, nil
 }
 
-func (m *Manager) migrateViaHosts(deviceIP, targetURL string) error {
+func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
+
+	var logs string
 
 	// 1. Parse targetURL to get IP for /etc/hosts
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil {
-		return fmt.Errorf("failed to parse target URL: %w", err)
+		return "", fmt.Errorf("failed to parse target URL: %w", err)
 	}
 
 	hostName := parsedURL.Hostname()
 	if hostName == "" || hostName == "localhost" {
 		// Use a better guess if needed, but for now expect valid IP/hostname
-		return fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
+		return "", fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
 	}
 
 	hostIP := m.resolveIP(hostName, client)
+	logs += fmt.Sprintf("Resolved %s to %s\n", hostName, hostIP)
 
 	// 2. Prepare /etc/hosts entries
 	domains := []string{
@@ -671,8 +704,9 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) error {
 	}
 
 	hostsContent, err := client.Run("cat /etc/hosts")
+	logs += "cat /etc/hosts: " + hostsContent + "\n"
 	if err != nil {
-		return fmt.Errorf("failed to read /etc/hosts: %w", err)
+		return logs, fmt.Errorf("failed to read /etc/hosts: %w", err)
 	}
 
 	for _, domain := range domains {
@@ -688,16 +722,19 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) error {
 	}
 
 	// 3. Upload new /etc/hosts
-	_, _ = client.Run(rwCmd)
+	out, _ := client.Run(rwCmd)
+	logs += rwCmd + ": " + out + "\n"
 	// Backup /etc/hosts if it doesn't exist
 	if _, err := client.Run("[ -f /etc/hosts.original ]"); err != nil {
-		_, _ = client.Run("cp /etc/hosts /etc/hosts.original")
+		out, _ := client.Run("cp /etc/hosts /etc/hosts.original")
+		logs += "cp /etc/hosts /etc/hosts.original: " + out + "\n"
 	}
 
 	if err := client.UploadContent([]byte(hostsContent), "/etc/hosts"); err != nil {
-		return fmt.Errorf("failed to update /etc/hosts: %w", err)
+		return logs, fmt.Errorf("failed to update /etc/hosts: %w", err)
 	}
 
+	logs += "Uploaded updated /etc/hosts\n"
 	fmt.Printf("Updated /etc/hosts on %s:\n%s\n", deviceIP, hostsContent)
 
 	// 4. Inject CA Certificate
@@ -705,23 +742,91 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) error {
 	m.checkCACertTrusted(summary, deviceIP)
 
 	if !summary.CACertTrusted {
-		if err := m.TrustCACert(deviceIP); err != nil {
-			return err
+		out, err := m.TrustCACert(deviceIP)
+		logs += "Trusting CA:\n" + out + "\n"
+		if err != nil {
+			return logs, err
 		}
 	} else {
+		logs += "CA certificate already trusted, skipping injection\n"
 		fmt.Printf("CA certificate already trusted on %s, skipping injection\n", deviceIP)
 	}
 
-	// 5. Reboot
-	if _, err := client.Run(fmt.Sprintf("%s && reboot", rwCmd)); err != nil {
-		return fmt.Errorf("failed to reboot speaker: %w", err)
+	return logs, nil
+}
+
+// RevertMigration reverts the speaker to its original Bose cloud configuration.
+func (m *Manager) RevertMigration(deviceIP string) (string, error) {
+	client := m.NewSSH(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+
+	var logs string
+
+	// 1. Revert SoundTouchSdkPrivateCfg.xml
+	remotePath := SoundTouchSdkPrivateCfgPath
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err == nil {
+		logs += fmt.Sprintf("Reverting %s from backup\n", remotePath)
+		fmt.Printf("Reverting %s from backup\n", remotePath)
+		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, remotePath, remotePath))
+		logs += fmt.Sprintf("cp %s.original %s: %s\n", remotePath, remotePath, out)
+		if err != nil {
+			return logs, fmt.Errorf("failed to revert %s: %w", remotePath, err)
+		}
+	} else {
+		return logs, fmt.Errorf("backup %s.original not found, cannot revert", remotePath)
 	}
 
-	return nil
+	// 2. Revert /etc/hosts
+	hostsPath := "/etc/hosts"
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", hostsPath)); err == nil {
+		logs += fmt.Sprintf("Reverting %s from backup\n", hostsPath)
+		fmt.Printf("Reverting %s from backup\n", hostsPath)
+		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, hostsPath, hostsPath))
+		logs += fmt.Sprintf("cp %s.original %s: %s\n", hostsPath, hostsPath, out)
+		if err != nil {
+			// Don't return error here, try to continue with other reverts
+			fmt.Printf("Warning: failed to revert %s: %v\n", hostsPath, err)
+		}
+	}
+
+	// 3. Remove CA certificate from trust store if it exists
+	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
+	if bundleContent, err := client.Run(fmt.Sprintf("cat %s", bundlePath)); err == nil && strings.Contains(bundleContent, CALabel) {
+		logs += fmt.Sprintf("Removing local CA certificate from %s\n", bundlePath)
+		fmt.Printf("Removing local CA certificate from %s\n", bundlePath)
+		lines := strings.Split(bundleContent, "\n")
+		var newLines []string
+		inOurCA := false
+		for _, line := range lines {
+			if strings.Contains(line, CALabel) {
+				inOurCA = !inOurCA
+				continue
+			}
+			if !inOurCA {
+				newLines = append(newLines, line)
+			}
+		}
+
+		bundleContent = strings.Join(newLines, "\n")
+		if bundleContent != "" && !strings.HasSuffix(bundleContent, "\n") {
+			bundleContent += "\n"
+		}
+
+		out, _ := client.Run(rwCmd)
+		logs += rwCmd + ": " + out + "\n"
+		if err := client.UploadContent([]byte(bundleContent), bundlePath); err != nil {
+			logs += "Warning: failed to remove CA from " + bundlePath + ": " + err.Error() + "\n"
+			fmt.Printf("Warning: failed to remove CA from %s: %v\n", bundlePath, err)
+		} else {
+			logs += "Uploaded updated bundle (CA removed)\n"
+		}
+	}
+
+	return logs, nil
 }
 
 // RemoveRemoteServices removes remote services from the device by deleting the known remote_services files.
-func (m *Manager) RemoveRemoteServices(deviceIP string) error {
+func (m *Manager) RemoveRemoteServices(deviceIP string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
 
@@ -731,14 +836,17 @@ func (m *Manager) RemoveRemoteServices(deviceIP string) error {
 		"/tmp/remote_services",
 	}
 
+	var logs string
 	var errors []error
 
 	for _, loc := range locations {
 		// Try to make filesystem writable and remove the file
-		_, err := client.Run(fmt.Sprintf("%s && rm -f %s", rwCmd, loc))
+		out, err := client.Run(fmt.Sprintf("%s && rm -v %s", rwCmd, loc))
+		logs += fmt.Sprintf("Removing %s: %s\n", loc, out)
 		if err != nil {
 			// If rw && rm failed, try just rm (e.g. for /tmp)
-			_, err = client.Run(fmt.Sprintf("rm -f %s", loc))
+			out, err = client.Run(fmt.Sprintf("rm -v %s", loc))
+			logs += fmt.Sprintf("Fallback removing %s: %s\n", loc, out)
 			if err != nil {
 				errors = append(errors, fmt.Errorf("failed to remove %s: %w", loc, err))
 			}
@@ -746,10 +854,24 @@ func (m *Manager) RemoveRemoteServices(deviceIP string) error {
 	}
 
 	if len(errors) == len(locations) {
-		return fmt.Errorf("failed to remove remote services from any location: %v", errors)
+		return logs, fmt.Errorf("failed to remove remote services from any location: %v", errors)
 	}
 
-	return nil
+	return logs, nil
+}
+
+// Reboot reboots the speaker at the given IP.
+func (m *Manager) Reboot(deviceIP string) (string, error) {
+	client := m.NewSSH(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+
+	fmt.Printf("Rebooting speaker at %s\n", deviceIP)
+	out, err := client.Run(fmt.Sprintf("%s && reboot", rwCmd))
+	if err != nil {
+		return out, fmt.Errorf("failed to reboot speaker: %w", err)
+	}
+
+	return out, nil
 }
 
 // TestDomain is the fake domain used for preliminary redirection tests.

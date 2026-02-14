@@ -35,8 +35,8 @@ func TestRootEndpoint(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(res.Body)
-	if !strings.Contains(string(body), "Soundcork Management") {
-		t.Errorf("Expected body to contain 'Soundcork Management', got %s", string(body))
+	if !strings.Contains(string(body), "Bose SoundTouch Toolkit") {
+		t.Errorf("Expected body to contain 'Bose SoundTouch Toolkit', got %s", string(body))
 	}
 }
 

@@ -144,6 +144,9 @@ func TestMigrationAndCA(t *testing.T) {
 	if result["ok"] != true {
 		t.Errorf("Migrate: Expected ok=true, got %v", result["ok"])
 	}
+	if _, ok := result["output"]; !ok {
+		t.Errorf("Migrate: Expected output field in response")
+	}
 
 	// 3. Test POST /setup/trust-ca/{deviceIP}
 	res, err = http.Post(ts.URL+"/setup/trust-ca/192.168.1.10", "application/json", nil)
@@ -161,6 +164,51 @@ func TestMigrationAndCA(t *testing.T) {
 	}
 	if result["ok"] != true {
 		t.Errorf("TrustCA: Expected ok=true, got %v", result["ok"])
+	}
+	if _, ok := result["output"]; !ok {
+		t.Errorf("TrustCA: Expected output field in response")
+	}
+
+	// 4. Test POST /setup/reboot/{deviceIP}
+	res, err = http.Post(ts.URL+"/setup/reboot/192.168.1.10", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Reboot: Expected status OK, got %v", res.Status)
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatalf("Reboot: Failed to decode response: %v", err)
+	}
+	if result["ok"] != true {
+		t.Errorf("Reboot: Expected ok=true, got %v", result["ok"])
+	}
+	if _, ok := result["output"]; !ok {
+		t.Errorf("Reboot: Expected output field in response")
+	}
+
+	// 5. Test POST /setup/remove-remote-services/{deviceIP}
+	res, err = http.Post(ts.URL+"/setup/remove-remote-services/192.168.1.10", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("RemoveRemote: Expected status OK, got %v", res.Status)
+	}
+
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatalf("RemoveRemote: Failed to decode response: %v", err)
+	}
+	if result["ok"] != true {
+		t.Errorf("RemoveRemote: Expected ok=true, got %v", result["ok"])
+	}
+	if _, ok := result["output"]; !ok {
+		t.Errorf("RemoveRemote: Expected output field in response")
 	}
 }
 

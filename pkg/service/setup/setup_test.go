@@ -72,7 +72,7 @@ func TestMigrateViaHosts(t *testing.T) {
 		}
 	}
 
-	err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaHosts failed: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestMigrateViaHosts(t *testing.T) {
 		t.Errorf("Expected ca-bundle.crt backup to be attempted")
 	}
 
-	// Verify reboot was called
+	// Verify reboot was NOT called
 	foundReboot := false
 	for _, call := range runCalls {
 		if strings.Contains(call, "reboot") {
@@ -103,8 +103,8 @@ func TestMigrateViaHosts(t *testing.T) {
 			break
 		}
 	}
-	if !foundReboot {
-		t.Errorf("Expected reboot to be called")
+	if foundReboot {
+		t.Errorf("Expected reboot NOT to be called automatically")
 	}
 }
 
@@ -554,7 +554,7 @@ func TestMigrateViaHosts_SkipCAIfTrusted(t *testing.T) {
 		}
 	}
 
-	err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaHosts failed: %v", err)
 	}
@@ -604,7 +604,7 @@ func TestTrustCACert(t *testing.T) {
 		}
 	}
 
-	err = m.TrustCACert("192.168.1.10")
+	_, err = m.TrustCACert("192.168.1.10")
 	if err != nil {
 		t.Fatalf("TrustCACert failed: %v", err)
 	}
@@ -631,6 +631,134 @@ func TestTrustCACert(t *testing.T) {
 	}
 	if !foundUpload {
 		t.Errorf("Expected updated bundle to be uploaded to /etc/pki/tls/certs/ca-bundle.crt")
+	}
+}
+
+func TestRevertMigration(t *testing.T) {
+	m := NewManager("http://localhost:8000", nil, nil)
+
+	runCalls := []string{}
+	uploadCalls := make(map[string]string)
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if command == "cat /etc/pki/tls/certs/ca-bundle.crt" {
+					return "existing content\n" + CALabel + "\nCERT DATA\n" + CALabel + "\nmore content", nil
+				}
+				// Mock file existence checks for .original files
+				if strings.HasPrefix(command, "[ -f") && strings.Contains(command, ".original") {
+					return "", nil // file exists
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				uploadCalls[remotePath] = string(content)
+				return nil
+			},
+		}
+	}
+
+	_, err := m.RevertMigration("192.168.1.10")
+	if err != nil {
+		t.Fatalf("RevertMigration failed: %v", err)
+	}
+
+	// Verify revert commands
+	foundXMLRevert := false
+	foundHostsRevert := false
+	foundReboot := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "cp "+SoundTouchSdkPrivateCfgPath+".original "+SoundTouchSdkPrivateCfgPath) {
+			foundXMLRevert = true
+		}
+		if strings.Contains(call, "cp /etc/hosts.original /etc/hosts") {
+			foundHostsRevert = true
+		}
+		if strings.Contains(call, "reboot") {
+			foundReboot = true
+		}
+	}
+
+	if !foundXMLRevert {
+		t.Errorf("Expected XML config revert")
+	}
+	if !foundHostsRevert {
+		t.Errorf("Expected /etc/hosts revert")
+	}
+	if foundReboot {
+		t.Errorf("Expected reboot NOT to be called automatically during revert")
+	}
+
+	// Verify RemoveRemoteServices was NOT called
+	for _, call := range runCalls {
+		if strings.Contains(call, "rm -f /etc/remote_services") {
+			t.Errorf("Remote services should NOT be removed during revert")
+		}
+	}
+
+	// Verify CA removal
+	if content, ok := uploadCalls["/etc/pki/tls/certs/ca-bundle.crt"]; ok {
+		if strings.Contains(content, CALabel) {
+			t.Errorf("Expected CA label to be removed from bundle, got: %s", content)
+		}
+		if !strings.Contains(content, "existing content") || !strings.Contains(content, "more content") {
+			t.Errorf("Expected existing content to be preserved in bundle, got: %s", content)
+		}
+	} else {
+		t.Errorf("Expected updated bundle to be uploaded")
+	}
+}
+
+func TestRevertMigration_NoBackup(t *testing.T) {
+	m := NewManager("http://localhost:8000", nil, nil)
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if strings.HasPrefix(command, "[ -f") {
+					return "", fmt.Errorf("file not found")
+				}
+				return "", nil
+			},
+		}
+	}
+
+	_, err := m.RevertMigration("192.168.1.10")
+	if err == nil {
+		t.Errorf("Expected error when backup is missing, got nil")
+	} else if !strings.Contains(err.Error(), "backup") {
+		t.Errorf("Expected error about missing backup, got: %v", err)
+	}
+}
+
+func TestReboot(t *testing.T) {
+	m := NewManager("http://localhost:8000", nil, nil)
+
+	runCalls := []string{}
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				return "", nil
+			},
+		}
+	}
+
+	_, err := m.Reboot("192.168.1.10")
+	if err != nil {
+		t.Fatalf("Reboot failed: %v", err)
+	}
+
+	foundReboot := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "reboot") {
+			foundReboot = true
+			break
+		}
+	}
+	if !foundReboot {
+		t.Errorf("Expected reboot command to be called")
 	}
 }
 

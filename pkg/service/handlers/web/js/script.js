@@ -293,6 +293,9 @@ async function showSummary(ip) {
         query += '&' + k + '=' + encodeURIComponent(opts[k]);
     }
 
+    const outputBox = document.getElementById('command-output-box');
+    if (outputBox) outputBox.style.display = 'none';
+
     try {
         const response = await fetch('/setup/summary/' + ip + query);
         if (!response.ok) {
@@ -391,6 +394,15 @@ async function showSummary(ip) {
         migrateBtn.onclick = () => migrate(ip);
         migrateBtn.disabled = !summary.ssh_success;
 
+        const revertBtn = document.getElementById('revert-migrate-btn');
+        revertBtn.onclick = () => revert(ip);
+        revertBtn.disabled = !summary.ssh_success;
+        revertBtn.style.display = summary.original_config ? 'inline-block' : 'none';
+
+        const rebootBtn = document.getElementById('reboot-speaker-btn');
+        rebootBtn.onclick = () => reboot(ip);
+        rebootBtn.disabled = !summary.ssh_success;
+
         const remoteBtn = document.getElementById('ensure-remote-btn');
         remoteBtn.onclick = () => ensureRemoteServices(ip);
         remoteBtn.disabled = !summary.ssh_success;
@@ -415,6 +427,82 @@ function refreshSummary() {
     const ip = document.getElementById('summary-ip').innerText;
     if (ip) {
         showSummary(ip);
+    }
+}
+
+function showCommandOutput(result) {
+    const outputBox = document.getElementById('command-output-box');
+    const outputText = document.getElementById('command-output');
+    if (outputBox && outputText && result.output) {
+        outputBox.style.display = 'block';
+        outputText.innerText = result.output;
+    } else if (outputBox) {
+        outputBox.style.display = 'none';
+    }
+}
+
+async function revert(ip) {
+    if (!ip) {
+        alert('Please enter a valid IP address.');
+        return;
+    }
+    if (!confirm('Are you sure you want to revert ' + ip + ' to Bose cloud defaults?')) {
+        return;
+    }
+
+    const summaryDiv = document.getElementById('migration-summary');
+    summaryDiv.style.display = 'none';
+
+    const statusDiv = document.getElementById('status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.backgroundColor = '#ffffcc';
+    statusDiv.innerHTML = 'Reverting ' + ip + ' to defaults...';
+
+    try {
+        const response = await fetch('/setup/revert/' + ip, { method: 'POST' });
+        const result = await response.json();
+        showCommandOutput(result);
+        if (result.ok) {
+            statusDiv.style.backgroundColor = '#ccffcc';
+            statusDiv.innerHTML = 'Successfully started revert for ' + ip + '.';
+        } else {
+            statusDiv.style.backgroundColor = '#ffcccc';
+            statusDiv.innerHTML = 'Revert failed for ' + ip + ': ' + (result.message || 'Unknown error');
+        }
+    } catch (error) {
+        statusDiv.style.backgroundColor = '#ffcccc';
+        statusDiv.innerHTML = 'Error reverting ' + ip + ': ' + error;
+    }
+}
+
+async function reboot(ip) {
+    if (!ip) {
+        alert('Please enter a valid IP address.');
+        return;
+    }
+    if (!confirm('Are you sure you want to reboot the speaker at ' + ip + '?')) {
+        return;
+    }
+
+    const statusDiv = document.getElementById('status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.backgroundColor = '#ffffcc';
+    statusDiv.innerHTML = 'Rebooting ' + ip + '...';
+
+    try {
+        const response = await fetch('/setup/reboot/' + ip, { method: 'POST' });
+        const result = await response.json();
+        showCommandOutput(result);
+        if (result.ok) {
+            statusDiv.style.backgroundColor = '#ccffcc';
+            statusDiv.innerHTML = 'Successfully started reboot for ' + ip + '.';
+        } else {
+            statusDiv.style.backgroundColor = '#ffcccc';
+            statusDiv.innerHTML = 'Reboot failed for ' + ip + ': ' + (result.message || 'Unknown error');
+        }
+    } catch (error) {
+        statusDiv.style.backgroundColor = '#ffcccc';
+        statusDiv.innerHTML = 'Error rebooting ' + ip + ': ' + error;
     }
 }
 
@@ -450,9 +538,10 @@ async function migrate(ip) {
     try {
         const response = await fetch('/setup/migrate/' + ip + query, { method: 'POST' });
         const result = await response.json();
+        showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = '#ccffcc';
-            statusDiv.innerHTML = 'Successfully started migration for ' + ip + '. The speaker will reboot.';
+            statusDiv.innerHTML = 'Successfully started migration for ' + ip + '.';
         } else {
             statusDiv.style.backgroundColor = '#ffcccc';
             statusDiv.innerHTML = 'Migration failed for ' + ip + ': ' + (result.message || 'Unknown error');
@@ -476,6 +565,7 @@ async function trustCA(ip) {
     try {
         const response = await fetch('/setup/trust-ca/' + ip, { method: 'POST' });
         const result = await response.json();
+        showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = '#ccffcc';
             statusDiv.innerHTML = 'Successfully injected Root CA on ' + ip + '.';
@@ -506,6 +596,7 @@ async function ensureRemoteServices(ip) {
     try {
         const response = await fetch('/setup/ensure-remote-services/' + ip, { method: 'POST' });
         const result = await response.json();
+        showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = '#ccffcc';
             statusDiv.innerHTML = 'Successfully ensured remote services for ' + ip + '.';
@@ -538,6 +629,7 @@ async function removeRemoteServices(ip) {
     try {
         const response = await fetch('/setup/remove-remote-services/' + ip, { method: 'POST' });
         const result = await response.json();
+        showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = '#ccffcc';
             statusDiv.innerHTML = 'Successfully removed remote services from ' + ip + '.';
@@ -564,6 +656,7 @@ async function backupConfig(ip) {
     try {
         const response = await fetch('/setup/backup/' + ip, { method: 'POST' });
         const result = await response.json();
+        showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = '#ccffcc';
             statusDiv.innerHTML = 'Successfully created backup for ' + ip + '.';
