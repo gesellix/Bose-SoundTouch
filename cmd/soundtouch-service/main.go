@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -138,7 +139,8 @@ func main() {
 			ds := initDataStore(config.dataDir)
 
 			// Load settings from datastore
-			persisted, _ := ds.GetSettings()
+			persisted, err := ds.GetSettings()
+			settingsExist := err == nil && persisted.ServerURL != ""
 			if persisted.ServerURL != "" {
 				config.serverURL = persisted.ServerURL
 			}
@@ -161,6 +163,20 @@ func main() {
 			config.logBody = persisted.LogBodies || config.logBody
 			config.record = persisted.RecordInteractions || config.record
 
+			if !settingsExist {
+				log.Printf("Creating default settings.json in %s", config.dataDir)
+				_ = ds.SaveSettings(datastore.Settings{
+					ServerURL:          config.serverURL,
+					ProxyURL:           config.targetURL,
+					HTTPServerURL:      config.httpsServerURL,
+					RedactLogs:         config.redact,
+					LogBodies:          config.logBody,
+					RecordInteractions: config.record,
+					DiscoveryInterval:  config.discoveryInterval.String(),
+					DiscoveryDisabled:  false,
+				})
+			}
+
 			// Recalculate domains if settings changed
 			hostname, _ := os.Hostname()
 			if hostname == "" {
@@ -181,10 +197,17 @@ func main() {
 			patternsPath := filepath.Join(config.dataDir, "patterns.json")
 
 			patterns, err := proxy.LoadPatterns(patternsPath)
-			if err == nil && len(patterns) > 0 {
-				recorder.Patterns = patterns
-			} else if err != nil {
+			if err != nil {
 				log.Printf("Warning: Failed to load patterns from %s: %v", patternsPath, err)
+			}
+			if len(patterns) == 0 {
+				log.Printf("Creating default patterns at %s", patternsPath)
+				patterns = proxy.DefaultPatterns()
+				data, _ := json.MarshalIndent(patterns, "", "  ")
+				_ = os.WriteFile(patternsPath, data, 0644)
+			}
+			if len(patterns) > 0 {
+				recorder.Patterns = patterns
 			}
 
 			server.SetRecorder(recorder)
