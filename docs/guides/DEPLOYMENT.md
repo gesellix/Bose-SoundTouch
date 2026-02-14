@@ -13,6 +13,10 @@ This guide covers everything you need to know to deploy robust, scalable SoundTo
 - [Performance Optimization](#performance-optimization)
 - [Error Handling Recovery](#error-handling-recovery)
 - [Deployment Strategies](#deployment-strategies)
+    - [Docker Deployment](#docker-deployment)
+    - [Kubernetes Deployment](#kubernetes-deployment)
+    - [Systemd Service](#systemd-service)
+    - [Raspberry Pi Installer](#raspberry-pi-installer)
 - [Maintenance Operations](#maintenance-operations)
 
 ---
@@ -926,38 +930,48 @@ data:
   device_hosts: "192.168.1.100,192.168.1.101,192.168.1.102"
 ```
 
-### Systemd Service
+#### Systemd Service
+
+A standard systemd unit for manual installation. This example assumes the binary is at `/usr/local/bin/soundtouch-service` and data is stored in `/var/lib/soundtouch-service`.
 
 ```ini
-# /etc/systemd/system/soundtouch.service
+# /etc/systemd/system/soundtouch-service.service
 [Unit]
-Description=SoundTouch Control Service
-After=network.target
-Wants=network.target
+Description=Bose SoundTouch Service
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
 User=soundtouch
 Group=soundtouch
-WorkingDirectory=/opt/soundtouch
-ExecStart=/opt/soundtouch/bin/soundtouch-app
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=always
-RestartSec=5
-Environment=DEVICE_HOSTS=192.168.1.100,192.168.1.101
-Environment=LOG_LEVEL=info
-Environment=CONFIG_FILE=/opt/soundtouch/config/production.yaml
+WorkingDirectory=/var/lib/soundtouch-service
+ExecStart=/usr/local/bin/soundtouch-service
+Environment=PORT=80
+Environment=SERVER_URL=http://soundtouch.local
 
-# Security settings
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/soundtouch/logs
+# Allow binding to privileged ports (80/443) without running as root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
 PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/soundtouch-service
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+#### Raspberry Pi Installer
+
+For users deploying on a Raspberry Pi, we provide a specialized automated installer that handles everything from architecture detection to security hardening.
+
+See the [Raspberry Pi Installation Guide](RASPBERRY-PI.md) for step-by-step instructions.
 
 ---
 

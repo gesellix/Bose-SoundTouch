@@ -120,7 +120,13 @@ ensure_user_group() {
 ensure_dirs() {
   log "Creating directories"
   mkdir -p "${CONFIG_DIR}" "${DATA_DIR}"
-  chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${DATA_DIR}"
+
+  # Optimized ownership check: only chown if not already owned by service user
+  if [[ "$(stat -c '%U:%G' "${DATA_DIR}")" != "${SERVICE_USER}:${SERVICE_GROUP}" ]]; then
+    log "Adjusting ownership of ${DATA_DIR} to ${SERVICE_USER}:${SERVICE_GROUP}"
+    chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${DATA_DIR}"
+  fi
+
   chmod 0755 "${CONFIG_DIR}" "${DATA_DIR}"
 }
 
@@ -136,10 +142,17 @@ download_binary() {
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL -o "${tmp}/soundtouch-service" "${url}"
   else
-    wget -O "${tmp}/soundtouch-service" "${url}"
+    wget -qO "${tmp}/soundtouch-service" "${url}"
   fi
 
   chmod +x "${tmp}/soundtouch-service"
+
+  # Backup existing binary if it exists
+  if [[ -f "${BIN_PATH}" ]]; then
+    log "Backing up existing binary to ${BIN_PATH}.old"
+    cp -p "${BIN_PATH}" "${BIN_PATH}.old"
+  fi
+
   install -m 0755 "${tmp}/soundtouch-service" "${BIN_PATH}"
   log "Installed binary to ${BIN_PATH}"
 }
@@ -201,8 +214,31 @@ EOF
 reload_enable_start() {
   log "Reloading systemd, enabling and starting service"
   systemctl daemon-reload
-  systemctl enable --now "${SERVICE_NAME}.service"
+  systemctl enable "${SERVICE_NAME}.service"
   systemctl restart "${SERVICE_NAME}.service"
+
+  log "Verifying service health..."
+  local health_url="http://localhost:${HTTP_PORT}/health"
+  local max_retries=5
+  local count=0
+  local success=false
+
+  while [[ $count -lt $max_retries ]]; do
+    if curl -fs "$health_url" >/dev/null 2>&1; then
+      success=true
+      break
+    fi
+    echo "Waiting for service to respond at $health_url... ($((count+1))/$max_retries)"
+    sleep 2
+    count=$((count+1))
+  done
+
+  if [[ "$success" = true ]]; then
+    log "✅ Service is healthy and responding!"
+  else
+    log "⚠️ Service started but did not respond to health check at $health_url within timeout."
+    log "Check logs with: journalctl -u ${SERVICE_NAME}.service -n 50"
+  fi
 }
 
 show_status() {
@@ -211,6 +247,16 @@ show_status() {
 
   log "Listening sockets (${HTTP_PORT}/${HTTPS_PORT})"
   ss -tulpn | grep -E ":((${HTTP_PORT})|(${HTTPS_PORT}))\b" || true
+
+  if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
+    log "Firewall check (UFW is active)"
+    if ! ufw status | grep -qE "${HTTP_PORT}.*ALLOW|${HTTPS_PORT}.*ALLOW"; then
+      log "⚠️ UFW is active but ports ${HTTP_PORT}/${HTTPS_PORT} might be blocked."
+      log "Run: sudo ufw allow ${HTTP_PORT}/tcp && sudo ufw allow ${HTTPS_PORT}/tcp"
+    else
+      log "✅ UFW rules for service ports appear to be in place."
+    fi
+  fi
 
   cat <<EOF
 

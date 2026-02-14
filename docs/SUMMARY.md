@@ -9,7 +9,14 @@
 * [Initial Device Setup](guides/DEVICE-INITIAL-SETUP.md)
 * [HTTPS Setup](guides/HTTPS-SETUP.md)
 * [Deployment](guides/DEPLOYMENT.md)
+* [Raspberry Pi Guide](guides/RASPBERRY-PI.md)
 * [Troubleshooting](guides/TROUBLESHOOTING.md)
+* [Useful Links](#useful-links)
+
+### Useful Links
+* [Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md)
+* [Raspberry Pi Installer](../../scripts/raspberry-pi/README.md)
+* [CLI Reference](guides/CLI-REFERENCE.md)
 
 ## Technical Reference
 * [API Cookbook](reference/API-COOKBOOK.md)
