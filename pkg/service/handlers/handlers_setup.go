@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
@@ -95,12 +96,18 @@ func (s *Server) HandleGetDiscoveryStatus(w http.ResponseWriter, _ *http.Request
 func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	serverURL, proxyURL, httpsServerURL := s.GetSettings()
+	s.mu.RLock()
+	serverURL, proxyURL, httpsServerURL := s.serverURL, s.proxyURL, s.httpsServerURL
+	discoveryInterval := s.discoveryInterval.String()
+	discoveryDisabled := s.discoveryDisabled
+	s.mu.RUnlock()
 
-	if err := json.NewEncoder(w).Encode(map[string]string{
-		"server_url":       serverURL,
-		"proxy_url":        proxyURL,
-		"https_server_url": httpsServerURL,
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"server_url":         serverURL,
+		"proxy_url":          proxyURL,
+		"https_server_url":   httpsServerURL,
+		"discovery_interval": discoveryInterval,
+		"discovery_disabled": discoveryDisabled,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -110,17 +117,31 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 // HandleUpdateSettings updates the service settings.
 func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
-		ServerURL string `json:"server_url"`
-		ProxyURL  string `json:"proxy_url"`
+		ServerURL         string `json:"server_url"`
+		ProxyURL          string `json:"proxy_url"`
+		DiscoveryInterval string `json:"discovery_interval"`
+		DiscoveryDisabled bool   `json:"discovery_disabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	interval, err := time.ParseDuration(settings.DiscoveryInterval)
+	if err != nil && settings.DiscoveryInterval != "" {
+		http.Error(w, "Invalid discovery interval: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	s.mu.Lock()
 	s.serverURL = settings.ServerURL
+
 	s.proxyURL = settings.ProxyURL
+	if settings.DiscoveryInterval != "" {
+		s.discoveryInterval = interval
+	}
+
+	s.discoveryDisabled = settings.DiscoveryDisabled
 
 	if s.sm != nil {
 		s.sm.ServerURL = settings.ServerURL
@@ -134,13 +155,15 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	currentHTTPS := s.httpsServerURL
 
 	log.Printf("Saving updated settings to %s/settings.json", s.ds.DataDir)
-	err := s.ds.SaveSettings(datastore.Settings{
+	err = s.ds.SaveSettings(datastore.Settings{
 		ServerURL:          s.serverURL,
 		ProxyURL:           s.proxyURL,
 		HTTPServerURL:      currentHTTPS,
 		RedactLogs:         currentRedact,
 		LogBodies:          currentLogBody,
 		RecordInteractions: currentRecord,
+		DiscoveryInterval:  s.discoveryInterval.String(),
+		DiscoveryDisabled:  s.discoveryDisabled,
 	})
 	s.mu.Unlock()
 
@@ -491,6 +514,8 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 	// Persist to datastore
 	// Access fields directly since we already hold the lock
 	serverURL, proxyURL, httpsServerURL := s.serverURL, s.proxyURL, s.httpsServerURL
+	discoveryInterval := s.discoveryInterval.String()
+	discoveryDisabled := s.discoveryDisabled
 
 	log.Printf("Saving updated proxy settings to %s/settings.json", s.ds.DataDir)
 	err := s.ds.SaveSettings(datastore.Settings{
@@ -500,6 +525,8 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 		RedactLogs:         s.proxyRedact,
 		LogBodies:          s.proxyLogBody,
 		RecordInteractions: s.recordEnabled,
+		DiscoveryInterval:  discoveryInterval,
+		DiscoveryDisabled:  discoveryDisabled,
 	})
 	s.mu.Unlock()
 
@@ -649,5 +676,22 @@ func (s *Server) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
 		"output":  output,
 	}); encodeErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleGetVersionInfo returns version information for the service.
+func (s *Server) HandleGetVersionInfo(w http.ResponseWriter, _ *http.Request) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"version": s.Version,
+		"commit":  s.Commit,
+		"date":    s.Date,
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
 	}
 }

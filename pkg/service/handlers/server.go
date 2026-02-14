@@ -15,30 +15,63 @@ import (
 
 // Server handles HTTP requests for the SoundTouch service.
 type Server struct {
-	ds             *datastore.DataStore
-	sm             *setup.Manager
-	mu             sync.RWMutex
-	serverURL      string
-	proxyURL       string
-	httpsServerURL string
-	discovering    bool
-	proxyRedact    bool
-	proxyLogBody   bool
-	recordEnabled  bool
-	recorder       *proxy.Recorder
+	ds                *datastore.DataStore
+	sm                *setup.Manager
+	mu                sync.RWMutex
+	serverURL         string
+	proxyURL          string
+	httpsServerURL    string
+	discovering       bool
+	proxyRedact       bool
+	proxyLogBody      bool
+	recordEnabled     bool
+	discoveryInterval time.Duration
+	discoveryDisabled bool
+	recorder          *proxy.Recorder
+	Version           string
+	Commit            string
+	Date              string
 }
 
 // NewServer creates a new SoundTouch service server.
 func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled bool) *Server {
 	return &Server{
-		ds:            ds,
-		sm:            sm,
-		serverURL:     serverURL,
-		proxyURL:      serverURL,
-		proxyRedact:   proxyRedact,
-		proxyLogBody:  proxyLogBody,
-		recordEnabled: recordEnabled,
+		ds:                ds,
+		sm:                sm,
+		serverURL:         serverURL,
+		proxyURL:          serverURL,
+		proxyRedact:       proxyRedact,
+		proxyLogBody:      proxyLogBody,
+		recordEnabled:     recordEnabled,
+		discoveryInterval: 5 * time.Minute,
 	}
+}
+
+// SetVersionInfo sets the version information for the server.
+func (s *Server) SetVersionInfo(version, commit, date string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.Version = version
+	s.Commit = commit
+	s.Date = date
+}
+
+// SetDiscoverySettings sets the discovery settings for the server.
+func (s *Server) SetDiscoverySettings(interval time.Duration, disabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.discoveryInterval = interval
+	s.discoveryDisabled = disabled
+}
+
+// GetDiscoverySettings returns the current discovery settings.
+func (s *Server) GetDiscoverySettings() (time.Duration, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.discoveryInterval, s.discoveryDisabled
 }
 
 // SetHTTPServerURL sets the external HTTPS URL of the service.

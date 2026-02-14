@@ -376,9 +376,11 @@ func TestSettingsPersistence(t *testing.T) {
 	ds := NewDataStore(tempDir)
 
 	settings := Settings{
-		ServerURL: "http://myserver:8000",
-		ProxyURL:  "http://myproxy:8001",
-		LogBodies: true,
+		ServerURL:         "http://myserver:8000",
+		ProxyURL:          "http://myproxy:8001",
+		LogBodies:         true,
+		DiscoveryInterval: "10m",
+		DiscoveryDisabled: true,
 	}
 
 	err = ds.SaveSettings(settings)
@@ -396,5 +398,11 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	if loaded.LogBodies != settings.LogBodies {
 		t.Errorf("Expected LogBodies %v, got %v", settings.LogBodies, loaded.LogBodies)
+	}
+	if loaded.DiscoveryInterval != settings.DiscoveryInterval {
+		t.Errorf("Expected DiscoveryInterval %s, got %s", settings.DiscoveryInterval, loaded.DiscoveryInterval)
+	}
+	if loaded.DiscoveryDisabled != settings.DiscoveryDisabled {
+		t.Errorf("Expected DiscoveryDisabled %v, got %v", settings.DiscoveryDisabled, loaded.DiscoveryDisabled)
 	}
 }

@@ -8,6 +8,12 @@ async function fetchSettings() {
         if (settings.proxy_url) {
             document.getElementById('proxy-domain').value = settings.proxy_url;
         }
+        if (settings.discovery_interval) {
+            document.getElementById('discovery-interval').value = settings.discovery_interval;
+        }
+        if (settings.discovery_disabled !== undefined) {
+            document.getElementById('discovery-disabled').checked = settings.discovery_disabled;
+        }
         fetchProxySettings();
     } catch (error) {
         console.error('Failed to fetch settings', error);
@@ -46,7 +52,9 @@ async function updateProxySettings() {
 async function updateSettings() {
     const settings = {
         server_url: document.getElementById('target-domain').value,
-        proxy_url: document.getElementById('proxy-domain').value
+        proxy_url: document.getElementById('proxy-domain').value,
+        discovery_interval: document.getElementById('discovery-interval').value,
+        discovery_disabled: document.getElementById('discovery-disabled').checked
     };
     const status = document.getElementById('settings-status');
     status.innerText = 'Saving...';
@@ -208,10 +216,24 @@ async function startSync() {
     }
 }
 
+async function fetchVersion() {
+    try {
+        const response = await fetch('/setup/version');
+        const data = await response.json();
+        const info = document.getElementById('version-info');
+        if (info && data.version) {
+            info.innerText = `SoundTouch Toolkit ${data.version} (${data.commit}) - ${data.date}`;
+        }
+    } catch (error) {
+        console.error('Failed to fetch version info', error);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     fetchSettings();
     fetchDevices();
     triggerDiscovery();
+    fetchVersion();
 
     document.getElementById('sync-now-btn').onclick = startSync;
 });

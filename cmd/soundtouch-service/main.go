@@ -151,6 +151,12 @@ func main() {
 				config.httpsServerURL = persisted.HTTPServerURL
 			}
 
+			if persisted.DiscoveryInterval != "" {
+				if d, err := time.ParseDuration(persisted.DiscoveryInterval); err == nil {
+					config.discoveryInterval = d
+				}
+			}
+
 			config.redact = persisted.RedactLogs || config.redact
 			config.logBody = persisted.LogBodies || config.logBody
 			config.record = persisted.RecordInteractions || config.record
@@ -167,6 +173,8 @@ func main() {
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 			server.SetHTTPServerURL(config.httpsServerURL)
+			server.SetVersionInfo(version, commit, date)
+			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryDisabled)
 
 			recorder := proxy.NewRecorder(config.dataDir)
 			recorder.Redact = config.redact
@@ -188,7 +196,7 @@ func main() {
 
 			pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody, recorder, server)
 
-			startDeviceDiscovery(server, config.discoveryInterval)
+			startDeviceDiscovery(server)
 
 			r := setupRouter(server, pyProxy)
 
@@ -392,11 +400,15 @@ func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Re
 	return pyProxy
 }
 
-func startDeviceDiscovery(server *handlers.Server, interval time.Duration) {
+func startDeviceDiscovery(server *handlers.Server) {
 	go func() {
 		for {
-			server.DiscoverDevices(context.Background())
-			time.Sleep(interval)
+			currentInterval, disabled := server.GetDiscoverySettings()
+			if !disabled {
+				server.DiscoverDevices(context.Background())
+			}
+
+			time.Sleep(currentInterval)
 		}
 	}()
 }
@@ -470,6 +482,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Get("/ca.crt", server.HandleGetCACert)
 		r.Get("/proxy-settings", server.HandleGetProxySettings)
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)
+		r.Get("/version", server.HandleGetVersionInfo)
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 	})
 

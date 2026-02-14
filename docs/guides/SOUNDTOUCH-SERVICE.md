@@ -161,6 +161,7 @@ The service supports multiple ways to configure its behavior. When multiple sour
 | `LOG_PROXY_BODY`                   | `--log-bodies`             | Log full request/response bodies                 | `false`                   |
 | `RECORD_INTERACTIONS`              | `--record-interactions`    | Record HTTP interactions to disk                 | `true`                    |
 | `DISCOVERY_INTERVAL`               | `--discovery-interval`     | Device discovery interval                        | `5m`                      |
+| `DISCOVERY_DISABLED`               |                            | Disable automated device discovery               | `false`                   |
 
 ### Configuration Examples
 

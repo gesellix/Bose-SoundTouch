@@ -90,6 +90,11 @@
                 <span style="font-size: 0.8em; color: #666;">(Upstream proxy URL)</span>
             </div>
             <div style="margin-bottom: 20px;">
+                <label for="discovery-interval">Discovery Interval:</label>
+                <input type="text" id="discovery-interval" placeholder="5m" style="width: 100px;">
+                <label style="margin-left: 15px;"><input type="checkbox" id="discovery-disabled"> Disable Automated Discovery</label>
+            </div>
+            <div style="margin-bottom: 20px;">
                 <button onclick="updateSettings()">Save Settings</button>
                 <span id="settings-status" style="margin-left: 10px; font-size: 0.9em;"></span>
             </div>
@@ -270,5 +275,8 @@
     </div>
 
     <script src="/web/js/script.js"></script>
+    <footer style="margin-top: 50px; padding: 20px; border-top: 1px solid #eee; font-size: 0.8em; color: #888; text-align: center;">
+        <span id="version-info">SoundTouch Toolkit</span>
+    </footer>
 </body>
 </html>

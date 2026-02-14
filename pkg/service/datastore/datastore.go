@@ -714,6 +714,8 @@ type Settings struct {
 	RedactLogs         bool   `json:"redact_logs"`
 	LogBodies          bool   `json:"log_bodies"`
 	RecordInteractions bool   `json:"record_interactions"`
+	DiscoveryInterval  string `json:"discovery_interval,omitempty"`
+	DiscoveryDisabled  bool   `json:"discovery_disabled"`
 }
 
 // GetSettings retrieves the global service settings.
