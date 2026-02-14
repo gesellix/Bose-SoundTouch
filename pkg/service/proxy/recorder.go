@@ -29,6 +29,7 @@ type Recorder struct {
 // NewRecorder creates a new HTTP interaction recorder.
 func NewRecorder(baseDir string) *Recorder {
 	sessionID := time.Now().Format("20060102-150405") + "-" + fmt.Sprintf("%d", os.Getpid())
+
 	return &Recorder{
 		BaseDir:   baseDir,
 		SessionID: sessionID,
@@ -43,10 +44,35 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 		return nil
 	}
 
-	// Group by URL path, sanitizing variable segments like IP addresses
-	pathSegments := strings.Split(strings.Trim(req.URL.Path, "/"), "/")
+	sanitizedSegments, replacements := r.getSanitizedSegments(req.URL.Path)
+	dir := r.getRecordingDir(category, sanitizedSegments)
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+
+	path := r.getRecordingPath(dir, req.Method)
+
+	var buf bytes.Buffer
+
+	r.writeRequest(&buf, req, replacements)
+
+	if res != nil {
+		r.writeResponse(&buf, res)
+	}
+
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		return err
+	}
+
+	return r.updateEnvFile(replacements)
+}
+
+func (r *Recorder) getSanitizedSegments(path string) ([]string, map[string]string) {
+	pathSegments := strings.Split(strings.Trim(path, "/"), "/")
 	sanitizedSegments := make([]string, 0, len(pathSegments))
 	replacements := make(map[string]string)
+
 	for _, segment := range pathSegments {
 		if segment == "" {
 			continue
@@ -54,53 +80,63 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 
 		sanitized, replacement := r.Patterns.Sanitize(segment)
 		sanitizedSegments = append(sanitizedSegments, sanitized)
+
 		if replacement != "" {
 			replacements[segment] = replacement
 		}
 	}
 
+	return sanitizedSegments, replacements
+}
+
+func (r *Recorder) getRecordingDir(category string, sanitizedSegments []string) string {
 	subDir := "root"
 	if len(sanitizedSegments) > 0 {
 		subDir = filepath.Join(sanitizedSegments...)
 	}
 
-	dir := filepath.Join(r.BaseDir, "interactions", r.SessionID, category, subDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", dir, err)
-	}
+	return filepath.Join(r.BaseDir, "interactions", r.SessionID, category, subDir)
+}
 
+func (r *Recorder) getRecordingPath(dir, method string) string {
 	timestamp := time.Now().Format("15-04-05.000")
 	count := atomic.AddUint64(&r.counter, 1)
-	filename := fmt.Sprintf("%04d-%s-%s.http", count, timestamp, req.Method)
-	path := filepath.Join(dir, filename)
+	filename := fmt.Sprintf("%04d-%s-%s.http", count, timestamp, method)
 
-	var buf bytes.Buffer
+	return filepath.Join(dir, filename)
+}
 
-	// Write Request
+func (r *Recorder) writeRequest(buf *bytes.Buffer, req *http.Request, replacements map[string]string) {
 	displayURL := req.URL.String()
 	for orig, repl := range replacements {
 		displayURL = strings.ReplaceAll(displayURL, orig, "{{"+strings.Trim(repl, "{}")+"}}")
 	}
 
-	buf.WriteString(fmt.Sprintf("### %s %s\n", req.Method, displayURL))
+	fmt.Fprintf(buf, "### %s %s\n", req.Method, displayURL)
+
 	for orig, repl := range replacements {
 		key := strings.Trim(repl, "{}")
-		buf.WriteString(fmt.Sprintf("// %s: %s\n", key, orig))
+		fmt.Fprintf(buf, "// %s: %s\n", key, orig)
 	}
-	buf.WriteString(fmt.Sprintf("%s %s\n", req.Method, displayURL))
+
+	fmt.Fprintf(buf, "%s %s\n", req.Method, displayURL)
+
 	for k, vv := range req.Header {
 		if r.Redact && isSensitive(k) {
-			buf.WriteString(fmt.Sprintf("%s: [REDACTED]\n", k))
+			fmt.Fprintf(buf, "%s: [REDACTED]\n", k)
 			continue
 		}
+
 		for _, v := range vv {
 			val := v
 			for orig, repl := range replacements {
 				val = strings.ReplaceAll(val, orig, "{{"+strings.Trim(repl, "{}")+"}}")
 			}
-			buf.WriteString(fmt.Sprintf("%s: %s\n", k, val))
+
+			fmt.Fprintf(buf, "%s: %s\n", k, val)
 		}
 	}
+
 	buf.WriteString("\n")
 
 	if req.Body != nil {
@@ -111,46 +147,42 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 			buf.WriteString("\n")
 		}
 	}
+}
 
-	// Write Response if available
-	if res != nil {
-		buf.WriteString("\n")
-		buf.WriteString("> {% \n")
-		buf.WriteString(fmt.Sprintf("    // Response: %d %s\n", res.StatusCode, http.StatusText(res.StatusCode)))
-		buf.WriteString("    // Headers:\n")
-		for k, vv := range res.Header {
-			if r.Redact && isSensitive(k) {
-				buf.WriteString(fmt.Sprintf("    // %s: [REDACTED]\n", k))
-				continue
-			}
-			for _, v := range vv {
-				buf.WriteString(fmt.Sprintf("    // %s: %s\n", k, v))
-			}
+func (r *Recorder) writeResponse(buf *bytes.Buffer, res *http.Response) {
+	buf.WriteString("\n")
+	buf.WriteString("> {% \n")
+	fmt.Fprintf(buf, "    // Response: %d %s\n", res.StatusCode, http.StatusText(res.StatusCode))
+	buf.WriteString("    // Headers:\n")
+
+	for k, vv := range res.Header {
+		if r.Redact && isSensitive(k) {
+			fmt.Fprintf(buf, "    // %s: [REDACTED]\n", k)
+			continue
 		}
-		buf.WriteString("%}\n")
 
-		if res.Body != nil {
-			bodyBytes, err := io.ReadAll(res.Body)
-			if err == nil {
-				res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-				contentType := res.Header.Get("Content-Type")
-				if strings.Contains(contentType, "xml") || strings.Contains(contentType, "json") || strings.Contains(contentType, "text") {
-					buf.WriteString("\n/*\n")
-					buf.Write(bodyBytes)
-					buf.WriteString("\n*/\n")
-				} else {
-					buf.WriteString(fmt.Sprintf("\n// [Binary response body: %d bytes]\n", len(bodyBytes)))
-				}
-			}
+		for _, v := range vv {
+			fmt.Fprintf(buf, "    // %s: %s\n", k, v)
 		}
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
-		return err
-	}
+	buf.WriteString("%}\n")
 
-	return r.updateEnvFile(replacements)
+	if res.Body != nil {
+		bodyBytes, err := io.ReadAll(res.Body)
+		if err == nil {
+			res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			contentType := res.Header.Get("Content-Type")
+			if strings.Contains(contentType, "xml") || strings.Contains(contentType, "json") || strings.Contains(contentType, "text") {
+				buf.WriteString("\n/*\n")
+				buf.Write(bodyBytes)
+				buf.WriteString("\n*/\n")
+			} else {
+				fmt.Fprintf(buf, "\n// [Binary response body: %d bytes]\n", len(bodyBytes))
+			}
+		}
+	}
 }
 
 func (r *Recorder) updateEnvFile(newVars map[string]string) error {
@@ -162,6 +194,7 @@ func (r *Recorder) updateEnvFile(newVars map[string]string) error {
 	defer r.mu.Unlock()
 
 	changed := false
+
 	for orig, repl := range newVars {
 		key := strings.Trim(repl, "{}")
 		if r.variables[key] != orig {

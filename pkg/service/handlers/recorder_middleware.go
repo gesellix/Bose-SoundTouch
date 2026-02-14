@@ -19,8 +19,10 @@ func (s *Server) RecordMiddleware(next http.Handler) http.Handler {
 
 		// Buffer the request body if it exists
 		var reqBody []byte
+
 		if r.Body != nil {
 			var err error
+
 			reqBody, err = io.ReadAll(r.Body)
 			if err == nil {
 				r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
@@ -37,6 +39,9 @@ func (s *Server) RecordMiddleware(next http.Handler) http.Handler {
 
 		// Create a response object for the recorder
 		res := rw.getRecordedResponse(r)
+		if res.Body != nil {
+			defer func() { _ = res.Body.Close() }()
+		}
 
 		// Put back the original request body for recording
 		r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
@@ -89,5 +94,6 @@ func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if h, ok := rw.ResponseWriter.(http.Hijacker); ok {
 		return h.Hijack()
 	}
+
 	return nil, nil, fmt.Errorf("ResponseWriter does not support Hijacker")
 }

@@ -25,6 +25,7 @@ func LoadPatterns(path string) (PathPatterns, error) {
 		if os.IsNotExist(err) {
 			return PathPatterns{}, nil
 		}
+
 		return nil, err
 	}
 
@@ -38,6 +39,7 @@ func LoadPatterns(path string) (PathPatterns, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid regex in pattern %s: %w", patterns[i].Name, err)
 		}
+
 		patterns[i].compiled = re
 	}
 
@@ -51,6 +53,7 @@ func (pp PathPatterns) Sanitize(segment string) (string, string) {
 			return p.Replacement, p.Replacement
 		}
 	}
+
 	return segment, ""
 }
 
@@ -63,5 +66,6 @@ func DefaultPatterns() PathPatterns {
 	}
 	re, _ := regexp.Compile(p.Regexp)
 	p.compiled = re
+
 	return PathPatterns{p}
 }

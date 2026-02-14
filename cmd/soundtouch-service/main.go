@@ -35,12 +35,14 @@ func main() {
 	recorder := proxy.NewRecorder(config.dataDir)
 	recorder.Redact = config.redact
 	patternsPath := filepath.Join(config.dataDir, "patterns.json")
+
 	patterns, err := proxy.LoadPatterns(patternsPath)
 	if err == nil && len(patterns) > 0 {
 		recorder.Patterns = patterns
 	} else if err != nil {
 		log.Printf("Warning: Failed to load patterns from %s: %v", patternsPath, err)
 	}
+
 	server.SetRecorder(recorder)
 
 	tlsConfig, err := cm.GetServerTLSConfig(config.domains)
@@ -80,16 +82,7 @@ type serviceConfig struct {
 
 func loadConfig() serviceConfig {
 	// Define flags
-	fPort := flag.String("port", "", "Port to bind the service to (env: PORT)")
-	fBindAddr := flag.String("bind", "", "Network interface to bind to (env: BIND_ADDR)")
-	fTargetURL := flag.String("target-url", "", "URL for Python-based service components (env: PYTHON_BACKEND_URL)")
-	fDataDir := flag.String("data-dir", "", "Directory for persistent data (env: DATA_DIR)")
-	fServerURL := flag.String("server-url", "", "External URL of this service (env: SERVER_URL)")
-	fHttpsPort := flag.String("https-port", "", "HTTPS port to bind the service to (env: HTTPS_PORT)")
-	fHttpsServerURL := flag.String("https-server-url", "", "External HTTPS URL (env: HTTPS_SERVER_URL)")
-	fRedact := flag.String("redact-logs", "", "Redact sensitive data in proxy logs (true/false, env: REDACT_PROXY_LOGS)")
-	fLogBody := flag.String("log-bodies", "", "Log full request/response bodies (true/false, env: LOG_PROXY_BODY)")
-	fRecord := flag.String("record-interactions", "", "Record HTTP interactions to disk (true/false, env: RECORD_INTERACTIONS)")
+	fPort, fBindAddr, fTargetURL, fDataDir, fServerURL, fHTTPSPort, fHTTPSServerURL, fRedact, fLogBody, fRecord := defineFlags()
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of soundtouch-service:\n")
@@ -99,78 +92,16 @@ func loadConfig() serviceConfig {
 
 	flag.Parse()
 
-	port := *fPort
-	if port == "" {
-		port = os.Getenv("PORT")
-	}
-	if port == "" {
-		port = "8000"
-	}
-
-	bindAddr := *fBindAddr
-	if bindAddr == "" {
-		bindAddr = os.Getenv("BIND_ADDR")
-	}
+	port := getEnvOrDefault("PORT", *fPort, "8000")
+	bindAddr := getEnvOrDefault("BIND_ADDR", *fBindAddr, "")
 
 	addr := bindAddr + ":" + port
 	if bindAddr == "" {
 		addr = ":" + port
 	}
 
-	targetURL := *fTargetURL
-	if targetURL == "" {
-		targetURL = os.Getenv("PYTHON_BACKEND_URL")
-	}
-	if targetURL == "" {
-		targetURL = "http://localhost:8001"
-	}
-
-	dataDir := *fDataDir
-	if dataDir == "" {
-		dataDir = os.Getenv("DATA_DIR")
-	}
-	if dataDir == "" {
-		dataDir = "data"
-	}
-
-	serverURL := *fServerURL
-	if serverURL == "" {
-		serverURL = os.Getenv("SERVER_URL")
-	}
-	if serverURL == "" {
-		hostname, _ := os.Hostname()
-		if hostname == "" {
-			hostname = "localhost"
-		}
-
-		serverURL = "http://" + strings.ToLower(hostname) + ":" + port
-	}
-
-	httpsPort := *fHttpsPort
-	if httpsPort == "" {
-		httpsPort = os.Getenv("HTTPS_PORT")
-	}
-	if httpsPort == "" {
-		httpsPort = "8443"
-	}
-
-	httpsAddr := bindAddr + ":" + httpsPort
-	if bindAddr == "" {
-		httpsAddr = ":" + httpsPort
-	}
-
-	httpsServerURL := *fHttpsServerURL
-	if httpsServerURL == "" {
-		httpsServerURL = os.Getenv("HTTPS_SERVER_URL")
-	}
-	if httpsServerURL == "" {
-		hostname, _ := os.Hostname()
-		if hostname == "" {
-			hostname = "localhost"
-		}
-
-		httpsServerURL = "https://" + strings.ToLower(hostname) + ":" + httpsPort
-	}
+	targetURL := getEnvOrDefault("PYTHON_BACKEND_URL", *fTargetURL, "http://localhost:8001")
+	dataDir := getEnvOrDefault("DATA_DIR", *fDataDir, "data")
 
 	hostname, _ := os.Hostname()
 	if hostname == "" {
@@ -179,6 +110,79 @@ func loadConfig() serviceConfig {
 
 	hostname = strings.ToLower(hostname)
 
+	serverURL := getEnvOrDefault("SERVER_URL", *fServerURL, "")
+	if serverURL == "" {
+		serverURL = "http://" + hostname + ":" + port
+	}
+
+	httpsPort := getEnvOrDefault("HTTPS_PORT", *fHTTPSPort, "8443")
+
+	httpsAddr := bindAddr + ":" + httpsPort
+	if bindAddr == "" {
+		httpsAddr = ":" + httpsPort
+	}
+
+	httpsServerURL := getEnvOrDefault("HTTPS_SERVER_URL", *fHTTPSServerURL, "")
+	if httpsServerURL == "" {
+		httpsServerURL = "https://" + hostname + ":" + httpsPort
+	}
+
+	domains := getDomains(serverURL, httpsServerURL, hostname)
+
+	redactVal := getEnvOrDefault("REDACT_PROXY_LOGS", *fRedact, "")
+	redact := redactVal != "false"
+
+	logBodyVal := getEnvOrDefault("LOG_PROXY_BODY", *fLogBody, "")
+	logBody := logBodyVal == "true"
+
+	recordVal := getEnvOrDefault("RECORD_INTERACTIONS", *fRecord, "")
+	record := recordVal != "false"
+
+	return serviceConfig{
+		port:           port,
+		bindAddr:       bindAddr,
+		addr:           addr,
+		targetURL:      targetURL,
+		dataDir:        dataDir,
+		serverURL:      serverURL,
+		httpsServerURL: httpsServerURL,
+		httpsAddr:      httpsAddr,
+		redact:         redact,
+		logBody:        logBody,
+		record:         record,
+		domains:        domains,
+	}
+}
+
+func defineFlags() (port, bind, target, data, server, httpsPort, httpsServer, redact, logBody, record *string) {
+	port = flag.String("port", "", "Port to bind the service to (env: PORT)")
+	bind = flag.String("bind", "", "Network interface to bind to (env: BIND_ADDR)")
+	target = flag.String("target-url", "", "URL for Python-based service components (env: PYTHON_BACKEND_URL)")
+	data = flag.String("data-dir", "", "Directory for persistent data (env: DATA_DIR)")
+	server = flag.String("server-url", "", "External URL of this service (env: SERVER_URL)")
+	httpsPort = flag.String("https-port", "", "HTTPS port to bind the service to (env: HTTPS_PORT)")
+	httpsServer = flag.String("https-server-url", "", "External HTTPS URL (env: HTTPS_SERVER_URL)")
+	redact = flag.String("redact-logs", "", "Redact sensitive data in proxy logs (true/false, env: REDACT_PROXY_LOGS)")
+	logBody = flag.String("log-bodies", "", "Log full request/response bodies (true/false, env: LOG_PROXY_BODY)")
+	record = flag.String("record-interactions", "", "Record HTTP interactions to disk (true/false, env: RECORD_INTERACTIONS)")
+
+	return
+}
+
+func getEnvOrDefault(envKey, flagVal, defaultVal string) string {
+	if flagVal != "" {
+		return flagVal
+	}
+
+	val := os.Getenv(envKey)
+	if val != "" {
+		return val
+	}
+
+	return defaultVal
+}
+
+func getDomains(serverURL, httpsServerURL, hostname string) []string {
 	domainsMap := map[string]bool{
 		"streaming.bose.com":  true,
 		"updates.bose.com":    true,
@@ -204,38 +208,7 @@ func loadConfig() serviceConfig {
 		domains = append(domains, d)
 	}
 
-	redactVal := *fRedact
-	if redactVal == "" {
-		redactVal = os.Getenv("REDACT_PROXY_LOGS")
-	}
-	redact := redactVal != "false"
-
-	logBodyVal := *fLogBody
-	if logBodyVal == "" {
-		logBodyVal = os.Getenv("LOG_PROXY_BODY")
-	}
-	logBody := logBodyVal == "true"
-
-	recordVal := *fRecord
-	if recordVal == "" {
-		recordVal = os.Getenv("RECORD_INTERACTIONS")
-	}
-	record := recordVal != "false"
-
-	return serviceConfig{
-		port:           port,
-		bindAddr:       bindAddr,
-		addr:           addr,
-		targetURL:      targetURL,
-		dataDir:        dataDir,
-		serverURL:      serverURL,
-		httpsServerURL: httpsServerURL,
-		httpsAddr:      httpsAddr,
-		redact:         redact,
-		logBody:        logBody,
-		record:         record,
-		domains:        domains,
-	}
+	return domains
 }
 
 func initDataStore(dataDir string) *datastore.DataStore {
