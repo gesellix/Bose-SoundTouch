@@ -30,12 +30,22 @@ func main() {
 	sm := setup.NewManager(config.serverURL, ds, cm)
 	server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody)
 
+	recorder := proxy.NewRecorder(config.dataDir)
+	patternsPath := filepath.Join(config.dataDir, "patterns.json")
+	patterns, err := proxy.LoadPatterns(patternsPath)
+	if err == nil && len(patterns) > 0 {
+		recorder.Patterns = patterns
+	} else if err != nil {
+		log.Printf("Warning: Failed to load patterns from %s: %v", patternsPath, err)
+	}
+	server.SetRecorder(recorder)
+
 	tlsConfig, err := cm.GetServerTLSConfig(config.domains)
 	if err != nil {
 		log.Printf("Warning: Failed to setup TLS: %v", err)
 	}
 
-	pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody)
+	pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody, recorder)
 
 	startDeviceDiscovery(server)
 
@@ -182,7 +192,7 @@ func initCertificateManager(dataDir string) *certmanager.CertificateManager {
 	return cm
 }
 
-func setupPythonProxy(targetURL string, redact, logBody bool) *httputil.ReverseProxy {
+func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Recorder) *httputil.ReverseProxy {
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		log.Fatalf("Failed to parse target URL: %v", err)
@@ -197,6 +207,7 @@ func setupPythonProxy(targetURL string, redact, logBody bool) *httputil.ReverseP
 
 		currentLp := proxy.NewLoggingProxy(target.String(), redact)
 		currentLp.LogBody = logBody
+		currentLp.SetRecorder(recorder)
 		currentLp.LogResponse(res)
 
 		return nil
@@ -208,6 +219,7 @@ func setupPythonProxy(targetURL string, redact, logBody bool) *httputil.ReverseP
 
 		currentLp := proxy.NewLoggingProxy(target.String(), redact)
 		currentLp.LogBody = logBody
+		currentLp.SetRecorder(recorder)
 		currentLp.LogRequest(req)
 	}
 
@@ -227,6 +239,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(server.RecordMiddleware)
 
 	r.Get("/", server.HandleRoot)
 	r.Get("/health", server.HandleHealth)

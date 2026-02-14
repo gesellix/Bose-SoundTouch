@@ -35,6 +35,7 @@ func (s *Server) HandleProxyRequest(w http.ResponseWriter, r *http.Request) {
 
 	lp := proxy.NewLoggingProxy(target.String(), s.proxyRedact)
 	lp.LogBody = s.proxyLogBody
+	lp.SetRecorder(s.recorder)
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	// Update director to set the correct host and path

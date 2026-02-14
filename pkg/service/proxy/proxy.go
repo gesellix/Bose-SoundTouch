@@ -24,6 +24,7 @@ type LoggingProxy struct {
 	Redact      bool
 	LogBody     bool
 	MaxBodySize int64
+	Recorder    *Recorder
 }
 
 // NewLoggingProxy creates a lightweight logger for HTTP requests/responses.
@@ -34,6 +35,11 @@ func NewLoggingProxy(_ string, redact bool) *LoggingProxy {
 		LogBody:     os.Getenv("LOG_PROXY_BODY") == "true",
 		MaxBodySize: 1024 * 10, // 10KB default limit for logging
 	}
+}
+
+// SetRecorder sets the recorder for the proxy.
+func (lp *LoggingProxy) SetRecorder(r *Recorder) {
+	lp.Recorder = r
 }
 
 // LogRequest prints an abbreviated request with optional header/body redaction.
@@ -82,6 +88,10 @@ func (lp *LoggingProxy) LogResponse(r *http.Response) {
 	}
 
 	log.Printf("[PROXY_RES] %d %s\n  Headers:\n%s\n  Body: %s", r.StatusCode, r.Request.URL.String(), headers, bodyStr)
+
+	if lp.Recorder != nil {
+		_ = lp.Recorder.Record("upstream", r.Request, r)
+	}
 }
 
 func formatHeaders(h http.Header, redact bool) string {

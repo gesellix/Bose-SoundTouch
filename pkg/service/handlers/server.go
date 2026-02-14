@@ -8,6 +8,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 )
 
@@ -20,6 +21,7 @@ type Server struct {
 	discovering  bool
 	proxyRedact  bool
 	proxyLogBody bool
+	recorder     *proxy.Recorder
 }
 
 // NewServer creates a new SoundTouch service server.
@@ -32,6 +34,11 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 		proxyRedact:  proxyRedact,
 		proxyLogBody: proxyLogBody,
 	}
+}
+
+// SetRecorder sets the recorder for the server.
+func (s *Server) SetRecorder(r *proxy.Recorder) {
+	s.recorder = r
 }
 
 // DiscoverDevices starts a background device discovery process.

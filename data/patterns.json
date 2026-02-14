@@ -1,0 +1,17 @@
+[
+  {
+    "name": "IPv4",
+    "regexp": "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$",
+    "replacement": "{ip}"
+  },
+  {
+    "name": "DeviceID",
+    "regexp": "^[A-F0-9]{12}$",
+    "replacement": "{deviceId}"
+  },
+  {
+    "name": "AccountID",
+    "regexp": "^\\d{1,10}$",
+    "replacement": "{accountId}"
+  }
+]
