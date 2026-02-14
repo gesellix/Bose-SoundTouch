@@ -47,6 +47,8 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 
 	// Setup Setup for tests
 	r.Route("/setup", func(r chi.Router) {
+		r.Get("/devices", server.HandleListDiscoveredDevices)
+		r.Delete("/devices/{deviceId}", server.HandleRemoveDevice)
 		r.Get("/settings", server.HandleGetSettings)
 		r.Post("/settings", server.HandleUpdateSettings)
 		r.Get("/proxy-settings", server.HandleGetProxySettings)

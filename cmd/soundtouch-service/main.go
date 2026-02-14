@@ -463,6 +463,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 	r.Route("/setup", func(r chi.Router) {
 		r.Get("/devices", server.HandleListDiscoveredDevices)
 		r.Post("/devices", server.HandleAddManualDevice)
+		r.Delete("/devices/{deviceId}", server.HandleRemoveDevice)
 		r.Post("/discover", server.HandleTriggerDiscovery)
 		r.Get("/discovery-status", server.HandleGetDiscoveryStatus)
 		r.Get("/settings", server.HandleGetSettings)

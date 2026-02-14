@@ -64,6 +64,7 @@ func (s *Server) HandleAddManualDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.handleDiscoveredDevice(d)
+	s.mergeOverlappingDevices()
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -87,6 +88,53 @@ func (s *Server) HandleGetDiscoveryStatus(w http.ResponseWriter, _ *http.Request
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(map[string]bool{"discovering": s.discovering}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleRemoveDevice removes a device from the datastore.
+func (s *Server) HandleRemoveDevice(w http.ResponseWriter, r *http.Request) {
+	deviceId := chi.URLParam(r, "deviceId")
+	if deviceId == "" {
+		http.Error(w, "Device ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// For now we assume a default account if not specified,
+	// or we might need to find which account this device belongs to.
+	// Looking at DataStore.ListAllDevices, it returns models.ServiceDeviceInfo which has DeviceID.
+
+	devices, err := s.ds.ListAllDevices()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var found bool
+
+	for i := range devices {
+		if devices[i].DeviceID == deviceId {
+			err = s.ds.RemoveDevice(devices[i].AccountID, devices[i].DeviceID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		http.Error(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

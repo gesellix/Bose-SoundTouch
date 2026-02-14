@@ -66,3 +66,13 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
 .info-box a:hover {
     text-decoration: none;
 }
+
+.btn-danger {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+}
+.btn-danger:hover {
+    background-color: #d32f2f;
+}

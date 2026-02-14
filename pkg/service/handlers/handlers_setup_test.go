@@ -249,6 +249,95 @@ func TestMigrationAndCA(t *testing.T) {
 	}
 }
 
+func TestRemoveDevice(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "remove-device-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	// Setup a dummy device in the datastore
+	account := "test-account"
+	deviceID := "TEST-DEVICE-ID"
+	deviceDir := filepath.Join(tempDir, account, "devices", deviceID)
+	if err := os.MkdirAll(deviceDir, 0755); err != nil {
+		t.Fatalf("Failed to create device dir: %v", err)
+	}
+
+	infoFile := filepath.Join(deviceDir, "DeviceInfo.xml")
+	infoXML := `<?xml version="1.0" encoding="UTF-8" ?><info deviceID="TEST-DEVICE-ID"><name>Test Device</name><type>SoundTouch 10</type></info>`
+	if err := os.WriteFile(infoFile, []byte(infoXML), 0644); err != nil {
+		t.Fatalf("Failed to create device info file: %v", err)
+	}
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// 1. Verify device exists
+	res, err := http.Get(ts.URL + "/setup/devices")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	var devices []map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&devices); err != nil {
+		t.Fatalf("Failed to decode devices: %v", err)
+	}
+
+	found := false
+	for _, d := range devices {
+		if d["device_id"] == deviceID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Device not found in list before removal")
+	}
+
+	// 2. Remove device
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/setup/devices/"+deviceID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK, got %v", res.Status)
+	}
+
+	// 3. Verify device is gone
+	res, err = http.Get(ts.URL + "/setup/devices")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if err := json.NewDecoder(res.Body).Decode(&devices); err != nil {
+		t.Fatalf("Failed to decode devices after removal: %v", err)
+	}
+
+	for _, d := range devices {
+		if d["device_id"] == deviceID {
+			t.Errorf("Device still exists in list after removal")
+		}
+	}
+
+	// 4. Verify directory is gone
+	if _, err := os.Stat(deviceDir); !os.IsNotExist(err) {
+		t.Errorf("Device directory still exists after removal")
+	}
+}
+
 type mockSSH struct{}
 
 func (m *mockSSH) Run(command string) (string, error) {

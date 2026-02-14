@@ -113,6 +113,7 @@ async function fetchDevices() {
                         <td>
                             <button onclick="prepareSync('${d.ip_address}')">Sync Data</button>
                             <button onclick="prepareMigration('${d.ip_address}')">Migrate</button>
+                            <button class="btn-danger" onclick="removeDevice('${d.device_id}', '${d.name}')">Remove</button>
                         </td>
                     </tr>
                 `;
@@ -262,6 +263,27 @@ async function addManualDevice() {
         }
     } catch (error) {
         alert('Error adding device: ' + error.message);
+    }
+}
+
+async function removeDevice(deviceId, name) {
+    if (!confirm(`Are you sure you want to remove device "${name}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/setup/devices/${deviceId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            fetchDevices();
+        } else {
+            const err = await response.text();
+            alert('Failed to remove device: ' + err);
+        }
+    } catch (error) {
+        alert('Error removing device: ' + error.message);
     }
 }
 

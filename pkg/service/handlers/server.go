@@ -141,12 +141,15 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 	for _, d := range devices {
 		s.handleDiscoveredDevice(*d)
 	}
+
+	// Post-discovery cleanup: merge overlapping IP/Serial entries
+	s.mergeOverlappingDevices()
 }
 
 func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	log.Printf("Discovered Bose device: %s at %s (Serial: %s)", d.Name, d.Host, d.SerialNo)
 
-	// 1. Check if we already have this device by serial number (best identifier)
+	// 1. Check if we already have this device
 	existingID := s.findExistingDeviceID(d)
 
 	// Use SerialNo if available, otherwise fallback to IP for the datastore directory name
@@ -187,11 +190,79 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	}
 }
 
+func (s *Server) mergeOverlappingDevices() {
+	allDevices, err := s.ds.ListAllDevices()
+	if err != nil {
+		return
+	}
+
+	// Group devices by IP
+	byIP := make(map[string][]models.ServiceDeviceInfo)
+
+	for i := range allDevices {
+		dev := allDevices[i]
+		if dev.IPAddress != "" {
+			byIP[dev.IPAddress] = append(byIP[dev.IPAddress], dev)
+		}
+	}
+
+	for ip, devices := range byIP {
+		if len(devices) <= 1 {
+			continue
+		}
+
+		// We have multiple entries for the same IP.
+		// Try to find one with a Serial Number to be the master.
+		var master *models.ServiceDeviceInfo
+
+		for i := range devices {
+			if devices[i].DeviceSerialNumber != "" || devices[i].DeviceID != "" {
+				master = &devices[i]
+				break
+			}
+		}
+
+		if master == nil {
+			// None have serials, just keep the first one (already handled by ListAllDevices unique check usually,
+			// but ListAllDevices might see different AccountIDs or directories)
+			continue
+		}
+
+		masterID := master.DeviceID
+		if masterID == "" {
+			masterID = master.DeviceSerialNumber
+		}
+
+		for i := range devices {
+			dev := devices[i]
+			devID := dev.DeviceID
+
+			if devID == "" {
+				devID = dev.IPAddress
+			}
+
+			if devID != masterID && dev.IPAddress == ip {
+				log.Printf("Merging overlapping device entry %s into %s (IP: %s)", devID, masterID, ip)
+				_ = s.ds.RemoveDevice(dev.AccountID, devID)
+			}
+		}
+	}
+}
+
 func (s *Server) findExistingDeviceID(d models.DiscoveredDevice) string {
 	allDevices, _ := s.ds.ListAllDevices()
 	for i := range allDevices {
 		known := allDevices[i]
+		// Match by Serial
 		if d.SerialNo != "" && (known.DeviceID == d.SerialNo || known.DeviceSerialNumber == d.SerialNo) {
+			if known.DeviceID != "" {
+				return known.DeviceID
+			}
+
+			return known.IPAddress
+		}
+		// Match by IP
+		if d.Host != "" && known.IPAddress == d.Host {
 			if known.DeviceID != "" {
 				return known.DeviceID
 			}

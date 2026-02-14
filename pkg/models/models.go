@@ -185,6 +185,7 @@ type ServiceDeviceInfo struct {
 	IPAddress           string `json:"ip_address" xml:"ipAddress"`
 	Name                string `json:"name" xml:"name"`
 	DiscoveryMethod     string `json:"discovery_method,omitempty"`
+	AccountID           string `json:"account_id,omitempty"`
 }
 
 // CustomerSupportDevice represents device information for customer support purposes.

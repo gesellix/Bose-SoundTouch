@@ -134,6 +134,7 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 			accDevices := ds.listDevicesInAccount(dir, acc.Name())
 			for i := range accDevices {
 				info := accDevices[i]
+				info.AccountID = acc.Name()
 
 				key := info.DeviceID
 				if key == "" {
