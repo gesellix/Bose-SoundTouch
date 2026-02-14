@@ -166,19 +166,20 @@ Then restart the service.
 
 # Updating to a New Version
 
-To upgrade:
+To upgrade, simply run the installer with the desired version as an argument:
 
 ```bash
-sudo VERSION=vX.Y.Z bash install-soundtouch-service.sh
+sudo bash install.sh vX.Y.Z
 ```
 
 The script will:
 
-* Download the new binary
-* Overwrite the old one
-* Restart the service
+* Automatically fetch the latest version of the installer script for that release
+* Download the new service binary
+* Backup the old binary to `.old`
+* Overwrite the binary and restart the service
 
-No need to reconfigure anything.
+No need to reconfigure anything; your existing `.env` file and data will be preserved.
 
 ---
 

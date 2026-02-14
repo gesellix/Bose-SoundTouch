@@ -37,6 +37,16 @@ sudo \
   bash install.sh
 ```
 
+### Updating the Service
+
+To update the service to a specific version, run the installer with the version as an argument:
+
+```bash
+sudo bash install.sh v0.18.1
+```
+
+The installer will automatically fetch the latest version of itself for that release and then update the service binary and restart it.
+
 ## Management
 
 Once installed, use standard `systemctl` commands to manage the service:

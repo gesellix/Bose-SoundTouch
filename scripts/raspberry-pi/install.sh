@@ -4,7 +4,10 @@ set -euo pipefail
 # ==============================================================================
 # Bose-SoundTouch soundtouch-service installer (systemd, headless)
 #
-# Example usage (override defaults via env vars):
+# Usage:
+#   sudo bash install.sh [vX.Y.Z]
+#
+# Examples (override defaults via env vars):
 #
 #   sudo \
 #     VERSION=v0.17.0 \
@@ -12,11 +15,10 @@ set -euo pipefail
 #     HTTP_PORT=80 \
 #     HTTPS_PORT=443 \
 #     DATA_DIR=/var/lib/soundtouch-service \
-#     LOG_PROXY_BODY=false \
-#     REDACT_PROXY_LOGS=true \
-#     RECORD_INTERACTIONS=true \
-#     DISCOVERY_INTERVAL=5m \
-#     bash install-soundtouch-service.sh
+#     bash install.sh
+#
+# Or with a version argument to perform an update:
+#   sudo bash install.sh v0.18.1
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
@@ -26,7 +28,11 @@ set -euo pipefail
 # - Safe to re-run; it will update binary/config/unit and restart the service.
 # ==============================================================================
 
-VERSION="${VERSION:-v0.17.0}"
+VERSION="${1:-${VERSION:-v0.17.0}}"
+# Normalize version prefix
+if [[ ! "$VERSION" =~ ^v ]]; then
+  VERSION="v${VERSION}"
+fi
 SERVICE_NAME="${SERVICE_NAME:-soundtouch-service}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/soundtouch-service}"
 
@@ -55,6 +61,10 @@ DISCOVERY_INTERVAL="${DISCOVERY_INTERVAL:-5m}"
 # Override if you want to force a specific asset suffix:
 #   ARCH_ASSET=linux-armv7|linux-arm64|linux-amd64
 ARCH_ASSET="${ARCH_ASSET:-}"
+
+# Internal variables
+SCRIPT_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
+IS_SELF_UPDATE="${IS_SELF_UPDATE:-false}"
 
 log() { printf "\n==> %s\n" "$*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -155,6 +165,47 @@ download_binary() {
 
   install -m 0755 "${tmp}/soundtouch-service" "${BIN_PATH}"
   log "Installed binary to ${BIN_PATH}"
+}
+
+self_update() {
+  # If we are already a self-update re-exec, don't do it again
+  if [[ "$IS_SELF_UPDATE" == "true" ]]; then
+    return
+  fi
+
+  local url="https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/${VERSION}/scripts/raspberry-pi/install.sh"
+  local tmp_script="/tmp/soundtouch-install-${VERSION}.sh"
+
+  log "Checking for installer updates for ${VERSION}..."
+  log "URL: ${url}"
+
+  if command -v curl >/dev/null 2>&1; then
+    if ! curl -fsSL -o "${tmp_script}" "${url}"; then
+      log "⚠️ Could not fetch installer for ${VERSION}, continuing with current script."
+      return
+    fi
+  else
+    if ! wget -qO "${tmp_script}" "${url}"; then
+      log "⚠️ Could not fetch installer for ${VERSION}, continuing with current script."
+      return
+    fi
+  fi
+
+  # Compare scripts to see if we actually need to re-exec
+  if diff -q "${SCRIPT_PATH}" "${tmp_script}" >/dev/null 2>&1; then
+    log "Installer is already up to date."
+    rm -f "${tmp_script}"
+    return
+  fi
+
+  log "Newer installer found for ${VERSION}. Re-executing..."
+  chmod +x "${tmp_script}"
+
+  # Export current env vars to the new script
+  export IS_SELF_UPDATE="true"
+  export VERSION HOSTNAME_FQDN HTTP_PORT HTTPS_PORT DATA_DIR BIN_PATH CONFIG_DIR ENV_FILE SERVICE_USER SERVICE_GROUP
+
+  exec "${tmp_script}" "$@"
 }
 
 write_env_file() {
@@ -281,6 +332,8 @@ main() {
   if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
     apt_install_if_missing curl
   fi
+
+  self_update "$@"
 
   ensure_user_group
   ensure_dirs
