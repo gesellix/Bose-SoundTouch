@@ -43,13 +43,13 @@ To migrate your speakers, the service needs SSH access. You can enable it by:
 3. Rebooting the speaker.
 Once enabled, you can log in as `root` (no password).
 
-#### 4. Discover and Sync Device Data
-The web interface handles the entire process in a guided flow across four tabs:
+#### 4. Setup Through the Web UI
+The web interface handles the entire process in a guided flow. Before proceeding, we strongly recommend reviewing the [Migration & Safety Guide](MIGRATION-SAFETY-GUIDE.md).
 
-*   **Step 1: Devices**: The service automatically scans for SoundTouch devices on your network. If a device is not found, you can manually add its IP address.
-*   **Step 2: Data Sync**: Select your device and click "Start Sync". This will automatically fetch your presets, recents, and configured sources from the speaker and store them in the local `data/` directory.
-*   **Step 3: Migration**: Choose your redirection method (XML Recommended) and click "Confirm Migration & Reboot".
-*   **Step 4: Settings**: Configure global server URLs and proxy behavior (logging, redaction).
+*   **Step 1: Settings**: Configure your server's IP or domain. This ensures the speakers know where to find the local services.
+*   **Step 2: Devices**: The service automatically scans for SoundTouch devices on your network. If a device is not found, you can manually add its IP address.
+*   **Step 3: Data Sync**: Select your device and click "Start Sync". This will automatically fetch your presets, recents, and configured sources from the speaker and store them in the local `data/` directory.
+*   **Step 4: Migration**: Choose your redirection method (XML Recommended) and click "Confirm Migration". After the migration, reboot your speaker to apply the changes.
 
 #### 5. Verify Your Local Data
 Once migrated, your speaker will use the data captured during the Sync step.

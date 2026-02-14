@@ -69,6 +69,7 @@ The `soundtouch-service` is a local server that emulates Bose's cloud services. 
 
 #### Key Features:
 - **🏠 Local Emulation**: BMX and Marge service implementation
+- **🔌 Easy Setup**: Activate SSH via USB stick (`remote_services` file)
 - **🔧 Device Migration**: Seamlessly transition devices to local control
 - **🌐 Web Management UI**: Easy browser-based setup and management
 - **💾 Persistent Data**: Store presets, recents, and sources locally
@@ -79,11 +80,13 @@ The `soundtouch-service` is a local server that emulates Bose's cloud services. 
 # Start the service
 soundtouch-service
 ```
-Open `http://localhost:8000` in your browser to manage your devices.
+Open `http://localhost:8000` in your browser to manage your devices. Documentation is also available directly through the web interface.
 
 For a comprehensive guide on transitioning your system, see the [Bose Cloud Shutdown: Survival Guide](docs/CLOUD-SHUTDOWN-GUIDE.md).
 
 Detailed service configuration and Docker instructions can be found in [docs/SOUNDTOUCH-SERVICE.md](docs/SOUNDTOUCH-SERVICE.md).
+
+For professional migration tips and safety measures, see the [Migration & Safety Guide](docs/MIGRATION-SAFETY-GUIDE.md).
 
 ### Library Usage
 

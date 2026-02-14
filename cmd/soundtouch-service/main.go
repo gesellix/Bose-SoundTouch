@@ -388,6 +388,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 
 	r.Get("/media/*", server.HandleMedia())
 	r.Get("/web/*", server.HandleWeb())
+	r.Get("/docs/*", server.HandleDocs)
 
 	r.Route("/bmx", func(r chi.Router) {
 		r.Get("/registry/v1/services", server.HandleBMXRegistry)

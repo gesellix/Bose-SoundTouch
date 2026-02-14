@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -433,11 +434,28 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 		method = MigrationMethodXML
 	}
 
-	if method == MigrationMethodHosts {
-		return m.migrateViaHosts(deviceIP, targetURL)
+	var logs string
+
+	// 0. Off-device backup for safety
+	if backupErr := m.BackupConfigOffDevice(deviceIP); backupErr != nil {
+		logs += fmt.Sprintf("Warning: Failed to create off-device backup: %v\n", backupErr)
+		// We continue, but this is a warning
+	} else {
+		logs += "Successfully created off-device backup of current configuration.\n"
 	}
 
-	var logs string
+	// 0b. Pre-flight check for SSH /rw permissions
+	client := m.NewSSH(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+	if rwTest, rwErr := client.Run(rwCmd); rwErr != nil {
+		return logs, fmt.Errorf("pre-flight check failed: cannot gain write access (cmd: %s, output: %s): %w", rwCmd, rwTest, rwErr)
+	}
+	logs += "Pre-flight: Write access verified.\n"
+
+	if method == MigrationMethodHosts {
+		out, err := m.migrateViaHosts(deviceIP, targetURL)
+		return logs + out, err
+	}
 
 	out, err := m.EnsureRemoteServices(deviceIP)
 	logs += "Ensuring remote services:\n" + out + "\n"
@@ -459,7 +477,6 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 	}
 
 	// If we have a proxyURL and can read current config, use it
-	client := m.NewSSH(deviceIP)
 	if curCfg, curCfgErr := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); curCfgErr == nil && curCfg != "" {
 		logs += "Read current configuration\n"
 
@@ -490,7 +507,6 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 
 	// 0. Backup original config if it doesn't exist
 	remotePath := SoundTouchSdkPrivateCfgPath
-	rwCmd := "(rw || mount -o remount,rw /)"
 
 	if backupOut, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
 		logs += fmt.Sprintf("Backing up original config to %s.original (check: %s)\n", remotePath, backupOut)
@@ -529,6 +545,49 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 	logs += "Uploaded new configuration to " + remotePath + "\n"
 
 	return logs, nil
+}
+
+// BackupConfigOffDevice creates a local backup of the speaker's configuration files in the DataStore.
+func (m *Manager) BackupConfigOffDevice(deviceIP string) error {
+	if m.DataStore == nil {
+		return fmt.Errorf("datastore not configured")
+	}
+
+	client := m.NewSSH(deviceIP)
+
+	// We need the serial number to find the right directory in DataStore
+	info, err := m.GetLiveDeviceInfo(deviceIP)
+	if err != nil {
+		return fmt.Errorf("failed to get device info: %w", err)
+	}
+
+	serial := info.SerialNumber
+	if serial == "" {
+		return fmt.Errorf("could not determine device serial number")
+	}
+
+	deviceDir := m.DataStore.AccountDeviceDir("default", serial)
+	if err := os.MkdirAll(deviceDir, 0755); err != nil {
+		return fmt.Errorf("failed to create device directory: %w", err)
+	}
+
+	// 1. Backup SoundTouchSdkPrivateCfg.xml
+	if config, err := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); err == nil && config != "" {
+		backupPath := filepath.Join(deviceDir, "SoundTouchSdkPrivateCfg.xml.bak")
+		if err := os.WriteFile(backupPath, []byte(config), 0644); err != nil {
+			return fmt.Errorf("failed to write config backup: %w", err)
+		}
+	}
+
+	// 2. Backup /etc/hosts
+	if hosts, err := client.Run("cat /etc/hosts"); err == nil && hosts != "" {
+		backupPath := filepath.Join(deviceDir, "hosts.bak")
+		if err := os.WriteFile(backupPath, []byte(hosts), 0644); err != nil {
+			return fmt.Errorf("failed to write hosts backup: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // BackupConfig creates a backup of the current configuration on the speaker.
@@ -1161,6 +1220,9 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 
 	// 4. Fetch Sources
 	m.syncSources(deviceIP, accountID, deviceID)
+
+	// 5. Create off-device backup of system configuration
+	_ = m.BackupConfigOffDevice(deviceIP)
 
 	return nil
 }

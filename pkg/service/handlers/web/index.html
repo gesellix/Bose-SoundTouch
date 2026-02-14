@@ -11,14 +11,89 @@
 
     <div class="tabs">
         <div class="tab-buttons">
-            <button class="tab-btn active" onclick="openTab(event, 'tab-devices')">1. Devices</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-sync')">2. Data Sync</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-migration')">3. Migration</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-settings')">4. Settings</button>
+            <button class="tab-btn active" onclick="openTab(event, 'tab-overview')">Overview</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-settings')">1. Settings</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-devices')">2. Devices</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-sync')">3. Data Sync</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-migration')">4. Migration</button>
         </div>
 
-        <!-- Tab 1: Devices -->
-        <div id="tab-devices" class="tab-content active">
+        <!-- Tab 0: Overview -->
+        <div id="tab-overview" class="tab-content active">
+            <h2>Welcome to Bose SoundTouch Toolkit</h2>
+            <p>This toolkit helps you keep your Bose SoundTouch speakers functional even after the Bose Cloud shutdown in May 2026. It emulates the necessary cloud services locally on your network.</p>
+
+            <h3>Migration Process at a Glance</h3>
+            <div class="info-box prerequisite-box">
+                <strong>🔌 Prerequisite: Enable SSH</strong><br>
+                Migration requires SSH access. To enable it:
+                <ol style="margin-top: 5px; margin-bottom: 0;">
+                    <li>Create an empty file named <code>remote_services</code> on a USB stick.</li>
+                    <li>Insert it into the speaker's <strong>SERVICE</strong> port and reboot the speaker.</li>
+                </ol>
+            </div>
+            <ol class="guide-steps">
+                <li>
+                    <strong>Settings:</strong> Review the <strong>Settings</strong> tab. Ensure the "Target Domain" and "Proxy Domain" use an IP address or domain name that is <strong>accessible from your speakers</strong> (usually the IP of this server on your local network).
+                </li>
+                <li>
+                    <strong>Discovery:</strong> Go to the <strong>Devices</strong> tab to find your speakers on the network.
+                    Ensure your speakers are powered on and connected to the same network.
+                </li>
+                <li>
+                    <strong>Data Sync:</strong> In the <strong>Data Sync</strong> tab, fetch your current presets, recents, and sources.
+                    This step is critical to ensure your local service has all your personalized data before you disconnect from the Bose cloud.
+                </li>
+                <li>
+                    <strong>Migration:</strong> In the <strong>Migration</strong> tab, redirect your speaker to this local service.
+                    We recommend the <strong>XML Configuration</strong> method as it is surgical and easily reversible.
+                </li>
+                <li>
+                    <strong>Verification:</strong> After migration and reboot, your speaker will communicate with this toolkit instead of Bose servers.
+                </li>
+            </ol>
+
+            <div class="info-box safety-box">
+                <strong>⚠️ Safety First:</strong> Before starting any migration, please read our
+                <a href="/docs/MIGRATION-SAFETY-GUIDE.md" target="_blank">Professional Migration & Safety Guide</a>.
+                The toolkit automatically creates backups, but understanding the process is key to a smooth transition.
+            </div>
+
+            <h3>Useful Links</h3>
+            <ul>
+                <li><a href="/docs/CLOUD-SHUTDOWN-GUIDE.md" target="_blank">Cloud Shutdown Survival Guide</a></li>
+                <li><a href="/docs/CLI-REFERENCE.md" target="_blank">CLI Reference</a></li>
+            </ul>
+        </div>
+
+        <!-- Tab 1: Settings -->
+        <div id="tab-settings" class="tab-content">
+            <h2>System Settings</h2>
+            <p style="font-size: 0.9em; color: #555; margin-bottom: 20px;">
+                <strong>Note:</strong> These URLs must be <strong>accessible from your SoundTouch devices</strong>.
+                Use the IP address of this server on your local network (e.g., <code>http://192.168.1.100:8000</code>)
+                rather than <code>localhost</code>.
+            </p>
+            <div style="margin-bottom: 20px;">
+                <label for="target-domain">Target Domain:</label>
+                <input type="text" id="target-domain" placeholder="http://192.168.x.x:8000" style="width: 300px;">
+                <span style="font-size: 0.8em; color: #666;">(Standard services URL)</span>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label for="proxy-domain">Proxy Domain:</label>
+                <input type="text" id="proxy-domain" placeholder="http://192.168.x.x:8000" style="width: 300px;">
+                <span style="font-size: 0.8em; color: #666;">(Upstream proxy URL)</span>
+            </div>
+            <div style="margin-bottom: 20px;">
+                Proxy Logging:
+                <label><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
+                <label style="margin-left: 15px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
+                <label style="margin-left: 15px;"><input type="checkbox" id="proxy-record" onchange="updateProxySettings()"> Record Interactions</label>
+            </div>
+        </div>
+
+        <!-- Tab 2: Devices -->
+        <div id="tab-devices" class="tab-content">
             <h2>Known Devices <span id="discovery-indicator" style="font-size: 0.5em; vertical-align: middle; display: none;">🔍 Scanning...</span></h2>
             <div id="device-list">Loading devices...</div>
             <div style="margin-top: 20px;">
@@ -28,7 +103,7 @@
             </div>
         </div>
 
-        <!-- Tab 2: Data Sync -->
+        <!-- Tab 3: Data Sync -->
         <div id="tab-sync" class="tab-content">
             <h2>Initial Data Sync</h2>
             <p>Before migrating, fetch your presets, recents, and configured sources from the device to ensure they are available locally.</p>
@@ -46,7 +121,7 @@
             </div>
         </div>
 
-        <!-- Tab 3: Migration -->
+        <!-- Tab 4: Migration -->
         <div id="tab-migration" class="tab-content">
             <h2>Device Migration</h2>
             <div class="device-selection">
@@ -181,27 +256,6 @@
                     <button id="remove-remote-btn" style="background-color: #f44336; color: white; border: none; padding: 10px 20px;">Remove Persistent Remote Services</button>
                     <button onclick="document.getElementById('migration-summary').style.display='none'" style="padding: 10px 20px;">Cancel</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Tab 4: Settings -->
-        <div id="tab-settings" class="tab-content">
-            <h2>System Settings</h2>
-            <div style="margin-bottom: 20px;">
-                <label for="target-domain">Target Domain:</label>
-                <input type="text" id="target-domain" placeholder="http://localhost:8000" style="width: 300px;">
-                <span style="font-size: 0.8em; color: #666;">(This URL will be used for standard services)</span>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <label for="proxy-domain">Proxy Domain:</label>
-                <input type="text" id="proxy-domain" placeholder="http://localhost:8000" style="width: 300px;">
-                <span style="font-size: 0.8em; color: #666;">(This URL will be used to proxy upstream Bose services)</span>
-            </div>
-            <div style="margin-bottom: 20px;">
-                Proxy Logging:
-                <label><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
-                <label style="margin-left: 15px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
-                <label style="margin-left: 15px;"><input type="checkbox" id="proxy-record" onchange="updateProxySettings()"> Record Interactions</label>
             </div>
         </div>
     </div>

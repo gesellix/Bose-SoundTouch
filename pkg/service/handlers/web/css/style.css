@@ -34,3 +34,35 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
     padding: 5px;
     min-width: 250px;
 }
+
+/* Guide & Overview styles */
+.guide-steps li {
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+.guide-steps strong {
+    color: #2196F3;
+    font-size: 1.1em;
+}
+.info-box {
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+.prerequisite-box {
+    background-color: #fffde7;
+    border-left: 4px solid #fff176;
+}
+.safety-box {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    margin-top: 20px;
+}
+.info-box a {
+    color: #0d47a1;
+    font-weight: bold;
+    text-decoration: underline;
+}
+.info-box a:hover {
+    text-decoration: none;
+}
