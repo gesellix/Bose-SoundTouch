@@ -446,10 +446,12 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 
 	// 0b. Pre-flight check for SSH /rw permissions
 	client := m.NewSSH(deviceIP)
+
 	rwCmd := "(rw || mount -o remount,rw /)"
 	if rwTest, rwErr := client.Run(rwCmd); rwErr != nil {
 		return logs, fmt.Errorf("pre-flight check failed: cannot gain write access (cmd: %s, output: %s): %w", rwCmd, rwTest, rwErr)
 	}
+
 	logs += "Pre-flight: Write access verified.\n"
 
 	if method == MigrationMethodHosts {

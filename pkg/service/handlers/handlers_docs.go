@@ -13,6 +13,7 @@ import (
 // HandleDocs returns a handler for serving documentation files as HTML.
 func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/docs")
+
 	path = strings.TrimPrefix(path, "/")
 	if path == "" {
 		path = "guides/SURVIVAL-GUIDE.md"
@@ -33,6 +34,7 @@ func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
 
 	// Load sidebar (SUMMARY.md)
 	summaryContent, _ := os.ReadFile(filepath.Join("docs", "SUMMARY.md"))
+
 	sidebar := ""
 	if len(summaryContent) > 0 {
 		// Render summary to HTML
@@ -52,7 +54,7 @@ func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
 
 	// Wrap in a documentation template with sidebar
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<!DOCTYPE html>
+	_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -120,5 +122,6 @@ func (s *Server) fixSidebarLinks(sidebar string) string {
 			}
 		}
 	}
+
 	return strings.Join(lines, "\n")
 }
