@@ -706,6 +706,60 @@ func (ds *DataStore) GetETagForAccount(account, device string) int64 {
 	return maxETag
 }
 
+// Settings represents the global service settings.
+type Settings struct {
+	ServerURL          string `json:"server_url"`
+	ProxyURL           string `json:"proxy_url"`
+	HTTPServerURL      string `json:"https_server_url,omitempty"`
+	RedactLogs         bool   `json:"redact_logs"`
+	LogBodies          bool   `json:"log_bodies"`
+	RecordInteractions bool   `json:"record_interactions"`
+}
+
+// GetSettings retrieves the global service settings.
+func (ds *DataStore) GetSettings() (Settings, error) {
+	if ds == nil || ds.DataDir == "" {
+		return Settings{}, nil
+	}
+
+	path := filepath.Join(ds.DataDir, "settings.json")
+	if !exists(path) {
+		return Settings{}, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Settings{}, err
+	}
+
+	var settings Settings
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return Settings{}, err
+	}
+
+	return settings, nil
+}
+
+// SaveSettings saves the global service settings.
+func (ds *DataStore) SaveSettings(settings Settings) error {
+	if ds == nil || ds.DataDir == "" {
+		return nil
+	}
+
+	if err := os.MkdirAll(ds.DataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	path := filepath.Join(ds.DataDir, "settings.json")
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
 // SaveUsageStats saves usage statistics to the datastore.
 func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "usage")

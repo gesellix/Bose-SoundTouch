@@ -136,9 +136,37 @@ func main() {
 		Action: func(c *cli.Context) error {
 			config := loadConfig(c)
 			ds := initDataStore(config.dataDir)
+
+			// Load settings from datastore
+			persisted, _ := ds.GetSettings()
+			if persisted.ServerURL != "" {
+				config.serverURL = persisted.ServerURL
+			}
+
+			if persisted.ProxyURL != "" {
+				config.targetURL = persisted.ProxyURL
+			}
+
+			if persisted.HTTPServerURL != "" {
+				config.httpsServerURL = persisted.HTTPServerURL
+			}
+
+			config.redact = persisted.RedactLogs || config.redact
+			config.logBody = persisted.LogBodies || config.logBody
+			config.record = persisted.RecordInteractions || config.record
+
+			// Recalculate domains if settings changed
+			hostname, _ := os.Hostname()
+			if hostname == "" {
+				hostname = "localhost"
+			}
+
+			config.domains = getDomains(config.serverURL, config.httpsServerURL, hostname)
+
 			cm := initCertificateManager(config.dataDir)
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
+			server.SetHTTPServerURL(config.httpsServerURL)
 
 			recorder := proxy.NewRecorder(config.dataDir)
 			recorder.Redact = config.redact
@@ -426,6 +454,7 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Post("/discover", server.HandleTriggerDiscovery)
 		r.Get("/discovery-status", server.HandleGetDiscoveryStatus)
 		r.Get("/settings", server.HandleGetSettings)
+		r.Post("/settings", server.HandleUpdateSettings)
 		r.Get("/info/{deviceIP}", server.HandleGetDeviceInfo)
 		r.Get("/summary/{deviceIP}", server.HandleGetMigrationSummary)
 		r.Post("/migrate/{deviceIP}", server.HandleMigrateDevice)

@@ -15,7 +15,16 @@ import (
 )
 
 func TestProxySettingsAPI(t *testing.T) {
-	r, server := setupRouter("http://localhost:8001", nil)
+	tempDir, err := os.MkdirTemp("", "proxy-settings-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	r, server := setupRouter("http://localhost:8001", ds)
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()
@@ -85,6 +94,34 @@ func TestProxySettingsAPI(t *testing.T) {
 
 	if settings["redact"] != false || settings["log_body"] != true {
 		t.Errorf("GET (after update): Unexpected settings: %+v", settings)
+	}
+
+	// 3. Test System Settings POST
+	sysUpdate := map[string]string{
+		"server_url": "http://new-server:8000",
+		"proxy_url":  "http://new-proxy:8001",
+	}
+
+	sysBody, err := json.Marshal(sysUpdate)
+	if err != nil {
+		t.Fatalf("Failed to marshal system settings data: %v", err)
+	}
+
+	res, err = http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(sysBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("POST /setup/settings: Expected status OK, got %v", res.Status)
+	}
+
+	// Verify server state
+	sURL, pURL, _ := server.GetSettings()
+	if sURL != "http://new-server:8000" || pURL != "http://new-proxy:8001" {
+		t.Errorf("POST /setup/settings: Server state did not update: serverURL=%s, proxyURL=%s", sURL, pURL)
 	}
 }
 

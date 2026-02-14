@@ -43,6 +43,36 @@ async function updateProxySettings() {
     }
 }
 
+async function updateSettings() {
+    const settings = {
+        server_url: document.getElementById('target-domain').value,
+        proxy_url: document.getElementById('proxy-domain').value
+    };
+    const status = document.getElementById('settings-status');
+    status.innerText = 'Saving...';
+    status.style.color = 'blue';
+
+    try {
+        const response = await fetch('/setup/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings)
+        });
+        if (response.ok) {
+            status.innerText = '✅ Settings saved. Restart service to apply all changes (like certificate SANs).';
+            status.style.color = 'green';
+            setTimeout(() => fetchSettings(), 500); // Give backend a moment to settle
+        } else {
+            const err = await response.text();
+            status.innerText = '❌ Failed: ' + err;
+            status.style.color = 'red';
+        }
+    } catch (error) {
+        status.innerText = '❌ Error: ' + error.message;
+        status.style.color = 'red';
+    }
+}
+
 async function fetchDevices() {
     try {
         const response = await fetch('/setup/devices');

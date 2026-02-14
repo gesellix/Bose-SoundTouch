@@ -365,3 +365,36 @@ func TestConfiguredSources(t *testing.T) {
 		t.Error("Expected auto-assigned ID for source with empty ID")
 	}
 }
+
+func TestSettingsPersistence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "settings-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := NewDataStore(tempDir)
+
+	settings := Settings{
+		ServerURL: "http://myserver:8000",
+		ProxyURL:  "http://myproxy:8001",
+		LogBodies: true,
+	}
+
+	err = ds.SaveSettings(settings)
+	if err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	loaded, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings failed: %v", err)
+	}
+
+	if loaded.ServerURL != settings.ServerURL {
+		t.Errorf("Expected ServerURL %s, got %s", settings.ServerURL, loaded.ServerURL)
+	}
+	if loaded.LogBodies != settings.LogBodies {
+		t.Errorf("Expected LogBodies %v, got %v", settings.LogBodies, loaded.LogBodies)
+	}
+}

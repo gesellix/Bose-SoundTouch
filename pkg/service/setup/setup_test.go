@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
 type mockSSH struct {
@@ -759,6 +760,97 @@ func TestReboot(t *testing.T) {
 	}
 	if !foundReboot {
 		t.Errorf("Expected reboot command to be called")
+	}
+}
+
+func TestBackupConfigOffDevice(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "backup-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	m := NewManager("http://localhost:8000", ds, nil)
+
+	serial := "08DF1F0BA325"
+
+	// Mock info server
+	infoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<info deviceID="%s"><name>Test</name><components><component><componentCategory>SCM</componentCategory><serialNumber>%s</serialNumber></component></components></info>`, serial, serial)
+	}))
+	defer infoServer.Close()
+
+	// Extract IP and port
+	deviceIP := infoServer.Listener.Addr().String()
+
+	// Mock SSH to return some config and hosts content
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if strings.Contains(command, SoundTouchSdkPrivateCfgPath) {
+					return "<SoundTouchSdkPrivateCfg><margeServerUrl>http://original</margeServerUrl></SoundTouchSdkPrivateCfg>", nil
+				}
+				if strings.Contains(command, "/etc/hosts") {
+					return "127.0.0.1 localhost\n192.168.1.1 bmx.bose.com", nil
+				}
+				return "", nil
+			},
+		}
+	}
+
+	err = m.BackupConfigOffDevice(deviceIP)
+	if err != nil {
+		t.Fatalf("BackupConfigOffDevice failed: %v", err)
+	}
+
+	// Verify files were created in datastore
+	deviceDir := m.DataStore.AccountDeviceDir("default", serial)
+	configPath := filepath.Join(deviceDir, "SoundTouchSdkPrivateCfg.xml.bak")
+	hostsPath := filepath.Join(deviceDir, "hosts.bak")
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Errorf("Expected config backup at %s, but it doesn't exist", configPath)
+	}
+
+	if _, err := os.Stat(hostsPath); os.IsNotExist(err) {
+		t.Errorf("Expected hosts backup at %s, but it doesn't exist", hostsPath)
+	}
+
+	// Verify content
+	configContent, _ := os.ReadFile(configPath)
+	if !strings.Contains(string(configContent), "http://original") {
+		t.Errorf("Unexpected config backup content: %s", string(configContent))
+	}
+
+	hostsContent, _ := os.ReadFile(hostsPath)
+	if !strings.Contains(string(hostsContent), "bmx.bose.com") {
+		t.Errorf("Unexpected hosts backup content: %s", string(hostsContent))
+	}
+}
+
+func TestMigrateSpeaker_PreFlightFailure(t *testing.T) {
+	m := NewManager("http://localhost:8000", nil, nil)
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if strings.Contains(command, "mount -o remount,rw /") {
+					return "mount: / is read-only", fmt.Errorf("remount failed")
+				}
+				return "", nil
+			},
+		}
+	}
+
+	_, err := m.MigrateSpeaker("192.168.1.10", "", "", nil, MigrationMethodXML)
+	if err == nil {
+		t.Errorf("Expected error during pre-flight write check, got nil")
+	}
+	if !strings.Contains(err.Error(), "pre-flight check failed") {
+		t.Errorf("Expected pre-flight error message, got: %v", err)
 	}
 }
 

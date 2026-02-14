@@ -136,7 +136,17 @@ Use the web interface or API to migrate devices from Bose cloud services to your
 
 ## Configuration
 
-The service can be configured via environment variables or command-line flags:
+### Configuration Precedence
+
+The service supports multiple ways to configure its behavior. When multiple sources provide the same setting, the following precedence rules apply (highest to lowest):
+
+1.  **`settings.json`**: Settings saved via the Web UI (stored in the data directory) take the highest precedence. This ensures that changes made in the browser persist across service restarts even if environment variables or flags change.
+2.  **Environment Variables / CLI Flags**: If a setting is not present in `settings.json`, environment variables and flags are used.
+3.  **Default Values**: If no configuration is provided, the service uses its built-in defaults.
+
+> **Tip**: If you find that changes to environment variables are not taking effect, check the **Settings** tab in the Web UI or inspect the `settings.json` file in your data directory, as it might be overriding your manual configuration.
+
+### Configuration Options
 
 | Variable                           | Flag                       | Description                                      | Default                   |
 |------------------------------------|----------------------------|--------------------------------------------------|---------------------------|

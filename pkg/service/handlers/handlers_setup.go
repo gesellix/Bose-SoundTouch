@@ -3,10 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
 )
@@ -93,10 +95,63 @@ func (s *Server) HandleGetDiscoveryStatus(w http.ResponseWriter, _ *http.Request
 func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	serverURL, proxyURL, httpsServerURL := s.GetSettings()
+
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"server_url": s.serverURL,
-		"proxy_url":  s.proxyURL,
+		"server_url":       serverURL,
+		"proxy_url":        proxyURL,
+		"https_server_url": httpsServerURL,
 	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleUpdateSettings updates the service settings.
+func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	var settings struct {
+		ServerURL string `json:"server_url"`
+		ProxyURL  string `json:"proxy_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	s.serverURL = settings.ServerURL
+	s.proxyURL = settings.ProxyURL
+
+	if s.sm != nil {
+		s.sm.ServerURL = settings.ServerURL
+	}
+
+	// Persist to datastore
+	// Access fields directly since we already hold the lock
+	currentRedact := s.proxyRedact
+	currentLogBody := s.proxyLogBody
+	currentRecord := s.recordEnabled
+	currentHTTPS := s.httpsServerURL
+
+	log.Printf("Saving updated settings to %s/settings.json", s.ds.DataDir)
+	err := s.ds.SaveSettings(datastore.Settings{
+		ServerURL:          s.serverURL,
+		ProxyURL:           s.proxyURL,
+		HTTPServerURL:      currentHTTPS,
+		RedactLogs:         currentRedact,
+		LogBodies:          currentLogBody,
+		RecordInteractions: currentRecord,
+	})
+	s.mu.Unlock()
+
+	if err != nil {
+		http.Error(w, "Failed to save settings: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Settings updated"}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -389,10 +444,12 @@ func (s *Server) HandleBackupConfig(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleGetProxySettings(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	redact, logBody, record := s.GetProxySettings()
+
 	if err := json.NewEncoder(w).Encode(map[string]bool{
-		"redact":   s.proxyRedact,
-		"log_body": s.proxyLogBody,
-		"record":   s.recordEnabled,
+		"redact":   redact,
+		"log_body": logBody,
+		"record":   record,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -426,9 +483,30 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	s.mu.Lock()
 	s.proxyRedact = settings.Redact
 	s.proxyLogBody = settings.LogBody
 	s.recordEnabled = settings.Record
+
+	// Persist to datastore
+	// Access fields directly since we already hold the lock
+	serverURL, proxyURL, httpsServerURL := s.serverURL, s.proxyURL, s.httpsServerURL
+
+	log.Printf("Saving updated proxy settings to %s/settings.json", s.ds.DataDir)
+	err := s.ds.SaveSettings(datastore.Settings{
+		ServerURL:          serverURL,
+		ProxyURL:           proxyURL,
+		HTTPServerURL:      httpsServerURL,
+		RedactLogs:         s.proxyRedact,
+		LogBodies:          s.proxyLogBody,
+		RecordInteractions: s.recordEnabled,
+	})
+	s.mu.Unlock()
+
+	if err != nil {
+		http.Error(w, "Failed to save settings: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 

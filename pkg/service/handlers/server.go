@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
@@ -14,15 +15,17 @@ import (
 
 // Server handles HTTP requests for the SoundTouch service.
 type Server struct {
-	ds            *datastore.DataStore
-	sm            *setup.Manager
-	serverURL     string
-	proxyURL      string
-	discovering   bool
-	proxyRedact   bool
-	proxyLogBody  bool
-	recordEnabled bool
-	recorder      *proxy.Recorder
+	ds             *datastore.DataStore
+	sm             *setup.Manager
+	mu             sync.RWMutex
+	serverURL      string
+	proxyURL       string
+	httpsServerURL string
+	discovering    bool
+	proxyRedact    bool
+	proxyLogBody   bool
+	recordEnabled  bool
+	recorder       *proxy.Recorder
 }
 
 // NewServer creates a new SoundTouch service server.
@@ -38,6 +41,14 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 	}
 }
 
+// SetHTTPServerURL sets the external HTTPS URL of the service.
+func (s *Server) SetHTTPServerURL(url string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.httpsServerURL = url
+}
+
 // SetRecorder sets the recorder for the server.
 func (s *Server) SetRecorder(r *proxy.Recorder) {
 	s.recorder = r
@@ -45,7 +56,26 @@ func (s *Server) SetRecorder(r *proxy.Recorder) {
 
 // GetRecordEnabled returns whether recording is enabled.
 func (s *Server) GetRecordEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	return s.recordEnabled
+}
+
+// GetSettings returns the current server settings.
+func (s *Server) GetSettings() (string, string, string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.serverURL, s.proxyURL, s.httpsServerURL
+}
+
+// GetProxySettings returns the current proxy settings.
+func (s *Server) GetProxySettings() (bool, bool, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.proxyRedact, s.proxyLogBody, s.recordEnabled
 }
 
 // DiscoverDevices starts a background device discovery process.
