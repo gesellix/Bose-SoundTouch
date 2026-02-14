@@ -100,8 +100,11 @@ services:
       - HTTPS_SERVER_URL=https://soundtouch.local:8443
       - DATA_DIR=/app/data
     volumes:
-      - ./data:/app/data
+      - soundtouch-data:/app/data
     restart: unless-stopped
+
+volumes:
+  soundtouch-data:
 ```
 
 And run:

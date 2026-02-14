@@ -24,6 +24,7 @@ dist/
 .env
 .env.local
 .env.*.local
+docker-compose.override.yml
 
 # Test coverage reports
 coverage.out
