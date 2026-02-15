@@ -63,4 +63,44 @@ func TestStatsHandlers(t *testing.T) {
 			t.Error("Error stats file was not created")
 		}
 	})
+
+	t.Run("HandleAppEvents", func(t *testing.T) {
+		jsonData := `{
+			"envelope": {
+				"monoTime": 12345,
+				"payloadProtocolVersion": "3.1",
+				"payloadType": "stapp",
+				"protocolVersion": "1.0",
+				"time": "2023-10-27T10:00:00Z",
+				"uniqueId": "device789"
+			},
+			"payload": {
+				"deviceInfo": {
+					"deviceID": "device789"
+				},
+				"events": [
+					{
+						"type": "APP_OPEN",
+						"time": "2023-10-27T10:00:01Z",
+						"data": {"foo": "bar"}
+					}
+				]
+			}
+		}`
+		req := httptest.NewRequest("POST", "/v1/stapp/device789", bytes.NewBufferString(jsonData))
+		w := httptest.NewRecorder()
+
+		s.HandleAppEvents(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status OK, got %d", w.Code)
+		}
+
+		events := ds.GetDeviceEvents("device789")
+		if len(events) == 0 {
+			t.Error("App events were not recorded")
+		} else if events[0].Type != "APP_OPEN" {
+			t.Errorf("Expected event type APP_OPEN, got %s", events[0].Type)
+		}
+	})
 }

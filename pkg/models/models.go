@@ -240,3 +240,70 @@ type DeviceEvent struct {
 	MonoTime int64                  `json:"monoTime"`
 	Data     map[string]interface{} `json:"data"`
 }
+
+// DeviceEventsRequest represents a request containing multiple device events (stapp/scmudc).
+type DeviceEventsRequest struct {
+	Envelope struct {
+		MonoTime               int64  `json:"monoTime"`
+		PayloadProtocolVersion string `json:"payloadProtocolVersion"`
+		PayloadType            string `json:"payloadType"`
+		ProtocolVersion        string `json:"protocolVersion"`
+		Time                   string `json:"time"`
+		UniqueID               string `json:"uniqueId"`
+	} `json:"envelope"`
+	Payload struct {
+		DeviceInfo struct {
+			BoseID          string `json:"boseID"`
+			DeviceID        string `json:"deviceID"`
+			DeviceType      string `json:"deviceType"`
+			SoftwareVersion string `json:"softwareVersion"`
+		} `json:"deviceInfo"`
+		Events []struct {
+			Data map[string]interface{} `json:"data"`
+			Time string                 `json:"time"`
+			Type string                 `json:"type"`
+		} `json:"events"`
+	} `json:"payload"`
+}
+
+// DeviceSettingsResponse represents device settings.
+type DeviceSettingsResponse struct {
+	XMLName  xml.Name        `xml:"deviceSettings"`
+	Settings []DeviceSetting `xml:"deviceSetting"`
+}
+
+// DeviceSetting represents a single device setting.
+type DeviceSetting struct {
+	Name  string `xml:"name"`
+	Value string `xml:"value"`
+}
+
+// AccountProfileResponse represents a customer account profile.
+type AccountProfileResponse struct {
+	XMLName        xml.Name `xml:"customer"`
+	AccountID      string   `xml:"accountID"`
+	Email          string   `xml:"email"`
+	FirstName      string   `xml:"firstName"`
+	LastName       string   `xml:"lastName"`
+	CountryCode    string   `xml:"countryCode"`
+	LanguageCode   string   `xml:"languageCode"`
+	Street         string   `xml:"street"`
+	City           string   `xml:"city"`
+	PostalCode     string   `xml:"postalCode"`
+	State          string   `xml:"state"`
+	Phone          string   `xml:"phone"`
+	MarketingOptIn bool     `xml:"marketingOptIn"`
+}
+
+// ChangePasswordRequest represents a request to change the account password.
+type ChangePasswordRequest struct {
+	XMLName     xml.Name `xml:"passwordChange"`
+	OldPassword string   `xml:"oldPassword"`
+	NewPassword string   `xml:"newPassword"`
+}
+
+// EmailAddressResponse represents the account email address.
+type EmailAddressResponse struct {
+	XMLName xml.Name `xml:"emailAddress"`
+	Email   string   `xml:",chardata"`
+}

@@ -24,6 +24,7 @@
 ## Technical Reference
 * [API Cookbook](reference/API-COOKBOOK.md)
 * [API Endpoints](reference/API-ENDPOINTS.md)
+* [Cloud API Emulation](reference/CLOUD-API.md)
 * [System Endpoints](reference/SYSTEM-ENDPOINTS.md)
 * [Speaker Endpoint](reference/SPEAKER-ENDPOINT.md)
 * [WebSocket Events](reference/WEBSOCKET-EVENTS.md)

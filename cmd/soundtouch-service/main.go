@@ -492,6 +492,20 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Get("/streaming/account/{account}/provider_settings", server.HandleMargeProviderSettings)
 		r.Get("/streaming/device/{device}/streaming_token", server.HandleMargeStreamingToken)
 		r.Post("/streaming/support/customersupport", server.HandleMargeCustomerSupport)
+		r.Get("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeGetDeviceSettings)
+		r.Post("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
+		r.Get("/streaming/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
+	})
+
+	r.Route("/customer", func(r chi.Router) {
+		r.Get("/account/{account}", server.HandleMargeAccountProfile)
+		r.Post("/account/{account}", server.HandleMargeUpdateAccountProfile)
+		r.Post("/account/{account}/password", server.HandleMargeChangePassword)
+	})
+
+	r.Route("/v1", func(r chi.Router) {
+		r.Post("/stapp/{deviceId}", server.HandleAppEvents)
+		r.Post("/scmudc/{deviceId}", server.HandleAppEvents)
 	})
 
 	r.Route("/streaming/stats", func(r chi.Router) {

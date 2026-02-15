@@ -60,6 +60,85 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleMargeAccountProfile returns the account profile.
+func (s *Server) HandleMargeAccountProfile(w http.ResponseWriter, r *http.Request) {
+	accountID := chi.URLParam(r, "account")
+
+	// Mock profile data
+	profile := models.AccountProfileResponse{
+		AccountID:    accountID,
+		Email:        "user@example.com",
+		FirstName:    "SoundTouch",
+		LastName:     "User",
+		CountryCode:  "US",
+		LanguageCode: "en",
+	}
+
+	data, err := xml.MarshalIndent(profile, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	_, _ = w.Write([]byte(xml.Header))
+	_, _ = w.Write(data)
+}
+
+// HandleMargeUpdateAccountProfile updates the account profile.
+func (s *Server) HandleMargeUpdateAccountProfile(w http.ResponseWriter, _ *http.Request) {
+	// Stub implementation
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleMargeChangePassword changes the account password.
+func (s *Server) HandleMargeChangePassword(w http.ResponseWriter, _ *http.Request) {
+	// Stub implementation
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleMargeGetEmailAddress returns the account email address.
+func (s *Server) HandleMargeGetEmailAddress(w http.ResponseWriter, _ *http.Request) {
+	resp := models.EmailAddressResponse{
+		Email: "user@example.com",
+	}
+
+	data, err := xml.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	_, _ = w.Write([]byte(xml.Header))
+	_, _ = w.Write(data)
+}
+
+// HandleMargeGetDeviceSettings returns device settings.
+func (s *Server) HandleMargeGetDeviceSettings(w http.ResponseWriter, _ *http.Request) {
+	resp := models.DeviceSettingsResponse{
+		Settings: []models.DeviceSetting{
+			{Name: "CLOCK_FORMAT", Value: "24HR"},
+		},
+	}
+
+	data, err := xml.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/xml")
+	_, _ = w.Write([]byte(xml.Header))
+	_, _ = w.Write(data)
+}
+
+// HandleMargeUpdateDeviceSettings updates device settings.
+func (s *Server) HandleMargeUpdateDeviceSettings(w http.ResponseWriter, _ *http.Request) {
+	// Stub implementation
+	w.WriteHeader(http.StatusOK)
+}
+
 // HandleMargeSoftwareUpdate returns the Marge software update information.
 func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Request) {
 	etag := "default-embedded"

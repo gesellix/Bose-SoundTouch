@@ -43,6 +43,16 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/streaming/account/{account}/provider_settings", server.HandleMargeProviderSettings)
 		r.Get("/streaming/device/{device}/streaming_token", server.HandleMargeStreamingToken)
 		r.Post("/streaming/support/customersupport", server.HandleMargeCustomerSupport)
+		r.Get("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeGetDeviceSettings)
+		r.Post("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
+		r.Get("/streaming/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
+	})
+
+	// Setup Customer for tests
+	r.Route("/customer", func(r chi.Router) {
+		r.Get("/account/{account}", server.HandleMargeAccountProfile)
+		r.Post("/account/{account}", server.HandleMargeUpdateAccountProfile)
+		r.Post("/account/{account}/password", server.HandleMargeChangePassword)
 	})
 
 	// Setup Setup for tests
