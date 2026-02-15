@@ -204,9 +204,20 @@ func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, _ *http.Reques
 	// In a real production environment, this would be a JWT or similar signed token.
 	// Some speakers might expect a specific format; we use a distinctive prefix
 	// to indicate it's a locally generated token.
-	token := "st-local-token-" + strconv.FormatInt(time.Now().Unix(), 10)
-	w.Header().Set("Authorization", "Bearer "+token)
+	tokenValue := "st-local-token-" + strconv.FormatInt(time.Now().Unix(), 10)
+	bearerToken := models.NewBearerToken(tokenValue)
+
+	data, err := xml.Marshal(bearerToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.Header().Set("Authorization", bearerToken.GetAuthHeader())
 	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(xml.Header))
+	_, _ = w.Write(data)
 }
 
 // HandleMargeCustomerSupport handles Marge customer support uploads.

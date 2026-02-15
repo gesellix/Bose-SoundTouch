@@ -279,6 +279,7 @@ func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
 	// Case 2: /etc/hosts + Trust CA Migration
 	// Check if /etc/hosts contains redirections for Bose domains
 	client := m.NewSSH(deviceIP)
+
 	hostsContent, err := client.Run("cat /etc/hosts")
 	if err == nil {
 		boseDomains := []string{

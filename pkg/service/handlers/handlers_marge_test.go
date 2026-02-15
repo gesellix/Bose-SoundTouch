@@ -471,9 +471,22 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 			t.Errorf("Expected status OK, got %v", res.Status)
 		}
 
+		contentType := res.Header.Get("Content-Type")
+		if contentType != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Invalid content type: %s", contentType)
+		}
+
 		token := res.Header.Get("Authorization")
 		if !strings.HasPrefix(token, "Bearer st-local-token-") {
 			t.Errorf("Invalid token header: %s", token)
+		}
+
+		body, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(body), "<bearertoken") {
+			t.Errorf("Response body missing <bearertoken: %s", body)
+		}
+		if !strings.Contains(string(body), token) {
+			t.Errorf("Response body missing token value: %s", body)
 		}
 	})
 
