@@ -12,8 +12,10 @@ The service provides:
 - **🌐 Web Management UI**: Browser-based interface for device management
 - **💾 Persistent Data**: Store device configurations, presets, and usage statistics
 - **📝 HTTP Recording**: Persist all interactions as re-playable `.http` files
+- **📥 Session Archiving**: Download entire interaction sessions as `.tar.gz` for offline analysis
 - **🔍 Auto-Discovery**: Automatically detect and configure SoundTouch devices
 - **🔒 Offline Operation**: Continue using full device functionality without internet
+- **🔗 Bose Proxy & Soundcork Fallback**: Dynamic proxying with automatic fallback to local [SoundCork](https://github.com/deborahgu/soundcork) emulation if enabled
 
 ## Architecture
 
@@ -381,6 +383,7 @@ The web management interface provides a comprehensive dashboard for managing you
 - **Advanced Filtering**: Filter interactions by session, category (Self/Upstream), and timestamp.
 - **Interaction Viewer**: View raw `.http` recording content directly in the browser.
 - **Session Management**: Delete individual sessions or perform bulk cleanup to keep only recent sessions.
+- **Session Download**: Download complete interaction sessions as `.tar.gz` archives for offline analysis or bug reports.
 
 ### Usage Tips
 
@@ -410,6 +413,8 @@ By default, the service redacts sensitive information from the recorded `.http` 
 - `Authorization` headers
 - `Cookie` headers
 - `X-Bose-Token` headers
+- `X-Bose-Key` headers
+- `Proxy-Authorization` headers
 
 This behavior is controlled by the `--redact-logs` flag or the `REDACT_PROXY_LOGS` environment variable.
 
