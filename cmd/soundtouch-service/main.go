@@ -380,10 +380,10 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 		}
 	}
 
-	config.redact = persisted.RedactLogs || config.redact
-	config.logBody = persisted.LogBodies || config.logBody
-	config.record = persisted.RecordInteractions || config.record
-	config.enableSoundcorkProxy = persisted.EnableSoundcorkProxy || config.enableSoundcorkProxy
+	config.redact = persisted.RedactLogs
+	config.logBody = persisted.LogBodies
+	config.record = persisted.RecordInteractions
+	config.enableSoundcorkProxy = persisted.EnableSoundcorkProxy
 
 	return persisted
 }
