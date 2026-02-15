@@ -375,6 +375,13 @@ The web management interface provides a comprehensive dashboard for managing you
 - **Statistics Dashboard**: Usage and error analytics
 - **Debug Tools**: Device communication testing utilities
 
+#### Interactions & Traffic Analysis
+- **Traffic Overview**: View aggregate request counts for self-handled and proxied traffic.
+- **Session Browsing**: Browse recorded interactions grouped by session.
+- **Advanced Filtering**: Filter interactions by session, category (Self/Upstream), and timestamp.
+- **Interaction Viewer**: View raw `.http` recording content directly in the browser.
+- **Session Management**: Delete individual sessions or perform bulk cleanup to keep only recent sessions.
+
 ### Usage Tips
 
 1. **First Time Setup**: The interface will guide you through initial device discovery
@@ -393,6 +400,7 @@ The service automatically records all HTTP interactions (both those handled loca
 - **Path-Based Structure**: Recordings are organized into subdirectories based on their URL path for better discoverability.
 - **Automatic Sanitization**: Variable path segments like IP addresses, Device IDs, and Account IDs are automatically identified and replaced with placeholders (e.g., `{{ip}}`, `{{deviceId}}`). The original values are preserved as comments at the top of the recorded `.http` files for easy identification.
 - **Re-playability**: An `http-client.env.json` file is generated for each session, allowing you to re-play the recorded requests immediately in IntelliJ IDEA.
+- **Management UI**: The **5. Interactions** tab provides a built-in viewer and management tools for all recorded data.
 
 ### Configuration
 
@@ -530,6 +538,26 @@ find data/stats/ -name "*.json" -mtime +90 -delete
 - `GET /setup/summary/{deviceIP}`: Get a detailed migration readiness summary.
 - `POST /setup/migrate/{deviceIP}`: Migrate a device using the specified method (XML/Hosts).
 - `GET /setup/ca.crt`: Download the Root CA certificate for manual installation.
+
+#### `GET /setup/interactions`
+Lists recorded interactions with optional filtering.
+
+**Query Parameters:**
+- `session`: Filter by session ID (optional)
+- `category`: Filter by category (`self` or `upstream`) (optional)
+- `since`: Filter by timestamp (e.g., `2026-02-15 15:00:00`) (optional)
+
+#### `GET /setup/interaction-stats`
+Returns aggregate statistics about recorded interactions across all sessions.
+
+#### `GET /setup/interaction-content?file={path}`
+Returns the raw content of a specific recorded `.http` file.
+
+#### `DELETE /setup/interactions/sessions/{sessionID}`
+Deletes all recordings associated with a specific session.
+
+#### `DELETE /setup/interactions/sessions?keep={N}`
+Bulk cleanup: deletes all but the most recent `N` sessions.
 
 ### Emulated Services
 - `/bmx/registry/v1/services`: BMX service registry.

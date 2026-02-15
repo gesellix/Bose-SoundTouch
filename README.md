@@ -23,6 +23,7 @@ A comprehensive solution for controlling and preserving Bose SoundTouch devices,
 - 🔧 **Service Migration**: Migrate devices to use local services instead of Bose cloud
 - 📊 **Traffic Analysis**: Proxy and log device communications
 - 📝 **HTTP Recording**: Persist interactions as re-playable `.http` files
+- 🧹 **Session Management**: Manage and cleanup recorded interaction sessions
 - 🔒 **Production Ready**: Extensive testing with real SoundTouch hardware
 - 🌐 **Cross-Platform**: Windows, macOS, Linux support
 
@@ -74,6 +75,7 @@ The `soundtouch-service` is a local server that emulates Bose's cloud services. 
 - **🌐 Web Management UI**: Easy browser-based setup and management
 - **💾 Persistent Data**: Store presets, recents, and sources locally
 - **📝 HTTP Recording**: Persist all interactions as re-playable `.http` files
+- **🧹 Session Management**: Manage and cleanup recorded interaction sessions
 
 #### Quick Start:
 ```bash
