@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"bytes"
+	"crypto/tls"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -33,33 +37,155 @@ func (s *Server) HandleProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lp := proxy.NewLoggingProxy(target.String(), s.proxyRedact)
-	lp.LogBody = s.proxyLogBody
-	lp.RecordEnabled = s.recordEnabled
-	lp.SetRecorder(s.recorder)
+	s.ServeProxy(target)(w, r)
+}
 
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	// Update director to set the correct host and path
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		req.Host = target.Host
-		req.URL.Path = target.Path
-		req.URL.RawQuery = r.URL.RawQuery
-		lp.LogRequest(req)
-	}
+// ServeProxy returns a handler that proxies to the given target.
+func (s *Server) ServeProxy(target *url.URL) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lp := proxy.NewLoggingProxy(target.String(), s.proxyRedact)
+		lp.LogBody = s.proxyLogBody
+		lp.RecordEnabled = s.recordEnabled
+		lp.SetRecorder(s.recorder)
 
-	proxy.ModifyResponse = func(res *http.Response) error {
-		// Generic Header Preservation
-		if etags, ok := res.Header["Etag"]; ok {
-			delete(res.Header, "Etag")
-			res.Header["ETag"] = etags
+		rp := httputil.NewSingleHostReverseProxy(target)
+		rp.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
 
-		lp.LogResponse(res)
+		// Update director to set the correct host and path
+		originalDirector := rp.Director
+		rp.Director = func(req *http.Request) {
+			originalDirector(req)
+			req.Host = target.Host
+			// If target has a path, we should probably append or replace.
+			// For Bose upstream, it's usually just the domain.
+			if target.Path != "" && target.Path != "/" {
+				req.URL.Path = target.Path
+			}
 
-		return nil
+			lp.LogRequest(req)
+		}
+
+		rp.ModifyResponse = func(res *http.Response) error {
+			res.Header.Set("X-Proxy-Origin", "upstream")
+			// Generic Header Preservation
+			if etags, ok := res.Header["Etag"]; ok {
+				delete(res.Header, "Etag")
+				res.Header["ETag"] = etags
+			}
+
+			lp.LogResponse(res)
+
+			return nil
+		}
+
+		rp.ServeHTTP(w, r)
+	}
+}
+
+// HandleNotFound handles requests that don't match any route.
+func (s *Server) HandleNotFound(w http.ResponseWriter, r *http.Request) {
+	if s.enableSoundcorkProxy {
+		s.HandleSoundcorkWithFallback(w, r)
+		return
 	}
 
-	proxy.ServeHTTP(w, r)
+	s.HandleBoseProxy(w, r)
+}
+
+// HandleSoundcorkWithFallback tries Soundcork first, then Bose if Soundcork returns 404 or fails.
+func (s *Server) HandleSoundcorkWithFallback(w http.ResponseWriter, r *http.Request) {
+	target, _ := url.Parse(s.soundcorkURL)
+
+	// Buffer request body if any, to allow multiple proxy attempts
+	var bodyBytes []byte
+	if r.Body != nil {
+		bodyBytes, _ = io.ReadAll(r.Body)
+		_ = r.Body.Close()
+	}
+
+	// We use a custom response writer to catch 404s
+	rw := &fallbackResponseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+		buffer:         &bytes.Buffer{},
+	}
+
+	// Create a shallow copy of the request to avoid side effects between attempts
+	r2 := r.Clone(r.Context())
+	if bodyBytes != nil {
+		r2.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	} else {
+		r2.Body = nil
+	}
+
+	// Remove RequestURI as it's not allowed in client requests
+	r2.RequestURI = ""
+
+	s.ServeProxy(target)(rw, r2)
+
+	if rw.statusCode == http.StatusNotFound || rw.statusCode == http.StatusBadGateway || rw.statusCode == http.StatusServiceUnavailable {
+		log.Printf("[PROXY] Soundcork returned %d for %s, falling back to Bose", rw.statusCode, r.URL.Path)
+
+		if !rw.wroteHeader {
+			// Restore original body if any
+			if bodyBytes != nil {
+				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
+
+			s.HandleBoseProxy(w, r)
+		}
+	}
+}
+
+type fallbackResponseWriter struct {
+	http.ResponseWriter
+	statusCode  int
+	wroteHeader bool
+	buffer      *bytes.Buffer
+}
+
+func (rw *fallbackResponseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	if code != http.StatusNotFound && code != http.StatusBadGateway && code != http.StatusServiceUnavailable {
+		rw.wroteHeader = true
+		rw.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (rw *fallbackResponseWriter) Write(b []byte) (int, error) {
+	if rw.statusCode == http.StatusNotFound || rw.statusCode == http.StatusBadGateway || rw.statusCode == http.StatusServiceUnavailable {
+		return len(b), nil // Drop the body
+	}
+
+	rw.wroteHeader = true
+
+	return rw.ResponseWriter.Write(b)
+}
+
+// HandleBoseProxy proxies the request to the Bose upstream.
+func (s *Server) HandleBoseProxy(w http.ResponseWriter, r *http.Request) {
+	host := r.Host
+	if host == "" {
+		host = "streaming.bose.com"
+	}
+
+	// Default to HTTPS for Bose services
+	scheme := "https"
+	if strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "::1") {
+		scheme = "http"
+	}
+
+	targetURL := scheme + "://" + host
+
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		log.Printf("[PROXY_ERR] Failed to parse target URL %s: %v", targetURL, err)
+		http.Error(w, "Invalid upstream host", http.StatusBadGateway)
+
+		return
+	}
+
+	s.ServeProxy(target)(w, r)
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ type Server struct {
 	enableSoundcorkProxy bool
 	shortcuts            map[string]int
 	recorder             *proxy.Recorder
+	UpstreamProxy        http.Handler
 	Version              string
 	Commit               string
 	Date                 string
@@ -41,7 +43,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 		ds:                   ds,
 		sm:                   sm,
 		serverURL:            serverURL,
-		soundcorkURL:         serverURL,
+		soundcorkURL:         "http://localhost:8001",
 		proxyRedact:          proxyRedact,
 		proxyLogBody:         proxyLogBody,
 		recordEnabled:        recordEnabled,
@@ -99,6 +101,14 @@ func (s *Server) SetHTTPServerURL(url string) {
 	defer s.mu.Unlock()
 
 	s.httpsServerURL = url
+}
+
+// SetSoundcorkURL sets the URL for the Soundcork backend.
+func (s *Server) SetSoundcorkURL(url string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.soundcorkURL = url
 }
 
 // SetRecorder sets the recorder for the server.

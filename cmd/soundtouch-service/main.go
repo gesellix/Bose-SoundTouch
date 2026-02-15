@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -161,6 +160,7 @@ func main() {
 			cm := initCertificateManager(config.dataDir)
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.enableSoundcorkProxy)
+			server.SetSoundcorkURL(config.soundcorkURL)
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
@@ -203,11 +203,9 @@ func main() {
 				log.Printf("Warning: Failed to setup TLS: %v", err)
 			}
 
-			scProxy := setupSoundcorkProxy(config.soundcorkURL, config.redact, config.logBody, recorder, server)
-
 			startDeviceDiscovery(server)
 
-			r := setupRouter(server, scProxy, config.enableSoundcorkProxy)
+			r := setupRouter(server)
 
 			log.Printf("Go service starting on %s, proxying to %s", config.serverURL, config.soundcorkURL)
 
@@ -429,64 +427,6 @@ func initCertificateManager(dataDir string) *certmanager.CertificateManager {
 	return cm
 }
 
-func setupSoundcorkProxy(soundcorkURL string, redact, logBody bool, recorder *proxy.Recorder, server *handlers.Server) *httputil.ReverseProxy {
-	target, err := url.Parse(soundcorkURL)
-	if err != nil {
-		log.Fatalf("Failed to parse Soundcork URL: %v", err)
-	}
-
-	scProxy := httputil.NewSingleHostReverseProxy(target)
-	scProxy.ModifyResponse = func(res *http.Response) error {
-		if etags, ok := res.Header["Etag"]; ok {
-			delete(res.Header, "Etag")
-			res.Header["ETag"] = etags
-		}
-
-		currentLp := proxy.NewLoggingProxy(target.String(), redact)
-		currentLp.LogBody = logBody
-		currentLp.RecordEnabled = server.GetRecordEnabled()
-		currentLp.SetRecorder(recorder)
-		currentLp.LogResponse(res)
-
-		return nil
-	}
-
-	originalScDirector := scProxy.Director
-	scProxy.Director = func(req *http.Request) {
-		originalScDirector(req)
-
-		// Fix X-Forwarded-For bloat by deduplicating
-		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
-			parts := strings.Split(xff, ",")
-			seen := make(map[string]bool)
-			unique := make([]string, 0, len(parts))
-
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p != "" && !seen[p] {
-					seen[p] = true
-					unique = append(unique, p)
-				}
-			}
-
-			// Limit the number of entries to prevent header overflow
-			if len(unique) > 10 {
-				unique = unique[len(unique)-10:]
-			}
-
-			req.Header.Set("X-Forwarded-For", strings.Join(unique, ", "))
-		}
-
-		currentLp := proxy.NewLoggingProxy(target.String(), redact)
-		currentLp.LogBody = logBody
-		currentLp.RecordEnabled = server.GetRecordEnabled()
-		currentLp.SetRecorder(recorder)
-		currentLp.LogRequest(req)
-	}
-
-	return scProxy
-}
-
 func startDeviceDiscovery(server *handlers.Server) {
 	go func() {
 		for {
@@ -500,9 +440,9 @@ func startDeviceDiscovery(server *handlers.Server) {
 	}()
 }
 
-func setupRouter(server *handlers.Server, scProxy *httputil.ReverseProxy, enableSoundcorkProxy bool) *chi.Mux {
+func setupRouter(server *handlers.Server) *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(server.OriginMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(server.ShortcutMiddleware)
 	r.Use(server.RecordMiddleware)
@@ -526,6 +466,13 @@ func setupRouter(server *handlers.Server, scProxy *httputil.ReverseProxy, enable
 		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	})
 
+	// Legacy or direct domain calls without /bmx prefix
+	r.Get("/registry/v1/services", server.HandleBMXRegistry)
+	r.Get("/tunein/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
+	r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
+	r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
+	r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
+
 	r.Route("/marge", func(r chi.Router) {
 		r.Get("/streaming/sourceproviders", server.HandleMargeSourceProviders)
 		r.Get("/accounts/{account}/full", server.HandleMargeAccountFull)
@@ -543,6 +490,23 @@ func setupRouter(server *handlers.Server, scProxy *httputil.ReverseProxy, enable
 		r.Post("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
 		r.Get("/streaming/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
 	})
+
+	// Legacy or direct domain calls without /marge prefix
+	r.Get("/streaming/sourceproviders", server.HandleMargeSourceProviders)
+	r.Get("/accounts/{account}/full", server.HandleMargeAccountFull)
+	r.Post("/streaming/support/power_on", server.HandleMargePowerOn)
+	r.Get("/updates/soundtouch", server.HandleMargeSoftwareUpdate)
+	r.Get("/accounts/{account}/devices/{device}/presets", server.HandleMargePresets)
+	r.Post("/accounts/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
+	r.Post("/accounts/{account}/devices/{device}/recents", server.HandleMargeAddRecent)
+	r.Post("/accounts/{account}/devices", server.HandleMargeAddDevice)
+	r.Delete("/accounts/{account}/devices/{device}", server.HandleMargeRemoveDevice)
+	r.Get("/streaming/account/{account}/provider_settings", server.HandleMargeProviderSettings)
+	r.Get("/streaming/device/{device}/streaming_token", server.HandleMargeStreamingToken)
+	r.Post("/streaming/support/customersupport", server.HandleMargeCustomerSupport)
+	r.Get("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeGetDeviceSettings)
+	r.Post("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
+	r.Get("/streaming/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
 
 	r.Route("/customer", func(r chi.Router) {
 		r.Get("/account/{account}", server.HandleMargeAccountProfile)
@@ -595,11 +559,7 @@ func setupRouter(server *handlers.Server, scProxy *httputil.ReverseProxy, enable
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 	})
 
-	if enableSoundcorkProxy {
-		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-			scProxy.ServeHTTP(w, r)
-		})
-	}
+	r.NotFound(server.HandleNotFound)
 
 	return r
 }

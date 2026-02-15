@@ -218,6 +218,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 				"events.api.bosecm.com",
 				"bose-prod.apigee.net",
 				"worldwide.bose.com",
+				"music.api.bose.com",
 			}
 
 			var hostsLines []string
