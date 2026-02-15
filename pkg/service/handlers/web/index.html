@@ -288,6 +288,10 @@
                 <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
                     <p style="margin: 0;">Total Requests: <strong id="total-requests">0</strong></p>
                     <button onclick="fetchInteractionStats()">Refresh Stats</button>
+                    <div style="margin-left: auto; text-align: right;">
+                        <button onclick="cleanupSessions()" class="btn-danger">Cleanup old sessions</button>
+                        <div style="font-size: 0.75em; color: #666; margin-top: 3px;">Keeps only the 10 most recent sessions</div>
+                    </div>
                 </div>
                 <div style="display: flex; gap: 20px;">
                     <div style="flex: 1; border-right: 1px solid #eee; padding-right: 20px;">

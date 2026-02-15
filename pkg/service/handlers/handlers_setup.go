@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -808,4 +809,51 @@ func (s *Server) HandleGetInteractionContent(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "text/plain")
 	_, _ = w.Write(content)
+}
+
+// HandleDeleteSession deletes a recorded interaction session.
+func (s *Server) HandleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	if s.recorder == nil {
+		http.Error(w, "Recorder not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	session := chi.URLParam(r, "session")
+	if session == "" {
+		http.Error(w, "Session ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.recorder.DeleteSession(session); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"ok": true}`))
+}
+
+// HandleCleanupSessions deletes all but the most recent N sessions.
+func (s *Server) HandleCleanupSessions(w http.ResponseWriter, r *http.Request) {
+	if s.recorder == nil {
+		http.Error(w, "Recorder not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	keep := 10
+
+	keepStr := r.URL.Query().Get("keep")
+	if keepStr != "" {
+		if k, err := strconv.Atoi(keepStr); err == nil {
+			keep = k
+		}
+	}
+
+	if err := s.recorder.CleanupSessions(keep); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"ok": true}`))
 }

@@ -298,7 +298,13 @@ async function fetchInteractionStats() {
                 }
 
                 const li = document.createElement('li');
-                li.innerHTML = `<span class="session-info"><strong>${sessionDisplay}:</strong> ${count || 0} requests</span> <button onclick="filterBySession('${session || ""}')" style="font-size: 0.8em; padding: 2px 5px;">Filter</button>`;
+                li.innerHTML = `
+                    <span class="session-info"><strong>${sessionDisplay}:</strong> ${count || 0} requests</span>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="filterBySession('${session || ""}')" style="font-size: 0.8em; padding: 2px 5px;">Filter</button>
+                        <button onclick="deleteSession('${session || ""}')" class="btn-danger" style="font-size: 0.8em; padding: 2px 5px;">Delete</button>
+                    </div>
+                `;
                 sessionList.appendChild(li);
 
                 const opt = document.createElement('option');
@@ -314,12 +320,62 @@ async function fetchInteractionStats() {
     }
 }
 
-function filterBySession(sessionId) {
+async function filterBySession(sessionId) {
     document.getElementById('filter-session').value = sessionId;
     fetchInteractions();
     const browseContainer = document.getElementById('browse-recordings');
     if (browseContainer) {
         browseContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+async function deleteSession(sessionId) {
+    if (!sessionId) return;
+    if (!confirm(`Are you sure you want to delete session ${sessionId}?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/setup/interactions/sessions/${sessionId}`, {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            // If the deleted session was selected in the filter, clear the filter
+            const sessionFilter = document.getElementById('filter-session');
+            if (sessionFilter.value === sessionId) {
+                sessionFilter.value = "";
+                fetchInteractions();
+            }
+            fetchInteractionStats();
+        } else {
+            const err = await response.text();
+            alert('Failed to delete session: ' + err);
+        }
+    } catch (error) {
+        alert('Error deleting session: ' + error.message);
+    }
+}
+
+async function cleanupSessions() {
+    if (!confirm('Are you sure you want to cleanup old sessions? Only the 10 most recent ones will be kept.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/setup/interactions/sessions?keep=10', {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            // Refresh everything
+            document.getElementById('filter-session').value = "";
+            fetchInteractionStats();
+            fetchInteractions();
+        } else {
+            const err = await response.text();
+            alert('Failed to cleanup sessions: ' + err);
+        }
+    } catch (error) {
+        alert('Error cleaning up sessions: ' + error.message);
     }
 }
 

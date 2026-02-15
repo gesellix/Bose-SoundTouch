@@ -528,6 +528,8 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Get("/interaction-stats", server.HandleGetInteractionStats)
 		r.Get("/interactions", server.HandleListInteractions)
 		r.Get("/interaction-content", server.HandleGetInteractionContent)
+		r.Delete("/interactions/sessions/{session}", server.HandleDeleteSession)
+		r.Delete("/interactions/sessions", server.HandleCleanupSessions)
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 	})
 

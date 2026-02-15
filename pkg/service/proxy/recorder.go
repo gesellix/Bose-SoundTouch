@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -425,6 +426,58 @@ func (r *Recorder) peekStatus(path string) int {
 	}
 
 	return 0
+}
+
+// DeleteSession deletes a specific recording session.
+func (r *Recorder) DeleteSession(sessionID string) error {
+	if sessionID == "" {
+		return fmt.Errorf("session ID is required")
+	}
+
+	sessionDir := filepath.Join(r.BaseDir, "interactions", sessionID)
+
+	return os.RemoveAll(sessionDir)
+}
+
+// CleanupSessions deletes all but the most recent keepCount sessions.
+func (r *Recorder) CleanupSessions(keepCount int) error {
+	interactionsDir := filepath.Join(r.BaseDir, "interactions")
+
+	entries, err := os.ReadDir(interactionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+
+		return err
+	}
+
+	var sessions []os.DirEntry
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			sessions = append(sessions, entry)
+		}
+	}
+
+	if len(sessions) <= keepCount {
+		return nil
+	}
+
+	// Sort sessions by name (timestamp) descending to keep the newest ones
+	// Session ID format: 20260102-150405-PID
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].Name() > sessions[j].Name()
+	})
+
+	for i := keepCount; i < len(sessions); i++ {
+		sessionDir := filepath.Join(interactionsDir, sessions[i].Name())
+		if err := os.RemoveAll(sessionDir); err != nil {
+			return fmt.Errorf("failed to delete session %s: %w", sessions[i].Name(), err)
+		}
+	}
+
+	return nil
 }
 
 // GetInteractionContent returns the raw content of a recorded interaction.

@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -508,6 +509,76 @@ func TestRecorder_ListInteractions(t *testing.T) {
 		// Should include 12:00:02.000 and 13:00:05.000
 		if len(list) != 2 {
 			t.Errorf("Expected 2 interactions since 12:00:01.600, got %d", len(list))
+		}
+	})
+}
+
+func TestRecorder_DeleteAndCleanup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "recorder-delete-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	r := NewRecorder(tmpDir)
+
+	// Create 15 dummy sessions
+	for i := 1; i <= 15; i++ {
+		// Use a format that sorts correctly: YYYYMMDD-HHmmss-PID
+		sessionID := fmt.Sprintf("20260215-12%02d00-12345", i)
+		sessionDir := filepath.Join(tmpDir, "interactions", sessionID)
+		os.MkdirAll(sessionDir, 0755)
+		os.WriteFile(filepath.Join(sessionDir, "test.http"), []byte("test"), 0644)
+	}
+
+	t.Run("Delete_specific_session", func(t *testing.T) {
+		sessionToDelete := "20260215-120500-12345"
+		err := r.DeleteSession(sessionToDelete)
+		if err != nil {
+			t.Fatalf("DeleteSession failed: %v", err)
+		}
+
+		if _, err := os.Stat(filepath.Join(tmpDir, "interactions", sessionToDelete)); !os.IsNotExist(err) {
+			t.Errorf("Session %s still exists after deletion", sessionToDelete)
+		}
+	})
+
+	t.Run("Cleanup_sessions", func(t *testing.T) {
+		err := r.CleanupSessions(10)
+		if err != nil {
+			t.Fatalf("CleanupSessions failed: %v", err)
+		}
+
+		entries, _ := os.ReadDir(filepath.Join(tmpDir, "interactions"))
+		if len(entries) != 10 {
+			t.Errorf("Expected 10 sessions to remain, got %d", len(entries))
+		}
+
+		// Ensure newest sessions are kept
+		// We created 1 to 15, deleted 5. Remaining: 1-4, 6-15 (14 sessions)
+		// Cleanup(10) should keep 15, 14, 13, 12, 11, 10, 9, 8, 7, 6.
+		expectedRemaining := []string{
+			"20260215-120600-12345",
+			"20260215-120700-12345",
+			"20260215-120800-12345",
+			"20260215-120900-12345",
+			"20260215-121000-12345",
+			"20260215-121100-12345",
+			"20260215-121200-12345",
+			"20260215-121300-12345",
+			"20260215-121400-12345",
+			"20260215-121500-12345",
+		}
+
+		for _, sessionID := range expectedRemaining {
+			if _, err := os.Stat(filepath.Join(tmpDir, "interactions", sessionID)); os.IsNotExist(err) {
+				t.Errorf("Expected session %s to remain, but it was deleted", sessionID)
+			}
+		}
+
+		// Check one that should be deleted
+		if _, err := os.Stat(filepath.Join(tmpDir, "interactions", "20260215-120100-12345")); !os.IsNotExist(err) {
+			t.Errorf("Session 20260215-120100-12345 should have been cleaned up")
 		}
 	})
 }
