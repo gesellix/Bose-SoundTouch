@@ -133,10 +133,13 @@ jobs:
             local CMD_PATH=$2
             local OUTPUT_NAME
 
+            # Ensure build directory exists
+            mkdir -p build
+
             if [[ "${{ matrix.goos }}" == "windows" ]]; then
-              OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}.exe"
+              OUTPUT_NAME="build/${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}.exe"
             else
-              OUTPUT_NAME="${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}"
+              OUTPUT_NAME="build/${BINARY_NAME}-v${{ needs.validate.outputs.version }}-${ARCH_SUFFIX}"
             fi
 
             echo "Building $BINARY_NAME: $OUTPUT_NAME"
@@ -193,8 +196,8 @@ jobs:
         with:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm }}
           path: |
-            soundtouch-cli-v*
-            soundtouch-service-v*
+            build/soundtouch-cli-v*
+            build/soundtouch-service-v*
           retention-days: 1
 
   checksums:
