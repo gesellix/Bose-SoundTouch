@@ -17,7 +17,7 @@
             <button class="tab-btn" onclick="openTab(event, 'tab-devices')">2. Devices</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-sync')">3. Data Sync</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-migration')">4. Migration</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-interactions')">5. Interactions</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-interactions')">5. Interactions & Events</button>
         </div>
 
         <!-- Tab 0: Overview -->
@@ -281,15 +281,18 @@
             </div>
         </div>
 
-        <!-- Tab 5: Interactions -->
+        <!-- Tab 5: Interactions & Events -->
         <div id="tab-interactions" class="tab-content">
-            <h2>Recorded Interactions</h2>
-            <p>Analysis of traffic handled by this service (self) and proxied to Bose (upstream).</p>
+            <h2>Recorded Interactions & Device Events</h2>
+            <p>Analysis of traffic handled by this service (self), proxied to Bose (upstream), and internal device events (telemetry).</p>
 
             <div id="interaction-stats-container" class="summary-box">
                 <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
                     <p style="margin: 0;">Total Requests: <strong id="total-requests">0</strong></p>
                     <button onclick="fetchInteractionStats()">Refresh Stats</button>
+                    <div style="margin-left: 10px;">
+                        <button onclick="showDeviceEvents()">View App/Device Events</button>
+                    </div>
                     <div style="margin-left: auto; text-align: right;">
                         <button onclick="cleanupSessions()" class="btn-danger">Cleanup old sessions</button>
                         <div style="font-size: 0.75em; color: #666; margin-top: 3px;">Keeps only the 10 most recent sessions</div>
@@ -359,6 +362,33 @@
                     <button onclick="document.getElementById('interaction-viewer').style.display='none'" style="background: #444; color: #fff; border: 1px solid #666;">Close</button>
                 </div>
                 <pre id="interaction-content" style="white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; margin: 0; padding: 10px; overflow-x: auto; max-height: 600px;"></pre>
+            </div>
+
+            <!-- Device Events Overlay -->
+            <div id="device-events-overlay" class="summary-box" style="margin-top: 20px; display: none; background: #fdfdfd; border: 1px solid #ddd;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0;">App & Device Events</h3>
+                    <div>
+                        <select id="event-device-selector" onchange="fetchDeviceEvents(this.value)">
+                            <option value="">-- Select Device --</option>
+                        </select>
+                        <button onclick="document.getElementById('device-events-overlay').style.display='none'" style="margin-left: 10px;">Close</button>
+                    </div>
+                </div>
+                <div id="events-list-container" style="max-height: 400px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
+                                <th style="padding: 8px;">Time</th>
+                                <th style="padding: 8px;">Type</th>
+                                <th style="padding: 8px;">Data</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-list">
+                            <tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Select a device to view events.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

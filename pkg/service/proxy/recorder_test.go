@@ -93,6 +93,12 @@ func TestRecorder_Record_Structure(t *testing.T) {
 				if len(f.Name()) < 5 || !isDigit(f.Name()[0]) || !isDigit(f.Name()[1]) || !isDigit(f.Name()[2]) || !isDigit(f.Name()[3]) || f.Name()[4] != '-' {
 					t.Errorf("Filename %s does not have correct 0000- prefix", f.Name())
 				}
+
+				// Verify Host header is present
+				content, _ := os.ReadFile(filepath.Join(expectedDir, f.Name()))
+				if !strings.Contains(string(content), "Host: ") {
+					t.Errorf("Recorded file does not contain Host header:\n%s", string(content))
+				}
 			}
 		})
 	}

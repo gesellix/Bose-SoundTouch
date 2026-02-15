@@ -109,6 +109,60 @@ func TestMigrateViaHosts(t *testing.T) {
 	}
 }
 
+func TestMigrateViaHosts_UpdateExisting(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test-update")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	_ = cm.EnsureCA()
+
+	m := NewManager("http://192.168.1.100:8000", nil, cm)
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if command == "cat /etc/hosts" {
+					return "127.0.0.1 localhost\n1.2.3.4\tstreaming.bose.com\n1.2.3.4\tupdates.bose.com", nil
+				}
+				if strings.HasPrefix(command, "[ -f") {
+					return "", nil // Backup already exists
+				}
+				if strings.HasPrefix(command, "grep -F") {
+					return "matched", nil // CA already trusted
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				if remotePath == "/etc/hosts" {
+					c := string(content)
+					if !strings.Contains(c, "192.168.1.100\tstreaming.bose.com") {
+						t.Errorf("Expected updated IP for streaming.bose.com, got:\n%s", c)
+					}
+					if !strings.Contains(c, "192.168.1.100\tupdates.bose.com") {
+						t.Errorf("Expected updated IP for updates.bose.com, got:\n%s", c)
+					}
+					if !strings.Contains(c, "192.168.1.100\tevents.api.bosecm.com") {
+						t.Errorf("Expected new domain events.api.bosecm.com, got:\n%s", c)
+					}
+					// Ensure no duplicates
+					if strings.Count(c, "streaming.bose.com") != 1 {
+						t.Errorf("Expected streaming.bose.com to appear exactly once, got %d", strings.Count(c, "streaming.bose.com"))
+					}
+				}
+				return nil
+			},
+		}
+	}
+
+	_, err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
+	if err != nil {
+		t.Fatalf("migrateViaHosts failed: %v", err)
+	}
+}
+
 func TestGetLiveDeviceInfo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/info" {

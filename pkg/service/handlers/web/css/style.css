@@ -102,3 +102,10 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
 .category-upstream { background-color: #f3e5f5; color: #7b1fa2; }
 .status-success { background-color: #e8f5e9; color: #2e7d32; }
 .status-error { background-color: #ffebee; color: #c62828; }
+
+.badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8em;
+    font-weight: bold;
+}

@@ -97,8 +97,12 @@ async function fetchDevices() {
             // Clear and repopulate selectors
             const currentSyncVal = syncSelector.value;
             const currentMigrationVal = migrationSelector.value;
+            const eventSelector = document.getElementById('event-device-selector');
+            const currentEventVal = eventSelector ? eventSelector.value : "";
+
             syncSelector.innerHTML = '<option value="">-- Select a device --</option>';
             migrationSelector.innerHTML = '<option value="">-- Select a device --</option>';
+            if (eventSelector) eventSelector.innerHTML = '<option value="">-- Select a device --</option>';
 
             devices.forEach(d => {
                 const methodLabel = d.discovery_method === 'manual' ? '👤 Manual' : '🔍 Auto';
@@ -126,12 +130,20 @@ async function fetchDevices() {
                 optMigrate.value = d.ip_address;
                 optMigrate.textContent = `${d.name} (${d.ip_address})`;
                 migrationSelector.appendChild(optMigrate);
+
+                if (eventSelector) {
+                    const optEvent = document.createElement('option');
+                    optEvent.value = d.device_id || d.ip_address;
+                    optEvent.textContent = `${d.name} (${d.ip_address})`;
+                    eventSelector.appendChild(optEvent);
+                }
             });
             html += '</table>';
             container.innerHTML = html;
 
             if (currentSyncVal) syncSelector.value = currentSyncVal;
             if (currentMigrationVal) migrationSelector.value = currentMigrationVal;
+            if (eventSelector && currentEventVal) eventSelector.value = currentEventVal;
 
             // Asynchronously fetch live info for each device
             devices.forEach(d => updateDeviceInfo(d.ip_address));
@@ -475,6 +487,59 @@ async function viewInteraction(file) {
         document.getElementById('interaction-viewer').scrollIntoView({ behavior: 'smooth' });
     } catch (error) {
         alert('Failed to load interaction content: ' + error);
+    }
+}
+
+async function showDeviceEvents() {
+    const overlay = document.getElementById('device-events-overlay');
+    overlay.style.display = 'block';
+    overlay.scrollIntoView({ behavior: 'smooth' });
+
+    // Ensure device selector is populated (handled by fetchDevices)
+    // but if it's still empty, we can try to trigger a fetch
+    const selector = document.getElementById('event-device-selector');
+    if (selector.options.length <= 1) {
+        fetchDevices();
+    }
+}
+
+async function fetchDeviceEvents(deviceId) {
+    if (!deviceId) return;
+
+    const list = document.getElementById('events-list');
+    list.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Loading events...</td></tr>';
+
+    try {
+        const response = await fetch(`/setup/devices/${deviceId}/events`);
+        const data = await response.json();
+        const events = data.events;
+
+        list.innerHTML = '';
+        if (!events || events.length === 0) {
+            list.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">No events found for this device.</td></tr>';
+            return;
+        }
+
+        // Sort events by time descending
+        events.sort((a, b) => (b.time || "").localeCompare(a.time || ""));
+
+        events.forEach(e => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #eee';
+
+            const time = e.time || "";
+            const type = e.type || "";
+            const data = JSON.stringify(e.data || {});
+
+            tr.innerHTML = `
+                <td style="padding: 8px; font-size: 0.8em; white-space: nowrap;">${time}</td>
+                <td style="padding: 8px;"><span class="badge category-self">${type}</span></td>
+                <td style="padding: 8px; font-size: 0.85em; font-family: monospace; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title='${data}'>${data}</td>
+            `;
+            list.appendChild(tr);
+        });
+    } catch (error) {
+        list.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: #f44336;">Error loading events: ${error.message}</td></tr>`;
     }
 }
 

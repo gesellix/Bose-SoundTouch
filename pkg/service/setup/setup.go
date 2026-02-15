@@ -215,6 +215,9 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 				"stats.bose.com",
 				"bmx.bose.com",
 				"content.api.bose.io",
+				"events.api.bosecm.com",
+				"bose-prod.apigee.net",
+				"worldwide.bose.com",
 			}
 
 			var hostsLines []string
@@ -858,6 +861,9 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		"stats.bose.com",
 		"bmx.bose.com",
 		"content.api.bose.io",
+		"events.api.bosecm.com",
+		"bose-prod.apigee.net",
+		"worldwide.bose.com",
 	}
 
 	hostsContent, err := client.Run("cat /etc/hosts")
@@ -867,16 +873,48 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		return logs, fmt.Errorf("failed to read /etc/hosts: %w", err)
 	}
 
-	for _, domain := range domains {
-		if !strings.Contains(hostsContent, domain) {
-			entry := fmt.Sprintf("%s\t%s", hostIP, domain)
+	lines := strings.Split(hostsContent, "\n")
+	var newLines []string
+	domainFound := make(map[string]bool)
 
-			if hostsContent != "" && !strings.HasSuffix(hostsContent, "\n") {
-				hostsContent += "\n"
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			newLines = append(newLines, line)
+			continue
+		}
+
+		fields := strings.Fields(trimmed)
+		if len(fields) >= 2 {
+			domain := fields[1]
+			isBoseDomain := false
+			for _, d := range domains {
+				if d == domain {
+					isBoseDomain = true
+					break
+				}
 			}
 
-			hostsContent += entry + "\n"
+			if isBoseDomain {
+				// Update existing entry with new IP
+				newLines = append(newLines, fmt.Sprintf("%s\t%s", hostIP, domain))
+				domainFound[domain] = true
+				continue
+			}
 		}
+		newLines = append(newLines, line)
+	}
+
+	// Add missing domains
+	for _, domain := range domains {
+		if !domainFound[domain] {
+			newLines = append(newLines, fmt.Sprintf("%s\t%s", hostIP, domain))
+		}
+	}
+
+	hostsContent = strings.Join(newLines, "\n")
+	if !strings.HasSuffix(hostsContent, "\n") {
+		hostsContent += "\n"
 	}
 
 	// 3. Upload new /etc/hosts

@@ -141,6 +141,7 @@ func (r *Recorder) writeRequest(buf *bytes.Buffer, req *http.Request, replacemen
 	}
 
 	fmt.Fprintf(buf, "%s %s\n", req.Method, displayURL)
+	fmt.Fprintf(buf, "Host: %s\n", req.Host)
 
 	for k, vv := range req.Header {
 		if r.Redact && isSensitive(k) {

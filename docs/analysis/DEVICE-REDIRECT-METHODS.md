@@ -9,6 +9,9 @@ SoundTouch devices primarily communicate with the following domains:
 - `updates.bose.com`: Software updates
 - `stats.bose.com`: Telemetry and analytics
 - `bmx.bose.com`: Bose Media eXchange registry
+- `events.api.bosecm.com`: Stockholm app analytics
+- `bose-prod.apigee.net`: Apigee gateway (used by some services)
+- `worldwide.bose.com`: Software update metadata and secondary services
 
 ---
 
@@ -153,7 +156,7 @@ For developers creating a completely isolated "dark" environment (no internet at
 1.  **XML**: Point all URLs to local services.
 2.  **Binary Patch**: Neutralize `IsItBose` to allow non-Bose domains/IPs.
 3.  **`/etc/hosts`**: Redirect hardcoded domains that aren't exposed in the XML (like analytics or NTP) to prevent leakage to the real Bose cloud.
-4.  **Process Instrumentation**: Use [SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook) to monitor and override internal behavior in real-time.
+4.  **Process Instrumentation**: Use [SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook) to monitor and override internal behavior in real-time. This is particularly useful for handling unknown hostnames or deep-hooking into service discovery logic that might bypass standard DNS lookups.
 
 ---
 
