@@ -321,6 +321,7 @@ async function fetchInteractionStats() {
                 li.innerHTML = `
                     <span class="session-info"><strong>${sessionDisplay}:</strong> ${count || 0} requests</span>
                     <div style="display: flex; gap: 5px;">
+                        <button onclick="downloadSession('${session || ""}')" class="btn-info" style="font-size: 0.8em; padding: 2px 5px;">Download</button>
                         <button onclick="filterBySession('${session || ""}')" style="font-size: 0.8em; padding: 2px 5px;">Filter</button>
                         <button onclick="deleteSession('${session || ""}')" class="btn-danger" style="font-size: 0.8em; padding: 2px 5px;">Delete</button>
                     </div>
@@ -338,6 +339,11 @@ async function fetchInteractionStats() {
     } catch (error) {
         console.error('Failed to fetch interaction stats', error);
     }
+}
+
+function downloadSession(sessionId) {
+    if (!sessionId) return;
+    window.location.href = `/setup/interactions/sessions/${sessionId}/download`;
 }
 
 async function filterBySession(sessionId) {

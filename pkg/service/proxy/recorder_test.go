@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -624,6 +626,64 @@ func TestRecorder_GetInteractionContent(t *testing.T) {
 	_, err = r.GetInteractionContent("non-existent")
 	if err == nil {
 		t.Error("Expected error for non-existent file, got nil")
+	}
+}
+
+func TestRecorder_ArchiveSession(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "archive-test")
+	defer os.RemoveAll(tmpDir)
+
+	r := NewRecorder(tmpDir)
+
+	sessionID := "test-session-123"
+	sessionDir := filepath.Join(tmpDir, "interactions", sessionID)
+	os.MkdirAll(filepath.Join(sessionDir, "category1"), 0755)
+	os.WriteFile(filepath.Join(sessionDir, "category1", "file1.http"), []byte("content1"), 0644)
+	os.WriteFile(filepath.Join(sessionDir, "file2.http"), []byte("content2"), 0644)
+
+	var buf bytes.Buffer
+	err := r.ArchiveSession(sessionID, &buf)
+	if err != nil {
+		t.Fatalf("ArchiveSession failed: %v", err)
+	}
+
+	if buf.Len() == 0 {
+		t.Fatal("Archive buffer is empty")
+	}
+
+	// Verify it's a valid tar.gz
+	gr, err := gzip.NewReader(&buf)
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+	defer gr.Close()
+
+	tr := tar.NewReader(gr)
+	files := make(map[string]string)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read tar: %v", err)
+		}
+
+		if header.Typeflag == tar.TypeReg {
+			var b bytes.Buffer
+			io.Copy(&b, tr)
+			files[header.Name] = b.String()
+		}
+	}
+
+	if len(files) != 2 {
+		t.Errorf("Expected 2 files in archive, got %d", len(files))
+	}
+	if files["category1/file1.http"] != "content1" {
+		t.Errorf("Unexpected content for category1/file1.http: %s", files["category1/file1.http"])
+	}
+	if files["file2.http"] != "content2" {
+		t.Errorf("Unexpected content for file2.http: %s", files["file2.http"])
 	}
 }
 

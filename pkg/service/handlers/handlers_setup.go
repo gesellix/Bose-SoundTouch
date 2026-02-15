@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	"fmt"
+
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
@@ -878,4 +880,28 @@ func (s *Server) HandleCleanupSessions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok": true}`))
+}
+
+// HandleDownloadSession returns a .tar.gz archive of a recorded interaction session.
+func (s *Server) HandleDownloadSession(w http.ResponseWriter, r *http.Request) {
+	if s.recorder == nil {
+		http.Error(w, "Recorder not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	session := chi.URLParam(r, "session")
+	if session == "" {
+		http.Error(w, "Session ID is required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar.gz\"", session))
+
+	if err := s.recorder.ArchiveSession(session, w); err != nil {
+		log.Printf("Error archiving session %s: %v", session, err)
+		// Since we already set headers, if we have an error here it might be partially written.
+		// But for now, simple error handling.
+		return
+	}
 }

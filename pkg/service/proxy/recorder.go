@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -578,4 +580,70 @@ func (r *Recorder) CleanupSessions(keepCount int) error {
 func (r *Recorder) GetInteractionContent(relPath string) ([]byte, error) {
 	fullPath := filepath.Join(r.BaseDir, "interactions", relPath)
 	return os.ReadFile(fullPath)
+}
+
+// ArchiveSession creates a .tar.gz archive of the specified session and writes it to w.
+func (r *Recorder) ArchiveSession(sessionID string, w io.Writer) (err error) {
+	sessionDir := filepath.Join(r.BaseDir, "interactions", sessionID)
+
+	info, statErr := os.Stat(sessionDir)
+	if statErr != nil {
+		return statErr
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", sessionID)
+	}
+
+	gw := gzip.NewWriter(w)
+
+	defer func() {
+		if closeErr := gw.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	tw := tar.NewWriter(gw)
+
+	defer func() {
+		if closeErr := tw.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	return filepath.Walk(sessionDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		header, hErr := tar.FileInfoHeader(info, info.Name())
+		if hErr != nil {
+			return hErr
+		}
+
+		rel, rErr := filepath.Rel(sessionDir, path)
+		if rErr != nil {
+			return rErr
+		}
+
+		header.Name = rel
+
+		if whErr := tw.WriteHeader(header); whErr != nil {
+			return whErr
+		}
+
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		f, oErr := os.Open(path)
+		if oErr != nil {
+			return oErr
+		}
+		defer f.Close()
+
+		_, cErr := io.Copy(tw, f)
+
+		return cErr
+	})
 }

@@ -589,6 +589,7 @@ func setupRouter(server *handlers.Server, scProxy *httputil.ReverseProxy, enable
 		r.Get("/interaction-stats", server.HandleGetInteractionStats)
 		r.Get("/interactions", server.HandleListInteractions)
 		r.Get("/interaction-content", server.HandleGetInteractionContent)
+		r.Get("/interactions/sessions/{session}/download", server.HandleDownloadSession)
 		r.Delete("/interactions/sessions/{session}", server.HandleDeleteSession)
 		r.Delete("/interactions/sessions", server.HandleCleanupSessions)
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
