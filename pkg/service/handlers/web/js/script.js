@@ -676,7 +676,7 @@ async function showSummary(ip) {
         return;
     }
     const targetUrl = document.getElementById('target-domain').value;
-    const proxyUrl = document.getElementById('proxy-domain').value;
+    const proxyUrl = document.getElementById('soundcork-url').value;
 
     const opts = {
         marge: document.getElementById('opt-marge').value,
@@ -926,7 +926,7 @@ async function migrate(ip) {
         return;
     }
     const targetUrl = document.getElementById('target-domain').value;
-    const proxyUrl = document.getElementById('proxy-domain').value;
+    const proxyUrl = document.getElementById('soundcork-url').value;
     const method = document.getElementById('migration-method').value;
 
     const opts = {
