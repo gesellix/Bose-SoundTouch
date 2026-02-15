@@ -39,7 +39,7 @@ type Server struct {
 
 // NewServer creates a new SoundTouch service server.
 func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled, enableSoundcorkProxy bool) *Server {
-	return &Server{
+	s := &Server{
 		ds:                   ds,
 		sm:                   sm,
 		serverURL:            serverURL,
@@ -50,6 +50,8 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 		enableSoundcorkProxy: enableSoundcorkProxy,
 		discoveryInterval:    5 * time.Minute,
 	}
+
+	return s
 }
 
 // SetVersionInfo sets the version information for the server.
@@ -113,7 +115,13 @@ func (s *Server) SetSoundcorkURL(url string) {
 
 // SetRecorder sets the recorder for the server.
 func (s *Server) SetRecorder(r *proxy.Recorder) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.recorder = r
+	if r != nil {
+		r.Redact = s.proxyRedact
+	}
 }
 
 // GetRecordEnabled returns whether recording is enabled.

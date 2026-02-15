@@ -579,6 +579,10 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 	s.recordEnabled = settings.Record
 	s.enableSoundcorkProxy = settings.EnableSoundcorkProxy
 
+	if s.recorder != nil {
+		s.recorder.Redact = settings.Redact
+	}
+
 	// Persist to datastore
 	// Access fields directly since we already hold the lock
 	serverURL, soundcorkURL, httpsServerURL := s.serverURL, s.soundcorkURL, s.httpsServerURL
