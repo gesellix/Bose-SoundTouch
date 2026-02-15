@@ -858,3 +858,65 @@ func TestMigrateSpeaker_PreFlightFailure(t *testing.T) {
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+func TestCheckIsMigrated(t *testing.T) {
+	m := NewManager("http://aftertouch:8000", nil, nil)
+
+	t.Run("XML Migrated", func(t *testing.T) {
+		summary := &MigrationSummary{
+			SSHSuccess: true,
+			ParsedCurrentConfig: &PrivateCfg{
+				MargeServerUrl: "http://aftertouch:8000/marge",
+			},
+		}
+		m.checkIsMigrated(summary, "127.0.0.1")
+		if !summary.IsMigrated {
+			t.Errorf("Expected IsMigrated to be true for XML migration")
+		}
+	})
+
+	t.Run("Hosts Migrated", func(t *testing.T) {
+		m.NewSSH = func(host string) SSHClient {
+			return &mockSSH{
+				runFunc: func(command string) (string, error) {
+					if command == "cat /etc/hosts" {
+						return "127.0.0.1\tstreaming.bose.com", nil
+					}
+					return "", nil
+				},
+			}
+		}
+		summary := &MigrationSummary{
+			SSHSuccess:    true,
+			CACertTrusted: true,
+		}
+		m.checkIsMigrated(summary, "127.0.0.1")
+		if !summary.IsMigrated {
+			t.Errorf("Expected IsMigrated to be true for hosts migration")
+		}
+	})
+
+	t.Run("Not Migrated", func(t *testing.T) {
+		m.NewSSH = func(host string) SSHClient {
+			return &mockSSH{
+				runFunc: func(command string) (string, error) {
+					if command == "cat /etc/hosts" {
+						return "127.0.0.1\tlocalhost", nil
+					}
+					return "", nil
+				},
+			}
+		}
+		summary := &MigrationSummary{
+			SSHSuccess: true,
+			ParsedCurrentConfig: &PrivateCfg{
+				MargeServerUrl: "http://streaming.bose.com/marge",
+			},
+			CACertTrusted: false,
+		}
+		m.checkIsMigrated(summary, "127.0.0.1")
+		if summary.IsMigrated {
+			t.Errorf("Expected IsMigrated to be false for non-migrated device")
+		}
+	})
+}

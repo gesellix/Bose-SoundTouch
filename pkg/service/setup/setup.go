@@ -64,6 +64,7 @@ type MigrationSummary struct {
 	FirmwareVersion          string      `json:"firmware_version,omitempty"`
 	CACertTrusted            bool        `json:"ca_cert_trusted"`
 	ServerHTTPSURL           string      `json:"server_https_url,omitempty"`
+	IsMigrated               bool        `json:"is_migrated"`
 }
 
 // SSHClient defines the interface for SSH operations.
@@ -245,7 +246,57 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		}
 	}
 
+	// 6. Check if migrated
+	m.checkIsMigrated(summary, deviceIP)
+
 	return summary, nil
+}
+
+// checkIsMigrated determines if the device is already migrated to AfterTouch.
+func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
+	if !summary.SSHSuccess {
+		return
+	}
+
+	// Case 1: XML Migration
+	// Check if any URL in the current config points to our server (targetURL)
+	if summary.ParsedCurrentConfig != nil {
+		targetURL := m.ServerURL
+		// Strip protocol for comparison if needed, or just check for substring
+		parsedTarget, err := url.Parse(targetURL)
+		if err == nil {
+			targetHost := parsedTarget.Hostname()
+			if strings.Contains(summary.ParsedCurrentConfig.MargeServerUrl, targetHost) ||
+				strings.Contains(summary.ParsedCurrentConfig.StatsServerUrl, targetHost) ||
+				strings.Contains(summary.ParsedCurrentConfig.SwUpdateUrl, targetHost) ||
+				strings.Contains(summary.ParsedCurrentConfig.BmxRegistryUrl, targetHost) {
+				summary.IsMigrated = true
+				return
+			}
+		}
+	}
+
+	// Case 2: /etc/hosts + Trust CA Migration
+	// Check if /etc/hosts contains redirections for Bose domains
+	client := m.NewSSH(deviceIP)
+	hostsContent, err := client.Run("cat /etc/hosts")
+	if err == nil {
+		boseDomains := []string{
+			"streaming.bose.com",
+			"updates.bose.com",
+			"stats.bose.com",
+			"bmx.bose.com",
+		}
+		for _, domain := range boseDomains {
+			if strings.Contains(hostsContent, domain) {
+				// If CA is also trusted, it's a strong indicator of migration
+				if summary.CACertTrusted {
+					summary.IsMigrated = true
+					return
+				}
+			}
+		}
+	}
 }
 
 // populateDeviceInfo fills in device information from datastore and live info

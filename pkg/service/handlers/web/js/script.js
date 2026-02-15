@@ -662,6 +662,11 @@ async function showSummary(ip) {
         document.getElementById('ssh-status').innerText = summary.ssh_success ? '✅ Success' : '❌ Failed';
         document.getElementById('ssh-status').style.color = summary.ssh_success ? 'green' : 'red';
 
+        const migrationStatus = document.getElementById('migration-status');
+        migrationStatus.innerText = summary.is_migrated ? '✅ Migrated to AfterTouch' : '❌ Not Migrated';
+        migrationStatus.style.color = summary.is_migrated ? 'green' : 'red';
+        migrationStatus.style.fontWeight = 'bold';
+
         document.getElementById('original-config-status').style.display = summary.original_config ? 'block' : 'none';
         document.getElementById('no-original-config-status').style.display = summary.original_config ? 'none' : 'block';
         document.getElementById('original-config-content').innerText = summary.original_config || '';
@@ -737,6 +742,7 @@ async function showSummary(ip) {
         const rebootBtn = document.getElementById('reboot-speaker-btn');
         rebootBtn.onclick = () => reboot(ip);
         rebootBtn.disabled = !summary.ssh_success;
+        rebootBtn.style.border = 'none'; // Reset border if it was set during migration
 
         const remoteBtn = document.getElementById('ensure-remote-btn');
         remoteBtn.onclick = () => ensureRemoteServices(ip);
@@ -876,7 +882,16 @@ async function migrate(ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = '#ccffcc';
-            statusDiv.innerHTML = 'Successfully started migration for ' + ip + '.';
+            statusDiv.innerHTML = 'Successfully started migration for ' + ip + '. <strong>Please reboot the device to activate the changes.</strong>';
+
+            // Make reboot button available and prominent
+            const rebootBtn = document.getElementById('reboot-speaker-btn');
+            rebootBtn.style.display = 'inline-block';
+            rebootBtn.disabled = false;
+            rebootBtn.style.border = '2px solid #000';
+
+            // Re-show summary but with prominence on reboot
+            summaryDiv.style.display = 'block';
         } else {
             statusDiv.style.backgroundColor = '#ffcccc';
             statusDiv.innerHTML = 'Migration failed for ' + ip + ': ' + (result.message || 'Unknown error');
