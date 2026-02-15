@@ -67,8 +67,7 @@ func TestRootEndpointJSON(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(res.Body)
-
-	expected := `{"Bose": "Can't Brick Us", "service": "Go/Chi"}`
+	expected := `{"Bose": "AfterTouch", "service": "Go/Chi", "docs": "https://gesellix.github.io/Bose-SoundTouch/"}`
 	if strings.TrimSpace(string(body)) != expected {
 		t.Errorf("Expected body %s, got %s", expected, string(body))
 	}

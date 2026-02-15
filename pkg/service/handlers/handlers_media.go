@@ -28,7 +28,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
 	if !strings.Contains(accept, "text/html") && (strings.Contains(accept, "application/json") || accept == "*/*" || accept == "") {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"Bose": "Can't Brick Us", "service": "Go/Chi"}`)
+		_, _ = fmt.Fprintf(w, `{"Bose": "AfterTouch", "service": "Go/Chi", "docs": "https://gesellix.github.io/Bose-SoundTouch/"}`)
 
 		return
 	}
