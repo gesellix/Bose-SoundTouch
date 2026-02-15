@@ -15,6 +15,7 @@ import (
 )
 
 func TestInteractionHandlers(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "interaction-handlers-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -113,6 +114,7 @@ func TestInteractionHandlers(t *testing.T) {
 }
 
 func TestRecordMiddleware(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "record-middleware-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)

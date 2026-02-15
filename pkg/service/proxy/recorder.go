@@ -104,13 +104,44 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 
 	path := r.getRecordingPath(dir, req.Method)
 
-	// Shallow copy request for the worker to avoid data races if the original is reused
-	// but Note: body is already buffered/replaced in middleware if needed.
-	// We need to be careful about bodies being closed.
+	// If we are in async mode, we MUST copy the bodies now because the caller
+	// might close them as soon as Record() returns.
+	var (
+		clonedReq *http.Request
+		clonedRes *http.Response
+	)
+
+	if r.queue != nil {
+		// Clone request
+		clonedReq = req.Clone(req.Context())
+		if req.Body != nil {
+			bodyBytes, _ := io.ReadAll(req.Body)
+			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			clonedReq.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
+
+		// Clone response if present
+		if res != nil {
+			clonedRes = &http.Response{
+				StatusCode: res.StatusCode,
+				Header:     res.Header.Clone(),
+				Request:    clonedReq,
+			}
+			if res.Body != nil {
+				bodyBytes, _ := io.ReadAll(res.Body)
+				res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				clonedRes.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
+		}
+	} else {
+		clonedReq = req
+		clonedRes = res
+	}
+
 	task := recordingTask{
 		category:     category,
-		req:          req,
-		res:          res,
+		req:          clonedReq,
+		res:          clonedRes,
 		replacements: replacements,
 		dir:          dir,
 		path:         path,
