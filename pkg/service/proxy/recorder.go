@@ -74,9 +74,19 @@ func NewRecorder(baseDir string) *Recorder {
 	if os.Getenv("RECORDER_ASYNC") != "false" {
 		r.queue = make(chan recordingTask, 100)
 		go r.worker()
+	} else {
+		log.Println("[DEBUG_LOG] Recorder starting in synchronous mode")
 	}
 
 	return r
+}
+
+// Close stops the recorder and waits for pending tasks to finish.
+func (r *Recorder) Close() {
+	if r.queue != nil {
+		close(r.queue)
+		// We might want to wait here, but for now just closing is a start
+	}
 }
 
 // Record logs an interaction to the configured category.

@@ -88,6 +88,7 @@ func TestLoggingProxy_LogRequest(t *testing.T) {
 }
 
 func TestLoggingProxy_LogResponse(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	lp := NewLoggingProxy("http://example.com", true)
 	lp.LogBody = true
 

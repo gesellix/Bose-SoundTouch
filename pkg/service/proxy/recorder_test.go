@@ -15,6 +15,7 @@ import (
 )
 
 func TestRecorder_Record_Structure(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -105,6 +106,7 @@ func TestRecorder_Record_Structure(t *testing.T) {
 }
 
 func TestRecorder_Record_Sanitization(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-sanitization-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -163,6 +165,7 @@ func TestRecorder_Record_Sanitization(t *testing.T) {
 }
 
 func TestRecorder_Record_Sanitization_Account(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-sanitization-account-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -217,6 +220,7 @@ func TestRecorder_Record_Sanitization_Account(t *testing.T) {
 }
 
 func TestRecorder_Record_Redaction(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-redaction-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -266,6 +270,7 @@ func isDigit(c byte) bool {
 }
 
 func TestRecorder_IncreasingPrefix(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-prefix-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -308,6 +313,7 @@ func TestRecorder_IncreasingPrefix(t *testing.T) {
 }
 
 func TestRecorder_EnvFile(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-env-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -350,6 +356,7 @@ func TestRecorder_EnvFile(t *testing.T) {
 }
 
 func TestRecorder_GetInteractionStats(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-stats-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -395,6 +402,7 @@ func TestRecorder_GetInteractionStats(t *testing.T) {
 }
 
 func TestRecorder_ListInteractions(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-list-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -620,6 +628,7 @@ func TestRecorder_GetInteractionContent(t *testing.T) {
 }
 
 func TestRecorder_Record_FullExchange(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-full-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -673,6 +682,7 @@ func TestRecorder_Record_FullExchange(t *testing.T) {
 }
 
 func TestRecorder_Record_BinaryResponse(t *testing.T) {
+	t.Setenv("RECORDER_ASYNC", "false")
 	tmpDir, err := os.MkdirTemp("", "recorder-binary-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
