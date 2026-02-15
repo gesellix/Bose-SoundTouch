@@ -14,13 +14,13 @@ var indexHTML []byte
 //go:embed web/css/* web/js/*
 var webFS embed.FS
 
-//go:embed soundcork/media/*
+//go:embed static/media/*
 var mediaFS embed.FS
 
-//go:embed soundcork/bmx_services.json
+//go:embed static/bmx_services.json
 var bmxServicesJSON []byte
 
-//go:embed soundcork/swupdate.xml
+//go:embed static/swupdate.xml
 var swUpdateXML []byte
 
 // HandleRoot returns the root endpoint response.
@@ -47,7 +47,7 @@ func (s *Server) HandleWeb() http.HandlerFunc {
 
 // HandleMedia returns a handler for serving media files.
 func (s *Server) HandleMedia() http.HandlerFunc {
-	subFS, _ := fs.Sub(mediaFS, "soundcork/media")
+	subFS, _ := fs.Sub(mediaFS, "static/media")
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		fs := http.StripPrefix("/media/", http.FileServer(http.FS(subFS)))

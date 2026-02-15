@@ -72,7 +72,7 @@ type SSHClient interface {
 	UploadContent(content []byte, remotePath string) error
 }
 
-// Manager handles the migration of speakers to the soundcork service.
+// Manager handles the migration of speakers to the service.
 type Manager struct {
 	ServerURL string
 	DataStore *datastore.DataStore
@@ -354,19 +354,19 @@ func (m *Manager) applyProxyOptions(plannedCfg *PrivateCfg, proxyURL string, opt
 		return
 	}
 
-	if options["marge"] == "original" && currentCfg.MargeServerUrl != "" {
+	if options["marge"] == "upstream" && currentCfg.MargeServerUrl != "" {
 		plannedCfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
 	}
 
-	if options["stats"] == "original" && currentCfg.StatsServerUrl != "" {
+	if options["stats"] == "upstream" && currentCfg.StatsServerUrl != "" {
 		plannedCfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)
 	}
 
-	if options["sw_update"] == "original" && currentCfg.SwUpdateUrl != "" {
+	if options["sw_update"] == "upstream" && currentCfg.SwUpdateUrl != "" {
 		plannedCfg.SwUpdateUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.SwUpdateUrl)
 	}
 
-	if options["bmx"] == "original" && currentCfg.BmxRegistryUrl != "" {
+	if options["bmx"] == "upstream" && currentCfg.BmxRegistryUrl != "" {
 		plannedCfg.BmxRegistryUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.BmxRegistryUrl)
 	}
 }
@@ -437,7 +437,7 @@ func (m *Manager) checkCACertTrusted(summary *MigrationSummary, deviceIP string)
 	}
 }
 
-// MigrateSpeaker configures the speaker at the given IP to use this soundcork service.
+// MigrateSpeaker configures the speaker at the given IP to use this service.
 func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options map[string]string, method MigrationMethod) (string, error) {
 	if targetURL == "" {
 		targetURL = m.ServerURL
@@ -1000,7 +1000,7 @@ func (m *Manager) Reboot(deviceIP string) (string, error) {
 const TestDomain = "custom-test-api.bose.fake"
 
 // CALabel is the label used to identify the local CA certificate in the trust store.
-const CALabel = "# Soundcork Local Root CA"
+const CALabel = "# AfterTouch"
 
 // TestHostsRedirection performs a preliminary check to see if /etc/hosts redirection works.
 func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, error) {

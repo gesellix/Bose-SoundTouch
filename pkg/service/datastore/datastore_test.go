@@ -9,7 +9,7 @@ import (
 )
 
 func TestDataStore(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestDataStore(t *testing.T) {
 }
 
 func TestListAllDevices_Empty(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-empty-test-*")
+	tempDir, err := os.MkdirTemp("", "st-empty-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestListAllDevices_Empty(t *testing.T) {
 }
 
 func TestListAllDevices(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-list-test-*")
+	tempDir, err := os.MkdirTemp("", "st-list-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestListAllDevices(t *testing.T) {
 }
 
 func TestListAllDevices_EmptyDeviceID(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-empty-id-test-*")
+	tempDir, err := os.MkdirTemp("", "st-empty-id-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestListAllDevices_EmptyDeviceID(t *testing.T) {
 }
 
 func TestListAllDevices_MultipleEmptyIDs(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-multi-empty-test-*")
+	tempDir, err := os.MkdirTemp("", "st-multi-empty-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestListAllDevices_MultipleEmptyIDs(t *testing.T) {
 }
 
 func TestListAllDevices_MalformedXML(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-malformed-test-*")
+	tempDir, err := os.MkdirTemp("", "st-malformed-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}

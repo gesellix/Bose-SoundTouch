@@ -1,6 +1,6 @@
 # Favicon Meanings
 
-This directory contains favicons for the Soundcork project in various formats (SVG, PNG, ICO). The icons use Morse code and Braille to represent the initials **S** (Sound) and **T** (Touch).
+This directory contains favicons for the service in various formats (SVG, PNG, ICO). The icons use Morse code and Braille to represent the initials **S** (Sound) and **T** (Touch).
 
 ## Morse Variant (`favicon-morse.*`)
 The icon represents the letters **S** and **T** in international Morse code:

@@ -35,8 +35,8 @@ func TestRootEndpoint(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(res.Body)
-	if !strings.Contains(string(body), "Bose SoundTouch Toolkit") {
-		t.Errorf("Expected body to contain 'Bose SoundTouch Toolkit', got %s", string(body))
+	if !strings.Contains(string(body), "AfterTouch") {
+		t.Errorf("Expected body to contain 'AfterTouch', got %s", string(body))
 	}
 }
 
@@ -80,7 +80,7 @@ func TestStaticMedia(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	// Use a known file from soundcork/media
+	// Use a known file from static/media
 	res, err := http.Get(ts.URL + "/media/SiriusXM_Logo_Color.svg")
 	if err != nil {
 		t.Fatal(err)

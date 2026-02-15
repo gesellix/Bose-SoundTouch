@@ -158,8 +158,8 @@ func (ds *DataStore) getPossibleDataDirs() []string {
 		dirs = append(dirs, filepath.Join(ds.DataDir, "accounts"))
 	}
 
-	// Also check soundcork-go/data/accounts if it's different and exists
-	altDir := "soundcork-go/data/accounts"
+	// Also check st-go/data/accounts if it's different and exists
+	altDir := "st-go/data/accounts"
 	if filepath.Join(ds.DataDir, "accounts") != altDir && exists(altDir) {
 		dirs = append(dirs, altDir)
 	}

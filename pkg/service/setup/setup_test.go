@@ -187,7 +187,7 @@ func TestGetMigrationSummary_WithProxyOptions(t *testing.T) {
 	defer server.Close()
 
 	host := server.Listener.Addr().String()
-	manager := NewManager("http://soundcork:8000", nil, nil)
+	manager := NewManager("http://st-service:8000", nil, nil)
 
 	// Since we can't easily mock SSH here without a full SSH server,
 	// we are testing the logic that depends on ParsedCurrentConfig being nil or not.
@@ -195,10 +195,10 @@ func TestGetMigrationSummary_WithProxyOptions(t *testing.T) {
 	// If SSH fails, ParsedCurrentConfig will be nil.
 
 	options := map[string]string{
-		"marge":     "original",
-		"stats":     "soundcork",
-		"sw_update": "original",
-		"bmx":       "soundcork",
+		"marge":     "upstream",
+		"stats":     "self",
+		"sw_update": "upstream",
+		"bmx":       "self",
 	}
 
 	summary, err := manager.GetMigrationSummary(host, "http://target:8000", "http://proxy:8000", options)

@@ -481,7 +481,7 @@ This project builds upon the excellent work of several community projects:
 ### SoundCork 🍾
 - **Project**: [SoundCork - SoundTouch API Intercept](https://github.com/deborahgu/soundcork)
 - **Authors**: Deborah Kaplan and contributors
-- **Our Implementation**: The `soundtouch-service` in this project is heavily inspired by and based on SoundCork's Python implementation. SoundCork pioneered the approach of intercepting and emulating Bose's cloud services, providing the foundation for offline SoundTouch operation.
+- **Our Implementation**: The `soundtouch-service` in this project is heavily inspired by SoundCork's Python implementation. SoundCork pioneered the approach of intercepting and emulating Bose's cloud services, providing the foundation for offline SoundTouch operation.
 - **Key Contributions**: Service emulation architecture, BMX/Marge endpoint discovery, device migration strategies
 - **License**: MIT License
 

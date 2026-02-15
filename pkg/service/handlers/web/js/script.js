@@ -227,7 +227,7 @@ async function fetchVersion() {
         const data = await response.json();
         const info = document.getElementById('version-info');
         if (info && data.version) {
-            info.innerText = `SoundTouch Toolkit ${data.version} (${data.commit}) - ${data.date}`;
+            info.innerText = `AfterTouch ${data.version} (${data.commit}) - ${data.date}`;
         }
     } catch (error) {
         console.error('Failed to fetch version info', error);

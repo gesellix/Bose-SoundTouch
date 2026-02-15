@@ -148,8 +148,8 @@ func (cm *CertificateManager) GenerateCA() error {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"SoundTouch Local Service"},
-			CommonName:   "SoundTouch Local Root CA",
+			Organization: []string{"AfterTouch"},
+			CommonName:   "AfterTouch Local Root CA",
 		},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
@@ -240,7 +240,7 @@ func (cm *CertificateManager) GenerateCertificate(domains []string) ([]byte, []b
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"SoundTouch Local Service"},
+			Organization: []string{"AfterTouch"},
 			CommonName:   domains[0],
 		},
 		NotBefore:   notBefore,

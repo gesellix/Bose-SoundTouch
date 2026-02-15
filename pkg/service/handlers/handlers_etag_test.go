@@ -16,7 +16,7 @@ const normalizedEtag = "Etag"
 const caseSensitiveETag = "ETag"
 
 func TestMargeETags(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "soundcork-etag-test-*")
+	tempDir, _ := os.MkdirTemp("", "st-etag-test-*")
 
 	defer func() { _ = os.RemoveAll(tempDir) }()
 

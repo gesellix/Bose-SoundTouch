@@ -61,7 +61,7 @@ func TestMargeSoftwareUpdate(t *testing.T) {
 }
 
 func TestMargeAccountFull(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestMargeAccountFull(t *testing.T) {
 }
 
 func TestMargePresets(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestMargePresets(t *testing.T) {
 }
 
 func TestMargeUpdatePreset(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestMargeUpdatePreset(t *testing.T) {
 }
 
 func TestMargeDeviceInfo(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestMargeDeviceInfo(t *testing.T) {
 }
 
 func TestMargeAddRemoveDevice(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestMargePowerOn(t *testing.T) {
 }
 
 func TestMargeAdvancedFeatures(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -472,7 +472,7 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		}
 
 		token := res.Header.Get("Authorization")
-		if !strings.HasPrefix(token, "Bearer soundcork-local-token-") {
+		if !strings.HasPrefix(token, "Bearer st-local-token-") {
 			t.Errorf("Invalid token header: %s", token)
 		}
 	})

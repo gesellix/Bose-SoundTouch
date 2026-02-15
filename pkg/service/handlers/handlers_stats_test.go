@@ -12,7 +12,7 @@ import (
 )
 
 func TestStatsHandlers(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "soundcork-test-*")
+	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}

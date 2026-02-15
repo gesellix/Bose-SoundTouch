@@ -1,6 +1,6 @@
 # HTTPS Setup & Custom CA Certificate
 
-To use the `/etc/hosts` redirection method safely, SoundTouch devices must communicate over HTTPS. This requires the device to trust the Root CA certificate used by the local `soundtouch-service`.
+To use the `/etc/hosts` redirection method safely, SoundTouch devices must communicate over HTTPS. This requires the device to trust the AfterTouch Root CA certificate used by the local service.
 
 ## 1. Automated Migration (Hosts Method)
 
@@ -13,12 +13,12 @@ curl -X POST "http://localhost:8000/setup/migrate/{deviceIP}?method=hosts"
 This command will:
 1.  Connect to the device via SSH.
 2.  Update `/etc/hosts` to point Bose domains to the service IP.
-3.  Inject the auto-generated Root CA into the device's trust store (`/etc/pki/tls/certs/ca-bundle.crt`).
+3.  Inject the auto-generated AfterTouch Root CA into the device's trust store (`/etc/pki/tls/certs/ca-bundle.crt`).
 4.  Reboot the device.
 
 ## 2. Managing the Root CA
 
-The `soundtouch-service` automatically generates a Root CA when it first starts.
+The AfterTouch service automatically generates a Root CA when it first starts.
 
 - **CA Certificate**: `data/certs/ca.crt`
 - **CA Private Key**: `data/certs/ca.key`
@@ -34,7 +34,7 @@ The `soundtouch-service` now includes a built-in HTTPS listener. This simplifies
 - **HTTPS Port**: Configurable via `HTTPS_PORT` environment variable (defaults to `8443`).
 - **HTTPS Server URL**: Configurable via `HTTPS_SERVER_URL` (e.g., `https://mysoundtouch.local:8443`). If not set, the service attempts to guess it using the system hostname.
 - **Domain Coverage**: Automatically presents a certificate for `streaming.bose.com`, `updates.bose.com`, `stats.bose.com`, `bmx.bose.com`, and `content.api.bose.io`.
-- **Automatic Setup**: On first start, it generates a server certificate signed by your local Root CA.
+- **Automatic Setup**: On first start, it generates a server certificate signed by your AfterTouch local Root CA.
 
 #### TLS Security
 

@@ -2,12 +2,13 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Bose SoundTouch Toolkit</title>
+    <title>AfterTouch (SoundTouch Toolkit)</title>
     <link rel="icon" href="/media/favicon-braille.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/web/css/style.css">
 </head>
 <body>
-    <h1>Bose SoundTouch Toolkit</h1>
+    <h1>AfterTouch</h1>
+    <p style="margin-top: -10px; font-style: italic; color: #666;">Bose SoundTouch Toolkit</p>
 
     <div class="tabs">
         <div class="tab-buttons">
@@ -21,7 +22,7 @@
 
         <!-- Tab 0: Overview -->
         <div id="tab-overview" class="tab-content active">
-            <h2>Welcome to Bose SoundTouch Toolkit</h2>
+            <h2>Welcome to AfterTouch</h2>
             <p>This toolkit helps you keep your Bose SoundTouch speakers functional even after the Bose Cloud shutdown in May 2026. It emulates the necessary cloud services locally on your network.</p>
 
             <h3>Migration Process at a Glance</h3>
@@ -164,7 +165,7 @@
                 <p id="original-config-status" style="display: none;">Backup: ✅ Found .original config at <code>/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original</code> <button onclick="toggleOriginalConfig()">Show Original Config</button></p>
                 <p id="no-original-config-status" style="display: none;">Backup: ❌ Not found <button id="backup-config-btn">Backup Config Now</button></p>
                 <p>Remote Services Enabled: <span id="remote-services-status"></span> <span id="remote-services-found" style="font-size: 0.8em; color: #666;"></span></p>
-                <p>Local Root CA Trusted: <span id="ca-trust-status"></span> <button id="trust-ca-btn" style="display: none; background-color: #607D8B; color: white; border: none; padding: 2px 8px; font-size: 0.8em; margin-left: 10px;">Trust CA Now</button></p>
+                <p>AfterTouch Local Root CA Trusted: <span id="ca-trust-status"></span> <button id="trust-ca-btn" style="display: none; background-color: #607D8B; color: white; border: none; padding: 2px 8px; font-size: 0.8em; margin-left: 10px;">Trust CA Now</button></p>
 
                 <div id="connection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #eefbff;">
                     <strong>HTTPS Connection Test:</strong><br>
@@ -213,8 +214,8 @@
                             <td id="orig-marge">loading...</td>
                             <td>
                                 <select id="opt-marge" onchange="refreshSummary()">
-                                    <option value="soundcork">Soundcork (Go/Python)</option>
-                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                    <option value="self">AfterTouch (Local Service)</option>
+                                    <option value="upstream">Upstream (Proxy via local service)</option>
                                 </select>
                             </td>
                         </tr>
@@ -223,8 +224,8 @@
                             <td id="orig-stats">loading...</td>
                             <td>
                                 <select id="opt-stats" onchange="refreshSummary()">
-                                    <option value="soundcork">Soundcork (Go/Python)</option>
-                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                    <option value="self">AfterTouch (Local Service)</option>
+                                    <option value="upstream">Upstream (Proxy via local service)</option>
                                 </select>
                             </td>
                         </tr>
@@ -233,8 +234,8 @@
                             <td id="orig-sw_update">loading...</td>
                             <td>
                                 <select id="opt-sw_update" onchange="refreshSummary()">
-                                    <option value="soundcork">Soundcork (Go/Python)</option>
-                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                    <option value="self">AfterTouch (Local Service)</option>
+                                    <option value="upstream">Upstream (Proxy via local service)</option>
                                 </select>
                             </td>
                         </tr>
@@ -243,8 +244,8 @@
                             <td id="orig-bmx">loading...</td>
                             <td>
                                 <select id="opt-bmx" onchange="refreshSummary()">
-                                    <option value="soundcork">Soundcork (Go/Python)</option>
-                                    <option value="original">Original (Proxy via soundcork-go)</option>
+                                    <option value="self">AfterTouch (Local Service)</option>
+                                    <option value="upstream">Upstream (Proxy via local service)</option>
                                 </select>
                             </td>
                         </tr>
@@ -257,14 +258,14 @@
                         <pre id="current-config"></pre>
                     </div>
                     <div id="planned-xml-pane" class="diff-pane">
-                        <span class="config-header">Planned Config (Soundcork)</span>
+                        <span class="config-header">Planned Config (AfterTouch)</span>
                         <pre id="planned-config"></pre>
                     </div>
                     <div id="planned-hosts-pane" class="diff-pane" style="display: none;">
                         <span class="config-header">Planned /etc/hosts Entries</span>
                         <pre id="planned-hosts"></pre>
                         <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                            <strong>Note:</strong> This method also injects the local Root CA into <code>/etc/pki/tls/certs/ca-bundle.crt</code> to enable secure HTTPS communication.
+                            <strong>Note:</strong> This method also injects the AfterTouch Local Root CA into <code>/etc/pki/tls/certs/ca-bundle.crt</code> to enable secure HTTPS communication.
                         </div>
                     </div>
                 </div>
@@ -363,7 +364,7 @@
 
     <script src="/web/js/script.js"></script>
     <footer style="margin-top: 50px; padding: 20px; border-top: 1px solid #eee; font-size: 0.8em; color: #888; text-align: center;">
-        <span id="version-info">SoundTouch Toolkit</span>
+        <span id="version-info">AfterTouch</span>
     </footer>
 </body>
 </html>
