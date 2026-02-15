@@ -874,7 +874,9 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 	}
 
 	lines := strings.Split(hostsContent, "\n")
+
 	var newLines []string
+
 	domainFound := make(map[string]bool)
 
 	for _, line := range lines {
@@ -888,6 +890,7 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		if len(fields) >= 2 {
 			domain := fields[1]
 			isBoseDomain := false
+
 			for _, d := range domains {
 				if d == domain {
 					isBoseDomain = true
@@ -899,9 +902,11 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 				// Update existing entry with new IP
 				newLines = append(newLines, fmt.Sprintf("%s\t%s", hostIP, domain))
 				domainFound[domain] = true
+
 				continue
 			}
 		}
+
 		newLines = append(newLines, line)
 	}
 
