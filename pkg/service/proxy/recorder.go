@@ -26,6 +26,26 @@ type Recorder struct {
 	mu         sync.Mutex
 }
 
+// InteractionStats represents statistics for recorded interactions.
+type InteractionStats struct {
+	TotalRequests int            `json:"total_requests"`
+	ByService     map[string]int `json:"by_service"`
+	BySession     map[string]int `json:"by_session"`
+}
+
+// Interaction represents a single recorded HTTP interaction.
+type Interaction struct {
+	ID        string `json:"id"`
+	Session   string `json:"session"`
+	Category  string `json:"category"`
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	File      string `json:"file"`
+	Counter   int    `json:"counter"`
+	Status    int    `json:"status"`
+	Timestamp string `json:"timestamp"`
+}
+
 // NewRecorder creates a new HTTP interaction recorder.
 func NewRecorder(baseDir string) *Recorder {
 	sessionID := time.Now().Format("20060102-150405") + "-" + fmt.Sprintf("%d", os.Getpid())
@@ -220,4 +240,195 @@ func (r *Recorder) updateEnvFile(newVars map[string]string) error {
 	}
 
 	return os.WriteFile(envFile, data, 0644)
+}
+
+// GetInteractionStats returns statistics about recorded interactions.
+func (r *Recorder) GetInteractionStats() (*InteractionStats, error) {
+	stats := &InteractionStats{
+		ByService: make(map[string]int),
+		BySession: make(map[string]int),
+	}
+
+	interactionsDir := filepath.Join(r.BaseDir, "interactions")
+	if _, err := os.Stat(interactionsDir); os.IsNotExist(err) {
+		return stats, nil
+	}
+
+	err := filepath.Walk(interactionsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".http") {
+			stats.TotalRequests++
+
+			// Extract category (self/upstream) and session from path
+			// Path is like: .../interactions/<session>/<category>/...
+			rel, err := filepath.Rel(interactionsDir, path)
+			if err != nil {
+				return err
+			}
+
+			parts := strings.Split(rel, string(filepath.Separator))
+			if len(parts) >= 2 {
+				sessionID := parts[0]
+				category := parts[1]
+				stats.BySession[sessionID]++
+				stats.ByService[category]++
+			}
+		}
+
+		return nil
+	})
+
+	return stats, err
+}
+
+// ListInteractions returns a list of recorded interactions.
+func (r *Recorder) ListInteractions(sessionFilter, categoryFilter, sinceFilter string) ([]Interaction, error) {
+	interactions := make([]Interaction, 0)
+	interactionsDir := filepath.Join(r.BaseDir, "interactions")
+
+	if _, err := os.Stat(interactionsDir); os.IsNotExist(err) {
+		return interactions, nil
+	}
+
+	err := filepath.Walk(interactionsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".http") {
+			return nil
+		}
+
+		rel, err := filepath.Rel(interactionsDir, path)
+		if err != nil {
+			return err
+		}
+
+		parts := strings.Split(rel, string(filepath.Separator))
+		if len(parts) < 3 {
+			return nil
+		}
+
+		sessionID, category := parts[0], parts[1]
+		if (sessionFilter != "" && sessionID != sessionFilter) || (categoryFilter != "" && category != categoryFilter) {
+			return nil
+		}
+
+		interaction, ok := r.parseInteractionFile(rel, path, parts)
+		if !ok {
+			return nil
+		}
+
+		if sinceFilter != "" && interaction.Timestamp != "" {
+			fullTS := r.getFullTimestamp(sessionID, interaction.ID)
+
+			normalizedSince := strings.ReplaceAll(strings.ReplaceAll(sinceFilter, ":", "-"), " ", "-")
+			if fullTS != "" && fullTS < normalizedSince {
+				return nil
+			}
+		}
+
+		interactions = append(interactions, interaction)
+
+		return nil
+	})
+
+	return interactions, err
+}
+
+func (r *Recorder) parseInteractionFile(rel, path string, parts []string) (Interaction, bool) {
+	sessionID, category := parts[0], parts[1]
+	filename := parts[len(parts)-1]
+	fnParts := strings.Split(strings.TrimSuffix(filename, ".http"), "-")
+
+	date := ""
+	if len(sessionID) >= 8 {
+		date = sessionID[0:4] + "-" + sessionID[4:6] + "-" + sessionID[6:8]
+	}
+
+	timestamp := ""
+
+	if len(fnParts) >= 4 {
+		timeStr := fnParts[1] + ":" + fnParts[2] + ":" + fnParts[3]
+		timestamp = timeStr
+
+		if date != "" {
+			timestamp = date + " " + timeStr
+		}
+	}
+
+	requestPath := "/" + strings.Join(parts[2:len(parts)-1], "/")
+	if requestPath == "/root" {
+		requestPath = "/"
+	}
+
+	method, counter := "UNKNOWN", 0
+	if len(fnParts) >= 1 {
+		_, _ = fmt.Sscanf(fnParts[0], "%d", &counter)
+	}
+
+	if len(fnParts) >= 5 {
+		method = fnParts[4]
+	}
+
+	return Interaction{
+		ID:        filename,
+		Session:   sessionID,
+		Category:  category,
+		Method:    method,
+		Path:      requestPath,
+		File:      rel,
+		Counter:   counter,
+		Status:    r.peekStatus(path),
+		Timestamp: timestamp,
+	}, true
+}
+
+func (r *Recorder) getFullTimestamp(sessionID, filename string) string {
+	if len(sessionID) < 8 {
+		return ""
+	}
+
+	date := sessionID[0:4] + "-" + sessionID[4:6] + "-" + sessionID[6:8]
+	fnParts := strings.Split(strings.TrimSuffix(filename, ".http"), "-")
+
+	if len(fnParts) < 4 {
+		return ""
+	}
+
+	return date + "-" + fnParts[1] + "-" + fnParts[2] + "-" + fnParts[3]
+}
+
+func (r *Recorder) peekStatus(path string) int {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		if !strings.Contains(line, "// Response:") {
+			continue
+		}
+
+		trimmedLine := strings.TrimPrefix(strings.TrimSpace(line), "//")
+		trimmedLine = strings.TrimPrefix(strings.TrimSpace(trimmedLine), "Response:")
+		trimmedLine = strings.TrimSpace(trimmedLine)
+
+		status := 0
+		_, _ = fmt.Sscanf(trimmedLine, "%d", &status)
+
+		return status
+	}
+
+	return 0
+}
+
+// GetInteractionContent returns the raw content of a recorded interaction.
+func (r *Recorder) GetInteractionContent(relPath string) ([]byte, error) {
+	fullPath := filepath.Join(r.BaseDir, "interactions", relPath)
+	return os.ReadFile(fullPath)
 }

@@ -705,7 +705,7 @@ type Settings struct {
 	LogBodies          bool           `json:"log_bodies"`
 	RecordInteractions bool           `json:"record_interactions"`
 	DiscoveryInterval  string         `json:"discovery_interval,omitempty"`
-	DiscoveryDisabled  bool           `json:"discovery_disabled"`
+	DiscoveryEnabled   bool           `json:"discovery_enabled"`
 	Shortcuts          map[string]int `json:"shortcuts,omitempty"`
 }
 

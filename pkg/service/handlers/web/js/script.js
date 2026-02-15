@@ -11,8 +11,8 @@ async function fetchSettings() {
         if (settings.discovery_interval) {
             document.getElementById('discovery-interval').value = settings.discovery_interval;
         }
-        if (settings.discovery_disabled !== undefined) {
-            document.getElementById('discovery-disabled').checked = settings.discovery_disabled;
+        if (settings.discovery_enabled !== undefined) {
+            document.getElementById('discovery-enabled').checked = settings.discovery_enabled;
         }
         fetchProxySettings();
     } catch (error) {
@@ -54,7 +54,7 @@ async function updateSettings() {
         server_url: document.getElementById('target-domain').value,
         proxy_url: document.getElementById('proxy-domain').value,
         discovery_interval: document.getElementById('discovery-interval').value,
-        discovery_disabled: document.getElementById('discovery-disabled').checked
+        discovery_enabled: document.getElementById('discovery-enabled').checked
     };
     const status = document.getElementById('settings-status');
     status.innerText = 'Saving...';
@@ -168,6 +168,11 @@ function openTab(evt, tabId) {
         content.className += " active";
     }
 
+    if (tabId === 'tab-interactions') {
+        fetchInteractionStats();
+        fetchInteractions();
+    }
+
     if (evt) {
         evt.currentTarget.className += " active";
     } else {
@@ -229,13 +234,202 @@ async function fetchVersion() {
     }
 }
 
+async function fetchInteractionStats() {
+    console.log('Fetching interaction stats...');
+    try {
+        const response = await fetch('/setup/interaction-stats');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const stats = await response.json();
+        console.log('Fetched interaction stats:', stats);
+
+        document.getElementById('total-requests').innerText = stats.total_requests || stats.TotalRequests || 0;
+
+        const statsContainer = document.getElementById('interaction-stats-container');
+        if (statsContainer) {
+            statsContainer.style.display = 'block';
+        }
+
+        const serviceList = document.getElementById('stats-by-service');
+        serviceList.innerHTML = '';
+        const byService = stats.by_service || stats.ByService;
+        if (byService) {
+            Object.entries(byService).forEach(([service, count]) => {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>${service || "unknown"}:</strong> ${count || 0} requests`;
+                serviceList.appendChild(li);
+            });
+        }
+
+        const sessionList = document.getElementById('stats-by-session');
+        const sessionFilter = document.getElementById('filter-session');
+        const currentFilter = sessionFilter.value;
+
+        sessionList.innerHTML = '';
+        sessionFilter.innerHTML = '<option value="">All Sessions</option>';
+
+        const bySession = stats.by_session || stats.BySession;
+        if (bySession) {
+            // Sort by session ID (timestamp) descending
+            const sortedSessions = Object.entries(bySession)
+                .sort((a, b) => {
+                    const sessionA = a[0] || "";
+                    const sessionB = b[0] || "";
+                    return sessionB.localeCompare(sessionA);
+                });
+
+            sortedSessions.forEach(([session, count]) => {
+                // Session format is like 20260215-160705-99213
+                // Try to make it more readable: 2026-02-15 16:07:05 (PID 99213)
+                let sessionDisplay = session || "unknown";
+                if (session && session.includes('-')) {
+                    const parts = session.split('-');
+                    if (parts.length >= 2) {
+                        const date = parts[0]; // 20260215
+                        const time = parts[1]; // 160705
+                        if (date.length === 8 && time.length === 6) {
+                            sessionDisplay = `${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)} ${time.substring(0, 2)}:${time.substring(2, 4)}:${time.substring(4, 6)}`;
+                            if (parts.length >= 3) {
+                                sessionDisplay += ` (PID ${parts[2]})`;
+                            }
+                        }
+                    }
+                }
+
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="session-info"><strong>${sessionDisplay}:</strong> ${count || 0} requests</span> <button onclick="filterBySession('${session || ""}')" style="font-size: 0.8em; padding: 2px 5px;">Filter</button>`;
+                sessionList.appendChild(li);
+
+                const opt = document.createElement('option');
+                opt.value = session || "";
+                opt.innerText = sessionDisplay;
+                sessionFilter.appendChild(opt);
+            });
+
+            sessionFilter.value = currentFilter;
+        }
+    } catch (error) {
+        console.error('Failed to fetch interaction stats', error);
+    }
+}
+
+function filterBySession(sessionId) {
+    document.getElementById('filter-session').value = sessionId;
+    fetchInteractions();
+    const browseContainer = document.getElementById('browse-recordings');
+    if (browseContainer) {
+        browseContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+async function fetchInteractions() {
+    console.log('Fetching interactions...');
+    const session = document.getElementById('filter-session').value;
+    const category = document.getElementById('filter-category').value;
+    const since = document.getElementById('filter-since').value;
+
+    let url = '/setup/interactions';
+    const params = [];
+    if (session) params.push(`session=${encodeURIComponent(session)}`);
+    if (category) params.push(`category=${encodeURIComponent(category)}`);
+    if (since) params.push(`since=${encodeURIComponent(since)}`);
+    if (params.length > 0) url += '?' + params.join('&');
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const interactions = await response.json();
+        console.log('Fetched interactions:', interactions);
+        const list = document.getElementById('interactions-list');
+        if (!list) {
+            console.error('Could not find interactions-list element');
+            return;
+        }
+
+        // Show the parent summary box if it was hidden
+        const browseContainer = list.closest('.summary-box');
+        if (browseContainer) {
+            browseContainer.style.display = 'block';
+        }
+
+        list.innerHTML = '';
+
+        if (!interactions || interactions.length === 0) {
+            list.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #666;">No interactions found for current filters.</td></tr>';
+            return;
+        }
+
+        // Default sort: Session desc, then Counter asc
+        // If a specific session is selected, sort primarily by counter asc
+        interactions.sort((a, b) => {
+            const sessionA = a.session || a.Session || "";
+            const sessionB = b.session || b.Session || "";
+            if (sessionA !== sessionB) {
+                return sessionB.localeCompare(sessionA);
+            }
+            const counterA = a.counter || a.Counter || 0;
+            const counterB = b.counter || b.Counter || 0;
+            return counterA - counterB;
+        });
+
+        interactions.forEach(i => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #eee';
+
+            const counter = i.counter || i.Counter || 0;
+            const timestamp = i.timestamp || i.Timestamp || "";
+            const method = i.method || i.Method || "";
+            const path = i.path || i.Path || "";
+            const status = i.status || i.Status || "";
+            const category = i.category || i.Category || "";
+            const session = i.session || i.Session || "";
+            const file = i.file || i.File || "";
+
+            let statusClass = '';
+            if (status >= 200 && status < 300) statusClass = 'status-success';
+            else if (status >= 400) statusClass = 'status-error';
+
+            tr.innerHTML = `
+                <td style="padding: 8px; color: #888;">${counter}</td>
+                <td style="padding: 8px; font-size: 0.8em; white-space: nowrap;">${timestamp}</td>
+                <td style="padding: 8px; font-family: monospace;">${method}</td>
+                <td style="padding: 8px; font-size: 0.9em;">${path}</td>
+                <td style="padding: 8px;"><span class="badge ${statusClass}">${status || '???'}</span></td>
+                <td style="padding: 8px;"><span class="badge category-${category}">${category}</span></td>
+                <td style="padding: 8px;"><button onclick="viewInteraction('${file}')">View</button></td>
+            `;
+            list.appendChild(tr);
+        });
+    } catch (error) {
+        console.error('Failed to fetch interactions', error);
+    }
+}
+
+async function viewInteraction(file) {
+    try {
+        const response = await fetch(`/setup/interaction-content?file=${encodeURIComponent(file)}`);
+        const content = await response.text();
+
+        document.getElementById('viewer-filename').innerText = file;
+        document.getElementById('interaction-content').innerText = content;
+        document.getElementById('interaction-viewer').style.display = 'block';
+        document.getElementById('interaction-viewer').scrollIntoView({ behavior: 'smooth' });
+    } catch (error) {
+        alert('Failed to load interaction content: ' + error);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     fetchSettings();
     fetchDevices();
     triggerDiscovery();
     fetchVersion();
 
-    document.getElementById('sync-now-btn').onclick = startSync;
+    const syncBtn = document.getElementById('sync-now-btn');
+    if (syncBtn) syncBtn.onclick = startSync;
 });
 
 

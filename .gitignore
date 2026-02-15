@@ -19,6 +19,7 @@ dist/
 /example-unified
 /mdns-scanner
 /websocket-demo
+/main
 
 # Environment configuration
 .env
@@ -28,6 +29,7 @@ docker-compose.override.yml
 
 # Test coverage reports
 coverage.out
+coverage*.out
 coverage.html
 *.prof
 

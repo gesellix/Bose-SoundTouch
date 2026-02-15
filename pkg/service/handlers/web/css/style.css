@@ -4,7 +4,7 @@ th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 th { background-color: #f2f2f2; }
 button { padding: 5px 10px; cursor: pointer; }
 .status { margin-top: 10px; padding: 10px; border: 1px solid #ccc; display: none; }
-.summary-box { margin-top: 20px; padding: 15px; border: 1px solid #aaa; background-color: #f9f9f9; display: none; }
+.summary-box { margin-top: 20px; padding: 15px; border: 1px solid #aaa; background-color: #f9f9f9; }
 pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; }
 .diff-container { display: flex; gap: 10px; }
 .diff-pane { flex: 1; min-width: 0; }
@@ -76,3 +76,29 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
 .btn-danger:hover {
     background-color: #d32f2f;
 }
+
+.badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+.stats-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.stats-list li {
+    padding: 5px 0;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.stats-list li:last-child {
+    border-bottom: none;
+}
+.category-self { background-color: #e3f2fd; color: #0d47a1; }
+.category-upstream { background-color: #f3e5f5; color: #7b1fa2; }
+.status-success { background-color: #e8f5e9; color: #2e7d32; }
+.status-error { background-color: #ffebee; color: #c62828; }

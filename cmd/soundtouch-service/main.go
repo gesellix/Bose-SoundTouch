@@ -173,7 +173,7 @@ func main() {
 				persisted.LogBodies = config.logBody
 				persisted.RecordInteractions = config.record
 				persisted.DiscoveryInterval = config.discoveryInterval.String()
-				persisted.DiscoveryDisabled = false
+				persisted.DiscoveryEnabled = true
 				persisted.Shortcuts = map[string]int{
 					"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
 					"/sw.js": http.StatusNotFound,
@@ -194,7 +194,7 @@ func main() {
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)
-			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryDisabled)
+			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
 			server.SetShortcuts(persisted.Shortcuts)
 
 			for path, status := range persisted.Shortcuts {
@@ -443,8 +443,8 @@ func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Re
 func startDeviceDiscovery(server *handlers.Server) {
 	go func() {
 		for {
-			currentInterval, disabled := server.GetDiscoverySettings()
-			if !disabled {
+			currentInterval, enabled := server.GetDiscoverySettings()
+			if enabled {
 				server.DiscoverDevices(context.Background())
 			}
 
@@ -525,6 +525,9 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Get("/proxy-settings", server.HandleGetProxySettings)
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)
 		r.Get("/version", server.HandleGetVersionInfo)
+		r.Get("/interaction-stats", server.HandleGetInteractionStats)
+		r.Get("/interactions", server.HandleListInteractions)
+		r.Get("/interaction-content", server.HandleGetInteractionContent)
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 	})
 

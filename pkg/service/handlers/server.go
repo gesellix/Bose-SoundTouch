@@ -26,7 +26,7 @@ type Server struct {
 	proxyLogBody      bool
 	recordEnabled     bool
 	discoveryInterval time.Duration
-	discoveryDisabled bool
+	discoveryEnabled  bool
 	shortcuts         map[string]int
 	recorder          *proxy.Recorder
 	Version           string
@@ -59,12 +59,12 @@ func (s *Server) SetVersionInfo(version, commit, date string) {
 }
 
 // SetDiscoverySettings sets the discovery settings for the server.
-func (s *Server) SetDiscoverySettings(interval time.Duration, disabled bool) {
+func (s *Server) SetDiscoverySettings(interval time.Duration, enabled bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.discoveryInterval = interval
-	s.discoveryDisabled = disabled
+	s.discoveryEnabled = enabled
 }
 
 // SetShortcuts sets the request shortcuts for the server.
@@ -88,7 +88,7 @@ func (s *Server) GetDiscoverySettings() (time.Duration, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.discoveryInterval, s.discoveryDisabled
+	return s.discoveryInterval, s.discoveryEnabled
 }
 
 // SetHTTPServerURL sets the external HTTPS URL of the service.

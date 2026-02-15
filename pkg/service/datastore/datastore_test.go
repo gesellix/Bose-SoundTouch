@@ -385,7 +385,7 @@ func TestSettingsPersistence(t *testing.T) {
 		ProxyURL:          "http://myproxy:8001",
 		LogBodies:         true,
 		DiscoveryInterval: "10m",
-		DiscoveryDisabled: true,
+		DiscoveryEnabled:  true,
 	}
 
 	err = ds.SaveSettings(settings)
@@ -407,7 +407,7 @@ func TestSettingsPersistence(t *testing.T) {
 	if loaded.DiscoveryInterval != settings.DiscoveryInterval {
 		t.Errorf("Expected DiscoveryInterval %s, got %s", settings.DiscoveryInterval, loaded.DiscoveryInterval)
 	}
-	if loaded.DiscoveryDisabled != settings.DiscoveryDisabled {
-		t.Errorf("Expected DiscoveryDisabled %v, got %v", settings.DiscoveryDisabled, loaded.DiscoveryDisabled)
+	if loaded.DiscoveryEnabled != settings.DiscoveryEnabled {
+		t.Errorf("Expected DiscoveryEnabled %v, got %v", settings.DiscoveryEnabled, loaded.DiscoveryEnabled)
 	}
 }

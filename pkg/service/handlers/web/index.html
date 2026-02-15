@@ -16,6 +16,7 @@
             <button class="tab-btn" onclick="openTab(event, 'tab-devices')">2. Devices</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-sync')">3. Data Sync</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-migration')">4. Migration</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-interactions')">5. Interactions</button>
         </div>
 
         <!-- Tab 0: Overview -->
@@ -92,17 +93,22 @@
             <div style="margin-bottom: 20px;">
                 <label for="discovery-interval">Discovery Interval:</label>
                 <input type="text" id="discovery-interval" placeholder="5m" style="width: 100px;">
-                <label style="margin-left: 15px;"><input type="checkbox" id="discovery-disabled"> Disable Automated Discovery</label>
+                <label style="margin-left: 15px;"><input type="checkbox" id="discovery-enabled"> Enable Automated Discovery</label>
             </div>
             <div style="margin-bottom: 20px;">
                 <button onclick="updateSettings()">Save Settings</button>
                 <span id="settings-status" style="margin-left: 10px; font-size: 0.9em;"></span>
             </div>
             <div style="margin-bottom: 20px;">
-                Proxy Logging:
-                <label><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
-                <label style="margin-left: 15px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
-                <label style="margin-left: 15px;"><input type="checkbox" id="proxy-record" onchange="updateProxySettings()"> Record Interactions</label>
+                <strong>Proxy Logging:</strong>
+                <div style="margin-top: 5px;">
+                    <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
+                    <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
+                    <label style="display: block; margin-bottom: 5px;">
+                        <input type="checkbox" id="proxy-record" onchange="updateProxySettings()"> Record Interactions
+                        <span style="font-size: 0.85em; color: #666; margin-left: 5px;">(View in <strong>5. Interactions</strong> tab)</span>
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -270,6 +276,83 @@
                     <button id="remove-remote-btn" style="background-color: #f44336; color: white; border: none; padding: 10px 20px;">Remove Persistent Remote Services</button>
                     <button onclick="document.getElementById('migration-summary').style.display='none'" style="padding: 10px 20px;">Cancel</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Tab 5: Interactions -->
+        <div id="tab-interactions" class="tab-content">
+            <h2>Recorded Interactions</h2>
+            <p>Analysis of traffic handled by this service (self) and proxied to Bose (upstream).</p>
+
+            <div id="interaction-stats-container" class="summary-box">
+                <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
+                    <p style="margin: 0;">Total Requests: <strong id="total-requests">0</strong></p>
+                    <button onclick="fetchInteractionStats()">Refresh Stats</button>
+                </div>
+                <div style="display: flex; gap: 20px;">
+                    <div style="flex: 1; border-right: 1px solid #eee; padding-right: 20px;">
+                        <h3>By Service</h3>
+                        <ul id="stats-by-service" class="stats-list"></ul>
+                    </div>
+                    <div style="flex: 2;">
+                        <h3>Sessions</h3>
+                        <div id="stats-by-session-container" style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 4px;">
+                            <ul id="stats-by-session" class="stats-list"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="browse-recordings" class="summary-box" style="margin-top: 20px;">
+                <h3>Browse Recordings</h3>
+                <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center; background: #f9f9f9; padding: 10px; border-radius: 4px;">
+                    <div>
+                        <label for="filter-session">Session:</label>
+                        <select id="filter-session" onchange="fetchInteractions()">
+                            <option value="">All Sessions</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="filter-category">Category:</label>
+                        <select id="filter-category" onchange="fetchInteractions()">
+                            <option value="">All Categories</option>
+                            <option value="self">Self (Emulated)</option>
+                            <option value="upstream">Upstream (Bose)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="filter-since">Since (YYYY-MM-DD HH:mm:ss):</label>
+                        <input type="text" id="filter-since" placeholder="e.g. 2026-02-15 15:00:00" size="25" onchange="fetchInteractions()">
+                    </div>
+                    <button onclick="fetchInteractions()">Apply Filters</button>
+                </div>
+
+                <div id="interactions-list-container" style="max-height: 400px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
+                                <th style="padding: 8px;">#</th>
+                                <th style="padding: 8px;">Time</th>
+                                <th style="padding: 8px;">Method</th>
+                                <th style="padding: 8px;">Path</th>
+                                <th style="padding: 8px;">Status</th>
+                                <th style="padding: 8px;">Category</th>
+                                <th style="padding: 8px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="interactions-list">
+                            <tr><td colspan="7" style="padding: 20px; text-align: center; color: #666;">No interactions found.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="interaction-viewer" class="summary-box" style="margin-top: 20px; display: none; background: #2b2b2b; color: #a9b7c6;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; color: #fff;">Recording Viewer: <span id="viewer-filename" style="font-weight: normal; font-size: 0.8em;"></span></h3>
+                    <button onclick="document.getElementById('interaction-viewer').style.display='none'" style="background: #444; color: #fff; border: 1px solid #666;">Close</button>
+                </div>
+                <pre id="interaction-content" style="white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; margin: 0; padding: 10px; overflow-x: auto; max-height: 600px;"></pre>
             </div>
         </div>
     </div>

@@ -144,7 +144,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
 	serverURL, proxyURL, httpsServerURL := s.serverURL, s.proxyURL, s.httpsServerURL
 	discoveryInterval := s.discoveryInterval.String()
-	discoveryDisabled := s.discoveryDisabled
+	discoveryEnabled := s.discoveryEnabled
 	s.mu.RUnlock()
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -152,7 +152,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"proxy_url":          proxyURL,
 		"https_server_url":   httpsServerURL,
 		"discovery_interval": discoveryInterval,
-		"discovery_disabled": discoveryDisabled,
+		"discovery_enabled":  discoveryEnabled,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -165,7 +165,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		ServerURL         string `json:"server_url"`
 		ProxyURL          string `json:"proxy_url"`
 		DiscoveryInterval string `json:"discovery_interval"`
-		DiscoveryDisabled bool   `json:"discovery_disabled"`
+		DiscoveryEnabled  bool   `json:"discovery_enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -186,7 +186,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		s.discoveryInterval = interval
 	}
 
-	s.discoveryDisabled = settings.DiscoveryDisabled
+	s.discoveryEnabled = settings.DiscoveryEnabled
 
 	if s.sm != nil {
 		s.sm.ServerURL = settings.ServerURL
@@ -208,7 +208,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		LogBodies:          currentLogBody,
 		RecordInteractions: currentRecord,
 		DiscoveryInterval:  s.discoveryInterval.String(),
-		DiscoveryDisabled:  s.discoveryDisabled,
+		DiscoveryEnabled:   s.discoveryEnabled,
 	})
 	s.mu.Unlock()
 
@@ -560,7 +560,7 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 	// Access fields directly since we already hold the lock
 	serverURL, proxyURL, httpsServerURL := s.serverURL, s.proxyURL, s.httpsServerURL
 	discoveryInterval := s.discoveryInterval.String()
-	discoveryDisabled := s.discoveryDisabled
+	discoveryEnabled := s.discoveryEnabled
 
 	log.Printf("Saving updated proxy settings to %s/settings.json", s.ds.DataDir)
 	err := s.ds.SaveSettings(datastore.Settings{
@@ -571,7 +571,7 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 		LogBodies:          s.proxyLogBody,
 		RecordInteractions: s.recordEnabled,
 		DiscoveryInterval:  discoveryInterval,
-		DiscoveryDisabled:  discoveryDisabled,
+		DiscoveryEnabled:   discoveryEnabled,
 	})
 	s.mu.Unlock()
 
@@ -739,4 +739,73 @@ func (s *Server) HandleGetVersionInfo(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+// HandleGetInteractionStats returns statistics about recorded interactions.
+func (s *Server) HandleGetInteractionStats(w http.ResponseWriter, _ *http.Request) {
+	if s.recorder == nil {
+		http.Error(w, "Recorder not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	stats, err := s.recorder.GetInteractionStats()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleListInteractions returns a list of recorded interactions.
+func (s *Server) HandleListInteractions(w http.ResponseWriter, r *http.Request) {
+	if s.recorder == nil {
+		http.Error(w, "Recorder not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	session := r.URL.Query().Get("session")
+	category := r.URL.Query().Get("category")
+	since := r.URL.Query().Get("since")
+
+	interactions, err := s.recorder.ListInteractions(session, category, since)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(interactions); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleGetInteractionContent returns the raw content of a recorded interaction.
+func (s *Server) HandleGetInteractionContent(w http.ResponseWriter, r *http.Request) {
+	if s.recorder == nil {
+		http.Error(w, "Recorder not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	file := r.URL.Query().Get("file")
+	if file == "" {
+		http.Error(w, "File parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	content, err := s.recorder.GetInteractionContent(file)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write(content)
 }
