@@ -59,13 +59,26 @@ func (pp PathPatterns) Sanitize(segment string) (string, string) {
 
 // DefaultPatterns returns the default set of path patterns.
 func DefaultPatterns() PathPatterns {
-	p := PathPattern{
-		Name:        "IPv4",
-		Regexp:      `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`,
-		Replacement: "{ip}",
+	return PathPatterns{
+		{
+			Name:        "IPv4",
+			Regexp:      `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`,
+			Replacement: "{ip}",
+		},
+		{
+			Name:        "UUID",
+			Regexp:      `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`,
+			Replacement: "{uuid}",
+		},
+		{
+			Name:        "AccountID",
+			Regexp:      `^\d{5,10}$`,
+			Replacement: "{accountId}",
+		},
+		{
+			Name:        "DeviceID",
+			Regexp:      `^[0-9a-fA-F]{12}$`,
+			Replacement: "{device_id}",
+		},
 	}
-	re, _ := regexp.Compile(p.Regexp)
-	p.compiled = re
-
-	return PathPatterns{p}
 }

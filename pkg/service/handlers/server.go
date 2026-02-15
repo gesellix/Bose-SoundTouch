@@ -186,8 +186,33 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 		deviceID = d.Host
 	}
 
+	accountID := ""
+
+	if liveInfo, err := s.sm.GetLiveDeviceInfo(d.Host); err == nil {
+		if liveInfo.MargeAccountUUID != "" {
+			accountID = liveInfo.MargeAccountUUID
+		}
+
+		if liveInfo.SerialNumber != "" {
+			d.SerialNo = liveInfo.SerialNumber
+			deviceID = d.SerialNo
+		}
+	}
+
+	if accountID == "" {
+		// Try to find account ID from existing device entries if live info failed
+		if existing := s.findExistingDeviceInfo(d); existing != nil {
+			accountID = existing.AccountID
+		}
+	}
+
+	if accountID == "" {
+		accountID = "default"
+	}
+
 	info := &models.ServiceDeviceInfo{
-		DeviceID:           d.SerialNo,
+		DeviceID:           deviceID,
+		AccountID:          accountID,
 		Name:               d.Name,
 		IPAddress:          d.Host,
 		DeviceSerialNumber: d.SerialNo,
@@ -199,10 +224,10 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	// If we had an IP-based entry and now have a Serial, clean up the IP-based entry
 	if d.SerialNo != "" && existingID != "" && existingID != d.SerialNo {
 		log.Printf("Device %s previously known as %s, migrating to serial-based ID %s", d.Name, existingID, d.SerialNo)
-		_ = s.ds.RemoveDevice("default", existingID)
+		_ = s.ds.RemoveDevice(accountID, existingID)
 	}
 
-	if err := s.ds.SaveDeviceInfo("default", deviceID, info); err != nil {
+	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
 		log.Printf("Failed to save device info: %v", err)
 	}
 }
@@ -233,15 +258,24 @@ func (s *Server) mergeOverlappingDevices() {
 		var master *models.ServiceDeviceInfo
 
 		for i := range devices {
-			if devices[i].DeviceSerialNumber != "" || devices[i].DeviceID != "" {
+			if devices[i].DeviceSerialNumber != "" {
 				master = &devices[i]
 				break
 			}
 		}
 
 		if master == nil {
-			// None have serials, just keep the first one (already handled by ListAllDevices unique check usually,
-			// but ListAllDevices might see different AccountIDs or directories)
+			// Fallback: look for one with DeviceID that isn't the IP
+			for i := range devices {
+				if devices[i].DeviceID != "" && devices[i].DeviceID != devices[i].IPAddress {
+					master = &devices[i]
+					break
+				}
+			}
+		}
+
+		if master == nil {
+			// None have serials, just keep the first one
 			continue
 		}
 
@@ -267,26 +301,27 @@ func (s *Server) mergeOverlappingDevices() {
 }
 
 func (s *Server) findExistingDeviceID(d models.DiscoveredDevice) string {
+	info := s.findExistingDeviceInfo(d)
+	if info != nil {
+		return info.DeviceID
+	}
+
+	return ""
+}
+
+func (s *Server) findExistingDeviceInfo(d models.DiscoveredDevice) *models.ServiceDeviceInfo {
 	allDevices, _ := s.ds.ListAllDevices()
 	for i := range allDevices {
 		known := allDevices[i]
 		// Match by Serial
 		if d.SerialNo != "" && (known.DeviceID == d.SerialNo || known.DeviceSerialNumber == d.SerialNo) {
-			if known.DeviceID != "" {
-				return known.DeviceID
-			}
-
-			return known.IPAddress
+			return &known
 		}
 		// Match by IP
 		if d.Host != "" && known.IPAddress == d.Host {
-			if known.DeviceID != "" {
-				return known.DeviceID
-			}
-
-			return known.IPAddress
+			return &known
 		}
 	}
 
-	return ""
+	return nil
 }

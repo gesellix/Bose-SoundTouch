@@ -22,8 +22,9 @@ func TestDataStore(t *testing.T) {
 
 	// Test Save/Get DeviceInfo
 	info := &models.ServiceDeviceInfo{
-		DeviceID: device,
-		Name:     "Test Speaker",
+		DeviceID:  device,
+		Name:      "Test Speaker",
+		AccountID: account,
 	}
 
 	err = ds.SaveDeviceInfo(account, device, info)
@@ -87,7 +88,7 @@ func TestDataStore(t *testing.T) {
 	}
 
 	// Test path helpers
-	expectedAccountDir := filepath.Join(tempDir, account)
+	expectedAccountDir := filepath.Join(tempDir, "accounts", account)
 	if ds.AccountDir(account) != expectedAccountDir {
 		t.Errorf("Expected account dir %s, got %s", expectedAccountDir, ds.AccountDir(account))
 	}
@@ -151,6 +152,7 @@ func TestListAllDevices(t *testing.T) {
 		DeviceSerialNumber: deviceID,
 		ProductCode:        "SoundTouch 10",
 		FirmwareVersion:    "1.2.3",
+		AccountID:          account,
 	}
 
 	err = ds.SaveDeviceInfo(account, deviceID, info)
@@ -185,8 +187,9 @@ func TestListAllDevices_EmptyDeviceID(t *testing.T) {
 	deviceID := ""
 
 	info := &models.ServiceDeviceInfo{
-		DeviceID: deviceID,
-		Name:     "Empty ID Speaker",
+		DeviceID:  deviceID,
+		Name:      "Empty ID Speaker",
+		AccountID: account,
 	}
 
 	// Use IP as fallback for device ID if it is empty
@@ -230,11 +233,13 @@ func TestListAllDevices_MultipleEmptyIDs(t *testing.T) {
 		DeviceID:  "",
 		Name:      "Speaker 1",
 		IPAddress: "192.168.1.1",
+		AccountID: account,
 	}
 	info2 := &models.ServiceDeviceInfo{
 		DeviceID:  "",
 		Name:      "Speaker 2",
 		IPAddress: "192.168.1.2",
+		AccountID: account,
 	}
 
 	// We use the same logic as in main.go: use IP as fallback for directory name

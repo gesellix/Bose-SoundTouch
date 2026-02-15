@@ -92,7 +92,7 @@ async function fetchDevices() {
         if (devices.length === 0) {
             container.innerHTML = 'No devices known yet.';
         } else {
-            let html = '<table><tr><th>Name</th><th>IP Address</th><th>Model</th><th>Serial Number</th><th>Firmware</th><th>Method</th><th>Action</th></tr>';
+            let html = '<table><tr><th>Name & Model</th><th>IP Address</th><th>Device & Account ID</th><th>Firmware & Serial</th><th>Method</th><th>Action</th></tr>';
 
             // Clear and repopulate selectors
             const currentSyncVal = syncSelector.value;
@@ -104,11 +104,10 @@ async function fetchDevices() {
                 const methodLabel = d.discovery_method === 'manual' ? '👤 Manual' : '🔍 Auto';
                 html += `
                     <tr id="device-row-${d.ip_address.replace(/\./g, '-')}">
-                        <td class="col-name">${d.name}</td>
+                        <td class="col-name-model"><div class="col-name">${d.name}</div><div class="col-model" style="font-size: 0.8em; color: #666;">${d.product_code}</div></td>
                         <td class="col-ip">${d.ip_address}</td>
-                        <td class="col-model">${d.product_code}</td>
-                        <td class="col-serial">${d.device_serial_number}</td>
-                        <td class="col-firmware">${d.firmware_version || '0.0.0'}</td>
+                        <td class="col-ids"><div class="col-deviceid">${d.device_id}</div><div class="col-accountid" style="font-size: 0.8em; color: #666;">${d.account_id || 'default'}</div></td>
+                        <td class="col-fw-serial"><div class="col-firmware">${d.firmware_version || '0.0.0'}</div><div class="col-serial" style="font-size: 0.8em; color: #666;">${d.device_serial_number}</div></td>
                         <td class="col-method">${methodLabel}</td>
                         <td>
                             <button onclick="prepareSync('${d.ip_address}')">Sync Data</button>
@@ -336,6 +335,12 @@ async function updateDeviceInfo(ip) {
 
             const firmwareEl = row.querySelector('.col-firmware');
             if (firmwareEl && info.softwareVersion) firmwareEl.innerText = info.softwareVersion;
+
+            const deviceIdEl = row.querySelector('.col-deviceid');
+            if (deviceIdEl && info.deviceID) deviceIdEl.innerText = info.deviceID;
+
+            const accountIdEl = row.querySelector('.col-accountid');
+            if (accountIdEl && info.margeAccountUUID) accountIdEl.innerText = info.margeAccountUUID;
         }
     } catch (error) {
         console.warn('Failed to fetch live info for ' + ip, error);
@@ -396,6 +401,12 @@ async function showSummary(ip) {
 
             const firmwareEl = row.querySelector('.col-firmware');
             if (firmwareEl && summary.firmware_version) firmwareEl.innerText = summary.firmware_version;
+
+            const deviceIdEl = row.querySelector('.col-deviceid');
+            if (deviceIdEl && summary.device_id) deviceIdEl.innerText = summary.device_id;
+
+            const accountIdEl = row.querySelector('.col-accountid');
+            if (accountIdEl && summary.account_id) accountIdEl.innerText = summary.account_id;
         }
 
         document.getElementById('ssh-status').innerText = summary.ssh_success ? '✅ Success' : '❌ Failed';

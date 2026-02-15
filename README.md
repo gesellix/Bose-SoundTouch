@@ -61,7 +61,7 @@ soundtouch-cli --host 192.168.1.100 volume set --level 50
 soundtouch-cli --host 192.168.1.100 preset list
 ```
 
-For full CLI documentation, see the [CLI Reference](https://gesellix.github.io/Bose-SoundTouch/guides/CLI-REFERENCE.md).
+For full CLI documentation, see the [CLI Reference](https://gesellix.github.io/Bose-SoundTouch/guides/CLI-REFERENCE.html).
 
 ### SoundTouch Service (Cloud Shutdown Protection)
 
@@ -82,11 +82,11 @@ soundtouch-service
 ```
 Open `http://localhost:8000` in your browser to manage your devices. Documentation is also available directly through the web interface.
 
-For a comprehensive guide on transitioning your system, see the [Bose Cloud Shutdown: Survival Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SURVIVAL-GUIDE.md).
+For a comprehensive guide on transitioning your system, see the [Bose Cloud Shutdown: Survival Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SURVIVAL-GUIDE.html).
 
-Detailed service configuration and Docker instructions can be found in [SoundTouch Service Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SOUNDTOUCH-SERVICE.md).
+Detailed service configuration and Docker instructions can be found in [SoundTouch Service Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SOUNDTOUCH-SERVICE.html).
 
-For professional migration tips and safety measures, see the [Migration & Safety Guide](https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-SAFETY.md).
+For professional migration tips and safety measures, see the [Migration & Safety Guide](https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-SAFETY.html).
 
 ### Library Usage
 
@@ -379,19 +379,19 @@ This library supports all Bose SoundTouch-compatible devices, including:
 ## Documentation
 
 - 📖 [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
-- 📚 [API Reference](https://gesellix.github.io/Bose-SoundTouch/reference/API-ENDPOINTS.md) - Complete endpoint documentation
-- 🔧 [CLI Reference](https://gesellix.github.io/Bose-SoundTouch/guides/CLI-REFERENCE.md) - Command-line tool guide
-- 🌐 [SoundTouch Service Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SOUNDTOUCH-SERVICE.md) - Local service setup and migration
-- 🎯 [Getting Started](https://gesellix.github.io/Bose-SoundTouch/guides/GETTING-STARTED.md) - Detailed setup and usage
+ - 📚 [API Reference](https://gesellix.github.io/Bose-SoundTouch/reference/API-ENDPOINTS.html) - Complete endpoint documentation
+- 🔧 [CLI Reference](https://gesellix.github.io/Bose-SoundTouch/guides/CLI-REFERENCE.html) - Command-line tool guide
+- 🌐 [SoundTouch Service Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SOUNDTOUCH-SERVICE.html) - Local service setup and migration
+- 🎯 [Getting Started](https://gesellix.github.io/Bose-SoundTouch/guides/GETTING-STARTED.html) - Detailed setup and usage
 - 📻 [Preset Quick Start](https://gesellix.github.io/Bose-SoundTouch/PRESET-QUICKSTART.md) - Favorite content management
 - 🧭 [Navigation Guide](https://gesellix.github.io/Bose-SoundTouch/NAVIGATION-GUIDE.md) - Content browsing and station management
 - 📋 [Navigation API Reference](https://gesellix.github.io/Bose-SoundTouch/API-NAVIGATION-REFERENCE.md) - Navigation API documentation
-- ⚙️ [Advanced Features](https://gesellix.github.io/Bose-SoundTouch/reference/SYSTEM-ENDPOINTS.md) - Advanced functionality
-- 🏠 [Multiroom Setup](https://gesellix.github.io/Bose-SoundTouch/reference/ZONE-MANAGEMENT.md) - Zone configuration guide
-- ⚡ [WebSocket Events](https://gesellix.github.io/Bose-SoundTouch/reference/WEBSOCKET-EVENTS.md) - Real-time event handling
-- 🔔 [Speaker Notifications](https://gesellix.github.io/Bose-SoundTouch/reference/SPEAKER-ENDPOINT.md) - TTS and audio notifications guide
-- 🔍 [Device Discovery](https://gesellix.github.io/Bose-SoundTouch/reference/DISCOVERY.md) - Discovery configuration
-- 🛠️ [Troubleshooting](https://gesellix.github.io/Bose-SoundTouch/guides/TROUBLESHOOTING.md) - Common issues and solutions
+- ⚙️ [Advanced Features](https://gesellix.github.io/Bose-SoundTouch/reference/SYSTEM-ENDPOINTS.html) - Advanced functionality
+- 🏠 [Multiroom Setup](https://gesellix.github.io/Bose-SoundTouch/reference/ZONE-MANAGEMENT.html) - Zone configuration guide
+- ⚡ [WebSocket Events](https://gesellix.github.io/Bose-SoundTouch/reference/WEBSOCKET-EVENTS.html) - Real-time event handling
+- 🔔 [Speaker Notifications](https://gesellix.github.io/Bose-SoundTouch/reference/SPEAKER-ENDPOINT.html) - TTS and audio notifications guide
+- 🔍 [Device Discovery](https://gesellix.github.io/Bose-SoundTouch/reference/DISCOVERY.html) - Discovery configuration
+- 🛠️ [Troubleshooting](https://gesellix.github.io/Bose-SoundTouch/guides/TROUBLESHOOTING.html) - Common issues and solutions
 
 ## Development
 
@@ -528,11 +528,11 @@ If you discover new endpoints, features, or improvements through this library, p
 - ❓ **Questions**: Check [existing discussions](https://github.com/gesellix/bose-soundtouch/discussions)
 - 📖 **Documentation**: [Online Documentation](https://gesellix.github.io/Bose-SoundTouch/)
 - 🔍 **New Discoveries**: [Undocumented Community Features](https://gesellix.github.io/Bose-SoundTouch/UNDOCUMENTED-COMMUNITY-FEATURES.md)
-- 🌐 **Upstream Analysis**: [Upstream URLs & Domains](https://gesellix.github.io/Bose-SoundTouch/analysis/UPSTREAM-URLS.md)
-- 🔧 **Redirection Guide**: [Device Redirect Methods](https://gesellix.github.io/Bose-SoundTouch/analysis/DEVICE-REDIRECT-METHODS.md)
-- 🐣 **Initial Setup**: [Device Initial Setup Variants](https://gesellix.github.io/Bose-SoundTouch/guides/DEVICE-INITIAL-SETUP.md)
+- 🌐 **Upstream Analysis**: [Upstream URLs & Domains](https://gesellix.github.io/Bose-SoundTouch/analysis/UPSTREAM-URLS.html)
+- 🔧 **Redirection Guide**: [Device Redirect Methods](https://gesellix.github.io/Bose-SoundTouch/analysis/DEVICE-REDIRECT-METHODS.html)
+- 🐣 **Initial Setup**: [Device Initial Setup Variants](https://gesellix.github.io/Bose-SoundTouch/guides/DEVICE-INITIAL-SETUP.html)
 - 📜 **Logging & Debugging**: [Device Logging Guide](https://gesellix.github.io/Bose-SoundTouch/DEVICE-LOGGING.md)
-- 🔒 **HTTPS & CA Setup**: [HTTPS & Custom CA Guide](https://gesellix.github.io/Bose-SoundTouch/guides/HTTPS-SETUP.md)
+- 🔒 **HTTPS & CA Setup**: [HTTPS & Custom CA Guide](https://gesellix.github.io/Bose-SoundTouch/guides/HTTPS-SETUP.html)
 
 ---
 

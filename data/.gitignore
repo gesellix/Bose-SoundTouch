@@ -1,4 +1,6 @@
+accounts/
 certs/
 default/
 interactions/
+patterns.json
 settings.json

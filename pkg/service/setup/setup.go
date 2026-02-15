@@ -59,6 +59,8 @@ type MigrationSummary struct {
 	DeviceName               string      `json:"device_name,omitempty"`
 	DeviceModel              string      `json:"device_model,omitempty"`
 	DeviceSerial             string      `json:"device_serial,omitempty"`
+	DeviceID                 string      `json:"device_id,omitempty"`
+	AccountID                string      `json:"account_id,omitempty"`
 	FirmwareVersion          string      `json:"firmware_version,omitempty"`
 	CACertTrusted            bool        `json:"ca_cert_trusted"`
 	ServerHTTPSURL           string      `json:"server_https_url,omitempty"`
@@ -92,14 +94,15 @@ func NewManager(serverURL string, ds *datastore.DataStore, cm *certmanager.Certi
 
 // DeviceInfoXML represents the XML structure from :8090/info
 type DeviceInfoXML struct {
-	XMLName      xml.Name `xml:"info" json:"-"`
-	DeviceID     string   `xml:"deviceID,attr" json:"deviceID"`
-	Name         string   `xml:"name" json:"name"`
-	Type         string   `xml:"type" json:"type"`
-	MaccAddress  string   `xml:"maccAddress" json:"maccAddress"`
-	SoftwareVer  string   `xml:"-" json:"softwareVersion"`
-	SerialNumber string   `xml:"-" json:"serialNumber"`
-	Components   []struct {
+	XMLName          xml.Name `xml:"info" json:"-"`
+	DeviceID         string   `xml:"deviceID,attr" json:"deviceID"`
+	Name             string   `xml:"name" json:"name"`
+	Type             string   `xml:"type" json:"type"`
+	MaccAddress      string   `xml:"maccAddress" json:"maccAddress"`
+	SoftwareVer      string   `xml:"-" json:"softwareVersion"`
+	SerialNumber     string   `xml:"-" json:"serialNumber"`
+	MargeAccountUUID string   `xml:"margeAccountUUID" json:"margeAccountUUID"`
+	Components       []struct {
 		Category        string `xml:"componentCategory"`
 		SoftwareVersion string `xml:"softwareVersion"`
 		SerialNumber    string `xml:"serialNumber"`
@@ -260,6 +263,8 @@ func (m *Manager) populateDeviceInfo(summary *MigrationSummary, deviceIP string)
 				summary.DeviceName = d.Name
 				summary.DeviceModel = d.ProductCode
 				summary.DeviceSerial = d.DeviceSerialNumber
+				summary.DeviceID = d.DeviceID
+				summary.AccountID = d.AccountID
 				summary.FirmwareVersion = d.FirmwareVersion
 
 				break
@@ -283,6 +288,14 @@ func (m *Manager) populateDeviceInfo(summary *MigrationSummary, deviceIP string)
 
 		if infoXML.SoftwareVer != "" {
 			summary.FirmwareVersion = infoXML.SoftwareVer
+		}
+
+		if infoXML.DeviceID != "" {
+			summary.DeviceID = infoXML.DeviceID
+		}
+
+		if infoXML.MargeAccountUUID != "" {
+			summary.AccountID = infoXML.MargeAccountUUID
 		}
 	}
 }
@@ -557,18 +570,39 @@ func (m *Manager) BackupConfigOffDevice(deviceIP string) error {
 
 	client := m.NewSSH(deviceIP)
 
-	// We need the serial number to find the right directory in DataStore
+	// We need the serial number and account identifier to find the right directory in DataStore
 	info, err := m.GetLiveDeviceInfo(deviceIP)
 	if err != nil {
 		return fmt.Errorf("failed to get device info: %w", err)
 	}
 
-	serial := info.SerialNumber
-	if serial == "" {
-		return fmt.Errorf("could not determine device serial number")
+	accountID := info.MargeAccountUUID
+	deviceID := info.SerialNumber
+
+	if deviceID == "" {
+		deviceID = info.DeviceID
 	}
 
-	deviceDir := m.DataStore.AccountDeviceDir("default", serial)
+	if deviceID == "" {
+		deviceID = deviceIP
+	}
+
+	if accountID == "" {
+		// Try to find account ID from existing device entries if info didn't have it
+		devices, _ := m.DataStore.ListAllDevices()
+		for i := range devices {
+			if devices[i].DeviceSerialNumber == info.SerialNumber || (info.DeviceID != "" && devices[i].DeviceID == info.DeviceID) {
+				accountID = devices[i].AccountID
+				break
+			}
+		}
+	}
+
+	if accountID == "" {
+		accountID = "default"
+	}
+
+	deviceDir := m.DataStore.AccountDeviceDir(accountID, deviceID)
 	if err := os.MkdirAll(deviceDir, 0755); err != nil {
 		return fmt.Errorf("failed to create device directory: %w", err)
 	}
@@ -1207,11 +1241,30 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 		return fmt.Errorf("failed to get device info: %w", err)
 	}
 
-	accountID := "default"
+	accountID := ""
 
 	deviceID := info.SerialNumber
 	if deviceID == "" {
 		deviceID = deviceIP
+	}
+
+	if info.MargeAccountUUID != "" {
+		accountID = info.MargeAccountUUID
+	}
+
+	if accountID == "" {
+		// Try to find account ID from existing device entries if info didn't have it
+		devices, _ := m.DataStore.ListAllDevices()
+		for i := range devices {
+			if devices[i].DeviceSerialNumber == info.SerialNumber || devices[i].DeviceID == info.DeviceID {
+				accountID = devices[i].AccountID
+				break
+			}
+		}
+	}
+
+	if accountID == "" {
+		accountID = "default"
 	}
 
 	// 2. Fetch Presets from :8090

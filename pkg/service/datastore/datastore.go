@@ -42,12 +42,12 @@ func NewDataStore(dataDir string) *DataStore {
 
 // AccountDir returns the directory path for a specific account.
 func (ds *DataStore) AccountDir(account string) string {
-	return filepath.Join(ds.DataDir, account)
+	return filepath.Join(ds.DataDir, "accounts", account)
 }
 
 // AccountDevicesDir returns the devices directory path for a specific account.
 func (ds *DataStore) AccountDevicesDir(account string) string {
-	return filepath.Join(ds.DataDir, account, constants.DevicesDir)
+	return filepath.Join(ds.AccountDir(account), constants.DevicesDir)
 }
 
 // AccountDeviceDir returns the directory path for a specific device within an account.
@@ -154,13 +154,13 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 
 func (ds *DataStore) getPossibleDataDirs() []string {
 	dirs := []string{}
-	if exists(ds.DataDir) {
-		dirs = append(dirs, ds.DataDir)
+	if exists(filepath.Join(ds.DataDir, "accounts")) {
+		dirs = append(dirs, filepath.Join(ds.DataDir, "accounts"))
 	}
 
-	// Also check soundcork-go/data if it's different and exists
-	altDir := "soundcork-go/data"
-	if ds.DataDir != altDir && exists(altDir) {
+	// Also check soundcork-go/data/accounts if it's different and exists
+	altDir := "soundcork-go/data/accounts"
+	if filepath.Join(ds.DataDir, "accounts") != altDir && exists(altDir) {
 		dirs = append(dirs, altDir)
 	}
 
@@ -637,17 +637,6 @@ func (ds *DataStore) Initialize() error {
 	// Ensure base data directory exists
 	if err := os.MkdirAll(ds.DataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Ensure default account exists
-	defaultDir := ds.AccountDir("default")
-	if err := os.MkdirAll(defaultDir, 0755); err != nil {
-		return fmt.Errorf("failed to create default account directory: %w", err)
-	}
-
-	// Ensure devices subdirectory for default account
-	if err := os.MkdirAll(ds.AccountDevicesDir("default"), 0755); err != nil {
-		return fmt.Errorf("failed to create default devices directory: %w", err)
 	}
 
 	return nil

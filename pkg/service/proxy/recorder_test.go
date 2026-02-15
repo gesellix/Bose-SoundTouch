@@ -19,6 +19,11 @@ func TestRecorder_Record_Structure(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	r := NewRecorder(tmpDir)
+	// Compile default patterns
+	for i := range r.Patterns {
+		re, _ := regexp.Compile(r.Patterns[i].Regexp)
+		r.Patterns[i].compiled = re
+	}
 
 	tests := []struct {
 		name     string
@@ -100,11 +105,11 @@ func TestRecorder_Record_Sanitization(t *testing.T) {
 	r := NewRecorder(tmpDir)
 	// Add a custom pattern
 	r.Patterns = append(r.Patterns, PathPattern{
-		Name:        "DeviceID",
+		Name:        "CustomDeviceID",
 		Regexp:      `^A81B\w{8}$`,
 		Replacement: "{deviceId}",
 	})
-	// Re-compile
+	// Compile all patterns
 	for i := range r.Patterns {
 		re, _ := regexp.Compile(r.Patterns[i].Regexp)
 		r.Patterns[i].compiled = re
@@ -124,7 +129,7 @@ func TestRecorder_Record_Sanitization(t *testing.T) {
 		t.Fatalf("Record failed: %v", err)
 	}
 
-	expectedDir := filepath.Join(tmpDir, "interactions", r.SessionID, "self", "info", "{ip}", "{deviceId}")
+	expectedDir := filepath.Join(tmpDir, "interactions", r.SessionID, "self", "info", "{ip}", "{device_id}")
 	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
 		t.Errorf("Expected directory %s does not exist", expectedDir)
 	}
@@ -137,13 +142,13 @@ func TestRecorder_Record_Sanitization(t *testing.T) {
 	content, _ := os.ReadFile(filepath.Join(expectedDir, files[0].Name()))
 	contentStr := string(content)
 
-	if !strings.Contains(contentStr, "### GET /info/{{ip}}/{{deviceId}}") {
+	if !strings.Contains(contentStr, "### GET /info/{{ip}}/{{device_id}}") {
 		t.Errorf("Expected sanitized comment in .http file, got:\n%s", contentStr)
 	}
-	if !strings.Contains(contentStr, "GET /info/{{ip}}/{{deviceId}}") {
+	if !strings.Contains(contentStr, "GET /info/{{ip}}/{{device_id}}") {
 		t.Errorf("Expected sanitized URL in .http file, got:\n%s", contentStr)
 	}
-	if !strings.Contains(contentStr, "X-Device: {{deviceId}}") {
+	if !strings.Contains(contentStr, "X-Device: {{device_id}}") {
 		t.Errorf("Expected sanitized Header in .http file, got:\n%s", contentStr)
 	}
 }
@@ -156,22 +161,19 @@ func TestRecorder_Record_Sanitization_Account(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	r := NewRecorder(tmpDir)
-	// Add AccountID pattern
-	r.Patterns = append(r.Patterns, PathPattern{
-		Name:        "AccountID",
-		Regexp:      `^\d{1,10}$`,
-		Replacement: "{accountId}",
-	})
-	// Re-compile
+	// Use default patterns which now include AccountID
+	r.Patterns = DefaultPatterns()
+	// Compile all patterns
 	for i := range r.Patterns {
 		re, _ := regexp.Compile(r.Patterns[i].Regexp)
 		r.Patterns[i].compiled = re
 	}
 
+	accountID := "1234567"
 	req := &http.Request{
 		Method: "GET",
 		URL: &url.URL{
-			Path: "/marge/accounts/12345/full",
+			Path: "/marge/accounts/" + accountID + "/full",
 		},
 		Header: make(http.Header),
 	}
@@ -200,7 +202,7 @@ func TestRecorder_Record_Sanitization_Account(t *testing.T) {
 	if !strings.Contains(contentStr, "GET /marge/accounts/{{accountId}}/full") {
 		t.Errorf("Expected sanitized URL in .http file, got:\n%s", contentStr)
 	}
-	if !strings.Contains(contentStr, "// accountId: 12345") {
+	if !strings.Contains(contentStr, "// accountId: "+accountID) {
 		t.Errorf("Expected accountId comment in .http file, got:\n%s", contentStr)
 	}
 }
@@ -262,6 +264,11 @@ func TestRecorder_IncreasingPrefix(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	r := NewRecorder(tmpDir)
+	// Compile default patterns
+	for i := range r.Patterns {
+		re, _ := regexp.Compile(r.Patterns[i].Regexp)
+		r.Patterns[i].compiled = re
+	}
 	req := &http.Request{
 		Method: "GET",
 		URL: &url.URL{
@@ -299,6 +306,11 @@ func TestRecorder_EnvFile(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	r := NewRecorder(tmpDir)
+	// Compile default patterns
+	for i := range r.Patterns {
+		re, _ := regexp.Compile(r.Patterns[i].Regexp)
+		r.Patterns[i].compiled = re
+	}
 	req := &http.Request{
 		Method: "GET",
 		URL: &url.URL{

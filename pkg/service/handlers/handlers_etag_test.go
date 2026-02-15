@@ -24,7 +24,7 @@ func TestMargeETags(t *testing.T) {
 
 	account := "12345"
 	deviceID := "DEV1"
-	accountDir := filepath.Join(tempDir, account)
+	accountDir := filepath.Join(tempDir, "accounts", account)
 	deviceDir := filepath.Join(accountDir, "devices", deviceID)
 	_ = os.MkdirAll(deviceDir, 0755)
 

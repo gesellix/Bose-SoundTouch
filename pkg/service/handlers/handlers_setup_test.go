@@ -262,7 +262,7 @@ func TestRemoveDevice(t *testing.T) {
 	// Setup a dummy device in the datastore
 	account := "test-account"
 	deviceID := "TEST-DEVICE-ID"
-	deviceDir := filepath.Join(tempDir, account, "devices", deviceID)
+	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", deviceID)
 	if err := os.MkdirAll(deviceDir, 0755); err != nil {
 		t.Fatalf("Failed to create device dir: %v", err)
 	}

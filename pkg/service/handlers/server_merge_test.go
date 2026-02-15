@@ -24,8 +24,11 @@ func TestMergeOverlappingDevices(t *testing.T) {
 
 	// 1. Save IP-based entry
 	infoIP := &models.ServiceDeviceInfo{
-		Name:      "Speaker IP",
-		IPAddress: ip,
+		DeviceID:    ip,
+		Name:        "Speaker IP",
+		IPAddress:   ip,
+		AccountID:   "default",
+		ProductCode: "ST10",
 	}
 	err = ds.SaveDeviceInfo("default", ip, infoIP)
 	if err != nil {
@@ -38,6 +41,8 @@ func TestMergeOverlappingDevices(t *testing.T) {
 		DeviceSerialNumber: serial,
 		Name:               "Speaker Serial",
 		IPAddress:          ip,
+		AccountID:          "default",
+		ProductCode:        "ST10",
 	}
 	err = ds.SaveDeviceInfo("default", serial, infoSerial)
 	if err != nil {
@@ -76,8 +81,11 @@ func TestFindExistingDeviceID(t *testing.T) {
 
 	// Save IP-based
 	ds.SaveDeviceInfo("default", ip, &models.ServiceDeviceInfo{
-		IPAddress: ip,
-		Name:      "IP Speaker",
+		DeviceID:    ip,
+		IPAddress:   ip,
+		Name:        "IP Speaker",
+		AccountID:   "default",
+		ProductCode: "ST10",
 	})
 
 	// Test finding by IP
@@ -94,6 +102,8 @@ func TestFindExistingDeviceID(t *testing.T) {
 		DeviceSerialNumber: serial,
 		IPAddress:          ip,
 		Name:               "Serial Speaker",
+		AccountID:          "default",
+		ProductCode:        "ST10",
 	})
 
 	// Test finding by IP should now return Serial (if Serial is known)

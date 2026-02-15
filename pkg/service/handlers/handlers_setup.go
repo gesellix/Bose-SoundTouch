@@ -101,10 +101,7 @@ func (s *Server) HandleRemoveDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For now we assume a default account if not specified,
-	// or we might need to find which account this device belongs to.
-	// Looking at DataStore.ListAllDevices, it returns models.ServiceDeviceInfo which has DeviceID.
-
+	// Find which account this device belongs to.
 	devices, err := s.ds.ListAllDevices()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

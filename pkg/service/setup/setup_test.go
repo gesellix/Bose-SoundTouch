@@ -776,11 +776,12 @@ func TestBackupConfigOffDevice(t *testing.T) {
 	m := NewManager("http://localhost:8000", ds, nil)
 
 	serial := "08DF1F0BA325"
+	accountID := "3230304"
 
 	// Mock info server
 	infoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
-		fmt.Fprintf(w, `<info deviceID="%s"><name>Test</name><components><component><componentCategory>SCM</componentCategory><serialNumber>%s</serialNumber></component></components></info>`, serial, serial)
+		fmt.Fprintf(w, `<info deviceID="%s"><name>Test</name><margeAccountUUID>%s</margeAccountUUID><components><component><componentCategory>SCM</componentCategory><serialNumber>%s</serialNumber></component></components></info>`, serial, accountID, serial)
 	}))
 	defer infoServer.Close()
 
@@ -808,7 +809,7 @@ func TestBackupConfigOffDevice(t *testing.T) {
 	}
 
 	// Verify files were created in datastore
-	deviceDir := m.DataStore.AccountDeviceDir("default", serial)
+	deviceDir := m.DataStore.AccountDeviceDir(accountID, serial)
 	configPath := filepath.Join(deviceDir, "SoundTouchSdkPrivateCfg.xml.bak")
 	hostsPath := filepath.Join(deviceDir, "hosts.bak")
 

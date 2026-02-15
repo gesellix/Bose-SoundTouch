@@ -72,7 +72,7 @@ func TestMargeAccountFull(t *testing.T) {
 
 	account := "12345"
 	deviceID := "ABCDE"
-	accountDir := filepath.Join(tempDir, account)
+	accountDir := filepath.Join(tempDir, "accounts", account)
 
 	deviceDir := filepath.Join(accountDir, "devices", deviceID)
 	err = os.MkdirAll(deviceDir, 0755)
@@ -137,7 +137,7 @@ func TestMargePresets(t *testing.T) {
 	account := "12345"
 	deviceID := "any"
 
-	accountDir := filepath.Join(tempDir, account)
+	accountDir := filepath.Join(tempDir, "accounts", account)
 	deviceDir := filepath.Join(accountDir, "devices", deviceID)
 	err = os.MkdirAll(deviceDir, 0755)
 
@@ -208,7 +208,7 @@ func TestMargeUpdatePreset(t *testing.T) {
 	account := "12345"
 	deviceID := "DEV1"
 
-	accountDir := filepath.Join(tempDir, account)
+	accountDir := filepath.Join(tempDir, "accounts", account)
 	deviceDir := filepath.Join(accountDir, "devices", deviceID)
 	err = os.MkdirAll(deviceDir, 0755)
 
@@ -277,7 +277,7 @@ func TestMargeDeviceInfo(t *testing.T) {
 	account := "12345"
 	deviceID := "DEV1"
 
-	accountDir := filepath.Join(tempDir, account)
+	accountDir := filepath.Join(tempDir, "accounts", account)
 	deviceDir := filepath.Join(accountDir, "devices", deviceID)
 	err = os.MkdirAll(deviceDir, 0755)
 
@@ -343,7 +343,7 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 
 	account := "12345"
 
-	accountDir := filepath.Join(tempDir, account)
+	accountDir := filepath.Join(tempDir, "accounts", account)
 	err = os.MkdirAll(accountDir, 0755)
 
 	if err != nil {
