@@ -81,10 +81,15 @@ func main() {
 				EnvVars: []string{"BIND_ADDR"},
 			},
 			&cli.StringFlag{
-				Name:    "target-url",
-				Usage:   "URL for Python-based service components (legacy)",
+				Name:    "soundcork-url",
+				Usage:   "URL for Soundcork-based service components (legacy)",
 				Value:   "http://localhost:8001",
-				EnvVars: []string{"PYTHON_BACKEND_URL", "TARGET_URL"},
+				EnvVars: []string{"SOUNDCORK_BACKEND_URL", "TARGET_URL"},
+			},
+			&cli.BoolFlag{
+				Name:    "enable-soundcork-proxy",
+				Usage:   "Enable proxying unknown requests to the Soundcork backend",
+				EnvVars: []string{"ENABLE_SOUNDCORK_PROXY"},
 			},
 			&cli.StringFlag{
 				Name:    "data-dir",
@@ -138,47 +143,11 @@ func main() {
 			config := loadConfig(c)
 			ds := initDataStore(config.dataDir)
 
-			// Load settings from datastore
-			persisted, err := ds.GetSettings()
+			persisted := applyPersistedSettings(ds, &config)
 
-			settingsExist := err == nil && persisted.ServerURL != ""
-			if persisted.ServerURL != "" {
-				config.serverURL = persisted.ServerURL
-			}
-
-			if persisted.ProxyURL != "" {
-				config.targetURL = persisted.ProxyURL
-			}
-
-			if persisted.HTTPServerURL != "" {
-				config.httpsServerURL = persisted.HTTPServerURL
-			}
-
-			if persisted.DiscoveryInterval != "" {
-				if d, durErr := time.ParseDuration(persisted.DiscoveryInterval); durErr == nil {
-					config.discoveryInterval = d
-				}
-			}
-
-			config.redact = persisted.RedactLogs || config.redact
-			config.logBody = persisted.LogBodies || config.logBody
-			config.record = persisted.RecordInteractions || config.record
-
-			if !settingsExist {
+			if persisted.ServerURL == "" {
 				log.Printf("Creating default settings.json in %s", config.dataDir)
-				persisted.ServerURL = config.serverURL
-				persisted.ProxyURL = config.targetURL
-				persisted.HTTPServerURL = config.httpsServerURL
-				persisted.RedactLogs = config.redact
-				persisted.LogBodies = config.logBody
-				persisted.RecordInteractions = config.record
-				persisted.DiscoveryInterval = config.discoveryInterval.String()
-				persisted.DiscoveryEnabled = true
-				persisted.Shortcuts = map[string]int{
-					"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
-					"/sw.js": http.StatusNotFound,
-				}
-				_ = ds.SaveSettings(persisted)
+				persisted = createDefaultSettings(ds, config)
 			}
 
 			// Recalculate domains if settings changed
@@ -191,7 +160,7 @@ func main() {
 
 			cm := initCertificateManager(config.dataDir)
 			sm := setup.NewManager(config.serverURL, ds, cm)
-			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
+			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.enableSoundcorkProxy)
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
@@ -234,13 +203,13 @@ func main() {
 				log.Printf("Warning: Failed to setup TLS: %v", err)
 			}
 
-			pyProxy := setupPythonProxy(config.targetURL, config.redact, config.logBody, recorder, server)
+			scProxy := setupSoundcorkProxy(config.soundcorkURL, config.redact, config.logBody, recorder, server)
 
 			startDeviceDiscovery(server)
 
-			r := setupRouter(server, pyProxy)
+			r := setupRouter(server, scProxy, config.enableSoundcorkProxy)
 
-			log.Printf("Go service starting on %s, proxying to %s", config.serverURL, config.targetURL)
+			log.Printf("Go service starting on %s, proxying to %s", config.serverURL, config.soundcorkURL)
 
 			if tlsConfig != nil {
 				startHTTPSServer(config.httpsAddr, r, tlsConfig, config.httpsServerURL)
@@ -274,19 +243,20 @@ func showVersionInfo(_ *cli.Context) error {
 }
 
 type serviceConfig struct {
-	port              string
-	bindAddr          string
-	addr              string
-	targetURL         string
-	dataDir           string
-	serverURL         string
-	httpsServerURL    string
-	httpsAddr         string
-	redact            bool
-	logBody           bool
-	record            bool
-	discoveryInterval time.Duration
-	domains           []string
+	port                 string
+	bindAddr             string
+	addr                 string
+	soundcorkURL         string
+	dataDir              string
+	serverURL            string
+	httpsServerURL       string
+	httpsAddr            string
+	redact               bool
+	logBody              bool
+	record               bool
+	enableSoundcorkProxy bool
+	discoveryInterval    time.Duration
+	domains              []string
 }
 
 func loadConfig(c *cli.Context) serviceConfig {
@@ -298,7 +268,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		addr = ":" + port
 	}
 
-	targetURL := c.String("target-url")
+	soundcorkURL := c.String("soundcork-url")
 	dataDir := c.String("data-dir")
 
 	hostname, _ := os.Hostname()
@@ -330,6 +300,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 	redact := c.Bool("redact-logs")
 	logBody := c.Bool("log-bodies")
 	record := c.Bool("record-interactions")
+	enableSoundcorkProxy := c.Bool("enable-soundcork-proxy")
 
 	discoveryIntervalStr := c.String("discovery-interval")
 
@@ -341,19 +312,20 @@ func loadConfig(c *cli.Context) serviceConfig {
 	}
 
 	return serviceConfig{
-		port:              port,
-		bindAddr:          bindAddr,
-		addr:              addr,
-		targetURL:         targetURL,
-		dataDir:           dataDir,
-		serverURL:         serverURL,
-		httpsServerURL:    httpsServerURL,
-		httpsAddr:         httpsAddr,
-		redact:            redact,
-		logBody:           logBody,
-		record:            record,
-		discoveryInterval: discoveryInterval,
-		domains:           domains,
+		port:                 port,
+		bindAddr:             bindAddr,
+		addr:                 addr,
+		soundcorkURL:         soundcorkURL,
+		dataDir:              dataDir,
+		serverURL:            serverURL,
+		httpsServerURL:       httpsServerURL,
+		httpsAddr:            httpsAddr,
+		redact:               redact,
+		logBody:              logBody,
+		record:               record,
+		enableSoundcorkProxy: enableSoundcorkProxy,
+		discoveryInterval:    discoveryInterval,
+		domains:              domains,
 	}
 }
 
@@ -386,6 +358,59 @@ func getDomains(serverURL, httpsServerURL, hostname string) []string {
 	return domains
 }
 
+func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) datastore.Settings {
+	persisted, err := ds.GetSettings()
+	if err != nil {
+		return datastore.Settings{}
+	}
+
+	if persisted.ServerURL != "" {
+		config.serverURL = persisted.ServerURL
+	}
+
+	if persisted.SoundcorkURL != "" {
+		config.soundcorkURL = persisted.SoundcorkURL
+	}
+
+	if persisted.HTTPServerURL != "" {
+		config.httpsServerURL = persisted.HTTPServerURL
+	}
+
+	if persisted.DiscoveryInterval != "" {
+		if d, durErr := time.ParseDuration(persisted.DiscoveryInterval); durErr == nil {
+			config.discoveryInterval = d
+		}
+	}
+
+	config.redact = persisted.RedactLogs || config.redact
+	config.logBody = persisted.LogBodies || config.logBody
+	config.record = persisted.RecordInteractions || config.record
+	config.enableSoundcorkProxy = persisted.EnableSoundcorkProxy || config.enableSoundcorkProxy
+
+	return persisted
+}
+
+func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datastore.Settings {
+	settings := datastore.Settings{
+		ServerURL:            config.serverURL,
+		SoundcorkURL:         config.soundcorkURL,
+		HTTPServerURL:        config.httpsServerURL,
+		RedactLogs:           config.redact,
+		LogBodies:            config.logBody,
+		RecordInteractions:   config.record,
+		DiscoveryInterval:    config.discoveryInterval.String(),
+		DiscoveryEnabled:     true,
+		EnableSoundcorkProxy: config.enableSoundcorkProxy,
+		Shortcuts: map[string]int{
+			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
+			"/sw.js": http.StatusNotFound,
+		},
+	}
+	_ = ds.SaveSettings(settings)
+
+	return settings
+}
+
 func initDataStore(dataDir string) *datastore.DataStore {
 	ds := datastore.NewDataStore(dataDir)
 	if err := ds.Initialize(); err != nil {
@@ -404,14 +429,14 @@ func initCertificateManager(dataDir string) *certmanager.CertificateManager {
 	return cm
 }
 
-func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Recorder, server *handlers.Server) *httputil.ReverseProxy {
-	target, err := url.Parse(targetURL)
+func setupSoundcorkProxy(soundcorkURL string, redact, logBody bool, recorder *proxy.Recorder, server *handlers.Server) *httputil.ReverseProxy {
+	target, err := url.Parse(soundcorkURL)
 	if err != nil {
-		log.Fatalf("Failed to parse target URL: %v", err)
+		log.Fatalf("Failed to parse Soundcork URL: %v", err)
 	}
 
-	pyProxy := httputil.NewSingleHostReverseProxy(target)
-	pyProxy.ModifyResponse = func(res *http.Response) error {
+	scProxy := httputil.NewSingleHostReverseProxy(target)
+	scProxy.ModifyResponse = func(res *http.Response) error {
 		if etags, ok := res.Header["Etag"]; ok {
 			delete(res.Header, "Etag")
 			res.Header["ETag"] = etags
@@ -426,9 +451,31 @@ func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Re
 		return nil
 	}
 
-	originalPyDirector := pyProxy.Director
-	pyProxy.Director = func(req *http.Request) {
-		originalPyDirector(req)
+	originalScDirector := scProxy.Director
+	scProxy.Director = func(req *http.Request) {
+		originalScDirector(req)
+
+		// Fix X-Forwarded-For bloat by deduplicating
+		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			seen := make(map[string]bool)
+			unique := make([]string, 0, len(parts))
+
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" && !seen[p] {
+					seen[p] = true
+					unique = append(unique, p)
+				}
+			}
+
+			// Limit the number of entries to prevent header overflow
+			if len(unique) > 10 {
+				unique = unique[len(unique)-10:]
+			}
+
+			req.Header.Set("X-Forwarded-For", strings.Join(unique, ", "))
+		}
 
 		currentLp := proxy.NewLoggingProxy(target.String(), redact)
 		currentLp.LogBody = logBody
@@ -437,7 +484,7 @@ func setupPythonProxy(targetURL string, redact, logBody bool, recorder *proxy.Re
 		currentLp.LogRequest(req)
 	}
 
-	return pyProxy
+	return scProxy
 }
 
 func startDeviceDiscovery(server *handlers.Server) {
@@ -453,7 +500,7 @@ func startDeviceDiscovery(server *handlers.Server) {
 	}()
 }
 
-func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.Mux {
+func setupRouter(server *handlers.Server, scProxy *httputil.ReverseProxy, enableSoundcorkProxy bool) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -547,9 +594,11 @@ func setupRouter(server *handlers.Server, pyProxy *httputil.ReverseProxy) *chi.M
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 	})
 
-	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		pyProxy.ServeHTTP(w, r)
-	})
+	if enableSoundcorkProxy {
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			scProxy.ServeHTTP(w, r)
+		})
+	}
 
 	return r
 }

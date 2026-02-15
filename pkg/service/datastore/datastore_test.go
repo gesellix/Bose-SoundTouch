@@ -382,7 +382,7 @@ func TestSettingsPersistence(t *testing.T) {
 
 	settings := Settings{
 		ServerURL:         "http://myserver:8000",
-		ProxyURL:          "http://myproxy:8001",
+		SoundcorkURL:      "http://myproxy:8001",
 		LogBodies:         true,
 		DiscoveryInterval: "10m",
 		DiscoveryEnabled:  true,

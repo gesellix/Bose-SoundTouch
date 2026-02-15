@@ -98,8 +98,8 @@ func TestProxySettingsAPI(t *testing.T) {
 
 	// 3. Test System Settings POST
 	sysUpdate := map[string]string{
-		"server_url": "http://new-server:8000",
-		"proxy_url":  "http://new-proxy:8001",
+		"server_url":    "http://new-server:8000",
+		"soundcork_url": "http://new-proxy:8001",
 	}
 
 	sysBody, err := json.Marshal(sysUpdate)
@@ -121,7 +121,7 @@ func TestProxySettingsAPI(t *testing.T) {
 	// Verify server state
 	sURL, pURL, _ := server.GetSettings()
 	if sURL != "http://new-server:8000" || pURL != "http://new-proxy:8001" {
-		t.Errorf("POST /setup/settings: Server state did not update: serverURL=%s, proxyURL=%s", sURL, pURL)
+		t.Errorf("POST /setup/settings: Server state did not update: serverURL=%s, soundcorkURL=%s", sURL, pURL)
 	}
 }
 

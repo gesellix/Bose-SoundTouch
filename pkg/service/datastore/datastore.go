@@ -698,15 +698,16 @@ func (ds *DataStore) GetETagForAccount(account, device string) int64 {
 
 // Settings represents the global service settings.
 type Settings struct {
-	ServerURL          string         `json:"server_url"`
-	ProxyURL           string         `json:"proxy_url"`
-	HTTPServerURL      string         `json:"https_server_url,omitempty"`
-	RedactLogs         bool           `json:"redact_logs"`
-	LogBodies          bool           `json:"log_bodies"`
-	RecordInteractions bool           `json:"record_interactions"`
-	DiscoveryInterval  string         `json:"discovery_interval,omitempty"`
-	DiscoveryEnabled   bool           `json:"discovery_enabled"`
-	Shortcuts          map[string]int `json:"shortcuts,omitempty"`
+	ServerURL            string         `json:"server_url"`
+	SoundcorkURL         string         `json:"soundcork_url"`
+	HTTPServerURL        string         `json:"https_server_url,omitempty"`
+	RedactLogs           bool           `json:"redact_logs"`
+	LogBodies            bool           `json:"log_bodies"`
+	RecordInteractions   bool           `json:"record_interactions"`
+	DiscoveryInterval    string         `json:"discovery_interval,omitempty"`
+	DiscoveryEnabled     bool           `json:"discovery_enabled"`
+	EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
+	Shortcuts            map[string]int `json:"shortcuts,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.

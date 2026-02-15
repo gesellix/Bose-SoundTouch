@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,6 +26,16 @@ type Recorder struct {
 	counter    uint64
 	variables  map[string]string
 	mu         sync.Mutex
+	queue      chan recordingTask
+}
+
+type recordingTask struct {
+	category     string
+	req          *http.Request
+	res          *http.Response
+	replacements map[string]string
+	dir          string
+	path         string
 }
 
 // InteractionStats represents statistics for recorded interactions.
@@ -51,15 +62,24 @@ type Interaction struct {
 func NewRecorder(baseDir string) *Recorder {
 	sessionID := time.Now().Format("20060102-150405") + "-" + fmt.Sprintf("%d", os.Getpid())
 
-	return &Recorder{
+	r := &Recorder{
 		BaseDir:   baseDir,
 		SessionID: sessionID,
 		Patterns:  DefaultPatterns(),
 		variables: make(map[string]string),
 	}
+
+	// Use environment variable to control async recording, default to true for production
+	// but allow disabling it for tests if needed.
+	if os.Getenv("RECORDER_ASYNC") != "false" {
+		r.queue = make(chan recordingTask, 100)
+		go r.worker()
+	}
+
+	return r
 }
 
-// Record persists a request and response to a .http file in the specified category (e.g., "self" or "upstream").
+// Record logs an interaction to the configured category.
 func (r *Recorder) Record(category string, req *http.Request, res *http.Response) error {
 	if r.BaseDir == "" {
 		return nil
@@ -74,19 +94,51 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 
 	path := r.getRecordingPath(dir, req.Method)
 
+	// Shallow copy request for the worker to avoid data races if the original is reused
+	// but Note: body is already buffered/replaced in middleware if needed.
+	// We need to be careful about bodies being closed.
+	task := recordingTask{
+		category:     category,
+		req:          req,
+		res:          res,
+		replacements: replacements,
+		dir:          dir,
+		path:         path,
+	}
+
+	// For testing purposes or if queue is nil, fallback to synchronous
+	if r.queue == nil {
+		r.save(task)
+		return nil
+	}
+
+	select {
+	case r.queue <- task:
+		return nil
+	default:
+		return fmt.Errorf("recording queue full, dropping interaction for %s", req.URL.Path)
+	}
+}
+
+func (r *Recorder) save(task recordingTask) {
 	var buf bytes.Buffer
+	r.writeRequest(&buf, task.req, task.replacements)
 
-	r.writeRequest(&buf, req, replacements)
-
-	if res != nil {
-		r.writeResponse(&buf, res)
+	if task.res != nil {
+		r.writeResponse(&buf, task.res)
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
-		return err
+	if err := os.WriteFile(task.path, buf.Bytes(), 0644); err != nil {
+		log.Printf("failed to write recording to %s: %v", task.path, err)
 	}
 
-	return r.updateEnvFile(replacements)
+	_ = r.updateEnvFile(task.replacements)
+}
+
+func (r *Recorder) worker() {
+	for task := range r.queue {
+		r.save(task)
+	}
 }
 
 func (r *Recorder) getSanitizedSegments(path string) ([]string, map[string]string) {

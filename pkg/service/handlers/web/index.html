@@ -87,9 +87,9 @@
                 <span style="font-size: 0.8em; color: #666;">(Standard services URL)</span>
             </div>
             <div style="margin-bottom: 20px;">
-                <label for="proxy-domain">Proxy Domain:</label>
-                <input type="text" id="proxy-domain" placeholder="http://192.168.x.x:8000" style="width: 300px;">
-                <span style="font-size: 0.8em; color: #666;">(Upstream proxy URL - usually the same as Target Domain)</span>
+                <label for="soundcork-url">Soundcork URL:</label>
+                <input type="text" id="soundcork-url" placeholder="http://192.168.x.x:8001" style="width: 300px;">
+                <span style="font-size: 0.8em; color: #666;">(Soundcork services URL)</span>
             </div>
             <div style="margin-bottom: 20px;">
                 <label for="discovery-interval">Discovery Interval:</label>
@@ -105,6 +105,7 @@
                 <div style="margin-top: 5px;">
                     <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
                     <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
+                    <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="enable-soundcork-proxy" onchange="updateProxySettings()"> Enable Soundcork Proxy (Legacy)</label>
                     <label style="display: block; margin-bottom: 5px;">
                         <input type="checkbox" id="proxy-record" onchange="updateProxySettings()"> Record Interactions
                         <span style="font-size: 0.85em; color: #666; margin-left: 5px;">(View in <strong>5. Interactions</strong> tab)</span>

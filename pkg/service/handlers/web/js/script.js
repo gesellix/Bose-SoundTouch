@@ -6,13 +6,16 @@ async function fetchSettings() {
             document.getElementById('target-domain').value = settings.server_url;
         }
         if (settings.proxy_url) {
-            document.getElementById('proxy-domain').value = settings.proxy_url;
+            document.getElementById('soundcork-url').value = settings.proxy_url;
         }
         if (settings.discovery_interval) {
             document.getElementById('discovery-interval').value = settings.discovery_interval;
         }
         if (settings.discovery_enabled !== undefined) {
             document.getElementById('discovery-enabled').checked = settings.discovery_enabled;
+        }
+        if (settings.enable_soundcork_proxy !== undefined) {
+            document.getElementById('enable-soundcork-proxy').checked = settings.enable_soundcork_proxy;
         }
         fetchProxySettings();
     } catch (error) {
@@ -27,6 +30,9 @@ async function fetchProxySettings() {
         document.getElementById('proxy-redact').checked = settings.redact;
         document.getElementById('proxy-log-body').checked = settings.log_body;
         document.getElementById('proxy-record').checked = settings.record;
+        if (settings.enable_soundcork_proxy !== undefined) {
+            document.getElementById('enable-soundcork-proxy').checked = settings.enable_soundcork_proxy;
+        }
     } catch (error) {
         console.error('Failed to fetch proxy settings', error);
     }
@@ -36,7 +42,8 @@ async function updateProxySettings() {
     const settings = {
         redact: document.getElementById('proxy-redact').checked,
         log_body: document.getElementById('proxy-log-body').checked,
-        record: document.getElementById('proxy-record').checked
+        record: document.getElementById('proxy-record').checked,
+        enable_soundcork_proxy: document.getElementById('enable-soundcork-proxy').checked
     };
     try {
         await fetch('/setup/proxy-settings', {
@@ -52,9 +59,10 @@ async function updateProxySettings() {
 async function updateSettings() {
     const settings = {
         server_url: document.getElementById('target-domain').value,
-        proxy_url: document.getElementById('proxy-domain').value,
+        proxy_url: document.getElementById('soundcork-url').value,
         discovery_interval: document.getElementById('discovery-interval').value,
-        discovery_enabled: document.getElementById('discovery-enabled').checked
+        discovery_enabled: document.getElementById('discovery-enabled').checked,
+        enable_soundcork_proxy: document.getElementById('enable-soundcork-proxy').checked
     };
     const status = document.getElementById('settings-status');
     status.innerText = 'Saving...';

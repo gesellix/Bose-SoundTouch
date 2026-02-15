@@ -15,36 +15,38 @@ import (
 
 // Server handles HTTP requests for the SoundTouch service.
 type Server struct {
-	ds                *datastore.DataStore
-	sm                *setup.Manager
-	mu                sync.RWMutex
-	serverURL         string
-	proxyURL          string
-	httpsServerURL    string
-	discovering       bool
-	proxyRedact       bool
-	proxyLogBody      bool
-	recordEnabled     bool
-	discoveryInterval time.Duration
-	discoveryEnabled  bool
-	shortcuts         map[string]int
-	recorder          *proxy.Recorder
-	Version           string
-	Commit            string
-	Date              string
+	ds                   *datastore.DataStore
+	sm                   *setup.Manager
+	mu                   sync.RWMutex
+	serverURL            string
+	soundcorkURL         string
+	httpsServerURL       string
+	discovering          bool
+	proxyRedact          bool
+	proxyLogBody         bool
+	recordEnabled        bool
+	discoveryInterval    time.Duration
+	discoveryEnabled     bool
+	enableSoundcorkProxy bool
+	shortcuts            map[string]int
+	recorder             *proxy.Recorder
+	Version              string
+	Commit               string
+	Date                 string
 }
 
 // NewServer creates a new SoundTouch service server.
-func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled bool) *Server {
+func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled, enableSoundcorkProxy bool) *Server {
 	return &Server{
-		ds:                ds,
-		sm:                sm,
-		serverURL:         serverURL,
-		proxyURL:          serverURL,
-		proxyRedact:       proxyRedact,
-		proxyLogBody:      proxyLogBody,
-		recordEnabled:     recordEnabled,
-		discoveryInterval: 5 * time.Minute,
+		ds:                   ds,
+		sm:                   sm,
+		serverURL:            serverURL,
+		soundcorkURL:         serverURL,
+		proxyRedact:          proxyRedact,
+		proxyLogBody:         proxyLogBody,
+		recordEnabled:        recordEnabled,
+		enableSoundcorkProxy: enableSoundcorkProxy,
+		discoveryInterval:    5 * time.Minute,
 	}
 }
 
@@ -117,15 +119,15 @@ func (s *Server) GetSettings() (string, string, string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.serverURL, s.proxyURL, s.httpsServerURL
+	return s.serverURL, s.soundcorkURL, s.httpsServerURL
 }
 
 // GetProxySettings returns the current proxy settings.
-func (s *Server) GetProxySettings() (bool, bool, bool) {
+func (s *Server) GetProxySettings() (bool, bool, bool, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.proxyRedact, s.proxyLogBody, s.recordEnabled
+	return s.proxyRedact, s.proxyLogBody, s.recordEnabled, s.enableSoundcorkProxy
 }
 
 // DiscoverDevices starts a background device discovery process.
