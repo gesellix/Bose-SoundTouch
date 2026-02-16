@@ -27,6 +27,13 @@ type DNSDiscovery struct {
 	// Servers for Shutdown
 	udpServer *dns.Server
 	tcpServer *dns.Server
+
+	// Address for loop prevention
+	bindAddr string
+
+	// Log throttling
+	lastLog   map[string]time.Time
+	lastLogMu sync.Mutex
 }
 
 // DiscoveredHost represents a host discovered via DNS queries.
@@ -46,6 +53,7 @@ func NewDNSDiscovery(upstreamDNS, serviceIP string) *DNSDiscovery {
 		upstreamDNS: upstreamDNS,
 		serviceIP:   serviceIP,
 		discovered:  make(map[string]*DiscoveredHost),
+		lastLog:     make(map[string]time.Time),
 	}
 }
 
@@ -72,12 +80,36 @@ func (d *DNSDiscovery) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	if isIntercepted {
 		// Return your service IP
 		d.respondWithIP(w, r, d.serviceIP)
-		log.Printf("[DNS] Intercepting %s (type %d) -> %s", hostname, q.Qtype, d.serviceIP)
+		d.throttledLog(fmt.Sprintf("[DNS] Intercepting %s (type %d) -> %s", hostname, q.Qtype, d.serviceIP))
 	} else {
 		// Forward to real DNS
-		log.Printf("[DNS] Forwarding %s (type %d) to %s", hostname, q.Qtype, d.upstreamDNS)
+		if d.upstreamDNS == "" {
+			d.throttledLog(fmt.Sprintf("[DNS ERROR] No upstream DNS configured, cannot forward %s", hostname))
+
+			m := new(dns.Msg)
+			m.SetReply(r)
+			m.Rcode = dns.RcodeServerFailure
+			_ = w.WriteMsg(m)
+
+			return
+		}
+
+		d.throttledLog(fmt.Sprintf("[DNS] Forwarding %s (type %d) to %s", hostname, q.Qtype, d.upstreamDNS))
 		d.forward(w, r)
 	}
+}
+
+func (d *DNSDiscovery) throttledLog(msg string) {
+	d.lastLogMu.Lock()
+	defer d.lastLogMu.Unlock()
+
+	now := time.Now()
+	if last, ok := d.lastLog[msg]; ok && now.Sub(last) < 10*time.Second {
+		return
+	}
+
+	d.lastLog[msg] = now
+	log.Print(msg)
 }
 
 // recordQuery logs a DNS query and updates the internal state.
@@ -183,8 +215,10 @@ func (d *DNSDiscovery) forward(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
+	q := r.Question[0]
+
 	// Don't forward PTR queries for our own service IP to avoid loops or slow timeouts
-	if r.Question[0].Qtype == dns.TypePTR {
+	if q.Qtype == dns.TypePTR {
 		m := new(dns.Msg)
 		m.SetReply(r)
 
@@ -196,16 +230,30 @@ func (d *DNSDiscovery) forward(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	c := new(dns.Client)
 	// Add port 53 if not present
 	upstream := d.upstreamDNS
 	if !strings.Contains(upstream, ":") {
 		upstream += ":53"
 	}
 
+	// Loop prevention: don't forward to ourselves
+	if upstream == d.bindAddr || (strings.HasPrefix(upstream, "127.0.0.1:") && strings.HasSuffix(d.bindAddr, upstream[9:])) {
+		d.throttledLog(fmt.Sprintf("[DNS ERROR] Refusing to forward %s to ourselves (%s)", q.Name, upstream))
+
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Rcode = dns.RcodeServerFailure
+		_ = w.WriteMsg(m)
+
+		return
+	}
+
+	c := new(dns.Client)
+	c.Timeout = 2 * time.Second
+
 	in, _, err := c.Exchange(r, upstream)
 	if err != nil {
-		log.Printf("[DNS ERROR] Forward failed for %s (type %d): %v", r.Question[0].Name, r.Question[0].Qtype, err)
+		d.throttledLog(fmt.Sprintf("[DNS ERROR] Forward failed for %s (type %d): %v", q.Name, q.Qtype, err))
 		// Return a failure response instead of just dropping
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -267,6 +315,7 @@ func (d *DNSDiscovery) Start(addr string) error {
 	mux.HandleFunc(".", d.ServeDNS)
 
 	d.mu.Lock()
+	d.bindAddr = addr
 	d.udpServer = &dns.Server{
 		Addr:    addr,
 		Net:     "udp",

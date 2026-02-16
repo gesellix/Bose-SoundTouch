@@ -1,7 +1,9 @@
 package discovery
 
 import (
+	"log"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,3 +194,107 @@ func (m *mockResponseWriter) Close() error                { return nil }
 func (m *mockResponseWriter) TsigStatus() error           { return nil }
 func (m *mockResponseWriter) TsigTimersOnly(bool)         {}
 func (m *mockResponseWriter) Hijack()                     {}
+
+func TestDNSDiscovery_LogThrottling(t *testing.T) {
+	d := NewDNSDiscovery("8.8.8.8", "192.168.1.100")
+
+	// Capture log output
+	var logBuf strings.Builder
+	oldOutput := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(oldOutput)
+
+	msg := "Test log message"
+	d.throttledLog(msg)
+	d.throttledLog(msg)
+	d.throttledLog(msg)
+
+	count := strings.Count(logBuf.String(), msg)
+	if count != 1 {
+		t.Errorf("Expected log message to appear once due to throttling, but appeared %d times", count)
+	}
+
+	// Advance time by 11 seconds to bypass throttling
+	d.lastLogMu.Lock()
+	d.lastLog[msg] = time.Now().Add(-11 * time.Second)
+	d.lastLogMu.Unlock()
+
+	d.throttledLog(msg)
+	count = strings.Count(logBuf.String(), msg)
+	if count != 2 {
+		t.Errorf("Expected log message to appear twice after advancing time, but appeared %d times", count)
+	}
+}
+
+func TestDNSDiscovery_LoopPrevention(t *testing.T) {
+	serviceIP := "192.168.1.100"
+	bindAddr := "127.0.0.1:53"
+	upstreamDNS := "127.0.0.1:53"
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d.bindAddr = bindAddr
+
+	// Capture log output to avoid panic if it's being throttled/logged
+	var logBuf strings.Builder
+	oldOutput := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(oldOutput)
+
+	m := new(dns.Msg)
+	m.SetQuestion("google.com.", dns.TypeA)
+
+	rw := &mockResponseWriter{}
+	d.forward(rw, m)
+
+	if rw.msg == nil {
+		t.Fatal("Expected a response message")
+	}
+
+	if rw.msg.Rcode != dns.RcodeServerFailure {
+		t.Errorf("Expected RcodeServerFailure (2), got %d", rw.msg.Rcode)
+	}
+}
+
+func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
+	serviceIP := "192.168.1.100"
+	upstreamDNS := "" // Empty upstream
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d.bindAddr = ":53"
+
+	m := new(dns.Msg)
+	m.SetQuestion("google.com.", dns.TypeA)
+
+	rw := &mockResponseWriter{}
+	d.ServeDNS(rw, m)
+
+	if rw.msg == nil {
+		t.Fatal("Expected a response message, got nil")
+	}
+
+	if rw.msg.Rcode != dns.RcodeServerFailure {
+		t.Errorf("Expected RcodeServerFailure (2) for empty upstream, got %d", rw.msg.Rcode)
+	}
+}
+
+func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
+	serviceIP := "192.168.1.100"
+	// Use an IP that is unroutable or doesn't exist on the network to ensure timeout
+	upstreamDNS := "192.0.2.1:53" // TEST-NET-1, usually non-routable
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+
+	m := new(dns.Msg)
+	m.SetQuestion("google.com.", dns.TypeA)
+
+	rw := &mockResponseWriter{}
+
+	start := time.Now()
+	d.forward(rw, m)
+	duration := time.Since(start)
+
+	if duration < 2*time.Second {
+		t.Errorf("Expected forward to take at least 2 seconds (timeout), but took %v", duration)
+	}
+
+	if rw.msg == nil || rw.msg.Rcode != dns.RcodeServerFailure {
+		t.Errorf("Expected RcodeServerFailure after timeout")
+	}
+}
