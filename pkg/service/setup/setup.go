@@ -713,6 +713,16 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 
 	logs += "Uploaded new configuration to " + remotePath + "\n"
 
+	// 2. Verify the configuration on device
+	if verification, err := client.Run(fmt.Sprintf("cat %s", remotePath)); err == nil {
+		if !strings.Contains(verification, cfg.MargeServerUrl) {
+			return logs, fmt.Errorf("verification failed: uploaded config on %s does not contain expected margeServerUrl", deviceIP)
+		}
+		logs += "Verified configuration on device\n"
+	} else {
+		logs += fmt.Sprintf("Warning: could not verify configuration on device: %v\n", err)
+	}
+
 	return logs, nil
 }
 
@@ -1036,9 +1046,21 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 
 	logs += "Uploaded updated /etc/hosts\n"
 
+	// 4. Verify /etc/hosts on device
+	if verification, err := client.Run("cat /etc/hosts"); err == nil {
+		for _, domain := range domains {
+			if !strings.Contains(verification, domain) || !strings.Contains(verification, hostIP) {
+				return logs, fmt.Errorf("verification failed: /etc/hosts on %s does not contain expected redirection for %s", deviceIP, domain)
+			}
+		}
+		logs += "Verified /etc/hosts on device\n"
+	} else {
+		logs += fmt.Sprintf("Warning: could not verify /etc/hosts on device: %v\n", err)
+	}
+
 	fmt.Printf("Updated /etc/hosts on %s:\n%s\n", deviceIP, hostsContent)
 
-	// 4. Inject CA Certificate
+	// 5. Inject CA Certificate
 	summary := &MigrationSummary{}
 	m.checkCACertTrusted(summary, deviceIP)
 
@@ -1112,7 +1134,7 @@ if [ -f "%s" ]; then
     targetScript="/opt/Bose/udhcpc.script"
     if [ -f "$targetScript" ] && ! grep -q "%s" "$targetScript"; then
         logger -t "aftertouch" "Patching $targetScript with Aftertouch DNS hook"
-        sed -i '/echo "search \$search_list # \$interface" >> \$RESOLV_CONF/a \                [ -f '"%s"' ] && cat '"%s"' >> '"$RESOLV_CONF"' && dns=""' "$targetScript"
+        sed -i '/echo "search \$search_list # \$interface" >> \$RESOLV_CONF/a \                [ -f '"%s"' ] && cat '"%s"' >> '"\$RESOLV_CONF"' && dns=""' "$targetScript"
     fi
 fi
 `, hookMarker, targetDHCPFile, hookMarker, targetDHCPFile, targetDHCPFile, hookMarker, hookMarker, targetDHCPFile, hookMarker, hookMarker, hookMarker)
@@ -1165,6 +1187,13 @@ fi
 		logs += fmt.Sprintf("Failed to apply patch immediately to %s: %v\n", targetDHCPFile, err)
 	} else {
 		logs += fmt.Sprintf("Applied patch to %s\n", targetDHCPFile)
+
+		// Verify patch on 50default
+		if verification, err := client.Run(fmt.Sprintf("grep -q \"%s\" %s && echo \"OK\"", hookMarker, targetDHCPFile)); err == nil && strings.TrimSpace(verification) == "OK" {
+			logs += fmt.Sprintf("Verified patch on %s\n", targetDHCPFile)
+		} else {
+			logs += fmt.Sprintf("Warning: could not verify patch on %s: %v\n", targetDHCPFile, err)
+		}
 	}
 
 	// Apply patch immediately to /opt/Bose/udhcpc.script if it exists
@@ -1179,11 +1208,18 @@ fi
 			_, _ = client.Run(fmt.Sprintf("cp %s.original %s", targetScript, targetScript))
 		}
 
-		patchCmdScript := fmt.Sprintf("sed -i '/echo \"search \\$search_list # \\$interface\" >> \\$RESOLV_CONF/a \\                [ -f '\"%s\"' ] && cat '\"%s\"' >> '\"$RESOLV_CONF\"' && dns=\"\"' %s", hookMarker, hookMarker, targetScript)
+		patchCmdScript := fmt.Sprintf("sed -i '/echo \"search \\$search_list # \\$interface\" >> \\$RESOLV_CONF/a \\                [ -f '\"%s\"' ] && cat '\"%s\"' >> '\"\\$RESOLV_CONF\"' && dns=\"\"' %s", hookMarker, hookMarker, targetScript)
 		if _, err := client.Run(patchCmdScript); err != nil {
 			logs += fmt.Sprintf("Failed to apply patch immediately to %s: %v\n", targetScript, err)
 		} else {
 			logs += fmt.Sprintf("Applied patch to %s\n", targetScript)
+
+			// Verify patch on udhcpc.script
+			if verification, err := client.Run(fmt.Sprintf("grep -q \"%s\" %s && echo \"OK\"", hookMarker, targetScript)); err == nil && strings.TrimSpace(verification) == "OK" {
+				logs += fmt.Sprintf("Verified patch on %s\n", targetScript)
+			} else {
+				logs += fmt.Sprintf("Warning: could not verify patch on %s: %v\n", targetScript, err)
+			}
 		}
 	}
 

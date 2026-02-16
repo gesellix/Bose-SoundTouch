@@ -283,7 +283,7 @@ The most robust and flexible DNS-based migration method. It utilizes the device'
        # Patch udhcpc.script if it exists (e.g. SoundTouch 10)
        TARGET_SCRIPT="/opt/Bose/udhcpc.script"
        if [ -f "$TARGET_SCRIPT" ] && ! grep -q "$HOOK_MARKER" "$TARGET_SCRIPT"; then
-           sed -i '/echo "search \$search_list # \$interface" >> \$RESOLV_CONF/a \                [ -f '"$HOOK_MARKER"' ] && cat '"$HOOK_MARKER"' >> '"$RESOLV_CONF"' && dns=""' "$TARGET_SCRIPT"
+           sed -i '/echo "search \$search_list # \$interface" >> \$RESOLV_CONF/a \                [ -f '"$HOOK_MARKER"' ] && cat '"$HOOK_MARKER"' >> '"\$RESOLV_CONF"' && dns=""' "$TARGET_SCRIPT"
        fi
    fi
    ```
