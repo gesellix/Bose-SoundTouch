@@ -718,6 +718,7 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 		if !strings.Contains(verification, cfg.MargeServerUrl) {
 			return logs, fmt.Errorf("verification failed: uploaded config on %s does not contain expected margeServerUrl", deviceIP)
 		}
+
 		logs += "Verified configuration on device\n"
 	} else {
 		logs += fmt.Sprintf("Warning: could not verify configuration on device: %v\n", err)
@@ -982,7 +983,54 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		return logs, fmt.Errorf("failed to read /etc/hosts: %w", err)
 	}
 
-	lines := strings.Split(hostsContent, "\n")
+	hostsContent = m.generateHostsContent(hostsContent, domains, hostIP)
+
+	// 3. Upload new /etc/hosts
+	out, _ := client.Run(rwCmd)
+	logs += rwCmd + ": " + out + "\n"
+	// Backup /etc/hosts if it doesn't exist
+	if _, err := client.Run("[ -f /etc/hosts.original ]"); err != nil {
+		out, _ := client.Run("cp /etc/hosts /etc/hosts.original")
+		logs += "cp /etc/hosts /etc/hosts.original: " + out + "\n"
+	}
+
+	if err := client.UploadContent([]byte(hostsContent), "/etc/hosts"); err != nil {
+		return logs, fmt.Errorf("failed to update /etc/hosts: %w", err)
+	}
+
+	logs += "Uploaded updated /etc/hosts\n"
+
+	// 4. Verify /etc/hosts on device
+	if err := m.verifyHosts(client, domains, hostIP, deviceIP); err != nil {
+		return logs, err
+	}
+
+	logs += "Verified /etc/hosts on device\n"
+
+	fmt.Printf("Updated /etc/hosts on %s:\n%s\n", deviceIP, hostsContent)
+
+	// 5. Inject CA Certificate
+	summary := &MigrationSummary{}
+	m.checkCACertTrusted(summary, deviceIP)
+
+	if !summary.CACertTrusted {
+		out, err := m.TrustCACert(deviceIP)
+
+		logs += "Trusting CA:\n" + out + "\n"
+		if err != nil {
+			return logs, err
+		}
+	} else {
+		logs += "CA certificate already trusted, skipping injection\n"
+
+		fmt.Printf("CA certificate already trusted on %s, skipping injection\n", deviceIP)
+	}
+
+	return logs, nil
+}
+
+func (m *Manager) generateHostsContent(currentContent string, domains []string, hostIP string) string {
+	lines := strings.Split(currentContent, "\n")
 
 	var newLines []string
 
@@ -1026,58 +1074,27 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		}
 	}
 
-	hostsContent = strings.Join(newLines, "\n")
+	hostsContent := strings.Join(newLines, "\n")
 	if !strings.HasSuffix(hostsContent, "\n") {
 		hostsContent += "\n"
 	}
 
-	// 3. Upload new /etc/hosts
-	out, _ := client.Run(rwCmd)
-	logs += rwCmd + ": " + out + "\n"
-	// Backup /etc/hosts if it doesn't exist
-	if _, err := client.Run("[ -f /etc/hosts.original ]"); err != nil {
-		out, _ := client.Run("cp /etc/hosts /etc/hosts.original")
-		logs += "cp /etc/hosts /etc/hosts.original: " + out + "\n"
+	return hostsContent
+}
+
+func (m *Manager) verifyHosts(client SSHClient, domains []string, hostIP, deviceIP string) error {
+	verification, err := client.Run("cat /etc/hosts")
+	if err != nil {
+		return fmt.Errorf("could not verify /etc/hosts on device: %w", err)
 	}
 
-	if err := client.UploadContent([]byte(hostsContent), "/etc/hosts"); err != nil {
-		return logs, fmt.Errorf("failed to update /etc/hosts: %w", err)
-	}
-
-	logs += "Uploaded updated /etc/hosts\n"
-
-	// 4. Verify /etc/hosts on device
-	if verification, err := client.Run("cat /etc/hosts"); err == nil {
-		for _, domain := range domains {
-			if !strings.Contains(verification, domain) || !strings.Contains(verification, hostIP) {
-				return logs, fmt.Errorf("verification failed: /etc/hosts on %s does not contain expected redirection for %s", deviceIP, domain)
-			}
+	for _, domain := range domains {
+		if !strings.Contains(verification, domain) || !strings.Contains(verification, hostIP) {
+			return fmt.Errorf("verification failed: /etc/hosts on %s does not contain expected redirection for %s", deviceIP, domain)
 		}
-		logs += "Verified /etc/hosts on device\n"
-	} else {
-		logs += fmt.Sprintf("Warning: could not verify /etc/hosts on device: %v\n", err)
 	}
 
-	fmt.Printf("Updated /etc/hosts on %s:\n%s\n", deviceIP, hostsContent)
-
-	// 5. Inject CA Certificate
-	summary := &MigrationSummary{}
-	m.checkCACertTrusted(summary, deviceIP)
-
-	if !summary.CACertTrusted {
-		out, err := m.TrustCACert(deviceIP)
-
-		logs += "Trusting CA:\n" + out + "\n"
-		if err != nil {
-			return logs, err
-		}
-	} else {
-		logs += "CA certificate already trusted, skipping injection\n"
-
-		fmt.Printf("CA certificate already trusted on %s, skipping injection\n", deviceIP)
-	}
-
-	return logs, nil
+	return nil
 }
 
 func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, error) {
@@ -1107,13 +1124,65 @@ func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, erro
 	// Ensure /mnt/nv exists
 	_, _ = client.Run("mkdir -p /mnt/nv")
 
-	if err := client.UploadContent([]byte(resolvContent), "/mnt/nv/aftertouch.resolv.conf"); err != nil {
-		return logs, fmt.Errorf("failed to upload /mnt/nv/aftertouch.resolv.conf: %w", err)
+	if uploadErr := client.UploadContent([]byte(resolvContent), "/mnt/nv/aftertouch.resolv.conf"); uploadErr != nil {
+		return logs, fmt.Errorf("failed to upload /mnt/nv/aftertouch.resolv.conf: %w", uploadErr)
 	}
 
 	logs += "Uploaded /mnt/nv/aftertouch.resolv.conf\n"
 
 	// 4. Update /mnt/nv/rc.local with idempotent patch
+	patchOut, err := m.updateRcLocalWithDNSHook(client)
+	logs += patchOut
+
+	if err != nil {
+		return logs, err
+	}
+
+	// 5. Apply patch immediately to /etc/udhcpc.d/50default
+	rwOut, _ := client.Run(rwCmd)
+	logs += rwCmd + ": " + rwOut + "\n"
+
+	hookMarker := "/mnt/nv/aftertouch.resolv.conf"
+	targetDHCPFile := "/etc/udhcpc.d/50default"
+	dhcpPatchOut, err := m.patchDHCPFile(client, targetDHCPFile, hookMarker)
+	logs += dhcpPatchOut
+
+	if err != nil {
+		logs += fmt.Sprintf("Warning: could not apply/verify patch on %s: %v\n", targetDHCPFile, err)
+	}
+
+	// Apply patch immediately to /opt/Bose/udhcpc.script if it exists
+	targetScript := "/opt/Bose/udhcpc.script"
+	if _, err := client.Run(fmt.Sprintf("[ -f %s ]", targetScript)); err == nil {
+		scriptPatchOut, err := m.patchUdhcpcScript(client, targetScript, hookMarker)
+		logs += scriptPatchOut
+
+		if err != nil {
+			logs += fmt.Sprintf("Warning: could not apply/verify patch on %s: %v\n", targetScript, err)
+		}
+	}
+
+	// 6. Inject CA Certificate
+	summary := &MigrationSummary{}
+	m.checkCACertTrusted(summary, deviceIP)
+
+	if !summary.CACertTrusted {
+		out, err := m.TrustCACert(deviceIP)
+
+		logs += "Trusting CA:\n" + out + "\n"
+		if err != nil {
+			return logs, err
+		}
+	} else {
+		logs += "CA certificate already trusted, skipping injection\n"
+	}
+
+	return logs, nil
+}
+
+func (m *Manager) updateRcLocalWithDNSHook(client SSHClient) (string, error) {
+	var logs string
+
 	rcLocalPath := "/mnt/nv/rc.local"
 	targetDHCPFile := "/etc/udhcpc.d/50default"
 	hookMarker := "/mnt/nv/aftertouch.resolv.conf"
@@ -1122,6 +1191,10 @@ func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, erro
 	currentRcLocal, rcErr := client.Run(fmt.Sprintf("cat %s", rcLocalPath))
 	if rcErr != nil {
 		currentRcLocal = ""
+	}
+
+	if strings.Contains(currentRcLocal, hookMarker) {
+		return fmt.Sprintf("%s already contains Aftertouch hook logic\n", rcLocalPath), nil
 	}
 
 	patchLogic := fmt.Sprintf(`
@@ -1139,38 +1212,36 @@ if [ -f "%s" ]; then
 fi
 `, hookMarker, targetDHCPFile, hookMarker, targetDHCPFile, targetDHCPFile, hookMarker, hookMarker, targetDHCPFile, hookMarker, hookMarker, hookMarker)
 
-	if !strings.Contains(currentRcLocal, hookMarker) {
-		newRcLocal := currentRcLocal
-		// Remove "cat: can't open..." error message if it was accidentally saved in the file
-		if strings.Contains(newRcLocal, "cat: can't open") {
-			newRcLocal = ""
-		}
-
-		if !strings.HasPrefix(newRcLocal, "#!/bin/sh") {
-			newRcLocal = "#!/bin/sh\n" + strings.TrimPrefix(newRcLocal, "#!/bin/sh")
-		}
-
-		if !strings.HasSuffix(newRcLocal, "\n") {
-			newRcLocal += "\n"
-		}
-
-		newRcLocal += patchLogic
-
-		if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
-			return logs, fmt.Errorf("failed to update %s: %w", rcLocalPath, err)
-		}
-
-		logs += fmt.Sprintf("Updated %s with DNS hook logic\n", rcLocalPath)
-
-		// Make it executable
-		_, _ = client.Run(fmt.Sprintf("chmod +x %s", rcLocalPath))
-	} else {
-		logs += fmt.Sprintf("%s already contains Aftertouch hook logic\n", rcLocalPath)
+	newRcLocal := currentRcLocal
+	// Remove "cat: can't open..." error message if it was accidentally saved in the file
+	if strings.Contains(newRcLocal, "cat: can't open") {
+		newRcLocal = ""
 	}
 
-	// 5. Apply patch immediately to /etc/udhcpc.d/50default
-	out, _ := client.Run(rwCmd)
-	logs += rwCmd + ": " + out + "\n"
+	if !strings.HasPrefix(newRcLocal, "#!/bin/sh") {
+		newRcLocal = "#!/bin/sh\n" + strings.TrimPrefix(newRcLocal, "#!/bin/sh")
+	}
+
+	if !strings.HasSuffix(newRcLocal, "\n") {
+		newRcLocal += "\n"
+	}
+
+	newRcLocal += patchLogic
+
+	if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
+		return logs, fmt.Errorf("failed to update %s: %w", rcLocalPath, err)
+	}
+
+	logs += fmt.Sprintf("Updated %s with DNS hook logic\n", rcLocalPath)
+
+	// Make it executable
+	_, _ = client.Run(fmt.Sprintf("chmod +x %s", rcLocalPath))
+
+	return logs, nil
+}
+
+func (m *Manager) patchDHCPFile(client SSHClient, targetDHCPFile, hookMarker string) (string, error) {
+	var logs string
 
 	// Backup if it doesn't exist
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetDHCPFile)); err != nil {
@@ -1184,58 +1255,45 @@ fi
 	// Run the patch logic via SSH to apply it now
 	patchCmd := fmt.Sprintf("sed -i '/echo \"search \\$domain\"/a \\        [ -f '\"%s\"' ] && cat '\"%s\"' && dns=\"\"' %s", hookMarker, hookMarker, targetDHCPFile)
 	if _, err := client.Run(patchCmd); err != nil {
-		logs += fmt.Sprintf("Failed to apply patch immediately to %s: %v\n", targetDHCPFile, err)
-	} else {
-		logs += fmt.Sprintf("Applied patch to %s\n", targetDHCPFile)
-
-		// Verify patch on 50default
-		if verification, err := client.Run(fmt.Sprintf("grep -q \"%s\" %s && echo \"OK\"", hookMarker, targetDHCPFile)); err == nil && strings.TrimSpace(verification) == "OK" {
-			logs += fmt.Sprintf("Verified patch on %s\n", targetDHCPFile)
-		} else {
-			logs += fmt.Sprintf("Warning: could not verify patch on %s: %v\n", targetDHCPFile, err)
-		}
+		return logs, fmt.Errorf("failed to apply patch immediately to %s: %w", targetDHCPFile, err)
 	}
 
-	// Apply patch immediately to /opt/Bose/udhcpc.script if it exists
-	targetScript := "/opt/Bose/udhcpc.script"
-	if _, err := client.Run(fmt.Sprintf("[ -f %s ]", targetScript)); err == nil {
-		// Backup if it doesn't exist
-		if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetScript)); err != nil {
-			out, _ := client.Run(fmt.Sprintf("cp %s %s.original", targetScript, targetScript))
-			logs += fmt.Sprintf("cp %s %s.original: %s\n", targetScript, targetScript, out)
-		} else {
-			// If backup exists, revert to it first to ensure we start from a clean state
-			_, _ = client.Run(fmt.Sprintf("cp %s.original %s", targetScript, targetScript))
-		}
+	logs += fmt.Sprintf("Applied patch to %s\n", targetDHCPFile)
 
-		patchCmdScript := fmt.Sprintf("sed -i '/echo \"search \\$search_list # \\$interface\" >> \\$RESOLV_CONF/a \\                [ -f '\"%s\"' ] && cat '\"%s\"' >> '\"\\$RESOLV_CONF\"' && dns=\"\"' %s", hookMarker, hookMarker, targetScript)
-		if _, err := client.Run(patchCmdScript); err != nil {
-			logs += fmt.Sprintf("Failed to apply patch immediately to %s: %v\n", targetScript, err)
-		} else {
-			logs += fmt.Sprintf("Applied patch to %s\n", targetScript)
-
-			// Verify patch on udhcpc.script
-			if verification, err := client.Run(fmt.Sprintf("grep -q \"%s\" %s && echo \"OK\"", hookMarker, targetScript)); err == nil && strings.TrimSpace(verification) == "OK" {
-				logs += fmt.Sprintf("Verified patch on %s\n", targetScript)
-			} else {
-				logs += fmt.Sprintf("Warning: could not verify patch on %s: %v\n", targetScript, err)
-			}
-		}
+	// Verify patch on 50default
+	if verification, err := client.Run(fmt.Sprintf("grep -q \"%s\" %s && echo \"OK\"", hookMarker, targetDHCPFile)); err == nil && strings.TrimSpace(verification) == "OK" {
+		logs += fmt.Sprintf("Verified patch on %s\n", targetDHCPFile)
+	} else {
+		return logs, fmt.Errorf("could not verify patch on %s: %w", targetDHCPFile, err)
 	}
 
-	// 6. Inject CA Certificate
-	summary := &MigrationSummary{}
-	m.checkCACertTrusted(summary, deviceIP)
+	return logs, nil
+}
 
-	if !summary.CACertTrusted {
-		out, err := m.TrustCACert(deviceIP)
+func (m *Manager) patchUdhcpcScript(client SSHClient, targetScript, hookMarker string) (string, error) {
+	var logs string
 
-		logs += "Trusting CA:\n" + out + "\n"
-		if err != nil {
-			return logs, err
-		}
+	// Backup if it doesn't exist
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetScript)); err != nil {
+		out, _ := client.Run(fmt.Sprintf("cp %s %s.original", targetScript, targetScript))
+		logs += fmt.Sprintf("cp %s %s.original: %s\n", targetScript, targetScript, out)
 	} else {
-		logs += "CA certificate already trusted, skipping injection\n"
+		// If backup exists, revert to it first to ensure we start from a clean state
+		_, _ = client.Run(fmt.Sprintf("cp %s.original %s", targetScript, targetScript))
+	}
+
+	patchCmdScript := fmt.Sprintf("sed -i '/echo \"search \\$search_list # \\$interface\" >> \\$RESOLV_CONF/a \\                [ -f '\"%s\"' ] && cat '\"%s\"' >> '\"\\$RESOLV_CONF\"' && dns=\"\"' %s", hookMarker, hookMarker, targetScript)
+	if _, err := client.Run(patchCmdScript); err != nil {
+		return logs, fmt.Errorf("failed to apply patch immediately to %s: %w", targetScript, err)
+	}
+
+	logs += fmt.Sprintf("Applied patch to %s\n", targetScript)
+
+	// Verify patch on udhcpc.script
+	if verification, err := client.Run(fmt.Sprintf("grep -q \"%s\" %s && echo \"OK\"", hookMarker, targetScript)); err == nil && strings.TrimSpace(verification) == "OK" {
+		logs += fmt.Sprintf("Verified patch on %s\n", targetScript)
+	} else {
+		return logs, fmt.Errorf("could not verify patch on %s: %w", targetScript, err)
 	}
 
 	return logs, nil

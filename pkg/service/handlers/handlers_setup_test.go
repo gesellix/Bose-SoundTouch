@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
@@ -140,7 +141,7 @@ func TestMigrationAndCA(t *testing.T) {
 	sm := setup.NewManager("http://localhost:8000", ds, cm)
 	// Mock SSH to avoid real connections
 	sm.NewSSH = func(host string) setup.SSHClient {
-		return &mockSSH{}
+		return &mockSSH{host: host}
 	}
 
 	r, server := setupRouter("http://localhost:8001", ds)
@@ -338,12 +339,27 @@ func TestRemoveDevice(t *testing.T) {
 	}
 }
 
-type mockSSH struct{}
+type mockSSH struct {
+	host     string
+	runCount int
+}
 
 func (m *mockSSH) Run(command string) (string, error) {
-	if command == "cat /etc/hosts" {
+	if strings.Contains(command, "cat /etc/hosts") {
+		m.runCount++
+		if m.runCount > 1 {
+			// Return updated hosts for verification
+			return "127.0.0.1 localhost\n192.168.1.100\tstreaming.bose.com\n192.168.1.100\tupdates.bose.com\n192.168.1.100\tstats.bose.com\n192.168.1.100\tbmx.bose.com\n192.168.1.100\tcontent.api.bose.io\n192.168.1.100\tevents.api.bosecm.com\n192.168.1.100\tbose-prod.apigee.net\n192.168.1.100\tworldwide.bose.com", nil
+		}
 		return "127.0.0.1 localhost", nil
+	}
+	if strings.HasPrefix(command, "[ -f") {
+		return "", nil // Pretend file exists for backups
+	}
+	if strings.HasPrefix(command, "grep -F") {
+		return "matched", nil // CA trusted
 	}
 	return "", nil
 }
+
 func (m *mockSSH) UploadContent(content []byte, remotePath string) error { return nil }
