@@ -17,6 +17,7 @@ A comprehensive solution for controlling and preserving Bose SoundTouch devices,
 - ⚡ **Real-time Events**: WebSocket connection for live device state monitoring
 - 🔍 **Device Discovery**: Automatic discovery via UPnP/SSDP and mDNS
 - 📻 **Content Navigation**: Browse and search TuneIn, Pandora, Spotify, local music
+- 📻 **RadioBrowser**: Access thousands of internet radio stations via [radio-browser.info](docs/reference/radio-browser.md)
 - 🎙️ **Station Management**: Add and play radio stations without presets
 - 🖥️ **CLI Tool**: Comprehensive command-line interface
 - 🌐 **SoundTouch Service**: Emulate Bose cloud services for offline device operation

@@ -38,6 +38,7 @@ The Bose SoundTouch Go client provides comprehensive source selection functional
 - `IHEARTRADIO` - iHeartRadio streaming
 - `STORED_MUSIC` - Local/network stored music
 - `AIRPLAY` - Apple AirPlay (device dependent)
+- `RADIO_BROWSER` - [RadioBrowser](radio-browser.md) internet radio directory
 
 ## Client Library Usage
 

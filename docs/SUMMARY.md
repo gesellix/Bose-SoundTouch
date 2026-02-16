@@ -33,6 +33,7 @@
 * [Preset Management](reference/PRESET-MANAGEMENT.md)
 * [Source Selection](reference/SOURCE-SELECTION.md)
 * [Volume Controls](reference/VOLUME-CONTROLS.md)
+* [RadioBrowser](reference/radio-browser.md)
 * [Bass Controls](reference/BASS-CONTROLS.md)
 * [Key Controls](reference/KEY-CONTROLS.md)
 * [Feature Mapping](reference/FEATURE-MAPPING.md)

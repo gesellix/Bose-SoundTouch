@@ -170,6 +170,46 @@
         "liveRadio",
         "onDemand"
       ]
+    },
+    {
+      "_links": {
+        "bmx_navigate": {
+          "href": "/v1/navigate"
+        },
+        "bmx_token": {
+          "href": "/v1/token"
+        },
+        "self": {
+          "href": "/"
+        }
+      },
+      "askAdapter": false,
+      "assets": {
+        "color": "#000000",
+        "description": "RadioBrowser is an open source internet radio directory. It provides access to thousands of internet radio stations worldwide. RadioBrowser is community driven and relies on user contributions to keep the station database up to date.",
+        "icons": {
+          "largeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
+          "monochromePng": "{MEDIA_SERVER}/orion-monochrome_v2.png",
+          "monochromeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
+          "smallSvg": "{MEDIA_SERVER}/orion-monochrome.svg"
+        },
+        "name": "RadioBrowser"
+      },
+      "authenticationModel": {
+        "anonymousAccount": {
+          "autoCreate": true,
+          "enabled": true
+        }
+      },
+      "baseUrl": "https://all.api.radio-browser.info/soundtouch",
+      "id": {
+        "name": "RADIO_BROWSER",
+        "value": 39
+      },
+      "streamTypes": [
+        "liveRadio",
+        "onDemand"
+      ]
     }
   ]
 }

@@ -41,6 +41,7 @@ var Providers = []string{
 	"RADIO.COM",
 	"RADIO_COM",
 	"SIRIUSXM_EVEREST",
+	"RADIO_BROWSER",
 }
 
 // Common file and path constants used by the datastore and setup logic.
