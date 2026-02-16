@@ -6,11 +6,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
 	"fmt"
 
+	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
@@ -148,10 +150,15 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	serverURL, soundcorkURL, httpsServerURL := s.serverURL, s.soundcorkURL, s.httpsServerURL
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
+	dnsEnabled := s.dnsEnabled
+	dnsUpstream := s.dnsUpstream
+	dnsBindAddr := s.dnsBindAddr
 	enableSoundcorkProxy := s.enableSoundcorkProxy
 	redact, logBody, record := s.proxyRedact, s.proxyLogBody, s.recordEnabled
 	shortcuts := s.shortcuts
 	s.mu.RUnlock()
+
+	dnsRunning, actualBind := s.GetDNSRunning()
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"server_url":             serverURL,
@@ -159,6 +166,11 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"https_server_url":       httpsServerURL,
 		"discovery_interval":     discoveryInterval,
 		"discovery_enabled":      discoveryEnabled,
+		"dns_enabled":            dnsEnabled,
+		"dns_running":            dnsRunning,
+		"dns_actual_bind":        actualBind,
+		"dns_upstream":           dnsUpstream,
+		"dns_bind_addr":          dnsBindAddr,
 		"enable_soundcork_proxy": enableSoundcorkProxy,
 		"redact_logs":            redact,
 		"log_bodies":             logBody,
@@ -177,6 +189,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		SoundcorkURL         string         `json:"soundcork_url"`
 		DiscoveryInterval    string         `json:"discovery_interval"`
 		DiscoveryEnabled     bool           `json:"discovery_enabled"`
+		DNSEnabled           bool           `json:"dns_enabled"`
+		DNSUpstream          string         `json:"dns_upstream"`
+		DNSBindAddr          string         `json:"dns_bind_addr"`
 		EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
 		Shortcuts            map[string]int `json:"shortcuts"`
 	}
@@ -200,6 +215,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.discoveryEnabled = settings.DiscoveryEnabled
+	s.dnsEnabled = settings.DNSEnabled
+	s.dnsUpstream = settings.DNSUpstream
+	s.dnsBindAddr = settings.DNSBindAddr
 
 	s.enableSoundcorkProxy = settings.EnableSoundcorkProxy
 	if settings.Shortcuts != nil {
@@ -227,6 +245,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordInteractions:   currentRecord,
 		DiscoveryInterval:    s.discoveryInterval.String(),
 		DiscoveryEnabled:     s.discoveryEnabled,
+		DNSEnabled:           s.dnsEnabled,
+		DNSUpstream:          s.dnsUpstream,
+		DNSBindAddr:          s.dnsBindAddr,
 		EnableSoundcorkProxy: s.enableSoundcorkProxy,
 		Shortcuts:            s.shortcuts,
 	})
@@ -379,6 +400,85 @@ func (s *Server) HandleRevertMigration(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Revert started", "output": output}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleGetDNSDiscoveries returns recorded DNS discoveries.
+func (s *Server) HandleGetDNSDiscoveries(w http.ResponseWriter, _ *http.Request) {
+	// 1. Get current in-memory discoveries
+	inMemory := s.GetDNSDiscovery()
+
+	// 2. Load persisted discoveries
+	persisted, err := s.ds.LoadDNSDiscoveries()
+	if err != nil {
+		log.Printf("Warning: Failed to load DNS discoveries: %v", err)
+	}
+
+	// 3. Merge them
+	merged := make(map[string]datastore.DNSDiscoveryEntry)
+	for _, p := range persisted {
+		merged[p.Hostname] = p
+	}
+
+	for hostname, h := range inMemory {
+		m, exists := merged[hostname]
+		if !exists || h.LastSeen.After(m.LastSeen) {
+			merged[hostname] = datastore.DNSDiscoveryEntry{
+				Hostname:      h.Hostname,
+				FirstSeen:     h.FirstSeen,
+				LastSeen:      h.LastSeen,
+				QueryCount:    h.QueryCount,
+				IsBoseService: h.IsBoseService,
+				IsIntercepted: h.IsIntercepted,
+				RemoteAddr:    h.RemoteAddr,
+			}
+		} else if h.QueryCount > m.QueryCount {
+			// If exists and persisted is newer (rare but possible), update query count if higher
+			m.QueryCount = h.QueryCount
+			merged[hostname] = m
+		}
+	}
+
+	// Convert to slice
+	result := make([]datastore.DNSDiscoveryEntry, 0, len(merged))
+	for _, entry := range merged {
+		result = append(result, entry)
+	}
+
+	// Sort by last seen descending
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].LastSeen.After(result[j].LastSeen)
+	})
+
+	// 4. Update persistence with merged results
+	if err := s.ds.SaveDNSDiscoveries(result); err != nil {
+		log.Printf("Warning: Failed to persist merged DNS discoveries: %v", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleClearDNSDiscoveries clears recorded DNS discoveries.
+func (s *Server) HandleClearDNSDiscoveries(w http.ResponseWriter, _ *http.Request) {
+	// 1. Clear in-memory
+	s.SetDNSDiscoveries(make(map[string]*discovery.DiscoveredHost))
+
+	// 2. Clear persistence
+	if err := s.ds.ClearDNSDiscoveries(); err != nil {
+		http.Error(w, "Failed to clear DNS discoveries: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
@@ -651,6 +751,46 @@ func (s *Server) HandleTestHostsRedirection(w http.ResponseWriter, r *http.Reque
 	if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok":      true,
 		"message": "Hosts redirection test successful",
+		"output":  output,
+	}); encodeErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleTestDNSRedirection performs a check for DNS redirection to the AfterTouch service.
+func (s *Server) HandleTestDNSRedirection(w http.ResponseWriter, r *http.Request) {
+	deviceIP := chi.URLParam(r, "deviceIP")
+	if deviceIP == "" {
+		http.Error(w, "Device IP is required", http.StatusBadRequest)
+		return
+	}
+
+	targetURL := r.URL.Query().Get("target_url")
+	if targetURL == "" {
+		targetURL = s.serverURL
+	}
+
+	output, err := s.sm.TestDNSRedirection(deviceIP, targetURL)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK) // Return 200 but ok: false so UI can show the output
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":      false,
+			"message": err.Error(),
+			"output":  output,
+		}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":      true,
+		"message": "DNS redirection test successful",
 		"output":  output,
 	}); encodeErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)

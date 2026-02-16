@@ -722,6 +722,8 @@ func TestRevertMigration(t *testing.T) {
 	// Verify revert commands
 	foundXMLRevert := false
 	foundHostsRevert := false
+	foundResolvRevert := false
+	foundChattrRemove := false
 	foundReboot := false
 	for _, call := range runCalls {
 		if strings.Contains(call, "cp "+SoundTouchSdkPrivateCfgPath+".original "+SoundTouchSdkPrivateCfgPath) {
@@ -729,6 +731,12 @@ func TestRevertMigration(t *testing.T) {
 		}
 		if strings.Contains(call, "cp /etc/hosts.original /etc/hosts") {
 			foundHostsRevert = true
+		}
+		if strings.Contains(call, "cp /etc/resolv.conf.original /etc/resolv.conf") {
+			foundResolvRevert = true
+		}
+		if strings.Contains(call, "chattr -i /etc/resolv.conf") {
+			foundChattrRemove = true
 		}
 		if strings.Contains(call, "reboot") {
 			foundReboot = true
@@ -740,6 +748,12 @@ func TestRevertMigration(t *testing.T) {
 	}
 	if !foundHostsRevert {
 		t.Errorf("Expected /etc/hosts revert")
+	}
+	if !foundResolvRevert {
+		t.Errorf("Expected /etc/resolv.conf revert")
+	}
+	if !foundChattrRemove {
+		t.Errorf("Expected chattr -i /etc/resolv.conf")
 	}
 	if foundReboot {
 		t.Errorf("Expected reboot NOT to be called automatically during revert")
@@ -814,6 +828,104 @@ func TestReboot(t *testing.T) {
 	}
 	if !foundReboot {
 		t.Errorf("Expected reboot command to be called")
+	}
+}
+
+func TestTestDNSRedirection(t *testing.T) {
+	m := NewManager("http://192.168.1.100:8000", nil, nil)
+
+	runCalls := []string{}
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if !strings.Contains(command, "-u") && strings.Contains(command, "nc") {
+					// Verify TCP length prefix is present: \x00\x21
+					if !strings.Contains(command, "\\x00\\x21") {
+						return "", fmt.Errorf("missing TCP length prefix in nc command")
+					}
+					// Mock od output: " 192 168 1 100"
+					return " 192 168 1 100", nil
+				}
+				if strings.HasPrefix(command, "nslookup aftertouch.test 192.168.1.100") {
+					return "Server: 192.168.1.100\nAddress 1: 192.168.1.100\n\nName: aftertouch.test\nAddress 1: 192.168.1.100", nil
+				}
+				return "", nil
+			},
+		}
+	}
+
+	output, err := m.TestDNSRedirection("192.168.1.10", "http://192.168.1.100:8000")
+	if err != nil {
+		t.Fatalf("TestDNSRedirection failed: %v", err)
+	}
+
+	if !strings.Contains(output, "192.168.1.100") {
+		t.Errorf("Expected output to contain service IP, got %s", output)
+	}
+
+	foundNc := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "nc") && !strings.Contains(call, "-u") && strings.Contains(call, "192.168.1.100 53") {
+			foundNc = true
+			break
+		}
+	}
+	if !foundNc {
+		t.Errorf("Expected nc command with port 53, got calls: %v", runCalls)
+	}
+}
+
+func TestTestDNSRedirection_CustomPort(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test-dns-port")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+	_ = ds.SaveSettings(datastore.Settings{
+		DNSBindAddr: ":1053",
+	})
+
+	m := NewManager("http://192.168.1.100:8000", ds, nil)
+
+	runCalls := []string{}
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if !strings.Contains(command, "-u") && strings.Contains(command, "nc") {
+					// Verify TCP length prefix is present: \x00\x21
+					if !strings.Contains(command, "\\x00\\x21") {
+						return "", fmt.Errorf("missing TCP length prefix in nc command")
+					}
+					return " 192 168 1 100", nil
+				}
+				return "", nil
+			},
+		}
+	}
+
+	output, err := m.TestDNSRedirection("192.168.1.10", "http://192.168.1.100:8000")
+	if err != nil {
+		t.Fatalf("TestDNSRedirection failed: %v", err)
+	}
+
+	if !strings.Contains(output, "192.168.1.100") {
+		t.Errorf("Expected output to contain service IP, got %s", output)
+	}
+
+	foundNc := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "nc") && !strings.Contains(call, "-u") && strings.Contains(call, "192.168.1.100 1053") {
+			foundNc = true
+			break
+		}
+	}
+	if !foundNc {
+		t.Errorf("Expected nc command with custom port 1053, got calls: %v", runCalls)
 	}
 }
 
@@ -909,6 +1021,79 @@ func TestMigrateSpeaker_PreFlightFailure(t *testing.T) {
 	}
 }
 
+func TestMigrateViaResolvConf(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test-resolv")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://192.168.1.100:8000", nil, cm)
+
+	runCalls := []string{}
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if command == "cat /etc/resolv.conf" {
+					return "nameserver 8.8.8.8", nil
+				}
+				if strings.HasPrefix(command, "[ -f") {
+					return "", fmt.Errorf("file not found")
+				}
+				if strings.HasPrefix(command, "grep -F") {
+					return "", fmt.Errorf("not found")
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				if remotePath == "/etc/resolv.conf" {
+					if !strings.Contains(string(content), "nameserver 192.168.1.100") {
+						t.Errorf("Expected resolv.conf content to contain nameserver, got %s", string(content))
+					}
+					if !strings.Contains(string(content), "nameserver 8.8.8.8") {
+						t.Errorf("Expected resolv.conf content to retain old nameserver, got %s", string(content))
+					}
+				}
+				return nil
+			},
+		}
+	}
+
+	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
+	if err != nil {
+		t.Fatalf("migrateViaResolvConf failed: %v", err)
+	}
+
+	// Verify backups were attempted
+	foundResolvBackup := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "cp /etc/resolv.conf /etc/resolv.conf.original") {
+			foundResolvBackup = true
+		}
+	}
+	if !foundResolvBackup {
+		t.Errorf("Expected /etc/resolv.conf backup to be attempted")
+	}
+
+	// Verify chattr +i was attempted
+	foundChattr := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "chattr +i /etc/resolv.conf") {
+			foundChattr = true
+			break
+		}
+	}
+	if !foundChattr {
+		t.Errorf("Expected chattr +i /etc/resolv.conf to be attempted")
+	}
+}
+
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
@@ -973,4 +1158,86 @@ func TestCheckIsMigrated(t *testing.T) {
 			t.Errorf("Expected IsMigrated to be false for non-migrated device")
 		}
 	})
+}
+
+func TestMigrateSpeaker_ResolvBlocking(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	m := NewManager("http://192.168.1.100:8000", ds, cm)
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				return "", nil
+			},
+		}
+	}
+
+	// 1. DNS Disabled
+	ds.SaveSettings(datastore.Settings{
+		DNSEnabled:  false,
+		DNSBindAddr: ":53",
+	})
+
+	// Mock HTTP server for device info
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/info" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<info deviceID="12345"><name>Test Speaker</name><type>ST10</type><maccAddress>00:11:22:33:44:55</maccAddress><margeAccountUUID>acc-123</margeAccountUUID></info>`))
+		}
+	}))
+	defer ts.Close()
+
+	// Use the test server address as device IP
+	tsIP := strings.TrimPrefix(ts.URL, "http://")
+
+	_, err = m.MigrateSpeaker(tsIP, "", "", nil, MigrationMethodResolvConf)
+	if err == nil || !strings.Contains(err.Error(), "DNS discovery server is not enabled") {
+		t.Errorf("Expected error about DNS not being enabled, got %v", err)
+	}
+
+	// 2. DNS Enabled but wrong port
+	ds.SaveSettings(datastore.Settings{
+		DNSEnabled:  true,
+		DNSBindAddr: ":5353",
+	})
+
+	_, err = m.MigrateSpeaker(tsIP, "", "", nil, MigrationMethodResolvConf)
+	if err == nil || !strings.Contains(err.Error(), "port 53 is required") {
+		t.Errorf("Expected error about port 53 required, got %v", err)
+	}
+
+	// 3. DNS Enabled and port 53, but not running
+	ds.SaveSettings(datastore.Settings{
+		DNSEnabled:  true,
+		DNSBindAddr: ":53",
+	})
+
+	m.GetDNSRunning = func() (bool, string) {
+		return false, ":53"
+	}
+
+	_, err = m.MigrateSpeaker(tsIP, "", "", nil, MigrationMethodResolvConf)
+	if err == nil || !strings.Contains(err.Error(), "not actually running") {
+		t.Errorf("Expected error about DNS not actually running, got %v", err)
+	}
+
+	// 4. DNS Enabled and port 53, and running
+	m.GetDNSRunning = func() (bool, string) {
+		return true, ":53"
+	}
+
+	// This should now proceed to migrateViaResolvConf
+	_, err = m.MigrateSpeaker(tsIP, "", "", nil, MigrationMethodResolvConf)
+	if err != nil && (strings.Contains(err.Error(), "DNS discovery server is not enabled") ||
+		strings.Contains(err.Error(), "port 53 is required") ||
+		strings.Contains(err.Error(), "not actually running")) {
+		t.Errorf("Did not expect pre-flight DNS errors, got %v", err)
+	}
 }

@@ -7,7 +7,8 @@ The `soundtouch-service` is a comprehensive local server that emulates Bose's cl
 The service provides:
 
 - **🏠 Local Service Emulation**: Complete BMX (Bose Media eXchange) and Marge service implementation
-- **🔧 Device Migration**: Seamlessly migrate devices from Bose cloud to local services  
+- **🔧 Device Migration**: Seamlessly migrate devices from Bose cloud to local services via XML config, `/etc/hosts`, or `/etc/resolv.conf`
+- **🔍 DNS Discovery & Interception**: Built-in DNS server to discover unknown Bose endpoints and selectively intercept cloud traffic
 - **📊 Traffic Proxying**: Inspect and log all device communications for debugging
 - **🌐 Web Management UI**: Browser-based interface for device management
 - **💾 Persistent Data**: Store device configurations, presets, and usage statistics
@@ -150,20 +151,23 @@ The service supports multiple ways to configure its behavior. When multiple sour
 
 ### Configuration Options
 
-| Variable                           | Flag                       | Description                                      | Default                   |
-|------------------------------------|----------------------------|--------------------------------------------------|---------------------------|
-| `PORT`                             | `--port`, `-p`             | HTTP port to bind the service to                 | `8000`                    |
-| `BIND_ADDR`                        | `--bind`                   | Network interface to bind to                     | all (ipv4 and ipv6)       |
-| `DATA_DIR`                         | `--data-dir`               | Directory for persistent data                    | `./data`                  |
-| `SERVER_URL`                       | `--server-url`, `-s`       | External URL of this service                     | `http://<hostname>:8000`  |
-| `HTTPS_PORT`                       | `--https-port`             | HTTPS port to bind the service to                | `8443`                    |
-| `HTTPS_SERVER_URL`                 | `--https-server-url`, `-S` | External HTTPS URL                               | `https://<hostname>:8443` |
-| `PYTHON_BACKEND_URL`, `TARGET_URL` | `--target-url`             | URL for Python-based service components (legacy) | `http://localhost:8001`   |
-| `REDACT_PROXY_LOGS`                | `--redact-logs`            | Redact sensitive data in proxy logs              | `true`                    |
-| `LOG_PROXY_BODY`                   | `--log-bodies`             | Log full request/response bodies                 | `false`                   |
-| `RECORD_INTERACTIONS`              | `--record-interactions`    | Record HTTP interactions to disk                 | `true`                    |
-| `DISCOVERY_INTERVAL`               | `--discovery-interval`     | Device discovery interval                        | `5m`                      |
-| `DISCOVERY_DISABLED`               |                            | Disable automated device discovery               | `false`                   |
+| Variable                           | Flag                       | Description                                                                                             | Default                   |
+|------------------------------------|----------------------------|---------------------------------------------------------------------------------------------------------|---------------------------|
+| `PORT`                             | `--port`, `-p`             | HTTP port to bind the service to                                                                        | `8000`                    |
+| `BIND_ADDR`                        | `--bind`                   | Network interface to bind to                                                                            | all (ipv4 and ipv6)       |
+| `DATA_DIR`                         | `--data-dir`               | Directory for persistent data                                                                           | `./data`                  |
+| `SERVER_URL`                       | `--server-url`, `-s`       | External URL of this service                                                                            | `http://<hostname>:8000`  |
+| `HTTPS_PORT`                       | `--https-port`             | HTTPS port to bind the service to                                                                       | `8443`                    |
+| `HTTPS_SERVER_URL`                 | `--https-server-url`, `-S` | External HTTPS URL                                                                                      | `https://<hostname>:8443` |
+| `PYTHON_BACKEND_URL`, `TARGET_URL` | `--target-url`             | URL for Python-based service components (legacy)                                                        | `http://localhost:8001`   |
+| `REDACT_PROXY_LOGS`                | `--redact-logs`            | Redact sensitive data in proxy logs                                                                     | `true`                    |
+| `LOG_PROXY_BODY`                   | `--log-bodies`             | Log full request/response bodies                                                                        | `false`                   |
+| `RECORD_INTERACTIONS`              | `--record-interactions`    | Record HTTP interactions to disk                                                                        | `true`                    |
+| `DISCOVERY_INTERVAL`               | `--discovery-interval`     | Device discovery interval                                                                               | `5m`                      |
+| `ENABLE_DNS_DISCOVERY`             | `--dns-discovery`          | Enable DNS discovery server                                                                             | `false`                   |
+| `DNS_UPSTREAM`                     | `--dns-upstream`           | Upstream DNS server for non-Bose queries                                                                | `8.8.8.8`                 |
+| `DNS_BIND_ADDR`                    | `--dns-bind`               | Bind address for the DNS discovery server (standard port `:53` is required for `resolv.conf` migration) | `:53`                     |
+| `DISCOVERY_DISABLED`               |                            | Disable automated device discovery                                                                      | `false`                   |
 
 ### Configuration Examples
 
@@ -236,6 +240,42 @@ curl "http://192.168.1.100:8090/presets"
 # Monitor device events (if needed)
 curl "http://localhost:8000/events/192.168.1.100"
 ```
+
+#### ResolvConf Migration (DNS Redirection)
+
+The most robust migration method. Instead of modifying specific host files, it configures the device to use the AfterTouch service as its primary DNS server.
+
+> **Note**: This method requires the DNS Discovery Server to be bound to **port 53** on your local IP and **actually running**. Most devices do not support custom DNS ports in `/etc/resolv.conf`. If you use a custom port for testing, remember to switch back to `:53` and ensure the server has successfully bound to it (check Settings for status) before the actual migration.
+
+**Advantages:**
+- **Discovery**: Automatically discover all Bose endpoints queried by the device.
+- **Dynamic Interception**: Intercept new or unknown services without further device modifications.
+- **Fail-Safe**: Can fall back to upstream DNS for non-intercepted queries.
+
+**Setup:**
+1. Enable DNS discovery in the service settings.
+2. Select the `resolv` method when migrating a device.
+3. The service will automatically make `/etc/resolv.conf` immutable (`chattr +i`) to prevent DHCP overrides.
+
+### DNS Discovery Server
+
+The SoundTouch service includes a built-in DNS server specifically designed for Bose devices.
+
+#### How it Works
+When enabled, the DNS server:
+1. Receives DNS queries from migrated SoundTouch devices.
+2. **Intercepts** known Bose domains (e.g., `api.bose.com`, `streaming.bose.com`, `bmx.bose.com`) and resolves them to the AfterTouch service IP.
+3. **Logs** all other queries for discovery purposes, allowing you to identify new Bose cloud endpoints.
+4. **Forwards** unknown or non-Bose queries to the configured upstream DNS server (default: `8.8.8.8`).
+
+#### Configuration
+You can enable and configure the DNS server via the Web UI or environment variables:
+- `ENABLE_DNS_DISCOVERY=true`: Turns on the DNS server.
+- `DNS_BIND_ADDR=:53`: The port to listen on (requires root privileges for port 53).
+- `DNS_UPSTREAM=1.1.1.1`: Your preferred upstream DNS provider.
+
+#### Manual Discovery via DNS
+Even without migrating a device, you can use the DNS server to discover what a device is querying by manually setting your router's DNS or the device's DNS to point to the AfterTouch service.
 
 ## API Reference
 
@@ -384,6 +424,7 @@ The web management interface provides a comprehensive dashboard for managing you
 - **Interaction Viewer**: View raw `.http` recording content directly in the browser.
 - **Session Management**: Delete individual sessions or perform bulk cleanup to keep only recent sessions.
 - **Session Download**: Download complete interaction sessions as `.tar.gz` archives for offline analysis or bug reports.
+- **DNS Discoveries**: Real-time table of all hostnames discovered via the AfterTouch DNS server, categorized by interception status (Self/Upstream).
 
 ### Usage Tips
 
@@ -464,6 +505,8 @@ data/
 │       │   └── {PATH}/
 │       │       └── {SEQ}-{TIME}-{METHOD}.http
 │       └── http-client.env.json
+├── dns/
+│   └── discoveries.json
 ├── stats/
 │   ├── usage/
 │   │   └── *.json
@@ -484,6 +527,9 @@ data/
 - **Sources.xml**: Configured music service providers
 - **Presets.xml**: Cross-device preset synchronization
 - **Recents.xml**: Recent playback history
+
+#### DNS Data (`dns/`)
+- **discoveries.json**: Persisted DNS discovery logs with hostname deduplication
 
 #### Statistics (`stats/`)
 - **usage/**: Device usage analytics and patterns
@@ -563,6 +609,14 @@ Deletes all recordings associated with a specific session.
 
 #### `DELETE /setup/interactions/sessions?keep={N}`
 Bulk cleanup: deletes all but the most recent `N` sessions.
+
+### DNS Discovery API
+
+#### `GET /setup/dns-discoveries`
+Returns merged in-memory and persisted DNS discoveries, sorted by last seen timestamp.
+
+#### `DELETE /setup/dns-discoveries`
+Clears all recorded DNS discovery data from memory and disk.
 
 ### Emulated Services
 - `/bmx/registry/v1/services`: BMX service registry.

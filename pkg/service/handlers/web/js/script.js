@@ -14,6 +14,15 @@ async function fetchSettings() {
         if (settings.discovery_enabled !== undefined) {
             document.getElementById('discovery-enabled').checked = settings.discovery_enabled;
         }
+        if (settings.dns_enabled !== undefined) {
+            document.getElementById('dns-enabled').checked = settings.dns_enabled;
+        }
+        if (settings.dns_upstream) {
+            document.getElementById('dns-upstream').value = settings.dns_upstream;
+        }
+        if (settings.dns_bind_addr) {
+            document.getElementById('dns-bind').value = settings.dns_bind_addr;
+        }
         if (settings.enable_soundcork_proxy !== undefined) {
             document.getElementById('enable-soundcork-proxy').checked = settings.enable_soundcork_proxy;
         }
@@ -62,6 +71,9 @@ async function updateSettings() {
         proxy_url: document.getElementById('soundcork-url').value,
         discovery_interval: document.getElementById('discovery-interval').value,
         discovery_enabled: document.getElementById('discovery-enabled').checked,
+        dns_enabled: document.getElementById('dns-enabled').checked,
+        dns_upstream: document.getElementById('dns-upstream').value,
+        dns_bind_addr: document.getElementById('dns-bind').value,
         enable_soundcork_proxy: document.getElementById('enable-soundcork-proxy').checked
     };
     const status = document.getElementById('settings-status');
@@ -191,6 +203,7 @@ function openTab(evt, tabId) {
     if (tabId === 'tab-interactions') {
         fetchInteractionStats();
         fetchInteractions();
+        fetchDNSDiscoveries();
     }
 
     if (evt) {
@@ -504,6 +517,74 @@ async function viewInteraction(file) {
     }
 }
 
+async function fetchDNSDiscoveries() {
+    console.log('Fetching DNS discoveries...');
+    try {
+        const response = await fetch('/setup/dns-discoveries');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const discoveries = await response.json();
+        console.log('Fetched DNS discoveries:', discoveries);
+        const list = document.getElementById('dns-discoveries-list');
+        if (!list) {
+            console.error('Could not find dns-discoveries-list element');
+            return;
+        }
+
+        list.innerHTML = '';
+
+        if (!discoveries || discoveries.length === 0) {
+            list.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #666;">No DNS queries discovered yet.</td></tr>';
+            return;
+        }
+
+        discoveries.forEach(d => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #eee';
+
+            const hostname = d.hostname || "";
+            const lastSeen = d.last_seen || "";
+            const count = d.query_count || 0;
+            const isBose = d.is_bose_service ? '✅' : '❌';
+            const category = d.is_intercepted ? 'self' : 'upstream';
+            const remoteAddr = d.remote_addr || 'unknown';
+
+            tr.innerHTML = `
+                <td style="padding: 8px; font-weight: bold;">${hostname}</td>
+                <td style="padding: 8px; font-size: 0.85em;">${lastSeen}</td>
+                <td style="padding: 8px; text-align: center;">${count}</td>
+                <td style="padding: 8px; text-align: center;">${isBose}</td>
+                <td style="padding: 8px;"><span class="badge category-${category}">${category}</span></td>
+                <td style="padding: 8px; font-size: 0.8em; color: #666;">${remoteAddr}</td>
+            `;
+            list.appendChild(tr);
+        });
+    } catch (error) {
+        console.error('Failed to fetch DNS discoveries', error);
+    }
+}
+
+async function clearDNSDiscoveries() {
+    if (!confirm('Are you sure you want to clear all DNS discovery logs?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/setup/dns-discoveries', {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            fetchDNSDiscoveries();
+        } else {
+            const err = await response.text();
+            alert('Failed to clear DNS discoveries: ' + err);
+        }
+    } catch (error) {
+        alert('Error clearing DNS discoveries: ' + error.message);
+    }
+}
+
 async function showDeviceEvents() {
     const overlay = document.getElementById('device-events-overlay');
     overlay.style.display = 'block';
@@ -796,6 +877,12 @@ async function showSummary(ip) {
 
         document.getElementById('planned-config').innerText = summary.planned_config;
         document.getElementById('planned-hosts').innerText = summary.planned_hosts || '';
+        document.getElementById('planned-resolv').innerText = `nameserver ${new URL(targetUrl).hostname}\n${summary.current_resolv_conf || ''}`;
+
+        const currentResolvElem = document.getElementById('current-resolv-content');
+        if (currentResolvElem) {
+            currentResolvElem.innerText = summary.current_resolv_conf || 'Not available';
+        }
 
         const testUrlElem = document.getElementById('test-url');
         testUrlElem.innerText = summary.server_https_url || 'N/A';
@@ -806,6 +893,7 @@ async function showSummary(ip) {
         document.getElementById('test-connection-explicit-btn').onclick = () => testConnection(ip, true);
         document.getElementById('test-connection-trusted-btn').onclick = () => testConnection(ip, false);
         document.getElementById('test-hosts-btn').onclick = () => testHostsRedirection(ip);
+        document.getElementById('test-dns-btn').onclick = () => testDNSRedirection(ip);
 
         toggleMigrationMethod();
 
@@ -1154,30 +1242,106 @@ async function testHostsRedirection(ip) {
     }
 }
 
+async function testDNSRedirection(ip) {
+    const targetUrl = document.getElementById('target-domain').value;
+    const testResultDiv = document.getElementById('dns-test-result');
+
+    testResultDiv.style.display = 'block';
+    testResultDiv.style.backgroundColor = '#f0f0f0';
+    testResultDiv.style.color = 'black';
+    testResultDiv.innerText = 'Running DNS redirection test from ' + ip + '...\n(This may take a few seconds)';
+
+    try {
+        const query = `?target_url=${encodeURIComponent(targetUrl)}`;
+        const response = await fetch(`/setup/test-dns/${ip}${query}`, { method: 'POST' });
+        const result = await response.json();
+
+        if (result.ok) {
+            testResultDiv.style.backgroundColor = '#ccffcc';
+            testResultDiv.innerText = '✅ ' + result.message + '\n\nOutput:\n' + result.output;
+        } else {
+            testResultDiv.style.backgroundColor = '#ffcccc';
+            testResultDiv.innerText = '❌ Test failed: ' + result.message + '\n\nOutput:\n' + result.output;
+        }
+    } catch (error) {
+        testResultDiv.style.backgroundColor = '#ffcccc';
+        testResultDiv.innerText = '❌ Error triggering test: ' + error;
+    }
+}
+
 function toggleOriginalConfig() {
     const pane = document.getElementById('original-config-pane');
     pane.style.display = pane.style.display === 'none' ? 'block' : 'none';
 }
 
-function toggleMigrationMethod() {
+async function toggleMigrationMethod() {
     const method = document.getElementById('migration-method').value;
     const xmlDiffPane = document.getElementById('xml-diff-pane');
     const plannedXmlPane = document.getElementById('planned-xml-pane');
     const plannedHostsPane = document.getElementById('planned-hosts-pane');
+    const plannedResolvPane = document.getElementById('planned-resolv-pane');
+    const currentResolvPane = document.getElementById('current-resolv-pane');
     const serviceOptions = document.getElementById('service-options');
     const hostsTestPane = document.getElementById('hosts-redirection-test');
+    const dnsTestPane = document.getElementById('dns-redirection-test');
+
+    const dnsWarning = document.getElementById('dns-port-warning');
 
     if (method === 'hosts') {
         xmlDiffPane.style.display = 'none';
         plannedXmlPane.style.display = 'none';
         plannedHostsPane.style.display = 'block';
+        plannedResolvPane.style.display = 'none';
+        currentResolvPane.style.display = 'none';
         serviceOptions.style.display = 'none';
         hostsTestPane.style.display = 'block';
+        dnsTestPane.style.display = 'none';
+        if (dnsWarning) dnsWarning.style.display = 'none';
+    } else if (method === 'resolv') {
+        xmlDiffPane.style.display = 'none';
+        plannedXmlPane.style.display = 'none';
+        plannedHostsPane.style.display = 'none';
+        plannedResolvPane.style.display = 'block';
+        currentResolvPane.style.display = 'block';
+        serviceOptions.style.display = 'none';
+        hostsTestPane.style.display = 'none';
+        dnsTestPane.style.display = 'block';
+
+        // Check DNS settings
+        try {
+            const response = await fetch('/setup/settings');
+            const settings = await response.json();
+            const dnsBind = settings.dns_bind_addr || '';
+            const isPort53 = dnsBind.endsWith(':53') || dnsBind === '53';
+            const isEnabled = settings.dns_enabled;
+            const isRunning = settings.dns_running;
+            const actualBind = settings.dns_actual_bind;
+
+            if (dnsWarning) {
+                if (!isEnabled) {
+                    dnsWarning.innerText = '⚠️ DNS Discovery is DISABLED in Settings. Migration will fail.';
+                    dnsWarning.style.display = 'block';
+                } else if (!isPort53) {
+                    dnsWarning.innerText = `⚠️ DNS Discovery is bound to ${dnsBind}, but port 53 is required for migration.`;
+                    dnsWarning.style.display = 'block';
+                } else if (!isRunning) {
+                    dnsWarning.innerText = `⚠️ DNS Discovery server is NOT RUNNING on ${dnsBind} (check for port conflicts/permissions). Migration will fail.`;
+                    dnsWarning.style.display = 'block';
+                } else {
+                    dnsWarning.style.display = 'none';
+                }
+            }
+        } catch (e) {
+            console.error('Failed to check DNS settings', e);
+        }
     } else {
         xmlDiffPane.style.display = 'block';
         plannedXmlPane.style.display = 'block';
         plannedHostsPane.style.display = 'none';
+        plannedResolvPane.style.display = 'none';
+        currentResolvPane.style.display = 'none';
         hostsTestPane.style.display = 'none';
+        dnsTestPane.style.display = 'none';
         // Only show service options if we have a parsed config
         const currentConfig = document.getElementById('current-config').innerText;
         if (currentConfig && !currentConfig.startsWith('Error') && currentConfig !== 'loading...') {

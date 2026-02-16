@@ -1,6 +1,7 @@
 accounts/
 certs/
 default/
+dns/
 interactions/
 patterns.json
 settings.json

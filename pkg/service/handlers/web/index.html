@@ -101,6 +101,24 @@
                 <span id="settings-status" style="margin-left: 10px; font-size: 0.9em;"></span>
             </div>
             <div style="margin-bottom: 20px;">
+                <strong>DNS Discovery:</strong>
+                <div style="margin-top: 5px;">
+                    <label style="display: block; margin-bottom: 5px;">
+                        <input type="checkbox" id="dns-enabled"> Enable DNS Discovery Server
+                    </label>
+                    <div style="margin-left: 20px; margin-bottom: 5px;">
+                        <label for="dns-upstream">Upstream DNS:</label>
+                        <input type="text" id="dns-upstream" placeholder="8.8.8.8" style="width: 150px;">
+                        <span style="font-size: 0.8em; color: #666; margin-left: 5px;">(For non-intercepted queries)</span>
+                    </div>
+                    <div style="margin-left: 20px;">
+                        <label for="dns-bind">DNS Bind Address:</label>
+                        <input type="text" id="dns-bind" placeholder=":53" style="width: 100px;">
+                        <span style="font-size: 0.8em; color: #666; margin-left: 5px;">(e.g., :53 or 0.0.0.0:53. <strong>Port 53</strong> is required for actual migration)</span>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-bottom: 20px;">
                 <strong>Proxy Logging:</strong>
                 <div style="margin-top: 5px;">
                     <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
@@ -194,12 +212,31 @@
                     <div id="hosts-test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
                 </div>
 
+                <div id="dns-redirection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #e6ffed; display: none;">
+                    <strong>Preliminary DNS Test:</strong><br>
+                    <span style="font-size: 0.85em; color: #555;">Verify the device can resolve domains via the AfterTouch DNS server.</span>
+                    <div style="margin-top: 10px;">
+                        Domain: <code>aftertouch.test</code>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button id="test-dns-btn" style="background-color: #28a745; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test DNS Redirection</button>
+                    </div>
+                    <div id="dns-test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
+                </div>
+
                 <div style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;">
                     <label for="migration-method"><strong>Migration Method:</strong></label>
                     <select id="migration-method" onchange="toggleMigrationMethod()">
                         <option value="xml">XML Configuration (Recommended - redirects specific services)</option>
                         <option value="hosts">/etc/hosts + Root CA (Advanced - global redirection)</option>
+                        <option value="resolv">/etc/resolv.conf (DNS Discovery Mode - robust)</option>
                     </select>
+                    <div id="dns-port-warning" style="margin-top: 5px; color: #d32f2f; font-weight: bold; font-size: 0.9em; display: none;"></div>
+                </div>
+
+                <div id="current-resolv-pane" style="display: none; margin-bottom: 20px;">
+                    <span class="config-header">Current /etc/resolv.conf</span>
+                    <pre id="current-resolv-content"></pre>
                 </div>
 
                 <div id="original-config-pane" style="display: none; margin-bottom: 20px;">
@@ -270,6 +307,13 @@
                             <strong>Note:</strong> This method also injects the AfterTouch Local Root CA into <code>/etc/pki/tls/certs/ca-bundle.crt</code> to enable secure HTTPS communication.
                         </div>
                     </div>
+                    <div id="planned-resolv-pane" class="diff-pane" style="display: none;">
+                        <span class="config-header">Planned /etc/resolv.conf</span>
+                        <pre id="planned-resolv"></pre>
+                        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                            <strong>Note:</strong> This method prepends AfterTouch as the nameserver and makes the file immutable (<code>chattr +i</code>). It also injects the Local Root CA.
+                        </div>
+                    </div>
                 </div>
                 <div style="margin-top: 15px;">
                     <button id="confirm-migrate-btn" style="background-color: #4CAF50; color: white; border: none; padding: 10px 20px;">Confirm Migration</button>
@@ -314,7 +358,9 @@
             </div>
 
             <div id="browse-recordings" class="summary-box" style="margin-top: 20px;">
-                <h3>Browse Recordings</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">Browse Recordings</h3>
+                </div>
                 <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center; background: #f9f9f9; padding: 10px; border-radius: 4px;">
                     <div>
                         <label for="filter-session">Session:</label>
@@ -352,6 +398,31 @@
                         </thead>
                         <tbody id="interactions-list">
                             <tr><td colspan="7" style="padding: 20px; text-align: center; color: #666;">No interactions found.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="dns-discoveries" class="summary-box" style="margin-top: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">DNS Discoveries</h3>
+                    <button onclick="clearDNSDiscoveries()" class="btn-danger">Clear DNS Logs</button>
+                </div>
+                <p style="font-size: 0.85em; color: #666;">Hosts discovered via the AfterTouch DNS server. "Self" means the domain was intercepted and redirected to this service.</p>
+                <div id="dns-discoveries-list-container" style="max-height: 400px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
+                                <th style="padding: 8px;">Hostname</th>
+                                <th style="padding: 8px;">Last Seen</th>
+                                <th style="padding: 8px; text-align: center;">Queries</th>
+                                <th style="padding: 8px; text-align: center;">Bose?</th>
+                                <th style="padding: 8px;">Category</th>
+                                <th style="padding: 8px;">Last Client IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dns-discoveries-list">
+                            <tr><td colspan="6" style="padding: 20px; text-align: center; color: #666;">No DNS discoveries found.</td></tr>
                         </tbody>
                     </table>
                 </div>

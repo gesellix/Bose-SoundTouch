@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
@@ -137,6 +138,23 @@ func main() {
 				Value:   "5m",
 				EnvVars: []string{"DISCOVERY_INTERVAL"},
 			},
+			&cli.BoolFlag{
+				Name:    "dns-discovery",
+				Usage:   "Enable DNS discovery server",
+				EnvVars: []string{"ENABLE_DNS_DISCOVERY"},
+			},
+			&cli.StringFlag{
+				Name:    "dns-upstream",
+				Usage:   "Upstream DNS server for non-Bose queries",
+				Value:   "8.8.8.8",
+				EnvVars: []string{"DNS_UPSTREAM"},
+			},
+			&cli.StringFlag{
+				Name:    "dns-bind",
+				Usage:   "Bind address for the DNS discovery server",
+				Value:   ":53",
+				EnvVars: []string{"DNS_BIND_ADDR"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			config := loadConfig(c)
@@ -160,10 +178,32 @@ func main() {
 			cm := initCertificateManager(config.dataDir)
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.enableSoundcorkProxy)
+			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetSoundcorkURL(config.soundcorkURL)
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
+			server.SetDNSSettings(persisted.DNSEnabled, persisted.DNSUpstream, persisted.DNSBindAddr)
+
+			// Load and set initial DNS discoveries
+			dnsDiscoveries, err := ds.LoadDNSDiscoveries()
+			if err == nil && len(dnsDiscoveries) > 0 {
+				initial := make(map[string]*discovery.DiscoveredHost)
+				for _, entry := range dnsDiscoveries {
+					initial[entry.Hostname] = &discovery.DiscoveredHost{
+						Hostname:      entry.Hostname,
+						FirstSeen:     entry.FirstSeen,
+						LastSeen:      entry.LastSeen,
+						QueryCount:    entry.QueryCount,
+						IsBoseService: entry.IsBoseService,
+						IsIntercepted: entry.IsIntercepted,
+						RemoteAddr:    entry.RemoteAddr,
+					}
+				}
+
+				server.SetDNSDiscoveries(initial)
+			}
+
 			server.SetShortcuts(persisted.Shortcuts)
 
 			for path, status := range persisted.Shortcuts {
@@ -253,6 +293,9 @@ type serviceConfig struct {
 	logBody              bool
 	record               bool
 	enableSoundcorkProxy bool
+	dnsEnabled           bool
+	dnsUpstream          string
+	dnsBind              string
 	discoveryInterval    time.Duration
 	domains              []string
 }
@@ -300,6 +343,10 @@ func loadConfig(c *cli.Context) serviceConfig {
 	record := c.Bool("record-interactions")
 	enableSoundcorkProxy := c.Bool("enable-soundcork-proxy")
 
+	dnsEnabled := c.Bool("dns-discovery")
+	dnsUpstream := c.String("dns-upstream")
+	dnsBind := c.String("dns-bind")
+
 	discoveryIntervalStr := c.String("discovery-interval")
 
 	discoveryInterval, err := time.ParseDuration(discoveryIntervalStr)
@@ -322,6 +369,9 @@ func loadConfig(c *cli.Context) serviceConfig {
 		logBody:              logBody,
 		record:               record,
 		enableSoundcorkProxy: enableSoundcorkProxy,
+		dnsEnabled:           dnsEnabled,
+		dnsUpstream:          dnsUpstream,
+		dnsBind:              dnsBind,
 		discoveryInterval:    discoveryInterval,
 		domains:              domains,
 	}
@@ -385,6 +435,15 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	config.record = persisted.RecordInteractions
 	config.enableSoundcorkProxy = persisted.EnableSoundcorkProxy
 
+	config.dnsEnabled = persisted.DNSEnabled
+	if persisted.DNSUpstream != "" {
+		config.dnsUpstream = persisted.DNSUpstream
+	}
+
+	if persisted.DNSBindAddr != "" {
+		config.dnsBind = persisted.DNSBindAddr
+	}
+
 	return persisted
 }
 
@@ -399,6 +458,9 @@ func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datast
 		DiscoveryInterval:    config.discoveryInterval.String(),
 		DiscoveryEnabled:     true,
 		EnableSoundcorkProxy: config.enableSoundcorkProxy,
+		DNSEnabled:           config.dnsEnabled,
+		DNSUpstream:          config.dnsUpstream,
+		DNSBindAddr:          config.dnsBind,
 		Shortcuts: map[string]int{
 			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
 			"/sw.js": http.StatusNotFound,
@@ -546,6 +608,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Post("/sync/{deviceIP}", server.HandleInitialSync)
 		r.Post("/test-connection/{deviceIP}", server.HandleTestConnection)
 		r.Post("/test-hosts/{deviceIP}", server.HandleTestHostsRedirection)
+		r.Post("/test-dns/{deviceIP}", server.HandleTestDNSRedirection)
 		r.Get("/ca.crt", server.HandleGetCACert)
 		r.Get("/proxy-settings", server.HandleGetProxySettings)
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)
@@ -556,6 +619,10 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Get("/interactions/sessions/{session}/download", server.HandleDownloadSession)
 		r.Delete("/interactions/sessions/{session}", server.HandleDeleteSession)
 		r.Delete("/interactions/sessions", server.HandleCleanupSessions)
+
+		r.Get("/dns-discoveries", server.HandleGetDNSDiscoveries)
+		r.Delete("/dns-discoveries", server.HandleClearDNSDiscoveries)
+
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 	})
 

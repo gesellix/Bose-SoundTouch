@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -28,9 +29,13 @@ type Server struct {
 	recordEnabled        bool
 	discoveryInterval    time.Duration
 	discoveryEnabled     bool
+	dnsEnabled           bool
+	dnsUpstream          string
+	dnsBindAddr          string
 	enableSoundcorkProxy bool
 	shortcuts            map[string]int
 	recorder             *proxy.Recorder
+	dnsDiscovery         *discovery.DNSDiscovery
 	UpstreamProxy        http.Handler
 	Version              string
 	Commit               string
@@ -71,6 +76,84 @@ func (s *Server) SetDiscoverySettings(interval time.Duration, enabled bool) {
 
 	s.discoveryInterval = interval
 	s.discoveryEnabled = enabled
+}
+
+// SetDNSSettings sets the DNS discovery settings for the server.
+func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	oldBind := s.dnsBindAddr
+	oldUpstream := s.dnsUpstream
+
+	s.dnsEnabled = enabled
+	s.dnsUpstream = upstream
+	s.dnsBindAddr = bind
+
+	if s.dnsDiscovery != nil {
+		if !enabled || bind != oldBind || upstream != oldUpstream {
+			log.Printf("[DNS] Settings changed, stopping DNS discovery server")
+
+			_ = s.dnsDiscovery.Shutdown()
+			s.dnsDiscovery = nil
+		}
+	}
+
+	if enabled && s.dnsDiscovery == nil {
+		log.Printf("[DNS] Starting DNS discovery server on %s", bind)
+
+		u, _ := url.Parse(s.serverURL)
+
+		serviceIP := u.Hostname()
+		if serviceIP == "localhost" || serviceIP == "" {
+			serviceIP = "127.0.0.1"
+		}
+
+		if s.sm != nil {
+			serviceIP = s.sm.GetResolvedIP(serviceIP)
+		}
+
+		s.dnsDiscovery = discovery.NewDNSDiscovery(upstream, serviceIP)
+		go func(d *discovery.DNSDiscovery, addr string) {
+			if err := d.Start(addr); err != nil {
+				log.Printf("Warning: DNS discovery server error: %v", err)
+			}
+		}(s.dnsDiscovery, bind)
+	}
+}
+
+// GetDNSRunning returns whether DNS discovery is active and its bind address.
+func (s *Server) GetDNSRunning() (bool, string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.dnsDiscovery == nil {
+		return false, ""
+	}
+
+	return s.dnsDiscovery.IsRunning(s.dnsBindAddr), s.dnsBindAddr
+}
+
+// SetDNSDiscoveries sets the initial DNS discoveries for the server.
+func (s *Server) SetDNSDiscoveries(discoveries map[string]*discovery.DiscoveredHost) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.dnsDiscovery != nil {
+		s.dnsDiscovery.SetDiscovered(discoveries)
+	}
+}
+
+// GetDNSDiscovery returns the current DNS discoveries.
+func (s *Server) GetDNSDiscovery() map[string]*discovery.DiscoveredHost {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.dnsDiscovery == nil {
+		return nil
+	}
+
+	return s.dnsDiscovery.GetDiscovered()
 }
 
 // SetShortcuts sets the request shortcuts for the server.

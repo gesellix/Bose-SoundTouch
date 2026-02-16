@@ -20,7 +20,9 @@ A comprehensive solution for controlling and preserving Bose SoundTouch devices,
 - 🎙️ **Station Management**: Add and play radio stations without presets
 - 🖥️ **CLI Tool**: Comprehensive command-line interface
 - 🌐 **SoundTouch Service**: Emulate Bose cloud services for offline device operation
-- 🔧 **Service Migration**: Migrate devices to use local services instead of Bose cloud
+- 🔧 **Service Migration**: Migrate devices to use local services instead of Bose cloud (XML, Hosts, or DNS redirection)
+- 🔍 **DNS Discovery & Interception**: Dynamic DNS server for intercepting and logging Bose service queries (requires port 53)
+- 📊 **DNS Discovery Analysis**: Track and deduplicate all device DNS queries to discover hidden hostnames
 - 📊 **Traffic Analysis**: Proxy and log device communications
 - 📝 **HTTP Recording**: Persist interactions as re-playable `.http` files
 - 🧹 **Session Management**: Manage and cleanup recorded interaction sessions

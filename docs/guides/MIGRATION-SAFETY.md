@@ -27,7 +27,10 @@ Before you proceed with the actual migration, follow these steps:
 4.  **Validate SSH Access**: Confirm the device responds to SSH without a password. 
     - In the Web UI **Migration** tab, select your speaker and verify that the "SSH Connection" status shows ✅ Success.
     - This toolkit automatically handles the necessary SSH parameters (ciphers and key exchanges) required by older Bose firmware.
-5.  **Use XML Migration First**: The `XML` migration method is less invasive than the `Hosts` method. It only changes the application config and doesn't require modifying the system's DNS/CA trust store if you don't need full HTTPS interception initially.
+5.  **Migration Methods**: 
+    - **XML Migration (Default)**: Less invasive, only changes the application config. Best for simple redirection.
+    - **Hosts Migration**: Modifies `/etc/hosts` on the device. Good for system-wide redirection of specific domains.
+    - **ResolvConf Migration**: Points the device to the AfterTouch DNS server. Best for discovering unknown Bose endpoints and dynamic interception. **Note**: This method requires the DNS Discovery Server to be running on port 53. The service includes a pre-flight check to ensure the server is properly bound before allowing this migration.
 6.  **Monitor Logs**: Run the `soundtouch-service` with `DEBUG` or `INFO` logging to see the step-by-step progress of the migration.
 
 #### 🔄 Rollback Strategy

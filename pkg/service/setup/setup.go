@@ -27,6 +27,8 @@ const (
 	MigrationMethodXML MigrationMethod = "xml"
 	// MigrationMethodHosts redirects services by modifying /etc/hosts and updating the CA trust store.
 	MigrationMethodHosts MigrationMethod = "hosts"
+	// MigrationMethodResolvConf redirects services by modifying /etc/resolv.conf and updating the CA trust store.
+	MigrationMethodResolvConf MigrationMethod = "resolv"
 )
 
 // SoundTouchSdkPrivateCfgPath is the path to the speaker's private configuration file on device.
@@ -64,6 +66,7 @@ type MigrationSummary struct {
 	FirmwareVersion          string      `json:"firmware_version,omitempty"`
 	CACertTrusted            bool        `json:"ca_cert_trusted"`
 	ServerHTTPSURL           string      `json:"server_https_url,omitempty"`
+	CurrentResolvConf        string      `json:"current_resolv_conf,omitempty"`
 	IsMigrated               bool        `json:"is_migrated"`
 }
 
@@ -79,6 +82,9 @@ type Manager struct {
 	DataStore *datastore.DataStore
 	Crypto    *certmanager.CertificateManager
 	NewSSH    func(host string) SSHClient
+
+	// GetDNSRunning is an optional callback to check the actual state of the DNS server.
+	GetDNSRunning func() (bool, string)
 }
 
 // NewManager creates a new Manager with the given base server URL.
@@ -236,6 +242,14 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	// 4. Check if CA certificate is trusted
 	m.checkCACertTrusted(summary, deviceIP)
 
+	// 4b. Check current /etc/resolv.conf
+	if summary.SSHSuccess {
+		client := m.NewSSH(deviceIP)
+		if resolvConf, err := client.Run("cat /etc/resolv.conf"); err == nil {
+			summary.CurrentResolvConf = resolvConf
+		}
+	}
+
 	// 5. Provide HTTPS URL for testing
 	if parsedURL, err := url.Parse(targetURL); err == nil {
 		hostIP := parsedURL.Hostname()
@@ -295,6 +309,23 @@ func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
 		for _, domain := range boseDomains {
 			if strings.Contains(hostsContent, domain) {
 				// If CA is also trusted, it's a strong indicator of migration
+				if summary.CACertTrusted {
+					summary.IsMigrated = true
+					return
+				}
+			}
+		}
+	}
+
+	// Case 3: /etc/resolv.conf Migration
+	// Check if /etc/resolv.conf contains our target nameserver
+	if summary.CurrentResolvConf != "" {
+		targetURL := m.ServerURL
+
+		parsedTarget, err := url.Parse(targetURL)
+		if err == nil {
+			targetHost := parsedTarget.Hostname()
+			if strings.Contains(summary.CurrentResolvConf, targetHost) {
 				if summary.CACertTrusted {
 					summary.IsMigrated = true
 					return
@@ -523,10 +554,62 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 
 	logs += "Pre-flight: Write access verified.\n"
 
-	if method == MigrationMethodHosts {
+	switch method {
+	case MigrationMethodHosts:
 		out, err := m.migrateViaHosts(deviceIP, targetURL)
 		return logs + out, err
+
+	case MigrationMethodResolvConf:
+		if err := m.checkDNSPreFlight(); err != nil {
+			return logs, err
+		}
+
+		out, err := m.migrateViaResolvConf(deviceIP, targetURL)
+
+		return logs + out, err
+
+	case MigrationMethodXML:
+		out, err := m.migrateViaXML(deviceIP, targetURL, proxyURL, options, client, rwCmd)
+		return logs + out, err
+
+	default:
+		return logs, fmt.Errorf("unsupported migration method: %s", method)
 	}
+}
+
+func (m *Manager) checkDNSPreFlight() error {
+	// Pre-flight check: DNS server must be enabled and bound to port 53
+	settings, err := m.DataStore.GetSettings()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve settings: %w", err)
+	}
+
+	if !settings.DNSEnabled {
+		return fmt.Errorf("DNS discovery server is not enabled. Please enable it in Settings before using /etc/resolv.conf migration")
+	}
+
+	if !strings.HasSuffix(settings.DNSBindAddr, ":53") && settings.DNSBindAddr != "53" {
+		return fmt.Errorf("DNS discovery server is bound to %s, but port 53 is required for /etc/resolv.conf migration", settings.DNSBindAddr)
+	}
+
+	// Also check the actual running state if callback is available
+	if m.GetDNSRunning != nil {
+		isRunning, bindAddr := m.GetDNSRunning()
+		if !isRunning {
+			return fmt.Errorf("DNS discovery server is configured but not actually running on %s. Please check logs for binding errors", bindAddr)
+		}
+
+		if !strings.HasSuffix(bindAddr, ":53") && bindAddr != "53" {
+			// This shouldn't happen based on previous check, but for completeness
+			return fmt.Errorf("DNS discovery server is running on %s, but port 53 is required", bindAddr)
+		}
+	}
+
+	return nil
+}
+
+func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options map[string]string, client SSHClient, rwCmd string) (string, error) {
+	var logs string
 
 	out, err := m.EnsureRemoteServices(deviceIP)
 	logs += "Ensuring remote services:\n" + out + "\n"
@@ -960,6 +1043,101 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 	return logs, nil
 }
 
+func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, error) {
+	client := m.NewSSH(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+
+	var logs string
+
+	// 1. Resolve target hostname to IP
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse target URL: %w", err)
+	}
+
+	hostName := parsedURL.Hostname()
+	if hostName == "" || hostName == "localhost" {
+		return "", fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
+	}
+
+	hostIP := m.resolveIP(hostName, client)
+	logs += fmt.Sprintf("Resolved %s to %s\n", hostName, hostIP)
+
+	// 2. Prepare /etc/resolv.conf content
+	// We prepend our nameserver to the existing ones
+	resolvConf, err := client.Run("cat /etc/resolv.conf")
+
+	logs += "cat /etc/resolv.conf: " + resolvConf + "\n"
+	if err != nil {
+		return logs, fmt.Errorf("failed to read /etc/resolv.conf: %w", err)
+	}
+
+	lines := strings.Split(resolvConf, "\n")
+
+	var newLines []string
+
+	newLines = append(newLines, "# Added by AfterTouch migration")
+	newLines = append(newLines, fmt.Sprintf("nameserver %s", hostIP))
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "nameserver") {
+			fields := strings.Fields(trimmed)
+			if len(fields) >= 2 && fields[1] == hostIP {
+				// Avoid duplicate nameserver entry
+				continue
+			}
+		}
+
+		newLines = append(newLines, line)
+	}
+
+	resolvConf = strings.Join(newLines, "\n")
+	if !strings.HasSuffix(resolvConf, "\n") {
+		resolvConf += "\n"
+	}
+
+	// 3. Upload new /etc/resolv.conf
+	out, _ := client.Run(rwCmd)
+	logs += rwCmd + ": " + out + "\n"
+
+	// Backup /etc/resolv.conf if it doesn't exist
+	if _, err := client.Run("[ -f /etc/resolv.conf.original ]"); err != nil {
+		out, _ := client.Run("cp /etc/resolv.conf /etc/resolv.conf.original")
+		logs += "cp /etc/resolv.conf /etc/resolv.conf.original: " + out + "\n"
+	}
+
+	if err := client.UploadContent([]byte(resolvConf), "/etc/resolv.conf"); err != nil {
+		return logs, fmt.Errorf("failed to update /etc/resolv.conf: %w", err)
+	}
+
+	logs += "Uploaded updated /etc/resolv.conf\n"
+
+	// 3b. Make it immutable if chattr is available
+	if _, err := client.Run("chattr +i /etc/resolv.conf"); err == nil {
+		logs += "Made /etc/resolv.conf immutable with chattr +i\n"
+	}
+
+	fmt.Printf("Updated /etc/resolv.conf on %s:\n%s\n", deviceIP, resolvConf)
+
+	// 4. Inject CA Certificate
+	summary := &MigrationSummary{}
+	m.checkCACertTrusted(summary, deviceIP)
+
+	if !summary.CACertTrusted {
+		out, err := m.TrustCACert(deviceIP)
+
+		logs += "Trusting CA:\n" + out + "\n"
+		if err != nil {
+			return logs, err
+		}
+	} else {
+		logs += "CA certificate already trusted, skipping injection\n"
+	}
+
+	return logs, nil
+}
+
 // RevertMigration reverts the speaker to its original Bose cloud configuration.
 func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 	client := m.NewSSH(deviceIP)
@@ -993,6 +1171,23 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		if err != nil {
 			// Don't return error here, try to continue with other reverts
 			fmt.Printf("Warning: failed to revert %s: %v\n", hostsPath, err)
+		}
+	}
+
+	// 2b. Revert /etc/resolv.conf
+	resolvPath := "/etc/resolv.conf"
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", resolvPath)); err == nil {
+		logs += fmt.Sprintf("Reverting %s from backup\n", resolvPath)
+		fmt.Printf("Reverting %s from backup\n", resolvPath)
+
+		// Try to remove immutable flag if it was set
+		_, _ = client.Run(fmt.Sprintf("chattr -i %s", resolvPath))
+
+		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, resolvPath, resolvPath))
+
+		logs += fmt.Sprintf("cp %s.original %s: %s\n", resolvPath, resolvPath, out)
+		if err != nil {
+			fmt.Printf("Warning: failed to revert %s: %v\n", resolvPath, err)
 		}
 	}
 
@@ -1130,6 +1325,74 @@ func (m *Manager) TestHostsRedirection(deviceIP, targetURL string) (string, erro
 	}
 
 	return combinedOutput, nil
+}
+
+// TestDNSRedirection performs a check from the device to see if DNS queries are intercepted by the AfterTouch service.
+func (m *Manager) TestDNSRedirection(deviceIP, targetURL string) (string, error) {
+	client := m.NewSSH(deviceIP)
+
+	hostIP, _, err := m.parseTargetURLAndResolveIP(targetURL, client)
+	if err != nil {
+		return "", err
+	}
+
+	// Use a raw DNS query via nc (netcat) to test DNS resolution from the device,
+	// because BusyBox nslookup might not support custom ports.
+	testDomain := "aftertouch.test"
+
+	// Fetch configured DNS port if available
+	dnsPort := "53"
+
+	if m.DataStore != nil {
+		if dsSettings, getSettingsErr := m.DataStore.GetSettings(); getSettingsErr == nil && dsSettings.DNSBindAddr != "" {
+			if lastColon := strings.LastIndex(dsSettings.DNSBindAddr, ":"); lastColon != -1 {
+				port := dsSettings.DNSBindAddr[lastColon+1:]
+				if _, atoiErr := strconv.Atoi(port); atoiErr == nil {
+					dnsPort = port
+				}
+			}
+		}
+	}
+
+	// Raw DNS query for aftertouch.test (Type A, Class IN)
+	// Transaction ID: 0xAAAA, Flags: 0x0100 (Standard query), Questions: 1, Answer RRs: 0, Authority RRs: 0, Additional RRs: 0
+	// Query: aftertouch.test, Type: A, Class: IN
+	// For TCP, we need a 2-byte length prefix: 0x0021 (33 bytes)
+	dnsQueryHex := "\\x00\\x21\\xaa\\xaa\\x01\\x00\\x00\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x0aaftertouch\\x04test\\x00\\x00\\x01\\x00\\x01"
+	// We use TCP (default for nc) because BusyBox nc might not support -u,
+	// and our DNS server listens on both TCP and UDP.
+	// DNS over TCP response also has a 2-byte length prefix, but tail -c 4 will still get the IP from the end.
+	ncCmd := fmt.Sprintf("echo -ne '%s' | nc -w 5 %s %s | tail -c 4 | od -An -tu1", dnsQueryHex, hostIP, dnsPort)
+
+	output, err := client.Run(ncCmd)
+	if err == nil {
+		// Parse the IP from od output: " 192 168 178 122"
+		fields := strings.Fields(output)
+		if len(fields) == 4 {
+			resolvedIP := fmt.Sprintf("%s.%s.%s.%s", fields[0], fields[1], fields[2], fields[3])
+			if resolvedIP == hostIP {
+				return fmt.Sprintf("Success: Raw DNS query for %s returned %s via nc to %s:%s", testDomain, resolvedIP, hostIP, dnsPort), nil
+			}
+
+			return output, fmt.Errorf("DNS redirection test failed: nc returned %s, expected %s", resolvedIP, hostIP)
+		}
+	}
+
+	// Fallback to nslookup if nc fails (maybe nc is missing or it's standard port 53)
+	serverAddr := hostIP
+	if dnsPort != "53" {
+		serverAddr = fmt.Sprintf("%s:%s", hostIP, dnsPort)
+	}
+
+	nslookupCmd := fmt.Sprintf("nslookup %s %s", testDomain, serverAddr)
+	nslookupOutput, nslookupErr := client.Run(nslookupCmd)
+
+	if nslookupErr == nil && strings.Contains(nslookupOutput, hostIP) {
+		return nslookupOutput, nil
+	}
+
+	return fmt.Sprintf("nc Output: %s (err: %v)\nnslookup Output: %s (err: %v)", output, err, nslookupOutput, nslookupErr),
+		fmt.Errorf("DNS redirection test failed: both nc and nslookup failed to resolve %s", testDomain)
 }
 
 func (m *Manager) parseTargetURLAndResolveIP(targetURL string, client SSHClient) (string, *url.URL, error) {
@@ -1286,6 +1549,11 @@ func (m *Manager) TestConnection(deviceIP, targetURL string, useExplicitCA bool)
 	}
 
 	return output, nil
+}
+
+// GetResolvedIP returns the resolved IP for a hostname, attempting to resolve it from any connected device first.
+func (m *Manager) GetResolvedIP(host string) string {
+	return m.resolveIP(host, nil)
 }
 
 func (m *Manager) resolveIP(host string, client SSHClient) string {

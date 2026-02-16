@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -707,6 +708,9 @@ type Settings struct {
 	DiscoveryInterval    string         `json:"discovery_interval,omitempty"`
 	DiscoveryEnabled     bool           `json:"discovery_enabled"`
 	EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
+	DNSEnabled           bool           `json:"dns_enabled"`
+	DNSUpstream          string         `json:"dns_upstream,omitempty"`
+	DNSBindAddr          string         `json:"dns_bind_addr,omitempty"`
 	Shortcuts            map[string]int `json:"shortcuts,omitempty"`
 }
 
@@ -821,4 +825,79 @@ func (ds *DataStore) GetDeviceEvents(deviceID string) []models.DeviceEvent {
 	copy(copiedEvents, events)
 
 	return copiedEvents
+}
+
+// DNSDiscoveryEntry represents a persisted DNS discovery.
+type DNSDiscoveryEntry struct {
+	Hostname      string    `json:"hostname"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastSeen      time.Time `json:"last_seen"`
+	QueryCount    int       `json:"query_count"`
+	IsBoseService bool      `json:"is_bose_service"`
+	IsIntercepted bool      `json:"is_intercepted"`
+	RemoteAddr    string    `json:"remote_addr,omitempty"`
+}
+
+// SaveDNSDiscoveries saves DNS discoveries to the datastore.
+func (ds *DataStore) SaveDNSDiscoveries(discoveries []DNSDiscoveryEntry) error {
+	if ds == nil || ds.DataDir == "" {
+		return nil
+	}
+
+	dir := filepath.Join(ds.DataDir, "dns")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create dns directory: %w", err)
+	}
+
+	path := filepath.Join(dir, "discoveries.json")
+
+	// Sort by last seen descending
+	sort.Slice(discoveries, func(i, j int) bool {
+		return discoveries[i].LastSeen.After(discoveries[j].LastSeen)
+	})
+
+	data, err := json.MarshalIndent(discoveries, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadDNSDiscoveries loads DNS discoveries from the datastore.
+func (ds *DataStore) LoadDNSDiscoveries() ([]DNSDiscoveryEntry, error) {
+	if ds == nil || ds.DataDir == "" {
+		return []DNSDiscoveryEntry{}, nil
+	}
+
+	path := filepath.Join(ds.DataDir, "dns", "discoveries.json")
+	if !exists(path) {
+		return []DNSDiscoveryEntry{}, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var discoveries []DNSDiscoveryEntry
+	if err := json.Unmarshal(data, &discoveries); err != nil {
+		return nil, err
+	}
+
+	return discoveries, nil
+}
+
+// ClearDNSDiscoveries removes all DNS discoveries from the datastore.
+func (ds *DataStore) ClearDNSDiscoveries() error {
+	if ds == nil || ds.DataDir == "" {
+		return nil
+	}
+
+	path := filepath.Join(ds.DataDir, "dns", "discoveries.json")
+	if !exists(path) {
+		return nil
+	}
+
+	return os.Remove(path)
 }
