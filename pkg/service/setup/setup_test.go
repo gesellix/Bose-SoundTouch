@@ -808,6 +808,47 @@ func TestRevertMigration(t *testing.T) {
 	}
 }
 
+func TestRevertMigration_CorruptedRcLocal(t *testing.T) {
+	m := NewManager("http://localhost:8000", nil, nil)
+
+	runCalls := []string{}
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if command == "cat /mnt/nv/rc.local" {
+					return "cat: can't open '/mnt/nv/rc.local': No such file or directory", nil
+				}
+				if strings.HasPrefix(command, "[ -f") {
+					if strings.Contains(command, ".original") {
+						if strings.Contains(command, "SoundTouchSdkPrivateCfg.xml") {
+							return "", nil // Pretend XML backup exists to satisfy RevertMigration
+						}
+						return "", fmt.Errorf("not found")
+					}
+				}
+				return "", nil
+			},
+		}
+	}
+
+	_, err := m.RevertMigration("192.168.1.10")
+	if err != nil {
+		t.Fatalf("RevertMigration failed: %v", err)
+	}
+
+	foundRmRcLocal := false
+	for _, call := range runCalls {
+		if call == "rm /mnt/nv/rc.local" {
+			foundRmRcLocal = true
+			break
+		}
+	}
+	if !foundRmRcLocal {
+		t.Errorf("Expected corrupted rc.local to be removed")
+	}
+}
+
 func TestRevertMigration_NoBackup(t *testing.T) {
 	m := NewManager("http://localhost:8000", nil, nil)
 
@@ -1110,6 +1151,59 @@ func TestMigrateViaResolvConf(t *testing.T) {
 	}
 	if !foundPatch {
 		t.Errorf("Expected immediate patch to /etc/udhcpc.d/50default")
+	}
+}
+
+func TestMigrateViaResolvConf_CorruptedRcLocal(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test-resolv-corrupted")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://192.168.1.100:8000", nil, cm)
+
+	uploads := make(map[string]string)
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if command == "cat /mnt/nv/rc.local" {
+					// Simulate corrupted file containing error message
+					return "cat: can't open '/mnt/nv/rc.local': No such file or directory", nil
+				}
+				if strings.HasPrefix(command, "[ -f") {
+					return "", fmt.Errorf("file not found")
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				uploads[remotePath] = string(content)
+				return nil
+			},
+		}
+	}
+
+	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
+	if err != nil {
+		t.Fatalf("migrateViaResolvConf failed: %v", err)
+	}
+
+	// Verify uploads - rc.local should have been sanitized and only contain shebang and hook
+	rcLocal := uploads["/mnt/nv/rc.local"]
+	if strings.Contains(rcLocal, "cat: can't open") {
+		t.Errorf("rc.local still contains corrupted content: %s", rcLocal)
+	}
+	if !strings.HasPrefix(rcLocal, "#!/bin/sh") {
+		t.Errorf("rc.local missing shebang: %s", rcLocal)
+	}
+	if !strings.Contains(rcLocal, "/mnt/nv/aftertouch.resolv.conf") {
+		t.Errorf("rc.local missing hook logic: %s", rcLocal)
 	}
 }
 

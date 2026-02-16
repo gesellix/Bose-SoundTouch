@@ -1097,7 +1097,10 @@ func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, erro
 	hookMarker := "/mnt/nv/aftertouch.resolv.conf"
 
 	// Check if rc.local exists and read it
-	currentRcLocal, _ := client.Run(fmt.Sprintf("cat %s", rcLocalPath))
+	currentRcLocal, rcErr := client.Run(fmt.Sprintf("cat %s", rcLocalPath))
+	if rcErr != nil {
+		currentRcLocal = ""
+	}
 
 	patchLogic := fmt.Sprintf(`
 # Aftertouch DNS hook: prioritizes our custom nameserver if it exists
@@ -1109,6 +1112,11 @@ fi
 
 	if !strings.Contains(currentRcLocal, hookMarker) {
 		newRcLocal := currentRcLocal
+		// Remove "cat: can't open..." error message if it was accidentally saved in the file
+		if strings.Contains(newRcLocal, "cat: can't open") {
+			newRcLocal = ""
+		}
+
 		if !strings.HasPrefix(newRcLocal, "#!/bin/sh") {
 			newRcLocal = "#!/bin/sh\n" + strings.TrimPrefix(newRcLocal, "#!/bin/sh")
 		}
@@ -1270,36 +1278,46 @@ func (m *Manager) revertAftertouchHook(client SSHClient, rwCmd string) string {
 		_, _ = client.Run(fmt.Sprintf("rm %s", aftertouchConfPath))
 	}
 
-	if currentRcLocal, err := client.Run(fmt.Sprintf("cat %s", rcLocalPath)); err == nil && (strings.Contains(currentRcLocal, aftertouchConfPath) || strings.Contains(currentRcLocal, "# Aftertouch DNS hook")) {
-		logs += fmt.Sprintf("Removing Aftertouch hook logic from %s\n", rcLocalPath)
-		fmt.Printf("Removing Aftertouch hook logic from %s\n", rcLocalPath)
+	if currentRcLocal, err := client.Run(fmt.Sprintf("cat %s", rcLocalPath)); err == nil {
+		// Remove "cat: can't open..." error message if it was accidentally saved in the file
+		if strings.Contains(currentRcLocal, "cat: can't open") {
+			logs += fmt.Sprintf("Removing corrupted %s\n", rcLocalPath)
+			_, _ = client.Run(fmt.Sprintf("rm %s", rcLocalPath))
 
-		// Simple removal: filter out lines between the marker and the 'fi'
-		lines := strings.Split(currentRcLocal, "\n")
-
-		var newLines []string
-
-		skip := false
-
-		for _, line := range lines {
-			if strings.Contains(line, "# Aftertouch DNS hook") {
-				skip = true
-				continue
-			}
-
-			if skip && strings.TrimSpace(line) == "fi" {
-				skip = false
-				continue
-			}
-
-			if !skip {
-				newLines = append(newLines, line)
-			}
+			return logs
 		}
 
-		newRcLocal := strings.Join(newLines, "\n")
-		if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
-			fmt.Printf("Warning: failed to update %s: %v\n", rcLocalPath, err)
+		if strings.Contains(currentRcLocal, aftertouchConfPath) || strings.Contains(currentRcLocal, "# Aftertouch DNS hook") {
+			logs += fmt.Sprintf("Removing Aftertouch hook logic from %s\n", rcLocalPath)
+			fmt.Printf("Removing Aftertouch hook logic from %s\n", rcLocalPath)
+
+			// Simple removal: filter out lines between the marker and the 'fi'
+			lines := strings.Split(currentRcLocal, "\n")
+
+			var newLines []string
+
+			skip := false
+
+			for _, line := range lines {
+				if strings.Contains(line, "# Aftertouch DNS hook") {
+					skip = true
+					continue
+				}
+
+				if skip && strings.TrimSpace(line) == "fi" {
+					skip = false
+					continue
+				}
+
+				if !skip {
+					newLines = append(newLines, line)
+				}
+			}
+
+			newRcLocal := strings.Join(newLines, "\n")
+			if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
+				fmt.Printf("Warning: failed to update %s: %v\n", rcLocalPath, err)
+			}
 		}
 	}
 
