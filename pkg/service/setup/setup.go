@@ -1088,6 +1088,7 @@ func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, erro
 	if err := client.UploadContent([]byte(resolvContent), "/mnt/nv/aftertouch.resolv.conf"); err != nil {
 		return logs, fmt.Errorf("failed to upload /mnt/nv/aftertouch.resolv.conf: %w", err)
 	}
+
 	logs += "Uploaded /mnt/nv/aftertouch.resolv.conf\n"
 
 	// 4. Update /mnt/nv/rc.local with idempotent patch
@@ -1111,14 +1112,17 @@ fi
 		if !strings.HasPrefix(newRcLocal, "#!/bin/sh") {
 			newRcLocal = "#!/bin/sh\n" + strings.TrimPrefix(newRcLocal, "#!/bin/sh")
 		}
+
 		if !strings.HasSuffix(newRcLocal, "\n") {
 			newRcLocal += "\n"
 		}
+
 		newRcLocal += patchLogic
 
 		if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
 			return logs, fmt.Errorf("failed to update %s: %w", rcLocalPath, err)
 		}
+
 		logs += fmt.Sprintf("Updated %s with DNS hook logic\n", rcLocalPath)
 
 		// Make it executable
@@ -1151,6 +1155,7 @@ fi
 
 	if !summary.CACertTrusted {
 		out, err := m.TrustCACert(deviceIP)
+
 		logs += "Trusting CA:\n" + out + "\n"
 		if err != nil {
 			return logs, err
@@ -1170,6 +1175,31 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 	var logs string
 
 	// 1. Revert SoundTouchSdkPrivateCfg.xml
+	out, err := m.revertXMLConfig(client, rwCmd)
+
+	logs += out
+	if err != nil {
+		return logs, err
+	}
+
+	// 2. Revert /etc/hosts
+	logs += m.revertHosts(client, rwCmd)
+
+	// 2b. Revert /etc/resolv.conf
+	logs += m.revertResolvConf(client, rwCmd)
+
+	// 2c. Revert Aftertouch DNS Hook
+	logs += m.revertAftertouchHook(client, rwCmd)
+
+	// 3. Remove CA certificate from trust store if it exists
+	logs += m.revertCACert(client, rwCmd)
+
+	return logs, nil
+}
+
+func (m *Manager) revertXMLConfig(client SSHClient, rwCmd string) (string, error) {
+	var logs string
+
 	remotePath := SoundTouchSdkPrivateCfgPath
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err == nil {
 		logs += fmt.Sprintf("Reverting %s from backup\n", remotePath)
@@ -1184,7 +1214,12 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		return logs, fmt.Errorf("backup %s.original not found, cannot revert", remotePath)
 	}
 
-	// 2. Revert /etc/hosts
+	return logs, nil
+}
+
+func (m *Manager) revertHosts(client SSHClient, rwCmd string) string {
+	var logs string
+
 	hostsPath := "/etc/hosts"
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", hostsPath)); err == nil {
 		logs += fmt.Sprintf("Reverting %s from backup\n", hostsPath)
@@ -1193,12 +1228,16 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 
 		logs += fmt.Sprintf("cp %s.original %s: %s\n", hostsPath, hostsPath, out)
 		if err != nil {
-			// Don't return error here, try to continue with other reverts
 			fmt.Printf("Warning: failed to revert %s: %v\n", hostsPath, err)
 		}
 	}
 
-	// 2b. Revert /etc/resolv.conf
+	return logs
+}
+
+func (m *Manager) revertResolvConf(client SSHClient, rwCmd string) string {
+	var logs string
+
 	resolvPath := "/etc/resolv.conf"
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", resolvPath)); err == nil {
 		logs += fmt.Sprintf("Reverting %s from backup\n", resolvPath)
@@ -1215,7 +1254,12 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		}
 	}
 
-	// 2c. Revert Aftertouch DNS Hook
+	return logs
+}
+
+func (m *Manager) revertAftertouchHook(client SSHClient, rwCmd string) string {
+	var logs string
+
 	aftertouchConfPath := "/mnt/nv/aftertouch.resolv.conf"
 	rcLocalPath := "/mnt/nv/rc.local"
 	targetDHCPFile := "/etc/udhcpc.d/50default"
@@ -1232,21 +1276,27 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 
 		// Simple removal: filter out lines between the marker and the 'fi'
 		lines := strings.Split(currentRcLocal, "\n")
+
 		var newLines []string
+
 		skip := false
+
 		for _, line := range lines {
 			if strings.Contains(line, "# Aftertouch DNS hook") {
 				skip = true
 				continue
 			}
+
 			if skip && strings.TrimSpace(line) == "fi" {
 				skip = false
 				continue
 			}
+
 			if !skip {
 				newLines = append(newLines, line)
 			}
 		}
+
 		newRcLocal := strings.Join(newLines, "\n")
 		if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
 			fmt.Printf("Warning: failed to update %s: %v\n", rcLocalPath, err)
@@ -1257,13 +1307,19 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		logs += fmt.Sprintf("Reverting %s from backup\n", targetDHCPFile)
 		fmt.Printf("Reverting %s from backup\n", targetDHCPFile)
 		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, targetDHCPFile, targetDHCPFile))
+
 		logs += fmt.Sprintf("cp %s.original %s: %s\n", targetDHCPFile, targetDHCPFile, out)
 		if err != nil {
 			fmt.Printf("Warning: failed to revert %s: %v\n", targetDHCPFile, err)
 		}
 	}
 
-	// 3. Remove CA certificate from trust store if it exists
+	return logs
+}
+
+func (m *Manager) revertCACert(client SSHClient, rwCmd string) string {
+	var logs string
+
 	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
 	if bundleContent, err := client.Run(fmt.Sprintf("cat %s", bundlePath)); err == nil && strings.Contains(bundleContent, CALabel) {
 		logs += fmt.Sprintf("Removing local CA certificate from %s\n", bundlePath)
@@ -1294,6 +1350,7 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		out, _ := client.Run(rwCmd)
 
 		logs += rwCmd + ": " + out + "\n"
+
 		if err := client.UploadContent([]byte(bundleContent), bundlePath); err != nil {
 			logs += "Warning: failed to remove CA from " + bundlePath + ": " + err.Error() + "\n"
 			fmt.Printf("Warning: failed to remove CA from %s: %v\n", bundlePath, err)
@@ -1302,7 +1359,7 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		}
 	}
 
-	return logs, nil
+	return logs
 }
 
 // RemoveRemoteServices removes remote services from the device by deleting the known remote_services files.
