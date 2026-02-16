@@ -241,21 +241,56 @@ curl "http://192.168.1.100:8090/presets"
 curl "http://localhost:8000/events/192.168.1.100"
 ```
 
-#### ResolvConf Migration (DNS Redirection)
+#### Aftertouch Hook (DHCP-Aware DNS Redirection)
 
-The most robust migration method. Instead of modifying specific host files, it configures the device to use the AfterTouch service as its primary DNS server.
-
-> **Note**: This method requires the DNS Discovery Server to be bound to **port 53** on your local IP and **actually running**. Most devices do not support custom DNS ports in `/etc/resolv.conf`. If you use a custom port for testing, remember to switch back to `:53` and ensure the server has successfully bound to it (check Settings for status) before the actual migration.
+The most robust and flexible migration method. It utilizes the device's persistent `/mnt/nv/rc.local` script to inject a priority DNS hook into the system's DHCP configuration.
 
 **Advantages:**
 - **Discovery**: Automatically discover all Bose endpoints queried by the device.
 - **Dynamic Interception**: Intercept new or unknown services without further device modifications.
-- **Fail-Safe**: Can fall back to upstream DNS for non-intercepted queries.
+- **Fail-Safe**: Falls back to the standard network DNS (provided by your router) if the Aftertouch service is unavailable.
+- **DHCP Compatible**: Preserves your router's assigned search domain and secondary DNS servers.
+- **Wildcard Support**: Seamlessly handles `*.bose.com` redirection via your local DNS server.
+- **Persistent**: Survives reboots and DHCP renewals.
+
+**How it works:**
+1. **Configuration**: A custom file named `/mnt/nv/aftertouch.resolv.conf` is created on the device's persistent partition.
+2. **Boot Hook**: On every boot, `/mnt/nv/rc.local` checks if the system's DHCP script (`/etc/udhcpc.d/50default`) has been patched.
+3. **Surgical Patch**: If not patched, it injects a one-line check into the DHCP script.
+4. **Resolution**: Whenever the device acquires a DHCP lease, the script now reads your `aftertouch.resolv.conf` first, placing your DNS server at the top of `/etc/resolv.conf` while keeping all other DHCP-provided settings.
 
 **Setup:**
-1. Enable DNS discovery in the service settings.
-2. Select the `resolv` method when migrating a device.
-3. The service will automatically make `/etc/resolv.conf` immutable (`chattr +i`) to prevent DHCP overrides.
+1. Enable SSH via the `remote_services` USB trick.
+2. Create `/mnt/nv/aftertouch.resolv.conf` with your server details:
+   ```text
+   # Created by Aftertouch/SoundTouch-Service
+   # Priority nameserver for Bose service redirection
+   nameserver 192.168.1.XXX
+   ```
+3. Update `/mnt/nv/rc.local` with the idempotent patch:
+   ```sh
+   #!/bin/sh
+   TARGET_FILE="/etc/udhcpc.d/50default"
+   HOOK_MARKER="/mnt/nv/aftertouch.resolv.conf"
+   if ! grep -q "$HOOK_MARKER" "$TARGET_FILE"; then
+       # Inject our config after the search domain line
+       sed -i '/echo "search \$domain"/a \        [ -f '"$HOOK_MARKER"' ] && cat '"$HOOK_MARKER" "$TARGET_FILE"
+   fi
+   ```
+4. Make the script executable: `chmod +x /mnt/nv/rc.local`.
+5. Reboot the speaker.
+
+#### Legacy ResolvConf Migration (Immutable File)
+
+An alternative method for older firmwares or specific use cases where the DHCP script cannot be easily patched.
+
+**Advantages:**
+- Simple to apply.
+- Guaranteed persistence via file attributes.
+
+**Setup:**
+1. The service manually creates `/etc/resolv.conf`.
+2. The service then makes `/etc/resolv.conf` immutable (`chattr +i`) to prevent DHCP overrides.
 
 ### DNS Discovery Server
 

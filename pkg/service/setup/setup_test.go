@@ -701,9 +701,14 @@ func TestRevertMigration(t *testing.T) {
 				if command == "cat /etc/pki/tls/certs/ca-bundle.crt" {
 					return "existing content\n" + CALabel + "\nCERT DATA\n" + CALabel + "\nmore content", nil
 				}
+				if command == "cat /mnt/nv/rc.local" {
+					return "#!/bin/sh\n# Aftertouch DNS hook\nlogic\nfi\n", nil
+				}
 				// Mock file existence checks for .original files
-				if strings.HasPrefix(command, "[ -f") && strings.Contains(command, ".original") {
-					return "", nil // file exists
+				if strings.HasPrefix(command, "[ -f") {
+					if strings.Contains(command, ".original") || strings.Contains(command, "/mnt/nv/aftertouch.resolv.conf") {
+						return "", nil // file exists
+					}
 				}
 				return "", nil
 			},
@@ -725,6 +730,9 @@ func TestRevertMigration(t *testing.T) {
 	foundResolvRevert := false
 	foundChattrRemove := false
 	foundReboot := false
+	foundAftertouchConfRemove := false
+	foundDHCPRevert := false
+
 	for _, call := range runCalls {
 		if strings.Contains(call, "cp "+SoundTouchSdkPrivateCfgPath+".original "+SoundTouchSdkPrivateCfgPath) {
 			foundXMLRevert = true
@@ -741,6 +749,12 @@ func TestRevertMigration(t *testing.T) {
 		if strings.Contains(call, "reboot") {
 			foundReboot = true
 		}
+		if strings.Contains(call, "rm /mnt/nv/aftertouch.resolv.conf") {
+			foundAftertouchConfRemove = true
+		}
+		if strings.Contains(call, "cp /etc/udhcpc.d/50default.original /etc/udhcpc.d/50default") {
+			foundDHCPRevert = true
+		}
 	}
 
 	if !foundXMLRevert {
@@ -755,8 +769,23 @@ func TestRevertMigration(t *testing.T) {
 	if !foundChattrRemove {
 		t.Errorf("Expected chattr -i /etc/resolv.conf")
 	}
+	if !foundAftertouchConfRemove {
+		t.Errorf("Expected /mnt/nv/aftertouch.resolv.conf removal")
+	}
+	if !foundDHCPRevert {
+		t.Errorf("Expected /etc/udhcpc.d/50default revert")
+	}
 	if foundReboot {
 		t.Errorf("Expected reboot NOT to be called automatically during revert")
+	}
+
+	// Verify rc.local cleanup
+	if content, ok := uploadCalls["/mnt/nv/rc.local"]; ok {
+		if strings.Contains(content, "# Aftertouch DNS hook") {
+			t.Errorf("Expected Aftertouch hook to be removed from rc.local, got: %s", content)
+		}
+	} else {
+		t.Errorf("Expected rc.local to be updated")
 	}
 
 	// Verify RemoveRemoteServices was NOT called
@@ -1091,6 +1120,69 @@ func TestMigrateViaResolvConf(t *testing.T) {
 	}
 	if !foundChattr {
 		t.Errorf("Expected chattr +i /etc/resolv.conf to be attempted")
+	}
+}
+
+func TestMigrateViaAftertouch(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test-aftertouch")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://192.168.1.100:8000", nil, cm)
+
+	runCalls := []string{}
+	uploads := make(map[string]string)
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if command == "cat /mnt/nv/rc.local" {
+					return "#!/bin/sh\n", nil
+				}
+				if strings.HasPrefix(command, "[ -f") {
+					return "", fmt.Errorf("file not found")
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				uploads[remotePath] = string(content)
+				return nil
+			},
+		}
+	}
+
+	_, err = m.migrateViaAftertouch("192.168.1.10", "http://192.168.1.100:8000")
+	if err != nil {
+		t.Fatalf("migrateViaAftertouch failed: %v", err)
+	}
+
+	// Verify uploads
+	if !strings.Contains(uploads["/mnt/nv/aftertouch.resolv.conf"], "nameserver 192.168.1.100") {
+		t.Errorf("aftertouch.resolv.conf missing nameserver")
+	}
+
+	if !strings.Contains(uploads["/mnt/nv/rc.local"], "/mnt/nv/aftertouch.resolv.conf") {
+		t.Errorf("rc.local missing hook logic")
+	}
+
+	// Verify immediate patch
+	foundPatch := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "sed -i") && strings.Contains(call, "/etc/udhcpc.d/50default") {
+			foundPatch = true
+			break
+		}
+	}
+	if !foundPatch {
+		t.Errorf("Expected immediate patch to /etc/udhcpc.d/50default")
 	}
 }
 

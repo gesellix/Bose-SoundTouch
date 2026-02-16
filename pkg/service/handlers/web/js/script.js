@@ -1297,15 +1297,24 @@ async function toggleMigrationMethod() {
         hostsTestPane.style.display = 'block';
         dnsTestPane.style.display = 'none';
         if (dnsWarning) dnsWarning.style.display = 'none';
-    } else if (method === 'resolv') {
+    } else if (method === 'resolv' || method === 'aftertouch') {
         xmlDiffPane.style.display = 'none';
         plannedXmlPane.style.display = 'none';
         plannedHostsPane.style.display = 'none';
         plannedResolvPane.style.display = 'block';
-        currentResolvPane.style.display = 'block';
+        currentResolvPane.style.display = method === 'resolv' ? 'block' : 'none';
         serviceOptions.style.display = 'none';
         hostsTestPane.style.display = 'none';
         dnsTestPane.style.display = 'block';
+
+        const resolvNote = document.getElementById('resolv-note');
+        if (resolvNote) {
+            if (method === 'aftertouch') {
+                resolvNote.innerHTML = '<strong>Note:</strong> This method injects a persistent DNS priority hook into the DHCP logic (<code>/etc/udhcpc.d/50default</code>). It preserves your router\'s search domain and secondary DNS servers. It also injects the Local Root CA.';
+            } else {
+                resolvNote.innerHTML = '<strong>Note:</strong> This method prepends AfterTouch as the nameserver and makes the file immutable (<code>chattr +i</code>). It also injects the Local Root CA.';
+            }
+        }
 
         // Check DNS settings
         try {

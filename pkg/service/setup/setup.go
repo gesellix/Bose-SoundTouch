@@ -29,6 +29,8 @@ const (
 	MigrationMethodHosts MigrationMethod = "hosts"
 	// MigrationMethodResolvConf redirects services by modifying /etc/resolv.conf and updating the CA trust store.
 	MigrationMethodResolvConf MigrationMethod = "resolv"
+	// MigrationMethodAftertouch redirects services by injecting a priority DNS hook into the DHCP logic and updating the CA trust store.
+	MigrationMethodAftertouch MigrationMethod = "aftertouch"
 )
 
 // SoundTouchSdkPrivateCfgPath is the path to the speaker's private configuration file on device.
@@ -215,6 +217,10 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		if hostName != "" && hostName != "localhost" {
 			client := m.NewSSH(deviceIP)
 			hostIP := m.resolveIP(hostName, client)
+
+			// Predicted aftertouch.resolv.conf
+			summary.CurrentResolvConf = fmt.Sprintf("# Created by Aftertouch/SoundTouch-Service\n# Priority nameserver for Bose service redirection\nnameserver %s\n", hostIP)
+
 			domains := []string{
 				"streaming.bose.com",
 				"updates.bose.com",
@@ -246,7 +252,9 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	if summary.SSHSuccess {
 		client := m.NewSSH(deviceIP)
 		if resolvConf, err := client.Run("cat /etc/resolv.conf"); err == nil {
-			summary.CurrentResolvConf = resolvConf
+			if summary.CurrentResolvConf == "" {
+				summary.CurrentResolvConf = resolvConf
+			}
 		}
 	}
 
@@ -565,6 +573,15 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 		}
 
 		out, err := m.migrateViaResolvConf(deviceIP, targetURL)
+
+		return logs + out, err
+
+	case MigrationMethodAftertouch:
+		if err := m.checkDNSPreFlight(); err != nil {
+			return logs, err
+		}
+
+		out, err := m.migrateViaAftertouch(deviceIP, targetURL)
 
 		return logs + out, err
 
@@ -1043,6 +1060,110 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 	return logs, nil
 }
 
+func (m *Manager) migrateViaAftertouch(deviceIP, targetURL string) (string, error) {
+	client := m.NewSSH(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+
+	var logs string
+
+	// 1. Resolve target hostname to IP
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse target URL: %w", err)
+	}
+
+	hostName := parsedURL.Hostname()
+	if hostName == "" || hostName == "localhost" {
+		return "", fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
+	}
+
+	hostIP := m.resolveIP(hostName, client)
+	logs += fmt.Sprintf("Resolved %s to %s\n", hostName, hostIP)
+
+	// 2. Prepare /mnt/nv/aftertouch.resolv.conf content
+	resolvContent := fmt.Sprintf("# Created by Aftertouch/SoundTouch-Service\n# Priority nameserver for Bose service redirection\nnameserver %s\n", hostIP)
+
+	// 3. Upload /mnt/nv/aftertouch.resolv.conf
+	// Ensure /mnt/nv exists
+	_, _ = client.Run("mkdir -p /mnt/nv")
+
+	if err := client.UploadContent([]byte(resolvContent), "/mnt/nv/aftertouch.resolv.conf"); err != nil {
+		return logs, fmt.Errorf("failed to upload /mnt/nv/aftertouch.resolv.conf: %w", err)
+	}
+	logs += "Uploaded /mnt/nv/aftertouch.resolv.conf\n"
+
+	// 4. Update /mnt/nv/rc.local with idempotent patch
+	rcLocalPath := "/mnt/nv/rc.local"
+	targetDHCPFile := "/etc/udhcpc.d/50default"
+	hookMarker := "/mnt/nv/aftertouch.resolv.conf"
+
+	// Check if rc.local exists and read it
+	currentRcLocal, _ := client.Run(fmt.Sprintf("cat %s", rcLocalPath))
+
+	patchLogic := fmt.Sprintf(`
+# Aftertouch DNS hook: prioritizes our custom nameserver if it exists
+if ! grep -q "%s" "%s"; then
+    logger -t "aftertouch" "Patching %s with Aftertouch DNS hook"
+    sed -i '/echo "search \$domain"/a \        [ -f '"%s"' ] && cat '"%s" "%s"
+fi
+`, hookMarker, targetDHCPFile, targetDHCPFile, hookMarker, hookMarker, targetDHCPFile)
+
+	if !strings.Contains(currentRcLocal, hookMarker) {
+		newRcLocal := currentRcLocal
+		if !strings.HasPrefix(newRcLocal, "#!/bin/sh") {
+			newRcLocal = "#!/bin/sh\n" + strings.TrimPrefix(newRcLocal, "#!/bin/sh")
+		}
+		if !strings.HasSuffix(newRcLocal, "\n") {
+			newRcLocal += "\n"
+		}
+		newRcLocal += patchLogic
+
+		if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
+			return logs, fmt.Errorf("failed to update %s: %w", rcLocalPath, err)
+		}
+		logs += fmt.Sprintf("Updated %s with DNS hook logic\n", rcLocalPath)
+
+		// Make it executable
+		_, _ = client.Run(fmt.Sprintf("chmod +x %s", rcLocalPath))
+	} else {
+		logs += fmt.Sprintf("%s already contains Aftertouch hook logic\n", rcLocalPath)
+	}
+
+	// 5. Apply patch immediately to /etc/udhcpc.d/50default
+	out, _ := client.Run(rwCmd)
+	logs += rwCmd + ": " + out + "\n"
+
+	// Backup if it doesn't exist
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetDHCPFile)); err != nil {
+		out, _ := client.Run(fmt.Sprintf("cp %s %s.original", targetDHCPFile, targetDHCPFile))
+		logs += fmt.Sprintf("cp %s %s.original: %s\n", targetDHCPFile, targetDHCPFile, out)
+	}
+
+	// Run the patch logic via SSH to apply it now
+	patchCmd := fmt.Sprintf("sed -i '/echo \"search \\$domain\"/a \\        [ -f '\"%s\"' ] && cat '\"%s\" %s", hookMarker, hookMarker, targetDHCPFile)
+	if _, err := client.Run(patchCmd); err != nil {
+		logs += fmt.Sprintf("Failed to apply patch immediately: %v\n", err)
+	} else {
+		logs += fmt.Sprintf("Applied patch to %s\n", targetDHCPFile)
+	}
+
+	// 6. Inject CA Certificate
+	summary := &MigrationSummary{}
+	m.checkCACertTrusted(summary, deviceIP)
+
+	if !summary.CACertTrusted {
+		out, err := m.TrustCACert(deviceIP)
+		logs += "Trusting CA:\n" + out + "\n"
+		if err != nil {
+			return logs, err
+		}
+	} else {
+		logs += "CA certificate already trusted, skipping injection\n"
+	}
+
+	return logs, nil
+}
+
 func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
@@ -1188,6 +1309,54 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 		logs += fmt.Sprintf("cp %s.original %s: %s\n", resolvPath, resolvPath, out)
 		if err != nil {
 			fmt.Printf("Warning: failed to revert %s: %v\n", resolvPath, err)
+		}
+	}
+
+	// 2c. Revert Aftertouch DNS Hook
+	aftertouchConfPath := "/mnt/nv/aftertouch.resolv.conf"
+	rcLocalPath := "/mnt/nv/rc.local"
+	targetDHCPFile := "/etc/udhcpc.d/50default"
+
+	if _, err := client.Run(fmt.Sprintf("[ -f %s ]", aftertouchConfPath)); err == nil {
+		logs += fmt.Sprintf("Removing %s\n", aftertouchConfPath)
+		fmt.Printf("Removing %s\n", aftertouchConfPath)
+		_, _ = client.Run(fmt.Sprintf("rm %s", aftertouchConfPath))
+	}
+
+	if currentRcLocal, err := client.Run(fmt.Sprintf("cat %s", rcLocalPath)); err == nil && (strings.Contains(currentRcLocal, aftertouchConfPath) || strings.Contains(currentRcLocal, "# Aftertouch DNS hook")) {
+		logs += fmt.Sprintf("Removing Aftertouch hook logic from %s\n", rcLocalPath)
+		fmt.Printf("Removing Aftertouch hook logic from %s\n", rcLocalPath)
+
+		// Simple removal: filter out lines between the marker and the 'fi'
+		lines := strings.Split(currentRcLocal, "\n")
+		var newLines []string
+		skip := false
+		for _, line := range lines {
+			if strings.Contains(line, "# Aftertouch DNS hook") {
+				skip = true
+				continue
+			}
+			if skip && strings.TrimSpace(line) == "fi" {
+				skip = false
+				continue
+			}
+			if !skip {
+				newLines = append(newLines, line)
+			}
+		}
+		newRcLocal := strings.Join(newLines, "\n")
+		if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
+			fmt.Printf("Warning: failed to update %s: %v\n", rcLocalPath, err)
+		}
+	}
+
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetDHCPFile)); err == nil {
+		logs += fmt.Sprintf("Reverting %s from backup\n", targetDHCPFile)
+		fmt.Printf("Reverting %s from backup\n", targetDHCPFile)
+		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, targetDHCPFile, targetDHCPFile))
+		logs += fmt.Sprintf("cp %s.original %s: %s\n", targetDHCPFile, targetDHCPFile, out)
+		if err != nil {
+			fmt.Printf("Warning: failed to revert %s: %v\n", targetDHCPFile, err)
 		}
 	}
 
