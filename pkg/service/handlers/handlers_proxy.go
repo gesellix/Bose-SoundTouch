@@ -48,6 +48,13 @@ func (s *Server) ServeProxy(target *url.URL) http.HandlerFunc {
 		lp.RecordEnabled = s.recordEnabled
 		lp.SetRecorder(s.recorder)
 
+		// Capture request body for recording, as it will be consumed by the proxy
+		var reqBody []byte
+		if r.Body != nil {
+			reqBody, _ = io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+		}
+
 		rp := httputil.NewSingleHostReverseProxy(target)
 		rp.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -73,6 +80,11 @@ func (s *Server) ServeProxy(target *url.URL) http.HandlerFunc {
 			if etags, ok := res.Header["Etag"]; ok {
 				delete(res.Header, "Etag")
 				res.Header["ETag"] = etags
+			}
+
+			// Restore captured request body for the recorder
+			if reqBody != nil {
+				res.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 			}
 
 			lp.LogResponse(res)
