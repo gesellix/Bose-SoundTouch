@@ -1207,6 +1207,141 @@ func TestMigrateViaResolvConf_CorruptedRcLocal(t *testing.T) {
 	}
 }
 
+func TestMigrateViaResolvConf_UdhcpcScript(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test-resolv-script")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://192.168.1.100:8000", nil, cm)
+
+	runCalls := []string{}
+	uploads := make(map[string]string)
+
+	targetScript := "/opt/Bose/udhcpc.script"
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if command == "cat /mnt/nv/rc.local" {
+					return "#!/bin/sh\n", nil
+				}
+				if command == "[ -f "+targetScript+" ]" {
+					return "", nil // file exists
+				}
+				if strings.HasPrefix(command, "[ -f") {
+					return "", fmt.Errorf("file not found")
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				uploads[remotePath] = string(content)
+				return nil
+			},
+		}
+	}
+
+	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
+	if err != nil {
+		t.Fatalf("migrateViaResolvConf failed: %v", err)
+	}
+
+	// Verify immediate patch to udhcpc.script
+	foundPatch := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "sed -i") && strings.Contains(call, targetScript) {
+			foundPatch = true
+			break
+		}
+	}
+	if !foundPatch {
+		t.Errorf("Expected immediate patch to %s", targetScript)
+	}
+
+	// Verify rc.local contains patch for udhcpc.script
+	rcLocal := uploads["/mnt/nv/rc.local"]
+	if !strings.Contains(rcLocal, "targetScript=\"/opt/Bose/udhcpc.script\"") {
+		t.Errorf("rc.local missing targetScript definition: %s", rcLocal)
+	}
+	if !strings.Contains(rcLocal, "sed -i '/echo \"search \\$search_list # \\$interface\" >> \\$RESOLV_CONF/a") {
+		t.Errorf("rc.local missing sed patch for udhcpc.script: %s", rcLocal)
+	}
+}
+
+func TestRevertMigration_ResolvConf(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "setup-test-revert-resolv")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	m := NewManager("http://192.168.1.100:8000", nil, nil)
+
+	runCalls := []string{}
+	uploads := make(map[string]string)
+	targetDHCPFile := "/etc/udhcpc.d/50default"
+	targetScript := "/opt/Bose/udhcpc.script"
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+				if command == "cat /mnt/nv/rc.local" {
+					return "#!/bin/sh\n# Aftertouch DNS hook\nif [ -f \"/mnt/nv/aftertouch.resolv.conf\" ]; then\n    sed ...\nfi\n", nil
+				}
+				if strings.Contains(command, ".original ]") {
+					return "", nil // backup exists
+				}
+				if strings.Contains(command, "[ -f /mnt/nv/aftertouch.resolv.conf ]") {
+					return "", nil
+				}
+				return "", nil
+			},
+			uploadContentFunc: func(content []byte, remotePath string) error {
+				uploads[remotePath] = string(content)
+				return nil
+			},
+		}
+	}
+
+	_, err = m.RevertMigration("192.168.1.10")
+	if err != nil {
+		t.Fatalf("RevertMigration failed: %v", err)
+	}
+
+	// Verify backups were restored
+	foundDHCPRestore := false
+	foundScriptRestore := false
+	for _, call := range runCalls {
+		if strings.Contains(call, "cp "+targetDHCPFile+".original "+targetDHCPFile) {
+			foundDHCPRestore = true
+		}
+		if strings.Contains(call, "cp "+targetScript+".original "+targetScript) {
+			foundScriptRestore = true
+		}
+	}
+
+	if !foundDHCPRestore {
+		t.Errorf("Expected %s to be restored from backup", targetDHCPFile)
+	}
+	if !foundScriptRestore {
+		t.Errorf("Expected %s to be restored from backup", targetScript)
+	}
+
+	// Verify rc.local was cleaned up
+	rcLocal := uploads["/mnt/nv/rc.local"]
+	if strings.Contains(rcLocal, "# Aftertouch DNS hook") {
+		t.Errorf("rc.local still contains hook logic after revert: %s", rcLocal)
+	}
+}
+
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }

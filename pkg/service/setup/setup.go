@@ -1104,11 +1104,18 @@ func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, erro
 
 	patchLogic := fmt.Sprintf(`
 # Aftertouch DNS hook: prioritizes our custom nameserver if it exists
-if ! grep -q "%s" "%s"; then
-    logger -t "aftertouch" "Patching %s with Aftertouch DNS hook"
-    sed -i '/echo "search \$domain"/a \        [ -f '"%s"' ] && cat '"%s" "%s"
+if [ -f "%s" ]; then
+    if [ -f "%s" ] && ! grep -q "%s" "%s"; then
+        logger -t "aftertouch" "Patching %s with Aftertouch DNS hook"
+        sed -i '/echo "search \$domain"/a \        [ -f '"%s"' ] && cat '"%s"' && dns=""' "%s"
+    fi
+    targetScript="/opt/Bose/udhcpc.script"
+    if [ -f "$targetScript" ] && ! grep -q "%s" "$targetScript"; then
+        logger -t "aftertouch" "Patching $targetScript with Aftertouch DNS hook"
+        sed -i '/echo "search \$search_list # \$interface" >> \$RESOLV_CONF/a \                [ -f '"%s"' ] && cat '"%s"' >> '"$RESOLV_CONF"' && dns=""' "$targetScript"
+    fi
 fi
-`, hookMarker, targetDHCPFile, targetDHCPFile, hookMarker, hookMarker, targetDHCPFile)
+`, hookMarker, targetDHCPFile, hookMarker, targetDHCPFile, targetDHCPFile, hookMarker, hookMarker, targetDHCPFile, hookMarker, hookMarker, hookMarker)
 
 	if !strings.Contains(currentRcLocal, hookMarker) {
 		newRcLocal := currentRcLocal
@@ -1147,14 +1154,37 @@ fi
 	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetDHCPFile)); err != nil {
 		out, _ := client.Run(fmt.Sprintf("cp %s %s.original", targetDHCPFile, targetDHCPFile))
 		logs += fmt.Sprintf("cp %s %s.original: %s\n", targetDHCPFile, targetDHCPFile, out)
+	} else {
+		// If backup exists, revert to it first to ensure we start from a clean state
+		_, _ = client.Run(fmt.Sprintf("cp %s.original %s", targetDHCPFile, targetDHCPFile))
 	}
 
 	// Run the patch logic via SSH to apply it now
-	patchCmd := fmt.Sprintf("sed -i '/echo \"search \\$domain\"/a \\        [ -f '\"%s\"' ] && cat '\"%s\" %s", hookMarker, hookMarker, targetDHCPFile)
+	patchCmd := fmt.Sprintf("sed -i '/echo \"search \\$domain\"/a \\        [ -f '\"%s\"' ] && cat '\"%s\"' && dns=\"\"' %s", hookMarker, hookMarker, targetDHCPFile)
 	if _, err := client.Run(patchCmd); err != nil {
-		logs += fmt.Sprintf("Failed to apply patch immediately: %v\n", err)
+		logs += fmt.Sprintf("Failed to apply patch immediately to %s: %v\n", targetDHCPFile, err)
 	} else {
 		logs += fmt.Sprintf("Applied patch to %s\n", targetDHCPFile)
+	}
+
+	// Apply patch immediately to /opt/Bose/udhcpc.script if it exists
+	targetScript := "/opt/Bose/udhcpc.script"
+	if _, err := client.Run(fmt.Sprintf("[ -f %s ]", targetScript)); err == nil {
+		// Backup if it doesn't exist
+		if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetScript)); err != nil {
+			out, _ := client.Run(fmt.Sprintf("cp %s %s.original", targetScript, targetScript))
+			logs += fmt.Sprintf("cp %s %s.original: %s\n", targetScript, targetScript, out)
+		} else {
+			// If backup exists, revert to it first to ensure we start from a clean state
+			_, _ = client.Run(fmt.Sprintf("cp %s.original %s", targetScript, targetScript))
+		}
+
+		patchCmdScript := fmt.Sprintf("sed -i '/echo \"search \\$search_list # \\$interface\" >> \\$RESOLV_CONF/a \\                [ -f '\"%s\"' ] && cat '\"%s\"' >> '\"$RESOLV_CONF\"' && dns=\"\"' %s", hookMarker, hookMarker, targetScript)
+		if _, err := client.Run(patchCmdScript); err != nil {
+			logs += fmt.Sprintf("Failed to apply patch immediately to %s: %v\n", targetScript, err)
+		} else {
+			logs += fmt.Sprintf("Applied patch to %s\n", targetScript)
+		}
 	}
 
 	// 6. Inject CA Certificate
@@ -1329,6 +1359,18 @@ func (m *Manager) revertAftertouchHook(client SSHClient, rwCmd string) string {
 		logs += fmt.Sprintf("cp %s.original %s: %s\n", targetDHCPFile, targetDHCPFile, out)
 		if err != nil {
 			fmt.Printf("Warning: failed to revert %s: %v\n", targetDHCPFile, err)
+		}
+	}
+
+	targetScript := "/opt/Bose/udhcpc.script"
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", targetScript)); err == nil {
+		logs += fmt.Sprintf("Reverting %s from backup\n", targetScript)
+		fmt.Printf("Reverting %s from backup\n", targetScript)
+		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, targetScript, targetScript))
+
+		logs += fmt.Sprintf("cp %s.original %s: %s\n", targetScript, targetScript, out)
+		if err != nil {
+			fmt.Printf("Warning: failed to revert %s: %v\n", targetScript, err)
 		}
 	}
 

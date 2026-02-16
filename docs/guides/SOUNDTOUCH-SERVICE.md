@@ -257,9 +257,9 @@ The most robust and flexible DNS-based migration method. It utilizes the device'
 
 **How it works:**
 1. **Configuration**: A custom file named `/mnt/nv/aftertouch.resolv.conf` is created on the device's persistent partition.
-2. **Boot Hook**: On every boot, `/mnt/nv/rc.local` checks if the system's DHCP script (`/etc/udhcpc.d/50default`) has been patched.
-3. **Surgical Patch**: If not patched, it injects a one-line check into the DHCP script.
-4. **Resolution**: Whenever the device acquires a DHCP lease, the script now reads your `aftertouch.resolv.conf` first, placing your DNS server at the top of `/etc/resolv.conf` while keeping all other DHCP-provided settings.
+2. **Boot Hook**: On every boot, `/mnt/nv/rc.local` checks if the system's DHCP scripts (`/etc/udhcpc.d/50default` or `/opt/Bose/udhcpc.script`) have been patched.
+3. **Surgical Patch**: If not patched, it injects a one-line check into the relevant DHCP scripts.
+4. **Resolution**: Whenever the device acquires a DHCP lease, the scripts now read your `aftertouch.resolv.conf` first, placing your DNS server at the top of `/etc/resolv.conf` while keeping all other DHCP-provided settings.
 
 **Setup:**
 1. Enable SSH via the `remote_services` USB trick.
@@ -272,11 +272,19 @@ The most robust and flexible DNS-based migration method. It utilizes the device'
 3. Update `/mnt/nv/rc.local` with the idempotent patch:
    ```sh
    #!/bin/sh
-   TARGET_FILE="/etc/udhcpc.d/50default"
+   # Aftertouch DNS hook: prioritizes our custom nameserver if it exists
    HOOK_MARKER="/mnt/nv/aftertouch.resolv.conf"
-   if ! grep -q "$HOOK_MARKER" "$TARGET_FILE"; then
-       # Inject our config after the search domain line
-       sed -i '/echo "search \$domain"/a \        [ -f '"$HOOK_MARKER"' ] && cat '"$HOOK_MARKER" "$TARGET_FILE"
+   if [ -f "$HOOK_MARKER" ]; then
+       # Patch 50default if it exists
+       TARGET_FILE="/etc/udhcpc.d/50default"
+       if [ -f "$TARGET_FILE" ] && ! grep -q "$HOOK_MARKER" "$TARGET_FILE"; then
+           sed -i '/echo "search \$domain"/a \        [ -f '"$HOOK_MARKER"' ] && cat '"$HOOK_MARKER"' && dns=""' "$TARGET_FILE"
+       fi
+       # Patch udhcpc.script if it exists (e.g. SoundTouch 10)
+       TARGET_SCRIPT="/opt/Bose/udhcpc.script"
+       if [ -f "$TARGET_SCRIPT" ] && ! grep -q "$HOOK_MARKER" "$TARGET_SCRIPT"; then
+           sed -i '/echo "search \$search_list # \$interface" >> \$RESOLV_CONF/a \                [ -f '"$HOOK_MARKER"' ] && cat '"$HOOK_MARKER"' >> '"$RESOLV_CONF"' && dns=""' "$TARGET_SCRIPT"
+       fi
    fi
    ```
 4. Make the script executable: `chmod +x /mnt/nv/rc.local`.
