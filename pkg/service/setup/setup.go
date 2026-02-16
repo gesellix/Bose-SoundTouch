@@ -27,10 +27,8 @@ const (
 	MigrationMethodXML MigrationMethod = "xml"
 	// MigrationMethodHosts redirects services by modifying /etc/hosts and updating the CA trust store.
 	MigrationMethodHosts MigrationMethod = "hosts"
-	// MigrationMethodResolvConf redirects services by modifying /etc/resolv.conf and updating the CA trust store.
+	// MigrationMethodResolvConf redirects services by injecting a priority DNS hook into the DHCP logic and updating the CA trust store.
 	MigrationMethodResolvConf MigrationMethod = "resolv"
-	// MigrationMethodAftertouch redirects services by injecting a priority DNS hook into the DHCP logic and updating the CA trust store.
-	MigrationMethodAftertouch MigrationMethod = "aftertouch"
 )
 
 // SoundTouchSdkPrivateCfgPath is the path to the speaker's private configuration file on device.
@@ -69,6 +67,7 @@ type MigrationSummary struct {
 	CACertTrusted            bool        `json:"ca_cert_trusted"`
 	ServerHTTPSURL           string      `json:"server_https_url,omitempty"`
 	CurrentResolvConf        string      `json:"current_resolv_conf,omitempty"`
+	PlannedResolv            string      `json:"planned_resolv,omitempty"`
 	IsMigrated               bool        `json:"is_migrated"`
 }
 
@@ -219,7 +218,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 			hostIP := m.resolveIP(hostName, client)
 
 			// Predicted aftertouch.resolv.conf
-			summary.CurrentResolvConf = fmt.Sprintf("# Created by Aftertouch/SoundTouch-Service\n# Priority nameserver for Bose service redirection\nnameserver %s\n", hostIP)
+			summary.PlannedResolv = fmt.Sprintf("# Created by Aftertouch/SoundTouch-Service\n# Priority nameserver for Bose service redirection\nnameserver %s\n", hostIP)
 
 			domains := []string{
 				"streaming.bose.com",
@@ -252,9 +251,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	if summary.SSHSuccess {
 		client := m.NewSSH(deviceIP)
 		if resolvConf, err := client.Run("cat /etc/resolv.conf"); err == nil {
-			if summary.CurrentResolvConf == "" {
-				summary.CurrentResolvConf = resolvConf
-			}
+			summary.CurrentResolvConf = resolvConf
 		}
 	}
 
@@ -325,18 +322,28 @@ func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
 		}
 	}
 
-	// Case 3: /etc/resolv.conf Migration
-	// Check if /etc/resolv.conf contains our target nameserver
-	if summary.CurrentResolvConf != "" {
-		targetURL := m.ServerURL
+	// Case 3: /etc/resolv.conf Migration (including Aftertouch hook)
+	// Check if /etc/resolv.conf contains our target nameserver OR if hook marker exists
+	if summary.SSHSuccess {
+		// Check for aftertouch.resolv.conf
+		if _, err := client.Run("[ -f /mnt/nv/aftertouch.resolv.conf ]"); err == nil {
+			if summary.CACertTrusted {
+				summary.IsMigrated = true
+				return
+			}
+		}
 
-		parsedTarget, err := url.Parse(targetURL)
-		if err == nil {
-			targetHost := parsedTarget.Hostname()
-			if strings.Contains(summary.CurrentResolvConf, targetHost) {
-				if summary.CACertTrusted {
-					summary.IsMigrated = true
-					return
+		if summary.CurrentResolvConf != "" {
+			targetURL := m.ServerURL
+
+			parsedTarget, err := url.Parse(targetURL)
+			if err == nil {
+				targetHost := parsedTarget.Hostname()
+				if strings.Contains(summary.CurrentResolvConf, targetHost) {
+					if summary.CACertTrusted {
+						summary.IsMigrated = true
+						return
+					}
 				}
 			}
 		}
@@ -573,15 +580,6 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 		}
 
 		out, err := m.migrateViaResolvConf(deviceIP, targetURL)
-
-		return logs + out, err
-
-	case MigrationMethodAftertouch:
-		if err := m.checkDNSPreFlight(); err != nil {
-			return logs, err
-		}
-
-		out, err := m.migrateViaAftertouch(deviceIP, targetURL)
 
 		return logs + out, err
 
@@ -1060,7 +1058,7 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 	return logs, nil
 }
 
-func (m *Manager) migrateViaAftertouch(deviceIP, targetURL string) (string, error) {
+func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
 
@@ -1153,101 +1151,6 @@ fi
 
 	if !summary.CACertTrusted {
 		out, err := m.TrustCACert(deviceIP)
-		logs += "Trusting CA:\n" + out + "\n"
-		if err != nil {
-			return logs, err
-		}
-	} else {
-		logs += "CA certificate already trusted, skipping injection\n"
-	}
-
-	return logs, nil
-}
-
-func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, error) {
-	client := m.NewSSH(deviceIP)
-	rwCmd := "(rw || mount -o remount,rw /)"
-
-	var logs string
-
-	// 1. Resolve target hostname to IP
-	parsedURL, err := url.Parse(targetURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse target URL: %w", err)
-	}
-
-	hostName := parsedURL.Hostname()
-	if hostName == "" || hostName == "localhost" {
-		return "", fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
-	}
-
-	hostIP := m.resolveIP(hostName, client)
-	logs += fmt.Sprintf("Resolved %s to %s\n", hostName, hostIP)
-
-	// 2. Prepare /etc/resolv.conf content
-	// We prepend our nameserver to the existing ones
-	resolvConf, err := client.Run("cat /etc/resolv.conf")
-
-	logs += "cat /etc/resolv.conf: " + resolvConf + "\n"
-	if err != nil {
-		return logs, fmt.Errorf("failed to read /etc/resolv.conf: %w", err)
-	}
-
-	lines := strings.Split(resolvConf, "\n")
-
-	var newLines []string
-
-	newLines = append(newLines, "# Added by AfterTouch migration")
-	newLines = append(newLines, fmt.Sprintf("nameserver %s", hostIP))
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "nameserver") {
-			fields := strings.Fields(trimmed)
-			if len(fields) >= 2 && fields[1] == hostIP {
-				// Avoid duplicate nameserver entry
-				continue
-			}
-		}
-
-		newLines = append(newLines, line)
-	}
-
-	resolvConf = strings.Join(newLines, "\n")
-	if !strings.HasSuffix(resolvConf, "\n") {
-		resolvConf += "\n"
-	}
-
-	// 3. Upload new /etc/resolv.conf
-	out, _ := client.Run(rwCmd)
-	logs += rwCmd + ": " + out + "\n"
-
-	// Backup /etc/resolv.conf if it doesn't exist
-	if _, err := client.Run("[ -f /etc/resolv.conf.original ]"); err != nil {
-		out, _ := client.Run("cp /etc/resolv.conf /etc/resolv.conf.original")
-		logs += "cp /etc/resolv.conf /etc/resolv.conf.original: " + out + "\n"
-	}
-
-	if err := client.UploadContent([]byte(resolvConf), "/etc/resolv.conf"); err != nil {
-		return logs, fmt.Errorf("failed to update /etc/resolv.conf: %w", err)
-	}
-
-	logs += "Uploaded updated /etc/resolv.conf\n"
-
-	// 3b. Make it immutable if chattr is available
-	if _, err := client.Run("chattr +i /etc/resolv.conf"); err == nil {
-		logs += "Made /etc/resolv.conf immutable with chattr +i\n"
-	}
-
-	fmt.Printf("Updated /etc/resolv.conf on %s:\n%s\n", deviceIP, resolvConf)
-
-	// 4. Inject CA Certificate
-	summary := &MigrationSummary{}
-	m.checkCACertTrusted(summary, deviceIP)
-
-	if !summary.CACertTrusted {
-		out, err := m.TrustCACert(deviceIP)
-
 		logs += "Trusting CA:\n" + out + "\n"
 		if err != nil {
 			return logs, err

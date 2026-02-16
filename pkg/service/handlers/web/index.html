@@ -229,8 +229,7 @@
                     <select id="migration-method" onchange="toggleMigrationMethod()">
                         <option value="xml">XML Configuration (Recommended - redirects specific services)</option>
                         <option value="hosts">/etc/hosts + Root CA (Advanced - global redirection)</option>
-                        <option value="resolv">/etc/resolv.conf (DNS Discovery Mode - robust)</option>
-                        <option value="aftertouch">Aftertouch Hook (DHCP-Aware - Most flexible)</option>
+                        <option value="resolv">/etc/resolv.conf (DHCP-Aware - Most flexible)</option>
                     </select>
                     <div id="dns-port-warning" style="margin-top: 5px; color: #d32f2f; font-weight: bold; font-size: 0.9em; display: none;"></div>
                 </div>
@@ -309,10 +308,10 @@
                         </div>
                     </div>
                     <div id="planned-resolv-pane" class="diff-pane" style="display: none;">
-                        <span class="config-header">Planned /etc/resolv.conf</span>
+                        <span class="config-header">Planned /etc/resolv.conf Hook</span>
                         <pre id="planned-resolv"></pre>
                         <div id="resolv-note" style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                            <strong>Note:</strong> This method prepends AfterTouch as the nameserver and makes the file immutable (<code>chattr +i</code>). It also injects the Local Root CA.
+                            <strong>Note:</strong> This method injects a persistent DNS priority hook into the DHCP logic (<code>/etc/udhcpc.d/50default</code>). It preserves your router's search domain and secondary DNS servers. It also injects the Local Root CA.
                         </div>
                     </div>
                 </div>

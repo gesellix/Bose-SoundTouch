@@ -241,9 +241,11 @@ curl "http://192.168.1.100:8090/presets"
 curl "http://localhost:8000/events/192.168.1.100"
 ```
 
-#### Aftertouch Hook (DHCP-Aware DNS Redirection)
+#### ResolvConf Migration (DHCP-Aware DNS Redirection)
 
-The most robust and flexible migration method. It utilizes the device's persistent `/mnt/nv/rc.local` script to inject a priority DNS hook into the system's DHCP configuration.
+The most robust and flexible DNS-based migration method. It utilizes the device's persistent `/mnt/nv/rc.local` script to inject a priority DNS hook into the system's DHCP configuration.
+
+> **Note**: This method requires the DNS Discovery Server to be bound to **port 53** on your local IP and **actually running**. Most devices do not support custom DNS ports in `/etc/resolv.conf`. If you use a custom port for testing, remember to switch back to `:53` and ensure the server has successfully bound to it (check Settings for status) before the actual migration.
 
 **Advantages:**
 - **Discovery**: Automatically discover all Bose endpoints queried by the device.
@@ -279,18 +281,6 @@ The most robust and flexible migration method. It utilizes the device's persiste
    ```
 4. Make the script executable: `chmod +x /mnt/nv/rc.local`.
 5. Reboot the speaker.
-
-#### Legacy ResolvConf Migration (Immutable File)
-
-An alternative method for older firmwares or specific use cases where the DHCP script cannot be easily patched.
-
-**Advantages:**
-- Simple to apply.
-- Guaranteed persistence via file attributes.
-
-**Setup:**
-1. The service manually creates `/etc/resolv.conf`.
-2. The service then makes `/etc/resolv.conf` immutable (`chattr +i`) to prevent DHCP overrides.
 
 ### DNS Discovery Server
 

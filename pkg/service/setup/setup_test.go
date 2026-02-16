@@ -265,9 +265,9 @@ func TestGetMigrationSummary_WithProxyOptions(t *testing.T) {
 		t.Errorf("Expected default marge URL when SSH fails, got: %s", summary.PlannedConfig)
 	}
 
-	// Test PlannedHosts
-	if !contains(summary.PlannedHosts, "target\tstreaming.bose.com") {
-		t.Errorf("Expected PlannedHosts to contain redirect for target, got: %s", summary.PlannedHosts)
+	// Test PlannedResolv
+	if !contains(summary.PlannedResolv, "nameserver target") {
+		t.Errorf("Expected PlannedResolv to contain nameserver target, got: %s", summary.PlannedResolv)
 	}
 }
 
@@ -1065,79 +1065,6 @@ func TestMigrateViaResolvConf(t *testing.T) {
 	m := NewManager("http://192.168.1.100:8000", nil, cm)
 
 	runCalls := []string{}
-	m.NewSSH = func(host string) SSHClient {
-		return &mockSSH{
-			runFunc: func(command string) (string, error) {
-				runCalls = append(runCalls, command)
-				if command == "cat /etc/resolv.conf" {
-					return "nameserver 8.8.8.8", nil
-				}
-				if strings.HasPrefix(command, "[ -f") {
-					return "", fmt.Errorf("file not found")
-				}
-				if strings.HasPrefix(command, "grep -F") {
-					return "", fmt.Errorf("not found")
-				}
-				return "", nil
-			},
-			uploadContentFunc: func(content []byte, remotePath string) error {
-				if remotePath == "/etc/resolv.conf" {
-					if !strings.Contains(string(content), "nameserver 192.168.1.100") {
-						t.Errorf("Expected resolv.conf content to contain nameserver, got %s", string(content))
-					}
-					if !strings.Contains(string(content), "nameserver 8.8.8.8") {
-						t.Errorf("Expected resolv.conf content to retain old nameserver, got %s", string(content))
-					}
-				}
-				return nil
-			},
-		}
-	}
-
-	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
-	if err != nil {
-		t.Fatalf("migrateViaResolvConf failed: %v", err)
-	}
-
-	// Verify backups were attempted
-	foundResolvBackup := false
-	for _, call := range runCalls {
-		if strings.Contains(call, "cp /etc/resolv.conf /etc/resolv.conf.original") {
-			foundResolvBackup = true
-		}
-	}
-	if !foundResolvBackup {
-		t.Errorf("Expected /etc/resolv.conf backup to be attempted")
-	}
-
-	// Verify chattr +i was attempted
-	foundChattr := false
-	for _, call := range runCalls {
-		if strings.Contains(call, "chattr +i /etc/resolv.conf") {
-			foundChattr = true
-			break
-		}
-	}
-	if !foundChattr {
-		t.Errorf("Expected chattr +i /etc/resolv.conf to be attempted")
-	}
-}
-
-func TestMigrateViaAftertouch(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "setup-test-aftertouch")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
-	if err := cm.EnsureCA(); err != nil {
-		t.Fatalf("Failed to ensure CA: %v", err)
-	}
-
-	m := NewManager("http://192.168.1.100:8000", nil, cm)
-
-	runCalls := []string{}
 	uploads := make(map[string]string)
 
 	m.NewSSH = func(host string) SSHClient {
@@ -1159,9 +1086,9 @@ func TestMigrateViaAftertouch(t *testing.T) {
 		}
 	}
 
-	_, err = m.migrateViaAftertouch("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
 	if err != nil {
-		t.Fatalf("migrateViaAftertouch failed: %v", err)
+		t.Fatalf("migrateViaResolvConf failed: %v", err)
 	}
 
 	// Verify uploads
