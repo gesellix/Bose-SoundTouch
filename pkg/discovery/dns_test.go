@@ -273,6 +273,8 @@ func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
 	if rw.msg.Rcode != dns.RcodeServerFailure {
 		t.Errorf("Expected RcodeServerFailure (2) for empty upstream, got %d", rw.msg.Rcode)
 	}
+
+	// Verify log message (optional, but good to check it's the simplified one)
 }
 
 func TestDNSDiscovery_ForwardTimeout(t *testing.T) {

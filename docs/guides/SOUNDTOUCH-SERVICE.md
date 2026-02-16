@@ -305,7 +305,7 @@ When enabled, the DNS server:
 You can enable and configure the DNS server via the Web UI or environment variables:
 - `ENABLE_DNS_DISCOVERY=true`: Turns on the DNS server.
 - `DNS_BIND_ADDR=:53`: The port to listen on (requires root privileges for port 53).
-- `DNS_UPSTREAM=1.1.1.1`: Your preferred upstream DNS provider. **Note:** Ensure this is not set to the same address as the DNS server itself (loopback or local IP) to avoid forwarding loops. The server includes built-in loop prevention, but misconfiguration will cause forwarding to fail. If left empty, forwarding will be disabled and non-intercepted queries will return a failure.
+- `DNS_UPSTREAM=1.1.1.1`: Your preferred upstream DNS provider. **Note:** Ensure this is not set to the same address as the DNS server itself (loopback or local IP) to avoid forwarding loops. The server includes built-in loop prevention, but misconfiguration will cause forwarding to fail. DNS Discovery cannot be enabled if this setting is empty.
 
 #### Manual Discovery via DNS
 Even without migrating a device, you can use the DNS server to discover what a device is querying by manually setting your router's DNS or the device's DNS to point to the AfterTouch service.

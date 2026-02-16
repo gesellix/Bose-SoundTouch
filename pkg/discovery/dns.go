@@ -84,7 +84,7 @@ func (d *DNSDiscovery) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	} else {
 		// Forward to real DNS
 		if d.upstreamDNS == "" {
-			d.throttledLog(fmt.Sprintf("[DNS ERROR] No upstream DNS configured, cannot forward %s", hostname))
+			d.throttledLog("[DNS ERROR] No upstream DNS configured, cannot forward")
 
 			m := new(dns.Msg)
 			m.SetReply(r)

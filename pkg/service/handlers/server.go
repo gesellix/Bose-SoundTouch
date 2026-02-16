@@ -99,6 +99,14 @@ func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
 		}
 	}
 
+	if enabled && upstream == "" {
+		log.Printf("[DNS] Cannot start DNS discovery server: upstream DNS is empty")
+
+		s.dnsEnabled = false
+
+		return
+	}
+
 	if enabled && s.dnsDiscovery == nil {
 		log.Printf("[DNS] Starting DNS discovery server on %s", bind)
 

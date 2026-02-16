@@ -200,6 +200,11 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if settings.DNSEnabled && settings.DNSUpstream == "" {
+		http.Error(w, "DNS Upstream is required when DNS Discovery is enabled", http.StatusBadRequest)
+		return
+	}
+
 	interval, err := time.ParseDuration(settings.DiscoveryInterval)
 	if err != nil && settings.DiscoveryInterval != "" {
 		http.Error(w, "Invalid discovery interval: "+err.Error(), http.StatusBadRequest)
@@ -251,7 +256,14 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		EnableSoundcorkProxy: s.enableSoundcorkProxy,
 		Shortcuts:            s.shortcuts,
 	})
+
+	dnsEnabled := s.dnsEnabled
+	dnsUpstream := s.dnsUpstream
+	dnsBindAddr := s.dnsBindAddr
+
 	s.mu.Unlock()
+
+	s.SetDNSSettings(dnsEnabled, dnsUpstream, dnsBindAddr)
 
 	if err != nil {
 		http.Error(w, "Failed to save settings: "+err.Error(), http.StatusInternalServerError)
