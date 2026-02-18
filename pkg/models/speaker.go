@@ -3,6 +3,8 @@ package models
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
+	"net/url"
 )
 
 // Error constants for speaker validation
@@ -57,9 +59,9 @@ func (p *PlayInfo) SetVolume(volume int) *PlayInfo {
 }
 
 // NewTTSPlayInfo creates a PlayInfo for Google TTS playback
-func NewTTSPlayInfo(text, appKey string, volume ...int) *PlayInfo {
+func NewTTSPlayInfo(text, appKey, language string, volume ...int) *PlayInfo {
 	// URL encode the text for Google TTS
-	url := "http://translate.google.com/translate_tts?ie=UTF-8&tl=EN&client=tw-ob&q=" + text
+	url := fmt.Sprintf("http://translate.google.com/translate_tts?ie=UTF-8&tl=%s&client=tw-ob&q=%s", language, url.QueryEscape(text))
 
 	playInfo := &PlayInfo{
 		XMLName: xml.Name{Local: "play_info"},

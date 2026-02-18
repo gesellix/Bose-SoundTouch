@@ -1769,8 +1769,8 @@ func (c *Client) hasCapability(capabilities *models.Capabilities, capability str
 }
 
 // PlayTTS plays a Text-To-Speech message using Google TTS on the speaker
-func (c *Client) PlayTTS(text, appKey string, volume ...int) error {
-	playInfo := models.NewTTSPlayInfo(text, appKey, volume...)
+func (c *Client) PlayTTS(text, appKey, language string, volume ...int) error {
+	playInfo := models.NewTTSPlayInfo(text, appKey, language, volume...)
 
 	if err := playInfo.Validate(); err != nil {
 		return fmt.Errorf("invalid TTS request: %w", err)

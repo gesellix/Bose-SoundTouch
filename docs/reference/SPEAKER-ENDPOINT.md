@@ -68,14 +68,14 @@ func main() {
     
     client := client.NewClient(config)
     
-    // Play TTS at current volume
-    err := client.PlayTTS("Hello, this is a test message", "YOUR_APP_KEY")
+    // Play TTS at current volume (language code "EN", "DE", etc.)
+    err := client.PlayTTS("Hello, this is a test message", "YOUR_APP_KEY", "EN")
     if err != nil {
         log.Fatal(err)
     }
     
     // Play TTS at specific volume (70)
-    err = client.PlayTTS("Volume test message", "YOUR_APP_KEY", 70)
+    err = client.PlayTTS("Volume test message", "YOUR_APP_KEY", "EN", 70)
     if err != nil {
         log.Fatal(err)
     }
@@ -277,7 +277,7 @@ You'll need to provide your own application key. The format and generation metho
 
 ```go
 // Doorbell notification
-client.PlayTTS("Someone is at the front door", "home-automation-key", 80)
+client.PlayTTS("Someone is at the front door", "home-automation-key", "EN", 80)
 
 // Security alert
 client.PlayURL(

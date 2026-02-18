@@ -370,7 +370,7 @@ soundtouch-cli speaker beep
 **Go Client Usage:**
 ```go
 // Text-to-Speech
-client.PlayTTS("Hello World", "your-app-key", 70)
+client.PlayTTS("Hello World", "your-app-key", "EN", 70)
 
 // URL content
 client.PlayURL("https://example.com/audio.mp3", "your-app-key", "Service", "Message", "Reason", 60)

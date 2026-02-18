@@ -320,8 +320,8 @@ func main() {
         Port: 8090,
     })
     
-    // Play Text-to-Speech message
-    err := c.PlayTTS("Welcome home!", "your-app-key", 70)
+    // Play Text-to-Speech message (language code "EN", "DE", etc.)
+    err := c.PlayTTS("Welcome home!", "your-app-key", "EN", 70)
     if err != nil {
         log.Fatal(err)
     }

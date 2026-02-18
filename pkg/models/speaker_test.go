@@ -35,9 +35,9 @@ func TestNewPlayInfo(t *testing.T) {
 
 func TestNewTTSPlayInfo(t *testing.T) {
 	// Test without volume
-	playInfo := NewTTSPlayInfo("Hello World", "test-key")
+	playInfo := NewTTSPlayInfo("Hello World", "test-key", "EN")
 
-	expectedURL := "http://translate.google.com/translate_tts?ie=UTF-8&tl=EN&client=tw-ob&q=Hello World"
+	expectedURL := "http://translate.google.com/translate_tts?ie=UTF-8&tl=EN&client=tw-ob&q=Hello+World"
 	if playInfo.URL != expectedURL {
 		t.Errorf("Expected URL '%s', got '%s'", expectedURL, playInfo.URL)
 	}
@@ -63,7 +63,7 @@ func TestNewTTSPlayInfo(t *testing.T) {
 	}
 
 	// Test with volume
-	playInfoWithVolume := NewTTSPlayInfo("Hello World", "test-key", 50)
+	playInfoWithVolume := NewTTSPlayInfo("Hello World", "test-key", "EN", 50)
 	if playInfoWithVolume.Volume == nil || *playInfoWithVolume.Volume != 50 {
 		t.Errorf("Expected Volume to be 50, got %v", playInfoWithVolume.Volume)
 	}

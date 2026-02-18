@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -35,23 +34,12 @@ func playTTS(c *cli.Context) error {
 		return err
 	}
 
-	// URL encode the text for Google TTS
-	encodedText := url.QueryEscape(text)
-
-	// Build TTS URL with language support
-	ttsURL := fmt.Sprintf("http://translate.google.com/translate_tts?ie=UTF-8&tl=%s&client=tw-ob&q=%s", language, encodedText)
-
 	// Create PlayInfo for TTS
-	playInfo := &models.PlayInfo{
-		URL:     ttsURL,
-		AppKey:  appKey,
-		Service: "TTS Notification",
-		Message: "Google TTS",
-		Reason:  text,
-	}
-
+	var playInfo *models.PlayInfo
 	if volume > 0 {
-		playInfo.SetVolume(volume)
+		playInfo = models.NewTTSPlayInfo(text, appKey, language, volume)
+	} else {
+		playInfo = models.NewTTSPlayInfo(text, appKey, language)
 	}
 
 	err = client.PlayCustom(playInfo)
@@ -121,10 +109,11 @@ func playURL(c *cli.Context) error {
 	}
 
 	// Create PlayInfo for URL content
-	playInfo := models.NewURLPlayInfo(urlStr, appKey, service, message, reason)
-
+	var playInfo *models.PlayInfo
 	if volume > 0 {
-		playInfo.SetVolume(volume)
+		playInfo = models.NewURLPlayInfo(urlStr, appKey, service, message, reason, volume)
+	} else {
+		playInfo = models.NewURLPlayInfo(urlStr, appKey, service, message, reason)
 	}
 
 	err = client.PlayCustom(playInfo)
