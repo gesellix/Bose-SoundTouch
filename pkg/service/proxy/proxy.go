@@ -106,7 +106,7 @@ func formatHeaders(h http.Header, redact bool) string {
 			val = "[REDACTED]"
 		}
 
-		sb.WriteString(fmt.Sprintf("    %s: %s\n", k, val))
+		fmt.Fprintf(&sb, "    %s: %s\n", k, val)
 	}
 
 	return strings.TrimSuffix(sb.String(), "\n")
