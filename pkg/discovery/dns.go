@@ -330,6 +330,10 @@ func (d *DNSDiscovery) Start(addr string) error {
 		Net:     "tcp",
 		Handler: mux,
 	}
+
+	// Capture server references before releasing mutex to avoid race condition
+	udpServer := d.udpServer
+	tcpServer := d.tcpServer
 	d.mu.Unlock()
 
 	errChan := make(chan error, 2)
@@ -337,7 +341,7 @@ func (d *DNSDiscovery) Start(addr string) error {
 	go func() {
 		log.Printf("[DNS] UDP Discovery server starting on %s", addr)
 
-		if err := d.udpServer.ListenAndServe(); err != nil {
+		if err := udpServer.ListenAndServe(); err != nil {
 			errChan <- fmt.Errorf("UDP server failed: %w", err)
 		}
 	}()
@@ -345,7 +349,7 @@ func (d *DNSDiscovery) Start(addr string) error {
 	go func() {
 		log.Printf("[DNS] TCP Discovery server starting on %s", addr)
 
-		if err := d.tcpServer.ListenAndServe(); err != nil {
+		if err := tcpServer.ListenAndServe(); err != nil {
 			errChan <- fmt.Errorf("TCP server failed: %w", err)
 		}
 	}()
