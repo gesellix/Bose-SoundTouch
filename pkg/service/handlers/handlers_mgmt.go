@@ -99,7 +99,9 @@ func (s *Server) HandleMgmtSpotifyInit(w http.ResponseWriter, _ *http.Request) {
 	redirectURL := svc.BuildAuthorizeURL()
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(map[string]string{
 		"redirectUrl": redirectURL,
 	})
 }
