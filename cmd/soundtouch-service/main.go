@@ -230,10 +230,12 @@ func main() {
 					config.dataDir,
 				)
 				server.SetSpotifyService(spotifyService)
+
 				clientIDPrefix := config.spotifyClientID
 				if len(clientIDPrefix) > 8 {
 					clientIDPrefix = clientIDPrefix[:8]
 				}
+
 				log.Printf("Spotify service initialized (client ID: %s...)", clientIDPrefix)
 			}
 

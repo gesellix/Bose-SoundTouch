@@ -27,6 +27,7 @@ func (s *Server) HandleMgmtListSpeakers(w http.ResponseWriter, r *http.Request) 
 	allDevices, err := s.ds.ListAllDevices()
 	if err != nil {
 		log.Printf("[Mgmt] Failed to list devices: %v", err)
+
 		allDevices = nil
 	}
 
@@ -38,7 +39,8 @@ func (s *Server) HandleMgmtListSpeakers(w http.ResponseWriter, r *http.Request) 
 	}
 
 	speakers := make([]speaker, 0, len(allDevices))
-	for _, d := range allDevices {
+	for i := range allDevices {
+		d := &allDevices[i]
 		speakers = append(speakers, speaker{
 			IPAddress: d.IPAddress,
 			Name:      d.Name,
@@ -48,9 +50,12 @@ func (s *Server) HandleMgmtListSpeakers(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"speakers": speakers,
-	})
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode speakers: %v", err)
+	}
 }
 
 // HandleMgmtDeviceEvents returns events for a device (currently a placeholder).
@@ -80,9 +85,11 @@ func (s *Server) HandleMgmtDeviceEvents(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"events": result,
-	})
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode events: %v", err)
+	}
 }
 
 // HandleMgmtSpotifyInit starts the Spotify OAuth flow by returning an authorization URL.
@@ -101,9 +108,12 @@ func (s *Server) HandleMgmtSpotifyInit(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
-	_ = enc.Encode(map[string]string{
+
+	if err := enc.Encode(map[string]string{
 		"redirectUrl": redirectURL,
-	})
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode redirect URL: %v", err)
+	}
 }
 
 // HandleMgmtSpotifyCallback is the browser OAuth callback from Spotify.
@@ -118,6 +128,7 @@ func (s *Server) HandleMgmtSpotifyCallback(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(`<html><body><h1>Error</h1><p>Spotify integration not configured</p></body></html>`))
+
 		return
 	}
 
@@ -125,6 +136,7 @@ func (s *Server) HandleMgmtSpotifyCallback(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`<html><body><h1>Spotify Authorization Failed</h1><p>Error: ` + errMsg + `</p></body></html>`))
+
 		return
 	}
 
@@ -133,6 +145,7 @@ func (s *Server) HandleMgmtSpotifyCallback(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`<html><body><h1>Missing authorization code</h1></body></html>`))
+
 		return
 	}
 
@@ -141,6 +154,7 @@ func (s *Server) HandleMgmtSpotifyCallback(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`<html><body><h1>Error</h1><p>Token exchange failed</p></body></html>`))
+
 		return
 	}
 
@@ -170,6 +184,7 @@ func (s *Server) HandleMgmtSpotifyConfirm(w http.ResponseWriter, r *http.Request
 	if err := svc.ExchangeCodeAndStore(code); err != nil {
 		log.Printf("[Mgmt] Spotify confirm failed: %v", err)
 		http.Error(w, `{"error":"token exchange failed"}`, http.StatusInternalServerError)
+
 		return
 	}
 
@@ -192,9 +207,12 @@ func (s *Server) HandleMgmtSpotifyAccounts(w http.ResponseWriter, _ *http.Reques
 	accounts := svc.GetAccounts()
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"accounts": accounts,
-	})
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode accounts: %v", err)
+	}
 }
 
 // HandleMgmtSpotifyToken returns a fresh Spotify access token and username.
@@ -212,14 +230,18 @@ func (s *Server) HandleMgmtSpotifyToken(w http.ResponseWriter, _ *http.Request) 
 	if err != nil {
 		log.Printf("[Mgmt] Spotify token error: %v", err)
 		http.Error(w, `{"error":"no token available"}`, http.StatusInternalServerError)
+
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"access_token": accessToken,
 		"username":     username,
-	})
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode token: %v", err)
+	}
 }
 
 // HandleMgmtSpotifyEntity resolves a Spotify URI to name and image URL.
@@ -239,24 +261,28 @@ func (s *Server) HandleMgmtSpotifyEntity(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req struct {
+	var request struct {
 		URI string `json:"uri"`
 	}
-	if err := json.Unmarshal(body, &req); err != nil || req.URI == "" {
+	if unmarshalErr := json.Unmarshal(body, &request); unmarshalErr != nil || request.URI == "" {
 		http.Error(w, `{"error":"missing or invalid uri"}`, http.StatusBadRequest)
 		return
 	}
 
-	name, imageURL, err := svc.ResolveEntity(req.URI)
+	name, imageURL, err := svc.ResolveEntity(request.URI)
 	if err != nil {
 		log.Printf("[Mgmt] Spotify entity resolve error: %v", err)
 		http.Error(w, `{"error":"entity resolution failed"}`, http.StatusInternalServerError)
+
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"name":     name,
 		"imageUrl": imageURL,
-	})
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode entity: %v", err)
+	}
 }

@@ -27,8 +27,8 @@ const (
 	SpotifyScopes = "streaming user-read-private user-read-email user-read-playback-state user-modify-playback-state"
 )
 
-// SpotifyAccount represents a stored Spotify account with tokens.
-type SpotifyAccount struct {
+// Account represents a stored Spotify account with tokens.
+type Account struct {
 	UserID       string `json:"user_id"`
 	DisplayName  string `json:"display_name"`
 	Email        string `json:"email"`
@@ -37,51 +37,53 @@ type SpotifyAccount struct {
 	ExpiresAt    int64  `json:"expires_at"`
 }
 
-// SpotifyService manages Spotify OAuth flow and token lifecycle.
-type SpotifyService struct {
+// Service manages Spotify OAuth flow and token lifecycle.
+type Service struct {
 	clientID     string
 	clientSecret string
 	redirectURI  string
 	dataDir      string
 	mu           sync.RWMutex
-	accounts     map[string]*SpotifyAccount
+	accounts     map[string]*Account
 
 	// Overridable URLs for testing
 	tokenURL string
 	apiBase  string
 }
 
-// NewSpotifyService creates a new SpotifyService and loads any persisted accounts.
-func NewSpotifyService(clientID, clientSecret, redirectURI, dataDir string) *SpotifyService {
-	s := &SpotifyService{
+// NewSpotifyService creates a new Service and loads any persisted accounts.
+func NewSpotifyService(clientID, clientSecret, redirectURI, dataDir string) *Service {
+	s := &Service{
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		redirectURI:  redirectURI,
 		dataDir:      dataDir,
-		accounts:     make(map[string]*SpotifyAccount),
+		accounts:     make(map[string]*Account),
 		tokenURL:     SpotifyTokenURL,
 		apiBase:      SpotifyAPIBase,
 	}
 	if err := s.load(); err != nil {
 		log.Printf("[Spotify] Failed to load accounts: %v", err)
 	}
+
 	return s
 }
 
 // BuildAuthorizeURL constructs the Spotify OAuth authorization URL.
-func (s *SpotifyService) BuildAuthorizeURL() string {
+func (s *Service) BuildAuthorizeURL() string {
 	params := url.Values{
 		"client_id":     {s.clientID},
 		"response_type": {"code"},
 		"redirect_uri":  {s.redirectURI},
 		"scope":         {SpotifyScopes},
 	}
+
 	return SpotifyAuthorizeURL + "?" + params.Encode()
 }
 
 // ExchangeCodeAndStore exchanges an authorization code for tokens,
 // fetches the user profile, and stores the account.
-func (s *SpotifyService) ExchangeCodeAndStore(code string) error {
+func (s *Service) ExchangeCodeAndStore(code string) error {
 	// Exchange code for tokens
 	tokenResp, err := s.exchangeCode(code)
 	if err != nil {
@@ -90,6 +92,7 @@ func (s *SpotifyService) ExchangeCodeAndStore(code string) error {
 
 	accessToken, _ := tokenResp["access_token"].(string)
 	refreshToken, _ := tokenResp["refresh_token"].(string)
+
 	expiresIn, _ := tokenResp["expires_in"].(float64)
 	if expiresIn == 0 {
 		expiresIn = 3600
@@ -105,7 +108,7 @@ func (s *SpotifyService) ExchangeCodeAndStore(code string) error {
 	displayName, _ := profile["display_name"].(string)
 	email, _ := profile["email"].(string)
 
-	account := &SpotifyAccount{
+	account := &Account{
 		UserID:       userID,
 		DisplayName:  displayName,
 		Email:        email,
@@ -123,10 +126,11 @@ func (s *SpotifyService) ExchangeCodeAndStore(code string) error {
 	}
 
 	log.Printf("[Spotify] Account linked: %s (%s)", displayName, userID)
+
 	return nil
 }
 
-func (s *SpotifyService) exchangeCode(code string) (map[string]interface{}, error) {
+func (s *Service) exchangeCode(code string) (map[string]interface{}, error) {
 	data := url.Values{
 		"grant_type":   {"authorization_code"},
 		"code":         {code},
@@ -137,6 +141,7 @@ func (s *SpotifyService) exchangeCode(code string) (map[string]interface{}, erro
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(s.clientID, s.clientSecret)
 
@@ -144,7 +149,10 @@ func (s *SpotifyService) exchangeCode(code string) (map[string]interface{}, erro
 	if err != nil {
 		return nil, fmt.Errorf("token request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -159,21 +167,26 @@ func (s *SpotifyService) exchangeCode(code string) (map[string]interface{}, erro
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
+
 	return result, nil
 }
 
-func (s *SpotifyService) getUserProfile(accessToken string) (map[string]interface{}, error) {
+func (s *Service) getUserProfile(accessToken string) (map[string]interface{}, error) {
 	req, err := http.NewRequest(http.MethodGet, s.apiBase+"/me", nil)
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("profile request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -188,11 +201,12 @@ func (s *SpotifyService) getUserProfile(accessToken string) (map[string]interfac
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("parse profile: %w", err)
 	}
+
 	return result, nil
 }
 
 // RefreshAccessToken refreshes the access token for the given account.
-func (s *SpotifyService) RefreshAccessToken(account *SpotifyAccount) error {
+func (s *Service) RefreshAccessToken(account *Account) error {
 	data := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {account.RefreshToken},
@@ -202,6 +216,7 @@ func (s *SpotifyService) RefreshAccessToken(account *SpotifyAccount) error {
 	if err != nil {
 		return err
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(s.clientID, s.clientSecret)
 
@@ -209,7 +224,10 @@ func (s *SpotifyService) RefreshAccessToken(account *SpotifyAccount) error {
 	if err != nil {
 		return fmt.Errorf("refresh request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -227,10 +245,12 @@ func (s *SpotifyService) RefreshAccessToken(account *SpotifyAccount) error {
 
 	s.mu.Lock()
 	account.AccessToken, _ = result["access_token"].(string)
+
 	expiresIn, _ := result["expires_in"].(float64)
 	if expiresIn == 0 {
 		expiresIn = 3600
 	}
+
 	account.ExpiresAt = time.Now().Unix() + int64(expiresIn)
 	if newRefresh, ok := result["refresh_token"].(string); ok && newRefresh != "" {
 		account.RefreshToken = newRefresh
@@ -245,19 +265,21 @@ func (s *SpotifyService) RefreshAccessToken(account *SpotifyAccount) error {
 }
 
 // GetFreshToken returns a valid access token and username, refreshing if needed.
-func (s *SpotifyService) GetFreshToken() (accessToken, username string, err error) {
+func (s *Service) GetFreshToken() (accessToken, username string, err error) {
 	s.mu.RLock()
+
 	if len(s.accounts) == 0 {
 		s.mu.RUnlock()
 		return "", "", fmt.Errorf("no Spotify accounts linked")
 	}
 
 	// Get the first account
-	var account *SpotifyAccount
+	var account *Account
 	for _, a := range s.accounts {
 		account = a
 		break
 	}
+
 	s.mu.RUnlock()
 
 	// Check if token needs refresh (expired or within 60s of expiry)
@@ -269,17 +291,18 @@ func (s *SpotifyService) GetFreshToken() (accessToken, username string, err erro
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return account.AccessToken, account.UserID, nil
 }
 
 // GetAccounts returns a copy of all accounts with tokens stripped for API responses.
-func (s *SpotifyService) GetAccounts() []SpotifyAccount {
+func (s *Service) GetAccounts() []Account {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make([]SpotifyAccount, 0, len(s.accounts))
+	result := make([]Account, 0, len(s.accounts))
 	for _, a := range s.accounts {
-		result = append(result, SpotifyAccount{
+		result = append(result, Account{
 			UserID:      a.UserID,
 			DisplayName: a.DisplayName,
 			Email:       a.Email,
@@ -287,11 +310,12 @@ func (s *SpotifyService) GetAccounts() []SpotifyAccount {
 			// AccessToken and RefreshToken deliberately omitted
 		})
 	}
+
 	return result
 }
 
 // ResolveEntity resolves a Spotify URI to a name and image URL.
-func (s *SpotifyService) ResolveEntity(uri string) (name, imageURL string, err error) {
+func (s *Service) ResolveEntity(uri string) (name, imageURL string, err error) {
 	entityType, entityID, err := parseSpotifyURI(uri)
 	if err != nil {
 		return "", "", err
@@ -303,17 +327,22 @@ func (s *SpotifyService) ResolveEntity(uri string) (name, imageURL string, err e
 	}
 
 	apiURL := fmt.Sprintf("%s/%s/%s", s.apiBase, entityType, entityID)
+
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return "", "", err
 	}
+
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("API request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -321,10 +350,11 @@ func (s *SpotifyService) ResolveEntity(uri string) (name, imageURL string, err e
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		return "", "", fmt.Errorf("Spotify entity not found")
+		return "", "", fmt.Errorf("spotify entity not found")
 	}
+
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("Spotify API error (%d): %s", resp.StatusCode, string(body))
+		return "", "", fmt.Errorf("spotify API error (%d): %s", resp.StatusCode, string(body))
 	}
 
 	var data map[string]interface{}
@@ -361,6 +391,7 @@ func extractImageURL(data map[string]interface{}, entityType string) string {
 			return url
 		}
 	}
+
 	return ""
 }
 
@@ -391,12 +422,14 @@ func parseSpotifyURI(uri string) (entityType, entityID string, err error) {
 }
 
 // save persists accounts to disk as JSON.
-func (s *SpotifyService) save() error {
+func (s *Service) save() error {
 	s.mu.RLock()
-	data := make(map[string]*SpotifyAccount, len(s.accounts))
+
+	data := make(map[string]*Account, len(s.accounts))
 	for k, v := range s.accounts {
 		data[k] = v
 	}
+
 	s.mu.RUnlock()
 
 	dir := filepath.Join(s.dataDir, "spotify")
@@ -418,7 +451,7 @@ func (s *SpotifyService) save() error {
 }
 
 // load reads persisted accounts from disk.
-func (s *SpotifyService) load() error {
+func (s *Service) load() error {
 	path := filepath.Join(s.dataDir, "spotify", "accounts.json")
 
 	jsonData, err := os.ReadFile(path)
@@ -426,10 +459,11 @@ func (s *SpotifyService) load() error {
 		if os.IsNotExist(err) {
 			return nil // No accounts file yet, not an error
 		}
+
 		return fmt.Errorf("read file: %w", err)
 	}
 
-	var accounts map[string]*SpotifyAccount
+	var accounts map[string]*Account
 	if err := json.Unmarshal(jsonData, &accounts); err != nil {
 		return fmt.Errorf("unmarshal accounts: %w", err)
 	}
@@ -439,5 +473,6 @@ func (s *SpotifyService) load() error {
 	s.mu.Unlock()
 
 	log.Printf("[Spotify] Loaded %d account(s)", len(accounts))
+
 	return nil
 }

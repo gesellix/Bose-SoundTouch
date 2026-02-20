@@ -47,7 +47,7 @@ type Server struct {
 	spotifyClientSecret  string
 	spotifyRedirectURI   string
 	baseURL              string
-	spotifyService       *spotify.SpotifyService
+	spotifyService       *spotify.Service
 }
 
 // NewServer creates a new SoundTouch service server.
@@ -251,7 +251,7 @@ func (s *Server) SetBaseURL(baseURL string) {
 }
 
 // SetSpotifyService sets the Spotify OAuth service.
-func (s *Server) SetSpotifyService(ss *spotify.SpotifyService) {
+func (s *Server) SetSpotifyService(ss *spotify.Service) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

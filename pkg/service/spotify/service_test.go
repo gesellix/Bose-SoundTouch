@@ -38,7 +38,7 @@ func TestGetAccountsStripsTokens(t *testing.T) {
 
 	// Manually add an account with tokens
 	svc.mu.Lock()
-	svc.accounts["user1"] = &SpotifyAccount{
+	svc.accounts["user1"] = &Account{
 		UserID:       "user1",
 		DisplayName:  "Test User",
 		Email:        "test@example.com",
@@ -107,7 +107,7 @@ func TestGetFreshTokenRefreshesExpired(t *testing.T) {
 
 	// Add an account with an expired token
 	svc.mu.Lock()
-	svc.accounts["user1"] = &SpotifyAccount{
+	svc.accounts["user1"] = &Account{
 		UserID:       "user1",
 		DisplayName:  "Test User",
 		AccessToken:  "old-expired-token",
@@ -213,7 +213,7 @@ func TestResolveEntityFetchesFromAPI(t *testing.T) {
 
 	// Add a non-expired account
 	svc.mu.Lock()
-	svc.accounts["user1"] = &SpotifyAccount{
+	svc.accounts["user1"] = &Account{
 		UserID:       "user1",
 		AccessToken:  "fresh-token",
 		RefreshToken: "refresh",
@@ -252,7 +252,7 @@ func TestSaveAndLoad(t *testing.T) {
 	// Create and populate
 	svc := NewSpotifyService("cid", "csecret", "http://localhost/cb", dir)
 	svc.mu.Lock()
-	svc.accounts["user1"] = &SpotifyAccount{
+	svc.accounts["user1"] = &Account{
 		UserID:       "user1",
 		DisplayName:  "Test User",
 		Email:        "test@example.com",
@@ -260,7 +260,7 @@ func TestSaveAndLoad(t *testing.T) {
 		RefreshToken: "rt",
 		ExpiresAt:    1234567890,
 	}
-	svc.accounts["user2"] = &SpotifyAccount{
+	svc.accounts["user2"] = &Account{
 		UserID:       "user2",
 		DisplayName:  "User Two",
 		Email:        "two@example.com",
@@ -405,7 +405,7 @@ func TestGetFreshTokenNotExpired(t *testing.T) {
 	svc := NewSpotifyService("cid", "csecret", "http://localhost/cb", t.TempDir())
 
 	svc.mu.Lock()
-	svc.accounts["user1"] = &SpotifyAccount{
+	svc.accounts["user1"] = &Account{
 		UserID:       "user1",
 		AccessToken:  "valid-token",
 		RefreshToken: "rt",
