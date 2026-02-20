@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // BasicAuthMgmt returns a Basic Auth middleware using the server's management credentials.
@@ -16,7 +17,7 @@ func (s *Server) BasicAuthMgmt() func(http.Handler) http.Handler {
 	password := s.mgmtPassword
 	s.mu.RUnlock()
 
-	return BasicAuthMiddleware(username, password)
+	return middleware.BasicAuth("Management API", map[string]string{username: password})
 }
 
 // HandleMgmtListSpeakers returns discovered speakers for the given account.
