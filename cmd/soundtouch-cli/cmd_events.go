@@ -389,6 +389,10 @@ func handleSpecialMessage(message *models.SpecialMessage, filters map[string]boo
 			if !filters["userActivity"] {
 				return
 			}
+		case models.MessageTypeUserInactivity:
+			if !filters["userInactivity"] {
+				return
+			}
 		}
 	}
 
@@ -401,6 +405,12 @@ func handleSpecialMessage(message *models.SpecialMessage, filters map[string]boo
 		}
 	case models.MessageTypeUserActivity:
 		fmt.Printf("\n👤 User Activity [%s]\n", message.DeviceID)
+
+		if verbose {
+			fmt.Printf("  ⏰ Timestamp: %s\n", message.Timestamp.Format("15:04:05"))
+		}
+	case models.MessageTypeUserInactivity:
+		fmt.Printf("\n💤 User Inactivity [%s]\n", message.DeviceID)
 
 		if verbose {
 			fmt.Printf("  ⏰ Timestamp: %s\n", message.Timestamp.Format("15:04:05"))

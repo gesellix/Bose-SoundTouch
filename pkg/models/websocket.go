@@ -304,8 +304,9 @@ type SpecialMessageType string
 
 // Constants for special message types
 const (
-	MessageTypeSdkInfo      SpecialMessageType = "sdkInfo"
-	MessageTypeUserActivity SpecialMessageType = "userActivity"
+	MessageTypeSdkInfo        SpecialMessageType = "sdkInfo"
+	MessageTypeUserActivity   SpecialMessageType = "userActivity"
+	MessageTypeUserInactivity SpecialMessageType = "userInactivity"
 )
 
 // SoundTouchSdkInfo represents the SDK info message sent on connection
@@ -318,6 +319,12 @@ type SoundTouchSdkInfo struct {
 // UserActivityUpdate represents user activity notifications
 type UserActivityUpdate struct {
 	XMLName  xml.Name `xml:"userActivityUpdate"`
+	DeviceID string   `xml:"deviceID,attr"`
+}
+
+// UserInactivityUpdate represents user inactivity notifications
+type UserInactivityUpdate struct {
+	XMLName  xml.Name `xml:"userInactivityUpdate"`
 	DeviceID string   `xml:"deviceID,attr"`
 }
 
@@ -604,6 +611,22 @@ func ParseSpecialMessage(data []byte) (*SpecialMessage, error) {
 		}, nil
 	}
 
+	// Check for userInactivityUpdate
+	if strings.Contains(dataStr, "<userInactivityUpdate") {
+		var userInactivity UserInactivityUpdate
+		if err := xml.Unmarshal(data, &userInactivity); err != nil {
+			return nil, fmt.Errorf("failed to parse userInactivityUpdate: %w", err)
+		}
+
+		return &SpecialMessage{
+			Type:      MessageTypeUserInactivity,
+			DeviceID:  userInactivity.DeviceID,
+			Data:      &userInactivity,
+			RawData:   data,
+			Timestamp: time.Now(),
+		}, nil
+	}
+
 	return nil, fmt.Errorf("unknown special message type: %s", dataStr)
 }
 
@@ -629,6 +652,17 @@ func (sm *SpecialMessage) GetUserActivity() *UserActivityUpdate {
 	return nil
 }
 
+// GetUserInactivity returns the parsed UserInactivity data if the message is of that type
+func (sm *SpecialMessage) GetUserInactivity() *UserInactivityUpdate {
+	if sm.Type == MessageTypeUserInactivity {
+		if userInactivity, ok := sm.Data.(*UserInactivityUpdate); ok {
+			return userInactivity
+		}
+	}
+
+	return nil
+}
+
 // String returns a string representation of the special message
 func (sm *SpecialMessage) String() string {
 	switch sm.Type {
@@ -638,6 +672,8 @@ func (sm *SpecialMessage) String() string {
 		}
 	case MessageTypeUserActivity:
 		return fmt.Sprintf("User Activity [Device: %s]", sm.DeviceID)
+	case MessageTypeUserInactivity:
+		return fmt.Sprintf("User Inactivity [Device: %s]", sm.DeviceID)
 	}
 
 	return fmt.Sprintf("Unknown Special Message - Type: %s", sm.Type)
