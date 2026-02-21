@@ -419,6 +419,32 @@ func (s *Server) HandleRevertMigration(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetDNSDiscoveries returns recorded DNS discoveries.
 func (s *Server) HandleGetDNSDiscoveries(w http.ResponseWriter, _ *http.Request) {
+	result := s.getMergedDNSDiscoveries()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleDownloadDNSDiscoveries returns recorded DNS discoveries as a downloadable JSON file.
+func (s *Server) HandleDownloadDNSDiscoveries(w http.ResponseWriter, _ *http.Request) {
+	result := s.getMergedDNSDiscoveries()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"dns-discoveries.json\"")
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+
+	if err := encoder.Encode(result); err != nil {
+		log.Printf("Error encoding DNS discoveries for download: %v", err)
+	}
+}
+
+func (s *Server) getMergedDNSDiscoveries() []datastore.DNSDiscoveryEntry {
 	// 1. Get current in-memory discoveries
 	inMemory := s.GetDNSDiscovery()
 
@@ -469,12 +495,7 @@ func (s *Server) HandleGetDNSDiscoveries(w http.ResponseWriter, _ *http.Request)
 		log.Printf("Warning: Failed to persist merged DNS discoveries: %v", err)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	return result
 }
 
 // HandleClearDNSDiscoveries clears recorded DNS discoveries.

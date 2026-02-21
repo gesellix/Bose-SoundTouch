@@ -713,6 +713,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Delete("/interactions/sessions", server.HandleCleanupSessions)
 
 		r.Get("/dns-discoveries", server.HandleGetDNSDiscoveries)
+		r.Get("/dns-discoveries/download", server.HandleDownloadDNSDiscoveries)
 		r.Delete("/dns-discoveries", server.HandleClearDNSDiscoveries)
 
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)

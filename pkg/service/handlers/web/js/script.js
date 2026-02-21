@@ -585,6 +585,10 @@ async function clearDNSDiscoveries() {
     }
 }
 
+function downloadDNSDiscoveries() {
+    window.location.href = '/setup/dns-discoveries/download';
+}
+
 async function showDeviceEvents() {
     const overlay = document.getElementById('device-events-overlay');
     overlay.style.display = 'block';

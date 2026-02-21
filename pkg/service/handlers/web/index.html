@@ -406,7 +406,10 @@
             <div id="dns-discoveries" class="summary-box" style="margin-top: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="margin: 0;">DNS Discoveries</h3>
-                    <button onclick="clearDNSDiscoveries()" class="btn-danger">Clear DNS Logs</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="downloadDNSDiscoveries()" class="btn-info">Download JSON</button>
+                        <button onclick="clearDNSDiscoveries()" class="btn-danger">Clear DNS Logs</button>
+                    </div>
                 </div>
                 <p style="font-size: 0.85em; color: #666;">Hosts discovered via the AfterTouch DNS server. "Self" means the domain was intercepted and redirected to this service.</p>
                 <div id="dns-discoveries-list-container" style="max-height: 400px; overflow-y: auto;">
