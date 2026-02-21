@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
@@ -149,6 +150,13 @@ func TestMigrationAndCA(t *testing.T) {
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()
+
+	// Add device to datastore for resolution
+	_ = ds.SaveDeviceInfo("default", "192.168.1.10", &models.ServiceDeviceInfo{
+		DeviceID:  "192.168.1.10",
+		IPAddress: "192.168.1.10",
+		AccountID: "default",
+	})
 
 	// 1. Test GET /setup/ca.crt
 	res, err := http.Get(ts.URL + "/setup/ca.crt")

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -215,6 +216,7 @@ func (s *Server) HandleMgmtSpotifyAccounts(w http.ResponseWriter, _ *http.Reques
 	}
 }
 
+// HandleMgmtSpotifyToken returns a fresh Spotify access token for the linked account.
 func (s *Server) HandleMgmtSpotifyToken(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
 	svc := s.spotifyService
@@ -284,4 +286,28 @@ func (s *Server) HandleMgmtSpotifyEntity(w http.ResponseWriter, r *http.Request)
 	}); err != nil {
 		log.Printf("[Mgmt] Failed to encode entity: %v", err)
 	}
+}
+
+// HandleMgmtPrimeDevice triggers a Spotify priming for a specific device.
+func (s *Server) HandleMgmtPrimeDevice(w http.ResponseWriter, r *http.Request) {
+	deviceID := r.URL.Query().Get("deviceId")
+
+	if deviceID == "" {
+		http.Error(w, `{"error":"missing deviceId"}`, http.StatusBadRequest)
+		return
+	}
+
+	deviceIP, err := s.resolveDeviceIDToIP(deviceID)
+	if err != nil {
+		log.Printf("[Mgmt] Prime failed: %v", err)
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusNotFound)
+
+		return
+	}
+
+	// Trigger priming
+	go s.PrimeDeviceWithSpotify(deviceIP)
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"status":"Priming triggered"}`))
 }

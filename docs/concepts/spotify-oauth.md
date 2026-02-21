@@ -93,9 +93,9 @@ sequenceDiagram
 
 ## Boot Primer Script
 
-A boot primer script that uses these endpoints to feed Spotify tokens to speakers via ZeroConf is available in the `scripts/spotify/` directory: [spotify-boot-primer.sh](../scripts/spotify/spotify-boot-primer.sh).
+A boot primer script that uses these endpoints to feed Spotify tokens to speakers via ZeroConf is available in the `scripts/spotify/` directory: [spotify-boot-primer.sh](../../scripts/spotify/spotify-boot-primer.sh).
 
-This script can be installed on the speaker itself (which runs embedded Linux) to automatically prime Spotify Connect at boot time. See [README.md](../scripts/spotify/README.md) and [INSTALL.md](../scripts/spotify/INSTALL.md) for instructions.
+This script can be installed on the speaker itself (which runs embedded Linux) to automatically prime Spotify Connect at boot time. See [README.md](../../scripts/spotify/README.md) and [INSTALL.md](../../scripts/spotify/INSTALL.md) for instructions.
 
 ### Automated Installation via Service
 

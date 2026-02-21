@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,6 +16,11 @@ import (
 
 // HandleMargeSourceProviders returns the Marge source providers.
 func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Request) {
+	// Trigger Spotify priming as this is a common liveness signal
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		go s.PrimeDeviceWithSpotify(host)
+	}
+
 	etag := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
@@ -34,6 +40,11 @@ func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Reque
 
 // HandleMargeAccountFull returns the full Marge account information.
 func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) {
+	// Trigger Spotify priming as this is a common liveness signal
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		go s.PrimeDeviceWithSpotify(host)
+	}
+
 	account := chi.URLParam(r, "account")
 
 	device := r.URL.Query().Get("device")

@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -265,6 +268,14 @@ func (s *Server) GetSettings() (string, string, string) {
 	return s.serverURL, s.soundcorkURL, s.httpsServerURL
 }
 
+// IsSpotifyConfigured returns whether Spotify integration is configured.
+func (s *Server) IsSpotifyConfigured() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.spotifyService != nil
+}
+
 // GetProxySettings returns the current proxy settings.
 func (s *Server) GetProxySettings() (bool, bool, bool, bool) {
 	s.mu.RLock()
@@ -306,6 +317,75 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 
 	// Post-discovery cleanup: merge overlapping IP/Serial entries
 	s.mergeOverlappingDevices()
+}
+
+// PrimeDeviceWithSpotify triggers a Spotify priming of the speaker if a Spotify account is linked.
+func (s *Server) PrimeDeviceWithSpotify(deviceIP string) {
+	s.mu.RLock()
+	svc := s.spotifyService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		return
+	}
+
+	accounts := svc.GetAccounts()
+	if len(accounts) == 0 {
+		return
+	}
+
+	// We'll use the first linked account. In the future, we might want to let the user
+	// pick or map accounts to speakers, but for now, we follow the "One linked account" model.
+	accessToken, username, err := svc.GetFreshToken()
+	if err != nil {
+		log.Printf("[Spotify Watchdog] Failed to get fresh token for %s: %v", deviceIP, err)
+		return
+	}
+
+	log.Printf("[Spotify Watchdog] Proactively priming %s with Spotify user %s", deviceIP, username)
+
+	if err := s.pushSpotifyTokenToDevice(deviceIP, username, accessToken); err != nil {
+		log.Printf("[Spotify Watchdog] Failed to prime %s: %v", deviceIP, err)
+	} else {
+		log.Printf("[Spotify Watchdog] Successfully primed %s", deviceIP)
+	}
+}
+
+func (s *Server) pushSpotifyTokenToDevice(deviceIP, username, accessToken string) error {
+	// ZeroConf API endpoint on the speaker
+	var zcURL string
+	if _, _, err := net.SplitHostPort(deviceIP); err == nil {
+		// If port is specified (e.g. in tests), keep it but usually it's just IP
+		zcURL = fmt.Sprintf("http://%s/zc", deviceIP)
+	} else {
+		// If no port specified, default to 8200
+		zcURL = fmt.Sprintf("http://%s:8200/zc", deviceIP)
+	}
+
+	data := url.Values{}
+	data.Set("action", "addUser")
+	data.Set("userName", username)
+	data.Set("blob", accessToken)
+	data.Set("clientKey", "")
+	data.Set("tokenType", "accesstoken")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.PostForm(zcURL, data)
+	if err != nil {
+		return fmt.Errorf("POST to %s failed: %w", zcURL, err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("POST to %s returned status %d: %s", zcURL, resp.StatusCode, string(body))
+	}
+
+	return nil
 }
 
 func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
@@ -375,6 +455,9 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
 		log.Printf("Failed to save device info: %v", err)
 	}
+
+	// Proactively prime with Spotify if a link exists
+	go s.PrimeDeviceWithSpotify(d.Host)
 }
 
 func (s *Server) mergeOverlappingDevices() {
@@ -469,4 +552,21 @@ func (s *Server) findExistingDeviceInfo(d models.DiscoveredDevice) *models.Servi
 	}
 
 	return nil
+}
+
+func (s *Server) resolveDeviceIDToIP(deviceID string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// 1. Try to find in Datastore
+	devices, err := s.ds.ListAllDevices()
+	if err == nil {
+		for i := range devices {
+			if devices[i].DeviceID == deviceID {
+				return devices[i].IPAddress, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("device not found: %s", deviceID)
 }

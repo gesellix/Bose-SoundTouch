@@ -119,6 +119,12 @@
                 </div>
             </div>
             <div style="margin-bottom: 20px;">
+                <strong>Spotify Integration:</strong>
+                <div id="spotify-config-status" style="margin-top: 5px; font-size: 0.9em;">
+                    Checking configuration...
+                </div>
+            </div>
+            <div style="margin-bottom: 20px;">
                 <strong>Proxy Logging:</strong>
                 <div style="margin-top: 5px;">
                     <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
@@ -134,7 +140,13 @@
 
         <!-- Tab 2: Devices -->
         <div id="tab-devices" class="tab-content">
-            <h2>Known Devices <span id="discovery-indicator" style="font-size: 0.5em; vertical-align: middle; display: none;">🔍 Scanning...</span></h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Known Devices <span id="discovery-indicator" style="font-size: 0.5em; vertical-align: middle; display: none;">🔍 Scanning...</span></h2>
+                <div id="spotify-status-header" style="background: #f0f0f0; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; display: flex; align-items: center; gap: 10px;">
+                    Spotify: <span id="spotify-account-name" style="font-weight: bold;">Not Linked</span>
+                    <button id="link-spotify-btn" onclick="linkSpotify()" style="font-size: 0.8em; padding: 2px 8px; background: #1DB954; color: white; border: none; border-radius: 10px; cursor: pointer;">Link Account</button>
+                </div>
+            </div>
             <div id="device-list">Loading devices...</div>
             <div style="margin-top: 20px;">
                 <button onclick="triggerDiscovery()">Scan Again</button>
@@ -179,8 +191,9 @@
             </div>
 
             <div id="migration-summary" class="summary-box" style="display: none;">
-                <h3>Migration Summary for <span id="summary-ip"></span></h3>
+                <h3>Migration Summary for <span id="summary-device-display"></span></h3>
                 <p>Migration Status: <span id="migration-status"></span></p>
+                <input type="hidden" id="summary-device-id">
                 <p>SSH Connection: <span id="ssh-status"></span></p>
                 <p id="original-config-status" style="display: none;">Backup: ✅ Found .original config at <code>/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original</code> <button onclick="toggleOriginalConfig()">Show Original Config</button></p>
                 <p id="no-original-config-status" style="display: none;">Backup: ❌ Not found <button id="backup-config-btn">Backup Config Now</button></p>

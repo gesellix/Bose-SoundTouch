@@ -34,10 +34,13 @@
 * [Source Selection](reference/SOURCE-SELECTION.md)
 * [Volume Controls](reference/VOLUME-CONTROLS.md)
 * [RadioBrowser](reference/radio-browser.md)
-* [Spotify OAuth](spotify-oauth.md)
 * [Bass Controls](reference/BASS-CONTROLS.md)
 * [Key Controls](reference/KEY-CONTROLS.md)
 * [Feature Mapping](reference/FEATURE-MAPPING.md)
+
+## Concepts
+* [Spotify Priming Strategy](concepts/spotify-priming-strategy.md)
+* [Spotify OAuth](concepts/spotify-oauth.md)
 
 ## Analysis & Research
 * [API Coverage Analysis](analysis/API-COVERAGE.md)
