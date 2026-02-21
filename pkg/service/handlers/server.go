@@ -46,7 +46,6 @@ type Server struct {
 	spotifyClientID      string
 	spotifyClientSecret  string
 	spotifyRedirectURI   string
-	baseURL              string
 	spotifyService       *spotify.Service
 }
 
@@ -240,14 +239,6 @@ func (s *Server) SetMgmtConfig(username, password string) {
 
 	s.mgmtUsername = username
 	s.mgmtPassword = password
-}
-
-// SetBaseURL sets the external base URL for OAuth callbacks.
-func (s *Server) SetBaseURL(baseURL string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.baseURL = baseURL
 }
 
 // SetSpotifyService sets the Spotify OAuth service.

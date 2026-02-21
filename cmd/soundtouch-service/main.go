@@ -220,7 +220,6 @@ func main() {
 			server.SetDNSSettings(persisted.DNSEnabled, persisted.DNSUpstream, persisted.DNSBindAddr)
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
-			server.SetBaseURL(config.baseURL)
 
 			if config.spotifyClientID != "" {
 				spotifyService := spotify.NewSpotifyService(
@@ -357,7 +356,6 @@ type serviceConfig struct {
 	spotifyRedirectURI   string
 	mgmtUsername         string
 	mgmtPassword         string
-	baseURL              string
 }
 
 func loadConfig(c *cli.Context) serviceConfig {
@@ -421,7 +419,6 @@ func loadConfig(c *cli.Context) serviceConfig {
 	spotifyRedirectURI := c.String("spotify-redirect-uri")
 	mgmtUsername := c.String("mgmt-username")
 	mgmtPassword := c.String("mgmt-password")
-	baseURL := c.String("base-url")
 
 	return serviceConfig{
 		port:                 port,
@@ -446,7 +443,6 @@ func loadConfig(c *cli.Context) serviceConfig {
 		spotifyRedirectURI:   spotifyRedirectURI,
 		mgmtUsername:         mgmtUsername,
 		mgmtPassword:         mgmtPassword,
-		baseURL:              baseURL,
 	}
 }
 
