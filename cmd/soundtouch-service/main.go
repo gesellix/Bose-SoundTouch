@@ -668,7 +668,6 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Use(server.BasicAuthMgmt())
 			r.Get("/accounts/{accountId}/speakers", server.HandleMgmtListSpeakers)
 			r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)
-			r.Post("/devices/{deviceId}/spotify/install-primer", server.HandleMgmtInstallSpotifyPrimer)
 			r.Post("/spotify/init", server.HandleMgmtSpotifyInit)
 			r.Post("/spotify/confirm", server.HandleMgmtSpotifyConfirm)
 			r.Get("/spotify/accounts", server.HandleMgmtSpotifyAccounts)

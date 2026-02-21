@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -216,94 +215,6 @@ func (s *Server) HandleMgmtSpotifyAccounts(w http.ResponseWriter, _ *http.Reques
 	}
 }
 
-// HandleMgmtInstallSpotifyPrimer installs the Spotify boot primer on a device identified by deviceId.
-// The deviceId can be either a known device ID/serial stored in the DataStore or a raw IP address.
-func (s *Server) HandleMgmtInstallSpotifyPrimer(w http.ResponseWriter, r *http.Request) {
-	deviceID := chi.URLParam(r, "deviceId")
-	if deviceID == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device ID is required"}); err != nil {
-			log.Printf("[Mgmt] Failed to encode error: %v", err)
-		}
-
-		return
-	}
-
-	targetURL := r.URL.Query().Get("target_url")
-	if targetURL == "" {
-		s.mu.RLock()
-		targetURL = s.sm.ServerURL
-		s.mu.RUnlock()
-	}
-
-	// Resolve deviceID to IP if possible
-	deviceIP := ""
-
-	// If the ID looks like an IP, use it directly
-	if strings.Count(deviceID, ".") == 3 || strings.Contains(deviceID, ":") { // IPv4 or IPv6
-		deviceIP = deviceID
-	} else {
-		// Look up in datastore
-		all, err := s.ds.ListAllDevices()
-		if err == nil {
-			for i := range all {
-				d := &all[i]
-				if d.DeviceID == deviceID || d.DeviceSerialNumber == deviceID {
-					deviceIP = d.IPAddress
-					break
-				}
-			}
-		}
-	}
-
-	if deviceIP == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "Device not found or missing IP"}); err != nil {
-			log.Printf("[Mgmt] Failed to encode error: %v", err)
-		}
-
-		return
-	}
-
-	s.mu.RLock()
-	mgr := s.sm
-	s.mu.RUnlock()
-
-	if mgr == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
-
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": "setup manager unavailable"}); err != nil {
-			log.Printf("[Mgmt] Failed to encode error: %v", err)
-		}
-
-		return
-	}
-
-	output, err := mgr.InstallSpotifyPrimer(deviceIP, targetURL)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
-			log.Printf("[Mgmt] Failed to encode error: %v", encodeErr)
-		}
-
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Spotify primer installed", "output": output}); err != nil {
-		log.Printf("[Mgmt] Failed to encode response: %v", err)
-	}
-}
-
-// HandleMgmtSpotifyToken returns a fresh Spotify access token and username.
 func (s *Server) HandleMgmtSpotifyToken(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
 	svc := s.spotifyService

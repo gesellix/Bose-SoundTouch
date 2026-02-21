@@ -1203,135 +1203,6 @@ func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, erro
 	return logs, nil
 }
 
-// InstallSpotifyPrimer installs all components required for the Spotify boot primer on the speaker.
-func (m *Manager) InstallSpotifyPrimer(deviceIP, targetURL string) (string, error) {
-	client := m.NewSSH(deviceIP)
-
-	var logs string
-
-	// 1. Create the necessary directories
-	atDir := "/mnt/nv/soundtouch-service"
-	_, _ = client.Run(fmt.Sprintf("mkdir -p %s", atDir))
-
-	// 2. Upload spotify-boot-primer script
-	primerSource := "scripts/spotify/spotify-boot-primer.sh"
-
-	primerContent, err := os.ReadFile(primerSource)
-	if err != nil {
-		// Fallback for different environments (e.g. tests)
-		primerSource = "../../../scripts/spotify/spotify-boot-primer.sh"
-		primerContent, err = os.ReadFile(primerSource)
-	}
-
-	if err == nil {
-		remotePrimerPath := "/mnt/nv/soundtouch-service/spotify-boot-primer"
-		if uploadErr := client.UploadContent(primerContent, remotePrimerPath); uploadErr != nil {
-			logs += fmt.Sprintf("Warning: failed to upload %s: %v\n", remotePrimerPath, uploadErr)
-		} else {
-			logs += fmt.Sprintf("Uploaded %s\n", remotePrimerPath)
-			_, _ = client.Run(fmt.Sprintf("chmod +x %s", remotePrimerPath))
-		}
-	} else {
-		logs += fmt.Sprintf("Warning: could not find spotify-boot-primer.sh locally (%s): %v\n", primerSource, err)
-	}
-
-	// 3. Create the config file
-	confPath := "/mnt/nv/soundtouch-service/spotify-primer.conf"
-
-	confContent := fmt.Sprintf("SOUNDTOUCH_URL=%s\nSOUNDTOUCH_USER=%s\nSOUNDTOUCH_PASS=%s\n",
-		targetURL, m.MgmtUsername, m.MgmtPassword)
-
-	if uploadErr := client.UploadContent([]byte(confContent), confPath); uploadErr != nil {
-		logs += fmt.Sprintf("Warning: failed to upload %s: %v\n", confPath, uploadErr)
-	} else {
-		logs += fmt.Sprintf("Uploaded %s\n", confPath)
-		_, _ = client.Run(fmt.Sprintf("chmod 600 %s", confPath))
-	}
-
-	// 4. Update rc.local with the hook
-	hookLogs, hookErr := m.updateRcLocalWithSpotifyHook(client)
-	logs += hookLogs
-
-	// 5. Cleanup legacy files
-	_, _ = client.Run("rm -f /mnt/nv/bin/spotify-boot-primer /mnt/nv/BoseApp-Persistence/1/spotify-primer.conf")
-
-	// 6. Set up .profile for PATH (optional but recommended in INSTALL.md)
-	profilePath := "/mnt/nv/.profile"
-	profileContent := "export PATH=\"/mnt/nv/soundtouch-service:$PATH\"\n"
-
-	if strings.Contains(targetURL, ".local") || strings.Contains(targetURL, "192.168.") {
-		// Only add if not already there to be idempotent
-		existingProfile, _ := client.Run(fmt.Sprintf("cat %s", profilePath))
-		if !strings.Contains(existingProfile, "/mnt/nv/soundtouch-service") {
-			newProfile := existingProfile
-			if !strings.HasSuffix(newProfile, "\n") && newProfile != "" {
-				newProfile += "\n"
-			}
-
-			newProfile += profileContent
-			_ = client.UploadContent([]byte(newProfile), profilePath)
-			logs += "Updated /mnt/nv/.profile with PATH\n"
-		}
-	}
-
-	return logs, hookErr
-}
-
-func (m *Manager) updateRcLocalWithSpotifyHook(client SSHClient) (string, error) {
-	var logs string
-
-	rcLocalPath := "/mnt/nv/rc.local"
-	primerPath := "/mnt/nv/soundtouch-service/spotify-boot-primer"
-	patchStartMarker := "# --- Aftertouch Spotify hook START ---"
-	patchEndMarker := "# --- Aftertouch Spotify hook END ---"
-
-	// Check if rc.local exists and read it
-	currentRcLocal, rcErr := client.Run(fmt.Sprintf("cat %s", rcLocalPath))
-	if rcErr != nil {
-		currentRcLocal = ""
-	}
-
-	if strings.Contains(currentRcLocal, patchStartMarker) {
-		return fmt.Sprintf("%s already contains Spotify hook logic\n", rcLocalPath), nil
-	}
-
-	patchLogic := fmt.Sprintf(`
-%s
-# Launches Spotify boot primer in background since SoundTouch starts at S99
-if [ -f "%s" ]; then
-    %s &
-fi
-%s
-`, patchStartMarker, primerPath, primerPath, patchEndMarker)
-
-	newRcLocal := currentRcLocal
-	// Remove "cat: can't open..." error message if it was accidentally saved in the file
-	if strings.Contains(newRcLocal, "cat: can't open") {
-		newRcLocal = ""
-	}
-
-	if !strings.HasPrefix(newRcLocal, "#!/bin/sh") {
-		newRcLocal = "#!/bin/sh\n" + strings.TrimPrefix(newRcLocal, "#!/bin/sh")
-	}
-
-	if !strings.HasSuffix(newRcLocal, "\n") {
-		newRcLocal += "\n"
-	}
-
-	newRcLocal += patchLogic
-
-	if err := client.UploadContent([]byte(newRcLocal), rcLocalPath); err != nil {
-		return logs, fmt.Errorf("failed to update %s: %w", rcLocalPath, err)
-	}
-
-	logs += fmt.Sprintf("Updated %s with Spotify hook logic\n", rcLocalPath)
-
-	// Make it executable
-	_, _ = client.Run(fmt.Sprintf("chmod +x %s", rcLocalPath))
-
-	return logs, nil
-}
-
 func (m *Manager) updateRcLocalWithDNSHook(client SSHClient) (string, error) {
 	var logs string
 
@@ -1516,9 +1387,6 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 
 	// 2c. Revert Aftertouch DNS Hook
 	logs += m.revertAftertouchHook(client, rwCmd)
-
-	// 2d. Revert Spotify Primer components
-	logs += m.revertSpotifyPrimer(client, rwCmd)
 
 	// 3. Remove CA certificate from trust store if it exists
 	logs += m.revertCACert(client, rwCmd)
@@ -1714,59 +1582,6 @@ func (m *Manager) removeRcLocalHooks(client SSHClient, rcLocalPath string) strin
 			fmt.Printf("Warning: failed to update %s: %v\n", rcLocalPath, err)
 		}
 	}
-
-	return logs
-}
-
-func (m *Manager) revertSpotifyPrimer(client SSHClient, rwCmd string) string {
-	var logs string
-
-	// 1. Remove binary and config
-	primerPath := "/mnt/nv/soundtouch-service/spotify-boot-primer"
-	confPath := "/mnt/nv/soundtouch-service/spotify-primer.conf"
-	legacyPrimerPath := "/mnt/nv/bin/spotify-boot-primer"
-	legacyConfPath := "/mnt/nv/BoseApp-Persistence/1/spotify-primer.conf"
-
-	out, _ := client.Run(fmt.Sprintf("%s && rm -f %s %s %s %s", rwCmd, primerPath, confPath, legacyPrimerPath, legacyConfPath))
-	if out != "" {
-		logs += fmt.Sprintf("Removing primer files: %s\n", out)
-	} else {
-		logs += "Requested removal of Spotify primer binary and config\n"
-	}
-
-	// 2. Remove rc.local hook (already handled by revertAftertouchHook if it uses markers,
-	// but let's be explicit if we want to clean up specifically)
-	// Actually revertAftertouchHook already removes blocks with "# --- Aftertouch Spotify hook START ---"
-
-	// 3. Optional: cleanup .profile PATH?
-	// Probably better to leave it as it might contain other things, or just remove the specific line
-	profilePath := "/mnt/nv/.profile"
-	if content, err := client.Run(fmt.Sprintf("cat %s", profilePath)); err == nil && (strings.Contains(content, "/mnt/nv/soundtouch-service") || strings.Contains(content, "/mnt/nv/bin")) {
-		lines := strings.Split(content, "\n")
-
-		var newLines []string
-
-		for _, line := range lines {
-			if !strings.Contains(line, "export PATH=\"/mnt/nv/soundtouch-service:$PATH\"") &&
-				!strings.Contains(line, "export PATH=\"/mnt/nv/bin:$PATH\"") &&
-				strings.TrimSpace(line) != "" {
-				newLines = append(newLines, line)
-			}
-		}
-
-		newContent := strings.Join(newLines, "\n")
-		if len(newLines) > 0 {
-			newContent += "\n"
-		}
-
-		if newContent != content {
-			_ = client.UploadContent([]byte(newContent), profilePath)
-			logs += "Cleaned up PATH in /mnt/nv/.profile\n"
-		}
-	}
-
-	// 4. Cleanup consolidated directory if empty
-	_, _ = client.Run("rmdir /mnt/nv/soundtouch-service 2>/dev/null")
 
 	return logs
 }
