@@ -43,7 +43,7 @@ To migrate your speakers, the service needs SSH access. You can enable it by:
 3. Rebooting the speaker (unplug/replug).
 
 **Verify SSH Access:**
-- Confirm the device responds to SSH without a password: `ssh -oHostKeyAlgorithms=+ssh-rsa root@<IP>`
+- Confirm the device responds to SSH without a password: `ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa root@<IP>`
 - Or use the **Migration** tab in the Web UI to see if the device shows a "✅ Success" status for SSH.
 Once enabled, you can log in as `root` (no password).
 

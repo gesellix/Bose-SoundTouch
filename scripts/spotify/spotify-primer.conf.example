@@ -1,0 +1,6 @@
+# /mnt/nv/BoseApp-Persistence/1/spotify-primer.conf — service connection for boot primer
+# The speaker fetches a fresh Spotify token from the service at boot.
+# No Spotify credentials needed on the device.
+SOUNDTOUCH_URL=https://soundtouch.example.com
+SOUNDTOUCH_USER=admin
+SOUNDTOUCH_PASS=secret

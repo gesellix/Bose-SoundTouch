@@ -1,0 +1,4 @@
+#!/bin/bash
+# /mnt/nv/rc.local — runs at boot via shelby_local (S97)
+# Launches Spotify boot primer in background since SoundTouch starts at S99
+/mnt/nv/bin/spotify-boot-primer &

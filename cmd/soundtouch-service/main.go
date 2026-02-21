@@ -211,6 +211,8 @@ func main() {
 
 			cm := initCertificateManager(config.dataDir)
 			sm := setup.NewManager(config.serverURL, ds, cm)
+			sm.MgmtUsername = config.mgmtUsername
+			sm.MgmtPassword = config.mgmtPassword
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.enableSoundcorkProxy)
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetSoundcorkURL(config.soundcorkURL)
@@ -666,6 +668,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Use(server.BasicAuthMgmt())
 			r.Get("/accounts/{accountId}/speakers", server.HandleMgmtListSpeakers)
 			r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)
+			r.Post("/devices/{deviceId}/spotify/install-primer", server.HandleMgmtInstallSpotifyPrimer)
 			r.Post("/spotify/init", server.HandleMgmtSpotifyInit)
 			r.Post("/spotify/confirm", server.HandleMgmtSpotifyConfirm)
 			r.Get("/spotify/accounts", server.HandleMgmtSpotifyAccounts)

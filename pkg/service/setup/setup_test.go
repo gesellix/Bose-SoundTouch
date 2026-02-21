@@ -719,7 +719,7 @@ func TestRevertMigration(t *testing.T) {
 				}
 				// Mock file existence checks for .original files
 				if strings.HasPrefix(command, "[ -f") {
-					if strings.Contains(command, ".original") || strings.Contains(command, "/mnt/nv/aftertouch.resolv.conf") {
+					if strings.Contains(command, ".original") || strings.Contains(command, "/mnt/nv/soundtouch-service/aftertouch.resolv.conf") || strings.Contains(command, "/mnt/nv/aftertouch.resolv.conf") {
 						return "", nil // file exists
 					}
 				}
@@ -1128,7 +1128,7 @@ func TestMigrateViaResolvConf(t *testing.T) {
 				if command == "cat /mnt/nv/rc.local" {
 					return "#!/bin/sh\n", nil
 				}
-				if strings.HasPrefix(command, "grep -q \"/mnt/nv/aftertouch.resolv.conf\"") {
+				if strings.HasPrefix(command, "grep -q \"/mnt/nv/soundtouch-service/aftertouch.resolv.conf\"") {
 					return "OK", nil
 				}
 				if strings.HasPrefix(command, "[ -f") {
@@ -1149,11 +1149,11 @@ func TestMigrateViaResolvConf(t *testing.T) {
 	}
 
 	// Verify uploads
-	if !strings.Contains(uploads["/mnt/nv/aftertouch.resolv.conf"], "nameserver 192.168.1.100") {
+	if !strings.Contains(uploads["/mnt/nv/soundtouch-service/aftertouch.resolv.conf"], "nameserver 192.168.1.100") {
 		t.Errorf("aftertouch.resolv.conf missing nameserver")
 	}
 
-	if !strings.Contains(uploads["/mnt/nv/rc.local"], "/mnt/nv/aftertouch.resolv.conf") {
+	if !strings.Contains(uploads["/mnt/nv/rc.local"], "/mnt/nv/soundtouch-service/aftertouch.resolv.conf") {
 		t.Errorf("rc.local missing hook logic")
 	}
 
@@ -1193,7 +1193,7 @@ func TestMigrateViaResolvConf_CorruptedRcLocal(t *testing.T) {
 					// Simulate corrupted file containing error message
 					return "cat: can't open '/mnt/nv/rc.local': No such file or directory", nil
 				}
-				if strings.HasPrefix(command, "grep -q \"/mnt/nv/aftertouch.resolv.conf\"") {
+				if strings.HasPrefix(command, "grep -q \"/mnt/nv/soundtouch-service/aftertouch.resolv.conf\"") {
 					return "OK", nil
 				}
 				if strings.HasPrefix(command, "[ -f") {
@@ -1221,7 +1221,7 @@ func TestMigrateViaResolvConf_CorruptedRcLocal(t *testing.T) {
 	if !strings.HasPrefix(rcLocal, "#!/bin/sh") {
 		t.Errorf("rc.local missing shebang: %s", rcLocal)
 	}
-	if !strings.Contains(rcLocal, "/mnt/nv/aftertouch.resolv.conf") {
+	if !strings.Contains(rcLocal, "/mnt/nv/soundtouch-service/aftertouch.resolv.conf") {
 		t.Errorf("rc.local missing hook logic: %s", rcLocal)
 	}
 }
@@ -1252,7 +1252,7 @@ func TestMigrateViaResolvConf_UdhcpcScript(t *testing.T) {
 				if command == "cat /mnt/nv/rc.local" {
 					return "#!/bin/sh\n", nil
 				}
-				if strings.HasPrefix(command, "grep -q \"/mnt/nv/aftertouch.resolv.conf\"") {
+				if strings.HasPrefix(command, "grep -q \"/mnt/nv/soundtouch-service/aftertouch.resolv.conf\"") {
 					return "OK", nil
 				}
 				if command == "[ -f "+targetScript+" ]" {
@@ -1320,12 +1320,12 @@ func TestRevertMigration_ResolvConf(t *testing.T) {
 			runFunc: func(command string) (string, error) {
 				runCalls = append(runCalls, command)
 				if command == "cat /mnt/nv/rc.local" {
-					return "#!/bin/sh\n# Aftertouch DNS hook\nif [ -f \"/mnt/nv/aftertouch.resolv.conf\" ]; then\n    sed ...\nfi\n", nil
+					return "#!/bin/sh\n# Aftertouch DNS hook\nif [ -f \"/mnt/nv/soundtouch-service/aftertouch.resolv.conf\" ]; then\n    sed ...\nfi\n", nil
 				}
 				if strings.Contains(command, ".original ]") {
 					return "", nil // backup exists
 				}
-				if strings.Contains(command, "[ -f /mnt/nv/aftertouch.resolv.conf ]") {
+				if strings.Contains(command, "[ -f /mnt/nv/soundtouch-service/aftertouch.resolv.conf ]") || strings.Contains(command, "[ -f /mnt/nv/aftertouch.resolv.conf ]") {
 					return "", nil
 				}
 				return "", nil
