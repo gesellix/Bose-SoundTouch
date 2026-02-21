@@ -38,6 +38,24 @@ func TestDNSDiscovery_Interception(t *testing.T) {
 		t.Errorf("Expected A record, got %T", rw.msg.Answer[0])
 	}
 
+	// Test intercepting streamingoauth.bose.com
+	m3 := new(dns.Msg)
+	m3.SetQuestion("streamingoauth.bose.com.", dns.TypeA)
+	rw3 := &mockResponseWriter{}
+	d.ServeDNS(rw3, m3)
+
+	if rw3.msg == nil || len(rw3.msg.Answer) == 0 {
+		t.Fatal("Expected response for streamingoauth.bose.com")
+	}
+
+	if a, ok := rw3.msg.Answer[0].(*dns.A); ok {
+		if a.A.String() != serviceIP {
+			t.Errorf("Expected intercepted IP %s for streamingoauth.bose.com, got %s", serviceIP, a.A.String())
+		}
+	} else {
+		t.Errorf("Expected A record for streamingoauth.bose.com, got %T", rw3.msg.Answer[0])
+	}
+
 	// Test aftertouch.test
 	m2 := new(dns.Msg)
 	m2.SetQuestion("aftertouch.test.", dns.TypeA)

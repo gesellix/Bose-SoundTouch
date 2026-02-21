@@ -155,6 +155,7 @@ func (d *DNSDiscovery) shouldIntercept(hostname string) bool {
 		"marge.bose.com",
 		"bmx.bose.com",
 		"streaming.bose.com",
+		"streamingoauth.bose.com",
 		"updates.bose.com",
 		"stats.bose.com",
 		"content.api.bose.io",
