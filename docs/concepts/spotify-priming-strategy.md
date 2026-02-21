@@ -19,22 +19,21 @@ We avoid invasive modifications to the speaker's filesystem.
 - **Native Communication:** We rely on the speaker's native ability to talk to Bose services, which are intercepted via DNS to point to the AfterTouch server.
 
 ### 3. Triggers for Priming
-Priming does not strictly depend on a *periodic* loop. Instead, AfterTouch uses multiple **Liveness Signals** to identify when a speaker needs attention:
+Priming is triggered when the speaker signals it is active and ready, specifically:
 
-- **Incoming "Pull" Requests:** When the speaker reaches out to AfterTouch endpoints (e.g., `/marge`, `/bmx`, or `/api`), it signals that the device is active. AfterTouch can use this as a trigger to ensure the device's ZeroConf state is correctly primed.
-- **Discovery Events:** Background scans (mDNS/UPnP) or manual refreshes in the UI serve as checkpoints.
-- **Server Startup:** When AfterTouch starts, it can proactively check all known devices from its database.
+- **Power On:** When the speaker calls the `/marge/streaming/support/power_on` endpoint, AfterTouch ensures the device's ZeroConf state is correctly primed. This is the primary trigger.
+- **Manual Override:** Users can manually trigger a "Prime Spotify" from the device list in the UI if needed.
 
 During any of these events, the server:
 1. Checks if a Spotify account is linked in AfterTouch.
 2. Checks the device's current priming status (via ZeroConf).
 3. If unprimed and an account is linked, it pushes the priming command.
 
-### 4. Automated Self-Healing (Default)
-By default, AfterTouch acts as the "Watchdog." It ensures that if a speaker loses its session (due to a crash, power loss, or token expiry), it is automatically re-primed during the next discovery checkpoint.
+### 4. Automated Recovery
+AfterTouch ensures that if a speaker loses its session (due to a crash or power loss), it is re-primed when it next powers on and reaches out to the service.
 
 ### 5. Decoupling
-The logic for account management and device discovery remains decoupled:
+The logic for account management and device interaction remains decoupled:
 - **Spotify Service:** Manages OAuth tokens and account state.
 - **Discovery Service:** Finds devices and tracks their network presence.
 - **Orchestrator:** Connects the two, deciding when to push tokens to discovered devices based on the current link status.

@@ -455,9 +455,6 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
 		log.Printf("Failed to save device info: %v", err)
 	}
-
-	// Proactively prime with Spotify if a link exists
-	go s.PrimeDeviceWithSpotify(d.Host)
 }
 
 func (s *Server) mergeOverlappingDevices() {

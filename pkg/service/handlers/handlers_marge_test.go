@@ -414,16 +414,28 @@ func TestMargePowerOn(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	res, err := http.Post(ts.URL+"/marge/streaming/support/power_on", "application/xml", bytes.NewReader([]byte("<powerOn/>")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Run("EmptyBody", func(t *testing.T) {
+		res, err := http.Post(ts.URL+"/marge/streaming/support/power_on", "application/xml", bytes.NewReader([]byte("<powerOn/>")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected status OK, got %v", res.Status)
+		}
+	})
 
-	defer func() { _ = res.Body.Close() }()
-
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status OK, got %v", res.Status)
-	}
+	t.Run("FullBody", func(t *testing.T) {
+		payload := `<?xml version="1.0" encoding="UTF-8" ?><device-data><device id="A81B6A536A98"><serialnumber>I6332527703739342000020</serialnumber><firmware-version>27.0.6.46330</firmware-version><product product_code="SoundTouch 10 sm2" type="5"><serialnumber>069231P63364828AE</serialnumber></product></device><diagnostic-data><device-landscape><rssi>Excellent</rssi><gateway-ip-address>192.168.1.1</gateway-ip-address><macaddresses><macaddress>A81B6A536A98</macaddress></macaddresses><ip-address>192.168.1.100</ip-address><network-connection-type>Wireless</network-connection-type></device-landscape></diagnostic-data></device-data>`
+		res, err := http.Post(ts.URL+"/marge/streaming/support/power_on", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected status OK, got %v", res.Status)
+		}
+	})
 }
 
 func TestMargeAdvancedFeatures(t *testing.T) {

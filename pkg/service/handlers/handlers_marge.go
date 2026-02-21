@@ -16,11 +16,6 @@ import (
 
 // HandleMargeSourceProviders returns the Marge source providers.
 func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Request) {
-	// Trigger Spotify priming as this is a common liveness signal
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		go s.PrimeDeviceWithSpotify(host)
-	}
-
 	etag := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
@@ -40,11 +35,6 @@ func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Reque
 
 // HandleMargeAccountFull returns the full Marge account information.
 func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) {
-	// Trigger Spotify priming as this is a common liveness signal
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		go s.PrimeDeviceWithSpotify(host)
-	}
-
 	account := chi.URLParam(r, "account")
 
 	device := r.URL.Query().Get("device")
@@ -67,7 +57,43 @@ func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) 
 }
 
 // HandleMargePowerOn handles the Marge power on request.
-func (s *Server) HandleMargePowerOn(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("[Marge] Failed to read power_on body: %v", err)
+		w.WriteHeader(http.StatusOK) // Silent failure is usually better for device requests
+
+		return
+	}
+
+	var req models.CustomerSupportRequest
+	if err := xml.Unmarshal(body, &req); err != nil {
+		log.Printf("[Marge] Failed to parse power_on body: %v", err)
+
+		// Fallback to remote address if body parsing fails
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			go s.PrimeDeviceWithSpotify(host)
+		}
+
+		w.WriteHeader(http.StatusOK)
+
+		return
+	}
+
+	deviceID := req.Device.ID
+	deviceIP := req.DiagnosticData.DeviceLandscape.IPAddress
+
+	log.Printf("[Marge] Device %s powered on (IP: %s)", deviceID, deviceIP)
+
+	if deviceIP != "" {
+		go s.PrimeDeviceWithSpotify(deviceIP)
+	} else {
+		// Fallback to remote address if IP is missing from XML
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			go s.PrimeDeviceWithSpotify(host)
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
