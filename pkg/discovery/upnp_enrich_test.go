@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
@@ -32,7 +33,8 @@ func TestEnrichDeviceInfo(t *testing.T) {
 		Name: "Initial Name",
 	}
 
-	service := &Service{}
+	service := NewService(1 * time.Second)
+	service.httpClient = server.Client()
 	err := service.enrichDeviceInfo(device, server.URL)
 
 	if err != nil {

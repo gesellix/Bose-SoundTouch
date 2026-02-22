@@ -78,11 +78,11 @@ func TestUnifiedDiscoveryWithCustomConfig(t *testing.T) {
 
 func TestUnifiedDiscoverDevices(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.DiscoveryTimeout = 2 * time.Second
+	cfg.DiscoveryTimeout = 100 * time.Millisecond
 	cfg.CacheEnabled = false // Disable cache for testing
 	service := NewUnifiedDiscoveryService(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	devices, err := service.DiscoverDevices(ctx)
@@ -119,13 +119,13 @@ func TestUnifiedDiscoverDevices(t *testing.T) {
 
 func TestUnifiedDiscoveryOnlyMDNS(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.DiscoveryTimeout = 1 * time.Second
+	cfg.DiscoveryTimeout = 100 * time.Millisecond
 	cfg.UPnPEnabled = false // Disable UPnP
 	cfg.MDNSEnabled = true  // Enable only mDNS
 	cfg.CacheEnabled = false
 	service := NewUnifiedDiscoveryService(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	devices, err := service.DiscoverDevices(ctx)
@@ -141,13 +141,13 @@ func TestUnifiedDiscoveryOnlyMDNS(t *testing.T) {
 
 func TestUnifiedDiscoveryOnlySSDP(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.DiscoveryTimeout = 1 * time.Second
+	cfg.DiscoveryTimeout = 100 * time.Millisecond
 	cfg.UPnPEnabled = true  // Enable only UPnP
 	cfg.MDNSEnabled = false // Disable mDNS
 	cfg.CacheEnabled = false
 	service := NewUnifiedDiscoveryService(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	devices, err := service.DiscoverDevices(ctx)

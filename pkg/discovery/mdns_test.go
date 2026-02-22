@@ -21,9 +21,9 @@ func TestNewMDNSDiscoveryService(t *testing.T) {
 }
 
 func TestMDNSDiscoverDevices(t *testing.T) {
-	service := NewMDNSDiscoveryService(2 * time.Second)
+	service := NewMDNSDiscoveryService(100 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	// Note: This test will attempt actual mDNS discovery

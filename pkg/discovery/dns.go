@@ -32,6 +32,9 @@ type DNSDiscovery struct {
 	// Address for loop prevention
 	bindAddr string
 
+	// Forward timeout
+	timeout time.Duration
+
 	// Log throttling
 	lastLog   map[string]time.Time
 	lastLogMu sync.Mutex
@@ -54,6 +57,7 @@ func NewDNSDiscovery(upstreamDNS []string, serviceIP string) *DNSDiscovery {
 		upstreamDNS: upstreamDNS,
 		serviceIP:   serviceIP,
 		discovered:  make(map[string]*DiscoveredHost),
+		timeout:     2 * time.Second,
 		lastLog:     make(map[string]time.Time),
 	}
 }
@@ -295,7 +299,7 @@ func (d *DNSDiscovery) forward(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	c := new(dns.Client)
-	c.Timeout = 2 * time.Second
+	c.Timeout = d.timeout
 
 	for _, upstream := range d.upstreamDNS {
 		// Add port 53 if not present

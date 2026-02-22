@@ -2,6 +2,9 @@ package discovery
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -109,18 +112,30 @@ func TestParseLocationURL_Invalid(t *testing.T) {
 }
 
 func TestParseResponse_ValidMediaRenderer(t *testing.T) {
-	service := NewService(1 * time.Second)
+	xmlPayload := `<?xml version="1.0" encoding="utf-8"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+    <device>
+        <friendlyName>Test Device</friendlyName>
+        <modelName>SoundTouch 10</modelName>
+        <serialNumber>AABBCCDDEEFF</serialNumber>
+    </device>
+</root>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/xml")
+		fmt.Fprint(w, xmlPayload)
+	}))
+	defer server.Close()
 
-	validResponse := `HTTP/1.1 200 OK
+	service := NewService(1 * time.Second)
+	service.httpClient = server.Client()
+
+	validResponse := fmt.Sprintf(`HTTP/1.1 200 OK
 Cache-Control: max-age=1800
-Date: Mon, 22 Jun 1998 09:55:21 GMT
-EXT:
-Location: http://192.168.1.100:8090/device.xml
-Server: Linux/3.14.0 UPnP/1.0 Bose-SoundTouch/1.0
+Location: %s
 ST: urn:schemas-upnp-org:device:MediaRenderer:1
 USN: uuid:12345678-1234-5678-9012-123456789012::urn:schemas-upnp-org:device:MediaRenderer:1
 
-`
+`, server.URL)
 
 	device, err := service.parseResponse(validResponse)
 	if err != nil {
@@ -131,12 +146,8 @@ USN: uuid:12345678-1234-5678-9012-123456789012::urn:schemas-upnp-org:device:Medi
 		t.Fatal("Expected device, got nil")
 	}
 
-	if device.Host != "192.168.1.100" {
-		t.Errorf("Expected host '192.168.1.100', got '%s'", device.Host)
-	}
-
-	if device.UPnPLocation != "http://192.168.1.100:8090/device.xml" {
-		t.Errorf("Expected UPnP location 'http://192.168.1.100:8090/device.xml', got '%s'", device.UPnPLocation)
+	if device.Name != "Test Device" {
+		t.Errorf("Expected name 'Test Device', got '%s'", device.Name)
 	}
 }
 

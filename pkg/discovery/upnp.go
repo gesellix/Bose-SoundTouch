@@ -20,11 +20,12 @@ import (
 
 // Service handles UPnP SSDP discovery of SoundTouch devices
 type Service struct {
-	timeout  time.Duration
-	cache    map[string]*models.DiscoveredDevice
-	cacheTTL time.Duration
-	mutex    sync.RWMutex
-	config   *config.Config
+	timeout    time.Duration
+	cache      map[string]*models.DiscoveredDevice
+	cacheTTL   time.Duration
+	mutex      sync.RWMutex
+	config     *config.Config
+	httpClient *http.Client
 }
 
 // NewService creates a new UPnP discovery service
@@ -34,11 +35,12 @@ func NewService(timeout time.Duration) *Service {
 	}
 
 	return &Service{
-		timeout:  timeout,
-		cache:    make(map[string]*models.DiscoveredDevice),
-		cacheTTL: defaultCacheTTL,
-		mutex:    sync.RWMutex{},
-		config:   config.DefaultConfig(),
+		timeout:    timeout,
+		cache:      make(map[string]*models.DiscoveredDevice),
+		cacheTTL:   defaultCacheTTL,
+		mutex:      sync.RWMutex{},
+		config:     config.DefaultConfig(),
+		httpClient: &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
@@ -55,11 +57,12 @@ func NewServiceWithConfig(cfg *config.Config) *Service {
 	}
 
 	return &Service{
-		timeout:  timeout,
-		cache:    make(map[string]*models.DiscoveredDevice),
-		cacheTTL: cacheTTL,
-		mutex:    sync.RWMutex{},
-		config:   cfg,
+		timeout:    timeout,
+		cache:      make(map[string]*models.DiscoveredDevice),
+		cacheTTL:   cacheTTL,
+		mutex:      sync.RWMutex{},
+		config:     cfg,
+		httpClient: &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
@@ -423,11 +426,7 @@ func (d *Service) parseLocationURL(location, usn string) (*models.DiscoveredDevi
 func (d *Service) enrichDeviceInfo(device *models.DiscoveredDevice, location string) error {
 	log.Printf("UPnP: Attempting to enrich device info by fetching %s", location)
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	resp, err := client.Get(location)
+	resp, err := d.httpClient.Get(location)
 	if err != nil {
 		log.Printf("UPnP: Failed to fetch device description from %s: %v", location, err)
 		return err

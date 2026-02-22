@@ -400,6 +400,7 @@ func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 	// Use an IP that is unroutable or doesn't exist on the network to ensure timeout
 	upstreamDNS := []string{"192.0.2.1:53"} // TEST-NET-1, usually non-routable
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d.timeout = 100 * time.Millisecond
 
 	m := new(dns.Msg)
 	m.SetQuestion("google.com.", dns.TypeA)
@@ -410,8 +411,8 @@ func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 	d.forward(rw, m)
 	duration := time.Since(start)
 
-	if duration < 2*time.Second {
-		t.Errorf("Expected forward to take at least 2 seconds (timeout), but took %v", duration)
+	if duration < 100*time.Millisecond {
+		t.Errorf("Expected forward to take at least 100ms (timeout), but took %v", duration)
 	}
 
 	if rw.msg == nil || rw.msg.Rcode != dns.RcodeServerFailure {
