@@ -207,39 +207,53 @@ self_update() {
     return
   fi
 
-  log "Newer installer found for ${VERSION}. Re-executing..."
-  chmod +x "${tmp_script}"
+  log "Newer installer found for ${VERSION}. Updating ${SCRIPT_PATH} and re-executing..."
+  install -m 0755 "${tmp_script}" "${SCRIPT_PATH}"
+  rm -f "${tmp_script}"
 
   # Export current env vars to the new script
   export IS_SELF_UPDATE="true"
   export VERSION HOSTNAME_FQDN HTTP_PORT HTTPS_PORT DATA_DIR BIN_PATH CONFIG_DIR ENV_FILE SERVICE_USER SERVICE_GROUP
   export SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET SPOTIFY_REDIRECT_URI MGMT_USERNAME MGMT_PASSWORD
 
-  exec "${tmp_script}" "$@"
+  exec "${SCRIPT_PATH}" "$@"
 }
 
 write_env_file() {
-  log "Writing env file: ${ENV_FILE}"
-  cat > "${ENV_FILE}" <<EOF
-PORT=${HTTP_PORT}
-HTTPS_PORT=${HTTPS_PORT}
-DATA_DIR=${DATA_DIR}
+  log "Updating env file: ${ENV_FILE}"
 
-LOG_PROXY_BODY=${LOG_PROXY_BODY}
-REDACT_PROXY_LOGS=${REDACT_PROXY_LOGS}
-RECORD_INTERACTIONS=${RECORD_INTERACTIONS}
-DISCOVERY_INTERVAL=${DISCOVERY_INTERVAL}
+  # 1. Start with a list of all variables we want to manage
+  local vars=(
+    "PORT=${HTTP_PORT}"
+    "HTTPS_PORT=${HTTPS_PORT}"
+    "DATA_DIR=${DATA_DIR}"
+    "LOG_PROXY_BODY=${LOG_PROXY_BODY}"
+    "REDACT_PROXY_LOGS=${REDACT_PROXY_LOGS}"
+    "RECORD_INTERACTIONS=${RECORD_INTERACTIONS}"
+    "DISCOVERY_INTERVAL=${DISCOVERY_INTERVAL}"
+    "SERVER_URL=${SERVER_URL}"
+    "HTTPS_SERVER_URL=${HTTPS_SERVER_URL}"
+    "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}"
+    "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
+    "SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}"
+    "MGMT_USERNAME=${MGMT_USERNAME}"
+    "MGMT_PASSWORD=${MGMT_PASSWORD}"
+  )
 
-SERVER_URL=${SERVER_URL}
-HTTPS_SERVER_URL=${HTTPS_SERVER_URL}
+  if [[ ! -f "${ENV_FILE}" ]]; then
+    for entry in "${vars[@]}"; do
+      echo "${entry}" >> "${ENV_FILE}"
+    done
+  else
+    for entry in "${vars[@]}"; do
+      local key="${entry%%=*}"
+      local val="${entry#*=}"
+      if ! grep -q "^${key}=" "${ENV_FILE}"; then
+        echo "${key}=${val}" >> "${ENV_FILE}"
+      fi
+    done
+  fi
 
-SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
-SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
-
-MGMT_USERNAME=${MGMT_USERNAME}
-MGMT_PASSWORD=${MGMT_PASSWORD}
-EOF
   chmod 0640 "${ENV_FILE}"
   # group-readable so you can add yourself to the group if desired
   chown root:"${SERVICE_GROUP}" "${ENV_FILE}" || true
