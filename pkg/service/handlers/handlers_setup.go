@@ -154,6 +154,9 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dnsEnabled := s.dnsEnabled
 	dnsUpstream := s.dnsUpstream
 	dnsBindAddr := s.dnsBindAddr
+	mirrorEnabled := s.mirrorEnabled
+	mirrorEndpoints := s.mirrorEndpoints
+	internalPaths := s.internalPaths
 	enableSoundcorkProxy := s.enableSoundcorkProxy
 	redact, logBody, record := s.proxyRedact, s.proxyLogBody, s.recordEnabled
 	shortcuts := s.shortcuts
@@ -173,6 +176,9 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"dns_actual_bind":        actualBind,
 		"dns_upstream":           strings.Join(dnsUpstream, ","),
 		"dns_bind_addr":          dnsBindAddr,
+		"mirror_enabled":         mirrorEnabled,
+		"mirror_endpoints":       mirrorEndpoints,
+		"internal_paths":         internalPaths,
 		"enable_soundcork_proxy": enableSoundcorkProxy,
 		"redact_logs":            redact,
 		"log_bodies":             logBody,
@@ -195,6 +201,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		DNSEnabled           bool           `json:"dns_enabled"`
 		DNSUpstream          string         `json:"dns_upstream"`
 		DNSBindAddr          string         `json:"dns_bind_addr"`
+		MirrorEnabled        bool           `json:"mirror_enabled"`
+		MirrorEndpoints      []string       `json:"mirror_endpoints"`
+		InternalPaths        []string       `json:"internal_paths"`
 		EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
 		Shortcuts            map[string]int `json:"shortcuts"`
 	}
@@ -241,6 +250,10 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	s.dnsUpstream = upstreamList
 	s.dnsBindAddr = settings.DNSBindAddr
 
+	s.mirrorEnabled = settings.MirrorEnabled
+	s.mirrorEndpoints = settings.MirrorEndpoints
+	s.internalPaths = settings.InternalPaths
+
 	s.enableSoundcorkProxy = settings.EnableSoundcorkProxy
 	if settings.Shortcuts != nil {
 		s.shortcuts = settings.Shortcuts
@@ -270,6 +283,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		DNSEnabled:           s.dnsEnabled,
 		DNSUpstream:          s.dnsUpstream,
 		DNSBindAddr:          s.dnsBindAddr,
+		MirrorEnabled:        s.mirrorEnabled,
+		MirrorEndpoints:      s.mirrorEndpoints,
+		InternalPaths:        s.internalPaths,
 		EnableSoundcorkProxy: s.enableSoundcorkProxy,
 		Shortcuts:            s.shortcuts,
 	})

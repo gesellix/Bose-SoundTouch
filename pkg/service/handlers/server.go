@@ -38,6 +38,9 @@ type Server struct {
 	dnsEnabled           bool
 	dnsUpstream          []string
 	dnsBindAddr          string
+	mirrorEnabled        bool
+	mirrorEndpoints      []string
+	internalPaths        []string
 	enableSoundcorkProxy bool
 	shortcuts            map[string]int
 	recorder             *proxy.Recorder
@@ -301,6 +304,23 @@ func (s *Server) SetMgmtConfig(username, password string) {
 
 	s.mgmtUsername = username
 	s.mgmtPassword = password
+}
+
+// SetMirrorSettings sets the mirroring settings for the server.
+func (s *Server) SetMirrorSettings(enabled bool, endpoints []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.mirrorEnabled = enabled
+	s.mirrorEndpoints = endpoints
+}
+
+// SetInternalPaths sets the internal paths for the server.
+func (s *Server) SetInternalPaths(paths []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.internalPaths = paths
 }
 
 // SetSpotifyService sets the Spotify OAuth service.

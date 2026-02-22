@@ -89,6 +89,35 @@ func TestInteractionHandlers(t *testing.T) {
 		}
 	})
 
+	t.Run("HandleListInteractions_Mirror", func(t *testing.T) {
+		// Create a mirror interaction
+		sessionID := recorder.SessionID
+		mirrorRelPath := filepath.Join(sessionID, "mirror", "test", "0002-12-00-01.000-GET.http")
+		fullPath := filepath.Join(tmpDir, "interactions", mirrorRelPath)
+		os.MkdirAll(filepath.Dir(fullPath), 0755)
+		os.WriteFile(fullPath, []byte("### GET /test mirror\n\n> {% \n    // Response: 200 OK\n%}\n"), 0644)
+
+		req := httptest.NewRequest("GET", "/setup/interactions?category=mirror", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		var interactions []proxy.Interaction
+		if err := json.NewDecoder(w.Body).Decode(&interactions); err != nil {
+			t.Fatalf("Failed to decode interactions: %v", err)
+		}
+
+		if len(interactions) != 1 {
+			t.Errorf("Expected 1 interaction for mirror, got %d", len(interactions))
+		}
+		if interactions[0].Category != "mirror" {
+			t.Errorf("Expected category mirror, got %s", interactions[0].Category)
+		}
+	})
+
 	t.Run("HandleGetInteractionContent", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/setup/interaction-content?file="+relPath, nil)
 		w := httptest.NewRecorder()
@@ -140,6 +169,9 @@ func TestRecordMiddleware(t *testing.T) {
 			f.Flush()
 		}
 	})
+	r.Get("/internal/test", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
 
 	req := httptest.NewRequest("GET", "/test-middleware", nil)
 	w := httptest.NewRecorder()
@@ -156,6 +188,24 @@ func TestRecordMiddleware(t *testing.T) {
 		r.ServeHTTP(w, req)
 		if w.Code != http.StatusCreated {
 			t.Errorf("Expected status 201, got %d", w.Code)
+		}
+	})
+
+	t.Run("HandleRecordMiddleware_InternalPath", func(t *testing.T) {
+		server.recordEnabled = true
+		server.internalPaths = []string{"/internal/*"}
+		req := httptest.NewRequest("GET", "/internal/test", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected status 201, got %d", w.Code)
+		}
+
+		// Check if it was recorded (it shouldn't be)
+		matches, _ := filepath.Glob(filepath.Join(tmpDir, "interactions", "*", "self", "internal", "*"))
+		if len(matches) > 0 {
+			t.Errorf("Expected no recording for internal path, found: %v", matches)
 		}
 	})
 }

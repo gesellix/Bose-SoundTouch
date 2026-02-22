@@ -280,6 +280,45 @@ func TestGetMigrationSummary_WithProxyOptions(t *testing.T) {
 	}
 }
 
+func TestGetMigrationSummary_MirrorSettings(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-mirror-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	settings := datastore.Settings{
+		MirrorEnabled:   true,
+		MirrorEndpoints: []string{"/recent", "/presets"},
+	}
+	if err := ds.SaveSettings(settings); err != nil {
+		t.Fatalf("Failed to save settings: %v", err)
+	}
+
+	m := NewManager("http://localhost:8000", ds, nil)
+
+	// Mock server for live info
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = fmt.Fprint(w, `<info deviceID="123"><name>Test</name></info>`)
+	}))
+	defer server.Close()
+
+	summary, err := m.GetMigrationSummary(server.Listener.Addr().String(), "", "", nil)
+	if err != nil {
+		t.Fatalf("GetMigrationSummary failed: %v", err)
+	}
+
+	if !summary.MirrorEnabled {
+		t.Error("Expected MirrorEnabled to be true in summary")
+	}
+
+	if len(summary.MirrorEndpoints) != 2 || summary.MirrorEndpoints[0] != "/recent" {
+		t.Errorf("Expected MirrorEndpoints [/recent /presets], got %v", summary.MirrorEndpoints)
+	}
+}
+
 func TestCheckCACertTrusted(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "ca-trust-test")
 	if err != nil {

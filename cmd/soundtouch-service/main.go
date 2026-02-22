@@ -189,6 +189,21 @@ func main() {
 				Usage:   "External base URL for OAuth callbacks behind reverse proxy",
 				EnvVars: []string{"BASE_URL"},
 			},
+			&cli.BoolFlag{
+				Name:    "mirror-enabled",
+				Usage:   "Enable background mirroring to Bose Cloud",
+				EnvVars: []string{"MIRROR_ENABLED"},
+			},
+			&cli.StringSliceFlag{
+				Name:    "mirror-endpoints",
+				Usage:   "Endpoints to mirror to Bose Cloud (comma-separated or multiple flags)",
+				EnvVars: []string{"MIRROR_ENDPOINTS"},
+			},
+			&cli.StringSliceFlag{
+				Name:    "internal-paths",
+				Usage:   "Paths for internal requests (comma-separated or multiple flags)",
+				EnvVars: []string{"INTERNAL_PATHS"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			config := loadConfig(c)
@@ -220,6 +235,8 @@ func main() {
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
+			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints)
+			server.SetInternalPaths(persisted.InternalPaths)
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
 
@@ -351,6 +368,9 @@ type serviceConfig struct {
 	dnsEnabled           bool
 	dnsUpstream          string
 	dnsBind              string
+	mirrorEnabled        bool
+	mirrorEndpoints      []string
+	internalPaths        []string
 	discoveryInterval    time.Duration
 	domains              []string
 	spotifyClientID      string
@@ -422,6 +442,10 @@ func loadConfig(c *cli.Context) serviceConfig {
 	mgmtUsername := c.String("mgmt-username")
 	mgmtPassword := c.String("mgmt-password")
 
+	mirrorEnabled := c.Bool("mirror-enabled")
+	mirrorEndpoints := c.StringSlice("mirror-endpoints")
+	internalPaths := c.StringSlice("internal-paths")
+
 	return serviceConfig{
 		port:                 port,
 		bindAddr:             bindAddr,
@@ -438,6 +462,9 @@ func loadConfig(c *cli.Context) serviceConfig {
 		dnsEnabled:           dnsEnabled,
 		dnsUpstream:          dnsUpstream,
 		dnsBind:              dnsBind,
+		mirrorEnabled:        mirrorEnabled,
+		mirrorEndpoints:      mirrorEndpoints,
+		internalPaths:        internalPaths,
 		discoveryInterval:    discoveryInterval,
 		domains:              domains,
 		spotifyClientID:      spotifyClientID,
@@ -515,6 +542,10 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 		config.dnsBind = persisted.DNSBindAddr
 	}
 
+	config.mirrorEnabled = persisted.MirrorEnabled
+	config.mirrorEndpoints = persisted.MirrorEndpoints
+	config.internalPaths = persisted.InternalPaths
+
 	return persisted
 }
 
@@ -532,6 +563,9 @@ func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datast
 		DNSEnabled:           config.dnsEnabled,
 		DNSUpstream:          strings.Split(config.dnsUpstream, ","),
 		DNSBindAddr:          config.dnsBind,
+		MirrorEnabled:        config.mirrorEnabled,
+		MirrorEndpoints:      config.mirrorEndpoints,
+		InternalPaths:        config.internalPaths,
 		Shortcuts: map[string]int{
 			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
 			"/sw.js": http.StatusNotFound,
@@ -578,6 +612,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Use(server.OriginMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(server.ShortcutMiddleware)
+	r.Use(server.MirrorMiddleware)
 	r.Use(server.RecordMiddleware)
 
 	r.Get("/", server.HandleRoot)
@@ -719,6 +754,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Get("/interaction-stats", server.HandleGetInteractionStats)
 		r.Get("/interactions", server.HandleListInteractions)
 		r.Get("/interaction-content", server.HandleGetInteractionContent)
+		r.Get("/parity-mismatches", server.HandleListParityMismatches)
+		r.Delete("/parity-mismatches", server.HandleClearParityMismatches)
 		r.Get("/interactions/sessions/{session}/download", server.HandleDownloadSession)
 		r.Delete("/interactions/sessions/{session}", server.HandleDeleteSession)
 		r.Delete("/interactions/sessions", server.HandleCleanupSessions)

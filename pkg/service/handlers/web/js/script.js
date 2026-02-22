@@ -152,6 +152,16 @@ async function fetchSettings() {
             dnsCurrentUpstream.innerText = '';
         }
 
+        if (settings.mirror_enabled !== undefined) {
+            document.getElementById('mirror-enabled').checked = settings.mirror_enabled;
+        }
+        if (settings.mirror_endpoints) {
+            document.getElementById('mirror-endpoints').value = settings.mirror_endpoints.join('\n');
+        }
+        if (settings.internal_paths) {
+            document.getElementById('internal-paths').value = settings.internal_paths.join('\n');
+        }
+
         if (settings.enable_soundcork_proxy !== undefined) {
             document.getElementById('enable-soundcork-proxy').checked = settings.enable_soundcork_proxy;
         }
@@ -215,6 +225,9 @@ async function updateSettings() {
         dns_enabled: document.getElementById('dns-enabled').checked,
         dns_upstream: document.getElementById('dns-upstream').value,
         dns_bind_addr: document.getElementById('dns-bind').value,
+        mirror_enabled: document.getElementById('mirror-enabled').checked,
+        mirror_endpoints: document.getElementById('mirror-endpoints').value.split('\n').map(s => s.trim()).filter(s => s !== ''),
+        internal_paths: document.getElementById('internal-paths').value.split('\n').map(s => s.trim()).filter(s => s !== ''),
         enable_soundcork_proxy: document.getElementById('enable-soundcork-proxy').checked
     };
     const status = document.getElementById('settings-status');
@@ -347,6 +360,10 @@ function openTab(evt, tabId) {
         fetchInteractionStats();
         fetchInteractions();
         fetchDNSDiscoveries();
+    }
+
+    if (tabId === 'tab-parity') {
+        fetchParityMismatches();
     }
 
     if (evt) {
@@ -823,11 +840,110 @@ async function fetchDeviceEvents(deviceId) {
     }
 }
 
+async function fetchParityMismatches() {
+    const list = document.getElementById('parity-mismatches-list');
+    list.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #666;">Loading mismatches...</td></tr>';
+
+    try {
+        const response = await fetch('/setup/parity-mismatches');
+        const mismatches = await response.json();
+
+        list.innerHTML = '';
+        if (!mismatches || mismatches.length === 0) {
+            list.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #666;">No parity mismatches detected yet.</td></tr>';
+            return;
+        }
+
+        mismatches.forEach(m => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #eee';
+
+            const time = m.timestamp || "";
+            const method = m.method || "";
+            const path = m.path || "";
+            const reasons = (m.reasons || []).join(', ');
+
+            tr.innerHTML = `
+                <td style="padding: 8px; font-size: 0.8em;">${time}</td>
+                <td style="padding: 8px; font-family: monospace;">${method}</td>
+                <td style="padding: 8px; font-size: 0.9em;">${path}</td>
+                <td style="padding: 8px; font-size: 0.85em; color: #c62828;">${reasons}</td>
+                <td style="padding: 8px;"><button onclick='viewParityMismatch(${JSON.stringify(m)})'>View Diff</button></td>
+            `;
+            list.appendChild(tr);
+        });
+    } catch (error) {
+        list.innerHTML = `<tr><td colspan="5" style="padding: 20px; text-align: center; color: #f44336;">Error loading mismatches: ${error.message}</td></tr>`;
+    }
+}
+
+async function clearParityMismatches() {
+    if (!confirm('Are you sure you want to clear all parity mismatch records?')) return;
+    try {
+        await fetch('/setup/parity-mismatches', { method: 'DELETE' });
+        fetchParityMismatches();
+        document.getElementById('parity-diff-view').style.display = 'none';
+    } catch (error) {
+        alert('Failed to clear mismatches: ' + error.message);
+    }
+}
+
+function viewParityMismatch(m) {
+    document.getElementById('diff-path-display').innerText = m.method + ' ' + m.path;
+    const reasonsList = document.getElementById('diff-reasons-list');
+    reasonsList.innerHTML = '';
+    (m.reasons || []).forEach(r => {
+        const li = document.createElement('li');
+        li.innerText = r;
+        reasonsList.appendChild(li);
+    });
+
+    document.getElementById('diff-local-meta').innerText = `Status: ${m.local.status}`;
+    document.getElementById('diff-upstream-meta').innerText = `Status: ${m.upstream.status}`;
+
+    document.getElementById('diff-local-body').innerText = formatXML(m.local.body);
+    document.getElementById('diff-upstream-body').innerText = formatXML(m.upstream.body);
+
+    document.getElementById('parity-diff-view').style.display = 'block';
+    document.getElementById('parity-diff-view').scrollIntoView({ behavior: 'smooth' });
+}
+
+function formatXML(xml) {
+    if (!xml) return '';
+    try {
+        let formatted = '';
+        let reg = /(>)(<)(\/*)/g;
+        xml = xml.replace(reg, '$1\r\n$2$3');
+        let pad = 0;
+        xml.split('\r\n').forEach(function(node) {
+            let indent = 0;
+            if (node.match(/.+<\/\w[^>]*>$/)) {
+                indent = 0;
+            } else if (node.match(/^<\/\w/)) {
+                if (pad !== 0) pad -= 1;
+            } else if (node.match(/^<\w[^>]*[^\/]>.*$/)) {
+                indent = 1;
+            } else {
+                indent = 0;
+            }
+
+            let padding = '';
+            for (let i = 0; i < pad; i++) padding += '  ';
+            formatted += padding + node + '\r\n';
+            pad += indent;
+        });
+        return formatted.trim();
+    } catch (e) {
+        return xml;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     fetchSettings();
     fetchDevices();
     triggerDiscovery();
     fetchVersion();
+    fetchParityMismatches();
 
     const syncBtn = document.getElementById('sync-now-btn');
     if (syncBtn) syncBtn.onclick = startSync;

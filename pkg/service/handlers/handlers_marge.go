@@ -190,7 +190,9 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 	// For the account-specific firmware route, always return the software_update tag.
 	// This route is specifically used by firmware like Bose_Lisa/27.0.6.
 	if chi.URLParam(r, "account") != "" {
+		w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 		_, _ = w.Write([]byte(marge.SoftwareUpdateToXML()))
+
 		return
 	}
 

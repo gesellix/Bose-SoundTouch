@@ -711,6 +711,9 @@ type Settings struct {
 	DNSEnabled           bool           `json:"dns_enabled"`
 	DNSUpstream          []string       `json:"dns_upstream,omitempty"`
 	DNSBindAddr          string         `json:"dns_bind_addr,omitempty"`
+	MirrorEnabled        bool           `json:"mirror_enabled"`
+	MirrorEndpoints      []string       `json:"mirror_endpoints,omitempty"`
+	InternalPaths        []string       `json:"internal_paths,omitempty"`
 	Shortcuts            map[string]int `json:"shortcuts,omitempty"`
 }
 

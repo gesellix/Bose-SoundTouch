@@ -18,6 +18,7 @@
             <button class="tab-btn" onclick="openTab(event, 'tab-sync')">3. Data Sync</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-migration')">4. Migration</button>
             <button class="tab-btn" onclick="openTab(event, 'tab-interactions')">5. Interactions & Events</button>
+            <button class="tab-btn" onclick="openTab(event, 'tab-parity')">6. Parity & Mirroring</button>
         </div>
 
         <!-- Tab 0: Overview -->
@@ -97,10 +98,6 @@
                 <label style="margin-left: 15px;"><input type="checkbox" id="discovery-enabled"> Enable Automated Discovery</label>
             </div>
             <div style="margin-bottom: 20px;">
-                <button onclick="updateSettings()">Save Settings</button>
-                <span id="settings-status" style="margin-left: 10px; font-size: 0.9em;"></span>
-            </div>
-            <div style="margin-bottom: 20px;">
                 <strong>DNS Discovery:</strong>
                 <div style="margin-top: 5px;">
                     <label style="display: block; margin-bottom: 5px;">
@@ -124,6 +121,23 @@
                 </div>
             </div>
             <div style="margin-bottom: 20px;">
+                <strong>Endpoint Mirroring:</strong>
+                <div style="margin-top: 5px;">
+                    <label style="display: block; margin-bottom: 5px;">
+                        <input type="checkbox" id="mirror-enabled"> Enable Background Mirroring to Bose Cloud
+                    </label>
+                    <div style="margin-left: 20px; margin-bottom: 5px;">
+                        <label for="mirror-endpoints">Mirror Endpoints (one per line, supports * wildcards):</label><br>
+                        <textarea id="mirror-endpoints" rows="4" style="width: 100%; max-width: 600px; margin-top: 5px; font-family: monospace;" placeholder="/streaming/account/*/device/*/recent&#10;/accounts/*/devices/*/presets/*"></textarea>
+                        <div class="info-box" style="margin-top: 5px; font-size: 0.85em; padding: 10px;">
+                            <strong>Note:</strong> Mirroring sends matching requests (including full headers) to the official Bose servers for parity comparison.
+                            If <em>Redact Sensitive Data</em> is enabled in Proxy Settings, credentials will be masked in <strong>logs and recordings</strong>, but
+                            full headers are always sent to Bose to ensure service compatibility.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-bottom: 20px;">
                 <strong>Spotify Integration:</strong>
                 <div id="spotify-config-status" style="margin-top: 5px; font-size: 0.9em;">
                     Checking configuration...
@@ -139,7 +153,19 @@
                         <input type="checkbox" id="proxy-record" onchange="updateProxySettings()"> Record Interactions
                         <span style="font-size: 0.85em; color: #666; margin-left: 5px;">(View in <strong>5. Interactions</strong> tab)</span>
                     </label>
+                    <div style="margin-left: 20px; margin-top: 10px;">
+                        <label for="internal-paths">Internal Paths (skip recording for these patterns):</label><br>
+                        <textarea id="internal-paths" rows="2" style="width: 100%; max-width: 600px; margin-top: 5px; font-family: monospace;" placeholder="/setup/*&#10;/web/*"></textarea>
+                        <div style="font-size: 0.8em; color: #666; margin-top: 2px;">
+                            Requests matching these patterns will be excluded from recording. Use one pattern per line.
+                        </div>
+                    </div>
                 </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <button onclick="updateSettings()">Save Settings</button>
+                <span id="settings-status" style="margin-left: 10px; font-size: 0.9em;"></span>
             </div>
         </div>
 
@@ -392,6 +418,7 @@
                             <option value="">All Categories</option>
                             <option value="self">Self (Emulated)</option>
                             <option value="upstream">Upstream (Bose)</option>
+                            <option value="mirror">Mirror (Bose)</option>
                         </select>
                     </div>
                     <div>
@@ -481,6 +508,64 @@
                             <tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Select a device to view events.</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 6: Parity & Mirroring -->
+        <div id="tab-parity" class="tab-content">
+            <h2>Parity Analysis</h2>
+            <p>Detection of discrepancies between AfterTouch local responses and official Bose Cloud responses for mirrored endpoints.</p>
+
+            <div class="summary-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">Parity Mismatches</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="fetchParityMismatches()">Refresh Mismatches</button>
+                        <button onclick="clearParityMismatches()" class="btn-danger">Clear All Records</button>
+                    </div>
+                </div>
+
+                <div id="parity-list-container" style="max-height: 500px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
+                                <th style="padding: 8px;">Time</th>
+                                <th style="padding: 8px;">Method</th>
+                                <th style="padding: 8px;">Path</th>
+                                <th style="padding: 8px;">Reasons</th>
+                                <th style="padding: 8px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="parity-mismatches-list">
+                            <tr><td colspan="5" style="padding: 20px; text-align: center; color: #666;">Loading mismatches...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="parity-diff-view" class="summary-box" style="display: none; margin-top: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">Mismatch Detail: <span id="diff-path-display"></span></h3>
+                    <button onclick="document.getElementById('parity-diff-view').style.display='none'">Close Detail</button>
+                </div>
+
+                <div style="margin-bottom: 15px; padding: 10px; background: #fff4f4; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">
+                    <strong>Detection Reasons:</strong>
+                    <ul id="diff-reasons-list" style="margin: 5px 0 0 0; padding-left: 20px;"></ul>
+                </div>
+
+                <div class="diff-container" style="margin-top: 15px;">
+                    <div class="diff-pane">
+                        <span class="config-header" style="background: #eefbff; color: #0056b3;">Local Response (AfterTouch)</span>
+                        <div id="diff-local-meta" style="font-size: 0.8em; margin-bottom: 5px; color: #666;"></div>
+                        <pre id="diff-local-body" style="background: #f8f9fa; border: 1px solid #eee; padding: 10px; font-size: 0.85em; overflow-x: auto;"></pre>
+                    </div>
+                    <div class="diff-pane">
+                        <span class="config-header" style="background: #fff4e6; color: #856404;">Upstream Response (Bose)</span>
+                        <div id="diff-upstream-meta" style="font-size: 0.8em; margin-bottom: 5px; color: #666;"></div>
+                        <pre id="diff-upstream-body" style="background: #f8f9fa; border: 1px solid #eee; padding: 10px; font-size: 0.85em; overflow-x: auto;"></pre>
+                    </div>
                 </div>
             </div>
         </div>

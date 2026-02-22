@@ -17,6 +17,17 @@ func (s *Server) RecordMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		s.mu.RLock()
+		internalPaths := s.internalPaths
+		s.mu.RUnlock()
+
+		for _, pattern := range internalPaths {
+			if matchPattern(pattern, r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		// Buffer the request body if it exists
 		var reqBody []byte
 

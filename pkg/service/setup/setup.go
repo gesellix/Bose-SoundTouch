@@ -69,6 +69,8 @@ type MigrationSummary struct {
 	CurrentResolvConf        string      `json:"current_resolv_conf,omitempty"`
 	PlannedResolv            string      `json:"planned_resolv,omitempty"`
 	IsMigrated               bool        `json:"is_migrated"`
+	MirrorEnabled            bool        `json:"mirror_enabled"`
+	MirrorEndpoints          []string    `json:"mirror_endpoints,omitempty"`
 }
 
 // SSHClient defines the interface for SSH operations.
@@ -87,6 +89,9 @@ type Manager struct {
 	// GetDNSRunning is an optional callback to check the actual state of the DNS server.
 	GetDNSRunning func() (bool, string)
 
+	// HTTPGet is an optional override for http.Get (primarily for testing).
+	HTTPGet func(url string) (*http.Response, error)
+
 	// Spotify management credentials for the boot primer
 	MgmtUsername string
 	MgmtPassword string
@@ -101,6 +106,7 @@ func NewManager(serverURL string, ds *datastore.DataStore, cm *certmanager.Certi
 		NewSSH: func(host string) SSHClient {
 			return ssh.NewClient(host)
 		},
+		HTTPGet:      http.Get,
 		MgmtUsername: "admin",
 		MgmtPassword: "change_me!",
 	}
@@ -132,7 +138,7 @@ func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 		_ = host
 	}
 
-	resp, err := http.Get(infoURL)
+	resp, err := m.HTTPGet(infoURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch info from %s: %w", infoURL, err)
 	}
@@ -277,6 +283,15 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 
 	// 6. Check if migrated
 	m.checkIsMigrated(summary, deviceIP)
+
+	// 7. Mirroring settings
+	if m.DataStore != nil {
+		settings, err := m.DataStore.GetSettings()
+		if err == nil {
+			summary.MirrorEnabled = settings.MirrorEnabled
+			summary.MirrorEndpoints = settings.MirrorEndpoints
+		}
+	}
 
 	return summary, nil
 }
@@ -2064,7 +2079,7 @@ func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
 		presetsURL = fmt.Sprintf("http://%s/presets", deviceIP)
 	}
 
-	resp, err := http.Get(presetsURL)
+	resp, err := m.HTTPGet(presetsURL)
 	if err != nil {
 		return
 	}
@@ -2119,7 +2134,7 @@ func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
 		recentsURL = fmt.Sprintf("http://%s/recents", deviceIP)
 	}
 
-	resp, err := http.Get(recentsURL)
+	resp, err := m.HTTPGet(recentsURL)
 	if err != nil {
 		return
 	}
@@ -2186,7 +2201,7 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 		sourcesURL = fmt.Sprintf("http://%s/sources", deviceIP)
 	}
 
-	resp, err := http.Get(sourcesURL)
+	resp, err := m.HTTPGet(sourcesURL)
 	if err != nil {
 		return
 	}

@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -125,6 +126,52 @@ func TestProxySettingsAPI(t *testing.T) {
 	if sURL != "http://new-server:8000" || pURL != "http://new-proxy:8001" {
 		t.Errorf("POST /setup/settings: Server state did not update: serverURL=%s, soundcorkURL=%s", sURL, pURL)
 	}
+
+	// 4. Test Mirror Settings persistence
+	mirrorUpdate := map[string]interface{}{
+		"server_url":       "http://mirror-test:8000",
+		"soundcork_url":    "http://mirror-test:8001",
+		"mirror_enabled":   true,
+		"mirror_endpoints": []string{"/test/*"},
+		"internal_paths":   []string{"/setup/*"},
+	}
+
+	mirrorBody, err := json.Marshal(mirrorUpdate)
+	if err != nil {
+		t.Fatalf("Failed to marshal mirror settings: %v", err)
+	}
+	res, err = http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(mirrorBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("POST /setup/settings (mirror): Expected status OK, got %v", res.Status)
+	}
+
+	// Verify server state
+	server.mu.RLock()
+	mEnabled := server.mirrorEnabled
+	mEndpoints := server.mirrorEndpoints
+	iPaths := server.internalPaths
+	server.mu.RUnlock()
+
+	if !mEnabled || len(mEndpoints) != 1 || mEndpoints[0] != "/test/*" {
+		t.Errorf("POST /setup/settings (mirror): Server state did not update: enabled=%v, endpoints=%v", mEnabled, mEndpoints)
+	}
+	if len(iPaths) != 1 || iPaths[0] != "/setup/*" {
+		t.Errorf("POST /setup/settings (mirror): Internal paths did not update: %v", iPaths)
+	}
+
+	// Verify persistence in datastore
+	persisted, _ := ds.GetSettings()
+	if !persisted.MirrorEnabled || len(persisted.MirrorEndpoints) != 1 || persisted.MirrorEndpoints[0] != "/test/*" {
+		t.Errorf("POST /setup/settings (mirror): Datastore did not update: %+v", persisted)
+	}
+	if len(persisted.InternalPaths) != 1 || persisted.InternalPaths[0] != "/setup/*" {
+		t.Errorf("POST /setup/settings (mirror): Datastore internal paths did not update: %+v", persisted)
+	}
 }
 
 func TestMigrationAndCA(t *testing.T) {
@@ -143,6 +190,21 @@ func TestMigrationAndCA(t *testing.T) {
 	// Mock SSH to avoid real connections
 	sm.NewSSH = func(host string) setup.SSHClient {
 		return &mockSSH{host: host}
+	}
+
+	// Mock HTTPGet to avoid real network timeouts
+	sm.HTTPGet = func(url string) (*http.Response, error) {
+		if strings.HasSuffix(url, "/info") {
+			xml := `<?xml version="1.0" encoding="UTF-8" ?><info deviceID="192.168.1.10"><name>Test Speaker</name><type>SoundTouch 10</type><margeAccountUUID>default</margeAccountUUID></info>`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(xml)),
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(strings.NewReader("Not Found")),
+		}, nil
 	}
 
 	r, server := setupRouter("http://localhost:8001", ds)

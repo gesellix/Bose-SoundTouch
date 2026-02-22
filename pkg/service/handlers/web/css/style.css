@@ -100,6 +100,7 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
 }
 .category-self { background-color: #e3f2fd; color: #0d47a1; }
 .category-upstream { background-color: #f3e5f5; color: #7b1fa2; }
+.category-mirror { background-color: #fff3e0; color: #e65100; }
 .status-success { background-color: #e8f5e9; color: #2e7d32; }
 .status-error { background-color: #ffebee; color: #c62828; }
 

@@ -13,6 +13,8 @@ The service provides:
 - **🌐 Web Management UI**: Browser-based interface for device management
 - **💾 Persistent Data**: Store device configurations, presets, and usage statistics
 - **📝 HTTP Recording**: Persist all interactions as re-playable `.http` files
+- **🔄 Endpoint Mirroring**: Asynchronously mirror local requests to Bose cloud for parity testing
+- **⚖️ Parity Logging**: Detect and record discrepancies between local and official Bose responses
 - **📥 Session Archiving**: Download entire interaction sessions as `.tar.gz` for offline analysis
 - **🔍 Auto-Discovery**: Automatically detect and configure SoundTouch devices
 - **🔒 Offline Operation**: Continue using full device functionality without internet
@@ -167,6 +169,9 @@ The service supports multiple ways to configure its behavior. When multiple sour
 | `ENABLE_DNS_DISCOVERY`             | `--dns-discovery`          | Enable DNS discovery server                                                                             | `false`                   |
 | `DNS_UPSTREAM`                     | `--dns-upstream`           | Upstream DNS server for non-Bose queries                                                                | `8.8.8.8`                 |
 | `DNS_BIND_ADDR`                    | `--dns-bind`               | Bind address for the DNS discovery server (standard port `:53` is required for `resolv.conf` migration) | `:53`                     |
+| `MIRROR_ENABLED`                   |                            | Enable background mirroring of specific endpoints to Bose cloud                                         | `false`                   |
+| `MIRROR_ENDPOINTS`                 |                            | Comma-separated list of path patterns to mirror (e.g., `/streaming/account/*/device/*/recent`)          | `[]`                      |
+| `INTERNAL_PATHS`                   | `--internal-paths`         | Paths for internal requests to exclude from recording (e.g., `/setup/*`, `/web/*`)                      | `[]`                      |
 | `DISCOVERY_DISABLED`               |                            | Disable automated device discovery                                                                      | `false`                   |
 
 ### Configuration Examples
@@ -309,6 +314,34 @@ You can enable and configure the DNS server via the Web UI or environment variab
 
 #### Manual Discovery via DNS
 Even without migrating a device, you can use the DNS server to discover what a device is querying by manually setting your router's DNS or the device's DNS to point to the AfterTouch service.
+
+## Endpoint Mirroring & Parity Logging
+
+The SoundTouch service includes a powerful **Mirroring** feature that allows you to handle requests locally while simultaneously forwarding them to the official Bose cloud in the background. This is primarily used for maintaining long-term compatibility and verifying the accuracy of the local emulation.
+
+### How Mirroring Works
+
+When an endpoint is configured for mirroring:
+1. **GET Requests**: Handled locally first (Primary). The response is returned to the speaker immediately. In the background, the same request is sent to Bose.
+2. **POST/PUT/DELETE Requests**: Handled locally first. The service then synchronously (but without blocking the speaker's response) forwards the request to Bose to ensure the "official" account state stays in sync with your local changes (e.g., updating a preset).
+
+### Parity Logging
+
+The **Parity Logger** automatically compares the response from your local service with the one received from Bose. If it detects any discrepancies, it:
+1. Logs a warning to the console: `[PARITY] Mismatch detected for GET /...`
+2. Saves a detailed JSON report to `data/parity_mismatches/`.
+
+Each report includes the full request, both response bodies, and a summary of what differed (status codes, content types, or missing/different XML tags).
+
+### Configuration
+
+Mirroring is configured via the **Settings** tab in the Web UI or through global settings:
+- **Mirror Enabled**: Master switch for the mirroring infrastructure.
+- **Mirror Endpoints**: A list of URL path patterns to mirror. You can use wildcards (`*`) to match variable parts like account or device IDs.
+  - Example: `/streaming/account/*/device/*/recent`
+  - Example: `/accounts/*/devices/*/presets/*`
+
+Mirrored requests are also recorded in the **Interaction Log** under the category `upstream-mirror`, allowing you to see side-by-side exactly how our service's behavior compares to the official one.
 
 ## API Reference
 
@@ -469,6 +502,17 @@ The web management interface provides a comprehensive dashboard for managing you
 ## HTTP Interaction Recording
 
 The service automatically records all HTTP interactions (both those handled locally and those proxied upstream) as `.http` files. These files are compatible with the [IntelliJ IDEA HTTP Client](https://www.jetbrains.com/help/idea/exploring-http-syntax.html).
+
+### Internal Paths (Excluding Traffic)
+
+To prevent internal management traffic (like the Web UI or setup API calls) from cluttering your interaction logs, you can configure **Internal Paths**. Requests matching these patterns will be processed normally but will **not** be recorded by the `RecordMiddleware`.
+
+By default, we recommend adding:
+- `/setup/*`: Management API calls
+- `/web/*`: Static Web UI resources
+- `/media/*`: Icons and static media
+
+You can configure these via the **Settings** tab in the Web UI or using the `--internal-paths` flag.
 
 ### Key Features
 

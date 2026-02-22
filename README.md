@@ -26,6 +26,8 @@ A comprehensive solution for controlling and preserving Bose SoundTouch devices,
 - 📊 **DNS Discovery Analysis**: Track and deduplicate all device DNS queries to discover hidden hostnames
 - 📊 **Traffic Analysis**: Proxy and log device communications
 - 📝 **HTTP Recording**: Persist interactions as re-playable `.http` files
+- 🔄 **Endpoint Mirroring**: Asynchronously mirror local requests to Bose cloud for parity testing
+- ⚖️ **Parity Logging**: Detect and record discrepancies between local and official Bose responses
 - 🧹 **Session Management**: Manage and cleanup recorded interaction sessions
 - 🔒 **Production Ready**: Extensive testing with real SoundTouch hardware
 - 🌐 **Cross-Platform**: Windows, macOS, Linux support
@@ -77,6 +79,8 @@ The `soundtouch-service` is a local server that emulates Bose's cloud services. 
 - **🔧 Device Migration**: Seamlessly transition devices to local control
 - **🌐 Web Management UI**: Easy browser-based setup and management
 - **💾 Persistent Data**: Store presets, recents, and sources locally
+- **🔄 Endpoint Mirroring**: Asynchronously mirror local requests to Bose cloud for parity testing
+- **⚖️ Parity Logging**: Detect and record discrepancies between local and official Bose responses
 - **📝 HTTP Recording**: Persist all interactions as re-playable `.http` files
 - **🧹 Session Management**: Manage and cleanup recorded interaction sessions
 
