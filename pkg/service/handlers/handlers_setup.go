@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"fmt"
@@ -170,7 +171,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"dns_enabled":            dnsEnabled,
 		"dns_running":            dnsRunning,
 		"dns_actual_bind":        actualBind,
-		"dns_upstream":           dnsUpstream,
+		"dns_upstream":           strings.Join(dnsUpstream, ","),
 		"dns_bind_addr":          dnsBindAddr,
 		"enable_soundcork_proxy": enableSoundcorkProxy,
 		"redact_logs":            redact,
@@ -223,7 +224,20 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	s.discoveryEnabled = settings.DiscoveryEnabled
 	s.dnsEnabled = settings.DNSEnabled
-	s.dnsUpstream = settings.DNSUpstream
+
+	// Handle comma-separated upstream DNS servers
+	var upstreamList []string
+
+	if settings.DNSUpstream != "" {
+		for _, u := range strings.Split(settings.DNSUpstream, ",") {
+			u = strings.TrimSpace(u)
+			if u != "" {
+				upstreamList = append(upstreamList, u)
+			}
+		}
+	}
+
+	s.dnsUpstream = upstreamList
 	s.dnsBindAddr = settings.DNSBindAddr
 
 	s.enableSoundcorkProxy = settings.EnableSoundcorkProxy
@@ -260,12 +274,12 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	})
 
 	dnsEnabled := s.dnsEnabled
-	dnsUpstream := s.dnsUpstream
+	dnsUpstreamStr := strings.Join(s.dnsUpstream, ",")
 	dnsBindAddr := s.dnsBindAddr
 
 	s.mu.Unlock()
 
-	s.SetDNSSettings(dnsEnabled, dnsUpstream, dnsBindAddr)
+	s.SetDNSSettings(dnsEnabled, dnsUpstreamStr, dnsBindAddr)
 
 	if err != nil {
 		http.Error(w, "Failed to save settings: "+err.Error(), http.StatusInternalServerError)

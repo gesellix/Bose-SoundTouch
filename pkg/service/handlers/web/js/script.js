@@ -42,6 +42,13 @@ async function fetchSpotifyStatus() {
     }
 }
 
+function toggleInfo(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = el.style.display === 'block' ? 'none' : 'block';
+    }
+}
+
 async function linkSpotify() {
     try {
         const response = await fetch('/mgmt/spotify/init', { method: 'POST' });

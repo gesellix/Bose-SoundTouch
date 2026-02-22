@@ -146,8 +146,8 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "dns-upstream",
-				Usage:   "Upstream DNS server for non-Bose queries",
-				Value:   "8.8.8.8",
+				Usage:   "Upstream DNS server(s) for non-Bose queries (comma-separated). If empty, /etc/resolv.conf is used.",
+				Value:   "",
 				EnvVars: []string{"DNS_UPSTREAM"},
 			},
 			&cli.StringFlag{
@@ -219,7 +219,7 @@ func main() {
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
-			server.SetDNSSettings(persisted.DNSEnabled, persisted.DNSUpstream, persisted.DNSBindAddr)
+			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
 
@@ -507,8 +507,8 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	config.enableSoundcorkProxy = persisted.EnableSoundcorkProxy
 
 	config.dnsEnabled = persisted.DNSEnabled
-	if persisted.DNSUpstream != "" {
-		config.dnsUpstream = persisted.DNSUpstream
+	if len(persisted.DNSUpstream) > 0 {
+		config.dnsUpstream = strings.Join(persisted.DNSUpstream, ",")
 	}
 
 	if persisted.DNSBindAddr != "" {
@@ -530,7 +530,7 @@ func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datast
 		DiscoveryEnabled:     true,
 		EnableSoundcorkProxy: config.enableSoundcorkProxy,
 		DNSEnabled:           config.dnsEnabled,
-		DNSUpstream:          config.dnsUpstream,
+		DNSUpstream:          strings.Split(config.dnsUpstream, ","),
 		DNSBindAddr:          config.dnsBind,
 		Shortcuts: map[string]int{
 			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,

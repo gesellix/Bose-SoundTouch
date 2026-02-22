@@ -12,7 +12,7 @@ import (
 
 func TestDNSDiscovery_Interception(t *testing.T) {
 	serviceIP := "192.168.1.100"
-	upstreamDNS := "8.8.8.8"
+	upstreamDNS := []string{"8.8.8.8"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
 	// Test intercepting Bose service
@@ -79,7 +79,7 @@ func TestDNSDiscovery_Forwarding(t *testing.T) {
 	// This test is harder because it needs a real upstream or a mock.
 	// For now, let's just test that it calls forward and record.
 	serviceIP := "192.168.1.100"
-	upstreamDNS := "127.0.0.1:5353" // Use a port that is likely closed or we can mock
+	upstreamDNS := []string{"127.0.0.1:5353"} // Use a port that is likely closed or we can mock
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
 	m := new(dns.Msg)
@@ -120,7 +120,7 @@ func TestDNSDiscovery_Forwarding(t *testing.T) {
 
 func TestDNSDiscovery_StartTCP(t *testing.T) {
 	serviceIP := "192.168.1.100"
-	upstreamDNS := "8.8.8.8"
+	upstreamDNS := []string{"8.8.8.8"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
 	addr := "127.0.0.1:5354"
@@ -169,7 +169,7 @@ func TestDNSDiscovery_StartTCP(t *testing.T) {
 
 func TestDNSDiscovery_IsRunning(t *testing.T) {
 	serviceIP := "192.168.1.100"
-	upstreamDNS := "8.8.8.8"
+	upstreamDNS := []string{"8.8.8.8"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
 	addr := "127.0.0.1:5355"
@@ -214,7 +214,7 @@ func (m *mockResponseWriter) TsigTimersOnly(bool)         {}
 func (m *mockResponseWriter) Hijack()                     {}
 
 func TestDNSDiscovery_LogThrottling(t *testing.T) {
-	d := NewDNSDiscovery("8.8.8.8", "192.168.1.100")
+	d := NewDNSDiscovery([]string{"8.8.8.8"}, "192.168.1.100")
 
 	// Capture log output
 	var logBuf strings.Builder
@@ -247,7 +247,7 @@ func TestDNSDiscovery_LogThrottling(t *testing.T) {
 func TestDNSDiscovery_LoopPrevention(t *testing.T) {
 	serviceIP := "192.168.1.100"
 	bindAddr := "127.0.0.1:53"
-	upstreamDNS := "127.0.0.1:53"
+	upstreamDNS := []string{"127.0.0.1:53"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 	d.bindAddr = bindAddr
 
@@ -274,7 +274,7 @@ func TestDNSDiscovery_LoopPrevention(t *testing.T) {
 
 func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
 	serviceIP := "192.168.1.100"
-	upstreamDNS := "" // Empty upstream
+	var upstreamDNS []string // Empty upstream
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 	d.bindAddr = ":53"
 
@@ -298,7 +298,7 @@ func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
 func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 	serviceIP := "192.168.1.100"
 	// Use an IP that is unroutable or doesn't exist on the network to ensure timeout
-	upstreamDNS := "192.0.2.1:53" // TEST-NET-1, usually non-routable
+	upstreamDNS := []string{"192.0.2.1:53"} // TEST-NET-1, usually non-routable
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
 	m := new(dns.Msg)
@@ -316,5 +316,60 @@ func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 
 	if rw.msg == nil || rw.msg.Rcode != dns.RcodeServerFailure {
 		t.Errorf("Expected RcodeServerFailure after timeout")
+	}
+}
+
+func TestDNSDiscovery_MultipleUpstreams(t *testing.T) {
+	serviceIP := "192.168.1.100"
+
+	// Mock server 1: returns NXDOMAIN
+	mux1 := dns.NewServeMux()
+	mux1.HandleFunc("test.com.", func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Rcode = dns.RcodeNameError
+		_ = w.WriteMsg(m)
+	})
+	ts1 := &dns.Server{Addr: "127.0.0.1:5356", Net: "udp", Handler: mux1}
+	go func() { _ = ts1.ListenAndServe() }()
+	defer func() { _ = ts1.Shutdown() }()
+
+	// Mock server 2: succeeds
+	mux2 := dns.NewServeMux()
+	mux2.HandleFunc("test.com.", func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Answer = append(m.Answer, &dns.A{
+			Hdr: dns.RR_Header{Name: r.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 300},
+			A:   net.ParseIP("1.2.3.4"),
+		})
+		_ = w.WriteMsg(m)
+	})
+	ts2 := &dns.Server{Addr: "127.0.0.1:5357", Net: "udp", Handler: mux2}
+	go func() { _ = ts2.ListenAndServe() }()
+	defer func() { _ = ts2.Shutdown() }()
+
+	time.Sleep(100 * time.Millisecond)
+
+	upstreamDNS := []string{"127.0.0.1:5356", "127.0.0.1:5357"}
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+
+	m := new(dns.Msg)
+	m.SetQuestion("test.com.", dns.TypeA)
+	rw := &mockResponseWriter{}
+
+	d.forward(rw, m)
+
+	if rw.msg == nil {
+		t.Fatal("Expected a response message")
+	}
+
+	// It should succeed because it falls back to the second upstream
+	if rw.msg.Rcode != dns.RcodeSuccess {
+		t.Errorf("Expected RcodeSuccess (0), got %d. Fallback failed.", rw.msg.Rcode)
+	}
+
+	if len(rw.msg.Answer) == 0 {
+		t.Fatal("Expected an answer from the second upstream")
 	}
 }

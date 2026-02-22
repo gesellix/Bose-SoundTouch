@@ -709,7 +709,7 @@ type Settings struct {
 	DiscoveryEnabled     bool           `json:"discovery_enabled"`
 	EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
 	DNSEnabled           bool           `json:"dns_enabled"`
-	DNSUpstream          string         `json:"dns_upstream,omitempty"`
+	DNSUpstream          []string       `json:"dns_upstream,omitempty"`
 	DNSBindAddr          string         `json:"dns_bind_addr,omitempty"`
 	Shortcuts            map[string]int `json:"shortcuts,omitempty"`
 }

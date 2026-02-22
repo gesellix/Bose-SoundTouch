@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
+	"github.com/miekg/dns"
 )
 
 // Server handles HTTP requests for the SoundTouch service.
@@ -34,7 +36,7 @@ type Server struct {
 	discoveryInterval    time.Duration
 	discoveryEnabled     bool
 	dnsEnabled           bool
-	dnsUpstream          string
+	dnsUpstream          []string
 	dnsBindAddr          string
 	enableSoundcorkProxy bool
 	shortcuts            map[string]int
@@ -88,6 +90,47 @@ func (s *Server) SetDiscoverySettings(interval time.Duration, enabled bool) {
 	s.discoveryEnabled = enabled
 }
 
+// parseUpstreamDNS splits a comma-separated string of DNS servers.
+func parseUpstreamDNS(upstream string) []string {
+	var upstreamList []string
+
+	if upstream != "" {
+		for _, u := range strings.Split(upstream, ",") {
+			u = strings.TrimSpace(u)
+			if u != "" {
+				upstreamList = append(upstreamList, u)
+			}
+		}
+	}
+
+	return upstreamList
+}
+
+// getSystemDNS returns the DNS servers from /etc/resolv.conf.
+func getSystemDNS() []string {
+	config, _ := dns.ClientConfigFromFile("/etc/resolv.conf")
+	if config != nil && len(config.Servers) > 0 {
+		return config.Servers
+	}
+
+	return nil
+}
+
+// areUpstreamsEqual compares two slices of DNS server addresses.
+func areUpstreamsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
 // SetDNSSettings sets the DNS discovery settings for the server.
 func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
 	s.mu.Lock()
@@ -97,11 +140,23 @@ func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
 	oldUpstream := s.dnsUpstream
 
 	s.dnsEnabled = enabled
-	s.dnsUpstream = upstream
 	s.dnsBindAddr = bind
 
+	upstreamList := parseUpstreamDNS(upstream)
+
+	// Try to get system DNS if none provided
+	if enabled && len(upstreamList) == 0 {
+		upstreamList = getSystemDNS()
+		if len(upstreamList) > 0 {
+			log.Printf("[DNS] Using system DNS servers from /etc/resolv.conf: %v", upstreamList)
+		}
+	}
+
+	s.dnsUpstream = upstreamList
+	upstreamChanged := !areUpstreamsEqual(upstreamList, oldUpstream)
+
 	if s.dnsDiscovery != nil {
-		if !enabled || bind != oldBind || upstream != oldUpstream {
+		if !enabled || bind != oldBind || upstreamChanged {
 			log.Printf("[DNS] Settings changed, stopping DNS discovery server")
 
 			_ = s.dnsDiscovery.Shutdown()
@@ -109,8 +164,8 @@ func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
 		}
 	}
 
-	if enabled && upstream == "" {
-		log.Printf("[DNS] Cannot start DNS discovery server: upstream DNS is empty")
+	if enabled && len(upstreamList) == 0 {
+		log.Printf("[DNS] Cannot start DNS discovery server: upstream DNS is empty and no system DNS found")
 
 		s.dnsEnabled = false
 
@@ -118,26 +173,30 @@ func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
 	}
 
 	if enabled && s.dnsDiscovery == nil {
-		log.Printf("[DNS] Starting DNS discovery server on %s", bind)
-
-		u, _ := url.Parse(s.serverURL)
-
-		serviceIP := u.Hostname()
-		if serviceIP == "localhost" || serviceIP == "" {
-			serviceIP = "127.0.0.1"
-		}
-
-		if s.sm != nil {
-			serviceIP = s.sm.GetResolvedIP(serviceIP)
-		}
-
-		s.dnsDiscovery = discovery.NewDNSDiscovery(upstream, serviceIP)
-		go func(d *discovery.DNSDiscovery, addr string) {
-			if err := d.Start(addr); err != nil {
-				log.Printf("Warning: DNS discovery server error: %v", err)
-			}
-		}(s.dnsDiscovery, bind)
+		s.startDNSDiscovery(bind, upstreamList)
 	}
+}
+
+func (s *Server) startDNSDiscovery(bind string, upstreamList []string) {
+	log.Printf("[DNS] Starting DNS discovery server on %s", bind)
+
+	u, _ := url.Parse(s.serverURL)
+
+	serviceIP := u.Hostname()
+	if serviceIP == "localhost" || serviceIP == "" {
+		serviceIP = "127.0.0.1"
+	}
+
+	if s.sm != nil {
+		serviceIP = s.sm.GetResolvedIP(serviceIP)
+	}
+
+	s.dnsDiscovery = discovery.NewDNSDiscovery(upstreamList, serviceIP)
+	go func(d *discovery.DNSDiscovery, addr string) {
+		if err := d.Start(addr); err != nil {
+			log.Printf("Warning: DNS discovery server error: %v", err)
+		}
+	}(s.dnsDiscovery, bind)
 }
 
 // GetDNSRunning returns whether DNS discovery is active and its bind address.

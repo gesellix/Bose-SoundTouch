@@ -14,7 +14,7 @@ import (
 // DNSDiscovery handles DNS queries and records discovered hosts.
 type DNSDiscovery struct {
 	// Configuration
-	upstreamDNS string
+	upstreamDNS []string
 	serviceIP   string
 
 	// State
@@ -48,7 +48,7 @@ type DiscoveredHost struct {
 }
 
 // NewDNSDiscovery creates a new DNSDiscovery instance.
-func NewDNSDiscovery(upstreamDNS, serviceIP string) *DNSDiscovery {
+func NewDNSDiscovery(upstreamDNS []string, serviceIP string) *DNSDiscovery {
 	return &DNSDiscovery{
 		upstreamDNS: upstreamDNS,
 		serviceIP:   serviceIP,
@@ -83,7 +83,7 @@ func (d *DNSDiscovery) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		d.throttledLog(fmt.Sprintf("[DNS] Intercepting %s (type %d) -> %s", hostname, q.Qtype, d.serviceIP))
 	} else {
 		// Forward to real DNS
-		if d.upstreamDNS == "" {
+		if len(d.upstreamDNS) == 0 {
 			d.throttledLog("[DNS ERROR] No upstream DNS configured, cannot forward")
 
 			m := new(dns.Msg)
@@ -94,7 +94,7 @@ func (d *DNSDiscovery) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			return
 		}
 
-		d.throttledLog(fmt.Sprintf("[DNS] Forwarding %s (type %d) to %s", hostname, q.Qtype, d.upstreamDNS))
+		d.throttledLog(fmt.Sprintf("[DNS] Forwarding %s (type %d) to %v", hostname, q.Qtype, d.upstreamDNS))
 		d.forward(w, r)
 	}
 }
@@ -234,44 +234,44 @@ func (d *DNSDiscovery) forward(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	// Add port 53 if not present
-	upstream := d.upstreamDNS
-	if !strings.Contains(upstream, ":") {
-		upstream += ":53"
-	}
-
-	// Loop prevention: don't forward to ourselves
-	if upstream == d.bindAddr || (strings.HasPrefix(upstream, "127.0.0.1:") && strings.HasSuffix(d.bindAddr, upstream[9:])) {
-		d.throttledLog(fmt.Sprintf("[DNS ERROR] Refusing to forward %s to ourselves (%s)", q.Name, upstream))
-
-		m := new(dns.Msg)
-		m.SetReply(r)
-		m.Rcode = dns.RcodeServerFailure
-		_ = w.WriteMsg(m)
-
-		return
-	}
-
 	c := new(dns.Client)
 	c.Timeout = 2 * time.Second
 
-	in, _, err := c.Exchange(r, upstream)
-	if err != nil {
-		d.throttledLog(fmt.Sprintf("[DNS ERROR] Forward failed for %s (type %d): %v", q.Name, q.Qtype, err))
-		// Return a failure response instead of just dropping
-		m := new(dns.Msg)
-		m.SetReply(r)
-
-		m.Rcode = dns.RcodeServerFailure
-		if err := w.WriteMsg(m); err != nil {
-			log.Printf("[DNS ERROR] Failed to write failure response: %v", err)
+	for _, upstream := range d.upstreamDNS {
+		// Add port 53 if not present
+		if !strings.Contains(upstream, ":") {
+			upstream += ":53"
 		}
 
-		return
+		// Loop prevention: don't forward to ourselves
+		if upstream == d.bindAddr || (strings.HasPrefix(upstream, "127.0.0.1:") && strings.HasSuffix(d.bindAddr, upstream[9:])) {
+			d.throttledLog(fmt.Sprintf("[DNS ERROR] Refusing to forward %s to ourselves (%s)", q.Name, upstream))
+			continue
+		}
+
+		in, _, err := c.Exchange(r, upstream)
+		if err == nil {
+			if in.Rcode == dns.RcodeSuccess {
+				if writeErr := w.WriteMsg(in); writeErr != nil {
+					log.Printf("[DNS ERROR] Failed to write forwarded response from %s: %v", upstream, writeErr)
+				}
+
+				return
+			}
+
+			d.throttledLog(fmt.Sprintf("[DNS] Upstream %s returned %s for %s, trying next", upstream, dns.RcodeToString[in.Rcode], q.Name))
+		} else {
+			d.throttledLog(fmt.Sprintf("[DNS ERROR] Forward failed for %s (type %d) via %s: %v", q.Name, q.Qtype, upstream, err))
+		}
 	}
 
-	if err := w.WriteMsg(in); err != nil {
-		log.Printf("[DNS ERROR] Failed to write forwarded response: %v", err)
+	// If we reach here, all upstreams failed
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Rcode = dns.RcodeServerFailure
+
+	if err := w.WriteMsg(m); err != nil {
+		log.Printf("[DNS ERROR] Failed to write failure response: %v", err)
 	}
 }
 

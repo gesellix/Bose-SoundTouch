@@ -103,6 +103,43 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
 .status-success { background-color: #e8f5e9; color: #2e7d32; }
 .status-error { background-color: #ffebee; color: #c62828; }
 
+.info-toggle {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    background-color: #607D8B;
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 5px;
+    font-style: normal;
+    user-select: none;
+}
+.info-toggle:hover {
+    background-color: #455A64;
+}
+.info-details {
+    display: none;
+    background-color: #f0f7ff;
+    border: 1px solid #d0e0f0;
+    padding: 10px;
+    margin-top: 5px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #333;
+    line-height: 1.4;
+    max-width: 400px;
+}
+.info-details code {
+    background-color: #e3f2fd;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
 .badge {
     padding: 2px 8px;
     border-radius: 10px;

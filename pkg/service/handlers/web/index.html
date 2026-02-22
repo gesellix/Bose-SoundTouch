@@ -108,8 +108,12 @@
                     </label>
                     <div style="margin-left: 20px; margin-bottom: 5px;">
                         <label for="dns-upstream">Upstream DNS:</label>
-                        <input type="text" id="dns-upstream" placeholder="8.8.8.8" style="width: 150px;">
-                        <span style="font-size: 0.8em; color: #666; margin-left: 5px;">(For non-intercepted queries)</span>
+                        <input type="text" id="dns-upstream" placeholder="8.8.8.8" style="width: 200px;">
+                        <span class="info-toggle" onclick="toggleInfo('dns-upstream-info')">ⓘ</span>
+                        <div id="dns-upstream-info" class="info-details">
+                            Optional: comma-separated list of DNS servers (e.g., <code>1.1.1.1, 8.8.8.8</code>).
+                            If empty, AfterTouch defaults to the system nameservers (from <code>/etc/resolv.conf</code>).
+                        </div>
                     </div>
                     <div style="margin-left: 20px;">
                         <label for="dns-bind">DNS Bind Address:</label>
