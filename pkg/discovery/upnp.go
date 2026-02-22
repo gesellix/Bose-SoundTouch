@@ -2,8 +2,10 @@ package discovery
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -418,7 +420,7 @@ func (d *Service) parseLocationURL(location, usn string) (*models.DiscoveredDevi
 }
 
 // enrichDeviceInfo tries to get additional device information from the device description
-func (d *Service) enrichDeviceInfo(_ *models.DiscoveredDevice, location string) error {
+func (d *Service) enrichDeviceInfo(device *models.DiscoveredDevice, location string) error {
 	log.Printf("UPnP: Attempting to enrich device info by fetching %s", location)
 
 	client := &http.Client{
@@ -437,8 +439,44 @@ func (d *Service) enrichDeviceInfo(_ *models.DiscoveredDevice, location string) 
 
 	log.Printf("UPnP: Successfully fetched device description from %s (Status: %s)", location, resp.Status)
 
-	// For now, we'll keep it simple and not parse the full UPnP device description
-	// This can be enhanced later to extract more detailed device information
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body: %w", err)
+	}
+
+	var upnpRoot struct {
+		XMLName xml.Name `xml:"root"`
+		Device  struct {
+			FriendlyName string `xml:"friendlyName"`
+			ModelName    string `xml:"modelName"`
+			SerialNumber string `xml:"serialNumber"`
+		} `xml:"device"`
+	}
+
+	if err := xml.Unmarshal(data, &upnpRoot); err != nil {
+		log.Printf("UPnP: Failed to parse device description from %s: %v", location, err)
+		return err
+	}
+
+	if upnpRoot.Device.FriendlyName != "" {
+		device.Name = upnpRoot.Device.FriendlyName
+	}
+
+	if upnpRoot.Device.ModelName != "" {
+		device.ModelID = upnpRoot.Device.ModelName
+	}
+
+	if upnpRoot.Device.SerialNumber != "" {
+		device.UPnPSerial = upnpRoot.Device.SerialNumber
+	}
+
+	log.Printf("UPnP: Enriched device info: Name='%s', Model='%s', UPnPSerial='%s'",
+		device.Name, device.ModelID, device.UPnPSerial)
+
 	return nil
 }
 

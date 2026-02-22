@@ -184,6 +184,7 @@ type ServiceDeviceInfo struct {
 	FirmwareVersion     string `json:"firmware_version" xml:"softwareVersion"`
 	IPAddress           string `json:"ip_address" xml:"ipAddress"`
 	Name                string `json:"name" xml:"name"`
+	MacAddress          string `json:"mac_address,omitempty" xml:"-"`
 	DiscoveryMethod     string `json:"discovery_method,omitempty"`
 	AccountID           string `json:"account_id,omitempty"`
 }

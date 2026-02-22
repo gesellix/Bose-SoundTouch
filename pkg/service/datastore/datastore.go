@@ -26,6 +26,8 @@ type DataStore struct {
 	DataDir      string
 	eventMutex   sync.RWMutex
 	deviceEvents map[string][]models.DeviceEvent
+	idMutex      sync.RWMutex
+	macToSerial  map[string]string
 }
 
 // NewDataStore creates a new DataStore.
@@ -38,6 +40,7 @@ func NewDataStore(dataDir string) *DataStore {
 	return &DataStore{
 		DataDir:      dataDir,
 		deviceEvents: make(map[string][]models.DeviceEvent),
+		macToSerial:  make(map[string]string),
 	}
 }
 
@@ -53,6 +56,14 @@ func (ds *DataStore) AccountDevicesDir(account string) string {
 
 // AccountDeviceDir returns the directory path for a specific device within an account.
 func (ds *DataStore) AccountDeviceDir(account, device string) string {
+	ds.idMutex.RLock()
+	serial, ok := ds.macToSerial[device]
+	ds.idMutex.RUnlock()
+
+	if ok {
+		device = serial
+	}
+
 	return filepath.Join(ds.AccountDevicesDir(account), device)
 }
 
@@ -77,8 +88,9 @@ func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDevic
 			SerialNumber    string `xml:"serialNumber"`
 		} `xml:"components>component"`
 		NetworkInfo []struct {
-			Type      string `xml:"type,attr"`
-			IPAddress string `xml:"ipAddress"`
+			Type       string `xml:"type,attr"`
+			IPAddress  string `xml:"ipAddress"`
+			MacAddress string `xml:"macAddress"`
 		} `xml:"networkInfo"`
 	}
 
@@ -105,6 +117,7 @@ func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDevic
 	for _, net := range info.NetworkInfo {
 		if net.Type == "SCM" {
 			deviceInfo.IPAddress = net.IPAddress
+			deviceInfo.MacAddress = net.MacAddress
 		}
 	}
 
@@ -195,6 +208,10 @@ func (ds *DataStore) listDevicesInAccount(baseDir, accountName string) []models.
 		}
 
 		if err == nil && info != nil {
+			if info.MacAddress != "" && info.DeviceSerialNumber != "" {
+				ds.UpdateMapping(info.MacAddress, info.DeviceSerialNumber)
+			}
+
 			devices = append(devices, *info)
 		}
 	}
@@ -220,8 +237,9 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 			SerialNumber    string `xml:"serialNumber"`
 		} `xml:"components>component"`
 		NetworkInfo []struct {
-			Type      string `xml:"type,attr"`
-			IPAddress string `xml:"ipAddress"`
+			Type       string `xml:"type,attr"`
+			IPAddress  string `xml:"ipAddress"`
+			MacAddress string `xml:"macAddress"`
 		} `xml:"networkInfo"`
 		DiscoveryMethod string `xml:"discoveryMethod"`
 	}
@@ -250,6 +268,7 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 	for _, net := range info.NetworkInfo {
 		if net.Type == "SCM" {
 			deviceInfo.IPAddress = net.IPAddress
+			deviceInfo.MacAddress = net.MacAddress
 		}
 	}
 
@@ -633,14 +652,29 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
-// Initialize creates the necessary directory structure for the datastore.
+// UpdateMapping updates the mapping between MAC address and serial number.
+func (ds *DataStore) UpdateMapping(mac, serial string) {
+	if mac == "" || serial == "" {
+		return
+	}
+
+	ds.idMutex.Lock()
+	defer ds.idMutex.Unlock()
+
+	ds.macToSerial[mac] = serial
+}
+
+// Initialize creates the necessary directory structure for the datastore and populates ID mappings.
 func (ds *DataStore) Initialize() error {
 	// Ensure base data directory exists
 	if err := os.MkdirAll(ds.DataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	return nil
+	// Scan for devices to populate MAC to Serial mapping
+	_, err := ds.ListAllDevices()
+
+	return err
 }
 
 // GetETagForPresets returns the ETag (modification time) for the presets file for a specific device.
