@@ -108,11 +108,12 @@
                     </label>
                     <div style="margin-left: 20px; margin-bottom: 5px;">
                         <label for="dns-upstream">Upstream DNS:</label>
-                        <input type="text" id="dns-upstream" placeholder="8.8.8.8" style="width: 200px;">
+                        <input type="text" id="dns-upstream" placeholder="Default: system nameservers" style="width: 200px;">
                         <span class="info-toggle" onclick="toggleInfo('dns-upstream-info')">ⓘ</span>
                         <div id="dns-upstream-info" class="info-details">
-                            Optional: comma-separated list of DNS servers (e.g., <code>1.1.1.1, 8.8.8.8</code>).
-                            If empty, AfterTouch defaults to the system nameservers (from <code>/etc/resolv.conf</code>).
+                            Optional: comma-separated list of DNS servers (e.g., <code>1.1.1.1, 8.8.8.8</code>).<br>
+                            If empty, AfterTouch defaults to the system nameservers (e.g. from <code>/etc/resolv.conf</code>).<br>
+                            <div id="dns-current-upstream" style="margin-top: 5px; font-weight: bold;"></div>
                         </div>
                     </div>
                     <div style="margin-left: 20px;">
@@ -246,7 +247,7 @@
                     <select id="migration-method" onchange="toggleMigrationMethod()">
                         <option value="xml">XML Configuration (Recommended - redirects specific services)</option>
                         <option value="hosts">/etc/hosts + Root CA (Advanced - global redirection)</option>
-                        <option value="resolv">/etc/resolv.conf (DHCP-Aware - Most flexible)</option>
+                        <option value="resolv">/etc/resolv.conf (DHCP-Aware - Redirect via DNS Hook)</option>
                     </select>
                     <div id="dns-port-warning" style="margin-top: 5px; color: #d32f2f; font-weight: bold; font-size: 0.9em; display: none;"></div>
                 </div>

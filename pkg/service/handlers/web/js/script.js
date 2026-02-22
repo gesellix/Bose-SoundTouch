@@ -144,6 +144,14 @@ async function fetchSettings() {
         if (settings.dns_bind_addr) {
             document.getElementById('dns-bind').value = settings.dns_bind_addr;
         }
+
+        const dnsCurrentUpstream = document.getElementById('dns-current-upstream');
+        if (dnsCurrentUpstream && settings.dns_upstream) {
+            dnsCurrentUpstream.innerText = 'Current upstreams: ' + settings.dns_upstream;
+        } else if (dnsCurrentUpstream) {
+            dnsCurrentUpstream.innerText = '';
+        }
+
         if (settings.enable_soundcork_proxy !== undefined) {
             document.getElementById('enable-soundcork-proxy').checked = settings.enable_soundcork_proxy;
         }

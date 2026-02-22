@@ -204,8 +204,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if settings.DNSEnabled && settings.DNSUpstream == "" {
-		http.Error(w, "DNS Upstream is required when DNS Discovery is enabled", http.StatusBadRequest)
-		return
+		// No strict requirement for DNSUpstream here as SetDNSSettings will
+		// try to fall back to system DNS. We only log it if both are empty later.
+		log.Printf("[DNS] DNS Discovery enabled without explicit upstreams, will try system DNS.")
 	}
 
 	interval, err := time.ParseDuration(settings.DiscoveryInterval)
