@@ -606,40 +606,57 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
 	r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 
+	streamingRoutes := func(r chi.Router) {
+		r.Get("/sourceproviders", server.HandleMargeSourceProviders)
+		r.Get("/account/{account}/device/{device}/recent", server.HandleMargeRecents)
+		r.Post("/account/{account}/device/{device}/recent", server.HandleMargeAddRecent)
+		r.Get("/account/{account}/device/{device}/presets", server.HandleMargePresets)
+		r.Post("/account/{account}/device/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
+		r.Post("/support/power_on", server.HandleMargePowerOn)
+		r.Get("/account/{account}/provider_settings", server.HandleMargeProviderSettings)
+		r.Get("/device/{device}/streaming_token", server.HandleMargeStreamingToken)
+		r.Post("/support/customersupport", server.HandleMargeCustomerSupport)
+		r.Get("/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeGetDeviceSettings)
+		r.Get("/account/{account}/device/{device}/group", server.HandleMargeDeviceGroup)
+		r.Get("/account/{account}/device/{device}/group/", server.HandleMargeDeviceGroup)
+		r.Get("/account/{account}/device/{device}/group/server", server.HandleMargeDeviceGroupServer)
+		r.Get("/account/{account}/device/{device}/group/member", server.HandleMargeDeviceGroupMember)
+		r.Post("/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
+		r.Get("/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
+		r.Get("/account/{account}/full", server.HandleMargeAccountFull)
+		r.Get("/software/update/account/{account}", server.HandleMargeSoftwareUpdate)
+
+		r.Route("/stats", func(r chi.Router) {
+			r.Post("/usage", server.HandleUsageStats)
+			r.Post("/error", server.HandleErrorStats)
+		})
+	}
+
+	accountsRoutes := func(r chi.Router) {
+		r.Get("/{account}/full", server.HandleMargeAccountFull)
+		r.Get("/{account}/devices/{device}/presets", server.HandleMargePresets)
+		r.Post("/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
+		r.Get("/{account}/devices/{device}/recents", server.HandleMargeRecents)
+		r.Post("/{account}/devices/{device}/recents", server.HandleMargeAddRecent)
+		r.Post("/{account}/devices", server.HandleMargeAddDevice)
+		r.Delete("/{account}/devices/{device}", server.HandleMargeRemoveDevice)
+		r.Get("/{account}/devices/{device}/group", server.HandleMargeDeviceGroup)
+		r.Get("/{account}/devices/{device}/group/", server.HandleMargeDeviceGroup)
+		r.Get("/{account}/devices/{device}/group/server", server.HandleMargeDeviceGroupServer)
+		r.Get("/{account}/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
+	}
+
 	r.Route("/marge", func(r chi.Router) {
-		r.Get("/streaming/sourceproviders", server.HandleMargeSourceProviders)
-		r.Get("/accounts/{account}/full", server.HandleMargeAccountFull)
-		r.Post("/streaming/support/power_on", server.HandleMargePowerOn)
+		r.Route("/streaming", streamingRoutes)
+		r.Route("/accounts", accountsRoutes)
+
 		r.Get("/updates/soundtouch", server.HandleMargeSoftwareUpdate)
-		r.Get("/accounts/{account}/devices/{device}/presets", server.HandleMargePresets)
-		r.Post("/accounts/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
-		r.Post("/accounts/{account}/devices/{device}/recents", server.HandleMargeAddRecent)
-		r.Post("/accounts/{account}/devices", server.HandleMargeAddDevice)
-		r.Delete("/accounts/{account}/devices/{device}", server.HandleMargeRemoveDevice)
-		r.Get("/streaming/account/{account}/provider_settings", server.HandleMargeProviderSettings)
-		r.Get("/streaming/device/{device}/streaming_token", server.HandleMargeStreamingToken)
-		r.Post("/streaming/support/customersupport", server.HandleMargeCustomerSupport)
-		r.Get("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeGetDeviceSettings)
-		r.Post("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
-		r.Get("/streaming/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
 	})
 
 	// Legacy or direct domain calls without /marge prefix
-	r.Get("/streaming/sourceproviders", server.HandleMargeSourceProviders)
-	r.Get("/accounts/{account}/full", server.HandleMargeAccountFull)
-	r.Post("/streaming/support/power_on", server.HandleMargePowerOn)
+	r.Route("/streaming", streamingRoutes)
+	r.Route("/accounts", accountsRoutes)
 	r.Get("/updates/soundtouch", server.HandleMargeSoftwareUpdate)
-	r.Get("/accounts/{account}/devices/{device}/presets", server.HandleMargePresets)
-	r.Post("/accounts/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
-	r.Post("/accounts/{account}/devices/{device}/recents", server.HandleMargeAddRecent)
-	r.Post("/accounts/{account}/devices", server.HandleMargeAddDevice)
-	r.Delete("/accounts/{account}/devices/{device}", server.HandleMargeRemoveDevice)
-	r.Get("/streaming/account/{account}/provider_settings", server.HandleMargeProviderSettings)
-	r.Get("/streaming/device/{device}/streaming_token", server.HandleMargeStreamingToken)
-	r.Post("/streaming/support/customersupport", server.HandleMargeCustomerSupport)
-	r.Get("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeGetDeviceSettings)
-	r.Post("/streaming/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
-	r.Get("/streaming/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
 
 	r.Route("/customer", func(r chi.Router) {
 		r.Get("/account/{account}", server.HandleMargeAccountProfile)
@@ -650,11 +667,6 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/stapp/{deviceId}", server.HandleAppEvents)
 		r.Post("/scmudc/{deviceId}", server.HandleAppEvents)
-	})
-
-	r.Route("/streaming/stats", func(r chi.Router) {
-		r.Post("/usage", server.HandleUsageStats)
-		r.Post("/error", server.HandleErrorStats)
 	})
 
 	r.Route("/mgmt", func(r chi.Router) {

@@ -28,7 +28,7 @@ func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.Header()["ETag"] = []string{etag}
 	_, _ = w.Write(data)
 }
@@ -51,7 +51,7 @@ func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.Header()["ETag"] = []string{etag}
 	_, _ = w.Write(data)
 }
@@ -146,7 +146,7 @@ func (s *Server) HandleMargeGetEmailAddress(w http.ResponseWriter, _ *http.Reque
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	_, _ = w.Write([]byte(xml.Header))
 	_, _ = w.Write(data)
 }
@@ -165,7 +165,7 @@ func (s *Server) HandleMargeGetDeviceSettings(w http.ResponseWriter, _ *http.Req
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	_, _ = w.Write([]byte(xml.Header))
 	_, _ = w.Write(data)
 }
@@ -184,8 +184,15 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.Header()["ETag"] = []string{etag}
+
+	// For the account-specific firmware route, always return the software_update tag.
+	// This route is specifically used by firmware like Bose_Lisa/27.0.6.
+	if chi.URLParam(r, "account") != "" {
+		_, _ = w.Write([]byte(marge.SoftwareUpdateToXML()))
+		return
+	}
 
 	if len(swUpdateXML) > 0 {
 		_, _ = w.Write(swUpdateXML)
@@ -211,7 +218,7 @@ func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.Header()["ETag"] = []string{etag}
 	_, _ = w.Write(data)
 }
@@ -244,7 +251,29 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	_, _ = w.Write(data)
+}
+
+// HandleMargeRecents returns the Marge recents for a device.
+func (s *Server) HandleMargeRecents(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	device := chi.URLParam(r, "device")
+
+	etag := strconv.FormatInt(s.ds.GetETagForRecents(account, device), 10)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	data, err := marge.RecentsToXML(s.ds, account, device)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.Header()["ETag"] = []string{etag}
 	_, _ = w.Write(data)
 }
 
@@ -268,7 +297,7 @@ func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	_, _ = w.Write(data)
 }
 
@@ -288,7 +317,7 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	_, _ = w.Write(data)
 }
 
@@ -310,7 +339,7 @@ func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request)
 func (s *Server) HandleMargeProviderSettings(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
-	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	_, _ = w.Write([]byte(marge.ProviderSettingsToXML(account)))
 }
 
@@ -334,6 +363,26 @@ func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, _ *http.Reques
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(xml.Header))
 	_, _ = w.Write(data)
+}
+
+// HandleMargeDeviceGroup returns grouping information for a device (empty group by default).
+func (s *Server) HandleMargeDeviceGroup(w http.ResponseWriter, _ *http.Request) {
+	// Native firmware expects vnd.bose.streaming content type
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><group/>`))
+}
+
+// HandleMargeDeviceGroupServer returns grouping server information (404 by default if not a server).
+func (s *Server) HandleMargeDeviceGroupServer(w http.ResponseWriter, r *http.Request) {
+	// Not in a group as server
+	http.NotFound(w, r)
+}
+
+// HandleMargeDeviceGroupMember returns grouping member information (404 by default if not a member).
+func (s *Server) HandleMargeDeviceGroupMember(w http.ResponseWriter, r *http.Request) {
+	// Not in a group as member
+	http.NotFound(w, r)
 }
 
 // HandleMargeCustomerSupport handles Marge customer support uploads.

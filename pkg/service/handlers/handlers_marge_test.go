@@ -264,7 +264,7 @@ func TestMargeUpdatePreset(t *testing.T) {
 	}
 }
 
-func TestMargeDeviceInfo(t *testing.T) {
+func TestMargeAddRecentRoute(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -329,6 +329,298 @@ func TestMargeDeviceInfo(t *testing.T) {
 	if !strings.Contains(string(recentData), "Recent Station") {
 		t.Error("Recent was not saved to datastore")
 	}
+}
+
+func TestMargeNativeStreamingRoutes(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-native-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+
+	account := "12345"
+	deviceID := "DEV1"
+
+	accountDir := filepath.Join(tempDir, "accounts", account)
+	deviceDir := filepath.Join(accountDir, "devices", deviceID)
+	err = os.MkdirAll(deviceDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create device dir: %v", err)
+	}
+
+	// Mock Sources.xml for recent tests
+	if err := os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(`
+		<sources>
+			<source id="SRC1" displayName="TUNEIN" secret="" secretType="Audio">
+				<sourceKey type="TUNEIN" account=""/>
+			</source>
+		</sources>
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write Sources.xml: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(deviceDir, "Recents.xml"), []byte(`<recents></recents>`), 0644); err != nil {
+		t.Fatalf("Failed to write Recents.xml: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(deviceDir, "Presets.xml"), []byte(`<presets></presets>`), 0644); err != nil {
+		t.Fatalf("Failed to write Presets.xml: %v", err)
+	}
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	t.Run("POST /streaming/account/{account}/device/{device}/recent", func(t *testing.T) {
+		payload := `
+			<recent>
+				<name>New Route Recent</name>
+				<sourceid>SRC1</sourceid>
+				<location>/station/s999</location>
+				<contentItemType>station</contentItemType>
+			</recent>`
+
+		res, err := http.Post(ts.URL+"/streaming/account/"+account+"/device/"+deviceID+"/recent", "application/xml", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", ct)
+		}
+
+		// Verify file was saved
+		recentData, _ := os.ReadFile(filepath.Join(deviceDir, "Recents.xml"))
+		if !strings.Contains(string(recentData), "New Route Recent") {
+			t.Error("Recent from native route was not saved to datastore")
+		}
+	})
+
+	t.Run("GET /streaming/account/{account}/full", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/streaming/account/" + account + "/full")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", ct)
+		}
+
+		fullData, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(fullData), account) {
+			t.Error("Account full response does not contain account ID")
+		}
+	})
+
+	t.Run("GET /streaming/software/update/account/{account}", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/streaming/software/update/account/" + account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", ct)
+		}
+
+		swData, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(swData), "software_update") {
+			t.Errorf("Response missing software_update tag: %s", string(swData))
+		}
+	})
+
+	t.Run("GET /streaming/account/{account}/device/{device}/recent", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/streaming/account/" + account + "/device/" + deviceID + "/recent")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", ct)
+		}
+
+		etag := res.Header.Get("ETag")
+		if etag == "" {
+			t.Error("Expected ETag header")
+		}
+
+		recentData, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(recentData), "recents") {
+			t.Errorf("Response missing recents tag: %s", string(recentData))
+		}
+
+		// Test 304
+		req, _ := http.NewRequest("GET", ts.URL+"/streaming/account/"+account+"/device/"+deviceID+"/recent", nil)
+		req.Header.Set("If-None-Match", etag)
+		res2, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res2.Body.Close()
+		if res2.StatusCode != http.StatusNotModified {
+			t.Errorf("Expected 304 Not Modified, got %v", res2.Status)
+		}
+	})
+
+	t.Run("GET /streaming/account/{account}/device/{device}/presets", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/streaming/account/" + account + "/device/" + deviceID + "/presets")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", ct)
+		}
+
+		etag := res.Header.Get("ETag")
+		if etag == "" {
+			t.Error("Expected ETag header")
+		}
+
+		presetData, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(presetData), "presets") {
+			t.Errorf("Response missing presets tag: %s", string(presetData))
+		}
+
+		// Test 304
+		req, _ := http.NewRequest("GET", ts.URL+"/streaming/account/"+account+"/device/"+deviceID+"/presets", nil)
+		req.Header.Set("If-None-Match", etag)
+		res2, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res2.Body.Close()
+		if res2.StatusCode != http.StatusNotModified {
+			t.Errorf("Expected 304 Not Modified, got %v", res2.Status)
+		}
+	})
+
+	t.Run("POST /streaming/account/{account}/device/{device}/presets/{presetNumber}", func(t *testing.T) {
+		payload := `
+			<preset>
+				<name>New Native Preset</name>
+				<sourceid>SRC1</sourceid>
+				<location>/station/s777</location>
+				<contentItemType>station</contentItemType>
+			</preset>`
+
+		res, err := http.Post(ts.URL+"/streaming/account/"+account+"/device/"+deviceID+"/presets/1", "application/xml", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", ct)
+		}
+
+		// Verify file was saved
+		presetData, _ := os.ReadFile(filepath.Join(deviceDir, "Presets.xml"))
+		if !strings.Contains(string(presetData), "New Native Preset") {
+			t.Error("Preset from native route was not saved to datastore")
+		}
+	})
+
+	t.Run("GET /streaming/account/{account}/device/{device}/group/", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/streaming/account/" + account + "/device/" + deviceID + "/group/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		groupData, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(groupData), "<group") {
+			t.Errorf("Response missing group tag: %s", string(groupData))
+		}
+	})
+
+	t.Run("GET /streaming/account/{account}/device/{device}/group/server", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/streaming/account/" + account + "/device/" + deviceID + "/group/server")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("Expected 404 Not Found, got %v", res.Status)
+		}
+	})
+
+	t.Run("GET /streaming/account/{account}/device/{device}/group/member", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/streaming/account/" + account + "/device/" + deviceID + "/group/member")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("Expected 404 Not Found, got %v", res.Status)
+		}
+	})
+
+	t.Run("GET /marge/accounts/{account}/devices/{device}/group", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/marge/accounts/" + account + "/devices/" + deviceID + "/group")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", ct)
+		}
+
+		groupData, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(groupData), "<group") {
+			t.Errorf("Response missing group tag: %s", string(groupData))
+		}
+	})
 }
 
 func TestMargeAddRemoveDevice(t *testing.T) {
