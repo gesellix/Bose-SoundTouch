@@ -4,6 +4,7 @@ package discovery
 import (
 	"fmt"
 	"log"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -192,19 +193,78 @@ func (d *DNSDiscovery) respondWithIP(w dns.ResponseWriter, r *dns.Msg, ip string
 	q := r.Question[0]
 	log.Printf("[DNS] Intercepted query for %s (type %d) from %s", q.Name, q.Qtype, w.RemoteAddr())
 
+	resolvedIP := ip
+	if net.ParseIP(ip) == nil {
+		// Attempt resolution if it's not a numeric IP
+		ips, err := net.LookupIP(ip)
+		if err == nil && len(ips) > 0 {
+			for _, rIP := range ips {
+				if rIP.To4() != nil {
+					resolvedIP = rIP.String()
+					break
+				}
+			}
+
+			if resolvedIP == ip && len(ips) > 0 {
+				resolvedIP = ips[0].String()
+			}
+		}
+	}
+
 	switch q.Qtype {
 	case dns.TypeA, dns.TypeANY:
-		rr, err := dns.NewRR(fmt.Sprintf("%s 60 IN A %s", q.Name, ip))
-		if err == nil {
-			m.Answer = append(m.Answer, rr)
+		if net.ParseIP(resolvedIP) == nil || strings.Contains(resolvedIP, ":") {
+			// If it's still not a valid IPv4 address, we can't create an A record.
+			// Try CNAME as a fallback if it looks like a hostname.
+			if !strings.Contains(resolvedIP, ":") {
+				// Normalize hostname for CNAME
+				target := resolvedIP
+				if !strings.HasSuffix(target, ".") {
+					target += "."
+				}
 
-			log.Printf("[DNS] Returning A record %s -> %s", q.Name, ip)
+				rr, err := dns.NewRR(fmt.Sprintf("%s 60 IN CNAME %s", q.Name, target))
+				if err == nil {
+					m.Answer = append(m.Answer, rr)
+
+					log.Printf("[DNS] Returning CNAME record %s -> %s", q.Name, target)
+				} else {
+					log.Printf("[DNS] Error creating CNAME fallback for %s: %v", target, err)
+
+					m.Rcode = dns.RcodeServerFailure
+				}
+			} else {
+				m.Rcode = dns.RcodeServerFailure
+			}
 		} else {
-			log.Printf("[DNS] Error creating A record: %v", err)
+			rr, err := dns.NewRR(fmt.Sprintf("%s 60 IN A %s", q.Name, resolvedIP))
+			if err == nil {
+				m.Answer = append(m.Answer, rr)
+
+				log.Printf("[DNS] Returning A record %s -> %s", q.Name, resolvedIP)
+			} else {
+				log.Printf("[DNS] Error creating A record for %s: %v", resolvedIP, err)
+
+				m.Rcode = dns.RcodeServerFailure
+			}
 		}
 	case dns.TypeAAAA:
-		// Explicitly return SUCCESS with no data for AAAA to prevent fallback issues
-		log.Printf("[DNS] Returning empty AAAA success (NODATA) for %s", q.Name)
+		// Check if we have an IPv6 address
+		if net.ParseIP(resolvedIP) != nil && strings.Contains(resolvedIP, ":") {
+			rr, err := dns.NewRR(fmt.Sprintf("%s 60 IN AAAA %s", q.Name, resolvedIP))
+			if err == nil {
+				m.Answer = append(m.Answer, rr)
+
+				log.Printf("[DNS] Returning AAAA record %s -> %s", q.Name, resolvedIP)
+			} else {
+				log.Printf("[DNS] Error creating AAAA record for %s: %v", resolvedIP, err)
+
+				m.Rcode = dns.RcodeServerFailure
+			}
+		} else {
+			// Explicitly return SUCCESS with no data for AAAA to prevent fallback issues if no IPv6
+			log.Printf("[DNS] Returning empty AAAA success (NODATA) for %s", q.Name)
+		}
 	default:
 		log.Printf("[DNS] Returning empty success for type %d", q.Qtype)
 	}

@@ -373,3 +373,69 @@ func TestDNSDiscovery_MultipleUpstreams(t *testing.T) {
 		t.Fatal("Expected an answer from the second upstream")
 	}
 }
+
+func TestDNSDiscovery_HostnameServiceIP(t *testing.T) {
+	// Use localhost which should resolve to 127.0.0.1
+	serviceIP := "localhost"
+	upstreamDNS := []string{"8.8.8.8"}
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+
+	m := new(dns.Msg)
+	m.SetQuestion("api.bose.com.", dns.TypeA)
+
+	rw := &mockResponseWriter{}
+	d.ServeDNS(rw, m)
+
+	if rw.msg == nil {
+		t.Fatal("Expected a response message, got nil")
+	}
+
+	if len(rw.msg.Answer) == 0 {
+		t.Fatal("Expected an answer in the response")
+	}
+
+	if a, ok := rw.msg.Answer[0].(*dns.A); ok {
+		// It should be resolved to 127.0.0.1 (or whatever localhost resolves to)
+		if a.A.String() == "" {
+			t.Error("Expected a non-empty IP address")
+		}
+		log.Printf("Resolved localhost to %s", a.A.String())
+	} else if cname, ok := rw.msg.Answer[0].(*dns.CNAME); ok {
+		// Fallback to CNAME is also acceptable if resolution failed but it shouldn't for localhost
+		if cname.Target != "localhost." {
+			t.Errorf("Expected CNAME to localhost., got %s", cname.Target)
+		}
+	} else {
+		t.Errorf("Expected A or CNAME record, got %T", rw.msg.Answer[0])
+	}
+}
+
+func TestDNSDiscovery_UnresolvableHostname(t *testing.T) {
+	// Use a likely unresolvable hostname
+	serviceIP := "this.hostname.does.not.exist.at.all.invalid"
+	upstreamDNS := []string{"8.8.8.8"}
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+
+	m := new(dns.Msg)
+	m.SetQuestion("api.bose.com.", dns.TypeA)
+
+	rw := &mockResponseWriter{}
+	d.ServeDNS(rw, m)
+
+	if rw.msg == nil {
+		t.Fatal("Expected a response message, got nil")
+	}
+
+	if len(rw.msg.Answer) == 0 {
+		t.Fatal("Expected an answer in the response (CNAME fallback)")
+	}
+
+	if cname, ok := rw.msg.Answer[0].(*dns.CNAME); ok {
+		expected := serviceIP + "."
+		if cname.Target != expected {
+			t.Errorf("Expected CNAME to %s, got %s", expected, cname.Target)
+		}
+	} else {
+		t.Errorf("Expected CNAME record for unresolvable hostname, got %T", rw.msg.Answer[0])
+	}
+}
