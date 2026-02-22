@@ -287,73 +287,87 @@ func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
 		return
 	}
 
-	// Case 1: XML Migration
-	// Check if any URL in the current config points to our server (targetURL)
-	if summary.ParsedCurrentConfig != nil {
-		targetURL := m.ServerURL
-		// Strip protocol for comparison if needed, or just check for substring
-		parsedTarget, err := url.Parse(targetURL)
-		if err == nil {
-			targetHost := parsedTarget.Hostname()
-			if strings.Contains(summary.ParsedCurrentConfig.MargeServerUrl, targetHost) ||
-				strings.Contains(summary.ParsedCurrentConfig.StatsServerUrl, targetHost) ||
-				strings.Contains(summary.ParsedCurrentConfig.SwUpdateUrl, targetHost) ||
-				strings.Contains(summary.ParsedCurrentConfig.BmxRegistryUrl, targetHost) {
-				summary.IsMigrated = true
-				return
-			}
-		}
-	}
-
-	// Case 2: /etc/hosts + Trust CA Migration
-	// Check if /etc/hosts contains redirections for Bose domains
 	client := m.NewSSH(deviceIP)
 
+	if m.isXMLMigrated(summary) || m.isHostsMigrated(client, summary) || m.isResolvConfMigrated(client, summary) {
+		summary.IsMigrated = true
+	}
+}
+
+// isXMLMigrated checks whether current XML config already points to our server.
+func (m *Manager) isXMLMigrated(summary *MigrationSummary) bool {
+	if summary.ParsedCurrentConfig == nil {
+		return false
+	}
+
+	parsedTarget, err := url.Parse(m.ServerURL)
+	if err != nil {
+		return false
+	}
+
+	targetHost := parsedTarget.Hostname()
+
+	return strings.Contains(summary.ParsedCurrentConfig.MargeServerUrl, targetHost) ||
+		strings.Contains(summary.ParsedCurrentConfig.StatsServerUrl, targetHost) ||
+		strings.Contains(summary.ParsedCurrentConfig.SwUpdateUrl, targetHost) ||
+		strings.Contains(summary.ParsedCurrentConfig.BmxRegistryUrl, targetHost)
+}
+
+// isHostsMigrated checks if /etc/hosts contains Bose domain redirections and CA is trusted.
+func (m *Manager) isHostsMigrated(client SSHClient, summary *MigrationSummary) bool {
 	hostsContent, err := client.Run("cat /etc/hosts")
-	if err == nil {
-		boseDomains := []string{
-			"streaming.bose.com",
-			"updates.bose.com",
-			"stats.bose.com",
-			"bmx.bose.com",
-		}
-		for _, domain := range boseDomains {
-			if strings.Contains(hostsContent, domain) {
-				// If CA is also trusted, it's a strong indicator of migration
-				if summary.CACertTrusted {
-					summary.IsMigrated = true
-					return
-				}
-			}
+	if err != nil {
+		return false
+	}
+
+	boseDomains := []string{
+		"streaming.bose.com",
+		"updates.bose.com",
+		"stats.bose.com",
+		"bmx.bose.com",
+	}
+	for _, domain := range boseDomains {
+		if strings.Contains(hostsContent, domain) && summary.CACertTrusted {
+			return true
 		}
 	}
 
-	// Case 3: /etc/resolv.conf Migration (including Aftertouch hook)
-	// Check if /etc/resolv.conf contains our target nameserver OR if hook marker exists
-	if summary.SSHSuccess {
-		// Check for aftertouch.resolv.conf
-		if _, err := client.Run("[ -f /mnt/nv/aftertouch.resolv.conf ]"); err == nil {
-			if summary.CACertTrusted {
-				summary.IsMigrated = true
-				return
-			}
-		}
+	return false
+}
 
-		if summary.CurrentResolvConf != "" {
-			targetURL := m.ServerURL
-
-			parsedTarget, err := url.Parse(targetURL)
-			if err == nil {
-				targetHost := parsedTarget.Hostname()
-				if strings.Contains(summary.CurrentResolvConf, targetHost) {
-					if summary.CACertTrusted {
-						summary.IsMigrated = true
-						return
-					}
-				}
-			}
-		}
+// isResolvConfMigrated checks for Aftertouch DNS migration signals and CA trust.
+func (m *Manager) isResolvConfMigrated(client SSHClient, summary *MigrationSummary) bool {
+	// Hook file present
+	if _, err := client.Run("[ -f /mnt/nv/aftertouch.resolv.conf ]"); err == nil {
+		return summary.CACertTrusted
 	}
+
+	if summary.CurrentResolvConf == "" {
+		return false
+	}
+
+	// Marker comment present
+	if strings.Contains(summary.CurrentResolvConf, "# Priority nameserver for Bose service redirection") && summary.CACertTrusted {
+		return true
+	}
+
+	// Match hostname or resolved IP
+	parsedTarget, err := url.Parse(m.ServerURL)
+	if err != nil {
+		return false
+	}
+
+	targetHost := parsedTarget.Hostname()
+	if strings.Contains(summary.CurrentResolvConf, targetHost) && summary.CACertTrusted {
+		return true
+	}
+
+	resolvedIP := m.resolveIP(targetHost, client)
+	if resolvedIP != "" && strings.Contains(summary.CurrentResolvConf, resolvedIP) && summary.CACertTrusted {
+		return true
+	}
+
+	return false
 }
 
 // populateDeviceInfo fills in device information from datastore and live info

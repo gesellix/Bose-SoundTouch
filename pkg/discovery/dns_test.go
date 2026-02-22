@@ -167,6 +167,106 @@ func TestDNSDiscovery_StartTCP(t *testing.T) {
 	}
 }
 
+func TestDNSDiscovery_SelfForwarding(t *testing.T) {
+	serviceIP := "soundtouch.local"
+	upstreamDNS := []string{"127.0.0.1:5357"}
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+
+	// Mock upstream DNS server for soundtouch.local
+	mux := dns.NewServeMux()
+	mux.HandleFunc("soundtouch.local.", func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		rr, _ := dns.NewRR("soundtouch.local. 60 IN A 192.168.178.10")
+		m.Answer = append(m.Answer, rr)
+		_ = w.WriteMsg(m)
+	})
+	ts := &dns.Server{Addr: "127.0.0.1:5357", Net: "udp", Handler: mux, ReadTimeout: 100 * time.Millisecond, WriteTimeout: 100 * time.Millisecond}
+	go func() {
+		_ = ts.ListenAndServe()
+	}()
+	defer func() { _ = ts.Shutdown() }()
+
+	time.Sleep(100 * time.Millisecond)
+
+	m := new(dns.Msg)
+	m.SetQuestion("soundtouch.local.", dns.TypeA)
+	rw := &mockResponseWriter{}
+	d.ServeDNS(rw, m)
+
+	if rw.msg == nil {
+		t.Fatal("Expected a response for soundtouch.local")
+	}
+
+	if rw.msg.Rcode != dns.RcodeSuccess {
+		t.Errorf("Expected Success (0) for soundtouch.local being forwarded, got %d", rw.msg.Rcode)
+	}
+
+	if len(rw.msg.Answer) == 0 {
+		t.Fatal("Expected an answer in the response")
+	}
+
+	if a, ok := rw.msg.Answer[0].(*dns.A); ok {
+		if a.A.String() != "192.168.178.10" {
+			t.Errorf("Expected IP 192.168.178.10, got %s", a.A.String())
+		}
+	}
+
+	// Check if d.recordQuery logged it correctly.
+	d.mu.RLock()
+	host, exists := d.discovered["soundtouch.local"]
+	d.mu.RUnlock()
+
+	if !exists {
+		t.Error("Expected soundtouch.local to be recorded")
+	}
+	// It should NOT be intercepted anymore
+	if host != nil && host.IsIntercepted {
+		t.Error("Expected soundtouch.local NOT to be intercepted anymore, but forwarded")
+	}
+}
+
+func TestDNSDiscovery_ForwardLocal(t *testing.T) {
+	serviceIP := "192.168.1.100"
+	upstreamDNS := []string{"127.0.0.1:5356"}
+	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+
+	m := new(dns.Msg)
+	m.SetQuestion("someone-else.local.", dns.TypeA)
+	rw := &mockResponseWriter{}
+
+	// Start a mock upstream DNS server that returns SUCCESS for .local
+	mux := dns.NewServeMux()
+	mux.HandleFunc("someone-else.local.", func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		rr, _ := dns.NewRR("someone-else.local. 60 IN A 192.168.1.50")
+		m.Answer = append(m.Answer, rr)
+		_ = w.WriteMsg(m)
+	})
+	ts := &dns.Server{Addr: "127.0.0.1:5356", Net: "udp", Handler: mux, ReadTimeout: 100 * time.Millisecond, WriteTimeout: 100 * time.Millisecond}
+	go func() {
+		_ = ts.ListenAndServe()
+	}()
+	defer func() { _ = ts.Shutdown() }()
+
+	time.Sleep(100 * time.Millisecond)
+
+	d.ServeDNS(rw, m)
+
+	if rw.msg == nil {
+		t.Fatal("Expected a response message")
+	}
+
+	if rw.msg.Rcode != dns.RcodeSuccess {
+		t.Errorf("Expected Success (0) for .local being forwarded, got %d", rw.msg.Rcode)
+	}
+
+	if len(rw.msg.Answer) == 0 {
+		t.Fatal("Expected an answer in the response")
+	}
+}
+
 func TestDNSDiscovery_IsRunning(t *testing.T) {
 	serviceIP := "192.168.1.100"
 	upstreamDNS := []string{"8.8.8.8"}

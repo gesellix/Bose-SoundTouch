@@ -1409,6 +1409,58 @@ func TestCheckIsMigrated(t *testing.T) {
 		}
 	})
 
+	t.Run("ResolvConf Migrated (Marker)", func(t *testing.T) {
+		m.NewSSH = func(host string) SSHClient {
+			return &mockSSH{
+				runFunc: func(command string) (string, error) {
+					if command == "cat /etc/hosts" {
+						return "127.0.0.1\tlocalhost", nil
+					}
+					if command == "[ -f /mnt/nv/aftertouch.resolv.conf ]" {
+						return "", fmt.Errorf("not found")
+					}
+					return "", nil
+				},
+			}
+		}
+		summary := &MigrationSummary{
+			SSHSuccess:        true,
+			CACertTrusted:     true,
+			CurrentResolvConf: "# Priority nameserver for Bose service redirection\nnameserver 192.168.1.1\n",
+		}
+		m.checkIsMigrated(summary, "127.0.0.1")
+		if !summary.IsMigrated {
+			t.Errorf("Expected IsMigrated to be true for resolv.conf migration with marker comment")
+		}
+	})
+
+	t.Run("ResolvConf Migrated (IP)", func(t *testing.T) {
+		m.NewSSH = func(host string) SSHClient {
+			return &mockSSH{
+				runFunc: func(command string) (string, error) {
+					if command == "cat /etc/hosts" {
+						return "127.0.0.1\tlocalhost", nil
+					}
+					if command == "[ -f /mnt/nv/aftertouch.resolv.conf ]" {
+						return "", fmt.Errorf("not found")
+					}
+					// Mock resolveIP by mocking its SSH commands if any, or just wait for it to return targetHost
+					return "", nil
+				},
+			}
+		}
+		// m.ServerURL is "http://aftertouch:8000" in this test (see top of TestCheckIsMigrated)
+		summary := &MigrationSummary{
+			SSHSuccess:        true,
+			CACertTrusted:     true,
+			CurrentResolvConf: "nameserver aftertouch\n",
+		}
+		m.checkIsMigrated(summary, "127.0.0.1")
+		if !summary.IsMigrated {
+			t.Errorf("Expected IsMigrated to be true for resolv.conf migration with matching hostname/IP")
+		}
+	})
+
 	t.Run("Not Migrated", func(t *testing.T) {
 		m.NewSSH = func(host string) SSHClient {
 			return &mockSSH{
