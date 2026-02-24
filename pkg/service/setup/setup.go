@@ -4,6 +4,8 @@ package setup
 import (
 	"encoding/xml"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -118,15 +120,25 @@ type DeviceInfoXML struct {
 	DeviceID         string   `xml:"deviceID,attr" json:"deviceID"`
 	Name             string   `xml:"name" json:"name"`
 	Type             string   `xml:"type" json:"type"`
-	MaccAddress      string   `xml:"maccAddress" json:"maccAddress"`
-	SoftwareVer      string   `xml:"-" json:"softwareVersion"`
-	SerialNumber     string   `xml:"-" json:"serialNumber"`
+	ModuleType       string   `xml:"moduleType" json:"moduleType"`
 	MargeAccountUUID string   `xml:"margeAccountUUID" json:"margeAccountUUID"`
+	MargeURL         string   `xml:"margeURL" json:"margeURL"`
+	CountryCode      string   `xml:"countryCode" json:"countryCode"`
+	RegionCode       string   `xml:"regionCode" json:"regionCode"`
+	Variant          string   `xml:"variant" json:"variant"`
+	VariantMode      string   `xml:"variantMode" json:"variantMode"`
 	Components       []struct {
 		Category        string `xml:"componentCategory"`
 		SoftwareVersion string `xml:"softwareVersion"`
 		SerialNumber    string `xml:"serialNumber"`
 	} `xml:"components>component" json:"-"`
+	NetworkInfo []struct {
+		Type       string `xml:"type,attr"`
+		MacAddress string `xml:"macAddress"`
+		IPAddress  string `xml:"ipAddress"`
+	} `xml:"networkInfo" json:"networkInfo"`
+	SoftwareVer  string `xml:"-" json:"softwareVersion"`
+	SerialNumber string `xml:"-" json:"serialNumber"`
 }
 
 // GetLiveDeviceInfo fetches live information from the speaker's :8090/info endpoint.
@@ -146,10 +158,20 @@ func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	var infoXML DeviceInfoXML
-	if err := xml.NewDecoder(resp.Body).Decode(&infoXML); err != nil {
+	if err := m.parseDeviceInfoXML(resp.Body, &infoXML); err != nil {
 		return nil, fmt.Errorf("failed to decode info XML from %s: %w", infoURL, err)
 	}
 
+	return &infoXML, nil
+}
+
+// parseDeviceInfoXML is a helper method for parsing device info XML from a reader
+func (m *Manager) parseDeviceInfoXML(reader io.Reader, infoXML *DeviceInfoXML) error {
+	if err := xml.NewDecoder(reader).Decode(infoXML); err != nil {
+		return err
+	}
+
+	// Extract data from components
 	for _, comp := range infoXML.Components {
 		switch comp.Category {
 		case "SCM":
@@ -164,7 +186,18 @@ func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 		}
 	}
 
-	return &infoXML, nil
+	return nil
+}
+
+// GetPrimaryMacAddress returns the primary MAC address from the SCM network interface.
+func (d *DeviceInfoXML) GetPrimaryMacAddress() string {
+	for _, net := range d.NetworkInfo {
+		if net.Type == "SCM" && net.MacAddress != "" {
+			return net.MacAddress
+		}
+	}
+
+	return ""
 }
 
 // GetMigrationSummary returns a summary of the current and planned state of the speaker.
@@ -2032,12 +2065,19 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 		return fmt.Errorf("failed to get device info: %w", err)
 	}
 
+	log.Printf("Starting sync for device at %s: Name='%s', DeviceID='%s', SerialNumber='%s'",
+		deviceIP, info.Name, info.DeviceID, info.SerialNumber)
+
 	accountID := ""
 
-	deviceID := info.SerialNumber
+	// Use deviceID from /info as canonical identifier (MAC address)
+	deviceID := info.DeviceID
 	if deviceID == "" {
-		deviceID = deviceIP
+		log.Printf("No deviceID found in /info response for device '%s' at %s", info.Name, deviceIP)
+		return fmt.Errorf("no deviceID found in /info response for device at %s - cannot sync without canonical device identifier", deviceIP)
 	}
+
+	log.Printf("Using deviceID '%s' for sync operations (MAC address from /info)", deviceID)
 
 	if info.MargeAccountUUID != "" {
 		accountID = info.MargeAccountUUID

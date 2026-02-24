@@ -204,6 +204,17 @@ func main() {
 				Usage:   "Paths for internal requests (comma-separated or multiple flags)",
 				EnvVars: []string{"INTERNAL_PATHS"},
 			},
+			&cli.BoolFlag{
+				Name:    "migration-enabled",
+				Usage:   "Enable device directory migration from serial to MAC-based structure",
+				Value:   true,
+				EnvVars: []string{"MIGRATION_ENABLED"},
+			},
+			&cli.BoolFlag{
+				Name:    "migration-dry-run",
+				Usage:   "Log what would be migrated without actually doing it",
+				EnvVars: []string{"MIGRATION_DRY_RUN"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			config := loadConfig(c)
@@ -228,7 +239,7 @@ func main() {
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			sm.MgmtUsername = config.mgmtUsername
 			sm.MgmtPassword = config.mgmtPassword
-			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.enableSoundcorkProxy)
+			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.enableSoundcorkProxy, config.migrationEnabled, config.migrationDryRun)
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetSoundcorkURL(config.soundcorkURL)
 			server.SetHTTPServerURL(config.httpsServerURL)
@@ -378,6 +389,8 @@ type serviceConfig struct {
 	spotifyRedirectURI   string
 	mgmtUsername         string
 	mgmtPassword         string
+	migrationEnabled     bool
+	migrationDryRun      bool
 }
 
 func loadConfig(c *cli.Context) serviceConfig {
@@ -441,10 +454,11 @@ func loadConfig(c *cli.Context) serviceConfig {
 	spotifyRedirectURI := c.String("spotify-redirect-uri")
 	mgmtUsername := c.String("mgmt-username")
 	mgmtPassword := c.String("mgmt-password")
-
 	mirrorEnabled := c.Bool("mirror-enabled")
 	mirrorEndpoints := c.StringSlice("mirror-endpoints")
 	internalPaths := c.StringSlice("internal-paths")
+	migrationEnabled := c.Bool("migration-enabled")
+	migrationDryRun := c.Bool("migration-dry-run")
 
 	return serviceConfig{
 		port:                 port,
@@ -472,6 +486,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 		spotifyRedirectURI:   spotifyRedirectURI,
 		mgmtUsername:         mgmtUsername,
 		mgmtPassword:         mgmtPassword,
+		migrationEnabled:     migrationEnabled,
+		migrationDryRun:      migrationDryRun,
 	}
 }
 

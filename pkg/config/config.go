@@ -30,6 +30,10 @@ type Config struct {
 	// Cache settings
 	CacheEnabled bool          `env:"CACHE_ENABLED" default:"true"`
 	CacheTTL     time.Duration `env:"CACHE_TTL" default:"30s"`
+
+	// Migration settings (TODO: Remove after 3-4 releases when all devices are migrated)
+	MigrationEnabled bool `env:"MIGRATION_ENABLED" default:"true"`
+	MigrationDryRun  bool `env:"MIGRATION_DRY_RUN" default:"false"`
 }
 
 // DeviceConfig represents a configured SoundTouch device
@@ -48,6 +52,8 @@ func DefaultConfig() *Config {
 		PreferredDevices: []DeviceConfig{},
 		HTTPTimeout:      10 * time.Second,
 		UserAgent:        "Bose-SoundTouch-Go-Client/1.0",
+		MigrationEnabled: true, // TODO: Change to false after 3-4 releases
+		MigrationDryRun:  false,
 		CacheEnabled:     true,
 		CacheTTL:         30 * time.Second,
 	}

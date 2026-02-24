@@ -20,7 +20,7 @@ type healthResp struct {
 
 func TestHealthEndpoint(t *testing.T) {
 	r := chi.NewRouter()
-	srv := &Server{}
+	srv := NewServer(nil, nil, "http://localhost", false, false, false, false, false, false)
 	r.Get("/health", srv.HandleHealth)
 
 	ts := httptest.NewServer(r)

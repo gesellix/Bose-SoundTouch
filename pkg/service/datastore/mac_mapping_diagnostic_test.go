@@ -68,7 +68,7 @@ func TestMacMappingDiagnostic(t *testing.T) {
 	// Test 1: Check if the mapping was populated
 	t.Run("CheckMappingPopulation", func(t *testing.T) {
 		ds.idMutex.RLock()
-		serial, ok := ds.macToSerial[macAddress]
+		serial, ok := ds.deviceMappings[macAddress]
 		ds.idMutex.RUnlock()
 
 		if !ok {
@@ -131,8 +131,8 @@ func TestMacMappingDiagnostic(t *testing.T) {
 		uppercaseMAC := "A81B6A536A98"
 
 		ds.idMutex.RLock()
-		_, lowercaseOk := ds.macToSerial[lowercaseMAC]
-		_, uppercaseOk := ds.macToSerial[uppercaseMAC]
+		_, lowercaseOk := ds.deviceMappings[lowercaseMAC]
+		_, uppercaseOk := ds.deviceMappings[uppercaseMAC]
 		ds.idMutex.RUnlock()
 
 		t.Logf("Lowercase MAC '%s' in mapping: %v", lowercaseMAC, lowercaseOk)
@@ -151,8 +151,8 @@ func TestMacMappingDiagnostic(t *testing.T) {
 		ds.idMutex.RLock()
 		defer ds.idMutex.RUnlock()
 
-		t.Logf("Total mappings found: %d", len(ds.macToSerial))
-		for mac, serial := range ds.macToSerial {
+		t.Logf("Total mappings found: %d", len(ds.deviceMappings))
+		for mac, serial := range ds.deviceMappings {
 			t.Logf("  MAC '%s' -> Serial '%s'", mac, serial)
 		}
 	})

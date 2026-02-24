@@ -115,8 +115,8 @@ func TestMacAddressCaseSensitivity(t *testing.T) {
 
 			// Check mapping
 			ds.idMutex.RLock()
-			mappedSerial, hasMappingForRequest := ds.macToSerial[tc.macInRequest]
-			mappedSerialFromDeviceInfo, hasMappingForDeviceInfo := ds.macToSerial[tc.macInDeviceInfo]
+			mappedSerial, hasMappingForRequest := ds.deviceMappings[tc.macInRequest]
+			mappedSerialFromDeviceInfo, hasMappingForDeviceInfo := ds.deviceMappings[tc.macInDeviceInfo]
 			ds.idMutex.RUnlock()
 
 			t.Logf("%s:", tc.description)
@@ -235,7 +235,7 @@ func TestProductionScenarioSimulation(t *testing.T) {
 
 			// Check what actually got mapped
 			ds.idMutex.RLock()
-			for mac, serial := range ds.macToSerial {
+			for mac, serial := range ds.deviceMappings {
 				t.Logf("  Mapping: '%s' -> '%s'", mac, serial)
 			}
 			ds.idMutex.RUnlock()

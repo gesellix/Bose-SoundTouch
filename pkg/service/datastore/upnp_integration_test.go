@@ -60,7 +60,7 @@ func TestUPnPDiscoveryToDatastoreMapping_FullFlow(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + deviceMAC + `</macAddress>
-        <ipAddress>192.168.178.35</ipAddress>
+        <ipAddress>192.168.1.100</ipAddress>
     </networkInfo>
 </info>`
 	if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {
@@ -128,7 +128,7 @@ func TestUPnPDiscoveryToDatastoreMapping_FullFlow(t *testing.T) {
 		// Simulate UPnP discovery
 		discoveryService := discovery.NewService(5 * time.Second)
 		device := &models.DiscoveredDevice{
-			Host: "192.168.178.35",
+			Host: "192.168.1.100",
 			Port: 8091,
 			Name: "Initial Name",
 		}
@@ -156,9 +156,9 @@ func TestUPnPDiscoveryToDatastoreMapping_FullFlow(t *testing.T) {
 
 		// Verify mapping was created during initialization
 		ds.idMutex.RLock()
-		mappedSerial, hasMappingExact := ds.macToSerial[deviceMAC]
+		mappedSerial, hasMappingExact := ds.deviceMappings[deviceMAC]
 		normalizedMAC := normalizeMAC(deviceMAC)
-		mappedSerialNormalized, hasMappingNormalized := ds.macToSerial[normalizedMAC]
+		mappedSerialNormalized, hasMappingNormalized := ds.deviceMappings[normalizedMAC]
 		ds.idMutex.RUnlock()
 
 		t.Logf("Mapping check:")
@@ -372,7 +372,7 @@ func TestMACMappingPerformance(t *testing.T) {
 
 	// Verify total mappings (should be more than numMappings due to normalization)
 	ds.idMutex.RLock()
-	totalMappings := len(ds.macToSerial)
+	totalMappings := len(ds.deviceMappings)
 	ds.idMutex.RUnlock()
 
 	t.Logf("  Total mappings stored: %d (includes normalized versions)", totalMappings)

@@ -24,11 +24,11 @@ func exists(path string) bool {
 
 // DataStore represents the device and configuration storage.
 type DataStore struct {
-	DataDir      string
-	eventMutex   sync.RWMutex
-	deviceEvents map[string][]models.DeviceEvent
-	idMutex      sync.RWMutex
-	macToSerial  map[string]string
+	DataDir        string
+	eventMutex     sync.RWMutex
+	deviceEvents   map[string][]models.DeviceEvent
+	idMutex        sync.RWMutex
+	deviceMappings map[string]string
 }
 
 // normalizeMAC normalizes a MAC address to a consistent format
@@ -54,9 +54,9 @@ func NewDataStore(dataDir string) *DataStore {
 	}
 
 	return &DataStore{
-		DataDir:      dataDir,
-		deviceEvents: make(map[string][]models.DeviceEvent),
-		macToSerial:  make(map[string]string),
+		DataDir:        dataDir,
+		deviceEvents:   make(map[string][]models.DeviceEvent),
+		deviceMappings: make(map[string]string),
 	}
 }
 
@@ -72,22 +72,37 @@ func (ds *DataStore) AccountDevicesDir(account string) string {
 
 // AccountDeviceDir returns the directory path for a specific device within an account.
 func (ds *DataStore) AccountDeviceDir(account, device string) string {
+	// First, check if the device directory exists directly with the given deviceID
+	// This prioritizes MAC-based deviceIDs over legacy mappings
+	directPath := filepath.Join(ds.AccountDevicesDir(account), device)
+	if _, err := os.Stat(directPath); err == nil {
+		// Directory exists, use the direct deviceID (preferred for MAC-based IDs)
+		return directPath
+	}
+
+	// If direct path doesn't exist, check device mappings for backward compatibility
 	ds.idMutex.RLock()
 
-	serial, ok := ds.macToSerial[device]
+	mappedDevice, ok := ds.deviceMappings[device]
 	if !ok {
 		// Try with normalized MAC address
 		normalizedDevice := normalizeMAC(device)
-		serial, ok = ds.macToSerial[normalizedDevice]
+		mappedDevice, ok = ds.deviceMappings[normalizedDevice]
 	}
 
 	ds.idMutex.RUnlock()
 
 	if ok {
-		device = serial
+		// Use the mapped device only if it exists and the direct path doesn't
+		mappedPath := filepath.Join(ds.AccountDevicesDir(account), mappedDevice)
+		if _, err := os.Stat(mappedPath); err == nil {
+			return mappedPath
+		}
 	}
 
-	return filepath.Join(ds.AccountDevicesDir(account), device)
+	// If neither direct path nor mapping work, return the direct path
+	// (this allows new devices to be created with MAC-based IDs)
+	return directPath
 }
 
 // GetDeviceInfo retrieves device information for the specified account and device.
@@ -115,6 +130,7 @@ func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDevic
 			IPAddress  string `xml:"ipAddress"`
 			MacAddress string `xml:"macAddress"`
 		} `xml:"networkInfo"`
+		DiscoveryMethod string `xml:"discoveryMethod"`
 	}
 
 	if err := xml.Unmarshal(data, &info); err != nil {
@@ -122,9 +138,11 @@ func (ds *DataStore) GetDeviceInfo(account, device string) (*models.ServiceDevic
 	}
 
 	deviceInfo := &models.ServiceDeviceInfo{
-		DeviceID:    info.DeviceID,
-		ProductCode: fmt.Sprintf("%s %s", info.Type, info.ModuleType),
-		Name:        info.Name,
+		DeviceID:        info.DeviceID,
+		AccountID:       account, // Set AccountID from parameter
+		ProductCode:     fmt.Sprintf("%s %s", info.Type, info.ModuleType),
+		Name:            info.Name,
+		DiscoveryMethod: info.DiscoveryMethod,
 	}
 
 	for _, comp := range info.Components {
@@ -231,9 +249,8 @@ func (ds *DataStore) listDevicesInAccount(baseDir, accountName string) []models.
 		}
 
 		if err == nil && info != nil {
-			if info.MacAddress != "" && info.DeviceSerialNumber != "" {
-				ds.UpdateMapping(info.MacAddress, info.DeviceSerialNumber)
-			}
+			// Update bidirectional device mappings for resolution
+			ds.updateDeviceMappings(*info)
 
 			devices = append(devices, *info)
 		}
@@ -537,8 +554,9 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	}
 
 	type NetworkInfoXML struct {
-		Type      string `xml:"type,attr"`
-		IPAddress string `xml:"ipAddress"`
+		Type       string `xml:"type,attr"`
+		IPAddress  string `xml:"ipAddress"`
+		MacAddress string `xml:"macAddress"`
 	}
 
 	type InfoXML struct {
@@ -584,8 +602,9 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 		},
 		NetworkInfo: []NetworkInfoXML{
 			{
-				Type:      "SCM",
-				IPAddress: info.IPAddress,
+				Type:       "SCM",
+				IPAddress:  info.IPAddress,
+				MacAddress: info.MacAddress,
 			},
 		},
 		DiscoveryMethod: info.DiscoveryMethod,
@@ -605,6 +624,11 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 func (ds *DataStore) RemoveDevice(account, device string) error {
 	dir := ds.AccountDeviceDir(account, device)
 	return os.RemoveAll(dir)
+}
+
+// RemoveDeviceDir is an alias for RemoveDevice for backwards compatibility.
+func (ds *DataStore) RemoveDeviceDir(account, device string) error {
+	return ds.RemoveDevice(account, device)
 }
 
 // GetConfiguredSources retrieves all configured sources for the specified account and device.
@@ -675,7 +699,32 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
-// UpdateMapping updates the mapping between MAC address and serial number.
+// updateDeviceMappings creates bidirectional mappings for device resolution
+func (ds *DataStore) updateDeviceMappings(info models.ServiceDeviceInfo) {
+	ds.idMutex.Lock()
+	defer ds.idMutex.Unlock()
+
+	deviceID := info.DeviceID
+	macAddress := info.MacAddress
+	deviceSerial := info.DeviceSerialNumber
+
+	// If device is stored with MAC as deviceID and has a serial, create backward mapping
+	if isMACAddressFormat(deviceID) && deviceSerial != "" && deviceSerial != deviceID {
+		ds.deviceMappings[deviceSerial] = deviceID
+	}
+
+	// If device is stored with serial as deviceID and has a MAC, create forward mapping
+	if !isMACAddressFormat(deviceID) && macAddress != "" {
+		ds.deviceMappings[macAddress] = deviceID
+		// Also store normalized MAC version
+		normalizedMAC := normalizeMAC(macAddress)
+		if normalizedMAC != macAddress {
+			ds.deviceMappings[normalizedMAC] = deviceID
+		}
+	}
+}
+
+// UpdateMapping maintains backward compatibility for external callers
 func (ds *DataStore) UpdateMapping(mac, serial string) {
 	if mac == "" || serial == "" {
 		return
@@ -684,13 +733,55 @@ func (ds *DataStore) UpdateMapping(mac, serial string) {
 	ds.idMutex.Lock()
 	defer ds.idMutex.Unlock()
 
-	// Store both the original MAC and the normalized version
-	ds.macToSerial[mac] = serial
+	// In the new system, MAC addresses are preferred as deviceIDs
+	// So map the serial TO the MAC (reverse of old system)
+	ds.deviceMappings[serial] = mac
+
+	// Also map MAC to serial for any remaining legacy code
+	ds.deviceMappings[mac] = serial
 
 	normalizedMAC := normalizeMAC(mac)
 	if normalizedMAC != mac {
-		ds.macToSerial[normalizedMAC] = serial
+		ds.deviceMappings[normalizedMAC] = serial
 	}
+}
+
+// isMACAddressFormat checks if a string looks like a MAC address
+func isMACAddressFormat(s string) bool {
+	// AABBCCDDEEFF format
+	if len(s) == 12 {
+		return isHexOnly(s)
+	}
+
+	// AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF format
+	if len(s) == 17 && (strings.Contains(s, ":") || strings.Contains(s, "-")) {
+		s = strings.ReplaceAll(s, "-", ":")
+
+		parts := strings.Split(s, ":")
+		if len(parts) != 6 {
+			return false
+		}
+
+		for _, part := range parts {
+			if len(part) != 2 || !isHexOnly(part) {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return false
+}
+
+func isHexOnly(s string) bool {
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'A' || r > 'F') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Initialize creates the necessary directory structure for the datastore and populates ID mappings.

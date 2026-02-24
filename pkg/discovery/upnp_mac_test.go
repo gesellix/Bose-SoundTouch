@@ -72,7 +72,7 @@ func TestUPnP_EnrichDeviceInfo_RealDeviceXML(t *testing.T) {
 
 	// Create a discovered device to enrich
 	device := &models.DiscoveredDevice{
-		Host: "192.168.178.35",
+		Host: "192.168.1.100",
 		Port: 8091,
 		Name: "Initial Device Name",
 	}
@@ -197,7 +197,7 @@ func TestUPnP_MACAddressDiscovery_Integration(t *testing.T) {
 
 func TestUPnP_URLPattern_Realistic(t *testing.T) {
 	// Test the exact URL pattern mentioned:
-	// http://192.168.178.35:8091/XD/BO5EBO5E-F00D-F00D-FEED-A81B6A536A98.xml
+	// http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-A81B6A536A98.xml
 
 	realDeviceXML := `<?xml version="1.0" encoding="utf-8"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0">
@@ -224,7 +224,7 @@ func TestUPnP_URLPattern_Realistic(t *testing.T) {
 
 	// Test enrichment using the realistic URL path
 	device := &models.DiscoveredDevice{
-		Host: "192.168.178.35",
+		Host: "192.168.1.100",
 		Port: 8091,
 		Name: "Initial Name",
 	}

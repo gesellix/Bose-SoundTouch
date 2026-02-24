@@ -148,7 +148,7 @@ func TestListAllDevices(t *testing.T) {
 	info := &models.ServiceDeviceInfo{
 		DeviceID:           deviceID,
 		Name:               "Test Speaker",
-		IPAddress:          "192.168.178.28",
+		IPAddress:          "192.168.1.100",
 		DeviceSerialNumber: deviceID,
 		ProductCode:        "SoundTouch 10",
 		FirmwareVersion:    "1.2.3",
