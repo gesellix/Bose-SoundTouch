@@ -379,7 +379,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 	log.Printf("UPnP: Successfully parsed device from location: %s at %s:%d", device.Name, device.Host, device.Port)
 
 	// Try to get more device info from the location URL
-	if err := d.enrichDeviceInfo(device, location); err != nil {
+	if err := d.EnrichDeviceInfo(device, location); err != nil {
 		log.Printf("UPnP: Could not enrich device info from location '%s': %v", location, err)
 		// Don't fail if we can't get additional info
 		// The basic info from URL parsing should be sufficient
@@ -422,8 +422,8 @@ func (d *Service) parseLocationURL(location, usn string) (*models.DiscoveredDevi
 	return device, nil
 }
 
-// enrichDeviceInfo tries to get additional device information from the device description
-func (d *Service) enrichDeviceInfo(device *models.DiscoveredDevice, location string) error {
+// EnrichDeviceInfo tries to get additional device information from the device description
+func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location string) error {
 	log.Printf("UPnP: Attempting to enrich device info by fetching %s", location)
 
 	resp, err := d.httpClient.Get(location)

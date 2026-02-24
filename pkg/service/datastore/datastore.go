@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,21 @@ type DataStore struct {
 	deviceEvents map[string][]models.DeviceEvent
 	idMutex      sync.RWMutex
 	macToSerial  map[string]string
+}
+
+// normalizeMAC normalizes a MAC address to a consistent format
+func normalizeMAC(mac string) string {
+	if mac == "" {
+		return ""
+	}
+	// Remove spaces and common separators, then convert to uppercase
+	mac = strings.TrimSpace(mac)
+	mac = strings.ReplaceAll(mac, " ", "")
+	mac = strings.ReplaceAll(mac, ":", "")
+	mac = strings.ReplaceAll(mac, "-", "")
+	mac = strings.ToUpper(mac)
+
+	return mac
 }
 
 // NewDataStore creates a new DataStore.
@@ -57,7 +73,14 @@ func (ds *DataStore) AccountDevicesDir(account string) string {
 // AccountDeviceDir returns the directory path for a specific device within an account.
 func (ds *DataStore) AccountDeviceDir(account, device string) string {
 	ds.idMutex.RLock()
+
 	serial, ok := ds.macToSerial[device]
+	if !ok {
+		// Try with normalized MAC address
+		normalizedDevice := normalizeMAC(device)
+		serial, ok = ds.macToSerial[normalizedDevice]
+	}
+
 	ds.idMutex.RUnlock()
 
 	if ok {
@@ -661,7 +684,13 @@ func (ds *DataStore) UpdateMapping(mac, serial string) {
 	ds.idMutex.Lock()
 	defer ds.idMutex.Unlock()
 
+	// Store both the original MAC and the normalized version
 	ds.macToSerial[mac] = serial
+
+	normalizedMAC := normalizeMAC(mac)
+	if normalizedMAC != mac {
+		ds.macToSerial[normalizedMAC] = serial
+	}
 }
 
 // Initialize creates the necessary directory structure for the datastore and populates ID mappings.

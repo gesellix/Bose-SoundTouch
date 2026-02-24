@@ -17,6 +17,7 @@ Welcome to the documentation for the Bose SoundTouch Toolkit. This toolkit helps
 - [HTTPS Setup](guides/HTTPS-SETUP.md)
 - [Deployment Guide](guides/DEPLOYMENT.md)
 - [Raspberry Pi Setup](guides/RASPBERRY-PI.md)
+- [MAC Address Mapping](guides/MAC-ADDRESS-MAPPING.md)
 - [Troubleshooting](guides/TROUBLESHOOTING.md)
 
 ### Technical Reference

@@ -35,7 +35,7 @@ func TestEnrichDeviceInfo(t *testing.T) {
 
 	service := NewService(1 * time.Second)
 	service.httpClient = server.Client()
-	err := service.enrichDeviceInfo(device, server.URL)
+	err := service.EnrichDeviceInfo(device, server.URL)
 
 	if err != nil {
 		t.Fatalf("enrichDeviceInfo failed: %v", err)

@@ -9,6 +9,7 @@
 * [Getting Started](guides/GETTING-STARTED.md)
 * [SoundTouch Service](guides/SOUNDTOUCH-SERVICE.md)
 * [Initial Device Setup](guides/DEVICE-INITIAL-SETUP.md)
+* [MAC Address Mapping](guides/MAC-ADDRESS-MAPPING.md)
 * [HTTPS Setup](guides/HTTPS-SETUP.md)
 * [Deployment](guides/DEPLOYMENT.md)
 * [Raspberry Pi Guide](guides/RASPBERRY-PI.md)
