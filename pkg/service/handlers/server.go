@@ -705,14 +705,13 @@ func (s *Server) findExistingDeviceID(d models.DiscoveredDevice) string {
 
 // findAllExistingDeviceVariants finds all existing device entries that could represent the same physical device
 func (s *Server) findAllExistingDeviceVariants(d models.DiscoveredDevice, liveInfo *setup.DeviceInfoXML) []models.ServiceDeviceInfo {
-	log.Printf("Searching for existing device variants with criteria:")
-	log.Printf("  Discovery IP: %s", d.Host)
-	log.Printf("  Discovery Serial: %s", d.SerialNo)
-	log.Printf("  Live Info Serial: %s", liveInfo.SerialNumber)
-	log.Printf("  Live Info Name: %s", liveInfo.Name)
-	log.Printf("  Live Info MAC: %s", liveInfo.GetPrimaryMacAddress())
-	log.Printf("  Live Info Product: %s %s", liveInfo.Type, liveInfo.ModuleType)
-
+	// log.Printf("Searching for existing device variants with criteria:")
+	// log.Printf("  Discovery IP: %s", d.Host)
+	// log.Printf("  Discovery Serial: %s", d.SerialNo)
+	// log.Printf("  Live Info Serial: %s", liveInfo.SerialNumber)
+	// log.Printf("  Live Info Name: %s", liveInfo.Name)
+	// log.Printf("  Live Info MAC: %s", liveInfo.GetPrimaryMacAddress())
+	// log.Printf("  Live Info Product: %s %s", liveInfo.Type, liveInfo.ModuleType)
 	allDevices, err := s.ds.ListAllDevices()
 	if err != nil {
 		return nil

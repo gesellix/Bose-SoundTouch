@@ -800,14 +800,14 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, httpsServerURL string) {
 	// Add custom error logging and connection state tracking
 	tlsConfig.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		log.Printf("[TLS] Certificate request for ServerName: %s", clientHello.ServerName)
+		// log.Printf("[TLS] Certificate request for ServerName: %s", clientHello.ServerName)
 
 		// Use the default certificate selection logic
 		for _, cert := range tlsConfig.Certificates {
 			if cert.Leaf != nil {
 				for _, name := range cert.Leaf.DNSNames {
 					if matchesDomain(name, clientHello.ServerName) {
-						log.Printf("[TLS] ✅ Serving certificate for %s (matched %s)", clientHello.ServerName, name)
+						// log.Printf("[TLS] ✅ Serving certificate for %s (matched %s)", clientHello.ServerName, name)
 						return &cert, nil
 					}
 				}
@@ -816,7 +816,7 @@ func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, h
 
 		// If no specific match, return the first certificate and log it
 		if len(tlsConfig.Certificates) > 0 {
-			log.Printf("[TLS] ⚠️ No exact match for %s, using default certificate", clientHello.ServerName)
+			// log.Printf("[TLS] ⚠️ No exact match for %s, using default certificate", clientHello.ServerName)
 			return &tlsConfig.Certificates[0], nil
 		}
 
@@ -922,8 +922,6 @@ func (c *loggingTLSConn) Read(b []byte) (n int, err error) {
 				strings.Contains(err.Error(), "certificate") {
 				log.Printf("[TLS] ❌ Handshake failed from %s: %v", c.addr, err)
 			}
-		} else if n > 0 {
-			log.Printf("[TLS] ✅ Successful connection from %s", c.addr)
 		}
 	}
 
