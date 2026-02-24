@@ -33,16 +33,23 @@ The `soundtouch-service` now includes a built-in HTTPS listener. This simplifies
 
 - **HTTPS Port**: Configurable via `HTTPS_PORT` environment variable (defaults to `8443`).
 - **HTTPS Server URL**: Configurable via `HTTPS_SERVER_URL` (e.g., `https://mysoundtouch.local:8443`). If not set, the service attempts to guess it using the system hostname.
-- **Domain Coverage**: Automatically presents a certificate for `streaming.bose.com`, `updates.bose.com`, `stats.bose.com`, `bmx.bose.com`, and `content.api.bose.io`.
+- **Domain Coverage**: Automatically presents a certificate with comprehensive coverage using wildcard certificates (`*.api.bose.io`, `*.api.bosecm.com`) plus specific domains (`streaming.bose.com`, `updates.bose.com`, `stats.bose.com`, `bmx.bose.com`, `worldwide.bose.com`, `bose-prod.apigee.net`, etc.).
+- **Wildcard Support**: Uses RFC-compliant wildcard certificates for automatic coverage of all API subdomains, including event analytics endpoints like `events.api.bosecm.com`, `eventsdev.api.bosecm.com`, and future API services.
+- **TLS Error Logging**: Comprehensive logging of TLS handshake attempts, certificate matching, and connection failures for debugging DNS redirection issues.
 - **Automatic Setup**: On first start, it generates a server certificate signed by your AfterTouch local Root CA.
 
-#### TLS Security
+#### TLS Security & Debugging
 
 The built-in HTTPS listener is configured to use modern and secure TLS settings while maintaining compatibility with SoundTouch devices (which support up to TLS 1.2 with OpenSSL 1.0.2).
 
 - **Minimum TLS Version**: TLS 1.2
 - **Preferred Cipher Suites**:
   - `ECDHE-RSA-AES128-GCM-SHA256`
+- **TLS Debugging**: Detailed logging of:
+  - Certificate requests by domain (`[TLS] Certificate request for ServerName: events.api.bosecm.com`)
+  - Wildcard certificate matching (`[TLS] ✅ Serving certificate for events.api.bosecm.com (matched *.api.bosecm.com)`)
+  - Handshake failures (`[TLS] ❌ Handshake failed from 192.168.1.50: tls: certificate not found`)
+  - Successful connections (`[TLS] ✅ Successful connection from 192.168.1.50`)
   - `ECDHE-RSA-AES256-GCM-SHA384`
   - `ECDHE-RSA-CHACHA20-POLY1305`
   - `RSA-AES128-GCM-SHA256` (Legacy support)

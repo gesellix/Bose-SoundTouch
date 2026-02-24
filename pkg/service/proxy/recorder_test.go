@@ -52,7 +52,7 @@ func TestRecorder_Record_Structure(t *testing.T) {
 		{
 			name:     "path_with_ip",
 			category: "self",
-			path:     "/setup/info/192.168.178.35",
+			path:     "/setup/info/192.168.1.100",
 			expected: "setup/info/{ip}",
 		},
 		{
@@ -131,7 +131,7 @@ func TestRecorder_Record_Sanitization(t *testing.T) {
 	req := &http.Request{
 		Method: "GET",
 		URL: &url.URL{
-			Path: "/info/192.168.178.35/A81B6A536A98",
+			Path: "/info/192.168.1.100/A81B6A536A98",
 		},
 		Header: make(http.Header),
 	}
@@ -331,7 +331,7 @@ func TestRecorder_EnvFile(t *testing.T) {
 	req := &http.Request{
 		Method: "GET",
 		URL: &url.URL{
-			Path: "/info/192.168.178.35",
+			Path: "/info/192.168.1.100",
 		},
 		Header: make(http.Header),
 	}
@@ -352,8 +352,8 @@ func TestRecorder_EnvFile(t *testing.T) {
 		t.Fatalf("Failed to unmarshal env file: %v", err)
 	}
 
-	if content["session"]["ip"] != "192.168.178.35" {
-		t.Errorf("Expected ip to be 192.168.178.35, got %s", content["session"]["ip"])
+	if content["session"]["ip"] != "192.168.1.100" {
+		t.Errorf("Expected ip to be 192.168.1.100, got %s", content["session"]["ip"])
 	}
 }
 

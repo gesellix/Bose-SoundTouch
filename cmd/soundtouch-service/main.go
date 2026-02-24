@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -477,15 +478,23 @@ func loadConfig(c *cli.Context) serviceConfig {
 
 func getDomains(serverURL, httpsServerURL, hostname string) []string {
 	domainsMap := map[string]bool{
-		"streaming.bose.com":  true,
-		"updates.bose.com":    true,
-		"stats.bose.com":      true,
-		"bmx.bose.com":        true,
-		"content.api.bose.io": true,
-		setup.TestDomain:      true,
-		hostname:              true,
-		"localhost":           true,
-		"127.0.0.1":           true,
+		// RFC-compliant wildcards for API patterns
+		"*.api.bose.io":    true,
+		"*.api.bosecm.com": true,
+		// Core Bose domains (keep specific ones for clarity)
+		"streaming.bose.com":   true,
+		"updates.bose.com":     true,
+		"stats.bose.com":       true,
+		"bmx.bose.com":         true,
+		"worldwide.bose.com":   true,
+		"music.api.bose.com":   true,
+		"bose-prod.apigee.net": true,
+		"bose-test.apigee.net": true,
+		// Local service domains
+		setup.TestDomain: true,
+		hostname:         true,
+		"localhost":      true,
+		"127.0.0.1":      true,
 	}
 
 	if u, err := url.Parse(serverURL); err == nil && u.Hostname() != "" {
@@ -773,17 +782,134 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 }
 
 func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, httpsServerURL string) {
+	// Add custom error logging and connection state tracking
+	tlsConfig.GetCertificate = func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		log.Printf("[TLS] Certificate request for ServerName: %s", clientHello.ServerName)
+
+		// Use the default certificate selection logic
+		for _, cert := range tlsConfig.Certificates {
+			if cert.Leaf != nil {
+				for _, name := range cert.Leaf.DNSNames {
+					if matchesDomain(name, clientHello.ServerName) {
+						log.Printf("[TLS] ✅ Serving certificate for %s (matched %s)", clientHello.ServerName, name)
+						return &cert, nil
+					}
+				}
+			}
+		}
+
+		// If no specific match, return the first certificate and log it
+		if len(tlsConfig.Certificates) > 0 {
+			log.Printf("[TLS] ⚠️ No exact match for %s, using default certificate", clientHello.ServerName)
+			return &tlsConfig.Certificates[0], nil
+		}
+
+		log.Printf("[TLS] ❌ No certificate available for %s", clientHello.ServerName)
+
+		return nil, fmt.Errorf("no certificate available for %s", clientHello.ServerName)
+	}
+
 	httpsServer := &http.Server{
 		Addr:      httpsAddr,
 		Handler:   r,
 		TLSConfig: tlsConfig,
+		ErrorLog:  log.Default(), // Ensure error logging is enabled
 	}
 
 	log.Printf("Go service starting HTTPS on %s", httpsServerURL)
 
 	go func() {
-		if err := httpsServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+		listener, err := net.Listen("tcp", httpsAddr)
+		if err != nil {
+			log.Printf("[TLS] Failed to create listener: %v", err)
+			return
+		}
+
+		tlsListener := tls.NewListener(listener, tlsConfig)
+
+		// Wrap listener to log connection attempts
+		wrappedListener := &loggingTLSListener{
+			Listener: tlsListener,
+		}
+
+		if err := httpsServer.Serve(wrappedListener); err != nil && err != http.ErrServerClosed {
 			log.Printf("HTTPS server error: %v", err)
 		}
 	}()
+}
+
+// matchesDomain checks if a certificate domain (which may be a wildcard) matches a server name
+func matchesDomain(certDomain, serverName string) bool {
+	if certDomain == serverName {
+		return true
+	}
+
+	// Handle wildcard certificates (only at the beginning of a label)
+	if strings.HasPrefix(certDomain, "*.") {
+		certBase := certDomain[2:] // Remove "*."
+
+		// For *.api.bose.io to match events.api.bose.io but not test.content.api.bose.io
+		// We need to ensure only one label is replaced by the wildcard
+		if strings.HasSuffix(serverName, "."+certBase) {
+			// Count dots to ensure we're not matching too many levels
+			serverPrefix := strings.TrimSuffix(serverName, "."+certBase)
+			if !strings.Contains(serverPrefix, ".") {
+				return true
+			}
+		}
+
+		// Also match the base domain (e.g., api.bose.io matches *.api.bose.io)
+		if serverName == certBase {
+			return true
+		}
+	}
+
+	return false
+}
+
+// loggingTLSListener wraps a TLS listener to log connection attempts and handshake failures
+type loggingTLSListener struct {
+	net.Listener
+}
+
+func (l *loggingTLSListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	// Wrap the connection to log TLS handshake results
+	return &loggingTLSConn{
+		Conn: conn,
+		addr: conn.RemoteAddr(),
+	}, nil
+}
+
+// loggingTLSConn wraps a TLS connection to log handshake failures
+type loggingTLSConn struct {
+	net.Conn
+	addr            net.Addr
+	handshakeLogged bool
+}
+
+func (c *loggingTLSConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+
+	// Log TLS handshake failures on first read attempt
+	if !c.handshakeLogged {
+		c.handshakeLogged = true
+
+		if err != nil {
+			// Check if this looks like a TLS handshake failure
+			if strings.Contains(err.Error(), "tls:") ||
+				strings.Contains(err.Error(), "handshake") ||
+				strings.Contains(err.Error(), "certificate") {
+				log.Printf("[TLS] ❌ Handshake failed from %s: %v", c.addr, err)
+			}
+		} else if n > 0 {
+			log.Printf("[TLS] ✅ Successful connection from %s", c.addr)
+		}
+	}
+
+	return n, err
 }

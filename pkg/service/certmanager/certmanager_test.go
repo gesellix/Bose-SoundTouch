@@ -103,7 +103,7 @@ func TestCertificateManager(t *testing.T) {
 	}
 
 	// Test certificate regeneration if domains change
-	newDomains := append(domains, "mac.fritz.box")
+	newDomains := append(domains, "foo.local")
 	tlsConfig2, err := cm.GetServerTLSConfig(newDomains)
 	if err != nil {
 		t.Fatalf("Failed to get updated TLS config: %v", err)
@@ -116,7 +116,7 @@ func TestCertificateManager(t *testing.T) {
 		cert, _ := x509.ParseCertificate(block.Bytes)
 		found := false
 		for _, d := range cert.DNSNames {
-			if d == "mac.fritz.box" {
+			if d == "foo.local" {
 				found = true
 				break
 			}
