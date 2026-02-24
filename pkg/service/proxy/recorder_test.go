@@ -847,3 +847,99 @@ func TestRecorder_ListInteractions_FullTimestamp(t *testing.T) {
 		}
 	})
 }
+
+func TestRecorder_NewFilenameFormat_WithDate(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "recorder-new-format-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	r := NewRecorder(tmpDir)
+	sessionID := "20260223-150000-12345"
+	r.SessionID = sessionID
+
+	// Create recordings with the new format that includes date in filename
+	basePath := filepath.Join(tmpDir, "interactions", sessionID, "self", "test")
+	os.MkdirAll(basePath, 0755)
+
+	files := []string{
+		"0047-20260223-215306.128-GET.http",
+		"0048-20260223-215306.417-POST.http",
+		"0049-20260223-080034.500-GET.http",
+		"0050-20260223-080034.507-PUT.http",
+	}
+
+	for _, f := range files {
+		os.WriteFile(filepath.Join(basePath, f), []byte("test content"), 0644)
+	}
+
+	t.Run("Parse_New_Format_Timestamps", func(t *testing.T) {
+		interactions, err := r.ListInteractions(sessionID, "", "")
+		if err != nil {
+			t.Fatalf("ListInteractions failed: %v", err)
+		}
+
+		if len(interactions) != 4 {
+			t.Fatalf("Expected 4 interactions, got %d", len(interactions))
+		}
+
+		// Check that timestamps include both date and time from filename
+		expectedTimestamps := []string{
+			"2026-02-23 21:53:06.128",
+			"2026-02-23 21:53:06.417",
+			"2026-02-23 08:00:34.500",
+			"2026-02-23 08:00:34.507",
+		}
+
+		for i, interaction := range interactions {
+			if interaction.Timestamp != expectedTimestamps[i] {
+				t.Errorf("Expected timestamp %s, got %s for interaction %d",
+					expectedTimestamps[i], interaction.Timestamp, i)
+			}
+		}
+	})
+
+	t.Run("Parse_Methods_From_New_Format", func(t *testing.T) {
+		interactions, err := r.ListInteractions(sessionID, "", "")
+		if err != nil {
+			t.Fatalf("ListInteractions failed: %v", err)
+		}
+
+		expectedMethods := []string{"GET", "POST", "GET", "PUT"}
+		for i, interaction := range interactions {
+			if interaction.Method != expectedMethods[i] {
+				t.Errorf("Expected method %s, got %s for interaction %d",
+					expectedMethods[i], interaction.Method, i)
+			}
+		}
+	})
+
+	t.Run("Filter_By_New_Format_Timestamp", func(t *testing.T) {
+		// Filter for interactions after 10:00:00 on that day
+		interactions, err := r.ListInteractions(sessionID, "", "2026-02-23 10:00:00")
+		if err != nil {
+			t.Fatalf("ListInteractions failed: %v", err)
+		}
+
+		// Should get the two evening interactions (21:53:06.xxx)
+		if len(interactions) != 2 {
+			t.Fatalf("Expected 2 interactions after 10:00:00, got %d", len(interactions))
+		}
+
+		for _, interaction := range interactions {
+			if !strings.Contains(interaction.Timestamp, "21:53:06") {
+				t.Errorf("Expected evening timestamp, got %s", interaction.Timestamp)
+			}
+		}
+	})
+
+	t.Run("GetFullTimestamp_New_Format", func(t *testing.T) {
+		// Test the getFullTimestamp function directly
+		fullTS := r.getFullTimestamp(sessionID, "0047-20260223-215306.128-GET.http")
+		expected := "2026-02-23-21-53-06.128"
+		if fullTS != expected {
+			t.Errorf("Expected full timestamp %s, got %s", expected, fullTS)
+		}
+	})
+}

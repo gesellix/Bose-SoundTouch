@@ -215,7 +215,7 @@ func (r *Recorder) getRecordingDir(category string, sanitizedSegments []string) 
 }
 
 func (r *Recorder) getRecordingPath(dir, method string) string {
-	timestamp := time.Now().Format("15-04-05.000")
+	timestamp := time.Now().Format("20060102-150405.000")
 	count := atomic.AddUint64(&r.counter, 1)
 	filename := fmt.Sprintf("%04d-%s-%s.http", count, timestamp, method)
 
@@ -441,34 +441,49 @@ func (r *Recorder) parseInteractionFile(rel, path string, parts []string) (Inter
 	filename := parts[len(parts)-1]
 	fnParts := strings.Split(strings.TrimSuffix(filename, ".http"), "-")
 
-	date := ""
-	if len(sessionID) >= 8 {
-		date = sessionID[0:4] + "-" + sessionID[4:6] + "-" + sessionID[6:8]
+	timestamp := ""
+	method, counter := "UNKNOWN", 0
+
+	if len(fnParts) >= 1 {
+		_, _ = fmt.Sscanf(fnParts[0], "%d", &counter)
 	}
 
-	timestamp := ""
+	// Check if this is the new format: count-yyyyMMdd-HHMMSS.sss-method.http
+	// New format has 4 parts and the second part is 8 digits (yyyyMMdd)
+	if len(fnParts) == 4 && len(fnParts[1]) == 8 {
+		dateStr := fnParts[1] // yyyyMMdd
+		timeStr := fnParts[2] // HHMMSS.sss
+		method = fnParts[3]
 
-	if len(fnParts) >= 4 {
+		// Format date: yyyyMMdd -> yyyy-MM-dd
+		date := dateStr[0:4] + "-" + dateStr[4:6] + "-" + dateStr[6:8]
+
+		// Format time: HHMMSS.sss -> HH:MM:SS.sss
+		if len(timeStr) >= 6 {
+			time := timeStr[0:2] + ":" + timeStr[2:4] + ":" + timeStr[4:]
+			timestamp = date + " " + time
+		}
+	} else if len(fnParts) >= 5 {
+		// Legacy format: count-HH-MM-SS.sss-method.http
+		// Extract date from sessionID for backward compatibility
+		date := ""
+		if len(sessionID) >= 8 {
+			date = sessionID[0:4] + "-" + sessionID[4:6] + "-" + sessionID[6:8]
+		}
+
 		timeStr := fnParts[1] + ":" + fnParts[2] + ":" + fnParts[3]
 		timestamp = timeStr
 
 		if date != "" {
 			timestamp = date + " " + timeStr
 		}
+
+		method = fnParts[4]
 	}
 
 	requestPath := "/" + strings.Join(parts[2:len(parts)-1], "/")
 	if requestPath == "/root" {
 		requestPath = "/"
-	}
-
-	method, counter := "UNKNOWN", 0
-	if len(fnParts) >= 1 {
-		_, _ = fmt.Sscanf(fnParts[0], "%d", &counter)
-	}
-
-	if len(fnParts) >= 5 {
-		method = fnParts[4]
 	}
 
 	return Interaction{
@@ -485,18 +500,32 @@ func (r *Recorder) parseInteractionFile(rel, path string, parts []string) (Inter
 }
 
 func (r *Recorder) getFullTimestamp(sessionID, filename string) string {
-	if len(sessionID) < 8 {
-		return ""
-	}
-
-	date := sessionID[0:4] + "-" + sessionID[4:6] + "-" + sessionID[6:8]
 	fnParts := strings.Split(strings.TrimSuffix(filename, ".http"), "-")
 
-	if len(fnParts) < 4 {
-		return ""
+	// Check if this is the new format: count-yyyyMMdd-HHMMSS.sss-method.http
+	// New format has 4 parts and the second part is 8 digits (yyyyMMdd)
+	if len(fnParts) == 4 && len(fnParts[1]) == 8 {
+		dateStr := fnParts[1] // yyyyMMdd
+		timeStr := fnParts[2] // HHMMSS.sss
+
+		if len(timeStr) >= 6 {
+			date := dateStr[0:4] + "-" + dateStr[4:6] + "-" + dateStr[6:8]
+			time := timeStr[0:2] + "-" + timeStr[2:4] + "-" + timeStr[4:]
+
+			return date + "-" + time
+		}
+	} else if len(fnParts) >= 5 {
+		// Legacy format: count-HH-MM-SS.sss-method.http
+		if len(sessionID) < 8 {
+			return ""
+		}
+
+		date := sessionID[0:4] + "-" + sessionID[4:6] + "-" + sessionID[6:8]
+
+		return date + "-" + fnParts[1] + "-" + fnParts[2] + "-" + fnParts[3]
 	}
 
-	return date + "-" + fnParts[1] + "-" + fnParts[2] + "-" + fnParts[3]
+	return ""
 }
 
 func (r *Recorder) peekStatus(path string) int {
