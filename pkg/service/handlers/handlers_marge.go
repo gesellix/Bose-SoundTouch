@@ -300,6 +300,7 @@ func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.WriteHeader(http.StatusCreated)
 	_, _ = w.Write(data)
 }
 

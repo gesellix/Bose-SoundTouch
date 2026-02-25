@@ -116,26 +116,42 @@ type parityResponseWriter struct {
 }
 
 func (p *parityResponseWriter) Header() http.Header {
-	return p.ResponseWriter.Header()
+	return p.recorder.Header()
 }
 
 func (p *parityResponseWriter) Write(b []byte) (int, error) {
+	if p.recorder.status == 0 {
+		p.WriteHeader(http.StatusOK)
+	}
+
 	p.recorder.body.Write(b)
+
 	return p.ResponseWriter.Write(b)
 }
 
 func (p *parityResponseWriter) WriteHeader(statusCode int) {
 	p.recorder.status = statusCode
+	// Copy headers to the real response writer before writing the header
+	for k, vv := range p.recorder.headers {
+		for _, v := range vv {
+			p.ResponseWriter.Header().Add(k, v)
+		}
+	}
+
 	p.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (s *Server) performMirror(r *http.Request) *mirrorResponseRecorder {
 	host := r.Host
-	if host == "" || host == "localhost" || strings.HasPrefix(host, "127.0.0.1") {
+	if host == "" || host == "localhost" {
 		host = "streaming.bose.com"
 	}
 
 	scheme := "https"
+	if strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "localhost") {
+		scheme = "http"
+	}
+
 	targetURL := scheme + "://" + host
 
 	target, err := url.Parse(targetURL)
@@ -231,12 +247,14 @@ func (s *Server) saveParityMismatch(req *http.Request, local, upstream *mirrorRe
 		"path":      req.URL.Path,
 		"reasons":   reasons,
 		"local": map[string]interface{}{
-			"status": local.status,
-			"body":   local.body.String(),
+			"status":  local.status,
+			"headers": local.headers,
+			"body":    local.body.String(),
 		},
 		"upstream": map[string]interface{}{
-			"status": upstream.status,
-			"body":   upstream.body.String(),
+			"status":  upstream.status,
+			"headers": upstream.headers,
+			"body":    upstream.body.String(),
 		},
 	}
 

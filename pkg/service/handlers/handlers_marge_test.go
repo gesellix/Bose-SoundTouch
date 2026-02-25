@@ -320,8 +320,8 @@ func TestMargeAddRecentRoute(t *testing.T) {
 
 	defer func() { _ = res.Body.Close() }()
 
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status OK, got %v", res.Status)
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("Expected status Created, got %v", res.Status)
 	}
 
 	// Verify file was saved
@@ -389,9 +389,9 @@ func TestMargeNativeStreamingRoutes(t *testing.T) {
 		}
 		defer res.Body.Close()
 
-		if res.StatusCode != http.StatusOK {
+		if res.StatusCode != http.StatusCreated {
 			body, _ := io.ReadAll(res.Body)
-			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+			t.Errorf("Expected status Created, got %v: %s", res.Status, string(body))
 		}
 
 		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
