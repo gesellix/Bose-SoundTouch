@@ -4,7 +4,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
@@ -13,10 +12,7 @@ import (
 
 // HandleBMXRegistry returns the BMX service registry.
 func (s *Server) HandleBMXRegistry(w http.ResponseWriter, _ *http.Request) {
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:8000"
-	}
+	baseURL := s.serverURL
 
 	content := string(bmxServicesJSON)
 	content = strings.ReplaceAll(content, "{BMX_SERVER}", baseURL)

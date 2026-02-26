@@ -39,12 +39,41 @@ func TestBMXServices(t *testing.T) {
 
 	// Verify placeholder replacement
 	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "http://localhost:8001") {
+		t.Errorf("Response does not contain expected baseURL http://localhost:8001, got: %s", bodyStr)
+	}
+
 	if strings.Contains(bodyStr, "{BMX_SERVER}") {
 		t.Error("Response still contains {BMX_SERVER} placeholder")
 	}
 
 	if strings.Contains(bodyStr, "{MEDIA_SERVER}") {
 		t.Error("Response still contains {MEDIA_SERVER} placeholder")
+	}
+}
+
+func TestBMXServices_EmptyBaseURL(t *testing.T) {
+	r, _ := setupRouter("", nil)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/bmx/registry/v1/services")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	body, _ := io.ReadAll(res.Body)
+	bodyStr := string(body)
+
+	// Since we removed the fallback, it should use the empty baseURL
+	if strings.Contains(bodyStr, "http://localhost:8000") {
+		t.Error("Response contains fallback URL http://localhost:8000, which should be removed")
+	}
+
+	if strings.Contains(bodyStr, "{BMX_SERVER}") {
+		t.Error("Response still contains {BMX_SERVER} placeholder")
 	}
 }
 
