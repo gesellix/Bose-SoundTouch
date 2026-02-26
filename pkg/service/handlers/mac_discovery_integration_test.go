@@ -74,7 +74,7 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 	sm := setup.NewManager(server.URL, ds, nil)
 
 	// Create server instance
-	srv := NewServer(ds, sm, "http://localhost", false, false, false, false, false, false)
+	srv := NewServer(ds, sm, "http://localhost", false, false, false, false, false)
 
 	t.Logf("Test scenario:")
 	t.Logf("  Device IP: %s", deviceIP)
@@ -311,7 +311,7 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 
 	deviceIP := server.URL[len("http://"):]
 	sm := setup.NewManager(server.URL, ds, nil)
-	srv := NewServer(ds, sm, server.URL, false, false, false, false, false, false)
+	srv := NewServer(ds, sm, server.URL, false, false, false, false, false)
 
 	// 3. Simulate rediscovery of the same device (now with /info working)
 	discoveredDevice := models.DiscoveredDevice{
@@ -380,7 +380,7 @@ func TestMACBasedDeviceDiscovery_FallbackScenario(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 	sm := setup.NewManager(server.URL, ds, nil)
 
-	srv := NewServer(ds, sm, server.URL, false, false, false, false, false, false)
+	srv := NewServer(ds, sm, server.URL, false, false, false, false, false)
 
 	// Simulate device discovery with UPnP providing serial
 	discoveredDevice := models.DiscoveredDevice{

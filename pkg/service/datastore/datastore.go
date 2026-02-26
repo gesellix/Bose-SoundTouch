@@ -875,23 +875,21 @@ func (ds *DataStore) GetETagForAccount(account, device string) int64 {
 
 // Settings represents the global service settings.
 type Settings struct {
-	ServerURL            string         `json:"server_url"`
-	SoundcorkURL         string         `json:"soundcork_url"`
-	HTTPServerURL        string         `json:"https_server_url,omitempty"`
-	RedactLogs           bool           `json:"redact_logs"`
-	LogBodies            bool           `json:"log_bodies"`
-	RecordInteractions   bool           `json:"record_interactions"`
-	DiscoveryInterval    string         `json:"discovery_interval,omitempty"`
-	DiscoveryEnabled     bool           `json:"discovery_enabled"`
-	EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
-	DNSEnabled           bool           `json:"dns_enabled"`
-	DNSUpstream          []string       `json:"dns_upstream,omitempty"`
-	DNSBindAddr          string         `json:"dns_bind_addr,omitempty"`
-	MirrorEnabled        bool           `json:"mirror_enabled"`
-	MirrorEndpoints      []string       `json:"mirror_endpoints,omitempty"`
-	PreferredSource      string         `json:"preferred_source,omitempty"`
-	InternalPaths        []string       `json:"internal_paths,omitempty"`
-	Shortcuts            map[string]int `json:"shortcuts,omitempty"`
+	ServerURL          string         `json:"server_url"`
+	HTTPServerURL      string         `json:"https_server_url,omitempty"`
+	RedactLogs         bool           `json:"redact_logs"`
+	LogBodies          bool           `json:"log_bodies"`
+	RecordInteractions bool           `json:"record_interactions"`
+	DiscoveryInterval  string         `json:"discovery_interval,omitempty"`
+	DiscoveryEnabled   bool           `json:"discovery_enabled"`
+	DNSEnabled         bool           `json:"dns_enabled"`
+	DNSUpstream        []string       `json:"dns_upstream,omitempty"`
+	DNSBindAddr        string         `json:"dns_bind_addr,omitempty"`
+	MirrorEnabled      bool           `json:"mirror_enabled"`
+	MirrorEndpoints    []string       `json:"mirror_endpoints,omitempty"`
+	PreferredSource    string         `json:"preferred_source,omitempty"`
+	InternalPaths      []string       `json:"internal_paths,omitempty"`
+	Shortcuts          map[string]int `json:"shortcuts,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.

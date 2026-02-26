@@ -33,7 +33,7 @@ func TestHandleProxyRequest_RequestBodyRecording(t *testing.T) {
 	defer backend.Close()
 
 	ds := datastore.NewDataStore(filepath.Join(tmpDir, "test.db"))
-	server := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	server := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 	server.recordEnabled = true
 	server.proxyLogBody = true
 	recorder := proxy.NewRecorder(tmpDir)

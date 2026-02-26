@@ -16,7 +16,7 @@ func TestMergeOverlappingDevices(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 
 	// Case 1: IP-only entry and Serial-based entry for the same IP
 	ip := "192.168.1.100"
@@ -74,7 +74,7 @@ func TestFindExistingDeviceID(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 
 	ip := "192.168.1.101"
 	serial := "SERIAL456"

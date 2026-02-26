@@ -97,7 +97,7 @@ func TestMacMappingIntegration_HTTPHandler(t *testing.T) {
 		t.Fatalf("failed to initialize datastore: %v", err)
 	}
 
-	server := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	server := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 
 	// Setup router with the exact same route as in production
 	router := chi.NewRouter()

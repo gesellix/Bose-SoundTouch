@@ -39,7 +39,7 @@ func TestMirrorMiddleware_PreferredSource(t *testing.T) {
 	defer upstreamServer.Close()
 
 	// 3. Setup our server with MirrorMiddleware
-	server := NewServer(ds, nil, "http://localhost:8000", false, false, false, false, false, false)
+	server := NewServer(ds, nil, "http://localhost:8000", false, false, false, false, false)
 	server.SetMirrorSettings(true, []string{"/test/local"}, "local")
 
 	// We need to trick performMirror to use our mock upstream.
@@ -119,7 +119,7 @@ func TestSettingsAPI_PreferredSource(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 	_ = ds.Initialize()
 
-	server := NewServer(ds, nil, "http://localhost:8000", false, false, false, false, false, false)
+	server := NewServer(ds, nil, "http://localhost:8000", false, false, false, false, false)
 
 	// Test GET initial
 	req := httptest.NewRequest("GET", "/setup/settings", nil)

@@ -20,7 +20,7 @@ func TestStatsHandlers(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
-	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 
 	t.Run("HandleUsageStats XML", func(t *testing.T) {
 		xmlData := `

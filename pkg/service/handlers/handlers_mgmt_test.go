@@ -13,7 +13,7 @@ import (
 )
 
 func TestHandleMgmtSpotifyInit(t *testing.T) {
-	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false)
 	// No spotify service configured
 	req := httptest.NewRequest("POST", "/mgmt/spotify/init", nil)
 	w := httptest.NewRecorder()
@@ -45,7 +45,7 @@ func TestHandleMgmtSpotifyInit(t *testing.T) {
 }
 
 func TestHandleMgmtSpotifyAccounts(t *testing.T) {
-	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false)
 	svc := spotify.NewSpotifyService("cid", "secret", "http://localhost/cb", t.TempDir())
 	s.SetSpotifyService(svc)
 
@@ -91,7 +91,7 @@ func TestHandleMgmtListSpeakers(t *testing.T) {
 }
 
 func TestHandleMgmtSpotifyCallback(t *testing.T) {
-	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false)
 	svc := spotify.NewSpotifyService("cid", "secret", "http://localhost/cb", t.TempDir())
 	s.SetSpotifyService(svc)
 
@@ -150,7 +150,7 @@ func TestHandleMgmtSpotifyCallback(t *testing.T) {
 }
 
 func TestHandleMgmtSpotifyConfirm(t *testing.T) {
-	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false)
 	svc := spotify.NewSpotifyService("cid", "secret", "http://localhost/cb", t.TempDir())
 	s.SetSpotifyService(svc)
 
@@ -191,7 +191,7 @@ func TestHandleMgmtDeviceEvents(t *testing.T) {
 }
 
 func TestBasicAuthMgmt(t *testing.T) {
-	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(nil, nil, "http://localhost", false, false, false, false, false)
 	s.SetMgmtConfig("admin", "secret123")
 
 	handler := s.BasicAuthMgmt()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -23,7 +23,7 @@ func TestInteractionHandlers(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	ds := datastore.NewDataStore(filepath.Join(tmpDir, "test.db"))
-	server := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	server := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 
 	t.Run("HandleGetInteractionStats_NoRecorder", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/setup/interaction-stats", nil)
@@ -151,7 +151,7 @@ func TestRecordMiddleware(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	ds := datastore.NewDataStore(filepath.Join(tmpDir, "test.db"))
-	server := NewServer(ds, nil, "http://localhost", false, false, true, false, false, false)
+	server := NewServer(ds, nil, "http://localhost", false, false, true, false, false)
 	recorder := proxy.NewRecorder(tmpDir)
 	server.SetRecorder(recorder)
 

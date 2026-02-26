@@ -25,7 +25,7 @@ func TestSnapshotIntegrity_SelfAndMirror(t *testing.T) {
 
 	ds := datastore.NewDataStore(tempDir)
 	recorder := proxy.NewRecorder(tempDir)
-	s := NewServer(ds, nil, "http://localhost:8000", false, false, true, false, false, false)
+	s := NewServer(ds, nil, "http://localhost:8000", false, false, true, false, false)
 	s.SetRecorder(recorder)
 	s.SetMirrorSettings(true, []string{"/mirror/*"}, "local")
 

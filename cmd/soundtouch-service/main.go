@@ -83,17 +83,6 @@ func main() {
 				EnvVars: []string{"BIND_ADDR"},
 			},
 			&cli.StringFlag{
-				Name:    "soundcork-url",
-				Usage:   "URL for Soundcork-based service components (legacy)",
-				Value:   "http://localhost:8001",
-				EnvVars: []string{"SOUNDCORK_BACKEND_URL", "TARGET_URL"},
-			},
-			&cli.BoolFlag{
-				Name:    "enable-soundcork-proxy",
-				Usage:   "Enable proxying unknown requests to the Soundcork backend",
-				EnvVars: []string{"ENABLE_SOUNDCORK_PROXY"},
-			},
-			&cli.StringFlag{
 				Name:    "data-dir",
 				Usage:   "Directory for persistent data",
 				Value:   "data",
@@ -246,9 +235,8 @@ func main() {
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			sm.MgmtUsername = config.mgmtUsername
 			sm.MgmtPassword = config.mgmtPassword
-			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.enableSoundcorkProxy, config.migrationEnabled, config.migrationDryRun)
+			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.migrationEnabled, config.migrationDryRun)
 			sm.GetDNSRunning = server.GetDNSRunning
-			server.SetSoundcorkURL(config.soundcorkURL)
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
@@ -337,7 +325,7 @@ func main() {
 
 			r := setupRouter(server)
 
-			log.Printf("Go service starting on %s, proxying to %s", config.serverURL, config.soundcorkURL)
+			log.Printf("Go service starting on %s", config.serverURL)
 
 			if tlsConfig != nil {
 				startHTTPSServer(config.httpsAddr, r, tlsConfig, config.httpsServerURL)
@@ -371,34 +359,32 @@ func showVersionInfo(_ *cli.Context) error {
 }
 
 type serviceConfig struct {
-	port                 string
-	bindAddr             string
-	addr                 string
-	soundcorkURL         string
-	dataDir              string
-	serverURL            string
-	httpsServerURL       string
-	httpsAddr            string
-	redact               bool
-	logBody              bool
-	record               bool
-	enableSoundcorkProxy bool
-	dnsEnabled           bool
-	dnsUpstream          string
-	dnsBind              string
-	mirrorEnabled        bool
-	mirrorEndpoints      []string
-	internalPaths        []string
-	discoveryInterval    time.Duration
-	domains              []string
-	spotifyClientID      string
-	spotifyClientSecret  string
-	spotifyRedirectURI   string
-	mgmtUsername         string
-	mgmtPassword         string
-	migrationEnabled     bool
-	migrationDryRun      bool
-	preferredSource      string
+	port                string
+	bindAddr            string
+	addr                string
+	dataDir             string
+	serverURL           string
+	httpsServerURL      string
+	httpsAddr           string
+	redact              bool
+	logBody             bool
+	record              bool
+	dnsEnabled          bool
+	dnsUpstream         string
+	dnsBind             string
+	mirrorEnabled       bool
+	mirrorEndpoints     []string
+	internalPaths       []string
+	discoveryInterval   time.Duration
+	domains             []string
+	spotifyClientID     string
+	spotifyClientSecret string
+	spotifyRedirectURI  string
+	mgmtUsername        string
+	mgmtPassword        string
+	migrationEnabled    bool
+	migrationDryRun     bool
+	preferredSource     string
 }
 
 func loadConfig(c *cli.Context) serviceConfig {
@@ -410,7 +396,6 @@ func loadConfig(c *cli.Context) serviceConfig {
 		addr = ":" + port
 	}
 
-	soundcorkURL := c.String("soundcork-url")
 	dataDir := c.String("data-dir")
 
 	hostname, _ := os.Hostname()
@@ -442,7 +427,6 @@ func loadConfig(c *cli.Context) serviceConfig {
 	redact := c.Bool("redact-logs")
 	logBody := c.Bool("log-bodies")
 	record := c.Bool("record-interactions")
-	enableSoundcorkProxy := c.Bool("enable-soundcork-proxy")
 
 	dnsEnabled := c.Bool("dns-discovery")
 	dnsUpstream := c.String("dns-upstream")
@@ -470,34 +454,32 @@ func loadConfig(c *cli.Context) serviceConfig {
 	preferredSource := c.String("preferred-source")
 
 	return serviceConfig{
-		port:                 port,
-		bindAddr:             bindAddr,
-		addr:                 addr,
-		soundcorkURL:         soundcorkURL,
-		dataDir:              dataDir,
-		serverURL:            serverURL,
-		httpsServerURL:       httpsServerURL,
-		httpsAddr:            httpsAddr,
-		redact:               redact,
-		logBody:              logBody,
-		record:               record,
-		enableSoundcorkProxy: enableSoundcorkProxy,
-		dnsEnabled:           dnsEnabled,
-		dnsUpstream:          dnsUpstream,
-		dnsBind:              dnsBind,
-		mirrorEnabled:        mirrorEnabled,
-		mirrorEndpoints:      mirrorEndpoints,
-		internalPaths:        internalPaths,
-		discoveryInterval:    discoveryInterval,
-		domains:              domains,
-		spotifyClientID:      spotifyClientID,
-		spotifyClientSecret:  spotifyClientSecret,
-		spotifyRedirectURI:   spotifyRedirectURI,
-		mgmtUsername:         mgmtUsername,
-		mgmtPassword:         mgmtPassword,
-		migrationEnabled:     migrationEnabled,
-		migrationDryRun:      migrationDryRun,
-		preferredSource:      preferredSource,
+		port:                port,
+		bindAddr:            bindAddr,
+		addr:                addr,
+		dataDir:             dataDir,
+		serverURL:           serverURL,
+		httpsServerURL:      httpsServerURL,
+		httpsAddr:           httpsAddr,
+		redact:              redact,
+		logBody:             logBody,
+		record:              record,
+		dnsEnabled:          dnsEnabled,
+		dnsUpstream:         dnsUpstream,
+		dnsBind:             dnsBind,
+		mirrorEnabled:       mirrorEnabled,
+		mirrorEndpoints:     mirrorEndpoints,
+		internalPaths:       internalPaths,
+		discoveryInterval:   discoveryInterval,
+		domains:             domains,
+		spotifyClientID:     spotifyClientID,
+		spotifyClientSecret: spotifyClientSecret,
+		spotifyRedirectURI:  spotifyRedirectURI,
+		mgmtUsername:        mgmtUsername,
+		mgmtPassword:        mgmtPassword,
+		migrationEnabled:    migrationEnabled,
+		migrationDryRun:     migrationDryRun,
+		preferredSource:     preferredSource,
 	}
 }
 
@@ -558,10 +540,6 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 		config.serverURL = persisted.ServerURL
 	}
 
-	if persisted.SoundcorkURL != "" {
-		config.soundcorkURL = persisted.SoundcorkURL
-	}
-
 	if persisted.HTTPServerURL != "" {
 		config.httpsServerURL = persisted.HTTPServerURL
 	}
@@ -575,7 +553,6 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	config.redact = persisted.RedactLogs
 	config.logBody = persisted.LogBodies
 	config.record = persisted.RecordInteractions
-	config.enableSoundcorkProxy = persisted.EnableSoundcorkProxy
 
 	config.dnsEnabled = persisted.DNSEnabled
 	if len(persisted.DNSUpstream) > 0 {
@@ -596,22 +573,20 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 
 func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datastore.Settings {
 	settings := datastore.Settings{
-		ServerURL:            config.serverURL,
-		SoundcorkURL:         config.soundcorkURL,
-		HTTPServerURL:        config.httpsServerURL,
-		RedactLogs:           config.redact,
-		LogBodies:            config.logBody,
-		RecordInteractions:   config.record,
-		DiscoveryInterval:    config.discoveryInterval.String(),
-		DiscoveryEnabled:     true,
-		EnableSoundcorkProxy: config.enableSoundcorkProxy,
-		DNSEnabled:           config.dnsEnabled,
-		DNSUpstream:          strings.Split(config.dnsUpstream, ","),
-		DNSBindAddr:          config.dnsBind,
-		MirrorEnabled:        config.mirrorEnabled,
-		MirrorEndpoints:      config.mirrorEndpoints,
-		PreferredSource:      config.preferredSource,
-		InternalPaths:        config.internalPaths,
+		ServerURL:          config.serverURL,
+		HTTPServerURL:      config.httpsServerURL,
+		RedactLogs:         config.redact,
+		LogBodies:          config.logBody,
+		RecordInteractions: config.record,
+		DiscoveryInterval:  config.discoveryInterval.String(),
+		DiscoveryEnabled:   true,
+		DNSEnabled:         config.dnsEnabled,
+		DNSUpstream:        strings.Split(config.dnsUpstream, ","),
+		DNSBindAddr:        config.dnsBind,
+		MirrorEnabled:      config.mirrorEnabled,
+		MirrorEndpoints:    config.mirrorEndpoints,
+		PreferredSource:    config.preferredSource,
+		InternalPaths:      config.internalPaths,
 		Shortcuts: map[string]int{
 			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
 			"/sw.js": http.StatusNotFound,

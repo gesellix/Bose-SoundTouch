@@ -126,9 +126,6 @@ async function fetchSettings() {
         if (settings.server_url) {
             document.getElementById('target-domain').value = settings.server_url;
         }
-        if (settings.proxy_url) {
-            document.getElementById('soundcork-url').value = settings.proxy_url;
-        }
         if (settings.discovery_interval) {
             document.getElementById('discovery-interval').value = settings.discovery_interval;
         }
@@ -165,10 +162,6 @@ async function fetchSettings() {
             document.getElementById('internal-paths').value = settings.internal_paths.join('\n');
         }
 
-        if (settings.enable_soundcork_proxy !== undefined) {
-            document.getElementById('enable-soundcork-proxy').checked = settings.enable_soundcork_proxy;
-        }
-
         const spotifyStatus = document.getElementById('spotify-config-status');
         if (spotifyStatus) {
             if (settings.spotify_configured) {
@@ -193,9 +186,6 @@ async function fetchProxySettings() {
         document.getElementById('proxy-redact').checked = settings.redact;
         document.getElementById('proxy-log-body').checked = settings.log_body;
         document.getElementById('proxy-record').checked = settings.record;
-        if (settings.enable_soundcork_proxy !== undefined) {
-            document.getElementById('enable-soundcork-proxy').checked = settings.enable_soundcork_proxy;
-        }
     } catch (error) {
         console.error('Failed to fetch proxy settings', error);
     }
@@ -206,7 +196,6 @@ async function updateProxySettings() {
         redact: document.getElementById('proxy-redact').checked,
         log_body: document.getElementById('proxy-log-body').checked,
         record: document.getElementById('proxy-record').checked,
-        enable_soundcork_proxy: document.getElementById('enable-soundcork-proxy').checked
     };
     try {
         await fetch('/setup/proxy-settings', {
@@ -222,7 +211,6 @@ async function updateProxySettings() {
 async function updateSettings() {
     const settings = {
         server_url: document.getElementById('target-domain').value,
-        proxy_url: document.getElementById('soundcork-url').value,
         discovery_interval: document.getElementById('discovery-interval').value,
         discovery_enabled: document.getElementById('discovery-enabled').checked,
         dns_enabled: document.getElementById('dns-enabled').checked,
@@ -232,7 +220,6 @@ async function updateSettings() {
         preferred_source: document.getElementById('preferred-source-upstream').checked ? 'upstream' : 'local',
         mirror_endpoints: document.getElementById('mirror-endpoints').value.split('\n').map(s => s.trim()).filter(s => s !== ''),
         internal_paths: document.getElementById('internal-paths').value.split('\n').map(s => s.trim()).filter(s => s !== ''),
-        enable_soundcork_proxy: document.getElementById('enable-soundcork-proxy').checked
     };
     const status = document.getElementById('settings-status');
     status.innerText = 'Saving...';
@@ -1068,7 +1055,6 @@ async function showSummary(deviceId) {
         return;
     }
     const targetUrl = document.getElementById('target-domain').value;
-    const proxyUrl = document.getElementById('soundcork-url').value;
 
     const opts = {
         marge: document.getElementById('opt-marge').value,
@@ -1087,7 +1073,7 @@ async function showSummary(deviceId) {
     const outputBox = document.getElementById('command-output-box');
     if (outputBox) outputBox.style.display = 'none';
 
-    let query = '?target_url=' + encodeURIComponent(targetUrl) + '&proxy_url=' + encodeURIComponent(proxyUrl);
+    let query = '?target_url=' + encodeURIComponent(targetUrl);
     for (let k in opts) {
         query += '&' + k + '=' + encodeURIComponent(opts[k]);
     }
@@ -1334,7 +1320,6 @@ async function migrate(deviceId, ip) {
         return;
     }
     const targetUrl = document.getElementById('target-domain').value;
-    const proxyUrl = document.getElementById('soundcork-url').value;
     const method = document.getElementById('migration-method').value;
 
     const opts = {
@@ -1353,7 +1338,7 @@ async function migrate(deviceId, ip) {
     const display = getDeviceDisplayName(deviceId);
     statusDiv.innerHTML = 'Migrating ' + display + ' using ' + method + '...';
 
-    let query = '?method=' + encodeURIComponent(method) + '&target_url=' + encodeURIComponent(targetUrl) + '&proxy_url=' + encodeURIComponent(proxyUrl);
+    let query = '?method=' + encodeURIComponent(method) + '&target_url=' + encodeURIComponent(targetUrl);
     for (let k in opts) {
         query += '&' + k + '=' + encodeURIComponent(opts[k]);
     }

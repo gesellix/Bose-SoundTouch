@@ -16,7 +16,7 @@ func TestDeviceMigration_DirectoryRename(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	srv := NewServer(ds, nil, "http://localhost", false, false, false, false, true, false)
+	srv := NewServer(ds, nil, "http://localhost", false, false, false, true, false)
 
 	accountID := "test-account"
 	macAddress := "A81B6A536A98"
@@ -121,7 +121,7 @@ func TestDeviceMigration_NoExistingTarget(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	srv := NewServer(ds, nil, "http://localhost", false, false, false, false, true, false)
+	srv := NewServer(ds, nil, "http://localhost", false, false, false, true, false)
 
 	accountID := "test-account"
 	macAddress := "A81B6A536A98"
@@ -189,7 +189,7 @@ func TestDeviceMigration_ExistingTargetRemoved(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	srv := NewServer(ds, nil, "http://localhost", false, false, false, false, true, false)
+	srv := NewServer(ds, nil, "http://localhost", false, false, false, true, false)
 
 	accountID := "test-account"
 	macAddress := "A81B6A536A98"

@@ -154,7 +154,7 @@ func TestComprehensiveMigration_MultipleExistingDevices(t *testing.T) {
 
 	deviceIP := server.URL[len("http://"):]
 	sm := setup.NewManager(server.URL, ds, nil)
-	srv := NewServer(ds, sm, server.URL, false, false, false, false, false, false)
+	srv := NewServer(ds, sm, server.URL, false, false, false, false, false)
 
 	// Simulate device rediscovery
 	discoveredDevice := models.DiscoveredDevice{
@@ -233,7 +233,7 @@ func TestFindAllExistingDeviceVariants_MatchingCriteria(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	srv := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	srv := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 	accountID := "testaccount"
 
 	// Create devices that should match various criteria
@@ -344,7 +344,7 @@ func TestMigration_EdgeCases(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	srv := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	srv := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 	accountID := "testaccount"
 
 	t.Run("NoExistingDevices", func(t *testing.T) {

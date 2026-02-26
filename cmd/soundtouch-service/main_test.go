@@ -18,10 +18,9 @@ func TestApplyPersistedSettings(t *testing.T) {
 
 	t.Run("overrides true with false", func(t *testing.T) {
 		config := &serviceConfig{
-			redact:               true,
-			logBody:              true,
-			record:               true,
-			enableSoundcorkProxy: true,
+			redact:  true,
+			logBody: true,
+			record:  true,
 		}
 
 		// Simulate the bug by using the old bitwise OR logic in the test,
@@ -29,10 +28,9 @@ func TestApplyPersistedSettings(t *testing.T) {
 		// config.redact = config.redact || false -> stays true
 
 		settings := datastore.Settings{
-			RedactLogs:           false,
-			LogBodies:            false,
-			RecordInteractions:   false,
-			EnableSoundcorkProxy: false,
+			RedactLogs:         false,
+			LogBodies:          false,
+			RecordInteractions: false,
 		}
 		err := ds.SaveSettings(settings)
 		if err != nil {
@@ -49,9 +47,6 @@ func TestApplyPersistedSettings(t *testing.T) {
 		}
 		if config.record != false {
 			t.Errorf("Expected record to be false, got true")
-		}
-		if config.enableSoundcorkProxy != false {
-			t.Errorf("Expected enableSoundcorkProxy to be false, got true")
 		}
 	})
 

@@ -25,40 +25,38 @@ import (
 
 // Server handles HTTP requests for the SoundTouch service.
 type Server struct {
-	ds                   *datastore.DataStore
-	sm                   *setup.Manager
-	migrationManager     *migration.Manager
-	mu                   sync.RWMutex
-	serverURL            string
-	soundcorkURL         string
-	httpsServerURL       string
-	discovering          bool
-	proxyRedact          bool
-	proxyLogBody         bool
-	recordEnabled        bool
-	discoveryInterval    time.Duration
-	discoveryEnabled     bool
-	dnsEnabled           bool
-	dnsUpstream          []string
-	dnsBindAddr          string
-	mirrorEnabled        bool
-	mirrorEndpoints      []string
-	preferredSource      string
-	internalPaths        []string
-	enableSoundcorkProxy bool
-	shortcuts            map[string]int
-	recorder             *proxy.Recorder
-	dnsDiscovery         *discovery.DNSDiscovery
-	UpstreamProxy        http.Handler
-	Version              string
-	Commit               string
-	Date                 string
-	mgmtUsername         string
-	mgmtPassword         string
-	spotifyClientID      string
-	spotifyClientSecret  string
-	spotifyRedirectURI   string
-	spotifyService       *spotify.Service
+	ds                  *datastore.DataStore
+	sm                  *setup.Manager
+	migrationManager    *migration.Manager
+	mu                  sync.RWMutex
+	serverURL           string
+	httpsServerURL      string
+	discovering         bool
+	proxyRedact         bool
+	proxyLogBody        bool
+	recordEnabled       bool
+	discoveryInterval   time.Duration
+	discoveryEnabled    bool
+	dnsEnabled          bool
+	dnsUpstream         []string
+	dnsBindAddr         string
+	mirrorEnabled       bool
+	mirrorEndpoints     []string
+	preferredSource     string
+	internalPaths       []string
+	shortcuts           map[string]int
+	recorder            *proxy.Recorder
+	dnsDiscovery        *discovery.DNSDiscovery
+	UpstreamProxy       http.Handler
+	Version             string
+	Commit              string
+	Date                string
+	mgmtUsername        string
+	mgmtPassword        string
+	spotifyClientID     string
+	spotifyClientSecret string
+	spotifyRedirectURI  string
+	spotifyService      *spotify.Service
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -83,7 +81,7 @@ var bufferPool = sync.Pool{
 }
 
 // NewServer creates a new SoundTouch service server.
-func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled, enableSoundcorkProxy, migrationEnabled, migrationDryRun bool) *Server {
+func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled, migrationEnabled, migrationDryRun bool) *Server {
 	// Initialize migration manager
 	migrationConfig := migration.Config{
 		Enabled: migrationEnabled,
@@ -91,17 +89,15 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 	}
 
 	s := &Server{
-		ds:                   ds,
-		sm:                   sm,
-		migrationManager:     migration.NewManager(ds, migrationConfig),
-		serverURL:            serverURL,
-		soundcorkURL:         "http://localhost:8001",
-		proxyRedact:          proxyRedact,
-		proxyLogBody:         proxyLogBody,
-		recordEnabled:        recordEnabled,
-		enableSoundcorkProxy: enableSoundcorkProxy,
-		discoveryInterval:    5 * time.Minute,
-		discoveryEnabled:     true,
+		ds:                ds,
+		sm:                sm,
+		migrationManager:  migration.NewManager(ds, migrationConfig),
+		serverURL:         serverURL,
+		proxyRedact:       proxyRedact,
+		proxyLogBody:      proxyLogBody,
+		recordEnabled:     recordEnabled,
+		discoveryInterval: 5 * time.Minute,
+		discoveryEnabled:  true,
 	}
 
 	return s
@@ -301,14 +297,6 @@ func (s *Server) SetHTTPServerURL(url string) {
 	s.httpsServerURL = url
 }
 
-// SetSoundcorkURL sets the URL for the Soundcork backend.
-func (s *Server) SetSoundcorkURL(url string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.soundcorkURL = url
-}
-
 // SetRecorder sets the recorder for the server.
 func (s *Server) SetRecorder(r *proxy.Recorder) {
 	s.mu.Lock()
@@ -374,11 +362,11 @@ func (s *Server) GetRecordEnabled() bool {
 }
 
 // GetSettings returns the current server settings.
-func (s *Server) GetSettings() (string, string, string) {
+func (s *Server) GetSettings() (string, string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.serverURL, s.soundcorkURL, s.httpsServerURL
+	return s.serverURL, s.httpsServerURL
 }
 
 // IsSpotifyConfigured returns whether Spotify integration is configured.
@@ -390,11 +378,11 @@ func (s *Server) IsSpotifyConfigured() bool {
 }
 
 // GetProxySettings returns the current proxy settings.
-func (s *Server) GetProxySettings() (bool, bool, bool, bool) {
+func (s *Server) GetProxySettings() (bool, bool, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.proxyRedact, s.proxyLogBody, s.recordEnabled, s.enableSoundcorkProxy
+	return s.proxyRedact, s.proxyLogBody, s.recordEnabled
 }
 
 // DiscoverDevices starts a background device discovery process.

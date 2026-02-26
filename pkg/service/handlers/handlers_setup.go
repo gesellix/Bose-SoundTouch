@@ -148,7 +148,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	s.mu.RLock()
-	serverURL, soundcorkURL, httpsServerURL := s.serverURL, s.soundcorkURL, s.httpsServerURL
+	serverURL, httpsServerURL := s.serverURL, s.httpsServerURL
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
 	dnsEnabled := s.dnsEnabled
@@ -158,7 +158,6 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	mirrorEndpoints := s.mirrorEndpoints
 	preferredSource := s.preferredSource
 	internalPaths := s.internalPaths
-	enableSoundcorkProxy := s.enableSoundcorkProxy
 	redact, logBody, record := s.proxyRedact, s.proxyLogBody, s.recordEnabled
 	shortcuts := s.shortcuts
 	spotifyConfigured := s.spotifyService != nil
@@ -167,26 +166,24 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dnsRunning, actualBind := s.GetDNSRunning()
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"server_url":             serverURL,
-		"soundcork_url":          soundcorkURL,
-		"https_server_url":       httpsServerURL,
-		"discovery_interval":     discoveryInterval,
-		"discovery_enabled":      discoveryEnabled,
-		"dns_enabled":            dnsEnabled,
-		"dns_running":            dnsRunning,
-		"dns_actual_bind":        actualBind,
-		"dns_upstream":           strings.Join(dnsUpstream, ","),
-		"dns_bind_addr":          dnsBindAddr,
-		"mirror_enabled":         mirrorEnabled,
-		"mirror_endpoints":       mirrorEndpoints,
-		"preferred_source":       preferredSource,
-		"internal_paths":         internalPaths,
-		"enable_soundcork_proxy": enableSoundcorkProxy,
-		"redact_logs":            redact,
-		"log_bodies":             logBody,
-		"record_interactions":    record,
-		"shortcuts":              shortcuts,
-		"spotify_configured":     spotifyConfigured,
+		"server_url":          serverURL,
+		"https_server_url":    httpsServerURL,
+		"discovery_interval":  discoveryInterval,
+		"discovery_enabled":   discoveryEnabled,
+		"dns_enabled":         dnsEnabled,
+		"dns_running":         dnsRunning,
+		"dns_actual_bind":     actualBind,
+		"dns_upstream":        strings.Join(dnsUpstream, ","),
+		"dns_bind_addr":       dnsBindAddr,
+		"mirror_enabled":      mirrorEnabled,
+		"mirror_endpoints":    mirrorEndpoints,
+		"preferred_source":    preferredSource,
+		"internal_paths":      internalPaths,
+		"redact_logs":         redact,
+		"log_bodies":          logBody,
+		"record_interactions": record,
+		"shortcuts":           shortcuts,
+		"spotify_configured":  spotifyConfigured,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -196,19 +193,17 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 // HandleUpdateSettings updates the service settings.
 func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
-		ServerURL            string         `json:"server_url"`
-		SoundcorkURL         string         `json:"soundcork_url"`
-		DiscoveryInterval    string         `json:"discovery_interval"`
-		DiscoveryEnabled     bool           `json:"discovery_enabled"`
-		DNSEnabled           bool           `json:"dns_enabled"`
-		DNSUpstream          string         `json:"dns_upstream"`
-		DNSBindAddr          string         `json:"dns_bind_addr"`
-		MirrorEnabled        bool           `json:"mirror_enabled"`
-		MirrorEndpoints      []string       `json:"mirror_endpoints"`
-		PreferredSource      string         `json:"preferred_source"`
-		InternalPaths        []string       `json:"internal_paths"`
-		EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
-		Shortcuts            map[string]int `json:"shortcuts"`
+		ServerURL         string         `json:"server_url"`
+		DiscoveryInterval string         `json:"discovery_interval"`
+		DiscoveryEnabled  bool           `json:"discovery_enabled"`
+		DNSEnabled        bool           `json:"dns_enabled"`
+		DNSUpstream       string         `json:"dns_upstream"`
+		DNSBindAddr       string         `json:"dns_bind_addr"`
+		MirrorEnabled     bool           `json:"mirror_enabled"`
+		MirrorEndpoints   []string       `json:"mirror_endpoints"`
+		PreferredSource   string         `json:"preferred_source"`
+		InternalPaths     []string       `json:"internal_paths"`
+		Shortcuts         map[string]int `json:"shortcuts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -230,7 +225,6 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.serverURL = settings.ServerURL
 
-	s.soundcorkURL = settings.SoundcorkURL
 	if settings.DiscoveryInterval != "" {
 		s.discoveryInterval = interval
 	}
@@ -258,7 +252,6 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	s.preferredSource = settings.PreferredSource
 	s.internalPaths = settings.InternalPaths
 
-	s.enableSoundcorkProxy = settings.EnableSoundcorkProxy
 	if settings.Shortcuts != nil {
 		s.shortcuts = settings.Shortcuts
 	}
@@ -276,23 +269,21 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Saving updated settings to %s/settings.json", s.ds.DataDir)
 	err = s.ds.SaveSettings(datastore.Settings{
-		ServerURL:            s.serverURL,
-		SoundcorkURL:         s.soundcorkURL,
-		HTTPServerURL:        currentHTTPS,
-		RedactLogs:           currentRedact,
-		LogBodies:            currentLogBody,
-		RecordInteractions:   currentRecord,
-		DiscoveryInterval:    s.discoveryInterval.String(),
-		DiscoveryEnabled:     s.discoveryEnabled,
-		DNSEnabled:           s.dnsEnabled,
-		DNSUpstream:          s.dnsUpstream,
-		DNSBindAddr:          s.dnsBindAddr,
-		MirrorEnabled:        s.mirrorEnabled,
-		MirrorEndpoints:      s.mirrorEndpoints,
-		PreferredSource:      s.preferredSource,
-		InternalPaths:        s.internalPaths,
-		EnableSoundcorkProxy: s.enableSoundcorkProxy,
-		Shortcuts:            s.shortcuts,
+		ServerURL:          s.serverURL,
+		HTTPServerURL:      currentHTTPS,
+		RedactLogs:         currentRedact,
+		LogBodies:          currentLogBody,
+		RecordInteractions: currentRecord,
+		DiscoveryInterval:  s.discoveryInterval.String(),
+		DiscoveryEnabled:   s.discoveryEnabled,
+		DNSEnabled:         s.dnsEnabled,
+		DNSUpstream:        s.dnsUpstream,
+		DNSBindAddr:        s.dnsBindAddr,
+		MirrorEnabled:      s.mirrorEnabled,
+		MirrorEndpoints:    s.mirrorEndpoints,
+		PreferredSource:    s.preferredSource,
+		InternalPaths:      s.internalPaths,
+		Shortcuts:          s.shortcuts,
 	})
 
 	dnsEnabled := s.dnsEnabled
@@ -793,13 +784,12 @@ func (s *Server) HandleBackupConfig(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleGetProxySettings(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	redact, logBody, record, enableSoundcorkProxy := s.GetProxySettings()
+	redact, logBody, record := s.GetProxySettings()
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"redact":                 redact,
-		"log_body":               logBody,
-		"record":                 record,
-		"enable_soundcork_proxy": enableSoundcorkProxy,
+		"redact":   redact,
+		"log_body": logBody,
+		"record":   record,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -824,10 +814,9 @@ func (s *Server) HandleGetCACert(w http.ResponseWriter, _ *http.Request) {
 // HandleUpdateProxySettings updates the proxy settings.
 func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
-		Redact               bool `json:"redact"`
-		LogBody              bool `json:"log_body"`
-		Record               bool `json:"record"`
-		EnableSoundcorkProxy bool `json:"enable_soundcork_proxy"`
+		Redact  bool `json:"redact"`
+		LogBody bool `json:"log_body"`
+		Record  bool `json:"record"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -838,7 +827,6 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 	s.proxyRedact = settings.Redact
 	s.proxyLogBody = settings.LogBody
 	s.recordEnabled = settings.Record
-	s.enableSoundcorkProxy = settings.EnableSoundcorkProxy
 
 	if s.recorder != nil {
 		s.recorder.Redact = settings.Redact
@@ -846,22 +834,20 @@ func (s *Server) HandleUpdateProxySettings(w http.ResponseWriter, r *http.Reques
 
 	// Persist to datastore
 	// Access fields directly since we already hold the lock
-	serverURL, soundcorkURL, httpsServerURL := s.serverURL, s.soundcorkURL, s.httpsServerURL
+	serverURL, httpsServerURL := s.serverURL, s.httpsServerURL
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
 
 	log.Printf("Saving updated proxy settings to %s/settings.json", s.ds.DataDir)
 	err := s.ds.SaveSettings(datastore.Settings{
-		ServerURL:            serverURL,
-		SoundcorkURL:         soundcorkURL,
-		HTTPServerURL:        httpsServerURL,
-		RedactLogs:           s.proxyRedact,
-		LogBodies:            s.proxyLogBody,
-		RecordInteractions:   s.recordEnabled,
-		DiscoveryInterval:    discoveryInterval,
-		DiscoveryEnabled:     discoveryEnabled,
-		EnableSoundcorkProxy: s.enableSoundcorkProxy,
-		Shortcuts:            s.shortcuts,
+		ServerURL:          serverURL,
+		HTTPServerURL:      httpsServerURL,
+		RedactLogs:         s.proxyRedact,
+		LogBodies:          s.proxyLogBody,
+		RecordInteractions: s.recordEnabled,
+		DiscoveryInterval:  discoveryInterval,
+		DiscoveryEnabled:   discoveryEnabled,
+		Shortcuts:          s.shortcuts,
 	})
 	s.mu.Unlock()
 

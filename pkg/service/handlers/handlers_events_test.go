@@ -14,7 +14,7 @@ import (
 
 func TestEventLog(t *testing.T) {
 	ds := datastore.NewDataStore(t.TempDir())
-	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false, false)
+	s := NewServer(ds, nil, "http://localhost", false, false, false, false, false)
 
 	r := chi.NewRouter()
 	r.Post("/streaming/stats/usage", s.HandleUsageStats)
