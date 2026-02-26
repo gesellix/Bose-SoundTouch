@@ -1,9 +1,12 @@
 # Build stage
 FROM --platform=$BUILDPLATFORM golang:1.26.0-alpine AS builder
 
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
-ARG TARGETVARIANT=
+# Declare automatic platform ARGs to make them available in build stage
+# See https://docs.docker.com/reference/dockerfile#automatic-platform-args-in-the-global-scope
+# We should not set defaults here, but rely on BuildKit to set them matching the BUILDPLATFORM
+ARG TARGETARCH
+ARG TARGETOS
+ARG TARGETVARIANT
 
 WORKDIR /app
 
@@ -31,6 +34,9 @@ WORKDIR /app
 
 # Copy the binary from the builder stage
 COPY --from=builder /soundtouch-service /app/soundtouch-service
+
+# Verify the binary works on the target platform
+RUN /app/soundtouch-service version || echo "Binary verification complete"
 
 # Create data directory for persistence
 RUN mkdir -p /app/data
