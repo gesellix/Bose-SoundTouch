@@ -289,6 +289,15 @@ func (d *Service) listenForResponses(ctx context.Context, listener *net.UDPConn,
 
 // buildMSearchRequest builds the M-SEARCH request for SoundTouch devices
 func (d *Service) buildMSearchRequest() string {
+	mx := int(d.timeout.Seconds())
+	if mx < 1 {
+		mx = 1
+	}
+
+	if mx > 5 {
+		mx = 5
+	}
+
 	return fmt.Sprintf(
 		"M-SEARCH * HTTP/1.1\r\n"+
 			"HOST: %s\r\n"+
@@ -298,7 +307,7 @@ func (d *Service) buildMSearchRequest() string {
 			"\r\n",
 		ssdpAddr,
 		soundTouchURN,
-		int(d.timeout.Seconds()),
+		mx,
 	)
 }
 

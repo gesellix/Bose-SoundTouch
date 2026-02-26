@@ -39,27 +39,48 @@ func TestNewDiscoveryServiceWithDefaultTimeout(t *testing.T) {
 }
 
 func TestBuildMSearchRequest(t *testing.T) {
-	service := NewService(5 * time.Second)
-	request := service.buildMSearchRequest()
+	t.Run("DefaultTimeout", func(t *testing.T) {
+		service := NewService(5 * time.Second)
+		request := service.buildMSearchRequest()
 
-	expectedLines := []string{
-		"M-SEARCH * HTTP/1.1",
-		"HOST: 239.255.255.250:1900",
-		"MAN: \"ssdp:discover\"",
-		"ST: urn:schemas-upnp-org:device:MediaRenderer:1",
-		"MX: 5",
-	}
-
-	for _, expectedLine := range expectedLines {
-		if !contains(request, expectedLine) {
-			t.Errorf("Expected M-SEARCH request to contain '%s'", expectedLine)
+		expectedLines := []string{
+			"M-SEARCH * HTTP/1.1",
+			"HOST: 239.255.255.250:1900",
+			"MAN: \"ssdp:discover\"",
+			"ST: urn:schemas-upnp-org:device:MediaRenderer:1",
+			"MX: 5",
 		}
-	}
 
-	// Check that request ends with double CRLF
-	if !contains(request, "\r\n\r\n") {
-		t.Error("Expected M-SEARCH request to end with double CRLF")
-	}
+		for _, expectedLine := range expectedLines {
+			if !contains(request, expectedLine) {
+				t.Errorf("Expected M-SEARCH request to contain '%s'", expectedLine)
+			}
+		}
+
+		if !contains(request, "\r\n\r\n") {
+			t.Error("Expected M-SEARCH request to end with double CRLF")
+		}
+	})
+
+	t.Run("LowTimeout", func(t *testing.T) {
+		// If timeout is less than 1 second, it should still use MX: 1
+		service := NewService(500 * time.Millisecond)
+		request := service.buildMSearchRequest()
+
+		if !contains(request, "MX: 1") {
+			t.Errorf("Expected low timeout (500ms) to result in MX: 1, but got something else. Request:\n%s", request)
+		}
+	})
+
+	t.Run("VeryHighTimeout", func(t *testing.T) {
+		// MX should probably be capped at 5 for UPnP compatibility
+		service := NewService(10 * time.Second)
+		request := service.buildMSearchRequest()
+
+		if !contains(request, "MX: 5") {
+			t.Errorf("Expected high timeout (10s) to result in MX: 5, but got something else. Request:\n%s", request)
+		}
+	})
 }
 
 func TestParseLocationURL_Valid(t *testing.T) {
