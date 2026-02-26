@@ -1,5 +1,9 @@
 # Build stage
-FROM golang:1.26.0-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.0-alpine AS builder
+
+ARG TARGETARCH=amd64
+ARG TARGETOS=linux
+ARG TARGETVARIANT=
 
 WORKDIR /app
 
@@ -11,7 +15,11 @@ RUN go mod download
 COPY . .
 
 # Build the soundtouch-service
-RUN CGO_ENABLED=0 GOOS=linux go build -o /soundtouch-service ./cmd/soundtouch-service
+RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build -o /soundtouch-service ./cmd/soundtouch-service; \
+    else \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /soundtouch-service ./cmd/soundtouch-service; \
+    fi
 
 # Final stage
 FROM alpine:3.23
