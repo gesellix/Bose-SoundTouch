@@ -61,7 +61,7 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("[Marge] Failed to read power_on body: %v", err)
-		w.WriteHeader(http.StatusOK) // Silent failure is usually better for device requests
+		w.WriteHeader(http.StatusOK)
 
 		return
 	}
@@ -191,15 +191,21 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 	// This route is specifically used by firmware like Bose_Lisa/27.0.6.
 	if chi.URLParam(r, "account") != "" {
 		w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
-		_, _ = w.Write([]byte(marge.SoftwareUpdateToXML()))
+
+		xmlData := marge.SoftwareUpdateToXML()
+		w.Header().Set("Content-Length", strconv.Itoa(len(xmlData)))
+		_, _ = w.Write([]byte(xmlData))
 
 		return
 	}
 
 	if len(swUpdateXML) > 0 {
+		w.Header().Set("Content-Length", strconv.Itoa(len(swUpdateXML)))
 		_, _ = w.Write(swUpdateXML)
 	} else {
-		_, _ = w.Write([]byte(marge.SoftwareUpdateToXML()))
+		xmlData := marge.SoftwareUpdateToXML()
+		w.Header().Set("Content-Length", strconv.Itoa(len(xmlData)))
+		_, _ = w.Write([]byte(xmlData))
 	}
 }
 
@@ -415,7 +421,5 @@ func (s *Server) HandleMargeCustomerSupport(w http.ResponseWriter, r *http.Reque
 		},
 	}
 	s.ds.AddDeviceEvent(req.Device.ID, event)
-
-	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.WriteHeader(http.StatusOK)
 }

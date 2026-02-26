@@ -3,10 +3,12 @@
 package marge
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -66,16 +68,22 @@ func ConfiguredSourceToXML(cs models.ConfiguredSource) ([]byte, error) {
 		Name             string `xml:"name"`
 		SourceProviderID string `xml:"sourceproviderid"`
 		SourceName       string `xml:"sourcename"`
-		SourceSettings   string `xml:"sourcesettings"`
+		SourceSettings   string `xml:"sourceSettings"`
 		UpdatedOn        string `xml:"updatedOn"`
 		Username         string `xml:"username"`
 	}
 
 	providerID := 0
+	tokenType := "token"
 
 	for i, p := range constants.Providers {
 		if p == cs.SourceKeyType {
 			providerID = i + 1
+
+			if p == "SPOTIFY" {
+				tokenType = "token_version_3"
+			}
+
 			break
 		}
 	}
@@ -90,25 +98,41 @@ func ConfiguredSourceToXML(cs models.ConfiguredSource) ([]byte, error) {
 		UpdatedOn:        DateStr,
 		Username:         cs.SourceKeyAccount,
 	}
-	sxml.Credential.Type = "token"
+	sxml.Credential.Type = tokenType
 	sxml.Credential.Value = cs.Secret
 
 	return xml.Marshal(sxml)
 }
 
+// EscapeXML escapes special characters for XML.
+func EscapeXML(s string) string {
+	var b bytes.Buffer
+	if err := xml.EscapeText(&b, []byte(s)); err != nil {
+		return s
+	}
+
+	return b.String()
+}
+
 // GetConfiguredSourceXML returns the XML representation of a configured source as a string.
 func GetConfiguredSourceXML(cs models.ConfiguredSource) string {
 	providerID := 0
+	tokenType := "token"
 
 	for i, p := range constants.Providers {
 		if p == cs.SourceKeyType {
 			providerID = i + 1
+
+			if p == "SPOTIFY" {
+				tokenType = "token_version_3"
+			}
+
 			break
 		}
 	}
 
-	return fmt.Sprintf(`<source id="%s" type="Audio"><createdOn>%s</createdOn><credential type="token">%s</credential><name>%s</name><sourceproviderid>%d</sourceproviderid><sourcename>%s</sourcename><sourcesettings></sourcesettings><updatedOn>%s</updatedOn><username>%s</username></source>`,
-		cs.ID, DateStr, cs.Secret, cs.SourceKeyAccount, providerID, cs.DisplayName, DateStr, cs.SourceKeyAccount)
+	return fmt.Sprintf(`<source id="%s" type="Audio"><createdOn>%s</createdOn><credential type="%s">%s</credential><name>%s</name><sourceproviderid>%d</sourceproviderid><sourcename>%s</sourcename><sourceSettings></sourceSettings><updatedOn>%s</updatedOn><username>%s</username></source>`,
+		EscapeXML(cs.ID), DateStr, EscapeXML(tokenType), EscapeXML(cs.Secret), EscapeXML(cs.SourceKeyAccount), providerID, EscapeXML(cs.DisplayName), DateStr, EscapeXML(cs.SourceKeyAccount))
 }
 
 // PresetsToXML converts account presets to XML format for Marge responses.
@@ -127,12 +151,12 @@ func PresetsToXML(ds *datastore.DataStore, account, device string) ([]byte, erro
 
 	for i := range presets {
 		p := &presets[i]
-		res += fmt.Sprintf(`<preset buttonNumber="%s">`, p.ID)
-		res += fmt.Sprintf(`<containerArt>%s</containerArt>`, p.ContainerArt)
-		res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, p.Type)
+		res += fmt.Sprintf(`<preset buttonNumber="%s">`, EscapeXML(p.ID))
+		res += fmt.Sprintf(`<containerArt>%s</containerArt>`, EscapeXML(p.ContainerArt))
+		res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, EscapeXML(p.Type))
 		res += fmt.Sprintf(`<createdOn>%s</createdOn>`, DateStr)
-		res += fmt.Sprintf(`<location>%s</location>`, p.Location)
-		res += fmt.Sprintf(`<name>%s</name>`, p.Name)
+		res += fmt.Sprintf(`<location>%s</location>`, EscapeXML(p.Location))
+		res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(p.Name))
 
 		// Content Item Source
 		for j := range sources {
@@ -174,20 +198,28 @@ func RecentsToXML(ds *datastore.DataStore, account, device string) ([]byte, erro
 			lastPlayed = time.Unix(sec, 0).Format(time.RFC3339)
 		}
 
-		res += fmt.Sprintf(`<recent id="%s">`, r.ID)
-		res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, r.Type)
+		res += fmt.Sprintf(`<recent id="%s">`, EscapeXML(r.ID))
+		res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, EscapeXML(r.Type))
 		res += fmt.Sprintf(`<createdOn>%s</createdOn>`, DateStr)
-		res += fmt.Sprintf(`<lastplayedat>%s</lastplayedat>`, lastPlayed)
-		res += fmt.Sprintf(`<location>%s</location>`, r.Location)
-		res += fmt.Sprintf(`<name>%s</name>`, r.Name)
+		res += fmt.Sprintf(`<lastplayedat>%s</lastplayedat>`, EscapeXML(lastPlayed))
+		res += fmt.Sprintf(`<location>%s</location>`, EscapeXML(r.Location))
+		res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(r.Name))
 
 		// Content Item Source
+		sourceID := ""
+
 		for j := range sources {
 			s := sources[j]
 			if s.ID == r.SourceID || (s.SourceKeyType == r.Source && s.SourceKeyAccount == r.SourceAccount) {
 				res += GetConfiguredSourceXML(s)
+				sourceID = s.ID
+
 				break
 			}
+		}
+
+		if sourceID != "" {
+			res += fmt.Sprintf(`<sourceid>%s</sourceid>`, EscapeXML(sourceID))
 		}
 
 		res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
@@ -201,7 +233,20 @@ func RecentsToXML(ds *datastore.DataStore, account, device string) ([]byte, erro
 
 // ProviderSettingsToXML generates provider settings XML for the specified account.
 func ProviderSettingsToXML(account string) string {
-	return fmt.Sprintf(`<providerSettings><providerSetting><boseId>%s</boseId><keyName>ELIGIBLE_FOR_TRIAL</keyName><value>true</value><providerId>14</providerId></providerSetting></providerSettings>`, account)
+	return xml.Header + fmt.Sprintf(`<providerSettings>
+    <providerSetting>
+      <boseId>%s</boseId>
+      <keyName>ELIGIBLE_FOR_TRIAL</keyName>
+      <value>false</value>
+      <providerId>14</providerId>
+    </providerSetting>
+    <providerSetting>
+      <boseId>%s</boseId>
+      <keyName>STREAMING_QUALITY</keyName>
+      <value>2</value>
+      <providerId>15</providerId>
+    </providerSetting>
+  </providerSettings>`, EscapeXML(account), EscapeXML(account))
 }
 
 // SoftwareUpdateToXML generates software update configuration XML.
@@ -218,7 +263,7 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		return nil, err
 	}
 
-	res := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><account id="%s"><accountStatus>OK</accountStatus><devices>`, account)
+	res := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><account id="%s"><accountStatus>OK</accountStatus><devices>`, EscapeXML(account))
 	lastDeviceID := ""
 
 	for _, entry := range entries {
@@ -234,13 +279,27 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 			continue
 		}
 
-		res += fmt.Sprintf(`<device deviceid="%s">`, deviceID)
-		res += fmt.Sprintf(`<attachedProduct product_code="%s"><components/><productlabel>%s</productlabel><serialnumber>%s</serialnumber></attachedProduct>`,
-			info.ProductCode, info.ProductCode, info.ProductSerialNumber)
+		res += fmt.Sprintf(`<device deviceid="%s">`, EscapeXML(deviceID))
+
+		res += fmt.Sprintf(`<attachedProduct product_code="%s">`, EscapeXML(info.ProductCode))
+		if len(info.Components) > 0 {
+			res += `<components>`
+			for _, comp := range info.Components {
+				res += fmt.Sprintf(`<component type="%s"><componentlabel>%s</componentlabel><firmware-version>%s</firmware-version><serialnumber>%s</serialnumber></component>`,
+					EscapeXML(comp.Category), EscapeXML(comp.Category), EscapeXML(comp.SoftwareVersion), EscapeXML(comp.SerialNumber))
+			}
+
+			res += `</components>`
+		} else {
+			res += `<components/>`
+		}
+
+		res += fmt.Sprintf(`<productlabel>%s</productlabel><serialnumber>%s</serialnumber></attachedProduct>`,
+			EscapeXML(info.ProductCode), EscapeXML(info.ProductSerialNumber))
 		res += fmt.Sprintf(`<createdOn>%s</createdOn>`, DateStr)
-		res += fmt.Sprintf(`<firmwareVersion>%s</firmwareVersion>`, info.FirmwareVersion)
-		res += fmt.Sprintf(`<ipaddress>%s</ipaddress>`, info.IPAddress)
-		res += fmt.Sprintf(`<name>%s</name>`, info.Name)
+		res += fmt.Sprintf(`<firmwareVersion>%s</firmwareVersion>`, EscapeXML(info.FirmwareVersion))
+		res += fmt.Sprintf(`<ipaddress>%s</ipaddress>`, EscapeXML(info.IPAddress))
+		res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(info.Name))
 
 		presets, _ := PresetsToXML(ds, account, deviceID)
 		if len(presets) > len(xml.Header) {
@@ -338,12 +397,12 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	}
 
 	// Return XML for the single preset
-	res := fmt.Sprintf(`<preset buttonNumber="%s">`, presetObj.ID)
-	res += fmt.Sprintf(`<containerArt>%s</containerArt>`, presetObj.ContainerArt)
-	res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, presetObj.Type)
+	res := fmt.Sprintf(`<preset buttonNumber="%s">`, EscapeXML(presetObj.ID))
+	res += fmt.Sprintf(`<containerArt>%s</containerArt>`, EscapeXML(presetObj.ContainerArt))
+	res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, EscapeXML(presetObj.Type))
 	res += fmt.Sprintf(`<createdOn>%s</createdOn>`, DateStr)
-	res += fmt.Sprintf(`<location>%s</location>`, presetObj.Location)
-	res += fmt.Sprintf(`<name>%s</name>`, presetObj.Name)
+	res += fmt.Sprintf(`<location>%s</location>`, EscapeXML(presetObj.Location))
+	res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(presetObj.Name))
 	res += GetConfiguredSourceXML(*matchingSrc)
 	res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
 	res += `</preset>`
@@ -354,12 +413,12 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 // AddRecent adds or updates a recent item for the specified account and device.
 func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte) ([]byte, error) {
 	sources, err := ds.GetConfiguredSources(account, device)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 
 	recents, err := ds.GetRecents(account, device)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 
@@ -376,7 +435,25 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 
 	matchingSrc := findMatchingSource(sources, newRecentElem.SourceID)
 	if matchingSrc == nil {
-		return nil, fmt.Errorf("invalid account/source")
+		// If we don't have a matching source, try to guess or create a virtual one.
+		// For Spotify, the location usually starts with /playback/container/c3...
+		// which is a base64 encoded spotify: URI.
+		if strings.Contains(newRecentElem.Location, "spotify") || newRecentElem.SourceID == "SPOTIFY" {
+			matchingSrc = &models.ConfiguredSource{
+				ID:          newRecentElem.SourceID,
+				DisplayName: "Spotify",
+			}
+			matchingSrc.SourceKey.Type = "SPOTIFY"
+			matchingSrc.SourceKeyType = "SPOTIFY"
+		} else {
+			// fallback to a generic source if we can't guess
+			matchingSrc = &models.ConfiguredSource{
+				ID:          newRecentElem.SourceID,
+				DisplayName: "Other",
+			}
+			matchingSrc.SourceKey.Type = "INVALID"
+			matchingSrc.SourceKeyType = "INVALID"
+		}
 	}
 
 	utcTime := parseLastPlayedAt(newRecentElem.LastPlayedAt)
@@ -464,13 +541,14 @@ func createNewRecent(recents []models.ServiceRecent, name string, matchingSrc *m
 
 func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.ConfiguredSource, createdOn string, utcTime int64) []byte {
 	lastPlayed := time.Unix(utcTime, 0).Format(time.RFC3339)
-	res := fmt.Sprintf(`<recent id="%s">`, recentObj.ID)
-	res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, recentObj.Type)
-	res += fmt.Sprintf(`<createdOn>%s</createdOn>`, createdOn)
-	res += fmt.Sprintf(`<lastplayedat>%s</lastplayedat>`, lastPlayed)
-	res += fmt.Sprintf(`<location>%s</location>`, recentObj.Location)
-	res += fmt.Sprintf(`<name>%s</name>`, recentObj.Name)
+	res := fmt.Sprintf(`<recent id="%s">`, EscapeXML(recentObj.ID))
+	res += fmt.Sprintf(`<contentItemType>%s</contentItemType>`, EscapeXML(recentObj.Type))
+	res += fmt.Sprintf(`<createdOn>%s</createdOn>`, EscapeXML(createdOn))
+	res += fmt.Sprintf(`<lastplayedat>%s</lastplayedat>`, EscapeXML(lastPlayed))
+	res += fmt.Sprintf(`<location>%s</location>`, EscapeXML(recentObj.Location))
+	res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(recentObj.Name))
 	res += GetConfiguredSourceXML(*matchingSrc)
+	res += fmt.Sprintf(`<sourceid>%s</sourceid>`, EscapeXML(matchingSrc.ID))
 	res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, DateStr)
 	res += `</recent>`
 
@@ -498,11 +576,11 @@ func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 	}
 
 	createdOn := time.Now().Format(time.RFC3339)
-	res := fmt.Sprintf(`<device deviceid="%s">`, newDeviceElem.DeviceID)
-	res += fmt.Sprintf(`<createdOn>%s</createdOn>`, createdOn)
+	res := fmt.Sprintf(`<device deviceid="%s">`, EscapeXML(newDeviceElem.DeviceID))
+	res += fmt.Sprintf(`<createdOn>%s</createdOn>`, EscapeXML(createdOn))
 	res += `<ipaddress></ipaddress>`
-	res += fmt.Sprintf(`<name>%s</name>`, newDeviceElem.Name)
-	res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, createdOn)
+	res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(newDeviceElem.Name))
+	res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, EscapeXML(createdOn))
 	res += `</device>`
 
 	return append([]byte(xml.Header), []byte(res)...), nil

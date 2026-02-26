@@ -28,16 +28,18 @@ func (s *Server) RecordMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// Buffer the request body if it exists
+		// Use snapshot if available, otherwise buffer body (compatibility mode)
+		var snapshot *RequestSnapshot
+		if s, ok := r.Context().Value(SnapshotKey).(*RequestSnapshot); ok {
+			snapshot = s
+		}
+
 		var reqBody []byte
-
-		if r.Body != nil {
-			var err error
-
-			reqBody, err = io.ReadAll(r.Body)
-			if err == nil {
-				r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
-			}
+		if snapshot != nil {
+			reqBody = snapshot.Body
+		} else if r.Body != nil {
+			reqBody, _ = io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 		}
 
 		// wrap ResponseWriter to capture the response
@@ -54,7 +56,7 @@ func (s *Server) RecordMiddleware(next http.Handler) http.Handler {
 			defer func() { _ = res.Body.Close() }()
 		}
 
-		// Put back the original request body for recording
+		// Restore body for recording
 		r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 
 		_ = s.recorder.Record("self", r, res)

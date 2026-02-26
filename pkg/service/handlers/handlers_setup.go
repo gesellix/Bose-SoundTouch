@@ -156,6 +156,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dnsBindAddr := s.dnsBindAddr
 	mirrorEnabled := s.mirrorEnabled
 	mirrorEndpoints := s.mirrorEndpoints
+	preferredSource := s.preferredSource
 	internalPaths := s.internalPaths
 	enableSoundcorkProxy := s.enableSoundcorkProxy
 	redact, logBody, record := s.proxyRedact, s.proxyLogBody, s.recordEnabled
@@ -178,6 +179,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"dns_bind_addr":          dnsBindAddr,
 		"mirror_enabled":         mirrorEnabled,
 		"mirror_endpoints":       mirrorEndpoints,
+		"preferred_source":       preferredSource,
 		"internal_paths":         internalPaths,
 		"enable_soundcork_proxy": enableSoundcorkProxy,
 		"redact_logs":            redact,
@@ -203,6 +205,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		DNSBindAddr          string         `json:"dns_bind_addr"`
 		MirrorEnabled        bool           `json:"mirror_enabled"`
 		MirrorEndpoints      []string       `json:"mirror_endpoints"`
+		PreferredSource      string         `json:"preferred_source"`
 		InternalPaths        []string       `json:"internal_paths"`
 		EnableSoundcorkProxy bool           `json:"enable_soundcork_proxy"`
 		Shortcuts            map[string]int `json:"shortcuts"`
@@ -252,6 +255,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	s.mirrorEnabled = settings.MirrorEnabled
 	s.mirrorEndpoints = settings.MirrorEndpoints
+	s.preferredSource = settings.PreferredSource
 	s.internalPaths = settings.InternalPaths
 
 	s.enableSoundcorkProxy = settings.EnableSoundcorkProxy
@@ -285,6 +289,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		DNSBindAddr:          s.dnsBindAddr,
 		MirrorEnabled:        s.mirrorEnabled,
 		MirrorEndpoints:      s.mirrorEndpoints,
+		PreferredSource:      s.preferredSource,
 		InternalPaths:        s.internalPaths,
 		EnableSoundcorkProxy: s.enableSoundcorkProxy,
 		Shortcuts:            s.shortcuts,

@@ -155,6 +155,9 @@ async function fetchSettings() {
         if (settings.mirror_enabled !== undefined) {
             document.getElementById('mirror-enabled').checked = settings.mirror_enabled;
         }
+        if (settings.preferred_source !== undefined) {
+            document.getElementById('preferred-source-upstream').checked = settings.preferred_source === 'upstream';
+        }
         if (settings.mirror_endpoints) {
             document.getElementById('mirror-endpoints').value = settings.mirror_endpoints.join('\n');
         }
@@ -226,6 +229,7 @@ async function updateSettings() {
         dns_upstream: document.getElementById('dns-upstream').value,
         dns_bind_addr: document.getElementById('dns-bind').value,
         mirror_enabled: document.getElementById('mirror-enabled').checked,
+        preferred_source: document.getElementById('preferred-source-upstream').checked ? 'upstream' : 'local',
         mirror_endpoints: document.getElementById('mirror-endpoints').value.split('\n').map(s => s.trim()).filter(s => s !== ''),
         internal_paths: document.getElementById('internal-paths').value.split('\n').map(s => s.trim()).filter(s => s !== ''),
         enable_soundcork_proxy: document.getElementById('enable-soundcork-proxy').checked

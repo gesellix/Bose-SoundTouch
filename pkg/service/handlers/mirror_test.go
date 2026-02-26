@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -43,7 +45,7 @@ func TestMirroring(t *testing.T) {
 	recorder := proxy.NewRecorder(tempDir)
 	server.SetRecorder(recorder)
 	server.SetRecordEnabled(true)
-	server.SetMirrorSettings(true, []string{"/streaming/account/*/device/*/recent"})
+	server.SetMirrorSettings(true, []string{"/streaming/account/*/device/*/recent"}, "local")
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()
@@ -135,6 +137,82 @@ func TestMirroring(t *testing.T) {
 		}
 		if ct := record.Upstream.Headers.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.2+xml" {
 			t.Errorf("Expected Upstream Content-Type application/vnd.bose.streaming-v1.2+xml, got %s", ct)
+		}
+	})
+
+	t.Run("POST Request Body Preservation", func(t *testing.T) {
+		// Set recorder to synchronous mode for testing
+		os.Setenv("RECORDER_ASYNC", "false")
+		defer os.Unsetenv("RECORDER_ASYNC")
+
+		// Create a mock upstream that echoes back the request body
+		postUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/scmudc/A81B6A536A98") {
+				// Read the request body
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				// Echo back the body in response for verification
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("X-Request-Body-Length", fmt.Sprintf("%d", len(body)))
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(body)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer postUpstream.Close()
+
+		// Setup mirroring for the POST endpoint
+		server.SetMirrorSettings(true, []string{"/v1/scmudc/*"}, "local")
+
+		requestBody := `{"envelope":{"monoTime":234906,"payloadProtocolVersion":"3.1","payloadType":"scmudc","protocolVersion":"1.0","time":"2026-02-25T23:03:14.976349+00:00","uniqueId":"A81B6A536A98"},"payload":{"deviceInfo":{"boseID":"3230304","deviceID":"A81B6A536A98","deviceType":"SoundTouch 10","serialNumber":"I6332527703739342000020","softwareVersion":"27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29","systemSerialNumber":"069231P63364828AE"},"events":[{"data":{"play-state":"PAUSE_STATE"},"monoTime":234904,"time":"2026-02-25T23:03:14.973466+00:00","type":"play-state-changed"}]}}`
+
+		path := "/v1/scmudc/A81B6A536A98"
+		req, _ := http.NewRequest("POST", ts.URL+path, strings.NewReader(requestBody))
+		req.Header.Set("Content-Type", "text/json; charset=utf-8")
+		req.Host = strings.TrimPrefix(postUpstream.URL, "http://")
+
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected status OK, got %v", res.Status)
+		}
+
+		// Wait briefly for the synchronous recording to complete
+		time.Sleep(100 * time.Millisecond)
+
+		// Check if the mirrored interaction was recorded with the request body
+		matchesMirror, _ := filepath.Glob(filepath.Join(tempDir, "interactions", "*", "mirror", "v1", "scmudc", "*", "*-POST.http"))
+		if len(matchesMirror) == 0 {
+			// Try broader search pattern
+			allHttpFiles, _ := filepath.Glob(filepath.Join(tempDir, "interactions", "*", "*", "*", "*", "*", "*.http"))
+			t.Errorf("Expected to find mirrored POST interaction. All .http files found: %v", allHttpFiles)
+		} else {
+			// Read the recorded mirrored interaction
+			recordedContent, err := os.ReadFile(matchesMirror[0])
+			if err != nil {
+				t.Fatalf("Failed to read recorded mirror interaction: %v", err)
+			}
+
+			recordedStr := string(recordedContent)
+
+			// Check if the request body was preserved in the recording
+			if !strings.Contains(recordedStr, requestBody) {
+				t.Errorf("Request body not found in mirrored recording. Content: %s", recordedStr)
+			}
+
+			// Check if the Content-Type header was preserved
+			if !strings.Contains(recordedStr, "Content-Type: text/json; charset=utf-8") {
+				t.Errorf("Content-Type header not found in mirrored recording. Content: %s", recordedStr)
+			}
 		}
 	})
 }

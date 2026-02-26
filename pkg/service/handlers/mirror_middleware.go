@@ -22,92 +22,153 @@ import (
 // MirrorMiddleware returns a middleware that mirrors specific requests to the Bose upstream.
 func (s *Server) MirrorMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.mu.RLock()
-		enabled := s.mirrorEnabled
-		endpoints := s.mirrorEndpoints
-		s.mu.RUnlock()
+		enabled, endpoints, preferredSource := s.getMirrorSettings()
 
-		if !enabled || len(endpoints) == 0 {
+		if !enabled || len(endpoints) == 0 || !s.shouldMirror(r.URL.Path, endpoints) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		shouldMirror := false
+		// Try to fetch snapshot from context
+		var snapshot *RequestSnapshot
+		if snap, ok := r.Context().Value(SnapshotKey).(*RequestSnapshot); ok {
+			snapshot = snap
+		}
 
-		for _, pattern := range endpoints {
-			if matchPattern(pattern, r.URL.Path) {
-				shouldMirror = true
-				break
+		// Buffer request body if snapshot is missing (compatibility mode)
+		var bodyBytes []byte
+		if snapshot != nil {
+			bodyBytes = snapshot.Body
+		} else if r.Body != nil {
+			bodyBytes, _ = io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
+
+		// Use request context but detach it for background operations to prevent cancellation when the primary request finishes
+		detachedCtx := context.WithoutCancel(r.Context())
+		if snapshot != nil {
+			detachedCtx = context.WithValue(detachedCtx, SnapshotKey, snapshot)
+		}
+
+		if preferredSource == "upstream" {
+			s.mirrorUpstreamPreferred(detachedCtx, w, r, next, bodyBytes)
+			return
+		}
+
+		s.mirrorLocalPreferred(detachedCtx, w, r, next, bodyBytes)
+	})
+}
+
+func (s *Server) getMirrorSettings() (bool, []string, string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.mirrorEnabled, s.mirrorEndpoints, s.preferredSource
+}
+
+func (s *Server) shouldMirror(path string, endpoints []string) bool {
+	for _, pattern := range endpoints {
+		if matchPattern(pattern, path) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *Server) mirrorUpstreamPreferred(detachedCtx context.Context, w http.ResponseWriter, r *http.Request, next http.Handler, bodyBytes []byte) {
+	log.Printf("[MIRROR] Upstream is preferred source for %s %s", r.Method, r.URL.Path)
+
+	// Clone request for local execution
+	rLocal := r.Clone(detachedCtx)
+	rLocal.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	localRecorder := &mirrorResponseRecorder{
+		headers: make(http.Header),
+		body:    &bytes.Buffer{},
+	}
+
+	// Run local handler in background
+	localDone := make(chan struct{})
+
+	go func() {
+		next.ServeHTTP(localRecorder, rLocal)
+		close(localDone)
+	}()
+
+	// Clone request for mirror execution
+	rMirror := r.Clone(detachedCtx)
+	rMirror.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	// Execute mirror synchronously
+	mirrorRes := s.performMirror(rMirror)
+
+	// Send mirror response to client
+	if mirrorRes != nil && mirrorRes.status != 0 && mirrorRes.status < 500 {
+		for k, vv := range mirrorRes.headers {
+			for _, v := range vv {
+				w.Header().Add(k, v)
 			}
 		}
 
-		if !shouldMirror {
-			next.ServeHTTP(w, r)
-			return
+		w.WriteHeader(mirrorRes.status)
+		_, _ = w.Write(mirrorRes.body.Bytes())
+	} else {
+		// Fallback to local if mirror failed
+		log.Printf("[MIRROR_ERR] Mirror failed, falling back to local for %s", r.URL.Path)
+		<-localDone
+
+		for k, vv := range localRecorder.headers {
+			for _, v := range vv {
+				w.Header().Add(k, v)
+			}
 		}
 
-		// Buffer request body for both local and mirror
-		var bodyBytes []byte
-		if r.Body != nil {
-			bodyBytes, _ = io.ReadAll(r.Body)
-			_ = r.Body.Close()
+		if localRecorder.status == 0 {
+			localRecorder.status = http.StatusOK
 		}
 
-		// Prepare local request
-		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		w.WriteHeader(localRecorder.status)
+		_, _ = w.Write(localRecorder.body.Bytes())
+	}
 
-		// Wrap response writer to capture local response for parity check
-		localRecorder := &mirrorResponseRecorder{
-			headers: make(http.Header),
-			body:    &bytes.Buffer{},
+	// Perform parity check once local is done
+	go func() {
+		<-localDone
+
+		if mirrorRes != nil {
+			s.checkParity(r, localRecorder, mirrorRes)
 		}
+	}()
+}
 
-		// Use a multi-writer if RecordMiddleware isn't already doing this,
-		// but let's just wrap it.
+func (s *Server) mirrorLocalPreferred(detachedCtx context.Context, w http.ResponseWriter, r *http.Request, next http.Handler, bodyBytes []byte) {
+	// Default: local is preferred source of truth
+	// Prepare local request
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		wrappedWriter := &parityResponseWriter{
-			ResponseWriter: w,
-			recorder:       localRecorder,
-		}
+	// Wrap response writer to capture local response for parity check
+	localRecorder := &mirrorResponseRecorder{
+		headers: make(http.Header),
+		body:    &bytes.Buffer{},
+	}
 
-		if r.Method == http.MethodGet {
-			// GET: Local is primary, Mirror is asynchronous
-			log.Printf("[MIRROR] Mirroring GET %s asynchronously", r.URL.Path)
+	wrappedWriter := &parityResponseWriter{
+		ResponseWriter: w,
+		recorder:       localRecorder,
+	}
 
-			// We need a clone for the async call, detached from original request context
-			// We use context.Background() because the original request's context
-			// will be canceled as soon as the local handler finishes and returns
-			// the response to the speaker.
-			//nolint:contextcheck
-			rMirror := r.Clone(context.Background())
-			rMirror.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	log.Printf("[MIRROR] Mirroring %s %s %s", r.Method, r.URL.Path, map[bool]string{true: "asynchronously", false: "synchronously"}[r.Method == http.MethodGet])
 
-			// For GET, we run mirror in background and don't wait for parity in real-time
-			// or we can wait for local to finish then trigger parity asynchronously.
+	rMirror := r.Clone(detachedCtx)
+	rMirror.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-			next.ServeHTTP(wrappedWriter, r)
+	next.ServeHTTP(wrappedWriter, r)
 
-			go func() {
-				mirrorRes := s.performMirror(rMirror)
-				s.checkParity(r, localRecorder, mirrorRes)
-			}()
-		} else {
-			// POST/PUT/DELETE: Local is primary for speaker response, but we sync synchronously
-			log.Printf("[MIRROR] Mirroring %s %s synchronously", r.Method, r.URL.Path)
-
-			// We need a clone for the background sync call
-			//nolint:contextcheck
-			rMirror := r.Clone(context.Background())
-			rMirror.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-			next.ServeHTTP(wrappedWriter, r)
-
-			go func() {
-				mirrorRes := s.performMirror(rMirror)
-				s.checkParity(r, localRecorder, mirrorRes)
-			}()
-		}
-	})
+	go func() {
+		mirrorRes := s.performMirror(rMirror)
+		s.checkParity(r, localRecorder, mirrorRes)
+	}()
 }
 
 type parityResponseWriter struct {
@@ -142,6 +203,41 @@ func (p *parityResponseWriter) WriteHeader(statusCode int) {
 }
 
 func (s *Server) performMirror(r *http.Request) *mirrorResponseRecorder {
+	// Try to fetch snapshot from context
+	var snapshot *RequestSnapshot
+	if snap, ok := r.Context().Value(SnapshotKey).(*RequestSnapshot); ok {
+		snapshot = snap
+	}
+
+	// Preserve request body for recording before it gets consumed by the proxy
+	var requestForRecording *http.Request
+	if s.recorder != nil && s.recordEnabled {
+		requestForRecording = r.Clone(r.Context())
+		if snapshot != nil {
+			// Use snapshot for both proxy and recording
+			r.Body = io.NopCloser(bytes.NewReader(snapshot.Body))
+			requestForRecording.Body = io.NopCloser(bytes.NewReader(snapshot.Body))
+		} else if r.Body != nil {
+			// Compatibility fallback
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err != nil {
+				log.Printf("[MIRROR_ERR] Failed to read request body for recording: %v", err)
+			} else {
+				// Restore body for proxy
+				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				// Set body for recording
+				requestForRecording.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			}
+		}
+
+		// Ensure Content-Length is set for the recording clone
+		if requestForRecording.Body != nil {
+			if snapshot != nil {
+				requestForRecording.ContentLength = int64(len(snapshot.Body))
+			}
+		}
+	}
+
 	host := r.Host
 	if host == "" || host == "localhost" {
 		host = "streaming.bose.com"
@@ -183,9 +279,9 @@ func (s *Server) performMirror(r *http.Request) *mirrorResponseRecorder {
 	proxy.ModifyResponse = func(res *http.Response) error {
 		res.Header.Set("X-Proxy-Origin", "upstream-mirror")
 
-		// Record mirrored interaction
-		if s.recorder != nil && s.recordEnabled {
-			_ = s.recorder.Record("mirror", r, res)
+		// Record mirrored interaction with preserved request body
+		if s.recorder != nil && s.recordEnabled && requestForRecording != nil {
+			_ = s.recorder.Record("mirror", requestForRecording, res)
 		}
 
 		return nil

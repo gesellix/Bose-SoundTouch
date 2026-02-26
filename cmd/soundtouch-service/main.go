@@ -216,6 +216,12 @@ func main() {
 				Usage:   "Log what would be migrated without actually doing it",
 				EnvVars: []string{"MIGRATION_DRY_RUN"},
 			},
+			&cli.StringFlag{
+				Name:    "preferred-source",
+				Usage:   "Preferred source of truth (local or upstream)",
+				Value:   "local",
+				EnvVars: []string{"PREFERRED_SOURCE"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			config := loadConfig(c)
@@ -247,7 +253,7 @@ func main() {
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
-			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints)
+			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints, persisted.PreferredSource)
 			server.SetInternalPaths(persisted.InternalPaths)
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
@@ -392,6 +398,7 @@ type serviceConfig struct {
 	mgmtPassword         string
 	migrationEnabled     bool
 	migrationDryRun      bool
+	preferredSource      string
 }
 
 func loadConfig(c *cli.Context) serviceConfig {
@@ -460,6 +467,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 	internalPaths := c.StringSlice("internal-paths")
 	migrationEnabled := c.Bool("migration-enabled")
 	migrationDryRun := c.Bool("migration-dry-run")
+	preferredSource := c.String("preferred-source")
 
 	return serviceConfig{
 		port:                 port,
@@ -489,6 +497,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		mgmtPassword:         mgmtPassword,
 		migrationEnabled:     migrationEnabled,
 		migrationDryRun:      migrationDryRun,
+		preferredSource:      preferredSource,
 	}
 }
 
@@ -498,14 +507,17 @@ func getDomains(serverURL, httpsServerURL, hostname string) []string {
 		"*.api.bose.io":    true,
 		"*.api.bosecm.com": true,
 		// Core Bose domains (keep specific ones for clarity)
-		"streaming.bose.com":   true,
-		"updates.bose.com":     true,
-		"stats.bose.com":       true,
-		"bmx.bose.com":         true,
-		"worldwide.bose.com":   true,
-		"music.api.bose.com":   true,
-		"bose-prod.apigee.net": true,
-		"bose-test.apigee.net": true,
+		"streaming.bose.com":      true,
+		"updates.bose.com":        true,
+		"stats.bose.com":          true,
+		"bmx.bose.com":            true,
+		"worldwide.bose.com":      true,
+		"music.api.bose.com":      true,
+		"streamingoauth.bose.com": true,
+		"bosecm.com":              true,
+		"bose.io":                 true,
+		"bose-prod.apigee.net":    true,
+		"bose-test.apigee.net":    true,
 		// Local service domains
 		setup.TestDomain: true,
 		hostname:         true,
@@ -532,6 +544,13 @@ func getDomains(serverURL, httpsServerURL, hostname string) []string {
 func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) datastore.Settings {
 	persisted, err := ds.GetSettings()
 	if err != nil {
+		return datastore.Settings{}
+	}
+
+	// Only override CLI values if settings file exists
+	// If no settings file exists, GetSettings returns empty Settings{} and we should preserve CLI values
+	settingsPath := filepath.Join(ds.DataDir, "settings.json")
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
 		return datastore.Settings{}
 	}
 
@@ -569,6 +588,7 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 
 	config.mirrorEnabled = persisted.MirrorEnabled
 	config.mirrorEndpoints = persisted.MirrorEndpoints
+	config.preferredSource = persisted.PreferredSource
 	config.internalPaths = persisted.InternalPaths
 
 	return persisted
@@ -590,12 +610,14 @@ func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datast
 		DNSBindAddr:          config.dnsBind,
 		MirrorEnabled:        config.mirrorEnabled,
 		MirrorEndpoints:      config.mirrorEndpoints,
+		PreferredSource:      config.preferredSource,
 		InternalPaths:        config.internalPaths,
 		Shortcuts: map[string]int{
 			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
 			"/sw.js": http.StatusNotFound,
 		},
 	}
+
 	_ = ds.SaveSettings(settings)
 
 	return settings
@@ -634,6 +656,7 @@ func startDeviceDiscovery(server *handlers.Server) {
 
 func setupRouter(server *handlers.Server) *chi.Mux {
 	r := chi.NewRouter()
+	r.Use(server.SnapshotMiddleware)
 	r.Use(server.OriginMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(server.ShortcutMiddleware)
@@ -722,6 +745,10 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Get("/account/{account}", server.HandleMargeAccountProfile)
 		r.Post("/account/{account}", server.HandleMargeUpdateAccountProfile)
 		r.Post("/account/{account}/password", server.HandleMargeChangePassword)
+	})
+
+	r.Route("/oauth", func(r chi.Router) {
+		r.HandleFunc("/*", server.HandleBoseProxy)
 	})
 
 	r.Route("/v1", func(r chi.Router) {

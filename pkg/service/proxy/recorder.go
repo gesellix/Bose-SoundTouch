@@ -117,9 +117,18 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 		// Clone request
 		clonedReq = req.Clone(req.Context())
 		if req.Body != nil {
-			bodyBytes, _ := io.ReadAll(req.Body)
-			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-			clonedReq.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			bodyBytes, err := io.ReadAll(req.Body)
+			if err != nil {
+				log.Printf("failed to read request body for async recording: %v", err)
+
+				clonedReq.Body = http.NoBody
+			} else {
+				// Reset original body for subsequent consumers (though Record is usually called at the end)
+				req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				// Set body for async task
+				clonedReq.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				clonedReq.ContentLength = int64(len(bodyBytes))
+			}
 		}
 
 		// Clone response if present
@@ -130,9 +139,17 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 				Request:    clonedReq,
 			}
 			if res.Body != nil {
-				bodyBytes, _ := io.ReadAll(res.Body)
-				res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-				clonedRes.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+				bodyBytes, err := io.ReadAll(res.Body)
+				if err != nil {
+					log.Printf("failed to read response body for async recording: %v", err)
+
+					res.Body = http.NoBody
+					clonedRes.Body = http.NoBody
+				} else {
+					res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+					clonedRes.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+					clonedRes.ContentLength = int64(len(bodyBytes))
+				}
 			}
 		}
 	} else {

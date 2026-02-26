@@ -290,12 +290,18 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 
 	deviceInfo := &models.ServiceDeviceInfo{
 		DeviceID:        info.DeviceID,
-		ProductCode:     fmt.Sprintf("%s %s", info.Type, info.ModuleType),
+		ProductCode:     info.Type,
 		Name:            info.Name,
 		DiscoveryMethod: info.DiscoveryMethod,
 	}
 
 	for _, comp := range info.Components {
+		deviceInfo.Components = append(deviceInfo.Components, models.ServiceComponent{
+			Category:        comp.Category,
+			SoftwareVersion: comp.SoftwareVersion,
+			SerialNumber:    comp.SerialNumber,
+		})
+
 		switch comp.Category {
 		case "SCM":
 			deviceInfo.FirmwareVersion = comp.SoftwareVersion
@@ -453,9 +459,17 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 	}
 
 	recents := []models.ServiceRecent{}
+	maxID := 0
 
 	for i := range recentsWrap.Recents {
 		r := &recentsWrap.Recents[i]
+
+		if id, err := strconv.Atoi(r.ID); err == nil {
+			if id > maxID {
+				maxID = id
+			}
+		}
+
 		recents = append(recents, models.ServiceRecent{
 			ServiceContentItem: models.ServiceContentItem{
 				ID:            r.ID,
@@ -470,6 +484,14 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 			UtcTime:      r.UtcTime,
 			ContainerArt: r.ContentItem.ContainerArt,
 		})
+	}
+
+	// Ensure all recents have unique numeric IDs
+	for i := range recents {
+		if _, err := strconv.Atoi(recents[i].ID); err != nil || recents[i].ID == "" {
+			maxID++
+			recents[i].ID = strconv.Itoa(maxID)
+		}
 	}
 
 	return recents, nil
@@ -867,6 +889,7 @@ type Settings struct {
 	DNSBindAddr          string         `json:"dns_bind_addr,omitempty"`
 	MirrorEnabled        bool           `json:"mirror_enabled"`
 	MirrorEndpoints      []string       `json:"mirror_endpoints,omitempty"`
+	PreferredSource      string         `json:"preferred_source,omitempty"`
 	InternalPaths        []string       `json:"internal_paths,omitempty"`
 	Shortcuts            map[string]int `json:"shortcuts,omitempty"`
 }

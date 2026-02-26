@@ -54,9 +54,12 @@ func TestMargeSoftwareUpdate(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(res.Body)
-	// Should contain software_update or INDEX (if swupdate.xml exists)
-	if !strings.Contains(string(body), "software_update") && !strings.Contains(string(body), "INDEX") {
+	// Should contain INDEX as we updated swupdate.xml
+	if !strings.Contains(string(body), "INDEX") {
 		t.Errorf("Unexpected response: %s", string(body))
+	}
+	if !strings.Contains(string(body), "0x0933") {
+		t.Errorf("Response missing VideoWave (0x0933) info: %s", string(body))
 	}
 }
 
@@ -761,6 +764,12 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		if !strings.Contains(string(body), "<boseId>123</boseId>") {
 			t.Errorf("Response body missing account ID: %s", body)
 		}
+		if !strings.Contains(string(body), "<keyName>ELIGIBLE_FOR_TRIAL</keyName>") {
+			t.Errorf("Response body missing ELIGIBLE_FOR_TRIAL: %s", body)
+		}
+		if !strings.Contains(string(body), "<keyName>STREAMING_QUALITY</keyName>") {
+			t.Errorf("Response body missing STREAMING_QUALITY: %s", body)
+		}
 	})
 
 	t.Run("StreamingToken", func(t *testing.T) {
@@ -823,6 +832,10 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 			t.Errorf("Expected status OK, got %v", res.Status)
 		}
 
+		if ct := res.Header.Get("Content-Type"); ct != "" {
+			t.Errorf("Expected no Content-Type for customer support upload (empty body), got %v", ct)
+		}
+
 		// Verify event was recorded
 		events := ds.GetDeviceEvents("587A628A4042")
 		found := false
@@ -841,6 +854,42 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 
 		if !found {
 			t.Error("Customer support event not found in event log")
+		}
+	})
+
+	t.Run("AddRecent_Reproduction", func(t *testing.T) {
+		account := "3230304"
+		device := "A81B6A536A98"
+
+		// Setup sources for this device
+		deviceDir := ds.AccountDeviceDir(account, device)
+		_ = os.MkdirAll(deviceDir, 0755)
+		_ = os.WriteFile(filepath.Join(deviceDir, "Recents.xml"), []byte("<recents/>"), 0644)
+		// No Sources.xml
+
+		path := "/marge/streaming/account/" + account + "/device/" + device + "/recent"
+		payload := `<?xml version="1.0" encoding="UTF-8" ?><recent><lastplayedat>2026-02-25T23:03:14+00:00</lastplayedat><sourceid>10863533</sourceid><name>My top tracks playlist</name><location>/playback/container/c3BvdGlmeTpwbGF5bGlzdDo3YklIMERKRUdoVjFSZ2duandOYWxn</location><contentItemType>tracklisturl</contentItemType></recent>`
+
+		res, err := http.Post(ts.URL+path, "application/xml", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status Created (201), got %v: %s", res.Status, body)
+		}
+
+		// Verify it was saved
+		recents, err := ds.GetRecents(account, device)
+		if err != nil {
+			t.Fatalf("Failed to get recents: %v", err)
+		}
+		if len(recents) == 0 {
+			t.Error("Recents list is empty")
+		} else if recents[0].Name != "My top tracks playlist" {
+			t.Errorf("Expected name 'My top tracks playlist', got '%s'", recents[0].Name)
 		}
 	})
 }

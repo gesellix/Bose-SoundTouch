@@ -177,16 +177,25 @@ type ConfiguredSource struct {
 
 // ServiceDeviceInfo represents information about a SoundTouch device.
 type ServiceDeviceInfo struct {
-	DeviceID            string `json:"device_id" xml:"deviceID,attr"`
-	ProductCode         string `json:"product_code" xml:"type"`
-	DeviceSerialNumber  string `json:"device_serial_number" xml:"serialnumber"`
-	ProductSerialNumber string `json:"product_serial_number" xml:"product_serial_number"`
-	FirmwareVersion     string `json:"firmware_version" xml:"softwareVersion"`
-	IPAddress           string `json:"ip_address" xml:"ipAddress"`
-	Name                string `json:"name" xml:"name"`
-	MacAddress          string `json:"mac_address,omitempty" xml:"-"`
-	DiscoveryMethod     string `json:"discovery_method,omitempty"`
-	AccountID           string `json:"account_id,omitempty"`
+	DeviceID            string             `json:"device_id" xml:"deviceID,attr"`
+	ProductCode         string             `json:"product_code" xml:"type"`
+	DeviceSerialNumber  string             `json:"device_serial_number" xml:"serialnumber"`
+	ProductSerialNumber string             `json:"product_serial_number" xml:"product_serial_number"`
+	FirmwareVersion     string             `json:"firmware_version" xml:"softwareVersion"`
+	IPAddress           string             `json:"ip_address" xml:"ipAddress"`
+	Name                string             `json:"name" xml:"name"`
+	MacAddress          string             `json:"mac_address,omitempty" xml:"-"`
+	DiscoveryMethod     string             `json:"discovery_method,omitempty"`
+	AccountID           string             `json:"account_id,omitempty"`
+	Components          []ServiceComponent `json:"components,omitempty" xml:"-"`
+}
+
+// ServiceComponent represents a hardware or software component of a device.
+type ServiceComponent struct {
+	Type            string `xml:"type,attr"`
+	Category        string `xml:"category,attr"`
+	SoftwareVersion string `xml:"softwareVersion"`
+	SerialNumber    string `xml:"serialNumber"`
 }
 
 // CustomerSupportDevice represents device information for customer support purposes.

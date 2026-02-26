@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -42,6 +43,7 @@ type Server struct {
 	dnsBindAddr          string
 	mirrorEnabled        bool
 	mirrorEndpoints      []string
+	preferredSource      string
 	internalPaths        []string
 	enableSoundcorkProxy bool
 	shortcuts            map[string]int
@@ -57,6 +59,27 @@ type Server struct {
 	spotifyClientSecret  string
 	spotifyRedirectURI   string
 	spotifyService       *spotify.Service
+}
+
+// RequestSnapshot represents an immutable snapshot of an HTTP request.
+type RequestSnapshot struct {
+	Method    string
+	URL       *url.URL
+	Headers   http.Header
+	Body      []byte
+	Host      string
+	Timestamp time.Time
+}
+
+type ctxKey struct{ name string }
+
+// SnapshotKey is the context key for the RequestSnapshot.
+var SnapshotKey = &ctxKey{"request_snapshot"}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
 }
 
 // NewServer creates a new SoundTouch service server.
@@ -317,12 +340,13 @@ func (s *Server) SetMgmtConfig(username, password string) {
 }
 
 // SetMirrorSettings sets the mirroring settings for the server.
-func (s *Server) SetMirrorSettings(enabled bool, endpoints []string) {
+func (s *Server) SetMirrorSettings(enabled bool, endpoints []string, preferredSource string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.mirrorEnabled = enabled
 	s.mirrorEndpoints = endpoints
+	s.preferredSource = preferredSource
 }
 
 // SetInternalPaths sets the internal paths for the server.
