@@ -100,7 +100,7 @@ jobs:
           go build -o "$output_name" ./cmd/soundtouch-cli
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: soundtouch-cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: soundtouch-cli-*

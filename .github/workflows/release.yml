@@ -192,7 +192,7 @@ jobs:
           echo "✅ Checksums generated successfully"
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm }}
           path: |
@@ -207,7 +207,7 @@ jobs:
 
     steps:
       - name: Download binary artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: binaries-*
           path: ./binaries
@@ -264,7 +264,7 @@ jobs:
           fi
 
       - name: Upload checksums
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: checksums
           path: |
@@ -275,7 +275,7 @@ jobs:
           retention-days: 1
 
       - name: Upload all release assets
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: binaries/release-files/
@@ -294,7 +294,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download release assets
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-assets
           path: ./release-assets
@@ -464,7 +464,7 @@ jobs:
 
     steps:
       - name: Download release assets
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: release-assets
           path: ./release-assets
