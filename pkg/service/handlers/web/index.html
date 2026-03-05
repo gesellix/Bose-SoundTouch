@@ -1,576 +1,1453 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"/>
     <title>AfterTouch (SoundTouch Toolkit)</title>
-    <link rel="icon" href="/media/favicon-braille.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/web/css/style.css">
+    <link rel="icon" href="/media/favicon-braille.svg" type="image/svg+xml"/>
+    <link rel="stylesheet" href="/web/css/style.css"/>
 </head>
 <body>
-    <h1>AfterTouch</h1>
-    <p style="margin-top: -10px; font-style: italic; color: #666;">Bose SoundTouch Toolkit</p>
+<h1>AfterTouch</h1>
+<p style="margin-top: -10px; font-style: italic; color: #666">
+    Bose SoundTouch Toolkit
+</p>
 
-    <div class="tabs">
-        <div class="tab-buttons">
-            <button class="tab-btn active" onclick="openTab(event, 'tab-overview')">Overview</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-settings')">1. Settings</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-devices')">2. Devices</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-sync')">3. Data Sync</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-migration')">4. Migration</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-interactions')">5. Interactions & Events</button>
-            <button class="tab-btn" onclick="openTab(event, 'tab-parity')">6. Parity & Mirroring</button>
-        </div>
+<div class="tabs">
+    <div class="tab-buttons">
+        <button class="tab-btn active" onclick="openTab(event, 'tab-overview')">
+            Overview
+        </button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-settings')">
+            1. Settings
+        </button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-devices')">
+            2. Devices
+        </button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-sync')">
+            3. Data Sync
+        </button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-migration')">
+            4. Migration
+        </button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-interactions')">
+            5. Interactions & Events
+        </button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-parity')">
+            6. Parity & Mirroring
+        </button>
+    </div>
 
-        <!-- Tab 0: Overview -->
-        <div id="tab-overview" class="tab-content active">
-            <h2>Welcome to AfterTouch</h2>
-            <p>This toolkit helps you keep your Bose SoundTouch speakers functional even after the Bose Cloud shutdown in May 2026. It emulates the necessary cloud services locally on your network.</p>
+    <!-- Tab 0: Overview -->
+    <div id="tab-overview" class="tab-content active">
+        <h2>Welcome to AfterTouch</h2>
+        <p>
+            This toolkit helps you keep your Bose SoundTouch speakers
+            functional even after the Bose Cloud shutdown in May 2026.
+            It emulates the necessary cloud services locally on your
+            network.
+        </p>
 
-            <h3>Migration Process at a Glance</h3>
-            <div class="info-box prerequisite-box">
-                <strong>🔌 Prerequisite: Enable SSH</strong><br>
-                Migration requires SSH access. To enable it:
-                <ol style="margin-top: 5px; margin-bottom: 5px;">
-                    <li>Create an empty file named <code>remote_services</code> on a USB stick.</li>
-                    <li>Insert it into the speaker's <strong>SERVICE</strong> port and reboot the speaker.</li>
-                </ol>
-                <strong>Verify connection:</strong>
-                <ul style="margin-top: 5px; margin-bottom: 0; padding-left: 20px;">
-                    <li>Use the <strong>Migration</strong> tab to select your device and verify that <em>SSH Connection</em> shows ✅ Success.</li>
-                    <li>Or manually: <code>ssh -oHostKeyAlgorithms=+ssh-rsa root@&lt;SPEAKER-IP&gt;</code> (no password).</li>
-                </ul>
-            </div>
-            <ol class="guide-steps">
+        <h3>Migration Process at a Glance</h3>
+        <div class="info-box prerequisite-box">
+            <strong>🔌 Prerequisite: Enable SSH</strong><br/>
+            Migration requires SSH access. To enable it:
+            <ol style="margin-top: 5px; margin-bottom: 5px">
                 <li>
-                    <strong>Settings:</strong> Review the <strong>Settings</strong> tab. Ensure the "Target Domain" and "Proxy Domain" use an IP address or domain name that is <strong>accessible from your speakers</strong> (usually the IP of this server on your local network).
+                    Create an empty file named
+                    <code>remote_services</code> on a USB stick.
                 </li>
                 <li>
-                    <strong>Discovery:</strong> Go to the <strong>Devices</strong> tab to find your speakers on the network.
-                    Ensure your speakers are powered on and connected to the same network.
-                </li>
-                <li>
-                    <strong>Data Sync:</strong> In the <strong>Data Sync</strong> tab, fetch your current presets, recents, and sources.
-                    This step is critical to ensure your local service has all your personalized data before you disconnect from the Bose cloud.
-                </li>
-                <li>
-                    <strong>Migration:</strong> In the <strong>Migration</strong> tab, redirect your speaker to this local service.
-                    We recommend the <strong>XML Configuration</strong> method as it is surgical and easily reversible.
-                </li>
-                <li>
-                    <strong>Verification:</strong> After migration and reboot, your speaker will communicate with this toolkit instead of Bose servers.
+                    Insert it into the speaker's
+                    <strong>SERVICE</strong> port and reboot the
+                    speaker.
                 </li>
             </ol>
-
-            <div class="info-box safety-box">
-                <strong>⚠️ Safety First:</strong> Before starting any migration, please read our
-                <a href="https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-SAFETY.html" target="_blank">Professional Migration & Safety Guide</a>.
-                The toolkit automatically creates backups, but understanding the process is key to a smooth transition.
-            </div>
-
-            <h3>Useful Links</h3>
-            <ul>
-                <li><a href="https://gesellix.github.io/Bose-SoundTouch/guides/SURVIVAL-GUIDE.html" target="_blank">Cloud Shutdown Survival Guide</a></li>
-                <li><a href="https://gesellix.github.io/Bose-SoundTouch/guides/CLI-REFERENCE.html" target="_blank">CLI Reference</a></li>
+            <strong>Verify connection:</strong>
+            <ul style="margin-top: 5px; margin-bottom: 0; padding-left: 20px;">
+                <li>
+                    Use the <strong>Migration</strong> tab to select
+                    your device and verify that
+                    <em>SSH Connection</em> shows ✅ Success.
+                </li>
+                <li>
+                    Or manually:
+                    <code
+                    >ssh -oHostKeyAlgorithms=+ssh-rsa
+                        root@&lt;SPEAKER-IP&gt;</code
+                    >
+                    (no password).
+                </li>
             </ul>
         </div>
+        <ol class="guide-steps">
+            <li>
+                <strong>Settings:</strong> Review the
+                <strong>Settings</strong> tab. Ensure the "Target
+                Domain" and "Proxy Domain" use an IP address or domain
+                name that is
+                <strong>accessible from your speakers</strong> (usually
+                the IP of this server on your local network).
+            </li>
+            <li>
+                <strong>Discovery:</strong> Go to the
+                <strong>Devices</strong> tab to find your speakers on
+                the network. Ensure your speakers are powered on and
+                connected to the same network.
+            </li>
+            <li>
+                <strong>Data Sync:</strong> In the
+                <strong>Data Sync</strong> tab, fetch your current
+                presets, recents, and sources. This step is critical to
+                ensure your local service has all your personalized data
+                before you disconnect from the Bose cloud.
+            </li>
+            <li>
+                <strong>Migration:</strong> In the
+                <strong>Migration</strong> tab, redirect your speaker to
+                this local service. We recommend the
+                <strong>XML Configuration</strong> method as it is
+                surgical and easily reversible.
+            </li>
+            <li>
+                <strong>Verification:</strong> After migration and
+                reboot, your speaker will communicate with this toolkit
+                instead of Bose servers.
+            </li>
+        </ol>
 
-        <!-- Tab 1: Settings -->
-        <div id="tab-settings" class="tab-content">
-            <h2>System Settings</h2>
-            <p style="font-size: 0.9em; color: #555; margin-bottom: 20px;">
-                <strong>Note:</strong> These URLs must be <strong>accessible from your SoundTouch devices</strong>.
-                Use the IP address of this server on your local network (e.g., <code>http://192.168.1.100:8000</code>)
-                rather than <code>localhost</code>.
+        <div class="info-box safety-box">
+            <strong>⚠️ Safety First:</strong> Before starting any
+            migration, please read our
+            <a href="https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-SAFETY.html" target="_blank">Professional
+                Migration & Safety Guide</a>. The toolkit automatically creates backups, but understanding the process
+            is key to a smooth transition.
+        </div>
+
+        <h3>Useful Links</h3>
+        <ul>
+            <li><a href="https://gesellix.github.io/Bose-SoundTouch/guides/SURVIVAL-GUIDE.html" target="_blank">Cloud
+                Shutdown Survival Guide</a></li>
+            <li><a href="https://gesellix.github.io/Bose-SoundTouch/guides/CLI-REFERENCE.html" target="_blank">CLI
+                Reference</a></li>
+        </ul>
+    </div>
+
+    <!-- Tab 1: Settings -->
+    <div id="tab-settings" class="tab-content">
+        <h2>System Settings</h2>
+        <p style="font-size: 0.9em; color: #555; margin-bottom: 20px">
+            <strong>Note:</strong> These URLs must be
+            <strong>accessible from your SoundTouch devices</strong>.
+            Use the IP address of this server on your local network
+            (e.g., <code>http://192.168.1.100:8000</code>) rather than
+            <code>localhost</code>.
+        </p>
+        <div style="margin-bottom: 20px">
+            <label for="target-domain">Target Domain:</label>
+            <input type="text" id="target-domain" placeholder="http://192.168.x.x:8000" style="width: 300px"/>
+            <span style="font-size: 0.8em; color: #666">(Standard services URL)</span>
+        </div>
+        <div style="margin-bottom: 20px">
+            <label for="discovery-interval">Discovery Interval:</label>
+            <input type="text" id="discovery-interval" placeholder="5m" style="width: 100px"/>
+            <label style="margin-left: 15px"><input type="checkbox" id="discovery-enabled"/> Enable Automated Discovery</label>
+        </div>
+        <div style="margin-bottom: 20px">
+            <strong>DNS Discovery:</strong>
+            <div style="margin-top: 5px">
+                <label style="display: block; margin-bottom: 5px">
+                    <input type="checkbox" id="dns-enabled"/> Enable
+                    DNS Discovery Server
+                </label>
+                <div style="margin-left: 20px; margin-bottom: 5px">
+                    <label for="dns-upstream">Upstream DNS:</label>
+                    <input
+                        type="text"
+                        id="dns-upstream"
+                        placeholder="Default: system nameservers"
+                        style="width: 200px"
+                    />
+                    <span
+                        class="info-toggle"
+                        onclick="toggleInfo('dns-upstream-info')"
+                    >ⓘ</span
+                    >
+                    <div id="dns-upstream-info" class="info-details">
+                        Optional: comma-separated list of DNS servers
+                        (e.g., <code>1.1.1.1, 8.8.8.8</code>).<br/>
+                        If empty, AfterTouch defaults to the system
+                        nameservers (e.g. from
+                        <code>/etc/resolv.conf</code>).<br/>
+                        <div
+                            id="dns-current-upstream"
+                            style="margin-top: 5px; font-weight: bold"
+                        ></div>
+                    </div>
+                </div>
+                <div style="margin-left: 20px">
+                    <label for="dns-bind">DNS Bind Address:</label>
+                    <input
+                        type="text"
+                        id="dns-bind"
+                        placeholder=":53"
+                        style="width: 100px"
+                    />
+                    <span
+                        style="
+                                    font-size: 0.8em;
+                                    color: #666;
+                                    margin-left: 5px;
+                                "
+                    >(e.g., :53 or 0.0.0.0:53.
+                                <strong>Port 53</strong> is required for actual
+                                migration)</span
+                    >
+                </div>
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
+            <strong>Endpoint Mirroring:</strong>
+            <div style="margin-top: 5px">
+                <label style="display: block; margin-bottom: 5px">
+                    <input type="checkbox" id="mirror-enabled"/> Enable
+                    Background Mirroring to Bose Cloud
+                </label>
+                <div style="margin-left: 20px; margin-bottom: 5px">
+                    <label style="display: block; margin-bottom: 5px">
+                        <input type="checkbox" id="preferred-source-upstream"/>
+                        Prefer Upstream Response for Mirrored Endpoints
+                    </label>
+                    <label for="mirror-endpoints">Mirror Endpoints (one per line, supports * wildcards):</label><br/>
+                    <textarea
+                        id="mirror-endpoints"
+                        rows="4"
+                        style="width: 100%; max-width: 600px; margin-top: 5px; font-family: monospace;"
+                        placeholder="/streaming/account/*/device/*/recent&#10;/accounts/*/devices/*/presets/*"
+                    ></textarea>
+                    <div
+                        class="info-box"
+                        style="
+                                    margin-top: 5px;
+                                    font-size: 0.85em;
+                                    padding: 10px;
+                                "
+                    >
+                        <strong>Note:</strong> Mirroring sends matching
+                        requests (including full headers) to the
+                        official Bose servers for parity comparison. If
+                        <em>Redact Sensitive Data</em> is enabled in
+                        Proxy Settings, credentials will be masked in
+                        <strong>logs and recordings</strong>, but full
+                        headers are always sent to Bose to ensure
+                        service compatibility.
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
+            <strong>Spotify Integration:</strong>
+            <div
+                id="spotify-config-status"
+                style="margin-top: 5px; font-size: 0.9em"
+            >
+                Checking configuration...
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
+            <strong>Proxy Logging:</strong>
+            <div style="margin-top: 5px">
+                <label style="display: block; margin-bottom: 5px"><input type="checkbox" id="proxy-redact"
+                                                                         onchange="updateProxySettings()"/> Redact
+                    Sensitive Headers</label>
+                <label style="display: block; margin-bottom: 5px"><input type="checkbox" id="proxy-log-body"
+                                                                         onchange="updateProxySettings()"/> Log
+                    Bodies</label>
+                <label style="display: block; margin-bottom: 5px"><input type="checkbox" id="proxy-record"
+                                                                         onchange="updateProxySettings()"/> Record
+                    Interactions<span style="font-size: 0.85em; color: #666; margin-left: 5px;">(View in <strong>5. Interactions</strong> tab)</span></label>
+                <div style="margin-left: 20px; margin-top: 10px">
+                    <label for="internal-paths">Internal Paths (skip recording for these patterns):</label><br/>
+                    <textarea
+                        id="internal-paths"
+                        rows="2"
+                        style="width: 100%; max-width: 600px; margin-top: 5px; font-family: monospace;"
+                        placeholder="/setup/*&#10;/web/*"
+                    ></textarea>
+                    <div
+                        style="
+                                    font-size: 0.8em;
+                                    color: #666;
+                                    margin-top: 2px;
+                                "
+                    >
+                        Requests matching these patterns will be
+                        excluded from recording. Use one pattern per
+                        line.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px">
+            <button onclick="updateSettings()">Save Settings</button>
+            <span
+                id="settings-status"
+                style="margin-left: 10px; font-size: 0.9em"
+            ></span>
+        </div>
+    </div>
+
+    <!-- Tab 2: Devices -->
+    <div id="tab-devices" class="tab-content">
+        <div
+            style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    "
+        >
+            <h2>
+                Known Devices
+                <span
+                    id="discovery-indicator"
+                    style="
+                                font-size: 0.5em;
+                                vertical-align: middle;
+                                display: none;
+                            "
+                >🔍 Scanning...</span
+                >
+            </h2>
+            <div
+                id="spotify-status-header"
+                style="
+                            background: #f0f0f0;
+                            padding: 5px 15px;
+                            border-radius: 20px;
+                            font-size: 0.9em;
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                        "
+            >
+                Spotify:
+                <span
+                    id="spotify-account-name"
+                    style="font-weight: bold"
+                >Not Linked</span
+                >
+                <button
+                    id="link-spotify-btn"
+                    onclick="linkSpotify()"
+                    style="
+                                font-size: 0.8em;
+                                padding: 2px 8px;
+                                background: #1db954;
+                                color: white;
+                                border: none;
+                                border-radius: 10px;
+                                cursor: pointer;
+                            "
+                >
+                    Link Account
+                </button>
+            </div>
+        </div>
+        <div id="device-list">Loading devices...</div>
+        <div style="margin-top: 20px">
+            <button onclick="triggerDiscovery()">Scan Again</button>
+            <input
+                type="text"
+                id="add-manual-ip"
+                placeholder="Manual IP (e.g. 192.168.1.100)"
+                style="margin-left: 20px; padding: 4px"
+            />
+            <button onclick="addManualDevice()">Add Device</button>
+        </div>
+    </div>
+
+    <!-- Tab 3: Data Sync -->
+    <div id="tab-sync" class="tab-content">
+        <h2>Initial Data Sync</h2>
+        <p>
+            Before migrating, fetch your presets, recents, and
+            configured sources from the device to ensure they are
+            available locally.
+        </p>
+        <div class="device-selection">
+            <label for="sync-device-list">Device:</label>
+            <select id="sync-device-list">
+                <option value="">-- Select a device --</option>
+            </select>
+            <button id="sync-now-btn">Start Sync</button>
+        </div>
+        <div id="sync-status" class="status"></div>
+        <div id="sync-results" style="margin-top: 20px; display: none">
+            <h3>Sync Results</h3>
+            <div
+                id="sync-log"
+                style="
+                            font-family: monospace;
+                            background: #f4f4f4;
+                            padding: 10px;
+                            border-radius: 4px;
+                            max-height: 300px;
+                            overflow-y: auto;
+                        "
+            ></div>
+        </div>
+    </div>
+
+    <!-- Tab 4: Migration -->
+    <div id="tab-migration" class="tab-content">
+        <h2>Device Migration</h2>
+        <div class="device-selection">
+            <label for="migration-device-list">Device:</label>
+            <select
+                id="migration-device-list"
+                onchange="showSummary(this.value)"
+            >
+                <option value="">-- Select a device --</option>
+            </select>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <div
+            id="command-output-box"
+            class="summary-box"
+            style="display: none; background-color: #f0f0f0"
+        >
+            <h3>Command Output</h3>
+            <div
+                id="command-output"
+                style="
+                            font-family: monospace;
+                            white-space: pre-wrap;
+                            font-size: 0.85em;
+                            max-height: 300px;
+                            overflow-y: auto;
+                            padding: 10px;
+                            border: 1px solid #ccc;
+                            background: #fff;
+                        "
+            ></div>
+        </div>
+
+        <div
+            id="migration-summary"
+            class="summary-box"
+            style="display: none"
+        >
+            <h3>
+                Migration Summary for
+                <span id="summary-device-display"></span>
+            </h3>
+            <p>Migration Status: <span id="migration-status"></span></p>
+            <input type="hidden" id="summary-device-id"/>
+            <p>SSH Connection: <span id="ssh-status"></span></p>
+            <p id="original-config-status" style="display: none">
+                Backup: ✅ Found .original config at
+                <code
+                >/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original</code
+                >
+                <button onclick="toggleOriginalConfig()">
+                    Show Original Config
+                </button>
             </p>
-            <div style="margin-bottom: 20px;">
-                <label for="target-domain">Target Domain:</label>
-                <input type="text" id="target-domain" placeholder="http://192.168.x.x:8000" style="width: 300px;">
-                <span style="font-size: 0.8em; color: #666;">(Standard services URL)</span>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <label for="discovery-interval">Discovery Interval:</label>
-                <input type="text" id="discovery-interval" placeholder="5m" style="width: 100px;">
-                <label style="margin-left: 15px;"><input type="checkbox" id="discovery-enabled"> Enable Automated Discovery</label>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <strong>DNS Discovery:</strong>
-                <div style="margin-top: 5px;">
-                    <label style="display: block; margin-bottom: 5px;">
-                        <input type="checkbox" id="dns-enabled"> Enable DNS Discovery Server
-                    </label>
-                    <div style="margin-left: 20px; margin-bottom: 5px;">
-                        <label for="dns-upstream">Upstream DNS:</label>
-                        <input type="text" id="dns-upstream" placeholder="Default: system nameservers" style="width: 200px;">
-                        <span class="info-toggle" onclick="toggleInfo('dns-upstream-info')">ⓘ</span>
-                        <div id="dns-upstream-info" class="info-details">
-                            Optional: comma-separated list of DNS servers (e.g., <code>1.1.1.1, 8.8.8.8</code>).<br>
-                            If empty, AfterTouch defaults to the system nameservers (e.g. from <code>/etc/resolv.conf</code>).<br>
-                            <div id="dns-current-upstream" style="margin-top: 5px; font-weight: bold;"></div>
-                        </div>
-                    </div>
-                    <div style="margin-left: 20px;">
-                        <label for="dns-bind">DNS Bind Address:</label>
-                        <input type="text" id="dns-bind" placeholder=":53" style="width: 100px;">
-                        <span style="font-size: 0.8em; color: #666; margin-left: 5px;">(e.g., :53 or 0.0.0.0:53. <strong>Port 53</strong> is required for actual migration)</span>
-                    </div>
+            <p id="no-original-config-status" style="display: none">
+                Backup: ❌ Not found
+                <button id="backup-config-btn">
+                    Backup Config Now
+                </button>
+            </p>
+            <p>
+                Remote Services Enabled:
+                <span id="remote-services-status"></span>
+                <span
+                    id="remote-services-found"
+                    style="font-size: 0.8em; color: #666"
+                ></span>
+            </p>
+            <p>
+                AfterTouch Local Root CA Trusted:
+                <span id="ca-trust-status"></span>
+                <button
+                    id="trust-ca-btn"
+                    style="
+                                display: none;
+                                background-color: #607d8b;
+                                color: white;
+                                border: none;
+                                padding: 2px 8px;
+                                font-size: 0.8em;
+                                margin-left: 10px;
+                            "
+                >
+                    Trust CA Now
+                </button>
+            </p>
+
+            <div
+                id="connection-test"
+                style="
+                            margin: 15px 0;
+                            padding: 10px;
+                            border: 1px solid #ddd;
+                            background-color: #eefbff;
+                        "
+            >
+                <strong>HTTPS Connection Test:</strong><br/>
+                <span style="font-size: 0.85em; color: #555"
+                >Verify the device can reach the server over
+                            HTTPS.</span
+                >
+                <div style="margin-top: 10px">
+                    URL: <code id="test-url"></code>
                 </div>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <strong>Endpoint Mirroring:</strong>
-                <div style="margin-top: 5px;">
-                    <label style="display: block; margin-bottom: 5px;">
-                        <input type="checkbox" id="mirror-enabled"> Enable Background Mirroring to Bose Cloud
-                    </label>
-                    <div style="margin-left: 20px; margin-bottom: 5px;">
-                        <label style="display: block; margin-bottom: 5px;">
-                            <input type="checkbox" id="preferred-source-upstream"> Prefer Upstream Response for Mirrored Endpoints
-                        </label>
-                        <label for="mirror-endpoints">Mirror Endpoints (one per line, supports * wildcards):</label><br>
-                        <textarea id="mirror-endpoints" rows="4" style="width: 100%; max-width: 600px; margin-top: 5px; font-family: monospace;" placeholder="/streaming/account/*/device/*/recent&#10;/accounts/*/devices/*/presets/*"></textarea>
-                        <div class="info-box" style="margin-top: 5px; font-size: 0.85em; padding: 10px;">
-                            <strong>Note:</strong> Mirroring sends matching requests (including full headers) to the official Bose servers for parity comparison.
-                            If <em>Redact Sensitive Data</em> is enabled in Proxy Settings, credentials will be masked in <strong>logs and recordings</strong>, but
-                            full headers are always sent to Bose to ensure service compatibility.
-                        </div>
-                    </div>
+                <div style="margin-top: 10px">
+                    <button
+                        id="test-connection-explicit-btn"
+                        style="
+                                    background-color: #607d8b;
+                                    color: white;
+                                    border: none;
+                                    padding: 5px 10px;
+                                    font-size: 0.9em;
+                                "
+                    >
+                        Test with Explicit CA.crt
+                    </button>
+                    <button
+                        id="test-connection-trusted-btn"
+                        style="
+                                    background-color: #607d8b;
+                                    color: white;
+                                    border: none;
+                                    padding: 5px 10px;
+                                    font-size: 0.9em;
+                                "
+                    >
+                        Test with Shared Trust Store
+                    </button>
                 </div>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <strong>Spotify Integration:</strong>
-                <div id="spotify-config-status" style="margin-top: 5px; font-size: 0.9em;">
-                    Checking configuration...
-                </div>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <strong>Proxy Logging:</strong>
-                <div style="margin-top: 5px;">
-                    <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-redact" onchange="updateProxySettings()"> Redact Sensitive Headers</label>
-                    <label style="display: block; margin-bottom: 5px;"><input type="checkbox" id="proxy-log-body" onchange="updateProxySettings()"> Log Bodies</label>
-                    <label style="display: block; margin-bottom: 5px;">
-                        <input type="checkbox" id="proxy-record" onchange="updateProxySettings()"> Record Interactions
-                        <span style="font-size: 0.85em; color: #666; margin-left: 5px;">(View in <strong>5. Interactions</strong> tab)</span>
-                    </label>
-                    <div style="margin-left: 20px; margin-top: 10px;">
-                        <label for="internal-paths">Internal Paths (skip recording for these patterns):</label><br>
-                        <textarea id="internal-paths" rows="2" style="width: 100%; max-width: 600px; margin-top: 5px; font-family: monospace;" placeholder="/setup/*&#10;/web/*"></textarea>
-                        <div style="font-size: 0.8em; color: #666; margin-top: 2px;">
-                            Requests matching these patterns will be excluded from recording. Use one pattern per line.
-                        </div>
-                    </div>
-                </div>
+                <div
+                    id="test-result"
+                    style="
+                                margin-top: 10px;
+                                display: none;
+                                padding: 10px;
+                                border-radius: 4px;
+                                font-family: monospace;
+                                white-space: pre-wrap;
+                                font-size: 0.85em;
+                                max-height: 200px;
+                                overflow-y: auto;
+                            "
+                ></div>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <button onclick="updateSettings()">Save Settings</button>
-                <span id="settings-status" style="margin-left: 10px; font-size: 0.9em;"></span>
-            </div>
-        </div>
-
-        <!-- Tab 2: Devices -->
-        <div id="tab-devices" class="tab-content">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>Known Devices <span id="discovery-indicator" style="font-size: 0.5em; vertical-align: middle; display: none;">🔍 Scanning...</span></h2>
-                <div id="spotify-status-header" style="background: #f0f0f0; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; display: flex; align-items: center; gap: 10px;">
-                    Spotify: <span id="spotify-account-name" style="font-weight: bold;">Not Linked</span>
-                    <button id="link-spotify-btn" onclick="linkSpotify()" style="font-size: 0.8em; padding: 2px 8px; background: #1DB954; color: white; border: none; border-radius: 10px; cursor: pointer;">Link Account</button>
+            <div
+                id="hosts-redirection-test"
+                style="
+                            margin: 15px 0;
+                            padding: 10px;
+                            border: 1px solid #ddd;
+                            background-color: #fff4e6;
+                            display: none;
+                        "
+            >
+                <strong>Preliminary /etc/hosts Test:</strong><br/>
+                <span style="font-size: 0.85em; color: #555"
+                >Verify the device's /etc/hosts mechanism before
+                            full migration.</span
+                >
+                <div style="margin-top: 10px">
+                    Domain: <code>custom-test-api.bose.fake</code>
                 </div>
+                <div style="margin-top: 10px">
+                    <button
+                        id="test-hosts-btn"
+                        style="
+                                    background-color: #ff9800;
+                                    color: white;
+                                    border: none;
+                                    padding: 5px 10px;
+                                    font-size: 0.9em;
+                                "
+                    >
+                        Test Hosts Redirection
+                    </button>
+                </div>
+                <div
+                    id="hosts-test-result"
+                    style="
+                                margin-top: 10px;
+                                display: none;
+                                padding: 10px;
+                                border-radius: 4px;
+                                font-family: monospace;
+                                white-space: pre-wrap;
+                                font-size: 0.85em;
+                                max-height: 200px;
+                                overflow-y: auto;
+                            "
+                ></div>
             </div>
-            <div id="device-list">Loading devices...</div>
-            <div style="margin-top: 20px;">
-                <button onclick="triggerDiscovery()">Scan Again</button>
-                <input type="text" id="add-manual-ip" placeholder="Manual IP (e.g. 192.168.1.100)" style="margin-left: 20px; padding: 4px;">
-                <button onclick="addManualDevice()">Add Device</button>
-            </div>
-        </div>
 
-        <!-- Tab 3: Data Sync -->
-        <div id="tab-sync" class="tab-content">
-            <h2>Initial Data Sync</h2>
-            <p>Before migrating, fetch your presets, recents, and configured sources from the device to ensure they are available locally.</p>
-            <div class="device-selection">
-                <label for="sync-device-list">Device:</label>
-                <select id="sync-device-list">
-                    <option value="">-- Select a device --</option>
+            <div
+                id="dns-redirection-test"
+                style="
+                            margin: 15px 0;
+                            padding: 10px;
+                            border: 1px solid #ddd;
+                            background-color: #e6ffed;
+                            display: none;
+                        "
+            >
+                <strong>Preliminary DNS Test:</strong><br/>
+                <span style="font-size: 0.85em; color: #555"
+                >Verify the device can resolve domains via the
+                            AfterTouch DNS server.</span
+                >
+                <div style="margin-top: 10px">
+                    Domain: <code>aftertouch.test</code>
+                </div>
+                <div style="margin-top: 10px">
+                    <button
+                        id="test-dns-btn"
+                        style="
+                                    background-color: #28a745;
+                                    color: white;
+                                    border: none;
+                                    padding: 5px 10px;
+                                    font-size: 0.9em;
+                                "
+                    >
+                        Test DNS Redirection
+                    </button>
+                </div>
+                <div
+                    id="dns-test-result"
+                    style="
+                                margin-top: 10px;
+                                display: none;
+                                padding: 10px;
+                                border-radius: 4px;
+                                font-family: monospace;
+                                white-space: pre-wrap;
+                                font-size: 0.85em;
+                                max-height: 200px;
+                                overflow-y: auto;
+                            "
+                ></div>
+            </div>
+
+            <div
+                style="
+                            margin: 15px 0;
+                            padding: 10px;
+                            border: 1px solid #ddd;
+                            background-color: #f9f9f9;
+                        "
+            >
+                <label for="migration-method"
+                ><strong>Migration Method:</strong></label
+                >
+                <select
+                    id="migration-method"
+                    onchange="toggleMigrationMethod()"
+                >
+                    <option value="xml">
+                        XML Configuration (Recommended - redirects
+                        specific services)
+                    </option>
+                    <option value="hosts">
+                        /etc/hosts + Root CA (Advanced - global
+                        redirection)
+                    </option>
+                    <option value="resolv">
+                        /etc/resolv.conf (DHCP-Aware - Redirect via DNS
+                        Hook)
+                    </option>
                 </select>
-                <button id="sync-now-btn">Start Sync</button>
-            </div>
-            <div id="sync-status" class="status"></div>
-            <div id="sync-results" style="margin-top: 20px; display: none;">
-                <h3>Sync Results</h3>
-                <div id="sync-log" style="font-family: monospace; background: #f4f4f4; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
-            </div>
-        </div>
-
-        <!-- Tab 4: Migration -->
-        <div id="tab-migration" class="tab-content">
-            <h2>Device Migration</h2>
-            <div class="device-selection">
-                <label for="migration-device-list">Device:</label>
-                <select id="migration-device-list" onchange="showSummary(this.value)">
-                    <option value="">-- Select a device --</option>
-                </select>
+                <div
+                    id="dns-port-warning"
+                    style="
+                                margin-top: 5px;
+                                color: #d32f2f;
+                                font-weight: bold;
+                                font-size: 0.9em;
+                                display: none;
+                            "
+                ></div>
             </div>
 
-            <div id="status" class="status"></div>
-
-            <div id="command-output-box" class="summary-box" style="display: none; background-color: #f0f0f0;">
-                <h3>Command Output</h3>
-                <div id="command-output" style="font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid #ccc; background: #fff;"></div>
+            <div
+                id="current-resolv-pane"
+                style="display: none; margin-bottom: 20px"
+            >
+                        <span class="config-header"
+                        >Current /etc/resolv.conf</span
+                        >
+                <pre id="current-resolv-content"></pre>
             </div>
 
-            <div id="migration-summary" class="summary-box" style="display: none;">
-                <h3>Migration Summary for <span id="summary-device-display"></span></h3>
-                <p>Migration Status: <span id="migration-status"></span></p>
-                <input type="hidden" id="summary-device-id">
-                <p>SSH Connection: <span id="ssh-status"></span></p>
-                <p id="original-config-status" style="display: none;">Backup: ✅ Found .original config at <code>/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original</code> <button onclick="toggleOriginalConfig()">Show Original Config</button></p>
-                <p id="no-original-config-status" style="display: none;">Backup: ❌ Not found <button id="backup-config-btn">Backup Config Now</button></p>
-                <p>Remote Services Enabled: <span id="remote-services-status"></span> <span id="remote-services-found" style="font-size: 0.8em; color: #666;"></span></p>
-                <p>AfterTouch Local Root CA Trusted: <span id="ca-trust-status"></span> <button id="trust-ca-btn" style="display: none; background-color: #607D8B; color: white; border: none; padding: 2px 8px; font-size: 0.8em; margin-left: 10px;">Trust CA Now</button></p>
-
-                <div id="connection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #eefbff;">
-                    <strong>HTTPS Connection Test:</strong><br>
-                    <span style="font-size: 0.85em; color: #555;">Verify the device can reach the server over HTTPS.</span>
-                    <div style="margin-top: 10px;">
-                        URL: <code id="test-url"></code>
-                    </div>
-                    <div style="margin-top: 10px;">
-                        <button id="test-connection-explicit-btn" style="background-color: #607D8B; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test with Explicit CA.crt</button>
-                        <button id="test-connection-trusted-btn" style="background-color: #607D8B; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test with Shared Trust Store</button>
-                    </div>
-                    <div id="test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
-                </div>
-
-                <div id="hosts-redirection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #fff4e6; display: none;">
-                    <strong>Preliminary /etc/hosts Test:</strong><br>
-                    <span style="font-size: 0.85em; color: #555;">Verify the device's /etc/hosts mechanism before full migration.</span>
-                    <div style="margin-top: 10px;">
-                        Domain: <code>custom-test-api.bose.fake</code>
-                    </div>
-                    <div style="margin-top: 10px;">
-                        <button id="test-hosts-btn" style="background-color: #FF9800; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test Hosts Redirection</button>
-                    </div>
-                    <div id="hosts-test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
-                </div>
-
-                <div id="dns-redirection-test" style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #e6ffed; display: none;">
-                    <strong>Preliminary DNS Test:</strong><br>
-                    <span style="font-size: 0.85em; color: #555;">Verify the device can resolve domains via the AfterTouch DNS server.</span>
-                    <div style="margin-top: 10px;">
-                        Domain: <code>aftertouch.test</code>
-                    </div>
-                    <div style="margin-top: 10px;">
-                        <button id="test-dns-btn" style="background-color: #28a745; color: white; border: none; padding: 5px 10px; font-size: 0.9em;">Test DNS Redirection</button>
-                    </div>
-                    <div id="dns-test-result" style="margin-top: 10px; display: none; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.85em; max-height: 200px; overflow-y: auto;"></div>
-                </div>
-
-                <div style="margin: 15px 0; padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;">
-                    <label for="migration-method"><strong>Migration Method:</strong></label>
-                    <select id="migration-method" onchange="toggleMigrationMethod()">
-                        <option value="xml">XML Configuration (Recommended - redirects specific services)</option>
-                        <option value="hosts">/etc/hosts + Root CA (Advanced - global redirection)</option>
-                        <option value="resolv">/etc/resolv.conf (DHCP-Aware - Redirect via DNS Hook)</option>
-                    </select>
-                    <div id="dns-port-warning" style="margin-top: 5px; color: #d32f2f; font-weight: bold; font-size: 0.9em; display: none;"></div>
-                </div>
-
-                <div id="current-resolv-pane" style="display: none; margin-bottom: 20px;">
-                    <span class="config-header">Current /etc/resolv.conf</span>
-                    <pre id="current-resolv-content"></pre>
-                </div>
-
-                <div id="original-config-pane" style="display: none; margin-bottom: 20px;">
-                    <span class="config-header">Original Config (Backup)</span>
-                    <pre id="original-config-content"></pre>
-                </div>
-
-                <div id="service-options" style="margin-bottom: 20px; display: none;">
-                    <h4>Service Implementations</h4>
-                    <table>
-                        <tr><th>Service</th><th>Original URL</th><th>Implementation</th></tr>
-                        <tr>
-                            <td>Marge (Streaming)</td>
-                            <td id="orig-marge">loading...</td>
-                            <td>
-                                <select id="opt-marge" onchange="refreshSummary()">
-                                    <option value="self">AfterTouch (Local Service)</option>
-                                    <option value="upstream">Upstream (Proxy via local service)</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Stats</td>
-                            <td id="orig-stats">loading...</td>
-                            <td>
-                                <select id="opt-stats" onchange="refreshSummary()">
-                                    <option value="self">AfterTouch (Local Service)</option>
-                                    <option value="upstream">Upstream (Proxy via local service)</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Software Update</td>
-                            <td id="orig-sw_update">loading...</td>
-                            <td>
-                                <select id="opt-sw_update" onchange="refreshSummary()">
-                                    <option value="self">AfterTouch (Local Service)</option>
-                                    <option value="upstream">Upstream (Proxy via local service)</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>BMX (Registry)</td>
-                            <td id="orig-bmx">loading...</td>
-                            <td>
-                                <select id="opt-bmx" onchange="refreshSummary()">
-                                    <option value="self">AfterTouch (Local Service)</option>
-                                    <option value="upstream">Upstream (Proxy via local service)</option>
-                                </select>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-
-                <div class="diff-container">
-                    <div id="xml-diff-pane" class="diff-pane">
-                        <span class="config-header">Current Config (on Speaker)</span>
-                        <pre id="current-config"></pre>
-                    </div>
-                    <div id="planned-xml-pane" class="diff-pane">
-                        <span class="config-header">Planned Config (AfterTouch)</span>
-                        <pre id="planned-config"></pre>
-                    </div>
-                    <div id="planned-hosts-pane" class="diff-pane" style="display: none;">
-                        <span class="config-header">Planned /etc/hosts Entries</span>
-                        <pre id="planned-hosts"></pre>
-                        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                            <strong>Note:</strong> This method also injects the AfterTouch Local Root CA into <code>/etc/pki/tls/certs/ca-bundle.crt</code> to enable secure HTTPS communication.
-                        </div>
-                    </div>
-                    <div id="planned-resolv-pane" class="diff-pane" style="display: none;">
-                        <span class="config-header">Planned /etc/resolv.conf Hook</span>
-                        <pre id="planned-resolv"></pre>
-                        <div id="resolv-note" style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                            <strong>Note:</strong> This method injects a persistent DNS priority hook into the DHCP logic (<code>/etc/udhcpc.d/50default</code>). It preserves your router's search domain and secondary DNS servers. It also injects the Local Root CA.
-                        </div>
-                    </div>
-                </div>
-                <div style="margin-top: 15px;">
-                    <button id="confirm-migrate-btn" style="background-color: #4CAF50; color: white; border: none; padding: 10px 20px;">Confirm Migration</button>
-                    <button id="revert-migrate-btn" style="background-color: #FF9800; color: white; border: none; padding: 10px 20px; display: none;">Revert to Defaults</button>
-                    <button id="reboot-speaker-btn" style="background-color: #607D8B; color: white; border: none; padding: 10px 20px;">Reboot Speaker</button>
-                    <button id="ensure-remote-btn" style="background-color: #2196F3; color: white; border: none; padding: 10px 20px;">Enable Persistent Remote Services</button>
-                    <button id="remove-remote-btn" style="background-color: #f44336; color: white; border: none; padding: 10px 20px;">Remove Persistent Remote Services</button>
-                    <button onclick="document.getElementById('migration-summary').style.display='none'" style="padding: 10px 20px;">Cancel</button>
-                </div>
+            <div
+                id="original-config-pane"
+                style="display: none; margin-bottom: 20px"
+            >
+                        <span class="config-header"
+                        >Original Config (Backup)</span
+                        >
+                <pre id="original-config-content"></pre>
             </div>
-        </div>
 
-        <!-- Tab 5: Interactions & Events -->
-        <div id="tab-interactions" class="tab-content">
-            <h2>Recorded Interactions & Device Events</h2>
-            <p>Analysis of traffic handled by this service (self), proxied to Bose (upstream), and internal device events (telemetry).</p>
+            <div
+                id="service-options"
+                style="margin-bottom: 20px; display: none"
+            >
+                <h4>Service Implementations</h4>
+                <table>
+                    <tr>
+                        <th>Service</th>
+                        <th>Original URL</th>
+                        <th>Implementation</th>
+                    </tr>
+                    <tr>
+                        <td>Marge (Streaming)</td>
+                        <td id="orig-marge">loading...</td>
+                        <td>
+                            <select
+                                id="opt-marge"
+                                onchange="refreshSummary()"
+                            >
+                                <option value="self">
+                                    AfterTouch (Local Service)
+                                </option>
+                                <option value="upstream">
+                                    Upstream (Proxy via local service)
+                                </option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Stats</td>
+                        <td id="orig-stats">loading...</td>
+                        <td>
+                            <select
+                                id="opt-stats"
+                                onchange="refreshSummary()"
+                            >
+                                <option value="self">
+                                    AfterTouch (Local Service)
+                                </option>
+                                <option value="upstream">
+                                    Upstream (Proxy via local service)
+                                </option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Software Update</td>
+                        <td id="orig-sw_update">loading...</td>
+                        <td>
+                            <select
+                                id="opt-sw_update"
+                                onchange="refreshSummary()"
+                            >
+                                <option value="self">
+                                    AfterTouch (Local Service)
+                                </option>
+                                <option value="upstream">
+                                    Upstream (Proxy via local service)
+                                </option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>BMX (Registry)</td>
+                        <td id="orig-bmx">loading...</td>
+                        <td>
+                            <select
+                                id="opt-bmx"
+                                onchange="refreshSummary()"
+                            >
+                                <option value="self">
+                                    AfterTouch (Local Service)
+                                </option>
+                                <option value="upstream">
+                                    Upstream (Proxy via local service)
+                                </option>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+            </div>
 
-            <div id="interaction-stats-container" class="summary-box">
-                <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px;">
-                    <p style="margin: 0;">Total Requests: <strong id="total-requests">0</strong></p>
-                    <button onclick="fetchInteractionStats()">Refresh Stats</button>
-                    <div style="margin-left: 10px;">
-                        <button onclick="showDeviceEvents()">View App/Device Events</button>
-                    </div>
-                    <div style="margin-left: auto; text-align: right;">
-                        <button onclick="cleanupSessions()" class="btn-danger">Cleanup old sessions</button>
-                        <div style="font-size: 0.75em; color: #666; margin-top: 3px;">Keeps only the 10 most recent sessions</div>
+            <div class="diff-container">
+                <div id="xml-diff-pane" class="diff-pane">
+                            <span class="config-header"
+                            >Current Config (on Speaker)</span
+                            >
+                    <pre id="current-config"></pre>
+                </div>
+                <div id="planned-xml-pane" class="diff-pane">
+                            <span class="config-header"
+                            >Planned Config (AfterTouch)</span
+                            >
+                    <pre id="planned-config"></pre>
+                </div>
+                <div
+                    id="planned-hosts-pane"
+                    class="diff-pane"
+                    style="display: none"
+                >
+                            <span class="config-header"
+                            >Planned /etc/hosts Entries</span
+                            >
+                    <pre id="planned-hosts"></pre>
+                    <div
+                        style="
+                                    margin-top: 10px;
+                                    font-size: 0.9em;
+                                    color: #666;
+                                "
+                    >
+                        <strong>Note:</strong> This method also injects
+                        the AfterTouch Local Root CA into
+                        <code>/etc/pki/tls/certs/ca-bundle.crt</code> to
+                        enable secure HTTPS communication.
                     </div>
                 </div>
-                <div style="display: flex; gap: 20px;">
-                    <div style="flex: 1; border-right: 1px solid #eee; padding-right: 20px;">
-                        <h3>By Service</h3>
-                        <ul id="stats-by-service" class="stats-list"></ul>
-                    </div>
-                    <div style="flex: 2;">
-                        <h3>Sessions</h3>
-                        <div id="stats-by-session-container" style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 4px;">
-                            <ul id="stats-by-session" class="stats-list"></ul>
-                        </div>
+                <div
+                    id="planned-resolv-pane"
+                    class="diff-pane"
+                    style="display: none"
+                >
+                            <span class="config-header"
+                            >Planned /etc/resolv.conf Hook</span
+                            >
+                    <pre id="planned-resolv"></pre>
+                    <div
+                        id="resolv-note"
+                        style="
+                                    margin-top: 10px;
+                                    font-size: 0.9em;
+                                    color: #666;
+                                "
+                    >
+                        <strong>Note:</strong> This method injects a
+                        persistent DNS priority hook into the DHCP logic
+                        (<code>/etc/udhcpc.d/50default</code>). It
+                        preserves your router's search domain and
+                        secondary DNS servers. It also injects the Local
+                        Root CA.
                     </div>
                 </div>
             </div>
-
-            <div id="browse-recordings" class="summary-box" style="margin-top: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">Browse Recordings</h3>
-                </div>
-                <div style="margin-bottom: 15px; display: flex; gap: 15px; align-items: center; background: #f9f9f9; padding: 10px; border-radius: 4px;">
-                    <div>
-                        <label for="filter-session">Session:</label>
-                        <select id="filter-session" onchange="fetchInteractions()">
-                            <option value="">All Sessions</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="filter-category">Category:</label>
-                        <select id="filter-category" onchange="fetchInteractions()">
-                            <option value="">All Categories</option>
-                            <option value="self">Self (Emulated)</option>
-                            <option value="upstream">Upstream (Bose)</option>
-                            <option value="mirror">Mirror (Bose)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="filter-since">Since (YYYY-MM-DD HH:mm:ss):</label>
-                        <input type="text" id="filter-since" placeholder="e.g. 2026-02-15 15:00:00" size="25" onchange="fetchInteractions()">
-                    </div>
-                    <button onclick="fetchInteractions()">Apply Filters</button>
-                </div>
-
-                <div id="interactions-list-container" style="max-height: 400px; overflow-y: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
-                                <th style="padding: 8px;">#</th>
-                                <th style="padding: 8px;">Time</th>
-                                <th style="padding: 8px;">Method</th>
-                                <th style="padding: 8px;">Path</th>
-                                <th style="padding: 8px;">Status</th>
-                                <th style="padding: 8px;">Category</th>
-                                <th style="padding: 8px;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="interactions-list">
-                            <tr><td colspan="7" style="padding: 20px; text-align: center; color: #666;">No interactions found.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="dns-discoveries" class="summary-box" style="margin-top: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">DNS Discoveries</h3>
-                    <div style="display: flex; gap: 10px;">
-                        <button onclick="downloadDNSDiscoveries()" class="btn-info">Download JSON</button>
-                        <button onclick="clearDNSDiscoveries()" class="btn-danger">Clear DNS Logs</button>
-                    </div>
-                </div>
-                <p style="font-size: 0.85em; color: #666;">Hosts discovered via the AfterTouch DNS server. "Self" means the domain was intercepted and redirected to this service.</p>
-                <div id="dns-discoveries-list-container" style="max-height: 400px; overflow-y: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
-                                <th style="padding: 8px;">Hostname</th>
-                                <th style="padding: 8px;">Last Seen</th>
-                                <th style="padding: 8px; text-align: center;">Queries</th>
-                                <th style="padding: 8px; text-align: center;">Bose?</th>
-                                <th style="padding: 8px;">Category</th>
-                                <th style="padding: 8px;">Last Client IP</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dns-discoveries-list">
-                            <tr><td colspan="6" style="padding: 20px; text-align: center; color: #666;">No DNS discoveries found.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="interaction-viewer" class="summary-box" style="margin-top: 20px; display: none; background: #2b2b2b; color: #a9b7c6;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3 style="margin: 0; color: #fff;">Recording Viewer: <span id="viewer-filename" style="font-weight: normal; font-size: 0.8em;"></span></h3>
-                    <button onclick="document.getElementById('interaction-viewer').style.display='none'" style="background: #444; color: #fff; border: 1px solid #666;">Close</button>
-                </div>
-                <pre id="interaction-content" style="white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; margin: 0; padding: 10px; overflow-x: auto; max-height: 600px;"></pre>
-            </div>
-
-            <!-- Device Events Overlay -->
-            <div id="device-events-overlay" class="summary-box" style="margin-top: 20px; display: none; background: #fdfdfd; border: 1px solid #ddd;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3 style="margin: 0;">App & Device Events</h3>
-                    <div>
-                        <select id="event-device-selector" onchange="fetchDeviceEvents(this.value)">
-                            <option value="">-- Select Device --</option>
-                        </select>
-                        <button onclick="document.getElementById('device-events-overlay').style.display='none'" style="margin-left: 10px;">Close</button>
-                    </div>
-                </div>
-                <div id="events-list-container" style="max-height: 400px; overflow-y: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
-                                <th style="padding: 8px;">Time</th>
-                                <th style="padding: 8px;">Type</th>
-                                <th style="padding: 8px;">Data</th>
-                            </tr>
-                        </thead>
-                        <tbody id="events-list">
-                            <tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Select a device to view events.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab 6: Parity & Mirroring -->
-        <div id="tab-parity" class="tab-content">
-            <h2>Parity Analysis</h2>
-            <p>Detection of discrepancies between AfterTouch local responses and official Bose Cloud responses for mirrored endpoints.</p>
-
-            <div class="summary-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">Parity Mismatches</h3>
-                    <div style="display: flex; gap: 10px;">
-                        <button onclick="fetchParityMismatches()">Refresh Mismatches</button>
-                        <button onclick="clearParityMismatches()" class="btn-danger">Clear All Records</button>
-                    </div>
-                </div>
-
-                <div id="parity-list-container" style="max-height: 500px; overflow-y: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="text-align: left; border-bottom: 2px solid #eee;">
-                                <th style="padding: 8px;">Time</th>
-                                <th style="padding: 8px;">Method</th>
-                                <th style="padding: 8px;">Path</th>
-                                <th style="padding: 8px;">Reasons</th>
-                                <th style="padding: 8px;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="parity-mismatches-list">
-                            <tr><td colspan="5" style="padding: 20px; text-align: center; color: #666;">Loading mismatches...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="parity-diff-view" class="summary-box" style="display: none; margin-top: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">Mismatch Detail: <span id="diff-path-display"></span></h3>
-                    <button onclick="document.getElementById('parity-diff-view').style.display='none'">Close Detail</button>
-                </div>
-
-                <div style="margin-bottom: 15px; padding: 10px; background: #fff4f4; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">
-                    <strong>Detection Reasons:</strong>
-                    <ul id="diff-reasons-list" style="margin: 5px 0 0 0; padding-left: 20px;"></ul>
-                </div>
-
-                <div class="diff-container" style="margin-top: 15px;">
-                    <div class="diff-pane">
-                        <span class="config-header" style="background: #eefbff; color: #0056b3;">Local Response (AfterTouch)</span>
-                        <div id="diff-local-meta" style="font-size: 0.8em; margin-bottom: 5px; color: #666;"></div>
-                        <pre id="diff-local-body" style="background: #f8f9fa; border: 1px solid #eee; padding: 10px; font-size: 0.85em; overflow-x: auto;"></pre>
-                    </div>
-                    <div class="diff-pane">
-                        <span class="config-header" style="background: #fff4e6; color: #856404;">Upstream Response (Bose)</span>
-                        <div id="diff-upstream-meta" style="font-size: 0.8em; margin-bottom: 5px; color: #666;"></div>
-                        <pre id="diff-upstream-body" style="background: #f8f9fa; border: 1px solid #eee; padding: 10px; font-size: 0.85em; overflow-x: auto;"></pre>
-                    </div>
-                </div>
+            <div style="margin-top: 15px">
+                <button
+                    id="confirm-migrate-btn"
+                    style="
+                                background-color: #4caf50;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                            "
+                >
+                    Confirm Migration
+                </button>
+                <button
+                    id="revert-migrate-btn"
+                    style="
+                                background-color: #ff9800;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                                display: none;
+                            "
+                >
+                    Revert to Defaults
+                </button>
+                <button
+                    id="reboot-speaker-btn"
+                    style="
+                                background-color: #607d8b;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                            "
+                >
+                    Reboot Speaker
+                </button>
+                <button
+                    id="ensure-remote-btn"
+                    style="
+                                background-color: #2196f3;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                            "
+                >
+                    Enable Persistent Remote Services
+                </button>
+                <button
+                    id="remove-remote-btn"
+                    style="
+                                background-color: #f44336;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                            "
+                >
+                    Remove Persistent Remote Services
+                </button>
+                <button
+                    onclick="
+                                document.getElementById(
+                                    'migration-summary',
+                                ).style.display = 'none'
+                            "
+                    style="padding: 10px 20px"
+                >
+                    Cancel
+                </button>
             </div>
         </div>
     </div>
 
-    <script src="/web/js/script.js"></script>
-    <footer style="margin-top: 50px; padding: 20px; border-top: 1px solid #eee; font-size: 0.8em; color: #888; text-align: center;">
-        <span id="version-info">AfterTouch</span>
-    </footer>
+    <!-- Tab 5: Interactions & Events -->
+    <div id="tab-interactions" class="tab-content">
+        <h2>Recorded Interactions & Device Events</h2>
+        <p>
+            Analysis of traffic handled by this service (self), proxied
+            to Bose (upstream), and internal device events (telemetry).
+        </p>
+
+        <div id="interaction-stats-container" class="summary-box">
+            <div
+                style="
+                            display: flex;
+                            gap: 20px;
+                            align-items: center;
+                            margin-bottom: 15px;
+                        "
+            >
+                <p style="margin: 0">
+                    Total Requests:
+                    <strong id="total-requests">0</strong>
+                </p>
+                <button onclick="fetchInteractionStats()">
+                    Refresh Stats
+                </button>
+                <div style="margin-left: 10px">
+                    <button onclick="showDeviceEvents()">
+                        View App/Device Events
+                    </button>
+                </div>
+                <div style="margin-left: auto; text-align: right">
+                    <button
+                        onclick="cleanupSessions()"
+                        class="btn-danger"
+                    >
+                        Cleanup old sessions
+                    </button>
+                    <div
+                        style="
+                                    font-size: 0.75em;
+                                    color: #666;
+                                    margin-top: 3px;
+                                "
+                    >
+                        Keeps only the 10 most recent sessions
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 20px">
+                <div
+                    style="
+                                flex: 1;
+                                border-right: 1px solid #eee;
+                                padding-right: 20px;
+                            "
+                >
+                    <h3>By Service</h3>
+                    <ul id="stats-by-service" class="stats-list"></ul>
+                </div>
+                <div style="flex: 2">
+                    <h3>Sessions</h3>
+                    <div
+                        id="stats-by-session-container"
+                        style="
+                                    max-height: 200px;
+                                    overflow-y: auto;
+                                    border: 1px solid #eee;
+                                    padding: 5px;
+                                    border-radius: 4px;
+                                "
+                    >
+                        <ul
+                            id="stats-by-session"
+                            class="stats-list"
+                        ></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div
+            id="browse-recordings"
+            class="summary-box"
+            style="margin-top: 20px"
+        >
+            <div
+                style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 15px;
+                        "
+            >
+                <h3 style="margin: 0">Browse Recordings</h3>
+            </div>
+            <div
+                style="
+                            margin-bottom: 15px;
+                            display: flex;
+                            gap: 15px;
+                            align-items: center;
+                            background: #f9f9f9;
+                            padding: 10px;
+                            border-radius: 4px;
+                        "
+            >
+                <div>
+                    <label for="filter-session">Session:</label>
+                    <select
+                        id="filter-session"
+                        onchange="fetchInteractions()"
+                    >
+                        <option value="">All Sessions</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-category">Category:</label>
+                    <select
+                        id="filter-category"
+                        onchange="fetchInteractions()"
+                    >
+                        <option value="">All Categories</option>
+                        <option value="self">Self (Emulated)</option>
+                        <option value="upstream">
+                            Upstream (Bose)
+                        </option>
+                        <option value="mirror">Mirror (Bose)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-since"
+                    >Since (YYYY-MM-DD HH:mm:ss):</label
+                    >
+                    <input
+                        type="text"
+                        id="filter-since"
+                        placeholder="e.g. 2026-02-15 15:00:00"
+                        size="25"
+                        onchange="fetchInteractions()"
+                    />
+                </div>
+                <button onclick="fetchInteractions()">
+                    Apply Filters
+                </button>
+            </div>
+
+            <div
+                id="interactions-list-container"
+                style="max-height: 400px; overflow-y: auto"
+            >
+                <table style="width: 100%; border-collapse: collapse">
+                    <thead>
+                    <tr
+                        style="
+                                        text-align: left;
+                                        border-bottom: 2px solid #eee;
+                                    "
+                    >
+                        <th style="padding: 8px">#</th>
+                        <th style="padding: 8px">Time</th>
+                        <th style="padding: 8px">Method</th>
+                        <th style="padding: 8px">Path</th>
+                        <th style="padding: 8px">Status</th>
+                        <th style="padding: 8px">Category</th>
+                        <th style="padding: 8px">Event Details</th>
+                        <th style="padding: 8px">Action</th>
+                    </tr>
+                    </thead>
+                    <tbody id="interactions-list">
+                    <tr>
+                        <td
+                            colspan="8"
+                            style="
+                                            padding: 20px;
+                                            text-align: center;
+                                            color: #666;
+                                        "
+                        >
+                            No interactions found.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div
+            id="dns-discoveries"
+            class="summary-box"
+            style="margin-top: 20px"
+        >
+            <div
+                style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 15px;
+                        "
+            >
+                <h3 style="margin: 0">DNS Discoveries</h3>
+                <div style="display: flex; gap: 10px">
+                    <button
+                        onclick="downloadDNSDiscoveries()"
+                        class="btn-info"
+                    >
+                        Download JSON
+                    </button>
+                    <button
+                        onclick="clearDNSDiscoveries()"
+                        class="btn-danger"
+                    >
+                        Clear DNS Logs
+                    </button>
+                </div>
+            </div>
+            <p style="font-size: 0.85em; color: #666">
+                Hosts discovered via the AfterTouch DNS server. "Self"
+                means the domain was intercepted and redirected to this
+                service.
+            </p>
+            <div
+                id="dns-discoveries-list-container"
+                style="max-height: 400px; overflow-y: auto"
+            >
+                <table style="width: 100%; border-collapse: collapse">
+                    <thead>
+                    <tr
+                        style="
+                                        text-align: left;
+                                        border-bottom: 2px solid #eee;
+                                    "
+                    >
+                        <th style="padding: 8px">Hostname</th>
+                        <th style="padding: 8px">Last Seen</th>
+                        <th
+                            style="padding: 8px; text-align: center"
+                        >
+                            Queries
+                        </th>
+                        <th
+                            style="padding: 8px; text-align: center"
+                        >
+                            Bose?
+                        </th>
+                        <th style="padding: 8px">Category</th>
+                        <th style="padding: 8px">Last Client IP</th>
+                    </tr>
+                    </thead>
+                    <tbody id="dns-discoveries-list">
+                    <tr>
+                        <td
+                            colspan="6"
+                            style="
+                                            padding: 20px;
+                                            text-align: center;
+                                            color: #666;
+                                        "
+                        >
+                            No DNS discoveries found.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div
+            id="interaction-viewer"
+            class="summary-box"
+            style="
+                        margin-top: 20px;
+                        display: none;
+                        background: #2b2b2b;
+                        color: #a9b7c6;
+                    "
+        >
+            <div
+                style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 10px;
+                        "
+            >
+                <h3 style="margin: 0; color: #fff">
+                    Recording Viewer:
+                    <span id="viewer-filename" style="font-weight: normal; font-size: 0.8em"></span>
+                </h3>
+                <button onclick="document.getElementById('interaction-viewer').style.display = 'none'"
+                        style="background: #444; color: #fff; border: 1px solid #666;">
+                    Close
+                </button>
+            </div>
+            <pre
+                id="interaction-content"
+                style="
+                            white-space: pre-wrap;
+                            font-family: &quot;Courier New&quot;, Courier, monospace;
+                            font-size: 0.9em;
+                            margin: 0;
+                            padding: 10px;
+                            overflow-x: auto;
+                            max-height: 600px;
+                        "
+            ></pre>
+        </div>
+
+        <!-- Device Events Overlay -->
+        <div
+            id="device-events-overlay"
+            class="summary-box"
+            style="
+                        margin-top: 20px;
+                        display: none;
+                        background: #fdfdfd;
+                        border: 1px solid #ddd;
+                    "
+        >
+            <div
+                style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 10px;
+                        "
+            >
+                <h3 style="margin: 0">App & Device Events</h3>
+                <div>
+                    <select id="event-device-selector" onchange="fetchDeviceEvents(this.value)">
+                        <option value="">-- Select Device --</option>
+                    </select>
+                    <button onclick="document.getElementById('device-events-overlay').style.display = 'none'"
+                            style="margin-left: 10px">Close
+                    </button>
+                </div>
+            </div>
+            <div
+                id="events-list-container"
+                style="max-height: 400px; overflow-y: auto"
+            >
+                <table style="width: 100%; border-collapse: collapse">
+                    <thead>
+                    <tr
+                        style="
+                                        text-align: left;
+                                        border-bottom: 2px solid #eee;
+                                    "
+                    >
+                        <th style="padding: 8px">Time</th>
+                        <th style="padding: 8px">Type</th>
+                        <th style="padding: 8px">Data</th>
+                    </tr>
+                    </thead>
+                    <tbody id="events-list">
+                    <tr>
+                        <td colspan="3" style="padding: 20px; text-align: center; color: #666;">Select a device to view
+                            events.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 6: Parity & Mirroring -->
+    <div id="tab-parity" class="tab-content">
+        <h2>Parity Analysis</h2>
+        <p>
+            Detection of discrepancies between AfterTouch local
+            responses and official Bose Cloud responses for mirrored
+            endpoints.
+        </p>
+
+        <div class="summary-box">
+            <div
+                style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 15px;
+                        "
+            >
+                <h3 style="margin: 0">Parity Mismatches</h3>
+                <div style="display: flex; gap: 10px">
+                    <button onclick="fetchParityMismatches()">
+                        Refresh Mismatches
+                    </button>
+                    <button
+                        onclick="clearParityMismatches()"
+                        class="btn-danger"
+                    >
+                        Clear All Records
+                    </button>
+                </div>
+            </div>
+
+            <div
+                id="parity-list-container"
+                style="max-height: 500px; overflow-y: auto"
+            >
+                <table style="width: 100%; border-collapse: collapse">
+                    <thead>
+                    <tr
+                        style="
+                                        text-align: left;
+                                        border-bottom: 2px solid #eee;
+                                    "
+                    >
+                        <th style="padding: 8px">Time</th>
+                        <th style="padding: 8px">Method</th>
+                        <th style="padding: 8px">Path</th>
+                        <th style="padding: 8px">Reasons</th>
+                        <th style="padding: 8px">Action</th>
+                    </tr>
+                    </thead>
+                    <tbody id="parity-mismatches-list">
+                    <tr>
+                        <td
+                            colspan="5"
+                            style="
+                                            padding: 20px;
+                                            text-align: center;
+                                            color: #666;
+                                        "
+                        >
+                            Loading mismatches...
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div
+            id="parity-diff-view"
+            class="summary-box"
+            style="display: none; margin-top: 20px"
+        >
+            <div
+                style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 15px;
+                        "
+            >
+                <h3 style="margin: 0">
+                    Mismatch Detail:
+                    <span id="diff-path-display"></span>
+                </h3>
+                <button onclick="document.getElementById('parity-diff-view').style.display = 'none'">Close Detail
+                </button>
+            </div>
+
+            <div
+                style="
+                            margin-bottom: 15px;
+                            padding: 10px;
+                            background: #fff4f4;
+                            border: 1px solid #f5c6cb;
+                            border-radius: 4px;
+                            color: #721c24;
+                        "
+            >
+                <strong>Detection Reasons:</strong>
+                <ul
+                    id="diff-reasons-list"
+                    style="margin: 5px 0 0 0; padding-left: 20px"
+                ></ul>
+            </div>
+
+            <div class="diff-container" style="margin-top: 15px">
+                <div class="diff-pane">
+                            <span
+                                class="config-header"
+                                style="background: #eefbff; color: #0056b3"
+                            >Local Response (AfterTouch)</span
+                            >
+                    <div
+                        id="diff-local-meta"
+                        style="
+                                    font-size: 0.8em;
+                                    margin-bottom: 5px;
+                                    color: #666;
+                                "
+                    ></div>
+                    <pre
+                        id="diff-local-body"
+                        style="
+                                    background: #f8f9fa;
+                                    border: 1px solid #eee;
+                                    padding: 10px;
+                                    font-size: 0.85em;
+                                    overflow-x: auto;
+                                "
+                    ></pre>
+                </div>
+                <div class="diff-pane">
+                            <span
+                                class="config-header"
+                                style="background: #fff4e6; color: #856404"
+                            >Upstream Response (Bose)</span
+                            >
+                    <div
+                        id="diff-upstream-meta"
+                        style="
+                                    font-size: 0.8em;
+                                    margin-bottom: 5px;
+                                    color: #666;
+                                "
+                    ></div>
+                    <pre
+                        id="diff-upstream-body"
+                        style="
+                                    background: #f8f9fa;
+                                    border: 1px solid #eee;
+                                    padding: 10px;
+                                    font-size: 0.85em;
+                                    overflow-x: auto;
+                                "
+                    ></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/web/js/script.js"></script>
+<footer
+    style="margin-top: 50px; padding: 20px; border-top: 1px solid #eee; font-size: 0.8em; color: #888; text-align: center;">
+    <span id="version-info">AfterTouch</span>
+</footer>
 </body>
 </html>

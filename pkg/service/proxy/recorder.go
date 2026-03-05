@@ -49,15 +49,16 @@ type InteractionStats struct {
 
 // Interaction represents a single recorded HTTP interaction.
 type Interaction struct {
-	ID        string `json:"id"`
-	Session   string `json:"session"`
-	Category  string `json:"category"`
-	Method    string `json:"method"`
-	Path      string `json:"path"`
-	File      string `json:"file"`
-	Counter   int    `json:"counter"`
-	Status    int    `json:"status"`
-	Timestamp string `json:"timestamp"`
+	ID         string               `json:"id"`
+	Session    string               `json:"session"`
+	Category   string               `json:"category"`
+	Method     string               `json:"method"`
+	Path       string               `json:"path"`
+	File       string               `json:"file"`
+	Counter    int                  `json:"counter"`
+	Status     int                  `json:"status"`
+	Timestamp  string               `json:"timestamp"`
+	SCMUDCData *EnrichedSCMUDCEvent `json:"scmudc_data,omitempty"`
 }
 
 // NewRecorder creates a new HTTP interaction recorder.
@@ -181,11 +182,25 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 }
 
 func (r *Recorder) save(task recordingTask) {
-	var buf bytes.Buffer
-	r.writeRequest(&buf, task.req, task.replacements)
+	var (
+		buf      bytes.Buffer
+		enriched *EnrichedSCMUDCEvent
+	)
+
+	// Check if this is a SCMUDC request and enrich it
+
+	if strings.Contains(task.req.URL.Path, "/v1/scmudc/") && task.req.Body != nil {
+		bodyBytes, err := io.ReadAll(task.req.Body)
+		if err == nil {
+			task.req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			enriched = enrichSCMUDCRequest(bodyBytes)
+		}
+	}
+
+	r.writeRequestWithEnrichment(&buf, task.req, task.replacements, enriched)
 
 	if task.res != nil {
-		r.writeResponse(&buf, task.res)
+		r.writeResponseWithEnrichment(&buf, task.res, enriched)
 	}
 
 	if err := os.WriteFile(task.path, buf.Bytes(), 0644); err != nil {
@@ -239,7 +254,7 @@ func (r *Recorder) getRecordingPath(dir, method string) string {
 	return filepath.Join(dir, filename)
 }
 
-func (r *Recorder) writeRequest(buf *bytes.Buffer, req *http.Request, replacements map[string]string) {
+func (r *Recorder) writeRequestWithEnrichment(buf *bytes.Buffer, req *http.Request, replacements map[string]string, enriched *EnrichedSCMUDCEvent) {
 	displayURL := req.URL.String()
 	for orig, repl := range replacements {
 		displayURL = strings.ReplaceAll(displayURL, orig, "{{"+strings.Trim(repl, "{}")+"}}")
@@ -250,6 +265,14 @@ func (r *Recorder) writeRequest(buf *bytes.Buffer, req *http.Request, replacemen
 	for orig, repl := range replacements {
 		key := strings.Trim(repl, "{}")
 		fmt.Fprintf(buf, "// %s: %s\n", key, orig)
+	}
+
+	// Add SCMUDC enriched comments
+	if enriched != nil {
+		enrichedComments := generateSCMUDCComments(enriched)
+		for _, comment := range enrichedComments {
+			fmt.Fprintf(buf, "%s\n", comment)
+		}
 	}
 
 	fmt.Fprintf(buf, "%s %s\n", req.Method, displayURL)
@@ -283,10 +306,29 @@ func (r *Recorder) writeRequest(buf *bytes.Buffer, req *http.Request, replacemen
 	}
 }
 
-func (r *Recorder) writeResponse(buf *bytes.Buffer, res *http.Response) {
+func (r *Recorder) writeResponseWithEnrichment(buf *bytes.Buffer, res *http.Response, enriched *EnrichedSCMUDCEvent) {
 	buf.WriteString("\n")
 	buf.WriteString("> {% \n")
 	fmt.Fprintf(buf, "    // Response: %d %s\n", res.StatusCode, http.StatusText(res.StatusCode))
+
+	// Add SCMUDC enrichment summary in response
+	if enriched != nil {
+		buf.WriteString("    //\n")
+		buf.WriteString("    // SCMUDC Event Analysis:\n")
+		fmt.Fprintf(buf, "    // - Origin: %s (%s)\n", getOriginDescription(enriched.Origin), enriched.Origin)
+		fmt.Fprintf(buf, "    // - Action: %s\n", enriched.Action)
+		fmt.Fprintf(buf, "    // - Summary: %s\n", enriched.Summary)
+
+		if enriched.DecodedData != nil {
+			fmt.Fprintf(buf, "    // - Content: %s\n", enriched.DecodedData.ItemName)
+
+			if enriched.DecodedData.SourceAccount != "" {
+				fmt.Fprintf(buf, "    // - Account: %s\n", enriched.DecodedData.SourceAccount)
+			}
+		}
+	}
+
+	buf.WriteString("    //\n")
 	buf.WriteString("    // Headers:\n")
 
 	for k, vv := range res.Header {
@@ -312,8 +354,8 @@ func (r *Recorder) writeResponse(buf *bytes.Buffer, res *http.Response) {
 				buf.WriteString("\n/*\n")
 				buf.Write(bodyBytes)
 				buf.WriteString("\n*/\n")
-			} else {
-				fmt.Fprintf(buf, "\n// [Binary response body: %d bytes]\n", len(bodyBytes))
+			} else if len(bodyBytes) > 0 {
+				fmt.Fprintf(buf, "\n[Binary response body: %d bytes]\n", len(bodyBytes))
 			}
 		}
 	}
@@ -503,7 +545,7 @@ func (r *Recorder) parseInteractionFile(rel, path string, parts []string) (Inter
 		requestPath = "/"
 	}
 
-	return Interaction{
+	interaction := Interaction{
 		ID:        filename,
 		Session:   sessionID,
 		Category:  category,
@@ -513,7 +555,122 @@ func (r *Recorder) parseInteractionFile(rel, path string, parts []string) (Inter
 		Counter:   counter,
 		Status:    r.peekStatus(path),
 		Timestamp: timestamp,
-	}, true
+	}
+
+	// Extract SCMUDC enrichment data if this is a SCMUDC request
+	if strings.Contains(requestPath, "/v1/scmudc/") {
+		interaction.SCMUDCData = r.extractSCMUDCFromFile(path)
+	}
+
+	return interaction, true
+}
+
+// extractSCMUDCFromFile parses SCMUDC enrichment data from a .http file
+func (r *Recorder) extractSCMUDCFromFile(path string) *EnrichedSCMUDCEvent {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	lines := strings.Split(string(content), "\n")
+
+	var (
+		enriched    EnrichedSCMUDCEvent
+		foundSCMUDC bool
+		bodyStart   int
+	)
+
+	// Look for SCMUDC enrichment comments
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+
+		switch {
+		case strings.HasPrefix(line, "// Origin: "):
+			parts := strings.Split(line, " (")
+			if len(parts) >= 2 {
+				enriched.Origin = strings.TrimSuffix(parts[1], ")")
+				foundSCMUDC = true
+			}
+		case strings.HasPrefix(line, "// Action: "):
+			enriched.Action = strings.TrimPrefix(line, "// Action: ")
+		case strings.HasPrefix(line, "// Command: "):
+			enriched.Command = strings.TrimPrefix(line, "// Command: ")
+		case strings.HasPrefix(line, "// Summary: "):
+			enriched.Summary = strings.TrimPrefix(line, "// Summary: ")
+		case strings.HasPrefix(line, "// - Source: "):
+			r.ensureDecodedData(&enriched)
+			enriched.DecodedData.ContentType = strings.TrimPrefix(line, "// - Source: ")
+		case strings.HasPrefix(line, "// - Item: "):
+			r.ensureDecodedData(&enriched)
+			enriched.DecodedData.ItemName = strings.TrimPrefix(line, "// - Item: ")
+		case strings.HasPrefix(line, "// - Account: "):
+			r.ensureDecodedData(&enriched)
+			enriched.DecodedData.SourceAccount = strings.TrimPrefix(line, "// - Account: ")
+		case strings.HasPrefix(line, "// - Artwork: "):
+			r.ensureDecodedData(&enriched)
+			enriched.DecodedData.ArtworkURL = strings.TrimPrefix(line, "// - Artwork: ")
+		case line == "// - Presetable: Yes":
+			r.ensureDecodedData(&enriched)
+			enriched.DecodedData.IsPresetable = true
+		case line == "{" && i > 0:
+			// Found start of JSON body
+			bodyStart = i
+			goto endLoop
+		}
+	}
+
+endLoop:
+	// If we didn't find enrichment comments but this is a SCMUDC request,
+	// try to parse the JSON body directly
+	if !foundSCMUDC && bodyStart > 0 {
+		if parsed := r.parseSCMUDBody(lines, bodyStart); parsed != nil {
+			return parsed
+		}
+	}
+
+	if !foundSCMUDC {
+		return nil
+	}
+
+	return &enriched
+}
+
+func (r *Recorder) ensureDecodedData(enriched *EnrichedSCMUDCEvent) {
+	if enriched.DecodedData == nil {
+		enriched.DecodedData = &DecodedContent{}
+	}
+}
+
+func (r *Recorder) parseSCMUDBody(lines []string, bodyStart int) *EnrichedSCMUDCEvent {
+	var bodyLines []string
+
+	inBody := false
+	braceCount := 0
+
+	for i := bodyStart; i < len(lines); i++ {
+		line := lines[i]
+		if strings.TrimSpace(line) == "{" && !inBody {
+			inBody = true
+
+			bodyLines = append(bodyLines, line)
+			braceCount = 1
+		} else if inBody {
+			bodyLines = append(bodyLines, line)
+
+			braceCount += strings.Count(line, "{") - strings.Count(line, "}")
+			if braceCount == 0 {
+				break
+			}
+		}
+	}
+
+	if len(bodyLines) > 0 {
+		bodyJSON := strings.Join(bodyLines, "\n")
+		return enrichSCMUDCRequest([]byte(bodyJSON))
+	}
+
+	return nil
 }
 
 func (r *Recorder) getFullTimestamp(sessionID, filename string) string {
