@@ -25,6 +25,9 @@
     },
     {
       "pattern": "^https://pkg.go.dev.*badge"
+    },
+    {
+      "pattern": "^\\.\\./images/(dashboard-home|account-creation|account-dashboard|usb-remote-services|device-discovery|device-registration|account-migration|migration-setup|migration-progress|migration-health|migration-complete|backup-setup)\\.png$"
     }
   ],
   "replacementPatterns": [

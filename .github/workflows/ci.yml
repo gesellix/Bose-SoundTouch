@@ -144,6 +144,29 @@ jobs:
           use-verbose-mode: "yes"
           config-file: ".github/markdown-link-check.json"
 
+      - name: Warn on pending images
+        run: |
+          IMAGES=(
+            "dashboard-home.png"
+            "account-creation.png"
+            "account-dashboard.png"
+            "usb-remote-services.png"
+            "device-discovery.png"
+            "device-registration.png"
+            "account-migration.png"
+            "migration-setup.png"
+            "migration-progress.png"
+            "migration-health.png"
+            "migration-complete.png"
+            "backup-setup.png"
+          )
+
+          for img in "${IMAGES[@]}"; do
+            if [ ! -f "docs/images/$img" ]; then
+              echo "::warning file=docs/guides/MIGRATION-GUIDE.md::Pending image '$img' is missing from docs/images/"
+            fi
+          done
+
       - name: Validate API documentation
         run: |
           # Check that all documented endpoints exist in code

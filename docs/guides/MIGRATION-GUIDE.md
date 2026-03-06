@@ -38,7 +38,7 @@ This guide will walk you through migrating your Bose SoundTouch speakers from Bo
 
 #### 1.1 Prepare Your Raspberry Pi
 
-1. **Flash Raspberry Pi OS** to your SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+1. **Flash Raspberry Pi OS** to your SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/documentation/computers/getting-started.html#raspberry-pi-imager)
 2. **Enable SSH** during imaging or create an empty `ssh` file on the boot partition
 3. **Boot your Pi** and connect it to your network
 4. **Find your Pi's IP address** (check your router or use `ping raspberrypi.local`)
