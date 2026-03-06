@@ -14,6 +14,9 @@
 * [Deployment](guides/DEPLOYMENT.md)
 * [Raspberry Pi Guide](guides/RASPBERRY-PI.md)
 * [Troubleshooting](guides/TROUBLESHOOTING.md)
+* [IoT Implementation Guide](guides/IOT-IMPLEMENTATION-GUIDE.md)
+* [Migration Guide](guides/MIGRATION-GUIDE.md)
+* [MQTT Integration Design](guides/MQTT-INTEGRATION-DESIGN.md)
 * [Useful Links](#useful-links)
 
 ### Useful Links
@@ -51,6 +54,8 @@
 * [Anonymization Summary](analysis/ANONYMIZATION-SUMMARY.md)
 * [Device Redirect Methods](analysis/DEVICE-REDIRECT-METHODS.md)
 * [Wiki API Comparison](analysis/WIKI-COMPARISON.md)
+* [IoT Config Summary](analysis/IOT-CONFIG-SUMMARY.md)
+* [IoT Configuration Analysis](analysis/IOT-CONFIGURATION-ANALYSIS.md)
 
 ## Appendix (Other Documents)
 * [API Navigation Reference](API-NAVIGATION-REFERENCE.md)
@@ -70,3 +75,8 @@
 * [Undocumented Community Features](UNDOCUMENTED-COMMUNITY-FEATURES.md)
 * [Unimplemented Endpoints](UNIMPLEMENTED-ENDPOINTS.md)
 * [Preset Store](preset-store.md)
+* [SCMUDC Enrichment Implementation](SCMUDC-ENRICHMENT-IMPLEMENTATION.md)
+* [Device Lifecycle and Power On Enhancement](device-lifecycle-and-power-on-enhancement.md)
+* [Device Lifecycle Summary](device-lifecycle-summary.md)
+* [Power On Implementation Guide](power-on-implementation-guide.md)
+* [SCMUDC Events Analysis](scmudc-events-analysis.md)

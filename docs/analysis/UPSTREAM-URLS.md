@@ -6,13 +6,13 @@ This document provides a comprehensive overview of the upstream Bose cloud servi
 
 SoundTouch devices use a set of primary domains for their operation. These are often configurable via the `SoundTouchSdkPrivateCfg.xml` file.
 
-| Service | Primary Domain | Purpose |
-| :--- | :--- | :--- |
-| **Marge** | `streaming.bose.com` | Account management, streaming source providers, and preset sync. |
-| **BMX Registry** | `content.api.bose.io` | Bose Media eXchange service discovery and registry. |
-| **Stats/Analytics** | `events.api.bosecm.com` | Telemetry, device events, and usage statistics. |
-| **Software Update** | `worldwide.bose.com` | Firmware update checks and downloads (path: `/updates/soundtouch`). |
-| **Voice/Alexa** | `voice.api.bose.io` | Token management for Amazon Alexa integration. |
+| Service             | Primary Domain          | Purpose                                                             |
+|:--------------------|:------------------------|:--------------------------------------------------------------------|
+| **Marge**           | `streaming.bose.com`    | Account management, streaming source providers, and preset sync.    |
+| **BMX Registry**    | `content.api.bose.io`   | Bose Media eXchange service discovery and registry.                 |
+| **Stats/Analytics** | `events.api.bosecm.com` | Telemetry, device events, and usage statistics.                     |
+| **Software Update** | `worldwide.bose.com`    | Firmware update checks and downloads (path: `/updates/soundtouch`). |
+| **Voice/Alexa**     | `voice.api.bose.io`     | Token management for Amazon Alexa integration.                      |
 
 ## Internal & Development Domains
 
