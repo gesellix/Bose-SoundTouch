@@ -3,5 +3,6 @@ certs/
 default/
 dns/
 interactions/
+parity_mismatches/
 patterns.json
 settings.json

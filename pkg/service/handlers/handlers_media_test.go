@@ -131,4 +131,15 @@ func TestStaticWeb(t *testing.T) {
 		!strings.Contains(res.Header.Get("Content-Type"), "text/javascript") {
 		t.Errorf("JS: Expected javascript content type, got %s", res.Header.Get("Content-Type"))
 	}
+
+	// 3. Test diff.min.js
+	res, err = http.Get(ts.URL + "/web/js/diff.min.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Diff JS: Expected status OK, got %v", res.Status)
+	}
 }

@@ -295,6 +295,7 @@ func (s *Server) performMirror(r *http.Request) *mirrorResponseRecorder {
 	return recorder
 }
 
+// checkParity compares local response with upstream response.
 func (s *Server) checkParity(req *http.Request, local, upstream *mirrorResponseRecorder) {
 	if local.status == 0 {
 		local.status = 200
@@ -324,7 +325,10 @@ func (s *Server) checkParity(req *http.Request, local, upstream *mirrorResponseR
 	}
 
 	// Basic body comparison (could be improved with XML semantic diff)
-	if !bytes.Equal(local.body.Bytes(), upstream.body.Bytes()) {
+	localBody := local.body.Bytes()
+	upstreamBody := upstream.body.Bytes()
+
+	if !bytes.Equal(localBody, upstreamBody) {
 		mismatch = true
 
 		reasons = append(reasons, "Body content mismatch")

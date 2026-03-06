@@ -1021,13 +1021,66 @@ function viewParityMismatch(m) {
     document.getElementById("diff-local-meta").innerText = `Status: ${m.local.status}`;
     document.getElementById("diff-upstream-meta").innerText = `Status: ${m.upstream.status}`;
 
-    document.getElementById("diff-local-body").innerText = formatXML(m.local.body,);
-    document.getElementById("diff-upstream-body").innerText = formatXML(m.upstream.body,);
+    const localCT = (m.local.headers && m.local.headers["Content-Type"]) ? m.local.headers["Content-Type"][0] : "";
+    const upstreamCT = (m.upstream.headers && m.upstream.headers["Content-Type"]) ? m.upstream.headers["Content-Type"][0] : "";
+
+    const localBody = formatBody(m.local.body, localCT);
+    const upstreamBody = formatBody(m.upstream.body, upstreamCT);
+
+    if (typeof Diff !== 'undefined') {
+        const diff = Diff.diffChars(localBody, upstreamBody);
+        const localEl = document.getElementById("diff-local-body");
+        const upstreamEl = document.getElementById("diff-upstream-body");
+
+        localEl.innerHTML = "";
+        upstreamEl.innerHTML = "";
+
+        diff.forEach((part) => {
+            const span = document.createElement('span');
+            if (part.added) {
+                span.className = 'diff-added';
+                span.innerText = part.value;
+                upstreamEl.appendChild(span);
+            } else if (part.removed) {
+                span.className = 'diff-removed';
+                span.innerText = part.value;
+                localEl.appendChild(span);
+            } else {
+                localEl.appendChild(document.createTextNode(part.value));
+                upstreamEl.appendChild(document.createTextNode(part.value));
+            }
+        });
+    } else {
+        document.getElementById("diff-local-body").innerText = localBody;
+        document.getElementById("diff-upstream-body").innerText = upstreamBody;
+    }
 
     document.getElementById("parity-diff-view").style.display = "block";
     document
         .getElementById("parity-diff-view")
         .scrollIntoView({behavior: "smooth"});
+}
+
+function formatBody(body, contentType) {
+    if (!body) return "";
+    contentType = (contentType || "").toLowerCase();
+    if (contentType.includes("json")) {
+        return formatJSON(body);
+    }
+    if (contentType.includes("xml")) {
+        return formatXML(body);
+    }
+    return body;
+}
+
+function formatJSON(json) {
+    if (!json) return "";
+    try {
+        const obj = typeof json === "string" ? JSON.parse(json) : json;
+        return JSON.stringify(obj, null, 2);
+    } catch (e) {
+        return json;
+    }
 }
 
 function formatXML(xml) {
