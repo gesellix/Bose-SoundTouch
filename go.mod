@@ -1,6 +1,6 @@
 module github.com/gesellix/bose-soundtouch
 
-go 1.25.7
+go 1.26.1
 
 require (
 	github.com/go-chi/chi/v5 v5.2.5
@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
+	github.com/xrash/smetrics v0.0.0-20250705151800-55b8f293f342 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
