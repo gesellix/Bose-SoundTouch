@@ -55,6 +55,8 @@ jobs:
   static-analysis:
     name: Static Security Analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
