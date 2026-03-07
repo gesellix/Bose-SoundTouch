@@ -55,23 +55,21 @@ func (s *Server) ServeProxy(target *url.URL) http.HandlerFunc {
 			r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 		}
 
-		rp := httputil.NewSingleHostReverseProxy(target)
-		rp.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+		rp := &httputil.ReverseProxy{
+			Rewrite: func(pr *httputil.ProxyRequest) {
+				pr.SetURL(target)
+				pr.Out.Host = target.Host
+				// If target has a path, we should probably append or replace.
+				// For Bose upstream, it's usually just the domain.
+				if target.Path != "" && target.Path != "/" {
+					pr.Out.URL.Path = target.Path
+				}
 
-		// Update director to set the correct host and path
-		originalDirector := rp.Director
-		rp.Director = func(req *http.Request) {
-			originalDirector(req)
-			req.Host = target.Host
-			// If target has a path, we should probably append or replace.
-			// For Bose upstream, it's usually just the domain.
-			if target.Path != "" && target.Path != "/" {
-				req.URL.Path = target.Path
-			}
-
-			lp.LogRequest(req)
+				lp.LogRequest(pr.Out)
+			},
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
 		}
 
 		rp.ModifyResponse = func(res *http.Response) error {
