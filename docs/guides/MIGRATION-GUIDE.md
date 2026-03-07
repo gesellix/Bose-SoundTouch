@@ -9,7 +9,7 @@
 
 ## Overview
 
-This guide will walk you through migrating your Bose SoundTouch speakers from Bose's cloud services to your own local SoundTouch service. By the end of this process, your speakers will be completely independent of Bose's servers while retaining all their functionality.
+This guide will walk you through migrating your Bose SoundTouch speakers from Bose's cloud services to AfterTouch, your own local SoundTouch service. By the end of this process, your speakers will be completely independent of Bose's servers while retaining all their functionality.
 
 > **💡 Why Migrate?** Bose announced the shutdown of their SoundTouch cloud services in May 2026. This migration ensures your speakers continue working indefinitely with enhanced local control and monitoring.
 
@@ -104,6 +104,20 @@ After creation, you'll see your **Account Dashboard**:
 ![Account Dashboard](../images/account-dashboard.png)
 *Example: Fresh account dashboard ready for device migration*
 
+### 2.3 Initial Settings
+
+Once your account is created, configure the global settings:
+1. **Settings**:
+   - Check **Target Domain**: Ensure it's reachable from the speaker (e.g., `soundtouch.fritz.box`).
+   - **DNS Discovery**: Enable DNS discovery on port `:53`. This is crucial for the DNS hook migration method.
+2. **Devices**:
+   - Go to the **"Device Discovery"** tab.
+   - Click **"Scan Network"** or manually add a speaker via IP address.
+   - Your devices should appear with **SSH Status**: `Enabled`.
+
+![Device Discovery](../images/device-discovery.png)
+*Example: Discovered devices with remote access enabled*
+
 ## Step 3: Prepare Your Devices
 
 > **⚠️ Important**: This step temporarily enables SSH access on your speakers. SSH will be automatically disabled after migration unless you choose to keep it enabled.
@@ -114,25 +128,14 @@ For each SoundTouch device:
 
 1. **Prepare a USB drive**:
    - Format as FAT32
-   - Create a file named `remote_services` (no extension)
-   - Content of file: `enable`
+   - Create an empty file named `remote_services` (no extension)
+   - (Optional) Firmware update/reset, see [Bose SoundTouch USB Update](https://downloads.bose.com/ced/soundtouch/soundtouch_usb/index.html)
 
 2. **Insert USB drive** into your SoundTouch speaker
 3. **Power cycle** the device (unplug for 10 seconds, then reconnect)
 
 ![USB Preparation](../images/usb-remote-services.png)
 *Example: USB drive setup for enabling remote services*
-
-### 3.2 Verify Remote Access
-
-In your SoundTouch Service dashboard:
-
-1. Go to **"Device Discovery"** tab
-2. Click **"Scan Network"**
-3. Your devices should appear with **SSH Status**: `Enabled`
-
-![Device Discovery](../images/device-discovery.png)
-*Example: Discovered devices with remote access enabled*
 
 ## Step 4: Discover and Register Devices
 
@@ -174,70 +177,51 @@ After registration, you'll see:
 
 ## Step 5: Migrate Individual Devices
 
-> **🔄 Migration Strategy**: We recommend "gradual migration" where devices continue using Bose services while building local data, then switch to local-only when ready.
-
-### 5.1 Start Device Migration
+### 5.1 Step 3: Data Sync
 
 1. **Dashboard** → **"Devices"** → Select your device
-2. **Click "Migrate Device"**
-3. **Configure migration**:
-   - Migration Method: `Gradual` (recommended)
-   - Preserve Data: ✅ `Yes`
-   - Backup Current State: ✅ `Yes`
-   - Test Period: `7 days`
+2. Click **"Data Sync"**
+3. This fetches configuration (presets, recents, sources) from the speaker to the SoundTouch service.
 
-![Migration Setup](../images/migration-setup.png)
-*Example: Migration configuration dialog*
+### 5.2 Step 4: Migration
 
-### 5.2 Migration Process
+Once data is synced, proceed to the migration tab for the device:
 
-The migration happens in phases:
+1. **Backup XML**: Create an off-device backup of the current configuration.
+2. **Enable Persistent Remote Service**: This ensures SSH remains available after reboots.
+   - *Note*: If you see `'rw: command not found'`, you can safely ignore it.
+3. **CA Certificate Configuration**:
+   - **Test with explicit CA**: Verify the speaker can communicate using the local CA.
+   - **Trust CA now**: Inject the local Root CA into the speaker's trust store.
+   - **Test with shared trust store**: Verify general HTTPS communication.
+4. **Migration Method**:
+   - Select **"Redirect via DNS hook"**.
+   - **Test DNS Redirection**: Ensure the speaker correctly resolves the service domain.
+5. **Confirm Migration**: Apply the final changes to the speaker.
 
-**Phase 1: Data Collection (Days 1-3)**
-- Device continues using Bose services
-- Local service mirrors all requests/responses
-- Builds local database of presets, recents, sources
-- Status: `Migrating - Data Collection`
+#### Example Migration Output:
+```text
+Successfully created off-device backup of current configuration.
+Pre-flight: Write access verified.
+Resolved soundtouch.fritz.box to 192.168.1.100
+Uploaded /mnt/nv/soundtouch-service/aftertouch.resolv.conf
+/mnt/nv/rc.local already contains Aftertouch hook logic
+(rw || mount -o remount,rw /): sh: rw: command not found
 
-**Phase 2: Testing (Days 4-6)**
-- Device uses local services for some requests
-- Falls back to Bose if issues occur
-- Validates local data completeness
-- Status: `Migrating - Testing`
+cp /etc/udhcpc.d/50default /etc/udhcpc.d/50default.original:
+Applied patch to /etc/udhcpc.d/50default
+Verified patch on /etc/udhcpc.d/50default
+cp /opt/Bose/udhcpc.script /opt/Bose/udhcpc.script.original:
+Applied patch to /opt/Bose/udhcpc.script
+Verified patch on /opt/Bose/udhcpc.script
+CA certificate already trusted, skipping injection
+```
 
-**Phase 3: Full Local (Day 7+)**
-- Device uses only local services
-- Bose services disabled for this device
-- Full independence achieved
-- Status: `Active - Local Only`
+## Step 7: Complete Account Migration
 
-![Migration Progress](../images/migration-progress.png)
-*Example: Migration progress tracking*
+### 7.1 Migrate All Devices
 
-### 5.3 Monitor Migration Health
-
-During migration, monitor:
-
-**Device Health Dashboard**:
-- **Connectivity**: Should remain `Online` throughout
-- **Response Time**: Should be similar or better than before
-- **Error Rate**: Should remain low (<1%)
-- **Data Completeness**: Shows percentage of data successfully migrated
-
-![Migration Health](../images/migration-health.png)
-*Example: Migration health monitoring*
-
-**Data Verification**:
-- **Presets**: Verify all presets work correctly
-- **Recent History**: Check recent play history is preserved
-- **Source Configuration**: Ensure all configured sources (Spotify, etc.) work
-- **Multiroom**: Test zone functionality if applicable
-
-## Step 6: Complete Account Migration
-
-### 6.1 Migrate All Devices
-
-Repeat Step 5 for each of your SoundTouch devices. You can migrate multiple devices simultaneously, but we recommend doing 1-2 at a time to monitor progress.
+Repeat the migration process for each of your SoundTouch devices. You can migrate multiple devices simultaneously, but we recommend doing 1-2 at a time to monitor progress.
 
 **Migration Dashboard** shows overall progress:
 - **Devices Migrated**: `2 of 4 completed`
@@ -248,7 +232,7 @@ Repeat Step 5 for each of your SoundTouch devices. You can migrate multiple devi
 ![Account Migration Status](../images/account-migration.png)
 *Example: Account-wide migration progress*
 
-### 6.2 Verify Complete Migration
+### 7.2 Verify Complete Migration
 
 When all devices are migrated:
 
@@ -260,18 +244,16 @@ When all devices are migrated:
 ![Migration Complete](../images/migration-complete.png)
 *Example: Completed migration dashboard*
 
-## Step 7: Post-Migration Setup
+## Step 8: Post-Migration Tasks
 
-### 7.1 Disable Remote Services (Optional)
+1. **Remove USB stick** from the speaker.
+2. **Reboot** the device to apply all changes.
 
-For enhanced security, disable SSH on migrated devices:
+### 8.1 Disable Remote Services (Optional)
 
-1. **Dashboard** → **"Device Management"**
-2. **Select device** → **"Security Settings"**
-3. **Click "Disable Remote Services"**
-4. **Confirm** to disable SSH access
+For enhanced security, you can disable SSH on migrated devices. However, keeping it enabled allows for easier future maintenance or reverts.
 
-### 7.2 Configure Backups
+### 8.2 Configure Backups
 
 Set up automatic backups of your device configurations:
 
@@ -284,7 +266,7 @@ Set up automatic backups of your device configurations:
 ![Backup Configuration](../images/backup-setup.png)
 *Example: Backup configuration settings*
 
-### 7.3 Set Up Monitoring Alerts (Optional)
+### 8.3 Set Up Monitoring Alerts (Optional)
 
 Configure notifications for important events:
 
