@@ -1008,7 +1008,7 @@ async function clearParityMismatches() {
     }
 }
 
-function viewParityMismatch(m) {
+function viewParityMismatch(m, forceRichDiff = false) {
     document.getElementById("diff-path-display").innerText = m.method + " " + m.path;
     const reasonsList = document.getElementById("diff-reasons-list");
     reasonsList.innerHTML = "";
@@ -1027,32 +1027,46 @@ function viewParityMismatch(m) {
     const localBody = formatBody(m.local.body, localCT);
     const upstreamBody = formatBody(m.upstream.body, upstreamCT);
 
-    if (typeof Diff !== 'undefined') {
-        const diff = Diff.diffChars(localBody, upstreamBody);
-        const localEl = document.getElementById("diff-local-body");
-        const upstreamEl = document.getElementById("diff-upstream-body");
+    const diffSizeThreshold = 50000; // 50KB
+    const isLarge = localBody.length > diffSizeThreshold || upstreamBody.length > diffSizeThreshold;
+    const warningEl = document.getElementById("diff-size-warning");
 
-        localEl.innerHTML = "";
-        upstreamEl.innerHTML = "";
+    if (isLarge && !forceRichDiff) {
+        warningEl.style.display = "block";
+        const forceBtn = document.getElementById("force-rich-diff-btn");
+        forceBtn.onclick = () => viewParityMismatch(m, true);
 
-        diff.forEach((part) => {
-            const span = document.createElement('span');
-            if (part.added) {
-                span.className = 'diff-added';
-                span.innerText = part.value;
-                upstreamEl.appendChild(span);
-            } else if (part.removed) {
-                span.className = 'diff-removed';
-                span.innerText = part.value;
-                localEl.appendChild(span);
-            } else {
-                localEl.appendChild(document.createTextNode(part.value));
-                upstreamEl.appendChild(document.createTextNode(part.value));
-            }
-        });
-    } else {
         document.getElementById("diff-local-body").innerText = localBody;
         document.getElementById("diff-upstream-body").innerText = upstreamBody;
+    } else {
+        warningEl.style.display = "none";
+        if (typeof Diff !== 'undefined') {
+            const diff = Diff.diffChars(localBody, upstreamBody);
+            const localEl = document.getElementById("diff-local-body");
+            const upstreamEl = document.getElementById("diff-upstream-body");
+
+            localEl.innerHTML = "";
+            upstreamEl.innerHTML = "";
+
+            diff.forEach((part) => {
+                const span = document.createElement('span');
+                if (part.added) {
+                    span.className = 'diff-added';
+                    span.innerText = part.value;
+                    upstreamEl.appendChild(span);
+                } else if (part.removed) {
+                    span.className = 'diff-removed';
+                    span.innerText = part.value;
+                    localEl.appendChild(span);
+                } else {
+                    localEl.appendChild(document.createTextNode(part.value));
+                    upstreamEl.appendChild(document.createTextNode(part.value));
+                }
+            });
+        } else {
+            document.getElementById("diff-local-body").innerText = localBody;
+            document.getElementById("diff-upstream-body").innerText = upstreamBody;
+        }
     }
 
     document.getElementById("parity-diff-view").style.display = "block";
