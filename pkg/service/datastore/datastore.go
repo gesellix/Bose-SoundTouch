@@ -437,53 +437,27 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 		return nil, err
 	}
 
-	var recentsWrap struct {
-		Recents []struct {
-			ID          string `xml:"id,attr"`
-			DeviceID    string `xml:"deviceID,attr"`
-			UtcTime     string `xml:"utcTime,attr"`
-			ContentItem struct {
-				Source        string `xml:"source,attr"`
-				Type          string `xml:"type,attr"`
-				Location      string `xml:"location,attr"`
-				SourceAccount string `xml:"sourceAccount,attr"`
-				IsPresetable  string `xml:"isPresetable,attr"`
-				ItemName      string `xml:"itemName"`
-				ContainerArt  string `xml:"containerArt"`
-			} `xml:"contentItem"`
-		} `xml:"recent"`
+	type RecentsXML struct {
+		XMLName xml.Name               `xml:"recents"`
+		Recents []models.ServiceRecent `xml:"recent"`
 	}
+
+	var recentsWrap RecentsXML
 
 	if err := xml.Unmarshal(data, &recentsWrap); err != nil {
 		return nil, fmt.Errorf("malformed recents XML at %s: %w", path, err)
 	}
 
-	recents := []models.ServiceRecent{}
+	recents := recentsWrap.Recents
 	maxID := 0
 
-	for i := range recentsWrap.Recents {
-		r := &recentsWrap.Recents[i]
-
+	for i := range recents {
+		r := &recents[i]
 		if id, err := strconv.Atoi(r.ID); err == nil {
 			if id > maxID {
 				maxID = id
 			}
 		}
-
-		recents = append(recents, models.ServiceRecent{
-			ServiceContentItem: models.ServiceContentItem{
-				ID:            r.ID,
-				Name:          r.ContentItem.ItemName,
-				Source:        r.ContentItem.Source,
-				Type:          r.ContentItem.Type,
-				Location:      r.ContentItem.Location,
-				SourceAccount: r.ContentItem.SourceAccount,
-				IsPresetable:  r.ContentItem.IsPresetable,
-			},
-			DeviceID:     r.DeviceID,
-			UtcTime:      r.UtcTime,
-			ContainerArt: r.ContentItem.ContainerArt,
-		})
 	}
 
 	// Ensure all recents have unique numeric IDs
@@ -501,52 +475,16 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 func (ds *DataStore) SaveRecents(account, device string, recents []models.ServiceRecent) error {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
 
-	type RecentXML struct {
-		ID          string `xml:"id,attr"`
-		DeviceID    string `xml:"deviceID,attr"`
-		UtcTime     string `xml:"utcTime,attr"`
-		ContentItem struct {
-			Source        string `xml:"source,attr,omitempty"`
-			Type          string `xml:"type,attr"`
-			Location      string `xml:"location,attr"`
-			SourceAccount string `xml:"sourceAccount,attr,omitempty"`
-			IsPresetable  string `xml:"isPresetable,attr"`
-			ItemName      string `xml:"itemName"`
-			ContainerArt  string `xml:"containerArt"`
-		} `xml:"contentItem"`
-	}
-
 	type RecentsXML struct {
-		XMLName xml.Name    `xml:"recents"`
-		Recents []RecentXML `xml:"recent"`
+		XMLName xml.Name               `xml:"recents"`
+		Recents []models.ServiceRecent `xml:"recent"`
 	}
 
-	var rx RecentsXML
-
-	for i := range recents {
-		r := &recents[i]
-
-		var rxml RecentXML
-
-		rxml.ID = r.ID
-		rxml.DeviceID = r.DeviceID
-		rxml.UtcTime = r.UtcTime
-		rxml.ContentItem.Source = r.Source
-		rxml.ContentItem.Type = r.Type
-		rxml.ContentItem.Location = r.Location
-		rxml.ContentItem.SourceAccount = r.SourceAccount
-
-		rxml.ContentItem.IsPresetable = r.IsPresetable
-		if rxml.ContentItem.IsPresetable == "" {
-			rxml.ContentItem.IsPresetable = "true"
-		}
-
-		rxml.ContentItem.ItemName = r.Name
-		rxml.ContentItem.ContainerArt = r.ContainerArt
-		rx.Recents = append(rx.Recents, rxml)
+	wrap := RecentsXML{
+		Recents: recents,
 	}
 
-	data, err := xml.MarshalIndent(rx, "", "    ")
+	data, err := xml.MarshalIndent(wrap, "", "    ")
 	if err != nil {
 		return err
 	}
@@ -670,10 +608,23 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		return nil, fmt.Errorf("malformed sources XML at %s: %w", path, err)
 	}
 
+	// Helper struct for unmarshaling with displayName
+	var sourcesWithDisplayName struct {
+		Sources []struct {
+			DisplayName string `xml:"displayName,attr"`
+		} `xml:"source"`
+	}
+
+	_ = xml.Unmarshal(data, &sourcesWithDisplayName)
+
 	for i := range sourcesWrap.Sources {
 		s := &sourcesWrap.Sources[i]
 		if s.ID == "" {
 			s.ID = strconv.Itoa(100001 + i)
+		}
+
+		if s.DisplayName == "" && i < len(sourcesWithDisplayName.Sources) {
+			s.DisplayName = sourcesWithDisplayName.Sources[i].DisplayName
 		}
 		// Sync legacy fields
 		s.SourceKeyType = s.SourceKey.Type

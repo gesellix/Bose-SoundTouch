@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 )
@@ -84,6 +85,37 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 	deviceIP := req.DiagnosticData.DeviceLandscape.IPAddress
 
 	log.Printf("[Marge] Device %s powered on (IP: %s)", deviceID, deviceIP)
+
+	// Persist device details provided in the power_on request
+	if deviceID != "" && s.ds != nil {
+		// Use "default" account if not found or if the device is not yet mapped to an account.
+		// In a real scenario, this might be resolved differently if we already have the account info.
+		accountID := "default"
+		if existing := s.findExistingDeviceInfoByDeviceID(deviceID); existing != nil && existing.AccountID != "" {
+			accountID = existing.AccountID
+		}
+
+		macAddress := ""
+		if len(req.DiagnosticData.DeviceLandscape.MacAddresses) > 0 {
+			macAddress = req.DiagnosticData.DeviceLandscape.MacAddresses[0]
+		}
+
+		info := &models.ServiceDeviceInfo{
+			DeviceID:            deviceID,
+			AccountID:           accountID,
+			ProductCode:         req.Device.Product.ProductCode,
+			DeviceSerialNumber:  req.Device.SerialNumber,
+			ProductSerialNumber: req.Device.Product.SerialNumber,
+			FirmwareVersion:     req.Device.FirmwareVersion,
+			IPAddress:           deviceIP,
+			MacAddress:          macAddress,
+			DiscoveryMethod:     "power_on",
+		}
+
+		if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
+			log.Printf("[Marge] Failed to save device info for %s: %v", deviceID, err)
+		}
+	}
 
 	if deviceIP != "" {
 		go s.PrimeDeviceWithSpotify(deviceIP)
@@ -370,7 +402,7 @@ func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, _ *http.Reques
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.Header().Set("Authorization", bearerToken.GetAuthHeader())
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(xml.Header))
+	_, _ = w.Write([]byte(constants.XMLHeader))
 	_, _ = w.Write(data)
 }
 
@@ -379,7 +411,7 @@ func (s *Server) HandleMargeDeviceGroup(w http.ResponseWriter, _ *http.Request) 
 	// Native firmware expects vnd.bose.streaming content type
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><group/>`))
+	_, _ = w.Write([]byte(constants.XMLHeader + `<group/>`))
 }
 
 // HandleMargeDeviceGroupServer returns grouping server information (404 by default if not a server).

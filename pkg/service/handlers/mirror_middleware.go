@@ -322,20 +322,77 @@ func (s *Server) checkParity(req *http.Request, local, upstream *mirrorResponseR
 		reasons = append(reasons, fmt.Sprintf("Content-Type mismatch: local %s, upstream %s", localCT, upstreamCT))
 	}
 
-	// Basic body comparison (could be improved with XML semantic diff)
+	// Compare bodies
 	localBody := local.body.Bytes()
 	upstreamBody := upstream.body.Bytes()
 
 	if !bytes.Equal(localBody, upstreamBody) {
-		mismatch = true
+		// If both are XML, try a whitespace-insensitive comparison
+		isXML := (strings.Contains(localCT, "/xml") || strings.Contains(localCT, "+xml")) &&
+			(strings.Contains(upstreamCT, "/xml") || strings.Contains(upstreamCT, "+xml"))
 
-		reasons = append(reasons, "Body content mismatch")
+		if isXML {
+			if !s.compareXMLWhitespaceInsensitive(localBody, upstreamBody) {
+				mismatch = true
+
+				reasons = append(reasons, "Body content mismatch (XML)")
+			}
+		} else {
+			mismatch = true
+
+			reasons = append(reasons, "Body content mismatch")
+		}
 	}
 
 	if mismatch {
 		log.Printf("[PARITY] Mismatch detected for %s %s: %v", req.Method, req.URL.Path, reasons)
 		s.saveParityMismatch(req, local, upstream, reasons)
 	}
+}
+
+// compareXMLWhitespaceInsensitive compares two XML bodies ignoring whitespace between elements.
+func (s *Server) compareXMLWhitespaceInsensitive(local, upstream []byte) bool {
+	clean := func(b []byte) string {
+		s := string(b)
+		// Remove XML declaration for easier comparison
+		if strings.HasPrefix(s, "<?xml") {
+			if idx := strings.Index(s, "?>"); idx != -1 {
+				s = s[idx+2:]
+			}
+		}
+
+		// Normalize whitespace:
+		// 1. Remove all whitespace between elements (i.e., between > and <)
+		// 2. Trim surrounding whitespace
+		var result strings.Builder
+
+		inTag := false
+
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			switch {
+			case c == '<':
+				inTag = true
+
+				result.WriteByte(c)
+			case c == '>':
+				inTag = false
+
+				result.WriteByte(c)
+			case inTag:
+				result.WriteByte(c)
+			default:
+				// We are between tags, only add if not whitespace
+				if c != ' ' && c != '\n' && c != '\r' && c != '\t' {
+					result.WriteByte(c)
+				}
+			}
+		}
+
+		return strings.TrimSpace(result.String())
+	}
+
+	return clean(local) == clean(upstream)
 }
 
 func (s *Server) saveParityMismatch(req *http.Request, local, upstream *mirrorResponseRecorder, reasons []string) {

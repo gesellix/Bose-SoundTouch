@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -729,6 +730,90 @@ func TestMargePowerOn(t *testing.T) {
 		defer func() { _ = res.Body.Close() }()
 		if res.StatusCode != http.StatusOK {
 			t.Errorf("Expected status OK, got %v", res.Status)
+		}
+	})
+
+	t.Run("Persistence", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "st-test-*")
+		if err != nil {
+			t.Fatalf("Failed to create temp dir: %v", err)
+		}
+		defer func() { _ = os.RemoveAll(tempDir) }()
+
+		ds := datastore.NewDataStore(tempDir)
+		r, _ := setupRouter("http://localhost:8001", ds)
+		ts2 := httptest.NewServer(r)
+		defer ts2.Close()
+
+		deviceID := "A81B6A536A98"
+		serialNumber := "I6332527703739342000020"
+		firmware := "27.0.6.46330"
+		productCode := "SoundTouch 10 sm2"
+		productSerial := "069231P63364828AE"
+		ipAddress := "192.168.1.100"
+		macAddress := "A81B6A536A98"
+
+		payload := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" ?>
+		<device-data>
+			<device id="%s">
+				<serialnumber>%s</serialnumber>
+				<firmware-version>%s</firmware-version>
+				<product product_code="%s" type="5">
+					<serialnumber>%s</serialnumber>
+				</product>
+			</device>
+			<diagnostic-data>
+				<device-landscape>
+					<rssi>Excellent</rssi>
+					<gateway-ip-address>192.168.1.1</gateway-ip-address>
+					<macaddresses>
+						<macaddress>%s</macaddress>
+					</macaddresses>
+					<ip-address>%s</ip-address>
+					<network-connection-type>Wireless</network-connection-type>
+				</device-landscape>
+			</diagnostic-data>
+		</device-data>`, deviceID, serialNumber, firmware, productCode, productSerial, macAddress, ipAddress)
+
+		res, err := http.Post(ts2.URL+"/marge/streaming/support/power_on", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected status OK, got %v", res.Status)
+		}
+
+		// Verify data in datastore
+		info, err := ds.GetDeviceInfo("default", deviceID)
+		if err != nil {
+			t.Fatalf("Failed to get device info: %v", err)
+		}
+
+		if info.DeviceID != deviceID {
+			t.Errorf("Expected DeviceID %s, got %s", deviceID, info.DeviceID)
+		}
+		if info.DeviceSerialNumber != serialNumber {
+			t.Errorf("Expected SerialNumber %s, got %s", serialNumber, info.DeviceSerialNumber)
+		}
+		if info.FirmwareVersion != firmware {
+			t.Errorf("Expected Firmware %s, got %s", firmware, info.FirmwareVersion)
+		}
+		if info.ProductCode != productCode {
+			t.Errorf("Expected ProductCode %s, got %s", productCode, info.ProductCode)
+		}
+		if info.ProductSerialNumber != productSerial {
+			t.Errorf("Expected ProductSerialNumber %s, got %s", productSerial, info.ProductSerialNumber)
+		}
+		if info.IPAddress != ipAddress {
+			t.Errorf("Expected IPAddress %s, got %s", ipAddress, info.IPAddress)
+		}
+		if info.MacAddress != macAddress {
+			t.Errorf("Expected MacAddress %s, got %s", macAddress, info.MacAddress)
+		}
+		if info.DiscoveryMethod != "power_on" {
+			t.Errorf("Expected DiscoveryMethod power_on, got %s", info.DiscoveryMethod)
 		}
 	})
 }

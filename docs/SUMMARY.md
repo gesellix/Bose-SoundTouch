@@ -80,3 +80,4 @@
 * [Device Lifecycle Summary](device-lifecycle-summary.md)
 * [Power On Implementation Guide](power-on-implementation-guide.md)
 * [SCMUDC Events Analysis](scmudc-events-analysis.md)
+* [Parity Improvements](PARITY-IMPROVEMENTS.md)

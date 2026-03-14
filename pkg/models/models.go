@@ -132,47 +132,86 @@ type SourceProvider struct {
 
 // ServiceContentItem represents a media content item with source and location details.
 type ServiceContentItem struct {
-	ID            string `json:"id" xml:"id,attr"`
-	Name          string `json:"name" xml:"itemName"`
-	Source        string `json:"source,omitempty" xml:"source,attr,omitempty"`
-	Type          string `json:"type" xml:"type,attr"`
-	Location      string `json:"location" xml:"location,attr"`
-	SourceAccount string `json:"source_account,omitempty" xml:"sourceAccount,attr,omitempty"`
-	SourceID      string `json:"source_id,omitempty" xml:"sourceid,omitempty"`
-	IsPresetable  string `json:"is_presetable,omitempty" xml:"isPresetable,attr,omitempty"`
+	ID              string `json:"id" xml:"id,attr"`
+	Name            string `json:"name" xml:"name"`
+	Source          string `json:"source,omitempty" xml:"source,attr,omitempty"`
+	Type            string `json:"type" xml:"type,attr"`
+	ContentItemType string `json:"content_item_type" xml:"contentItemType"`
+	Location        string `json:"location" xml:"location"`
+	SourceAccount   string `json:"source_account,omitempty" xml:"sourceAccount,attr,omitempty"`
+	SourceID        string `json:"source_id,omitempty" xml:"sourceid,omitempty"`
+	IsPresetable    string `json:"is_presetable,omitempty" xml:"isPresetable,attr,omitempty"`
 }
 
 // ServicePreset represents a user-defined preset for quick access to media content.
 type ServicePreset struct {
 	ServiceContentItem
-	ContainerArt string `json:"container_art" xml:"containerArt"`
-	CreatedOn    string `json:"created_on" xml:"createdOn"`
-	UpdatedOn    string `json:"updated_on" xml:"updatedOn"`
+	ContainerArt string            `json:"container_art" xml:"containerArt"`
+	CreatedOn    string            `json:"created_on" xml:"createdOn"`
+	UpdatedOn    string            `json:"updated_on" xml:"updatedOn"`
+	ButtonNumber string            `json:"button_number,omitempty" xml:"buttonNumber,attr,omitempty"`
+	Username     string            `json:"-" xml:"username,omitempty"`
+	SourceConfig *ConfiguredSource `json:"-" xml:"source,omitempty"`
 }
 
 // ServiceRecent represents recently played media content.
 type ServiceRecent struct {
+	XMLName xml.Name `json:"-" xml:"recent"`
 	ServiceContentItem
-	DeviceID     string `json:"device_id" xml:"deviceid"`
-	UtcTime      string `json:"utc_time" xml:"utc_time"`
-	ContainerArt string `json:"container_art,omitempty" xml:"containerArt,omitempty"`
+	DeviceID     string            `json:"device_id" xml:"deviceid,attr"`
+	UtcTime      string            `json:"utc_time" xml:"utcTime,attr"`
+	CreatedOn    string            `json:"created_on,omitempty" xml:"createdOn"`
+	UpdatedOn    string            `json:"updated_on,omitempty" xml:"updatedOn"`
+	ContainerArt string            `json:"container_art,omitempty" xml:"containerArt,omitempty"`
+	SourceConfig *ConfiguredSource `json:"-" xml:"source,omitempty"`
+	LastPlayedAt string            `json:"last_played_at,omitempty" xml:"lastplayedat"`
 }
 
 // ConfiguredSource represents a configured media source with authentication details.
 type ConfiguredSource struct {
-	DisplayName string `json:"display_name" xml:"displayName,attr"`
-	ID          string `json:"id" xml:"id,attr"`
-	Secret      string `json:"secret" xml:"secret,attr"`
-	SecretType  string `json:"secret_type" xml:"secretType,attr"`
+	XMLName     xml.Name `json:"-" xml:"source"`
+	DisplayName string   `json:"display_name" xml:"name"`
+	ID          string   `json:"id" xml:"id,attr"`
+	Secret      string   `json:"secret" xml:"credential"`
+	SecretType  string   `json:"secret_type" xml:"credential_type,attr"`
 	SourceKey   struct {
 		Type    string `xml:"type,attr"`
 		Account string `xml:"account,attr"`
-	} `json:"source_key" xml:"sourceKey"`
+	} `json:"source_key" xml:"source_key"`
+	Type string `xml:"type,attr"`
+
+	// Parity fields
+	CreatedOn        string `json:"created_on,omitempty" xml:"createdOn"`
+	UpdatedOn        string `json:"updated_on,omitempty" xml:"updatedOn"`
+	SourceProviderID string `json:"sourceproviderid,omitempty" xml:"sourceproviderid"`
+	Username         string `json:"username,omitempty" xml:"username"`
+	SourceName       string `json:"source_name,omitempty" xml:"sourcename"`
+	SourceSettings   string `json:"-" xml:"sourceSettings"`
 
 	// Legacy fields for backward compatibility in code if needed,
 	// though it's better to update the code to use SourceKey.
 	SourceKeyType    string `json:"source_key_type" xml:"-"`
 	SourceKeyAccount string `json:"source_key_account" xml:"-"`
+}
+
+// MarshalXML implements the xml.Marshaler interface for custom XML encoding of ConfiguredSource.
+func (s ConfiguredSource) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	type Alias ConfiguredSource
+
+	a := struct {
+		Alias
+		Username       string `xml:"username"`
+		SourceName     string `xml:"sourcename"`
+		SourceSettings string `xml:"sourceSettings"`
+	}{
+		Alias: Alias(s),
+	}
+	a.Username = s.Username
+	a.SourceName = s.SourceName
+	// We want <sourceSettings/>
+	a.SourceSettings = ""
+
+	return e.EncodeElement(a, start)
 }
 
 // ServiceDeviceInfo represents information about a SoundTouch device.
@@ -193,9 +232,10 @@ type ServiceDeviceInfo struct {
 // ServiceComponent represents a hardware or software component of a device.
 type ServiceComponent struct {
 	Type            string `xml:"type,attr"`
-	Category        string `xml:"category,attr"`
-	SoftwareVersion string `xml:"softwareVersion"`
-	SerialNumber    string `xml:"serialNumber"`
+	Category        string `xml:"category,attr,omitempty"`
+	SoftwareVersion string `xml:"firmware-version"`
+	SerialNumber    string `xml:"serialnumber"`
+	Label           string `xml:"componentlabel,omitempty"`
 }
 
 // CustomerSupportDevice represents device information for customer support purposes.
@@ -316,4 +356,91 @@ type ChangePasswordRequest struct {
 type EmailAddressResponse struct {
 	XMLName xml.Name `xml:"emailAddress"`
 	Email   string   `xml:",chardata"`
+}
+
+// FullResponseSource represents a configured media source specifically for the /full response.
+// It follows the specific XML structure and field order of the upstream /full response.
+type FullResponseSource struct {
+	ID         string `xml:"id,attr"`
+	Type       string `xml:"type,attr"`
+	CreatedOn  string `xml:"createdOn"`
+	Credential struct {
+		Type  string `xml:"type,attr"`
+		Value string `xml:",chardata"`
+	} `xml:"credential"`
+	Name             string `xml:"name"`
+	SourceProviderID string `xml:"sourceproviderid"`
+	SourceName       string `xml:"sourcename"`
+	SourceSettings   string `xml:"sourceSettings"`
+	UpdatedOn        string `xml:"updatedOn"`
+	Username         string `xml:"username"`
+}
+
+// FullResponsePreset represents a preset specifically for the /full response.
+type FullResponsePreset struct {
+	ButtonNumber    string             `xml:"buttonNumber,attr"`
+	ContainerArt    string             `xml:"containerArt"`
+	ContentItemType string             `xml:"contentItemType"`
+	CreatedOn       string             `xml:"createdOn"`
+	Location        string             `xml:"location"`
+	Name            string             `xml:"name"`
+	Source          FullResponseSource `xml:"source"`
+	UpdatedOn       string             `xml:"updatedOn"`
+	Username        string             `xml:"username"`
+}
+
+// FullResponseRecent represents a recent item specifically for the /full response.
+type FullResponseRecent struct {
+	ID              string             `xml:"id,attr"`
+	ContentItemType string             `xml:"contentItemType"`
+	CreatedOn       string             `xml:"createdOn"`
+	LastPlayedAt    string             `xml:"lastplayedat"`
+	Location        string             `xml:"location"`
+	Name            string             `xml:"name"`
+	Source          FullResponseSource `xml:"source"`
+	SourceID        string             `xml:"sourceid"`
+	UpdatedOn       string             `xml:"updatedOn"`
+}
+
+// AccountFullResponse represents the complete account XML structure.
+type AccountFullResponse struct {
+	XMLName           xml.Name             `xml:"account"`
+	ID                string               `xml:"id,attr"`
+	AccountStatus     string               `xml:"accountStatus"`
+	Devices           []AccountDevice      `xml:"devices>device"`
+	Mode              string               `xml:"mode"`
+	PreferredLanguage string               `xml:"preferredLanguage"`
+	ProviderSettings  []ProviderSetting    `xml:"providerSettings>providerSetting"`
+	Sources           []FullResponseSource `xml:"sources>source"`
+}
+
+// AccountDevice represents a device in the account response.
+type AccountDevice struct {
+	DeviceID        string               `xml:"deviceid,attr"`
+	AttachedProduct *AttachedProduct     `xml:"attachedProduct"`
+	CreatedOn       string               `xml:"createdOn"`
+	FirmwareVersion string               `xml:"firmwareVersion"`
+	IPAddress       string               `xml:"ipaddress"`
+	Name            string               `xml:"name"`
+	Presets         []FullResponsePreset `xml:"presets>preset"`
+	Recents         []FullResponseRecent `xml:"recents>recent"`
+	SerialNumber    string               `xml:"serialNumber"`
+	UpdatedOn       string               `xml:"updatedOn"`
+}
+
+// AttachedProduct represents product information for a device.
+type AttachedProduct struct {
+	ProductCode  string             `xml:"product_code,attr"`
+	Components   []ServiceComponent `xml:"components>component"`
+	ProductLabel string             `xml:"productlabel"`
+	SerialNumber string             `xml:"serialNumber"`
+	UpdatedOn    string             `xml:"updatedOn"`
+}
+
+// ProviderSetting represents a single provider setting.
+type ProviderSetting struct {
+	BoseID     string `xml:"boseId"`
+	KeyName    string `xml:"keyName"`
+	Value      string `xml:"value"`
+	ProviderID string `xml:"providerId"`
 }
