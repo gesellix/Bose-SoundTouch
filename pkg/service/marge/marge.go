@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -167,8 +168,12 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 		}
 	}
 
-	if s.SourceKeyType == "SPOTIFY" {
-		tokenType = "token_version_3"
+	if s.SecretType == "" {
+		if s.SourceKeyType == "SPOTIFY" {
+			tokenType = "token_version_3"
+		}
+
+		s.SecretType = tokenType
 	}
 
 	if providerID == "" {
@@ -185,8 +190,6 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 
 	s.Type = "Audio"
 	s.SourceProviderID = providerID
-
-	s.SecretType = tokenType
 
 	if s.SourceName == "" && s.DisplayName != "Other" {
 		s.SourceName = s.DisplayName
@@ -405,6 +408,14 @@ func mapToFullResponseSource(s models.ConfiguredSource) models.FullResponseSourc
 	fullSource.Credential.Type = s.SecretType
 	fullSource.Credential.Value = s.Secret
 
+	if fullSource.Credential.Type == "" || fullSource.Credential.Type == "token" {
+		if s.Type == "SPOTIFY" || s.SourceProviderID == "SPOTIFY" || s.SourceKeyType == "SPOTIFY" {
+			fullSource.Credential.Type = "token_version_3"
+		} else if fullSource.Credential.Type == "" {
+			fullSource.Credential.Type = "token"
+		}
+	}
+
 	if s.SourceKeyType == "TUNEIN" {
 		fullSource.SourceName = ""
 	}
@@ -422,7 +433,6 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 	for i := range presets {
 		p := &presets[i]
 
-		p.ButtonNumber = p.ID
 		if p.CreatedOn == "" {
 			p.CreatedOn = DateStr
 		}
@@ -446,9 +456,9 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		}
 
 		fullPreset := models.FullResponsePreset{
-			ButtonNumber:    p.ButtonNumber,
+			ButtonNumber:    p.ID,
 			ContainerArt:    p.ContainerArt,
-			ContentItemType: p.Type,
+			ContentItemType: p.ContentItemType,
 			CreatedOn:       p.CreatedOn,
 			Location:        p.Location,
 			Name:            p.Name,
@@ -494,7 +504,7 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 
 		fullRecent := models.FullResponseRecent{
 			ID:              r.ID,
-			ContentItemType: r.Type,
+			ContentItemType: r.ContentItemType,
 			CreatedOn:       r.CreatedOn,
 			LastPlayedAt:    r.LastPlayedAt,
 			Location:        r.Location,
@@ -581,6 +591,7 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	data = bytes.ReplaceAll(data, []byte("<components></components>"), []byte("<components/>"))
 	data = bytes.ReplaceAll(data, []byte("<sourceSettings> </sourceSettings>"), []byte("<sourceSettings/>"))
 	data = bytes.ReplaceAll(data, []byte("<sourceSettings></sourceSettings>"), []byte("<sourceSettings/>"))
+	data = bytes.ReplaceAll(data, []byte("<name></name>"), []byte("<name/>"))
 
 	return append([]byte(constants.XMLHeader), data...), nil
 }
@@ -840,7 +851,7 @@ func persistLearnedSource(ds *datastore.DataStore, account, device string, sourc
 	}
 
 	if err := ds.SaveConfiguredSources(account, device, updatedSources); err != nil {
-		fmt.Printf("[DEBUG_LOG] Failed to persist learned source: %v\n", err)
+		log.Printf("[MARGE_ERR] Failed to persist learned source for %s: %v", device, err)
 	}
 }
 

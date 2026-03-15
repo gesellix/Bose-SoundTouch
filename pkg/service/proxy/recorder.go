@@ -78,7 +78,7 @@ func NewRecorder(baseDir string) *Recorder {
 		r.queue = make(chan recordingTask, 100)
 		go r.worker()
 	} else {
-		log.Println("[DEBUG_LOG] Recorder starting in synchronous mode")
+		log.Println("Recorder starting in synchronous mode")
 	}
 
 	return r

@@ -3,6 +3,12 @@
 This document summarizes the improvements made to the **Marge service** to improve parity with the upstream Bose SoundTouch service, along with open issues and proposed next steps.
 
 #### ✅ Completed Improvements (Marge Service)
+*   **Mapped Preset `buttonNumber`**: Correctly mapped the internal `ServicePreset.ID` to the `buttonNumber` XML attribute in the `/full` response.
+*   **Populated `contentItemType`**: The `contentItemType` (e.g., `tracklisturl`) is now correctly synchronized from upstream, persisted in the local datastore, and returned in the `/full` response for both presets and recents.
+*   **Standardized Credential Types**: Adjusted the logic for Spotify to use the correct `token_version_3` type when a token is present in the `/full` response, improving parity with the upstream service. The service now respects existing `credential_type` values from `Sources.xml` (e.g., `token_version_3` for Spotify) while providing sensible defaults for new or incomplete sources.
+*   **Inconsistent `serialNumber` Casing**: Fixed the casing mismatch in the `/full` response where the upstream uses camelCase `<serialNumber>` in the top-level `<device>` and lowercase `<serialnumber>` in the nested `<attachedProduct>`. Local responses now correctly mirror this inconsistency.
+*   **Device Name Consistency**: Fixed an issue where the device `<name>` was empty in some local `/full` responses by ensuring it is correctly populated from the datastore and synchronized from upstream.
+*   **Improved XML Parity**: Empty `<name>` tags in the `/full` response are now self-closing (`<name/>`), matching upstream behavior.
 *   **Timestamp-based ID Generation**: Implemented a 9-digit ID schema (`YYMMDD` + 3-digit counter) for `recent` items, ensuring IDs are large, unique, and stay within the 32-bit integer range.
 *   **Automatic Source Learning**: The service now extracts and persists full metadata (credentials, provider IDs, and custom names) from incoming `POST /recent` requests. This improves parity for subsequent `GET /recents` calls.
 *   **Source Provider Mapping**: Synchronized local source provider IDs and timestamps with upstream data. The `RADIO_BROWSER` provider is included in the public `/streaming/sourceproviders` list to maintain internal functionality while acknowledging it as a parity gap.
@@ -15,6 +21,7 @@ This document summarizes the improvements made to the **Marge service** to impro
     *   Implemented structured XML marshaling with consistent 2-space indentation for recents and source providers.
 *   **Improved TuneIn Parity**: Fixed TuneIn source mapping to use ID `25` and ensuring `sourcename` is empty in responses, matching upstream behavior for station playback.
 *   **High-Fidelity Full Account Sync**: Refactored the `/streaming/account/{accountId}/full` response to match the upstream structure. This includes:
+    *   **Mapped Preset `buttonNumber`**: Correctly mapped the internal `ServicePreset.ID` to the `buttonNumber` XML attribute in the `/full` response.
     *   **Structured XML Marshaling**: Replaced manual string concatenation with structured Go models and `xml.Marshal` for the entire response.
     *   **Specific Response Models**: Introduced `FullResponseSource`, `FullResponsePreset`, and `FullResponseRecent` to accurately reflect the upstream structure where `<source>` is a child element, rather than a set of attributes.
     *   **Correct Nesting**: Ensured that `<presets>` and `<recents>` correctly nest their associated `<source>` details, resolving previous data omissions.
@@ -60,3 +67,20 @@ Continue the "learning" approach for other services. For example, if we see a ne
 Analysis of device reboot logs revealed several data requirements:
 *   **Power-On Details Tracking**: Implemented extraction and persistence of detailed device information (serial numbers, firmware version, product details, and MAC addresses) from the `POST /streaming/support/power_on` request. This data is now stored in the local datastore, improving our ability to respond accurately to subsequent management requests.
 *   **Source Provider Mapping**: Synchronized local source provider IDs and timestamps with upstream data. The `RADIO_BROWSER` provider is included in the public `/streaming/sourceproviders` list to maintain internal functionality while acknowledging it as a parity gap.
+
+#### 7. Account Full Response (/full) Structural & Value Parity (In Progress)
+Based on `_/diffs/diff7/`, several structural and value gaps remain in the `/full` account response:
+
+**Remaining Findings:**
+    *   **Nested Source Inconsistency in Recents**: The `<source>` element within `<recent>` entries still frequently points to a generic fallback (ID `9330201`) instead of the specific source (e.g., Spotify ID `10863533`).
+    *   Missing/empty `<username>` at the `<preset>` level.
+*   **Values**:
+    *   **Empty Device `<name>`**: Locally, the device `<name>` is empty in the response even when available in the datastore or upstream.
+    *   **Empty `<contentItemType>`**: Local responses have empty `<contentItemType>` in presets and recents, whereas upstream has `tracklisturl` or `stationurl`.
+    *   `preferredLanguage` mismatch (`en` vs `de`).
+
+**Next Implementation Steps (Proposals):**
+1.  **Fix Device `<name>` Population**: Investigate why `CreateAccountDevice` or `AccountFullToXML` is not correctly returning the device name even if it's synchronized.
+2.  **Refine Source Association in Recents**: Improve the matching logic in `mapRecentsToFullResponse` to correctly link recents to their specific `ConfiguredSource` (e.g., by matching `sourceid` attribute).
+3.  **Populate `contentItemType`**: Update the internal models and `SyncFromAccountFull` to correctly extract, persist, and echo back `contentItemType` (e.g., `tracklisturl`).
+4.  **Handle Account Metadata**: Synchronize `preferredLanguage` from the upstream `/full` response to the local account state.

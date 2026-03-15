@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 )
 
 // MirrorMiddleware returns a middleware that mirrors specific requests to the Bose upstream.
@@ -347,6 +351,21 @@ func (s *Server) checkParity(req *http.Request, local, upstream *mirrorResponseR
 	if mismatch {
 		log.Printf("[PARITY] Mismatch detected for %s %s: %v", req.Method, req.URL.Path, reasons)
 		s.saveParityMismatch(req, local, upstream, reasons)
+	}
+
+	// Trigger synchronization if this is a /full response from upstream
+	if strings.Contains(req.URL.Path, "/full") && upstream.status == http.StatusOK {
+		var resp models.AccountFullResponse
+		if err := xml.Unmarshal(upstream.body.Bytes(), &resp); err == nil {
+			log.Printf("[MIRROR] Triggering sync from upstream /full response for %s", req.URL.Path)
+			marge.LogSyncDiff(s.ds, &resp)
+
+			if err = marge.SyncFromAccountFull(s.ds, &resp); err != nil {
+				log.Printf("[MIRROR_ERR] Failed to sync from upstream /full: %v", err)
+			}
+		} else {
+			log.Printf("[MIRROR_ERR] Failed to unmarshal upstream /full response: %v", err)
+		}
 	}
 }
 

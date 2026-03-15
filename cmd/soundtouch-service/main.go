@@ -235,7 +235,7 @@ func main() {
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			sm.MgmtUsername = config.mgmtUsername
 			sm.MgmtPassword = config.mgmtPassword
-			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record, config.migrationEnabled, config.migrationDryRun)
+			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date)

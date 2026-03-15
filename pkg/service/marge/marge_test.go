@@ -181,6 +181,9 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	if !strings.Contains(xmlStr, `<device deviceid="08DF1F0BA325">`) {
 		t.Errorf("Expected device attribute deviceid, got %s", xmlStr)
 	}
+	if !strings.Contains(xmlStr, `<name>A Sound Machine</name>`) {
+		t.Errorf("Expected <name>A Sound Machine</name> under device, got %s", xmlStr)
+	}
 	if !strings.Contains(xmlStr, `<serialNumber>08DF1F0BA325</serialNumber>`) {
 		t.Errorf("Expected <serialNumber>08DF1F0BA325</serialNumber> under device, got %s", xmlStr)
 	}
@@ -195,8 +198,8 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	if !strings.Contains(xmlStr, `<productlabel>SoundTouch 20</productlabel>`) {
 		t.Errorf("Expected productlabel SoundTouch 20, got %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, `<serialNumber>066802942560222AE</serialNumber>`) {
-		t.Errorf("Expected <serialNumber>066802942560222AE</serialNumber> under attachedProduct, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<serialnumber>066802942560222AE</serialnumber>`) {
+		t.Errorf("Expected <serialnumber>066802942560222AE</serialnumber> under attachedProduct, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<updatedOn>`) {
 		t.Errorf("Expected <updatedOn> under attachedProduct, got %s", xmlStr)
@@ -542,5 +545,134 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 	}
 	if strings.Contains(string(respXML), "<source id=\"101\" type=\"Audio\"><createdOn>2012-09-19T12:43:00.000+00:00</createdOn><credential type=\"token\">key&amp;value</credential><name>test-user</name><sourceid>101</sourceid>") {
 		t.Errorf("sourceid should not be inside source tag: %s", string(respXML))
+	}
+}
+
+func TestMapToFullResponseSource_CredentialRespect(t *testing.T) {
+	// 1. Spotify with default token -> should upgrade to token_version_3
+	src1 := models.ConfiguredSource{
+		SourceKey: struct {
+			Type    string `xml:"type,attr"`
+			Account string `xml:"account,attr"`
+		}{Type: "SPOTIFY", Account: "user1"},
+		SourceKeyType: "SPOTIFY",
+		SecretType:    "token",
+		Secret:        "token123",
+	}
+	full1 := mapToFullResponseSource(src1)
+	if full1.Credential.Type != "token_version_3" {
+		t.Errorf("expected token_version_3 for Spotify with 'token', got %s", full1.Credential.Type)
+	}
+
+	// 2. Spotify with explicit token_version_3 -> should keep it
+	src2 := models.ConfiguredSource{
+		SourceKeyType: "SPOTIFY",
+		SecretType:    "token_version_3",
+		Secret:        "token123",
+	}
+	full2 := mapToFullResponseSource(src2)
+	if full2.Credential.Type != "token_version_3" {
+		t.Errorf("expected token_version_3 to be preserved, got %s", full2.Credential.Type)
+	}
+
+	// 3. Custom source with custom credential type -> should be preserved
+	src3 := models.ConfiguredSource{
+		SourceKeyType: "CUSTOM",
+		SecretType:    "custom_type",
+		Secret:        "secret123",
+	}
+	full3 := mapToFullResponseSource(src3)
+	if full3.Credential.Type != "custom_type" {
+		t.Errorf("expected custom_type to be preserved, got %s", full3.Credential.Type)
+	}
+
+	// 4. Source with empty credential type -> should default to 'token'
+	src4 := models.ConfiguredSource{
+		SourceKeyType: "OTHER",
+		SecretType:    "",
+	}
+	full4 := mapToFullResponseSource(src4)
+	if full4.Credential.Type != "token" {
+		t.Errorf("expected empty SecretType to default to 'token', got %s", full4.Credential.Type)
+	}
+}
+
+func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "marge-test-backup-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	account := "3230304"
+	device := "A81B6A536A98"
+
+	// Mimic the backup structure: accounts/3230304/devices/A81B6A536A98/DeviceInfo.xml
+	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", device)
+	_ = os.MkdirAll(deviceDir, 0755)
+
+	deviceInfoXML := `<?xml version="1.0" encoding="UTF-8"?>
+<info deviceID="A81B6A536A98">
+    <name>Sound Machinechen</name>
+    <type>SoundTouch</type>
+    <moduleType>10 sm2</moduleType>
+    <components>
+        <component>
+            <componentCategory>SCM</componentCategory>
+            <softwareVersion>27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29</softwareVersion>
+            <serialNumber>I6332527703739342000020</serialNumber>
+        </component>
+    </components>
+    <networkInfo type="SCM">
+        <ipAddress>192.168.178.35</ipAddress>
+        <macAddress>A81B6A536A98</macAddress>
+    </networkInfo>
+    <discoveryMethod>sync_full</discoveryMethod>
+</info>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(deviceInfoXML), 0644)
+
+	ds := datastore.NewDataStore(tempDir)
+
+	// Generate XML
+	fullXML, err := AccountFullToXML(ds, account)
+	if err != nil {
+		t.Fatalf("AccountFullToXML failed: %v", err)
+	}
+
+	xmlStr := string(fullXML)
+
+	// Verify Name is present
+	if !strings.Contains(xmlStr, `<name>Sound Machinechen</name>`) {
+		t.Errorf("Expected <name>Sound Machinechen</name> under device, got %s", xmlStr)
+	}
+
+	// 2. Verify ButtonNumber and ContentItemType mapping
+	presetsDir := filepath.Join(deviceDir)
+	_ = os.MkdirAll(presetsDir, 0755)
+	presetsXML := `<?xml version="1.0" encoding="UTF-8"?>
+<presets>
+    <preset id="1" createdOn="1719128436" updatedOn="1728740382">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh" itemName="Jonas" isPresetable="true" contentItemType="tracklisturl">
+            <containerArt>https://i.scdn.co/image/art</containerArt>
+        </ContentItem>
+    </preset>
+</presets>`
+	_ = os.WriteFile(filepath.Join(presetsDir, "Presets.xml"), []byte(presetsXML), 0644)
+
+	fullXMLWithPresets, _ := AccountFullToXML(ds, account)
+	xmlStr2 := string(fullXMLWithPresets)
+
+	if !strings.Contains(xmlStr2, `buttonNumber="1"`) {
+		t.Errorf("Expected buttonNumber=\"1\", got %s", xmlStr2)
+	}
+	if !strings.Contains(xmlStr2, `<contentItemType>tracklisturl</contentItemType>`) {
+		t.Errorf("Expected <contentItemType>tracklisturl</contentItemType>, got %s", xmlStr2)
+	}
+
+	// 3. Test with empty name
+	_ = os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(`<?xml version="1.0" encoding="UTF-8"?><info deviceID="A81B6A536A98"><name></name></info>`), 0644)
+	fullXML2, _ := AccountFullToXML(ds, account)
+	if !strings.Contains(string(fullXML2), `<name/>`) {
+		t.Errorf("Expected <name/> for empty name, got %s", string(fullXML2))
 	}
 }

@@ -16,7 +16,6 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
-	"github.com/gesellix/bose-soundtouch/pkg/service/migration"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
@@ -27,7 +26,6 @@ import (
 type Server struct {
 	ds                  *datastore.DataStore
 	sm                  *setup.Manager
-	migrationManager    *migration.Manager
 	mu                  sync.RWMutex
 	serverURL           string
 	httpsServerURL      string
@@ -81,17 +79,10 @@ var bufferPool = sync.Pool{
 }
 
 // NewServer creates a new SoundTouch service server.
-func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled, migrationEnabled, migrationDryRun bool) *Server {
-	// Initialize migration manager
-	migrationConfig := migration.Config{
-		Enabled: migrationEnabled,
-		DryRun:  migrationDryRun,
-	}
-
+func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, proxyRedact, proxyLogBody, recordEnabled bool) *Server {
 	s := &Server{
 		ds:                ds,
 		sm:                sm,
-		migrationManager:  migration.NewManager(ds, migrationConfig),
 		serverURL:         serverURL,
 		proxyRedact:       proxyRedact,
 		proxyLogBody:      proxyLogBody,
@@ -568,32 +559,13 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 		}
 	}
 
-	// 7. Check for existing device entries that need migration
-	log.Printf("Checking for existing device variants to migrate for device %s (MAC: %s)", liveInfo.Name, deviceID)
-
-	existingDevices := s.findAllExistingDeviceVariants(d, liveInfo)
-	if len(existingDevices) == 0 {
-		log.Printf("No existing device variants found for migration")
-	}
-
-	// Use migration manager to handle device directory migration
-	migrated := s.migrationManager.MigrateDevicesIfNeeded(existingDevices, deviceID)
-	if !migrated {
-		log.Printf("Device %s: no migration needed (already uses correct MAC-based ID %s)", liveInfo.Name, deviceID)
-	}
-
-	// 8. Save the updated device info
+	// 7. Save the updated device info
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
 		log.Printf("Failed to save device info for %s: %v", deviceID, err)
 		return
 	}
 
 	log.Printf("Successfully saved device %s (%s) with MAC-based deviceID: %s", info.Name, d.Host, deviceID)
-}
-
-// GetMigrationStats returns migration statistics for debugging/monitoring
-func (s *Server) GetMigrationStats() migration.Stats {
-	return s.migrationManager.GetStats()
 }
 
 // handleDiscoveredDeviceFallback handles device discovery when /info endpoint is not available
@@ -710,98 +682,6 @@ func (s *Server) findExistingDeviceID(d models.DiscoveredDevice) string {
 	info := s.findExistingDeviceInfo(d)
 	if info != nil {
 		return info.DeviceID
-	}
-
-	return ""
-}
-
-// findAllExistingDeviceVariants finds all existing device entries that could represent the same physical device
-func (s *Server) findAllExistingDeviceVariants(d models.DiscoveredDevice, liveInfo *setup.DeviceInfoXML) []models.ServiceDeviceInfo {
-	// log.Printf("Searching for existing device variants with criteria:")
-	// log.Printf("  Discovery IP: %s", d.Host)
-	// log.Printf("  Discovery Serial: %s", d.SerialNo)
-	// log.Printf("  Live Info Serial: %s", liveInfo.SerialNumber)
-	// log.Printf("  Live Info Name: %s", liveInfo.Name)
-	// log.Printf("  Live Info MAC: %s", liveInfo.GetPrimaryMacAddress())
-	// log.Printf("  Live Info Product: %s %s", liveInfo.Type, liveInfo.ModuleType)
-	allDevices, err := s.ds.ListAllDevices()
-	if err != nil {
-		return nil
-	}
-
-	var matches []models.ServiceDeviceInfo
-
-	seenDeviceIDs := make(map[string]bool)
-
-	for i := range allDevices {
-		device := &allDevices[i]
-		if seenDeviceIDs[device.DeviceID] {
-			continue
-		}
-
-		matchReason := s.getMatchReason(*device, d, liveInfo)
-		if matchReason != "" {
-			matches = append(matches, *device)
-			seenDeviceIDs[device.DeviceID] = true
-			log.Printf("  ✓ Found variant %s: %s", device.DeviceID, matchReason)
-		}
-	}
-
-	if len(matches) == 0 {
-		log.Printf("  No existing device variants found")
-	} else {
-		log.Printf("Found %d existing device variant(s) for %s:", len(matches), liveInfo.Name)
-
-		for i := range matches {
-			match := &matches[i]
-			log.Printf("  - %s (Account: %s, IP: %s, Serial: %s, MAC: %s, Product: %s)",
-				match.DeviceID, match.AccountID, match.IPAddress, match.DeviceSerialNumber, match.MacAddress, match.ProductCode)
-		}
-	}
-
-	return matches
-}
-
-func (s *Server) getMatchReason(device models.ServiceDeviceInfo, d models.DiscoveredDevice, liveInfo *setup.DeviceInfoXML) string {
-	// 1. Same IP address
-	if d.Host != "" && device.IPAddress == d.Host {
-		return fmt.Sprintf("IP address match (%s == %s)", d.Host, device.IPAddress)
-	}
-
-	// 2. Same UPnP serial number
-	if d.SerialNo != "" && (device.DeviceID == d.SerialNo || device.DeviceSerialNumber == d.SerialNo) {
-		if device.DeviceID == d.SerialNo {
-			return "UPnP serial as DeviceID"
-		}
-
-		return "UPnP serial in DeviceSerialNumber"
-	}
-
-	// 3. Same device serial number from /info
-	if liveInfo.SerialNumber != "" && device.DeviceSerialNumber == liveInfo.SerialNumber {
-		return fmt.Sprintf("device serial number match (%s)", liveInfo.SerialNumber)
-	}
-
-	// 4. Same MAC address (if device already has one stored)
-	primaryMAC := liveInfo.GetPrimaryMacAddress()
-	if primaryMAC != "" && device.MacAddress == primaryMAC {
-		return fmt.Sprintf("MAC address match (%s)", primaryMAC)
-	}
-
-	// 5. Same device name and similar product (fuzzy match for renamed devices)
-	if liveInfo.Name != "" && device.Name == liveInfo.Name {
-		expectedProduct := liveInfo.Type + " " + liveInfo.ModuleType
-		if device.ProductCode == expectedProduct ||
-			device.ProductCode == liveInfo.Type ||
-			strings.Contains(device.ProductCode, liveInfo.Type) ||
-			strings.Contains(expectedProduct, device.ProductCode) {
-			return fmt.Sprintf("name and product match (name: %s, product: %s)", liveInfo.Name, device.ProductCode)
-		}
-	}
-
-	// 6. DeviceID matches component serial (device was stored by serial before)
-	if liveInfo.SerialNumber != "" && device.DeviceID == liveInfo.SerialNumber {
-		return fmt.Sprintf("DeviceID matches component serial (%s)", liveInfo.SerialNumber)
 	}
 
 	return ""

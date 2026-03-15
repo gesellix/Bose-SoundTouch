@@ -6,7 +6,7 @@ import (
 )
 
 func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) {
-	server := NewServer(ds, nil, targetURL, false, false, false, false, false)
+	server := NewServer(ds, nil, targetURL, false, false, false)
 
 	r := chi.NewRouter()
 	r.Use(server.OriginMiddleware)

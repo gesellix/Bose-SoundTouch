@@ -433,7 +433,7 @@ type AttachedProduct struct {
 	ProductCode  string             `xml:"product_code,attr"`
 	Components   []ServiceComponent `xml:"components>component"`
 	ProductLabel string             `xml:"productlabel"`
-	SerialNumber string             `xml:"serialNumber"`
+	SerialNumber string             `xml:"serialnumber"`
 	UpdatedOn    string             `xml:"updatedOn"`
 }
 

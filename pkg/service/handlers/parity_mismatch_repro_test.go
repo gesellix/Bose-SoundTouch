@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -62,7 +61,7 @@ func TestParityMismatchReproduction_New(t *testing.T) {
 		body, _ := io.ReadAll(res.Body)
 		bodyStr := string(body)
 
-		fmt.Printf("[DEBUG_LOG] Response Body:\n%s\n", bodyStr)
+		t.Logf("Response Body:\n%s\n", bodyStr)
 
 		// Verification points:
 		// 1. Standalone="yes"

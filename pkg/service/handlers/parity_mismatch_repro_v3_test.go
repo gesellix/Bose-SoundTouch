@@ -111,7 +111,7 @@ func TestParityMismatchReproduction_V3(t *testing.T) {
 		body, _ := io.ReadAll(res.Body)
 		bodyStr := string(body)
 
-		fmt.Printf("[DEBUG_LOG] GET /recents Local Response:\n%s\n", bodyStr)
+		t.Logf("GET /recents Local Response:\n%s\n", bodyStr)
 
 		if !strings.Contains(bodyStr, `<sourceproviderid>25</sourceproviderid>`) {
 			t.Error("Source provider ID missing in GET /recents")
