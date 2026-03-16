@@ -105,6 +105,7 @@ func (s *Server) HandleCustomPlayback(w http.ResponseWriter, r *http.Request) {
 
 	// Decode URL if it's base64 encoded
 	var streamUrl string
+
 	decoded, err := base64.URLEncoding.DecodeString(encodedURL)
 	if err != nil {
 		decoded, err = base64.StdEncoding.DecodeString(encodedURL)

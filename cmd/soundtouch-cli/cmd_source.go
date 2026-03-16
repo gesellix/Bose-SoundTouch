@@ -274,6 +274,7 @@ func selectCustomRadio(c *cli.Context) error {
 	if itemName != "" {
 		params.Add("name", itemName)
 	}
+
 	if containerArt != "" {
 		params.Add("imageUrl", containerArt)
 	}
