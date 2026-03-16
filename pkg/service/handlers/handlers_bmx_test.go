@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -105,5 +106,46 @@ func TestOrionPlayback(t *testing.T) {
 
 	if resp["name"] != "Test Orion" {
 		t.Errorf("Expected name Test Orion, got %v", resp["name"])
+	}
+}
+
+func TestCustomPlayback(t *testing.T) {
+	r, _ := setupRouter("http://localhost:8001", nil)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// Base64 encoded: http://example.com/stream
+	encodedURL := "aHR0cDovL2V4YW1wbGUuY29tL3N0cmVhbQ=="
+	imageUrl := "http://example.com/img.jpg"
+	name := "Test Custom"
+
+	res, err := http.Get(ts.URL + "/bmx/custom/v1/playback/" + encodedURL + "?imageUrl=" + url.QueryEscape(imageUrl) + "&name=" + url.QueryEscape(name))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK, got %v", res.Status)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(body, &resp)
+
+	if resp["name"] != "Test Custom" {
+		t.Errorf("Expected name Test Custom, got %v", resp["name"])
+	}
+
+	audio := resp["audio"].(map[string]interface{})
+	if audio["streamUrl"] != "http://example.com/stream" {
+		t.Errorf("Expected streamUrl http://example.com/stream, got %v", audio["streamUrl"])
+	}
+
+	if resp["imageUrl"] != imageUrl {
+		t.Errorf("Expected imageUrl %s, got %v", imageUrl, resp["imageUrl"])
 	}
 }

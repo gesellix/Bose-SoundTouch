@@ -26,10 +26,11 @@ The service consists of several key components:
 
 ### BMX Services (Bose Media eXchange)
 - **TuneIn Integration**: Direct playback of radio stations and podcasts
+- **Custom Streams**: Flexible playback of any internet radio URL via dynamic proxy
 - **Service Registry**: Media service discovery and configuration
 - **Playback Control**: Stream URL resolution and audio metadata
 
-### Marge Services (Account & Device Management)  
+### Marge Services (Account & Device Management)
 - **Account Management**: User account simulation and device association
 - **Preset Synchronization**: Cross-device preset storage and sync
 - **Recent Items**: Playback history tracking and management
@@ -57,7 +58,7 @@ go build -o soundtouch-service ./cmd/soundtouch-service
 
 ### Docker Support
 
-You can run the SoundTouch service using Docker or Docker Compose. 
+You can run the SoundTouch service using Docker or Docker Compose.
 
 > **Note for macOS and Windows users**: The `--net host` option is only supported on Linux. On macOS and Windows, service discovery (mDNS, UPnP) will not work automatically within the container. You will need to manually enter your device's IP address in the management UI, and the service will communicate with it directly.
 
@@ -393,7 +394,7 @@ Migrates device to use local services.
 
 **Query Parameters:**
 - `target_url`: Custom service URL (optional)
-- `proxy_url`: Proxy URL for fallback (optional)  
+- `proxy_url`: Proxy URL for fallback (optional)
 - `marge`: Set to "original" to proxy Marge requests (optional)
 - `stats`: Set to "original" to proxy stats requests (optional)
 - `sw_update`: Set to "original" to proxy update requests (optional)
@@ -764,7 +765,7 @@ ls -la data/events/
 This service implementation is based on and inspired by several excellent community projects:
 
 ### SoundCork
-- **Project**: [SoundCork](https://github.com/deborahgu/soundcork)  
+- **Project**: [SoundCork](https://github.com/deborahgu/soundcork)
 - **Authors**: Deborah Gu and contributors
 - **Contribution**: The architecture and service emulation approach in this Go implementation is heavily based on SoundCork's pioneering Python implementation. SoundCork provided the foundation for understanding Bose's service architecture and migration strategies.
 
@@ -809,7 +810,7 @@ soundtouch:
   - host: 192.168.1.100
     port: 8090
     name: "Living Room Speaker"
-    
+
 rest:
   - resource: "http://localhost:8000/setup/devices"
     scan_interval: 60

@@ -925,6 +925,34 @@ func main() {
 						},
 					},
 					{
+						Name:   "custom-radio",
+						Usage:  "Select custom radio stream via soundtouch-service",
+						Action: selectCustomRadio,
+						Before: RequireHost,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "url",
+								Aliases:  []string{"u"},
+								Usage:    "Stream URL",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:    "name",
+								Aliases: []string{"n"},
+								Usage:   "Station name",
+							},
+							&cli.StringFlag{
+								Name:  "artwork",
+								Usage: "Station artwork URL",
+							},
+							&cli.StringFlag{
+								Name:  "service-url",
+								Usage: "URL of the soundtouch-service (default: http://localhost:8080)",
+								Value: "http://localhost:8080",
+							},
+						},
+					},
+					{
 						Name:   "local-music",
 						Usage:  "Select local music content (LOCAL_MUSIC)",
 						Action: selectLocalMusic,

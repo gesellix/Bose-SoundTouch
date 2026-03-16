@@ -27,6 +27,7 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
 		r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
 		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
+		r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 	})
 
 	// Legacy or direct domain calls without /bmx prefix
@@ -35,6 +36,7 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 	r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
 	r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
 	r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
+	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 
 	streamingRoutes := func(r chi.Router) {
 		r.Get("/sourceproviders", server.HandleMargeSourceProviders)

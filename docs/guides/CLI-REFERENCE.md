@@ -394,6 +394,9 @@ soundtouch-cli --host <device> source spotify
 soundtouch-cli --host <device> source bluetooth
 soundtouch-cli --host <device> source aux
 
+# Custom radio selection (via soundtouch-service)
+soundtouch-cli --host <device> source custom-radio --url <STREAM_URL> [--name <NAME>] [--artwork <ARTWORK>] [--service-url <SERVICE_URL>]
+
 # Advanced content selection
 soundtouch-cli --host <device> source internet-radio --location <URL> [--name <NAME>]
 soundtouch-cli --host <device> source local-music --location <LOCATION> --account <ACCOUNT>
@@ -482,6 +485,7 @@ soundtouch-cli --host 192.168.1.10 source compare
 | Command | Description | Requirements |
 |---------|-------------|--------------|
 | `internet-radio` | Select internet radio stream (LOCAL_INTERNET_RADIO) | Stream URL |
+| `custom-radio` | Select custom radio stream via soundtouch-service | Stream URL and service URL |
 | `local-music` | Select local music content (LOCAL_MUSIC) | SoundTouch App Media Server |
 | `stored-music` | Select stored music content (STORED_MUSIC) | UPnP/DLNA media server |
 | `content` | Generic content selection (advanced) | Source and location |
@@ -495,6 +499,12 @@ The `internet-radio` command supports the streamUrl proxy format from the [Sound
 soundtouch-cli --host 192.168.1.10 source internet-radio \
   --location "http://contentapi.gmuth.de/station.php?name=Antenne%20Chillout&streamUrl=https://stream.antenne.de/chillout/stream/aacp" \
   --name "Antenne Chillout"
+
+# Using local soundtouch-service for custom streams
+soundtouch-cli --host 192.168.1.10 source custom-radio \
+  --url "https://stream.antenne.de/chillout/stream/aacp" \
+  --name "Antenne Chillout" \
+  --service-url "http://localhost:8080"
 ```
 
 #### Service Introspection
@@ -1044,7 +1054,7 @@ soundtouch-cli --host 192.168.1.10 speaker beep
 
 **Supported Languages for TTS:**
 - `EN` - English (default)
-- `DE` - German  
+- `DE` - German
 - `ES` - Spanish
 - `FR` - French
 - `IT` - Italian
@@ -1085,7 +1095,7 @@ soundtouch-cli --host <device> events subscribe [flags]
 
 **Event Types:**
 - `nowPlaying` - Track changes, playback status
-- `volume` - Volume and mute changes  
+- `volume` - Volume and mute changes
 - `connection` - Network connectivity status
 - `preset` - Preset configuration changes
 - `zone` - Multiroom zone changes

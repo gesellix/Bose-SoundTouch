@@ -17,6 +17,7 @@ A comprehensive solution for controlling and preserving Bose SoundTouch devices,
 - ⚡ **Real-time Events**: WebSocket connection for live device state monitoring
 - 🔍 **Device Discovery**: Automatic discovery via UPnP/SSDP and mDNS
 - 📻 **Content Navigation**: Browse and search TuneIn, Pandora, Spotify, local music
+- 📻 **Custom Radio**: Play any stream URL via [flexible proxying](docs/guides/CLI-REFERENCE.md#custom-radio-selection-via-soundtouch-service)
 - 📻 **RadioBrowser**: Access thousands of internet radio stations via [radio-browser.info](docs/reference/radio-browser.md)
 - 🎙️ **Station Management**: Add and play radio stations without presets
 - 🖥️ **CLI Tool**: Comprehensive command-line interface
@@ -106,7 +107,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/gesellix/bose-soundtouch/pkg/client"
 )
 
@@ -116,20 +117,20 @@ func main() {
         Host: "192.168.1.100",
         Port: 8090,
     })
-    
+
     // Get device information
     info, err := c.GetDeviceInfo()
     if err != nil {
         log.Fatal(err)
     }
     fmt.Printf("Device: %s\n", info.Name)
-    
+
     // Control playback
     err = c.Play()
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Set volume
     err = c.SetVolume(50)
     if err != nil {
@@ -147,7 +148,7 @@ import (
     "fmt"
     "log"
     "time"
-    
+
     "github.com/gesellix/bose-soundtouch/pkg/discovery"
 )
 
@@ -158,9 +159,9 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     for _, device := range devices {
-        fmt.Printf("Found: %s at %s:%d\n", 
+        fmt.Printf("Found: %s at %s:%d\n",
             device.Name, device.Host, device.Port)
     }
 }
@@ -174,7 +175,7 @@ import (
     "context"
     "fmt"
     "log"
-    
+
     "github.com/gesellix/bose-soundtouch/pkg/client"
     "github.com/gesellix/bose-soundtouch/pkg/models"
 )
@@ -184,13 +185,13 @@ func main() {
         Host: "192.168.1.100",
         Port: 8090,
     })
-    
+
     // Subscribe to device events
     events, err := c.SubscribeToEvents(context.Background())
     if err != nil {
         log.Fatal(err)
     }
-    
+
     for event := range events {
         switch e := event.(type) {
         case *models.NowPlayingUpdated:
@@ -211,7 +212,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/gesellix/bose-soundtouch/pkg/client"
     "github.com/gesellix/bose-soundtouch/pkg/models"
 )
@@ -221,21 +222,21 @@ func main() {
         Host: "192.168.1.100",
         Port: 8090,
     })
-    
+
     // Get current presets
     presets, err := c.GetPresets()
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("Found %d presets\n", len(presets.Preset))
-    
+
     // Store currently playing content as preset 1
     err = c.StoreCurrentAsPreset(1)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Store Spotify playlist as preset 2
     spotifyContent := &models.ContentItem{
         Source:        "SPOTIFY",
@@ -249,7 +250,7 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Store radio station as preset 3
     radioContent := &models.ContentItem{
         Source:       "TUNEIN",
@@ -262,13 +263,13 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Select preset 1
     err = c.SelectPreset(1)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Println("Preset management complete!")
 }
 ```
@@ -279,7 +280,7 @@ package main
 
 import (
     "log"
-    
+
     "github.com/gesellix/bose-soundtouch/pkg/client"
     "github.com/gesellix/bose-soundtouch/pkg/models"
 )
@@ -289,7 +290,7 @@ func main() {
         Host: "192.168.1.100", // Master speaker
         Port: 8090,
     })
-    
+
     // Create a multiroom zone
     zone := &models.Zone{
         Master: "192.168.1.100",
@@ -298,12 +299,12 @@ func main() {
             {IPAddress: "192.168.1.102"}, // Kitchen
         },
     }
-    
+
     err := master.SetZone(zone)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Println("Multiroom zone created!")
 }
 ```
@@ -314,7 +315,7 @@ package main
 
 import (
     "log"
-    
+
     "github.com/gesellix/bose-soundtouch/pkg/client"
 )
 
@@ -323,13 +324,13 @@ func main() {
         Host: "192.168.1.100",
         Port: 8090,
     })
-    
+
     // Play Text-to-Speech message (language code "EN", "DE", etc.)
     err := c.PlayTTS("Welcome home!", "your-app-key", "EN", 70)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Play audio content from URL
     err = c.PlayURL(
         "https://example.com/doorbell.mp3",
@@ -342,13 +343,13 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Play notification beep
     err = c.PlayNotificationBeep()
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Println("Notifications sent!")
 }
 ```
@@ -358,7 +359,7 @@ func main() {
 This library supports all Bose SoundTouch-compatible devices, including:
 
 - SoundTouch 10, 20, 30 series
-- SoundTouch Portable  
+- SoundTouch Portable
 - Wave SoundTouch music system
 - SoundTouch-enabled Bose speakers
 
@@ -519,7 +520,7 @@ This project builds upon the excellent work of several community projects:
 These projects together form a comprehensive ecosystem for SoundTouch device management:
 
 - **This Project**: Go library + CLI + service for programmatic control and offline operation
-- **SoundCork**: Python-based service interception and cloud replacement  
+- **SoundCork**: Python-based service interception and cloud replacement
 - **SoundTouch Plus**: Home Assistant integration with extensive device support
 - **ÜberBöse**: API research and advanced endpoint discovery
 - **SoundTouch Hook**: Advanced reverse engineering and process instrumentation

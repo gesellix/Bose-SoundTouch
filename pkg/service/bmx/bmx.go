@@ -280,6 +280,33 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 	return response, nil
 }
 
+// BuildCustomStreamResponse builds a playback response from streamUrl, imageUrl, and name.
+func BuildCustomStreamResponse(streamURL, imageURL, name string) (*models.BmxPlaybackResponse, error) {
+	streamList := []models.Stream{
+		{
+			HasPlaylist: true,
+			IsRealtime:  true,
+			StreamUrl:   streamURL,
+		},
+	}
+
+	audio := models.Audio{
+		HasPlaylist: true,
+		IsRealtime:  true,
+		StreamUrl:   streamURL,
+		Streams:     streamList,
+	}
+
+	response := &models.BmxPlaybackResponse{
+		Audio:      audio,
+		ImageUrl:   imageURL,
+		Name:       name,
+		StreamType: "liveRadio",
+	}
+
+	return response, nil
+}
+
 // PlayCustomStream builds a playback response from a base64-encoded JSON blob
 // with fields streamUrl, imageUrl, and name.
 func PlayCustomStream(data string) (*models.BmxPlaybackResponse, error) {
@@ -302,27 +329,5 @@ func PlayCustomStream(data string) (*models.BmxPlaybackResponse, error) {
 		return nil, err
 	}
 
-	streamList := []models.Stream{
-		{
-			HasPlaylist: true,
-			IsRealtime:  true,
-			StreamUrl:   jsonObj.StreamURL,
-		},
-	}
-
-	audio := models.Audio{
-		HasPlaylist: true,
-		IsRealtime:  true,
-		StreamUrl:   jsonObj.StreamURL,
-		Streams:     streamList,
-	}
-
-	response := &models.BmxPlaybackResponse{
-		Audio:      audio,
-		ImageUrl:   jsonObj.ImageURL,
-		Name:       jsonObj.Name,
-		StreamType: "liveRadio",
-	}
-
-	return response, nil
+	return BuildCustomStreamResponse(jsonObj.StreamURL, jsonObj.ImageURL, jsonObj.Name)
 }

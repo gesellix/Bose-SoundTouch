@@ -23,6 +23,14 @@ All content selection features from the [SoundTouch WebServices API Wiki](https:
   - Automatic defaults for missing parameters
 - **Use Cases**: Internet radio streams, proxy-based radio services
 
+#### `SelectLocalInternetRadio(location, ...)` via `soundtouch-service`
+- **Purpose**: Select custom radio stream via local `soundtouch-service` proxy
+- **Features**:
+  - Flexible stream URL encoding (Base64 or URL-escaped)
+  - Dynamic generation of Bose-compatible playback JSON
+  - Seamless integration with existing `LOCAL_INTERNET_RADIO` source
+- **Use Case**: Playing any internet radio URL without external proxy dependencies
+
 #### `SelectLocalMusic(location, sourceAccount, itemName, containerArt string) error`
 - **Purpose**: Select LOCAL_MUSIC content from SoundTouch App Media Server
 - **Requirements**: SoundTouch App Media Server running on a computer
@@ -45,6 +53,15 @@ soundtouch-cli --host <device> source internet-radio \
   --location "http://contentapi.gmuth.de/station.php?name=MyStation&streamUrl=https://stream.example.com/radio" \
   --name "My Station" \
   --artwork "https://example.com/art.png"
+```
+
+#### `soundtouch-cli source custom-radio`
+```bash
+soundtouch-cli --host <device> source custom-radio \
+  --url "https://stream.example.com/radio" \
+  --name "My Station" \
+  --artwork "https://example.com/art.png" \
+  --service-url "http://localhost:8080"
 ```
 
 #### `soundtouch-cli source local-music`
@@ -101,7 +118,7 @@ Comprehensive test suites implemented for all new functionality:
 ### Example Code
 Complete working example demonstrating:
 - LOCAL_INTERNET_RADIO with streamUrl proxy format
-- LOCAL_INTERNET_RADIO with direct streams  
+- LOCAL_INTERNET_RADIO with direct streams
 - LOCAL_MUSIC content selection
 - STORED_MUSIC content selection
 - Generic ContentItem usage
@@ -152,7 +169,7 @@ All convenience methods create properly structured `ContentItem` objects:
 Based on the wiki structure, these related features are also supported:
 
 1. **LOCAL_MUSIC**: ✅ Fully implemented
-2. **STORED_MUSIC**: ✅ Fully implemented  
+2. **STORED_MUSIC**: ✅ Fully implemented
 3. **SPOTIFY**: ✅ Previously implemented
 4. **TUNEIN**: ✅ Previously implemented
 5. **BLUETOOTH**: ✅ Previously implemented
@@ -169,7 +186,7 @@ err := client.SelectLocalInternetRadio(location, "", "My Station", "")
 // Direct ContentItem
 contentItem := &models.ContentItem{
     Source:       "LOCAL_INTERNET_RADIO",
-    Type:         "stationurl", 
+    Type:         "stationurl",
     Location:     location,
     ItemName:     "My Station",
     IsPresetable: true,

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -247,6 +249,60 @@ func selectLocalInternetRadio(c *cli.Context) error {
 	}
 
 	PrintSuccess("Internet radio stream selected")
+
+	return nil
+}
+
+// selectCustomRadio handles selecting custom radio stream via soundtouch-service
+func selectCustomRadio(c *cli.Context) error {
+	clientConfig := GetClientConfig(c)
+
+	client, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		return err
+	}
+
+	streamURL := c.String("url")
+	itemName := c.String("name")
+	containerArt := c.String("artwork")
+	serviceURL := c.String("service-url")
+
+	encodedURL := base64.URLEncoding.EncodeToString([]byte(streamURL))
+	location := fmt.Sprintf("%s/bmx/custom/v1/playback/%s", serviceURL, encodedURL)
+
+	params := url.Values{}
+	if itemName != "" {
+		params.Add("name", itemName)
+	}
+	if containerArt != "" {
+		params.Add("imageUrl", containerArt)
+	}
+
+	if len(params) > 0 {
+		location += "?" + params.Encode()
+	}
+
+	// Check LOCAL_INTERNET_RADIO availability
+	checker := NewServiceAvailabilityChecker(client)
+	if !checker.CheckSourceAvailable("LOCAL_INTERNET_RADIO", "select custom radio") {
+		return fmt.Errorf("LOCAL_INTERNET_RADIO is not available")
+	}
+
+	PrintDeviceHeader("Selecting custom radio stream", clientConfig.Host, clientConfig.Port)
+
+	if itemName != "" {
+		fmt.Printf("  Station: %s\n", itemName)
+	}
+
+	fmt.Printf("  URL: %s\n", streamURL)
+	fmt.Printf("  Proxy: %s\n", location)
+
+	err = client.SelectLocalInternetRadio(location, "", itemName, containerArt)
+	if err != nil {
+		return fmt.Errorf("failed to select custom radio: %w", err)
+	}
+
+	PrintSuccess("Custom radio stream selected")
 
 	return nil
 }
