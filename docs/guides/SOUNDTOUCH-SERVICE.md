@@ -797,7 +797,7 @@ func customBMXHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
     r := chi.NewRouter()
-    r.Get("/bmx/custom/endpoint", customBMXHandler)
+    r.Get("/custom/endpoint", customBMXHandler)
     http.ListenAndServe(":8000", r)
 }
 ```

@@ -268,7 +268,7 @@ func selectCustomRadio(c *cli.Context) error {
 	serviceURL := c.String("service-url")
 
 	encodedURL := base64.URLEncoding.EncodeToString([]byte(streamURL))
-	location := fmt.Sprintf("%s/bmx/custom/v1/playback/%s", serviceURL, encodedURL)
+	location := fmt.Sprintf("%s/custom/v1/playback/%s", serviceURL, encodedURL)
 
 	params := url.Values{}
 	if itemName != "" {

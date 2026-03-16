@@ -120,7 +120,7 @@ func TestCustomPlayback(t *testing.T) {
 	imageUrl := "http://example.com/img.jpg"
 	name := "Test Custom"
 
-	res, err := http.Get(ts.URL + "/bmx/custom/v1/playback/" + encodedURL + "?imageUrl=" + url.QueryEscape(imageUrl) + "&name=" + url.QueryEscape(name))
+	res, err := http.Get(ts.URL + "/custom/v1/playback/" + encodedURL + "?imageUrl=" + url.QueryEscape(imageUrl) + "&name=" + url.QueryEscape(name))
 	if err != nil {
 		t.Fatal(err)
 	}
