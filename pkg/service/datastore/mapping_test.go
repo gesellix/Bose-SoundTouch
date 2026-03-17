@@ -57,7 +57,7 @@ func TestDataStore_MacAddressMapping(t *testing.T) {
 
 	// Test mapping resolution in AccountDeviceDir
 	resolvedDir := ds.AccountDeviceDir(accountID, macAddress)
-	expectedDir := filepath.Join("testdata/mapping", "accounts", accountID, "devices", serialNumber)
+	expectedDir, _ := filepath.Abs(filepath.Join("testdata/mapping", "accounts", accountID, "devices", serialNumber))
 	if resolvedDir != expectedDir {
 		t.Errorf("expected dir %s, got %s", expectedDir, resolvedDir)
 	}

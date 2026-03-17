@@ -24,7 +24,11 @@ func exists(path string) bool {
 
 // DataStore represents the device and configuration storage.
 type DataStore struct {
-	DataDir        string
+	// DataDir is the (possibly relative) base directory for all datastore files.
+	DataDir string
+	// baseDir is the absolute, normalized base directory used for path safety checks.
+	baseDir string
+
 	eventMutex     sync.RWMutex
 	deviceEvents   map[string][]models.DeviceEvent
 	idMutex        sync.RWMutex
@@ -54,28 +58,68 @@ func NewDataStore(dataDir string) *DataStore {
 		dataDir = "data"
 	}
 
+	absBase, err := filepath.Abs(dataDir)
+	if err != nil {
+		// Fallback to the provided dataDir if Abs fails; this preserves existing behavior.
+		absBase = dataDir
+	}
+
 	return &DataStore{
 		DataDir:        dataDir,
+		baseDir:        absBase,
 		deviceEvents:   make(map[string][]models.DeviceEvent),
 		deviceMappings: make(map[string]string),
 	}
 }
 
+// safeJoin joins the given path elements to the datastore baseDir and ensures
+// that the resulting absolute path stays within baseDir. If the check fails,
+// baseDir is returned to prevent directory traversal.
+func (ds *DataStore) safeJoin(elem ...string) string {
+	// Join the base directory with the provided elements.
+	path := filepath.Join(append([]string{ds.baseDir}, elem...)...)
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		// On error, fall back to baseDir to avoid using an unexpected path.
+		return ds.baseDir
+	}
+
+	base := ds.baseDir
+	if base == "" {
+		// If baseDir is not set for some reason, fall back to original path.
+		return absPath
+	}
+
+	// Ensure the resolved path is within the base directory.
+	baseWithSep := base
+	if !strings.HasSuffix(baseWithSep, string(os.PathSeparator)) {
+		baseWithSep += string(os.PathSeparator)
+	}
+
+	if absPath == base || strings.HasPrefix(absPath, baseWithSep) {
+		return absPath
+	}
+
+	// If the path would escape the base directory, return baseDir as a safe default.
+	return base
+}
+
 // AccountDir returns the directory path for a specific account.
 func (ds *DataStore) AccountDir(account string) string {
-	return filepath.Join(ds.DataDir, "accounts", account)
+	return ds.safeJoin("accounts", account)
 }
 
 // AccountDevicesDir returns the devices directory path for a specific account.
 func (ds *DataStore) AccountDevicesDir(account string) string {
-	return filepath.Join(ds.AccountDir(account), constants.DevicesDir)
+	return ds.safeJoin("accounts", account, constants.DevicesDir)
 }
 
 // AccountDeviceDir returns the directory path for a specific device within an account.
 func (ds *DataStore) AccountDeviceDir(account, device string) string {
 	// First, check if the device directory exists directly with the given deviceID
 	// This prioritizes MAC-based deviceIDs over legacy mappings
-	directPath := filepath.Join(ds.AccountDevicesDir(account), device)
+	directPath := ds.safeJoin("accounts", account, constants.DevicesDir, device)
 	if _, err := os.Stat(directPath); err == nil {
 		// Directory exists, use the direct deviceID (preferred for MAC-based IDs)
 		return directPath
@@ -95,7 +139,7 @@ func (ds *DataStore) AccountDeviceDir(account, device string) string {
 
 	if ok {
 		// Use the mapped device only if it exists and the direct path doesn't
-		mappedPath := filepath.Join(ds.AccountDevicesDir(account), mappedDevice)
+		mappedPath := ds.safeJoin("accounts", account, constants.DevicesDir, mappedDevice)
 		if _, err := os.Stat(mappedPath); err == nil {
 			return mappedPath
 		}
