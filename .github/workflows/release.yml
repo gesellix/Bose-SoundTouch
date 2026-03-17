@@ -512,7 +512,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
