@@ -126,3 +126,47 @@ func TestCertificateManager(t *testing.T) {
 		}
 	}
 }
+
+func TestCertificateManagerIPAddress(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "crypto-ip-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := NewCertificateManager(filepath.Join(tempDir, "certs"))
+
+	// Test certificate generation with an IP address
+	domains := []string{"192.168.1.100", "localhost"}
+	certPEM, _, err := cm.GenerateCertificate(domains)
+	if err != nil {
+		t.Fatalf("Failed to generate certificate: %v", err)
+	}
+
+	// Verify generated certificate
+	block, _ := pem.Decode(certPEM)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("Failed to parse certificate: %v", err)
+	}
+
+	// Check IP addresses
+	foundIP := false
+	for _, ip := range cert.IPAddresses {
+		if ip.String() == "192.168.1.100" {
+			foundIP = true
+			break
+		}
+	}
+
+	if !foundIP {
+		t.Errorf("Expected IP address 192.168.1.100 in IPAddresses, but it was not found")
+	}
+
+	// Check if it was mistakenly added to DNSNames
+	for _, dns := range cert.DNSNames {
+		if dns == "192.168.1.100" {
+			t.Errorf("IP address 192.168.1.100 should NOT be in DNSNames")
+		}
+	}
+}

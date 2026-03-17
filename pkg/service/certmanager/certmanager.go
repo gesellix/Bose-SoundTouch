@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"time"
@@ -78,6 +79,9 @@ func (cm *CertificateManager) GetServerTLSConfig(domains []string) (*tls.Config,
 					domainMap := make(map[string]bool)
 					for _, d := range cert.DNSNames {
 						domainMap[d] = true
+					}
+					for _, ip := range cert.IPAddresses {
+						domainMap[ip.String()] = true
 					}
 
 					for _, d := range domains {
@@ -237,6 +241,16 @@ func (cm *CertificateManager) GenerateCertificate(domains []string) ([]byte, []b
 		return nil, nil, err
 	}
 
+	var dnsNames []string
+	var ipAddresses []net.IP
+	for _, domain := range domains {
+		if ip := net.ParseIP(domain); ip != nil {
+			ipAddresses = append(ipAddresses, ip)
+		} else {
+			dnsNames = append(dnsNames, domain)
+		}
+	}
+
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
@@ -247,7 +261,8 @@ func (cm *CertificateManager) GenerateCertificate(domains []string) ([]byte, []b
 		NotAfter:    notAfter,
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:    domains,
+		DNSNames:    dnsNames,
+		IPAddresses: ipAddresses,
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &priv.PublicKey, caKey)
