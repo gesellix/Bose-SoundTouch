@@ -80,6 +80,7 @@ func (cm *CertificateManager) GetServerTLSConfig(domains []string) (*tls.Config,
 					for _, d := range cert.DNSNames {
 						domainMap[d] = true
 					}
+
 					for _, ip := range cert.IPAddresses {
 						domainMap[ip.String()] = true
 					}
@@ -241,8 +242,11 @@ func (cm *CertificateManager) GenerateCertificate(domains []string) ([]byte, []b
 		return nil, nil, err
 	}
 
-	var dnsNames []string
-	var ipAddresses []net.IP
+	var (
+		dnsNames    []string
+		ipAddresses []net.IP
+	)
+
 	for _, domain := range domains {
 		if ip := net.ParseIP(domain); ip != nil {
 			ipAddresses = append(ipAddresses, ip)
