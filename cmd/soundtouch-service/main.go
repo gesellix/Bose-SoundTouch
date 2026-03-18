@@ -724,6 +724,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	})
 
 	r.Route("/oauth", func(r chi.Router) {
+		r.Post("/device/{deviceID}/music/musicprovider/15/token/cs3", server.HandleBoseSpotifyToken)
+		r.Post("/device/{deviceID}/music/musicprovider/15/token", server.HandleBoseSpotifyLegacyToken)
 		r.HandleFunc("/*", server.HandleBoseProxy)
 	})
 
