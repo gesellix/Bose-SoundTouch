@@ -16,8 +16,17 @@ import (
 func (s *Server) HandleBMXRegistry(w http.ResponseWriter, _ *http.Request) {
 	baseURL := s.serverURL
 
+	s.mu.RLock()
+	dnsEnabled := s.dnsEnabled
+	s.mu.RUnlock()
+
+	bmxServer := baseURL
+	if dnsEnabled {
+		bmxServer = "https://content.api.bose.io"
+	}
+
 	content := string(bmxServicesJSON)
-	content = strings.ReplaceAll(content, "{BMX_SERVER}", baseURL)
+	content = strings.ReplaceAll(content, "{BMX_SERVER}", bmxServer)
 	content = strings.ReplaceAll(content, "{MEDIA_SERVER}", baseURL+"/media")
 
 	w.Header().Set("Content-Type", "application/json")
