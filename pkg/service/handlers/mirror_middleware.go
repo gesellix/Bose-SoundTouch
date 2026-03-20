@@ -27,8 +27,9 @@ import (
 func (s *Server) MirrorMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		enabled, endpoints, preferredSource := s.getMirrorSettings()
+		isMirrorRequest := r.Header.Get("X-Mirror-Request") == "true"
 
-		if !enabled || len(endpoints) == 0 || !s.shouldMirror(r.URL.Path, endpoints) {
+		if !enabled || isMirrorRequest || len(endpoints) == 0 || !s.shouldMirror(r.URL.Path, endpoints) {
 			next.ServeHTTP(w, r)
 			return
 		}
