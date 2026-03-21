@@ -23,8 +23,8 @@ func TestMargeRecentConsistencyAndIDParity(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	account := "3230304"
-	deviceID := "A81B6A536A98"
+	account := "1234567"
+	deviceID := "001122334455"
 
 	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", deviceID)
 	os.MkdirAll(deviceDir, 0755)

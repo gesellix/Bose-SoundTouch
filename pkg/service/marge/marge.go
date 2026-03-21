@@ -62,78 +62,11 @@ func SourceProvidersToXML() ([]byte, error) {
 
 // ConfiguredSourceToXML converts a configured source to XML format.
 func ConfiguredSourceToXML(cs models.ConfiguredSource) ([]byte, error) {
-	type SourceXML struct {
-		XMLName    xml.Name `xml:"source"`
-		ID         string   `xml:"id,attr"`
-		Type       string   `xml:"type,attr"`
-		CreatedOn  string   `xml:"createdOn"`
-		Credential struct {
-			Type  string `xml:"type,attr"`
-			Value string `xml:",chardata"`
-		} `xml:"credential"`
-		Name             string `xml:"name"`
-		SourceProviderID string `xml:"sourceproviderid"`
-		SourceName       string `xml:"sourcename"`
-		SourceSettings   string `xml:"sourceSettings"`
-		UpdatedOn        string `xml:"updatedOn"`
-		Username         string `xml:"username"`
-	}
-
-	providerID := cs.SourceProviderID
-	tokenType := "token"
-
-	if providerID == "" {
-		for _, p := range constants.StaticProviders {
-			if p.Name == cs.SourceKeyType {
-				providerID = strconv.Itoa(p.ID)
-				break
-			}
-		}
-	}
-
-	if cs.SourceKeyType == "SPOTIFY" {
-		tokenType = "token_version_3"
-	}
-
-	if providerID == "" {
-		providerID = "0"
-	}
-
-	createdOn := cs.CreatedOn
-	if createdOn == "" {
-		createdOn = DateStr
-	}
-
-	updatedOn := cs.UpdatedOn
-	if updatedOn == "" {
-		updatedOn = DateStr
-	}
-
-	sxml := SourceXML{
-		ID:               cs.ID,
-		Type:             "Audio",
-		CreatedOn:        createdOn,
-		Name:             cs.SourceKeyAccount,
-		SourceProviderID: providerID,
-		SourceName:       cs.DisplayName,
-		SourceSettings:   "",
-		UpdatedOn:        updatedOn,
-		Username:         cs.SourceKeyAccount,
-	}
-	if sxml.SourceName == "Other" || cs.SourceKeyType == "TUNEIN" {
-		sxml.SourceName = ""
-	}
-
-	sxml.Credential.Type = tokenType
-	sxml.Credential.Value = cs.Secret
-
-	data, err := xml.Marshal(sxml)
+	// Use the model's own MarshalXML for consistent output
+	data, err := xml.Marshal(cs)
 	if err != nil {
 		return nil, err
 	}
-
-	// Parity: use self-closing tags for empty SourceSettings
-	data = bytes.ReplaceAll(data, []byte("<sourceSettings></sourceSettings>"), []byte("<sourceSettings/>"))
 
 	return data, nil
 }
@@ -240,9 +173,17 @@ func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 		}
 
 		// Find and prepare source
+		// Priority 1: sourceID match
+		// Priority 2: source and sourceAccount match
+		sourceID := p.SourceID
+		if sourceID == "" {
+			sourceID = p.SourceID
+		}
+
 		for j := range sources {
 			s := sources[j]
-			if s.ID == p.SourceID || (s.SourceKeyType == p.Source && s.SourceKeyAccount == p.SourceAccount) {
+			if (sourceID != "" && s.ID == sourceID) ||
+				(s.SourceKeyType == p.Source && s.SourceKeyAccount == p.SourceAccount) {
 				// Use a new variable to avoid pointer-to-iterator-variable bug
 				matchedSource := s
 				PrepareConfiguredSource(&matchedSource)
@@ -255,12 +196,12 @@ func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 		pxml.Presets = append(pxml.Presets, p)
 	}
 
-	data, err := xml.Marshal(pxml)
+	data, err := xml.MarshalIndent(pxml, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 
-	return append([]byte(constants.XMLHeader), data...), nil
+	return append([]byte(constants.XMLHeader+"\n"), data...), nil
 }
 
 // RecentsToXML converts account recent items to XML format for Marge responses.
@@ -372,11 +313,20 @@ func CreateAccountDevice(ds *datastore.DataStore, account, deviceID string) (mod
 		UpdatedOn:       DateStr,
 	}
 
+	if device.SerialNumber == "" && info.DeviceID != "" {
+		device.SerialNumber = info.DeviceID
+	}
+
+	if device.AttachedProduct.SerialNumber == "" && info.ProductSerialNumber != "" {
+		device.AttachedProduct.SerialNumber = info.ProductSerialNumber
+	} else if device.AttachedProduct.SerialNumber == "" && device.SerialNumber != "" {
+		device.AttachedProduct.SerialNumber = device.SerialNumber
+	}
+
 	if len(info.Components) > 0 {
 		for _, comp := range info.Components {
 			device.AttachedProduct.Components = append(device.AttachedProduct.Components, models.ServiceComponent{
-				Type:            comp.Type,
-				Label:           comp.Label,
+				Category:        comp.Category,
 				SoftwareVersion: comp.SoftwareVersion,
 				SerialNumber:    comp.SerialNumber,
 			})
@@ -397,6 +347,7 @@ func mapToFullResponseSource(s models.ConfiguredSource) models.FullResponseSourc
 	fullSource := models.FullResponseSource{
 		ID:               s.ID,
 		Type:             s.Type,
+		DisplayName:      s.DisplayName,
 		CreatedOn:        s.CreatedOn,
 		Name:             s.SourceKeyAccount,
 		SourceProviderID: s.SourceProviderID,
@@ -456,7 +407,7 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		}
 
 		fullPreset := models.FullResponsePreset{
-			ButtonNumber:    p.ID,
+			ButtonNumber:    p.ButtonNumber,
 			ContainerArt:    p.ContainerArt,
 			ContentItemType: p.ContentItemType,
 			CreatedOn:       p.CreatedOn,
@@ -535,7 +486,7 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		ID:                account,
 		AccountStatus:     "OK",
 		Mode:              "global",
-		PreferredLanguage: "en",
+		PreferredLanguage: "de",
 		ProviderSettings: []models.ProviderSetting{
 			{
 				BoseID:     account,
@@ -550,6 +501,16 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 				ProviderID: "15",
 			},
 		},
+	}
+
+	if info, _ := ds.GetAccountInfo(account); info != nil {
+		if info.PreferredLanguage != "" {
+			resp.PreferredLanguage = info.PreferredLanguage
+		}
+
+		if len(info.ProviderSettings) > 0 {
+			resp.ProviderSettings = info.ProviderSettings
+		}
 	}
 
 	var lastDeviceID string
@@ -635,14 +596,15 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	nowStr := strconv.FormatInt(time.Now().Unix(), 10)
 	presetObj := models.ServicePreset{
 		ServiceContentItem: models.ServiceContentItem{
-			ID:            strconv.Itoa(presetNumber),
-			Name:          newPresetElem.Name,
-			Source:        matchingSrc.SourceKeyType,
-			Type:          newPresetElem.ContentItemType,
-			Location:      newPresetElem.Location,
-			SourceAccount: matchingSrc.SourceKeyAccount,
-			SourceID:      newPresetElem.SourceID,
+			Name:            newPresetElem.Name,
+			Source:          matchingSrc.SourceKeyType,
+			Type:            newPresetElem.ContentItemType,
+			Location:        newPresetElem.Location,
+			SourceAccount:   matchingSrc.SourceKeyAccount,
+			SourceID:        newPresetElem.SourceID,
+			ContentItemType: newPresetElem.ContentItemType,
 		},
+		ID:           strconv.Itoa(presetNumber),
 		ContainerArt: newPresetElem.ContainerArt,
 		CreatedOn:    nowStr,
 		UpdatedOn:    nowStr,
@@ -732,8 +694,11 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 	}
 
 	// Ensure DisplayName and SourceName are consistent
-	if matchingSrc.SourceName == "" && matchingSrc.DisplayName != "" && matchingSrc.DisplayName != "Other" {
-		matchingSrc.SourceName = matchingSrc.DisplayName
+	if matchingSrc.SourceName == "" && matchingSrc.DisplayName != "" {
+		// Parity: for some services like TuneIn, sourcename should be empty
+		if matchingSrc.DisplayName != "TuneIn" && matchingSrc.DisplayName != "Other" {
+			matchingSrc.SourceName = matchingSrc.DisplayName
+		}
 	}
 
 	if matchingSrc.DisplayName == "" && matchingSrc.SourceName != "" {
@@ -770,8 +735,16 @@ func learnSource(ds *datastore.DataStore, account, device string, sources []mode
 
 func createLearnedSource(sourceID, location, sourceName, credentialValue, sourceProviderID, createdOn, updatedOn string) *models.ConfiguredSource {
 	displayName := sourceName
-	if displayName == "" {
-		displayName = "Other"
+	// For TuneIn, we often see empty DisplayName/SourceName in recent items
+	// if it's already a known source or if it's a generic TuneIn request.
+	if displayName == "" && sourceID != "" {
+		// Try to deduce from sourceID if it looks like a known service
+		switch sourceID {
+		case "14774275": // TuneIn
+			displayName = "TuneIn"
+		case "Spotify":
+			displayName = "Spotify"
+		}
 	}
 
 	src := &models.ConfiguredSource{
@@ -873,18 +846,16 @@ func updateOrCreateRecent(recents []models.ServiceRecent, name string, matchingS
 			// Move to front
 			recents = append([]models.ServiceRecent{*recentObj}, append(recents[:i], recents[i+1:]...)...)
 
-			break
+			return recentObj, recents
 		}
 	}
 
-	if recentObj == nil {
-		recentObj = createNewRecent(recents, name, matchingSrc, contentItemType, location, device, utcTime)
-		recentObj.UpdatedOn = FormatTime(time.Now())
+	recentObj = createNewRecent(recents, name, matchingSrc, contentItemType, location, device, utcTime)
+	recentObj.UpdatedOn = FormatTime(time.Now())
 
-		recents = append([]models.ServiceRecent{*recentObj}, recents...)
-		if len(recents) > 10 {
-			recents = recents[:10]
-		}
+	recents = append([]models.ServiceRecent{*recentObj}, recents...)
+	if len(recents) > 10 {
+		recents = recents[:10]
 	}
 
 	return recentObj, recents

@@ -2119,8 +2119,11 @@ func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
 		presetsURL = fmt.Sprintf("http://%s/presets", deviceIP)
 	}
 
+	log.Printf("[SYNC] Syncing presets for %s", deviceIP)
+
 	resp, err := m.HTTPGet(presetsURL)
 	if err != nil {
+		log.Printf("[SYNC_ERR] Failed to fetch presets for %s: %v", deviceIP, err)
 		return
 	}
 
@@ -2159,6 +2162,8 @@ func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
 				SourceID:      "", // Preset doesn't have SourceID in ContentItem usually
 				IsPresetable:  strconv.FormatBool(p.ContentItem.IsPresetable),
 			},
+			ID:           strconv.Itoa(p.ID),
+			ButtonNumber: strconv.Itoa(p.ID),
 			ContainerArt: p.ContentItem.ContainerArt,
 			CreatedOn:    createdOn,
 			UpdatedOn:    updatedOn,
@@ -2255,9 +2260,17 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 		for _, s := range srs.SourceItem {
 			cs := models.ConfiguredSource{
 				DisplayName: s.DisplayName,
-				ID:          s.Source,
-				SecretType:  string(s.Status),
+				Secret:      "",
+				SecretType:  "",
 			}
+			if s.Status == "READY" {
+				cs.SecretType = "token"
+			}
+
+			if s.Source == "SPOTIFY" {
+				cs.SecretType = "token_version_3"
+			}
+
 			cs.SourceKey.Type = s.Source
 			cs.SourceKey.Account = s.SourceAccount
 			// Also set legacy fields for now

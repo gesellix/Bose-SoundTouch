@@ -17,6 +17,8 @@ func SyncFromAccountFull(ds *datastore.DataStore, resp *models.AccountFullRespon
 	}
 
 	log.Printf("[SYNC] Starting synchronization for account %s", accountID)
+	// 0. Update Account Metadata
+	syncAccountInfo(ds, accountID, resp)
 
 	for i := range resp.Devices {
 		dev := &resp.Devices[i]
@@ -32,7 +34,7 @@ func SyncFromAccountFull(ds *datastore.DataStore, resp *models.AccountFullRespon
 		syncDeviceInfo(ds, accountID, dev)
 
 		// 2. Update Configured Sources for this device
-		syncConfiguredSources(ds, accountID, deviceID, resp.Sources)
+		syncConfiguredSources(ds, accountID, deviceID, resp.Sources, dev)
 
 		// 3. Update Presets
 		syncPresets(ds, accountID, deviceID, dev.Presets)
@@ -44,6 +46,18 @@ func SyncFromAccountFull(ds *datastore.DataStore, resp *models.AccountFullRespon
 	log.Printf("[SYNC] Synchronization completed for account %s", accountID)
 
 	return nil
+}
+
+func syncAccountInfo(ds *datastore.DataStore, accountID string, resp *models.AccountFullResponse) {
+	info := &models.ServiceAccountInfo{
+		AccountID:         accountID,
+		PreferredLanguage: resp.PreferredLanguage,
+		ProviderSettings:  resp.ProviderSettings,
+	}
+
+	if err := ds.SaveAccountInfo(accountID, info); err != nil {
+		log.Printf("[SYNC_ERR] Failed to save account info for %s: %v", accountID, err)
+	}
 }
 
 func syncDeviceInfo(ds *datastore.DataStore, accountID string, dev *models.AccountDevice) {
@@ -61,7 +75,15 @@ func syncDeviceInfo(ds *datastore.DataStore, accountID string, dev *models.Accou
 	}
 	if dev.AttachedProduct != nil {
 		info.ProductCode = dev.AttachedProduct.ProductCode
+
 		info.ProductSerialNumber = dev.AttachedProduct.SerialNumber
+		for _, comp := range dev.AttachedProduct.Components {
+			info.Components = append(info.Components, models.ServiceComponent{
+				Category:        comp.Category,
+				SoftwareVersion: comp.SoftwareVersion,
+				SerialNumber:    comp.SerialNumber,
+			})
+		}
 	}
 
 	// If the name is empty in the upstream response, try to preserve the local name
@@ -102,14 +124,46 @@ func syncDeviceInfo(ds *datastore.DataStore, accountID string, dev *models.Accou
 	}
 }
 
-func syncConfiguredSources(ds *datastore.DataStore, accountID, deviceID string, sources []models.FullResponseSource) {
+func syncConfiguredSources(ds *datastore.DataStore, accountID, deviceID string, sources []models.FullResponseSource, dev *models.AccountDevice) {
 	// We'll use the account-level sources from the response as a base.
 	var deviceSources []models.ConfiguredSource
 
+	// Track seen sources to avoid duplicates
+	seen := make(map[string]bool)
+
+	// 1. Add sources from the account-level sources list
 	for i := range sources {
 		s := &sources[i]
+		if s.ID != "" && seen[s.ID] {
+			continue
+		}
+
 		dsrc := mapFullSourceToConfiguredSource(*s)
 		deviceSources = append(deviceSources, dsrc)
+
+		if s.ID != "" {
+			seen[s.ID] = true
+		}
+	}
+
+	// 2. Add sources from presets if they are not already in the list
+	for i := range dev.Presets {
+		p := &dev.Presets[i]
+		if p.Source.ID != "" && !seen[p.Source.ID] {
+			dsrc := mapFullSourceToConfiguredSource(p.Source)
+			deviceSources = append(deviceSources, dsrc)
+			seen[p.Source.ID] = true
+		}
+	}
+
+	// 3. Add sources from recents if they are not already in the list
+	for i := range dev.Recents {
+		r := &dev.Recents[i]
+		if r.Source.ID != "" && !seen[r.Source.ID] {
+			dsrc := mapFullSourceToConfiguredSource(r.Source)
+			deviceSources = append(deviceSources, dsrc)
+			seen[r.Source.ID] = true
+		}
 	}
 
 	if err := ds.SaveConfiguredSources(accountID, deviceID, deviceSources); err != nil {
@@ -132,6 +186,7 @@ func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSou
 				SourceAccount:   p.Source.Username,
 			},
 			ButtonNumber: p.ButtonNumber,
+			ID:           p.ButtonNumber,
 			CreatedOn:    p.CreatedOn,
 			UpdatedOn:    p.UpdatedOn,
 			ContainerArt: p.ContainerArt,
@@ -142,6 +197,7 @@ func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSou
 				UpdatedOn:        p.Source.UpdatedOn,
 				SourceName:       p.Source.SourceName,
 				DisplayName:      p.Source.Name,
+				Name:             p.Source.Name,
 				SourceProviderID: p.Source.SourceProviderID,
 				Secret:           p.Source.Credential.Value,
 				SecretType:       p.Source.Credential.Type,
@@ -181,6 +237,7 @@ func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSou
 				UpdatedOn:        r.Source.UpdatedOn,
 				SourceName:       r.Source.SourceName,
 				DisplayName:      r.Source.Name,
+				Name:             r.Source.Name,
 				SourceProviderID: r.Source.SourceProviderID,
 				Secret:           r.Source.Credential.Value,
 				SecretType:       r.Source.Credential.Type,
@@ -202,13 +259,23 @@ func mapFullSourceToConfiguredSource(s models.FullResponseSource) models.Configu
 		CreatedOn:        s.CreatedOn,
 		UpdatedOn:        s.UpdatedOn,
 		SourceName:       s.SourceName,
-		DisplayName:      s.Name,
+		DisplayName:      s.DisplayName,
+		Name:             s.Name,
 		SourceProviderID: s.SourceProviderID,
 		Secret:           s.Credential.Value,
 		SecretType:       s.Credential.Type,
 		Username:         s.Username,
 		SourceSettings:   s.SourceSettings,
 	}
+
+	if dsrc.DisplayName == "" {
+		dsrc.DisplayName = s.Name
+	}
+
+	if dsrc.Name == "" {
+		dsrc.Name = s.DisplayName
+	}
+
 	dsrc.SourceKey.Type = s.Type
 	dsrc.SourceKey.Account = s.Username
 

@@ -360,6 +360,10 @@ function openTab(evt, tabId) {
         fetchParityMismatches();
     }
 
+    if (tabId === "tab-account") {
+        fetchAccountList();
+    }
+
     if (evt) {
         evt.currentTarget.className += " active";
     } else {
@@ -456,6 +460,160 @@ async function fetchVersion() {
         }
     } catch (error) {
         console.error("Failed to fetch version info", error);
+    }
+}
+
+async function fetchAccountList() {
+    try {
+        const response = await fetch("/mgmt/accounts");
+        if (!response.ok) return;
+        const data = await response.json();
+        const selector = document.getElementById("account-selector");
+        if (selector) {
+            selector.innerHTML = data.accounts.map(acc => `<option value="${acc}">${acc}</option>`).join("");
+            if (data.accounts.length > 0) {
+                fetchAccountDetails(selector.value);
+            }
+        }
+    } catch (error) {
+        console.error("Failed to fetch account list", error);
+    }
+}
+
+async function fetchAccountDetails(accountId) {
+    if (!accountId) return;
+    const metadataEl = document.getElementById("account-metadata");
+    const devicesEl = document.getElementById("account-devices-list");
+
+    if (metadataEl) metadataEl.innerHTML = "Loading...";
+    if (devicesEl) devicesEl.innerHTML = "Loading devices...";
+
+    try {
+        const response = await fetch(`/mgmt/accounts/${encodeURIComponent(accountId)}`);
+        if (!response.ok) {
+            if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Failed to load account details: ${response.statusText}</span>`;
+            return;
+        }
+        const data = await response.json();
+
+        // Render Metadata
+        if (metadataEl) {
+            metadataEl.innerHTML = `
+                <table style="width: 100%; font-size: 0.9em;">
+                    <tr><td style="padding: 4px"><strong>Account ID:</strong></td><td style="padding: 4px">${data.account.account_id}</td></tr>
+                    <tr><td style="padding: 4px"><strong>Language:</strong></td><td style="padding: 4px">${data.account.preferred_language || "Not set"}</td></tr>
+                    <tr><td style="padding: 4px"><strong>Provider Settings:</strong></td><td style="padding: 4px">${data.account.provider_settings ? "Configured" : "None"}</td></tr>
+                </table>
+            `;
+        }
+
+        // Render Devices
+        if (devicesEl) {
+            if (!data.devices || data.devices.length === 0) {
+                devicesEl.innerHTML = "No devices found for this account.";
+                return;
+            }
+
+            devicesEl.innerHTML = data.devices.map(device => `
+                <div class="summary-box" style="margin-bottom: 15px; border-left: 5px solid #007bff; padding: 15px;">
+                    <div style="display: flex; justify-content: space-between; cursor: pointer; align-items: center;" onclick="toggleInfo('device-details-${device.device_id}')">
+                        <h4 style="margin: 0">${device.name || "Unnamed Device"} (${device.product_code})</h4>
+                        <div style="font-size: 0.8em; color: #666">
+                            ${device.ip_address} | ${device.device_id} <span style="font-size: 1.2em; vertical-align: middle;">&#9662;</span>
+                        </div>
+                    </div>
+
+                    <div id="device-details-${device.device_id}" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
+                            <div>
+                                <h5 style="margin: 10px 0 5px 0">Device Metadata</h5>
+                                <div style="font-size: 0.85em; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #e9ecef">
+                                    <strong>Serial:</strong> ${device.device_serial_number || device.serial_number || "N/A"}<br>
+                                    <strong>MAC:</strong> ${device.mac_address || "N/A"}<br>
+                                    <strong>Version:</strong> ${device.firmware_version || "N/A"}<br>
+                                    <strong>Discovery:</strong> ${device.discovery_method || "N/A"}
+                                </div>
+
+                                <h5 style="margin: 15px 0 5px 0">Hardware Components</h5>
+                                <ul style="font-size: 0.8em; padding-left: 20px; margin: 0">
+                                    ${device.components ? device.components.map(c => `<li><strong>${c.category || c.type || 'Component'}</strong>: ${c.firmware_version || 'N/A'} <br><small style="color:#777">S/N: ${c.serial_number || 'N/A'}</small></li>`).join("") : "<li>No components found</li>"}
+                                </ul>
+                            </div>
+
+                            <div>
+                                <h5 style="margin: 10px 0 5px 0">Presets (1-6)</h5>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px">
+                                    ${Array.from({length: 6}, (_, i) => {
+                                        const p = device.presets ? device.presets.find(pr => pr.button_number == i + 1) : null;
+                                        let itemName = "Empty";
+                                        let sourceLabel = "";
+
+                                        if (p) {
+                                            itemName = p.name || (p.source ? (p.source.source_label || p.source.name || p.source.type) : "Unknown");
+                                            if (p.source) {
+                                                const s = p.source;
+                                                const name = s.source_label || s.source_name || s.name || s.type;
+                                                const account = (s.account && s.account !== s.username) ? ` [${s.account}]` : "";
+                                                const finalName = name || s.type || "Unknown Source";
+                                                if (finalName) {
+                                                    sourceLabel = `<br><small style="color: #666; font-size: 0.85em;">via ${finalName}${account}</small>`;
+                                                }
+                                            }
+                                        }
+
+                                        return `
+                                            <div style="border: 1px solid #ddd; padding: 5px; font-size: 0.8em; background: ${p ? "#e6ffed" : "#f8f9fa"}; border-radius: 3px;">
+                                                <strong>#${i + 1}</strong>: ${itemName}${sourceLabel}
+                                            </div>
+                                        `;
+                                    }).join("")}
+                                </div>
+
+                                <h5 style="margin: 15px 0 5px 0">Recent Items</h5>
+                                <div style="max-height: 150px; overflow-y: auto; font-size: 0.8em; border: 1px solid #eee; padding: 5px; border-radius: 4px">
+                                    <ul style="padding-left: 15px; margin: 0">
+                                        ${device.recents ? device.recents.slice(0, 10).map(r => {
+                                            const name = r.name || (r.source ? (r.source.source_label || r.source.name || r.source.type) : "Unknown");
+                                            let sourceLabel = "";
+                                            if (r.source) {
+                                                const s = r.source;
+                                                const sName = s.source_label || s.source_name || s.name || s.type;
+                                                const account = (s.account && s.account !== s.username) ? ` [${s.account}]` : "";
+                                                const finalSName = sName || s.type || "Unknown Source";
+                                                if (finalSName) {
+                                                    sourceLabel = `<br><small style="color: #666; font-size: 0.9em;">via ${finalSName}${account}</small>`;
+                                                }
+                                            }
+                                            return `<li>${name}${sourceLabel} <br><small style="color:#888">${r.created_on ? new Date(r.created_on * 1000).toLocaleString() : 'N/A'}</small></li>`;
+                                        }).join("") : "<li>No recents</li>"}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 15px; border-top: 1px dashed #ddd; padding-top: 10px">
+                            <h5 style="margin: 0 0 5px 0">Configured Sources</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 5px">
+                                ${device.sources ? device.sources.filter(s => (s.source_label || s.source_name || s.name || s.type)).map(s => {
+                                    const sourceName = s.source_label || s.source_name || s.name || s.type;
+                                    const usernameSuffix = (s.username && s.username !== "Local") ? ` (${s.username})` : "";
+                                    const accountSuffix = (s.account && s.account !== s.username) ? ` [${s.account}]` : "";
+                                    return `
+                                        <span style="background: #eefbff; color: #0056b3; border: 1px solid #b8daff; padding: 2px 8px; border-radius: 12px; font-size: 0.75em" title="Source Type: ${s.type}">
+                                            ${sourceName}${usernameSuffix}${accountSuffix}
+                                        </span>
+                                    `;
+                                }).join("") : "<small style='color:#999'>None</small>"}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+    } catch (error) {
+        if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Error: ${error.message}</span>`;
+        console.error("Failed to fetch account details", error);
     }
 }
 

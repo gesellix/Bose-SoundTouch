@@ -23,9 +23,9 @@ func TestMacMappingIntegration_HTTPHandler(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Setup test data (same as the issue description)
-	accountID := "3230304"
+	accountID := "1234567"
 	serialNumber := "I6332527703739342000020"
-	macAddress := "A81B6A536A98"
+	macAddress := "001122334455"
 
 	// Create directory structure using serial number
 	deviceDir := filepath.Join(tmpDir, "accounts", accountID, "devices", serialNumber)
@@ -265,8 +265,8 @@ func TestMacMappingDebug(t *testing.T) {
 		serial  string
 		mac     string
 	}{
-		{"3230304", "I6332527703739342000020", "A81B6A536A98"},
-		{"3230304", "J1234567890123456789012", "B92C7B647BA9"},
+		{"1234567", "I6332527703739342000020", "001122334455"},
+		{"1234567", "J1234567890123456789012", "B92C7B647BA9"},
 		{"5678901", "K9876543210987654321098", "C03D8C758CAA"},
 	}
 

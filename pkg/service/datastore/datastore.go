@@ -105,6 +105,45 @@ func (ds *DataStore) safeJoin(elem ...string) string {
 	return base
 }
 
+// SafeJoin returns a safe joined path relative to the datastore base directory.
+func (ds *DataStore) SafeJoin(elem ...string) string {
+	return ds.safeJoin(elem...)
+}
+
+// ListAccounts returns a list of all account IDs (directories in the data root).
+func (ds *DataStore) ListAccounts() ([]string, error) {
+	ds.fileMutex.RLock()
+	defer ds.fileMutex.RUnlock()
+
+	// Account data is stored in 'accounts' subdirectory within the data root.
+	accountsDir := filepath.Join(ds.baseDir, "accounts")
+	if !exists(accountsDir) {
+		return []string{"default"}, nil
+	}
+
+	entries, err := os.ReadDir(accountsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := make([]string, 0)
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// Basic filter to ignore common hidden/system dirs
+			if entry.Name() != ".git" && entry.Name() != "logs" {
+				accounts = append(accounts, entry.Name())
+			}
+		}
+	}
+
+	if len(accounts) == 0 {
+		accounts = append(accounts, "default")
+	}
+
+	return accounts, nil
+}
+
 // AccountDir returns the directory path for a specific account.
 func (ds *DataStore) AccountDir(account string) string {
 	return ds.safeJoin("accounts", account)
@@ -199,6 +238,12 @@ func (ds *DataStore) getDeviceInfoNoLock(account, device string) (*models.Servic
 	}
 
 	for _, comp := range info.Components {
+		deviceInfo.Components = append(deviceInfo.Components, models.ServiceComponent{
+			Category:        comp.Category,
+			SoftwareVersion: comp.SoftwareVersion,
+			SerialNumber:    comp.SerialNumber,
+		})
+
 		switch comp.Category {
 		case "SCM":
 			deviceInfo.FirmwareVersion = comp.SoftwareVersion
@@ -459,15 +504,15 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 			CreatedOn   string `xml:"createdOn,attr"`
 			UpdatedOn   string `xml:"updatedOn,attr"`
 			ContentItem struct {
-				Source          string `xml:"source,attr"`
-				Type            string `xml:"type,attr"`
-				Location        string `xml:"location,attr"`
-				SourceAccount   string `xml:"sourceAccount,attr"`
-				IsPresetable    string `xml:"isPresetable,attr"`
-				ItemName        string `xml:"itemName"`
-				ContentItemType string `xml:"contentItemType"`
-				ContainerArt    string `xml:"containerArt"`
+				Source        string `xml:"source,attr"`
+				Type          string `xml:"type,attr"`
+				Location      string `xml:"location,attr"`
+				SourceAccount string `xml:"sourceAccount,attr"`
+				IsPresetable  string `xml:"isPresetable,attr"`
+				ItemName      string `xml:"itemName"`
+				ContainerArt  string `xml:"containerArt"`
 			} `xml:"ContentItem"`
+			Source *models.ConfiguredSource `xml:"source"`
 		} `xml:"preset"`
 	}
 
@@ -480,14 +525,10 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 	for i := range presetsWrap.Presets {
 		p := &presetsWrap.Presets[i]
 
-		cit := p.ContentItem.ContentItemType
-		if cit == "" {
-			cit = p.ContentItem.Type
-		}
+		cit := p.ContentItem.Type
 
 		presets = append(presets, models.ServicePreset{
 			ServiceContentItem: models.ServiceContentItem{
-				ID:              p.ID,
 				Name:            p.ContentItem.ItemName,
 				Source:          p.ContentItem.Source,
 				Type:            p.ContentItem.Type,
@@ -496,9 +537,12 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 				IsPresetable:    p.ContentItem.IsPresetable,
 				ContentItemType: cit,
 			},
+			ID:           p.ID,
+			ButtonNumber: p.ID,
 			ContainerArt: p.ContentItem.ContainerArt,
 			CreatedOn:    p.CreatedOn,
 			UpdatedOn:    p.UpdatedOn,
+			SourceConfig: p.Source,
 		})
 	}
 
@@ -511,21 +555,24 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 	defer ds.fileMutex.Unlock()
 
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
 
 	type PresetXML struct {
 		ID          string `xml:"id,attr"`
 		CreatedOn   string `xml:"createdOn,attr"`
 		UpdatedOn   string `xml:"updatedOn,attr"`
 		ContentItem struct {
-			Source          string `xml:"source,attr,omitempty"`
-			Type            string `xml:"type,attr"`
-			Location        string `xml:"location,attr"`
-			SourceAccount   string `xml:"sourceAccount,attr,omitempty"`
-			IsPresetable    string `xml:"isPresetable,attr"`
-			ItemName        string `xml:"itemName"`
-			ContentItemType string `xml:"contentItemType"`
-			ContainerArt    string `xml:"containerArt"`
+			Source        string `xml:"source,attr,omitempty"`
+			Type          string `xml:"type,attr"`
+			Location      string `xml:"location,attr"`
+			SourceAccount string `xml:"sourceAccount,attr"`
+			IsPresetable  string `xml:"isPresetable,attr"`
+			ItemName      string `xml:"itemName"`
+			ContainerArt  string `xml:"containerArt"`
 		} `xml:"ContentItem"`
+		Source *models.ConfiguredSource `xml:"source,omitempty"`
 	}
 
 	type PresetsXML struct {
@@ -540,7 +587,11 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 
 		var pxml PresetXML
 
-		pxml.ID = p.ID
+		pxml.ID = p.ButtonNumber
+		if pxml.ID == "" {
+			pxml.ID = p.ID
+		}
+
 		pxml.CreatedOn = p.CreatedOn
 		pxml.UpdatedOn = p.UpdatedOn
 		pxml.ContentItem.Source = p.Source
@@ -549,8 +600,8 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 		pxml.ContentItem.SourceAccount = p.SourceAccount
 		pxml.ContentItem.IsPresetable = "true"
 		pxml.ContentItem.ItemName = p.Name
-		pxml.ContentItem.ContentItemType = p.ContentItemType
 		pxml.ContentItem.ContainerArt = p.ContainerArt
+		pxml.Source = p.SourceConfig
 		px.Presets = append(px.Presets, pxml)
 	}
 
@@ -592,6 +643,7 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 
 	for i := range recents {
 		r := &recents[i]
+
 		if id, err := strconv.Atoi(r.ID); err == nil {
 			if id > maxID {
 				maxID = id
@@ -619,7 +671,12 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 	ds.fileMutex.Lock()
 	defer ds.fileMutex.Unlock()
 
-	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
+	dir := ds.AccountDeviceDir(account, device)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	path := filepath.Join(dir, constants.RecentsFile)
 
 	type RecentsXML struct {
 		XMLName xml.Name               `xml:"recents"`
@@ -730,11 +787,27 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	}
 
 	ix := InfoXML{
-		DeviceID:   info.DeviceID,
-		Name:       info.Name,
-		Type:       devType,
-		ModuleType: moduleType,
-		Components: []ComponentXML{
+		DeviceID:        info.DeviceID,
+		Name:            info.Name,
+		Type:            devType,
+		ModuleType:      moduleType,
+		DiscoveryMethod: info.DiscoveryMethod,
+	}
+
+	if ix.DiscoveryMethod == "" {
+		ix.DiscoveryMethod = "sync_full"
+	}
+
+	for _, comp := range info.Components {
+		ix.Components = append(ix.Components, ComponentXML{
+			ComponentCategory: comp.Category,
+			SoftwareVersion:   comp.SoftwareVersion,
+			SerialNumber:      comp.SerialNumber,
+		})
+	}
+
+	if len(ix.Components) == 0 {
+		ix.Components = []ComponentXML{
 			{
 				ComponentCategory: "SCM",
 				SoftwareVersion:   info.FirmwareVersion,
@@ -744,15 +817,15 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 				ComponentCategory: "PackagedProduct",
 				SerialNumber:      info.ProductSerialNumber,
 			},
+		}
+	}
+
+	ix.NetworkInfo = []NetworkInfoXML{
+		{
+			Type:       "SCM",
+			IPAddress:  info.IPAddress,
+			MacAddress: info.MacAddress,
 		},
-		NetworkInfo: []NetworkInfoXML{
-			{
-				Type:       "SCM",
-				IPAddress:  info.IPAddress,
-				MacAddress: info.MacAddress,
-			},
-		},
-		DiscoveryMethod: info.DiscoveryMethod,
 	}
 
 	data, err := xml.MarshalIndent(ix, "", "    ")
@@ -763,6 +836,51 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	header := []byte(xml.Header)
 
 	return os.WriteFile(path, append(header, data...), 0644)
+}
+
+// SaveAccountInfo saves account-level metadata to the datastore.
+func (ds *DataStore) SaveAccountInfo(accountID string, info *models.ServiceAccountInfo) error {
+	if ds == nil || ds.DataDir == "" || accountID == "" {
+		return nil
+	}
+
+	dir := ds.AccountDir(accountID)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	path := filepath.Join(dir, "account.json")
+
+	data, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+// GetAccountInfo retrieves account-level metadata from the datastore.
+func (ds *DataStore) GetAccountInfo(accountID string) (*models.ServiceAccountInfo, error) {
+	if ds == nil || ds.DataDir == "" || accountID == "" {
+		return &models.ServiceAccountInfo{AccountID: accountID}, nil
+	}
+
+	path := filepath.Join(ds.AccountDir(accountID), "account.json")
+	if !exists(path) {
+		return &models.ServiceAccountInfo{AccountID: accountID}, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var info models.ServiceAccountInfo
+	if err := json.Unmarshal(data, &info); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
 }
 
 // RemoveDevice removes a device and all its data from the specified account.
@@ -800,27 +918,26 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		return nil, fmt.Errorf("malformed sources XML at %s: %w", path, err)
 	}
 
-	// Helper struct for unmarshaling with displayName
-	var sourcesWithDisplayName struct {
-		Sources []struct {
-			DisplayName string `xml:"displayName,attr"`
-		} `xml:"source"`
-	}
-
-	_ = xml.Unmarshal(data, &sourcesWithDisplayName)
-
 	for i := range sourcesWrap.Sources {
 		s := &sourcesWrap.Sources[i]
+
+		// Ensure SourceKey values are prioritized for legacy fields
+		if s.SourceKey.Type != "" {
+			s.SourceKeyType = s.SourceKey.Type
+		}
+
+		if s.SourceKey.Account != "" {
+			s.SourceKeyAccount = s.SourceKey.Account
+		}
+
+		// Ensure Type is populated from SourceKey if missing
+		if s.Type == "" && s.SourceKey.Type != "" {
+			s.Type = s.SourceKey.Type
+		}
+
 		if s.ID == "" {
 			s.ID = strconv.Itoa(100001 + i)
 		}
-
-		if s.DisplayName == "" && i < len(sourcesWithDisplayName.Sources) {
-			s.DisplayName = sourcesWithDisplayName.Sources[i].DisplayName
-		}
-		// Sync legacy fields
-		s.SourceKeyType = s.SourceKey.Type
-		s.SourceKeyAccount = s.SourceKey.Account
 	}
 
 	return sourcesWrap.Sources, nil

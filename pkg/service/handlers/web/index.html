@@ -36,6 +36,9 @@
         <button class="tab-btn" onclick="openTab(event, 'tab-parity')">
             6. Parity & Mirroring
         </button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-account')">
+            7. Local Account
+        </button>
     </div>
 
     <!-- Tab 0: Overview -->
@@ -1214,7 +1217,7 @@
                 id="interaction-content"
                 style="
                             white-space: pre-wrap;
-                            font-family: &quot;Courier New&quot;, Courier, monospace;
+                            font-family: 'Courier New', Courier, monospace;
                             font-size: 0.9em;
                             margin: 0;
                             padding: 10px;
@@ -1432,6 +1435,30 @@
                     ></pre>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Tab 7: Local Account -->
+    <div id="tab-account" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Local Account Details</h2>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label for="account-selector">Account:</label>
+                <select id="account-selector" onchange="fetchAccountDetails(this.value)">
+                    <option value="default">Default</option>
+                </select>
+                <button onclick="fetchAccountDetails(document.getElementById('account-selector').value)">Refresh</button>
+            </div>
+        </div>
+
+        <div id="account-info-container" class="summary-box">
+            <h3>Account Overview</h3>
+            <div id="account-metadata">Loading...</div>
+        </div>
+
+        <div id="account-devices-container">
+            <h3>Connected Devices</h3>
+            <div id="account-devices-list">Select an account to view devices.</div>
         </div>
     </div>
 </div>

@@ -57,6 +57,10 @@
 * [IoT Config Summary](analysis/IOT-CONFIG-SUMMARY.md)
 * [IoT Configuration Analysis](analysis/IOT-CONFIGURATION-ANALYSIS.md)
 
+## Parity Analysis
+* [Parity Improvements](PARITY-IMPROVEMENTS.md)
+* [Parity SoundCork](PARITY-SOUNDCORK.md)
+
 ## Appendix (Other Documents)
 * [API Navigation Reference](API-NAVIGATION-REFERENCE.md)
 * [Claude Instructions](CLAUDE.md)
@@ -81,3 +85,4 @@
 * [Power On Implementation Guide](power-on-implementation-guide.md)
 * [SCMUDC Events Analysis](scmudc-events-analysis.md)
 * [Parity Improvements](PARITY-IMPROVEMENTS.md)
+* [Parity SoundCork](PARITY-SOUNDCORK.md)

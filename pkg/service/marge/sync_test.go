@@ -117,7 +117,12 @@ func TestSyncFromAccountFull(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to get sources: %v", err)
 	}
-	if len(sources) != 1 {
-		t.Errorf("Expected 1 source, got %d", len(sources))
+	// Now we aggregate sources from Account + Preset + Recent.
+	// Account has TUNEIN.
+	// Preset has TUNEIN (same ID, so deduplicated).
+	// Recent has SPOTIFY (new ID, so added).
+	// Total expected: 2
+	if len(sources) != 2 {
+		t.Errorf("Expected 2 sources (aggregated), got %d", len(sources))
 	}
 }

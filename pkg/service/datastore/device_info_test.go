@@ -15,8 +15,8 @@ func TestSaveDeviceInfo_MergesName(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := NewDataStore(tempDir)
-	account := "3230304"
-	device := "A81B6A536A98"
+	account := "1234567"
+	device := "001122334455"
 
 	// 1. Initial save with name
 	info1 := &models.ServiceDeviceInfo{

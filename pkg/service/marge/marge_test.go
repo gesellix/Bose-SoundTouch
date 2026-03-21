@@ -88,7 +88,7 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
-	account := "3230304"
+	account := "1234567"
 	device := "08DF1F0BA325"
 
 	// 1. Setup Device Info with Components
@@ -100,20 +100,20 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 		ProductSerialNumber: "066802942560222AE",
 		FirmwareVersion:     "27.0.6.46330.5043500",
 		IPAddress:           "192.168.178.28",
-	}
-	_ = ds.SaveDeviceInfo(account, device, info)
-
-	// Since SaveDeviceInfo is limited, we'll manually add the SMSC component
-	// because CreateAccountDevice expects it in info.Components
-	info, _ = ds.GetDeviceInfo(account, device)
-	info.Components = []models.ServiceComponent{
-		{
-			Type:            "SMSC",
-			SoftwareVersion: "I2014101420409423",
-			SerialNumber:    "08DF1F0BA32A",
-			Label:           "SMSC",
+		Components: []models.ServiceComponent{
+			{
+				Category:        "SMSC",
+				SoftwareVersion: "I2014101420409423",
+				SerialNumber:    "08DF1F0BA32A",
+			},
+			{
+				Category:        "LIGHTSWITCH",
+				SoftwareVersion: "1.2.3",
+				SerialNumber:    "LS001",
+			},
 		},
 	}
+	_ = ds.SaveDeviceInfo(account, device, info)
 	// We'll mock the CreateAccountDevice call or just rely on the fact that
 	// info.Components will be used if we could save it.
 	// But ds.SaveDeviceInfo doesn't save arbitrary components.
@@ -127,26 +127,27 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	// 2. Setup Sources
 	src := models.ConfiguredSource{
 		ID:          "10863533",
-		DisplayName: "gesellix",
+		DisplayName: "test-user",
 		Type:        "Audio",
-		Secret:      "AQBtotl13...",
+		Secret:      "dummy-token-spotify...",
 		SecretType:  "token_version_3",
-		SourceName:  "gesellix+spotify@gmail.com",
-		Username:    "gesellix",
+		SourceName:  "test-user+spotify@gmail.com",
+		Username:    "test-user",
 	}
 	src.SourceKeyType = "SPOTIFY"
-	src.SourceKeyAccount = "gesellix"
+	src.SourceKeyAccount = "test-user"
 	_ = ds.SaveConfiguredSources(account, device, []models.ConfiguredSource{src})
 
 	// 3. Setup Presets
 	preset := models.ServicePreset{
 		ServiceContentItem: models.ServiceContentItem{
-			ID:       "1",
-			Name:     "Jonas",
+			Name:     "test-playlist",
 			Type:     "tracklisturl",
 			Location: "/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh",
 			Source:   "SPOTIFY",
 		},
+		ID:           "1",
+		ButtonNumber: "1",
 		ContainerArt: "https://i.scdn.co/image/ab67616d00001e025ff75c5d082fc50a3a74ad7b",
 	}
 	_ = ds.SavePresets(account, device, []models.ServicePreset{preset})
@@ -173,8 +174,11 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 
 	// 6. Verify Structure
 	// Root and attributes
-	if !strings.Contains(xmlStr, `<account id="3230304">`) {
-		t.Errorf("Expected <account id=\"3230304\">, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<account id="1234567">`) {
+		t.Errorf("Expected <account id=\"1234567\">, got %s", xmlStr)
+	}
+	if !strings.Contains(xmlStr, `<preferredLanguage>de</preferredLanguage>`) {
+		t.Errorf("Expected <preferredLanguage>de</preferredLanguage>, got %s", xmlStr)
 	}
 
 	// Device structure
@@ -191,15 +195,29 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 		t.Errorf("Expected <updatedOn> under device, got %s", xmlStr)
 	}
 
+	// Preset buttonNumber
+	if !strings.Contains(xmlStr, `<preset buttonNumber="1">`) {
+		t.Errorf("Expected <preset buttonNumber=\"1\">, got %s", xmlStr)
+	}
+
 	// AttachedProduct and Components
 	if !strings.Contains(xmlStr, `<attachedProduct product_code="SoundTouch 20">`) {
 		t.Errorf("Expected attachedProduct with product_code, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<productlabel>SoundTouch 20</productlabel>`) {
-		t.Errorf("Expected productlabel SoundTouch 20, got %s", xmlStr)
+		t.Errorf("Expected productlabel, got %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, `<serialnumber>066802942560222AE</serialnumber>`) {
-		t.Errorf("Expected <serialnumber>066802942560222AE</serialnumber> under attachedProduct, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<component category="SMSC">`) && !strings.Contains(xmlStr, `category="SMSC"`) {
+		t.Errorf("Expected component with category SMSC, got %s", xmlStr)
+	}
+	if !strings.Contains(xmlStr, `<component category="LIGHTSWITCH">`) && !strings.Contains(xmlStr, `category="LIGHTSWITCH"`) {
+		t.Errorf("Expected component with category LIGHTSWITCH, got %s", xmlStr)
+	}
+	if !strings.Contains(xmlStr, `<firmware-version>1.2.3</firmware-version>`) {
+		t.Errorf("Expected firmware-version 1.2.3, got %s", xmlStr)
+	}
+	if !strings.Contains(xmlStr, `<serialnumber>08DF1F0BA325</serialnumber>`) {
+		t.Errorf("Expected <serialnumber>08DF1F0BA325</serialnumber> under attachedProduct, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<updatedOn>`) {
 		t.Errorf("Expected <updatedOn> under attachedProduct, got %s", xmlStr)
@@ -225,10 +243,13 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	}
 
 	// Global Sources
-	if !strings.Contains(xmlStr, `<source id="10863533" type="Audio">`) {
-		t.Errorf("Expected source tag with attributes, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<source id="10863533" type="Audio" displayName="test-user">`) {
+		t.Errorf("Expected source tag with displayName attribute, got %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, `<credential type="token_version_3">AQBtotl13...</credential>`) {
+	if !strings.Contains(xmlStr, `<name>test-user</name>`) {
+		t.Errorf("Expected <name>test-user</name> under source, got %s", xmlStr)
+	}
+	if !strings.Contains(xmlStr, `<credential type="token_version_3">dummy-token-spotify...</credential>`) {
 		t.Errorf("Expected credential tag, got %s", xmlStr)
 	}
 
@@ -304,11 +325,11 @@ func TestRecentsXML_EmptyIDFix(t *testing.T) {
 		t.Fatalf("RecentsToXML failed: %v", err)
 	}
 
-	if strings.Contains(string(xmlData), `recent id=""`) {
+	if strings.Contains(string(xmlData), ` id=""`) {
 		t.Errorf("XML should not contain empty recent ID: %s", string(xmlData))
 	}
 
-	if !strings.Contains(string(xmlData), `recent id="1"`) {
+	if !strings.Contains(string(xmlData), `id="1"`) {
 		t.Errorf("XML should contain fixed numeric ID: %s", string(xmlData))
 	}
 }
@@ -331,11 +352,14 @@ func TestRecentsToXML_SourceIncluded(t *testing.T) {
 	recents := []models.ServiceRecent{
 		{
 			ServiceContentItem: models.ServiceContentItem{
-				ID:       "1",
-				Name:     "Test Track",
-				SourceID: "100001",
-				Type:     "tracklisturl",
-				Location: "/test",
+				ID:              "1",
+				Name:            "Test Track",
+				Source:          "SPOTIFY",
+				SourceAccount:   "test-user",
+				SourceID:        "100001",
+				Type:            "tracklisturl",
+				ContentItemType: "tracklisturl",
+				Location:        "/test",
 			},
 			DeviceID: device,
 			UtcTime:  "1708896000",
@@ -350,6 +374,10 @@ func TestRecentsToXML_SourceIncluded(t *testing.T) {
 			DisplayName: "Spotify",
 			SourceName:  "Spotify",
 			Username:    "testuser",
+			SourceKey: struct {
+				Type    string `xml:"type,attr"`
+				Account string `xml:"account,attr"`
+			}{Type: "SPOTIFY", Account: "test-user"},
 		},
 	}
 	_ = ds.SaveConfiguredSources(account, device, sources)
@@ -361,14 +389,20 @@ func TestRecentsToXML_SourceIncluded(t *testing.T) {
 	}
 
 	xmlStr := string(xmlData)
-	if !strings.Contains(xmlStr, "<source") {
-		t.Errorf("XML should contain <source> element: %s", xmlStr)
+	if !strings.Contains(xmlStr, "id=\"1\"") {
+		t.Errorf("XML should contain id=\"1\" for recent: %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, "<sourcename>Spotify</sourcename>") {
-		t.Errorf("XML should contain <sourcename>Spotify</sourcename>: %s", xmlStr)
+	if !strings.Contains(xmlStr, "source=\"SPOTIFY\"") {
+		t.Errorf("XML should contain source=\"SPOTIFY\" attribute: %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, "<username>testuser</username>") {
-		t.Errorf("XML should contain <username>testuser</username>: %s", xmlStr)
+	if !strings.Contains(xmlStr, "type=\"tracklisturl\"") {
+		t.Errorf("XML should contain type=\"tracklisturl\" attribute: %s", xmlStr)
+	}
+	if !strings.Contains(xmlStr, "location=\"/test\"") {
+		t.Errorf("XML should contain location=\"/test\" attribute: %s", xmlStr)
+	}
+	if !strings.Contains(xmlStr, "displayName=\"Spotify\"") {
+		t.Errorf("XML should contain displayName=\"Spotify\" in source attribute: %s", xmlStr)
 	}
 }
 
@@ -390,12 +424,15 @@ func TestPresetsToXML_SourceIncluded(t *testing.T) {
 	presets := []models.ServicePreset{
 		{
 			ServiceContentItem: models.ServiceContentItem{
-				ID:       "1",
-				Name:     "Test Preset",
-				SourceID: "100001",
-				Type:     "tracklisturl",
-				Location: "/test",
+				ID:            "1",
+				Name:          "Test Preset",
+				SourceID:      "100001",
+				Source:        "SPOTIFY",
+				SourceAccount: "testuser",
+				Type:          "tracklisturl",
+				Location:      "/test",
 			},
+			ID: "1",
 		},
 	}
 	_ = ds.SavePresets(account, device, presets)
@@ -405,10 +442,10 @@ func TestPresetsToXML_SourceIncluded(t *testing.T) {
 		{
 			ID:          "100001",
 			DisplayName: "Spotify",
-			SourceName:  "Spotify",
-			Username:    "testuser",
 		},
 	}
+	sources[0].SourceKey.Type = "SPOTIFY"
+	sources[0].SourceKey.Account = "testuser"
 	_ = ds.SaveConfiguredSources(account, device, sources)
 
 	// Fetch XML
@@ -421,8 +458,8 @@ func TestPresetsToXML_SourceIncluded(t *testing.T) {
 	if !strings.Contains(xmlStr, "<source") {
 		t.Errorf("XML should contain <source> element: %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, "<sourcename>Spotify</sourcename>") {
-		t.Errorf("XML should contain <sourcename>Spotify</sourcename>: %s", xmlStr)
+	if !strings.Contains(xmlStr, "displayName=\"Spotify\"") {
+		t.Errorf("XML should contain displayName=\"Spotify\" attribute: %s", xmlStr)
 	}
 }
 
@@ -431,6 +468,7 @@ func TestGetConfiguredSourceXML_Escaping(t *testing.T) {
 		ID:          "101&202",
 		DisplayName: "Test & Source",
 		Secret:      "key&value",
+		SecretType:  "token",
 	}
 	src.SourceKeyAccount = "user&name"
 
@@ -438,36 +476,23 @@ func TestGetConfiguredSourceXML_Escaping(t *testing.T) {
 	if !strings.Contains(xmlData, "id=\"101&amp;202\"") {
 		t.Errorf("ID not escaped in attribute: %s", xmlData)
 	}
-	if strings.Contains(xmlData, "<sourceid>101&amp;202</sourceid>") {
-		t.Errorf("ID should not be escaped in sourceid tag inside source tag anymore: %s", xmlData)
+	if !strings.Contains(xmlData, "displayName=\"Test &amp; Source\"") {
+		t.Errorf("DisplayName not escaped in attribute: %s", xmlData)
 	}
-	if !strings.Contains(xmlData, "<sourcename>Test &amp; Source</sourcename>") {
-		t.Errorf("DisplayName not escaped: %s", xmlData)
-	}
-	if !strings.Contains(xmlData, ">key&amp;value</credential>") {
-		t.Errorf("Secret not escaped: %s", xmlData)
+	if !strings.Contains(xmlData, "secret=\"key&amp;value\"") {
+		t.Errorf("Secret not escaped in attribute: %s", xmlData)
 	}
 }
 
 func TestGetConfiguredSourceXML_Parity(t *testing.T) {
-	t.Run("Other source should have empty sourcename", func(t *testing.T) {
+	t.Run("Other source should have displayName in attribute", func(t *testing.T) {
 		src := models.ConfiguredSource{
 			ID:          "14774275",
 			DisplayName: "Other",
 		}
 		xmlData := GetConfiguredSourceXML(src)
-		if !strings.Contains(xmlData, "<sourcename></sourcename>") && !strings.Contains(xmlData, "<sourcename/>") {
-			t.Errorf("Expected empty sourcename for 'Other', got: %s", xmlData)
-		}
-	})
-
-	t.Run("sourceSettings should be present", func(t *testing.T) {
-		src := models.ConfiguredSource{
-			ID: "14774275",
-		}
-		xmlData := GetConfiguredSourceXML(src)
-		if !strings.Contains(xmlData, "<sourceSettings>") && !strings.Contains(xmlData, "<sourceSettings/>") {
-			t.Errorf("Expected sourceSettings, got: %s", xmlData)
+		if !strings.Contains(xmlData, "displayName=\"Other\"") {
+			t.Errorf("Expected displayName=\"Other\", got: %s", xmlData)
 		}
 	})
 }
@@ -504,10 +529,10 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 	// 2. Add an initial recent
 	sourceXML := []byte(`
 <recent>
-    <name>Initial Station</name>
+    <contentItem source="TUNEIN" type="stationurl" location="station-1" sourceAccount="test-user">
+        <itemName>Initial Station</itemName>
+    </contentItem>
     <sourceid>101</sourceid>
-    <location>station-1</location>
-    <contentItemType>station</contentItemType>
 </recent>`)
 
 	_, err = AddRecent(ds, account, device, sourceXML)
@@ -535,16 +560,14 @@ func TestAddRecent_TimestampPreservation(t *testing.T) {
 	}
 
 	recents, _ = ds.GetRecents(account, device)
+	// AddRecent should have reused the existing one since location/source are the same
 	if len(recents) != 1 {
 		t.Errorf("Expected still 1 recent, got %d", len(recents))
 	}
 
-	// Verify that sourceid is present in recent response and is a sibling to source tag
-	if !strings.Contains(string(respXML), "<sourceid>101</sourceid>") {
-		t.Errorf("Expected sourceid in recent response: %s", string(respXML))
-	}
-	if strings.Contains(string(respXML), "<source id=\"101\" type=\"Audio\"><createdOn>2012-09-19T12:43:00.000+00:00</createdOn><credential type=\"token\">key&amp;value</credential><name>test-user</name><sourceid>101</sourceid>") {
-		t.Errorf("sourceid should not be inside source tag: %s", string(respXML))
+	// Verify that source id is present in recent response
+	if !strings.Contains(string(respXML), "id=\"101\"") {
+		t.Errorf("Expected source id in recent response: %s", string(respXML))
 	}
 }
 
@@ -604,15 +627,15 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	account := "3230304"
-	device := "A81B6A536A98"
+	account := "1234567"
+	device := "001122334455"
 
-	// Mimic the backup structure: accounts/3230304/devices/A81B6A536A98/DeviceInfo.xml
+	// Mimic the backup structure: accounts/1234567/devices/001122334455/DeviceInfo.xml
 	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", device)
 	_ = os.MkdirAll(deviceDir, 0755)
 
 	deviceInfoXML := `<?xml version="1.0" encoding="UTF-8"?>
-<info deviceID="A81B6A536A98">
+<info deviceID="001122334455">
     <name>Sound Machinechen</name>
     <type>SoundTouch</type>
     <moduleType>10 sm2</moduleType>
@@ -625,7 +648,7 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <ipAddress>192.168.178.35</ipAddress>
-        <macAddress>A81B6A536A98</macAddress>
+        <macAddress>001122334455</macAddress>
     </networkInfo>
     <discoveryMethod>sync_full</discoveryMethod>
 </info>`
@@ -652,7 +675,7 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	presetsXML := `<?xml version="1.0" encoding="UTF-8"?>
 <presets>
     <preset id="1" createdOn="1719128436" updatedOn="1728740382">
-        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh" itemName="Jonas" isPresetable="true" contentItemType="tracklisturl">
+        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh" itemName="test-playlist" isPresetable="true" contentItemType="tracklisturl">
             <containerArt>https://i.scdn.co/image/art</containerArt>
         </ContentItem>
     </preset>
@@ -670,7 +693,7 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	}
 
 	// 3. Test with empty name
-	_ = os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(`<?xml version="1.0" encoding="UTF-8"?><info deviceID="A81B6A536A98"><name></name></info>`), 0644)
+	_ = os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(`<?xml version="1.0" encoding="UTF-8"?><info deviceID="001122334455"><name></name></info>`), 0644)
 	fullXML2, _ := AccountFullToXML(ds, account)
 	if !strings.Contains(string(fullXML2), `<name/>`) {
 		t.Errorf("Expected <name/> for empty name, got %s", string(fullXML2))

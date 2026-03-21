@@ -23,10 +23,10 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Mock device info response (real-world example)
-	deviceInfoXML := `<info deviceID="A81B6A536A98">
+	deviceInfoXML := `<info deviceID="001122334455">
 <name>Sound Machinechen</name>
 <type>SoundTouch 10</type>
-<margeAccountUUID>3230304</margeAccountUUID>
+<margeAccountUUID>1234567</margeAccountUUID>
 <components>
 <component>
 <componentCategory>SCM</componentCategory>
@@ -41,7 +41,7 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 </components>
 <margeURL>https://streaming.bose.com</margeURL>
 <networkInfo type="SCM">
-<macAddress>A81B6A536A98</macAddress>
+<macAddress>001122334455</macAddress>
 <ipAddress>192.168.1.100</ipAddress>
 </networkInfo>
 <networkInfo type="SMSC">
@@ -98,8 +98,8 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 	srv.handleDiscoveredDevice(discoveredDevice)
 
 	// 3. Verify the device was saved with MAC address as deviceID
-	expectedDeviceID := "A81B6A536A98" // MAC address from /info
-	expectedAccountID := "3230304"     // From margeAccountUUID
+	expectedDeviceID := "001122334455" // MAC address from /info
+	expectedAccountID := "1234567"     // From margeAccountUUID
 
 	deviceInfo, err := ds.GetDeviceInfo(expectedAccountID, expectedDeviceID)
 	if err != nil {
@@ -135,8 +135,8 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 		t.Errorf("Expected productCode 'SoundTouch 10 sm2', got '%s'", deviceInfo.ProductCode)
 	}
 
-	if deviceInfo.MacAddress != "A81B6A536A98" {
-		t.Errorf("Expected macAddress 'A81B6A536A98', got '%s'", deviceInfo.MacAddress)
+	if deviceInfo.MacAddress != "001122334455" {
+		t.Errorf("Expected macAddress '001122334455', got '%s'", deviceInfo.MacAddress)
 	}
 
 	if deviceInfo.DeviceSerialNumber != "I6332527703739342000020" {
@@ -193,7 +193,7 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 	// Verify MAC address in networkInfo
 	macFound := false
 	for _, net := range savedXML.NetworkInfo {
-		if net.Type == "SCM" && net.MacAddress == "A81B6A536A98" {
+		if net.Type == "SCM" && net.MacAddress == "001122334455" {
 			macFound = true
 			break
 		}
@@ -212,14 +212,14 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 	}
 
 	// 7. Test MAC address resolution
-	resolvedDir := ds.AccountDeviceDir(expectedAccountID, "A81B6A536A98") // Use MAC as device lookup
+	resolvedDir := ds.AccountDeviceDir(expectedAccountID, "001122334455") // Use MAC as device lookup
 	expectedResolvedDir := ds.AccountDeviceDir(expectedAccountID, expectedDeviceID)
 
 	if resolvedDir != expectedResolvedDir {
 		t.Errorf("MAC resolution failed. Expected '%s', got '%s'", expectedResolvedDir, resolvedDir)
 	} else {
 		t.Logf("\n5. MAC address resolution verified:")
-		t.Logf("   MAC 'A81B6A536A98' resolves to correct device directory")
+		t.Logf("   MAC '001122334455' resolves to correct device directory")
 	}
 
 	t.Logf("\n✅ MAC-based device discovery integration test passed!")
@@ -241,7 +241,7 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	accountID := "3230304"
+	accountID := "1234567"
 
 	// 1. Create an existing device entry using IP address (old style)
 	oldDeviceID := "192.168.1.100"
@@ -281,10 +281,10 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 	t.Logf("  Test presets saved: %d", len(testPresets))
 
 	// 2. Mock the same device now providing proper /info response
-	deviceInfoXML := `<info deviceID="A81B6A536A98">
+	deviceInfoXML := `<info deviceID="001122334455">
 <name>Sound Machinechen</name>
 <type>SoundTouch 10</type>
-<margeAccountUUID>3230304</margeAccountUUID>
+<margeAccountUUID>1234567</margeAccountUUID>
 <components>
 <component>
 <componentCategory>SCM</componentCategory>
@@ -293,7 +293,7 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 </component>
 </components>
 <networkInfo type="SCM">
-<macAddress>A81B6A536A98</macAddress>
+<macAddress>001122334455</macAddress>
 <ipAddress>192.168.1.100</ipAddress>
 </networkInfo>
 <moduleType>sm2</moduleType>
@@ -326,7 +326,7 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 	srv.handleDiscoveredDevice(discoveredDevice)
 
 	// 5. Verify new device exists with MAC as deviceID
-	newDeviceID := "A81B6A536A98"
+	newDeviceID := "001122334455"
 	newInfo, err := ds.GetDeviceInfo(accountID, newDeviceID)
 	if err != nil {
 		t.Fatalf("Failed to get migrated device info: %v", err)

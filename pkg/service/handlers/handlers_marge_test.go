@@ -722,7 +722,7 @@ func TestMargePowerOn(t *testing.T) {
 	})
 
 	t.Run("FullBody", func(t *testing.T) {
-		payload := `<?xml version="1.0" encoding="UTF-8" ?><device-data><device id="A81B6A536A98"><serialnumber>I6332527703739342000020</serialnumber><firmware-version>27.0.6.46330</firmware-version><product product_code="SoundTouch 10 sm2" type="5"><serialnumber>069231P63364828AE</serialnumber></product></device><diagnostic-data><device-landscape><rssi>Excellent</rssi><gateway-ip-address>192.168.1.1</gateway-ip-address><macaddresses><macaddress>A81B6A536A98</macaddress></macaddresses><ip-address>192.168.1.100</ip-address><network-connection-type>Wireless</network-connection-type></device-landscape></diagnostic-data></device-data>`
+		payload := `<?xml version="1.0" encoding="UTF-8" ?><device-data><device id="001122334455"><serialnumber>I6332527703739342000020</serialnumber><firmware-version>27.0.6.46330</firmware-version><product product_code="SoundTouch 10 sm2" type="5"><serialnumber>069231P63364828AE</serialnumber></product></device><diagnostic-data><device-landscape><rssi>Excellent</rssi><gateway-ip-address>192.168.1.1</gateway-ip-address><macaddresses><macaddress>001122334455</macaddress></macaddresses><ip-address>192.168.1.100</ip-address><network-connection-type>Wireless</network-connection-type></device-landscape></diagnostic-data></device-data>`
 		res, err := http.Post(ts.URL+"/marge/streaming/support/power_on", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(payload))
 		if err != nil {
 			t.Fatal(err)
@@ -745,13 +745,13 @@ func TestMargePowerOn(t *testing.T) {
 		ts2 := httptest.NewServer(r)
 		defer ts2.Close()
 
-		deviceID := "A81B6A536A98"
+		deviceID := "001122334455"
 		serialNumber := "I6332527703739342000020"
 		firmware := "27.0.6.46330"
 		productCode := "SoundTouch 10 sm2"
 		productSerial := "069231P63364828AE"
 		ipAddress := "192.168.1.100"
-		macAddress := "A81B6A536A98"
+		macAddress := "001122334455"
 
 		payload := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" ?>
 		<device-data>
@@ -943,8 +943,8 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 	})
 
 	t.Run("AddRecent_Reproduction", func(t *testing.T) {
-		account := "3230304"
-		device := "A81B6A536A98"
+		account := "1234567"
+		device := "001122334455"
 
 		// Setup sources for this device
 		deviceDir := ds.AccountDeviceDir(account, device)

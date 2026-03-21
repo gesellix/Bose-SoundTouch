@@ -743,14 +743,23 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		// All other management endpoints require Basic Auth.
 		r.Group(func(r chi.Router) {
 			r.Use(server.BasicAuthMgmt())
-			r.Get("/accounts/{accountId}/speakers", server.HandleMgmtListSpeakers)
+
+			r.Route("/accounts", func(r chi.Router) {
+				r.Get("/", server.HandleMgmtListAccounts)
+				r.Get("/{accountId}", server.HandleMgmtAccountDetails)
+				r.Get("/{accountId}/speakers", server.HandleMgmtListSpeakers)
+			})
+
+			r.Route("/spotify", func(r chi.Router) {
+				r.Post("/init", server.HandleMgmtSpotifyInit)
+				r.Post("/confirm", server.HandleMgmtSpotifyConfirm)
+				r.Get("/accounts", server.HandleMgmtSpotifyAccounts)
+				r.Get("/token", server.HandleMgmtSpotifyToken)
+				r.Post("/entity", server.HandleMgmtSpotifyEntity)
+				r.Post("/prime", server.HandleMgmtPrimeDevice)
+			})
+
 			r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)
-			r.Post("/spotify/init", server.HandleMgmtSpotifyInit)
-			r.Post("/spotify/confirm", server.HandleMgmtSpotifyConfirm)
-			r.Get("/spotify/accounts", server.HandleMgmtSpotifyAccounts)
-			r.Get("/spotify/token", server.HandleMgmtSpotifyToken)
-			r.Post("/spotify/entity", server.HandleMgmtSpotifyEntity)
-			r.Post("/spotify/prime", server.HandleMgmtPrimeDevice)
 		})
 	})
 

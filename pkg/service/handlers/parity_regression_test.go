@@ -20,8 +20,8 @@ func TestMargeParityRegressions(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := datastore.NewDataStore(tempDir)
-	account := "3230304"
-	deviceID := "A81B6A536A98"
+	account := "1234567"
+	deviceID := "001122334455"
 
 	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", deviceID)
 	os.MkdirAll(deviceDir, 0755)
@@ -44,7 +44,7 @@ func TestMargeParityRegressions(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	t.Run("POST recent with Other source - sourcename should be empty", func(t *testing.T) {
+	t.Run("POST recent with Other source - displayName should be 'Other' in attribute", func(t *testing.T) {
 		payload := `
 <recent>
   <contentItemType>stationurl</contentItemType>
@@ -68,23 +68,18 @@ func TestMargeParityRegressions(t *testing.T) {
 			t.Errorf("Response missing standalone=\"yes\"")
 		}
 
-		// Check for empty sourcename when it's "Other"
-		if !strings.Contains(bodyStr, "<sourcename></sourcename>") && !strings.Contains(bodyStr, "<sourcename/>") {
-			t.Errorf("Expected empty sourcename for 'Other' source, but got something else or missing. Body: %s", bodyStr)
+		// Check for displayName when it's "Other"
+		if !strings.Contains(bodyStr, `displayName="Other"`) {
+			t.Errorf("Expected displayName=\"Other\", but got: %s", bodyStr)
 		}
 
 		// Check for date format (should have .000+00:00)
 		if !strings.Contains(bodyStr, ".000+00:00") {
 			t.Errorf("Response date format mismatch, expected .000+00:00. Body: %s", bodyStr)
 		}
-
-		// Check for sourceSettings presence
-		if !strings.Contains(bodyStr, "<sourceSettings>") && !strings.Contains(bodyStr, "<sourceSettings/>") {
-			t.Errorf("Response missing sourceSettings element. Body: %s", bodyStr)
-		}
 	})
 
-	t.Run("POST recent with named source - sourcename should be preserved", func(t *testing.T) {
+	t.Run("POST recent with named source - displayName should be preserved in attribute", func(t *testing.T) {
 		payload := `
 <recent>
   <contentItemType>track</contentItemType>
@@ -103,8 +98,8 @@ func TestMargeParityRegressions(t *testing.T) {
 		body, _ := io.ReadAll(res.Body)
 		bodyStr := string(body)
 
-		if !strings.Contains(bodyStr, "<sourcename>My Spotify</sourcename>") {
-			t.Errorf("Expected sourcename 'My Spotify', body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `displayName="My Spotify"`) {
+			t.Errorf("Expected displayName=\"My Spotify\", body: %s", bodyStr)
 		}
 	})
 }
