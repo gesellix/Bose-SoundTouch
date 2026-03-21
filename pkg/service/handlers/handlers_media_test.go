@@ -79,8 +79,8 @@ func TestStaticMedia(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	// Use a known file from static/media
-	res, err := http.Get(ts.URL + "/media/SiriusXM_Logo_Color.svg")
+	// Use a known file from static/media in a subdirectory
+	res, err := http.Get(ts.URL + "/media/bmx-icons/siriusxm-everest/SiriusXM_Logo_Color.svg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,5 +141,41 @@ func TestStaticWeb(t *testing.T) {
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Diff JS: Expected status OK, got %v", res.Status)
+	}
+
+	// 4. Test Favicon
+	res, err = http.Get(ts.URL + "/web/img/favicon-braille.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Favicon: Expected status OK, got %v", res.Status)
+	}
+	if !strings.Contains(res.Header.Get("Content-Type"), "image/svg+xml") {
+		t.Errorf("Favicon: Expected image/svg+xml content type, got %s", res.Header.Get("Content-Type"))
+	}
+
+	// 5. Test old Favicon path (should be 404)
+	res, err = http.Get(ts.URL + "/media/favicon-braille.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("Old Favicon: Expected status NotFound, got %v", res.Status)
+	}
+
+	// 6. Test old Favicon path in web/ (should be 404)
+	res, err = http.Get(ts.URL + "/web/favicon-braille.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("Web Root Favicon: Expected status NotFound, got %v", res.Status)
 	}
 }

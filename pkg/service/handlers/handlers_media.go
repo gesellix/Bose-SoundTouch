@@ -11,7 +11,7 @@ import (
 //go:embed web/index.html
 var indexHTML []byte
 
-//go:embed web/css/* web/js/*
+//go:embed web/css/* web/js/* web/img/favicon-braille* web/img/favicon*
 var webFS embed.FS
 
 //go:embed static/media/*
@@ -50,7 +50,6 @@ func (s *Server) HandleMedia() http.HandlerFunc {
 	subFS, _ := fs.Sub(mediaFS, "static/media")
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		fs := http.StripPrefix("/media/", http.FileServer(http.FS(subFS)))
-		fs.ServeHTTP(w, r)
+		http.StripPrefix("/media", http.FileServer(http.FS(subFS))).ServeHTTP(w, r)
 	}
 }

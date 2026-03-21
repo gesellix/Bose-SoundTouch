@@ -60,8 +60,8 @@ func TestHandleBMXRegistry_DNSDependent(t *testing.T) {
 					if strings.HasPrefix(iconURL, "{") {
 						t.Errorf("Icon %s still has placeholder: %s", k, iconURL)
 					}
-					if !strings.HasPrefix(iconURL, localURL+"/media") {
-						t.Errorf("Icon %s should point to local media server, got %s", k, iconURL)
+					if !strings.HasPrefix(iconURL, localURL+"/media/bmx-icons/tunein") {
+						t.Errorf("Icon %s should point to local media server bmx-icons subdirectory, got %s", k, iconURL)
 					}
 				}
 			}

@@ -23,11 +23,11 @@
                 "color": "#000000",
                 "description": "With TuneIn on SoundTouch, listen to more than 100,000 stations and the hottest podcasts, plus live games, concerts and shows from around the world. However, you cannot access your Favorites and Premium content on your existing TuneIn account at this time.",
                 "icons": {
-                    "defaultAlbumArt": "{MEDIA_SERVER}/tunein-default-album-art.png",
-                    "largeSvg": "{MEDIA_SERVER}/tunein-smallSvg.svg",
-                    "monochromePng": "{MEDIA_SERVER}/tunein-monochromePng.png",
-                    "monochromeSvg": "{MEDIA_SERVER}/tunein-monochromeSvg.svg",
-                    "smallSvg": "{MEDIA_SERVER}/tunein-smallSvg.svg"
+                    "defaultAlbumArt": "{MEDIA_SERVER}/bmx-icons/tunein/default-album-art.png",
+                    "largeSvg": "{MEDIA_SERVER}/bmx-icons/tunein/smallSvg.svg",
+                    "monochromePng": "{MEDIA_SERVER}/bmx-icons/tunein/monochromePng.png",
+                    "monochromeSvg": "{MEDIA_SERVER}/bmx-icons/tunein/monochromeSvg.svg",
+                    "smallSvg": "{MEDIA_SERVER}/bmx-icons/tunein/smallSvg.svg"
                 },
                 "name": "TuneIn"
             },
@@ -61,10 +61,10 @@
                 "color": "#000000",
                 "description": "Custom radio stations with BMX.",
                 "icons": {
-                    "largeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
-                    "monochromePng": "{MEDIA_SERVER}/orion-monochrome_v2.png",
-                    "monochromeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
-                    "smallSvg": "{MEDIA_SERVER}/orion-monochrome.svg"
+                    "largeSvg": "{MEDIA_SERVER}/bmx-icons/orion/monochrome.svg",
+                    "monochromePng": "{MEDIA_SERVER}/bmx-icons/orion/monochrome_v2.png",
+                    "monochromeSvg": "{MEDIA_SERVER}/bmx-icons/orion/monochrome.svg",
+                    "smallSvg": "{MEDIA_SERVER}/bmx-icons/orion/monochrome.svg"
                 },
                 "name": "Custom Stations"
             },
@@ -106,10 +106,10 @@
                 "color": "#004b85",
                 "description": "Over 200 channels including commercial-free music, plus play-by-play and sports talk, world class news, comedy, exclusive entertainment and more.",
                 "icons": {
-                    "largeSvg": "{MEDIA_SERVER}/SiriusXM_Logo_Color.svg",
-                    "monochromePng": "{MEDIA_SERVER}/siriusxm-monochromePng.png",
-                    "monochromeSvg": "{MEDIA_SERVER}/SiriusXM_Logo_Mono.svg",
-                    "smallSvg": "{MEDIA_SERVER}/SiriusXM_Logo_Color.svg"
+                    "largeSvg": "{MEDIA_SERVER}/bmx-icons/siriusxm-everest/SiriusXM_Logo_Color.svg",
+                    "monochromePng": "{MEDIA_SERVER}/bmx-icons/siriusxm-everest/monochromePng.png",
+                    "monochromeSvg": "{MEDIA_SERVER}/bmx-icons/siriusxm-everest/SiriusXM_Logo_Mono.svg",
+                    "smallSvg": "{MEDIA_SERVER}/bmx-icons/siriusxm-everest/SiriusXM_Logo_Color.svg"
                 },
                 "name": "SiriusXM",
                 "shortDescription": "Over 200 channels including commercial-free music, plus play-by-play and sports talk, world class news, comedy, exclusive entertainment and more."
@@ -188,10 +188,10 @@
                 "color": "#000000",
                 "description": "RadioBrowser is an open source internet radio directory. It provides access to thousands of internet radio stations worldwide. RadioBrowser is community driven and relies on user contributions to keep the station database up to date.",
                 "icons": {
-                    "largeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
-                    "monochromePng": "{MEDIA_SERVER}/orion-monochrome_v2.png",
-                    "monochromeSvg": "{MEDIA_SERVER}/orion-monochrome.svg",
-                    "smallSvg": "{MEDIA_SERVER}/orion-monochrome.svg"
+                    "largeSvg": "{MEDIA_SERVER}/bmx-icons/orion/monochrome.svg",
+                    "monochromePng": "{MEDIA_SERVER}/bmx-icons/orion/monochrome_v2.png",
+                    "monochromeSvg": "{MEDIA_SERVER}/bmx-icons/orion/monochrome.svg",
+                    "smallSvg": "{MEDIA_SERVER}/bmx-icons/orion/monochrome.svg"
                 },
                 "name": "RadioBrowser"
             },

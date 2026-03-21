@@ -59,7 +59,7 @@ func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
 <head>
     <meta charset="UTF-8">
     <title>%s - Bose SoundTouch Toolkit Docs</title>
-    <link rel="icon" href="/media/favicon-braille.svg" type="image/svg+xml">
+   	<link rel="icon" href="/web/img/favicon-braille.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/web/css/style.css">
     <style>
         body { margin: 0; padding: 0; display: flex; font-family: sans-serif; height: 100vh; overflow: hidden; }

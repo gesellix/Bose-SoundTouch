@@ -165,3 +165,10 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
     font-size: 0.8em;
     font-weight: bold;
 }
+
+.logo {
+    height: 40px;
+    vertical-align: middle;
+    margin-right: 10px;
+    margin-top: -5px;
+}
