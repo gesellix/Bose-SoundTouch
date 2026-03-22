@@ -111,6 +111,7 @@ func GetProviderName(providerID string) string {
 			return p.Name
 		}
 	}
+
 	return providerID
 }
 

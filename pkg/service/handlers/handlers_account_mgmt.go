@@ -125,10 +125,12 @@ func (s *Server) HandleMgmtUpdateAccountProviderSetting(w http.ResponseWriter, r
 
 	// 2. Update the specific setting
 	found := false
+
 	for i, setting := range accountInfo.ProviderSettings {
 		if setting.ProviderID == req.ProviderID && setting.KeyName == req.Key {
 			accountInfo.ProviderSettings[i].Value = req.Value
 			found = true
+
 			break
 		}
 	}
