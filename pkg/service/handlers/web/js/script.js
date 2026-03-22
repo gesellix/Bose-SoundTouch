@@ -506,13 +506,149 @@ async function fetchAccountDetails(accountId) {
 
         // Render Metadata
         if (metadataEl) {
+            const warningNotice = data.account.is_placeholder ?
+                `<div style="background: #fff3cd; color: #856404; padding: 10px; border: 1px solid #ffeeba; border-radius: 4px; margin-bottom: 10px; font-size: 0.85em;">
+                    <strong>Notice:</strong> Account data (account.json) was not found in the expected location for this account ID.
+                </div>` : "";
+
             metadataEl.innerHTML = `
+                ${warningNotice}
                 <table style="width: 100%; font-size: 0.9em;">
                     <tr><td style="padding: 4px"><strong>Account ID:</strong></td><td style="padding: 4px">${data.account.account_id}</td></tr>
-                    <tr><td style="padding: 4px"><strong>Language:</strong></td><td style="padding: 4px">${data.account.preferred_language || "Not set"}</td></tr>
-                    <tr><td style="padding: 4px"><strong>Provider Settings:</strong></td><td style="padding: 4px">${data.account.provider_settings ? "Configured" : "None"}</td></tr>
+                    <tr><td style="padding: 4px"><strong>Language:</strong></td><td style="padding: 4px">
+                        <select id="account-language-select" style="font-size: 0.9em; padding: 2px;">
+                            <option value="en" ${data.account.preferred_language === "en" || !data.account.preferred_language ? "selected" : ""}>en</option>
+                            <option value="de" ${data.account.preferred_language === "de" ? "selected" : ""}>de</option>
+                        </select>
+                        <span id="language-update-status" style="margin-left: 8px; font-size: 0.8em; display: none;">Saving...</span>
+                    </td></tr>
+                    <tr><td style="padding: 4px"><strong>Provider Settings:</strong></td><td style="padding: 4px">
+                        ${data.account.provider_settings && data.account.provider_settings.length > 0 ?
+                            (() => {
+                                const grouped = data.account.provider_settings.reduce((acc, s) => {
+                                    const pName = s.provider_name || s.provider_id;
+                                    if (!acc[pName]) acc[pName] = [];
+                                    acc[pName].push(s);
+                                    return acc;
+                                }, {});
+                                return Object.entries(grouped).map(([pName, settings]) => `
+                                    <div style="margin-bottom: 8px;">
+                                        <strong>${pName}</strong>
+                                        <ul style="margin: 2px 0 0 0; padding-left: 20px; list-style-type: disc;">
+                                            ${settings.map(s => {
+                                                if ((s.provider_name === "SPOTIFY" || s.provider_id === "15") && s.key_name === "STREAMING_QUALITY") {
+                                                    return `
+                                                        <li style="margin-bottom: 4px;">
+                                                            Music Streaming Quality:
+                                                            <select class="provider-setting-select"
+                                                                    data-account-id="${data.account.account_id}"
+                                                                    data-provider-id="${s.provider_id}"
+                                                                    data-key="${s.key_name}"
+                                                                    style="font-size: 0.9em; padding: 2px; margin-left: 4px;">
+                                                                <option value="1" ${s.value === "1" ? "selected" : ""}>Fastest Streaming - up to 128 kbit/s</option>
+                                                                <option value="2" ${s.value === "2" ? "selected" : ""}>Balanced Quality and Speed - up to 192 kbit/s</option>
+                                                                <option value="3" ${s.value === "3" ? "selected" : ""}>Best Quality - up to 320 kbit/s</option>
+                                                            </select>
+                                                            <span class="setting-update-status" style="margin-left: 8px; font-size: 0.8em; display: none;">Saving...</span>
+                                                        </li>
+                                                    `;
+                                                }
+                                                return `<li>${s.key_name}: ${s.value}</li>`;
+                                            }).join("")}
+                                        </ul>
+                                    </div>
+                                `).join("");
+                            })() : "None"}
+                    </td></tr>
                 </table>
             `;
+
+            const languageSelect = document.getElementById("account-language-select");
+            if (languageSelect) {
+                languageSelect.addEventListener("change", async (e) => {
+                    const statusEl = document.getElementById("language-update-status");
+                    const newLang = e.target.value;
+                    if (statusEl) {
+                        statusEl.innerText = "Saving...";
+                        statusEl.style.display = "inline";
+                        statusEl.style.color = "#666";
+                    }
+                    try {
+                        const response = await fetch(`/mgmt/accounts/${data.account.account_id}/language`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({ language: newLang }),
+                        });
+                        if (response.ok) {
+                            if (statusEl) {
+                                statusEl.innerText = "Saved!";
+                                statusEl.style.color = "#28a745";
+                                setTimeout(() => {
+                                    statusEl.style.display = "none";
+                                }, 2000);
+                            }
+                        } else {
+                            throw new Error(await response.text());
+                        }
+                    } catch (error) {
+                        console.error("Failed to update language", error);
+                        if (statusEl) {
+                            statusEl.innerText = "Error!";
+                            statusEl.style.color = "#dc3545";
+                        }
+                    }
+                });
+            }
+
+            const providerSettingSelects = document.querySelectorAll(".provider-setting-select");
+            providerSettingSelects.forEach(select => {
+                select.addEventListener("change", async (e) => {
+                    const statusEl = e.target.parentElement.querySelector(".setting-update-status");
+                    const accID = e.target.dataset.accountId;
+                    const provID = e.target.dataset.providerId;
+                    const key = e.target.dataset.key;
+                    const newValue = e.target.value;
+
+                    if (statusEl) {
+                        statusEl.innerText = "Saving...";
+                        statusEl.style.display = "inline";
+                        statusEl.style.color = "#666";
+                    }
+
+                    try {
+                        const response = await fetch(`/mgmt/accounts/${accID}/provider-settings`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                provider_id: provID,
+                                key: key,
+                                value: newValue
+                            }),
+                        });
+                        if (response.ok) {
+                            if (statusEl) {
+                                statusEl.innerText = "Saved!";
+                                statusEl.style.color = "#28a745";
+                                setTimeout(() => {
+                                    statusEl.style.display = "none";
+                                }, 2000);
+                            }
+                        } else {
+                            throw new Error(await response.text());
+                        }
+                    } catch (error) {
+                        console.error("Failed to update provider setting", error);
+                        if (statusEl) {
+                            statusEl.innerText = "Error!";
+                            statusEl.style.color = "#dc3545";
+                        }
+                    }
+                });
+            });
         }
 
         // Render Devices

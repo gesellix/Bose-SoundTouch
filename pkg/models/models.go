@@ -439,6 +439,7 @@ type ServiceAccountInfo struct {
 	AccountID         string            `json:"account_id"`
 	PreferredLanguage string            `json:"preferred_language"`
 	ProviderSettings  []ProviderSetting `json:"provider_settings"`
+	IsPlaceholder     bool              `json:"is_placeholder,omitempty"`
 }
 
 // CustomerSupportDevice represents device information for customer support purposes.
@@ -649,8 +650,9 @@ type AttachedProduct struct {
 
 // ProviderSetting represents a single provider setting.
 type ProviderSetting struct {
-	BoseID     string `json:"bose_id" xml:"boseId"`
-	KeyName    string `json:"key_name" xml:"keyName"`
-	Value      string `json:"value" xml:"value"`
-	ProviderID string `json:"provider_id" xml:"providerId"`
+	BoseID       string `json:"bose_id" xml:"boseId"`
+	KeyName      string `json:"key_name" xml:"keyName"`
+	Value        string `json:"value" xml:"value"`
+	ProviderID   string `json:"provider_id" xml:"providerId"`
+	ProviderName string `json:"provider_name,omitempty" xml:"-"`
 }

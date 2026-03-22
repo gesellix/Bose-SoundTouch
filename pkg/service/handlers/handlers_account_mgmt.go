@@ -21,6 +21,14 @@ func (s *Server) HandleMgmtAccountDetails(w http.ResponseWriter, r *http.Request
 		accountInfo = &models.ServiceAccountInfo{AccountID: accountID}
 	}
 
+	// Enrich provider settings with names
+	for i := range accountInfo.ProviderSettings {
+		s := &accountInfo.ProviderSettings[i]
+		if s.ProviderName == "" {
+			s.ProviderName = constants.GetProviderName(s.ProviderID)
+		}
+	}
+
 	// 2. List all devices for this account
 	allDevices, err := s.ds.ListAllDevices()
 	if err != nil {
@@ -47,6 +55,101 @@ func (s *Server) HandleMgmtAccountDetails(w http.ResponseWriter, r *http.Request
 	}); err != nil {
 		log.Printf("[Mgmt] Failed to encode account details: %v", err)
 	}
+}
+
+// HandleMgmtUpdateAccountLanguage updates the preferred language for an account.
+func (s *Server) HandleMgmtUpdateAccountLanguage(w http.ResponseWriter, r *http.Request) {
+	accountID := chi.URLParam(r, "accountId")
+
+	var req struct {
+		Language string `json:"language"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Language != "en" && req.Language != "de" {
+		http.Error(w, "Language must be 'en' or 'de'", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Load current account info
+	accountInfo, err := s.ds.GetAccountInfo(accountID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Update language
+	accountInfo.AccountID = accountID // Ensure ID is correct
+	accountInfo.PreferredLanguage = req.Language
+	accountInfo.IsPlaceholder = false
+
+	// 3. Save account info
+	if err := s.ds.SaveAccountInfo(accountID, accountInfo); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleMgmtUpdateAccountProviderSetting updates a specific provider setting for an account.
+func (s *Server) HandleMgmtUpdateAccountProviderSetting(w http.ResponseWriter, r *http.Request) {
+	accountID := chi.URLParam(r, "accountId")
+
+	var req struct {
+		ProviderID string `json:"provider_id"`
+		Key        string `json:"key"`
+		Value      string `json:"value"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ProviderID == "" || req.Key == "" {
+		http.Error(w, "provider_id and key are required", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Load current account info
+	accountInfo, err := s.ds.GetAccountInfo(accountID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Update the specific setting
+	found := false
+	for i, setting := range accountInfo.ProviderSettings {
+		if setting.ProviderID == req.ProviderID && setting.KeyName == req.Key {
+			accountInfo.ProviderSettings[i].Value = req.Value
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// If not found, we can choose to add it or return error.
+		// For now, let's return an error as we expect to edit existing ones.
+		http.Error(w, "Provider setting not found", http.StatusNotFound)
+		return
+	}
+
+	accountInfo.AccountID = accountID // Ensure ID is correct
+	accountInfo.IsPlaceholder = false
+
+	// 3. Save account info
+	if err := s.ds.SaveAccountInfo(accountID, accountInfo); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 type deviceDetail struct {

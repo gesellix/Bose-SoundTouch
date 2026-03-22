@@ -865,9 +865,10 @@ func (ds *DataStore) GetAccountInfo(accountID string) (*models.ServiceAccountInf
 		return &models.ServiceAccountInfo{AccountID: accountID}, nil
 	}
 
+	// Try account root (canonical location)
 	path := filepath.Join(ds.AccountDir(accountID), "account.json")
 	if !exists(path) {
-		return &models.ServiceAccountInfo{AccountID: accountID}, nil
+		return &models.ServiceAccountInfo{AccountID: accountID, IsPlaceholder: true}, nil
 	}
 
 	data, err := os.ReadFile(path)

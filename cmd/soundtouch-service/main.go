@@ -757,6 +757,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Route("/accounts", func(r chi.Router) {
 				r.Get("/", server.HandleMgmtListAccounts)
 				r.Get("/{accountId}", server.HandleMgmtAccountDetails)
+				r.Post("/{accountId}/language", server.HandleMgmtUpdateAccountLanguage)
+				r.Post("/{accountId}/provider-settings", server.HandleMgmtUpdateAccountProviderSetting)
 				r.Get("/{accountId}/speakers", server.HandleMgmtListSpeakers)
 			})
 

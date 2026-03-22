@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -145,6 +146,138 @@ func TestHandleMgmtAccountDetails_Recents(t *testing.T) {
 	if p0.ButtonNumber != "1" {
 		t.Errorf("Expected button_number '1', got '%s'", p0.ButtonNumber)
 	}
+}
+
+func TestHandleMgmtUpdateAccountLanguage(t *testing.T) {
+	tempBaseDir := "mgmt_test_data_lang"
+	err := os.MkdirAll(tempBaseDir, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempBaseDir)
+
+	ds := datastore.NewDataStore(tempBaseDir)
+	err = ds.Initialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accountID := "1234567"
+	server := &Server{ds: ds}
+
+	r := chi.NewRouter()
+	r.Post("/mgmt/accounts/{accountId}/language", server.HandleMgmtUpdateAccountLanguage)
+
+	t.Run("Valid Language de", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{"language": "de"})
+		req := httptest.NewRequest("POST", "/mgmt/accounts/1234567/language", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		accInfo, _ := ds.GetAccountInfo(accountID)
+		if accInfo.PreferredLanguage != "de" {
+			t.Errorf("Expected language 'de', got '%s'", accInfo.PreferredLanguage)
+		}
+	})
+
+	t.Run("Invalid Language fr", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{"language": "fr"})
+		req := httptest.NewRequest("POST", "/mgmt/accounts/1234567/language", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+}
+
+func TestHandleMgmtUpdateAccountProviderSetting(t *testing.T) {
+	tempBaseDir := "mgmt_test_data_provider"
+	err := os.MkdirAll(tempBaseDir, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempBaseDir)
+
+	ds := datastore.NewDataStore(tempBaseDir)
+	err = ds.Initialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accountID := "1234567"
+	server := &Server{ds: ds}
+
+	// Setup initial account info
+	initialInfo := &models.ServiceAccountInfo{
+		AccountID: accountID,
+		ProviderSettings: []models.ProviderSetting{
+			{
+				ProviderID: "15",
+				KeyName:    "STREAMING_QUALITY",
+				Value:      "2",
+			},
+		},
+	}
+	ds.SaveAccountInfo(accountID, initialInfo)
+
+	r := chi.NewRouter()
+	r.Post("/mgmt/accounts/{accountId}/provider-settings", server.HandleMgmtUpdateAccountProviderSetting)
+
+	t.Run("Valid Update", func(t *testing.T) {
+		payload := map[string]string{
+			"provider_id": "15",
+			"key":         "STREAMING_QUALITY",
+			"value":       "3",
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest("POST", "/mgmt/accounts/1234567/provider-settings", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		accInfo, _ := ds.GetAccountInfo(accountID)
+		found := false
+		for _, s := range accInfo.ProviderSettings {
+			if s.ProviderID == "15" && s.KeyName == "STREAMING_QUALITY" {
+				if s.Value != "3" {
+					t.Errorf("Expected value '3', got '%s'", s.Value)
+				}
+				found = true
+			}
+		}
+		if !found {
+			t.Error("Provider setting not found after update")
+		}
+	})
+
+	t.Run("Setting Not Found", func(t *testing.T) {
+		payload := map[string]string{
+			"provider_id": "99",
+			"key":         "NON_EXISTENT",
+			"value":       "val",
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest("POST", "/mgmt/accounts/1234567/provider-settings", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404, got %d", w.Code)
+		}
+	})
 }
 
 func TestHandleMgmtAccountDetails_Sources(t *testing.T) {

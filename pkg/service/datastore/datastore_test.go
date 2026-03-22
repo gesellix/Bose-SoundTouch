@@ -92,6 +92,37 @@ func TestDataStore(t *testing.T) {
 	if ds.AccountDir(account) != expectedAccountDir {
 		t.Errorf("Expected account dir %s, got %s", expectedAccountDir, ds.AccountDir(account))
 	}
+
+	// Test GetAccountInfo with placeholder
+	accInfo, err := ds.GetAccountInfo("non-existent")
+	if err != nil {
+		t.Errorf("GetAccountInfo failed: %v", err)
+	}
+	if !accInfo.IsPlaceholder {
+		t.Errorf("Expected IsPlaceholder to be true for non-existent account")
+	}
+
+	// Test SaveAccountInfo and GetAccountInfo
+	accountID := "acc-123"
+	info2 := &models.ServiceAccountInfo{
+		AccountID:         accountID,
+		PreferredLanguage: "en",
+	}
+	err = ds.SaveAccountInfo(accountID, info2)
+	if err != nil {
+		t.Errorf("SaveAccountInfo failed: %v", err)
+	}
+
+	loadedAccInfo, err := ds.GetAccountInfo(accountID)
+	if err != nil {
+		t.Errorf("GetAccountInfo failed: %v", err)
+	}
+	if loadedAccInfo.PreferredLanguage != "en" {
+		t.Errorf("Expected language en, got %s", loadedAccInfo.PreferredLanguage)
+	}
+	if loadedAccInfo.IsPlaceholder {
+		t.Errorf("Expected IsPlaceholder to be false for existing account")
+	}
 }
 
 func TestListAllDevices_Empty(t *testing.T) {

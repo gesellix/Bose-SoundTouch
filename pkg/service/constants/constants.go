@@ -1,6 +1,8 @@
 // Package constants defines file names, directories, and common values used by the service layer.
 package constants
 
+import "strconv"
+
 // SourceProvider represents a media source provider configuration.
 type SourceProvider struct {
 	ID        int
@@ -95,6 +97,21 @@ func GetSourceLabel(sourceType string) string {
 	default:
 		return sourceType
 	}
+}
+
+// GetProviderName returns the human-readable name for a provider ID.
+func GetProviderName(providerID string) string {
+	id, err := strconv.Atoi(providerID)
+	if err != nil {
+		return providerID
+	}
+
+	for _, p := range StaticProviders {
+		if p.ID == id {
+			return p.Name
+		}
+	}
+	return providerID
 }
 
 // Providers lists known source provider identifiers used by Bose SoundTouch.

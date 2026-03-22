@@ -518,6 +518,13 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		}
 	}
 
+	for i := range resp.ProviderSettings {
+		ps := &resp.ProviderSettings[i]
+		if ps.ProviderName == "" {
+			ps.ProviderName = constants.GetProviderName(ps.ProviderID)
+		}
+	}
+
 	var lastDeviceID string
 
 	for _, entry := range entries {
