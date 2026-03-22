@@ -49,7 +49,7 @@ func TestHandleBoseSpotifyToken_LocalResponse(t *testing.T) {
 
 	// chi.URLParam works when using chi router
 	r := chi.NewRouter()
-	r.Post("/oauth/device/{deviceID}/music/musicprovider/15/token/cs3", server.HandleBoseSpotifyToken)
+	r.Post("/oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3", server.HandleBoseToken)
 
 	req := httptest.NewRequest("POST", "/oauth/device/DEVICE123/music/musicprovider/15/token/cs3", nil)
 	w := httptest.NewRecorder()
@@ -85,7 +85,7 @@ func TestHandleBoseSpotifyToken_FallbackToProxy(t *testing.T) {
 
 	// chi.URLParam works when using chi router
 	r := chi.NewRouter()
-	r.Post("/oauth/device/{deviceID}/music/musicprovider/15/token/cs3", server.HandleBoseSpotifyToken)
+	r.Post("/oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3", server.HandleBoseToken)
 
 	// Since there's no Spotify service, it should fall back to HandleBoseProxy.
 	// HandleBoseProxy will try to contact streaming.bose.com.
@@ -113,13 +113,13 @@ func TestHandleBoseSpotifyToken_FallbackToProxy(t *testing.T) {
 	}
 }
 
-func TestHandleBoseSpotifyLegacyToken(t *testing.T) {
+func TestHandleBoseLegacyToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	ds := datastore.NewDataStore(tmpDir)
 	server := NewServer(ds, nil, "http://localhost", false, false, false)
 
 	r := chi.NewRouter()
-	r.Post("/oauth/device/{deviceID}/music/musicprovider/15/token", server.HandleBoseSpotifyLegacyToken)
+	r.Post("/oauth/device/{deviceID}/music/musicprovider/{sourceID}/token", server.HandleBoseLegacyToken)
 
 	// Since we are not configuring Spotify, it should fall back to proxy
 	req := httptest.NewRequest("POST", "/oauth/device/DEVICE123/music/musicprovider/15/token", nil)

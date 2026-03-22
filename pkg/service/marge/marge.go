@@ -487,20 +487,25 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		AccountStatus:     "OK",
 		Mode:              "global",
 		PreferredLanguage: "de",
-		ProviderSettings: []models.ProviderSetting{
-			{
+	}
+
+	for _, p := range constants.StaticProviders {
+		switch p.Name {
+		case "DEEZER":
+			resp.ProviderSettings = append(resp.ProviderSettings, models.ProviderSetting{
 				BoseID:     account,
 				KeyName:    "ELIGIBLE_FOR_TRIAL",
 				Value:      "false",
-				ProviderID: "14",
-			},
-			{
+				ProviderID: strconv.Itoa(p.ID),
+			})
+		case "SPOTIFY":
+			resp.ProviderSettings = append(resp.ProviderSettings, models.ProviderSetting{
 				BoseID:     account,
 				KeyName:    "STREAMING_QUALITY",
 				Value:      "2",
-				ProviderID: "15",
-			},
-		},
+				ProviderID: strconv.Itoa(p.ID),
+			})
+		}
 	}
 
 	if info, _ := ds.GetAccountInfo(account); info != nil {

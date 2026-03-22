@@ -5,8 +5,32 @@ import (
 	"log"
 	"net/http"
 
+	"strconv"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/go-chi/chi/v5"
 )
+
+// HandleBoseToken handles the Bose-specific token refresh request from the speaker.
+// POST /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3
+func (s *Server) HandleBoseToken(w http.ResponseWriter, r *http.Request) {
+	sourceID := chi.URLParam(r, "sourceID")
+
+	for _, provider := range constants.StaticProviders {
+		if strconv.Itoa(provider.ID) == sourceID && provider.Name == "SPOTIFY" {
+			s.HandleBoseSpotifyToken(w, r)
+			return
+		}
+	}
+
+	s.HandleBoseProxy(w, r)
+}
+
+// HandleBoseLegacyToken handles the Bose-specific token refresh request (legacy or variant).
+// POST /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token
+func (s *Server) HandleBoseLegacyToken(w http.ResponseWriter, r *http.Request) {
+	s.HandleBoseToken(w, r)
+}
 
 // HandleBoseSpotifyToken handles the Bose-specific Spotify token refresh request from the speaker.
 // POST /oauth/device/{deviceID}/music/musicprovider/15/token/cs3
@@ -60,11 +84,4 @@ func (s *Server) HandleBoseSpotifyToken(w http.ResponseWriter, r *http.Request) 
 		log.Printf("[Spotify Proxy] Failed to encode response: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
-}
-
-// HandleBoseSpotifyLegacyToken handles the Bose-specific Spotify token refresh request (legacy or variant).
-// POST /oauth/device/{deviceID}/music/musicprovider/15/token
-func (s *Server) HandleBoseSpotifyLegacyToken(w http.ResponseWriter, r *http.Request) {
-	// Some firmware might use a slightly different path.
-	s.HandleBoseSpotifyToken(w, r)
 }
