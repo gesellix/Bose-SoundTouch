@@ -158,6 +158,9 @@ async function fetchSettings() {
         if (settings.mirror_endpoints) {
             document.getElementById("mirror-endpoints").value = settings.mirror_endpoints.join("\n");
         }
+        if (settings.skip_mirror_endpoints) {
+            document.getElementById("skip-mirror-endpoints").value = settings.skip_mirror_endpoints.join("\n");
+        }
         if (settings.internal_paths) {
             document.getElementById("internal-paths").value = settings.internal_paths.join("\n");
         }
@@ -217,6 +220,11 @@ async function updateSettings() {
         preferred_source: document.getElementById("preferred-source-upstream").checked ? "upstream" : "local",
         mirror_endpoints: document
             .getElementById("mirror-endpoints")
+            .value.split("\n")
+            .map((s) => s.trim())
+            .filter((s) => s !== ""),
+        skip_mirror_endpoints: document
+            .getElementById("skip-mirror-endpoints")
             .value.split("\n")
             .map((s) => s.trim())
             .filter((s) => s !== ""),

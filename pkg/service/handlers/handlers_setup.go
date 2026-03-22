@@ -156,6 +156,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dnsBindAddr := s.dnsBindAddr
 	mirrorEnabled := s.mirrorEnabled
 	mirrorEndpoints := s.mirrorEndpoints
+	skipMirrorEndpoints := s.skipMirrorEndpoints
 	preferredSource := s.preferredSource
 	internalPaths := s.internalPaths
 	redact, logBody, record := s.proxyRedact, s.proxyLogBody, s.recordEnabled
@@ -166,24 +167,25 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dnsRunning, actualBind := s.GetDNSRunning()
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"server_url":          serverURL,
-		"https_server_url":    httpsServerURL,
-		"discovery_interval":  discoveryInterval,
-		"discovery_enabled":   discoveryEnabled,
-		"dns_enabled":         dnsEnabled,
-		"dns_running":         dnsRunning,
-		"dns_actual_bind":     actualBind,
-		"dns_upstream":        strings.Join(dnsUpstream, ","),
-		"dns_bind_addr":       dnsBindAddr,
-		"mirror_enabled":      mirrorEnabled,
-		"mirror_endpoints":    mirrorEndpoints,
-		"preferred_source":    preferredSource,
-		"internal_paths":      internalPaths,
-		"redact_logs":         redact,
-		"log_bodies":          logBody,
-		"record_interactions": record,
-		"shortcuts":           shortcuts,
-		"spotify_configured":  spotifyConfigured,
+		"server_url":            serverURL,
+		"https_server_url":      httpsServerURL,
+		"discovery_interval":    discoveryInterval,
+		"discovery_enabled":     discoveryEnabled,
+		"dns_enabled":           dnsEnabled,
+		"dns_running":           dnsRunning,
+		"dns_actual_bind":       actualBind,
+		"dns_upstream":          strings.Join(dnsUpstream, ","),
+		"dns_bind_addr":         dnsBindAddr,
+		"mirror_enabled":        mirrorEnabled,
+		"mirror_endpoints":      mirrorEndpoints,
+		"skip_mirror_endpoints": skipMirrorEndpoints,
+		"preferred_source":      preferredSource,
+		"internal_paths":        internalPaths,
+		"redact_logs":           redact,
+		"log_bodies":            logBody,
+		"record_interactions":   record,
+		"shortcuts":             shortcuts,
+		"spotify_configured":    spotifyConfigured,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -193,17 +195,18 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 // HandleUpdateSettings updates the service settings.
 func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
-		ServerURL         string         `json:"server_url"`
-		DiscoveryInterval string         `json:"discovery_interval"`
-		DiscoveryEnabled  bool           `json:"discovery_enabled"`
-		DNSEnabled        bool           `json:"dns_enabled"`
-		DNSUpstream       string         `json:"dns_upstream"`
-		DNSBindAddr       string         `json:"dns_bind_addr"`
-		MirrorEnabled     bool           `json:"mirror_enabled"`
-		MirrorEndpoints   []string       `json:"mirror_endpoints"`
-		PreferredSource   string         `json:"preferred_source"`
-		InternalPaths     []string       `json:"internal_paths"`
-		Shortcuts         map[string]int `json:"shortcuts"`
+		ServerURL           string         `json:"server_url"`
+		DiscoveryInterval   string         `json:"discovery_interval"`
+		DiscoveryEnabled    bool           `json:"discovery_enabled"`
+		DNSEnabled          bool           `json:"dns_enabled"`
+		DNSUpstream         string         `json:"dns_upstream"`
+		DNSBindAddr         string         `json:"dns_bind_addr"`
+		MirrorEnabled       bool           `json:"mirror_enabled"`
+		MirrorEndpoints     []string       `json:"mirror_endpoints"`
+		SkipMirrorEndpoints []string       `json:"skip_mirror_endpoints"`
+		PreferredSource     string         `json:"preferred_source"`
+		InternalPaths       []string       `json:"internal_paths"`
+		Shortcuts           map[string]int `json:"shortcuts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -249,6 +252,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	s.mirrorEnabled = settings.MirrorEnabled
 	s.mirrorEndpoints = settings.MirrorEndpoints
+	s.skipMirrorEndpoints = settings.SkipMirrorEndpoints
 	s.preferredSource = settings.PreferredSource
 	s.internalPaths = settings.InternalPaths
 
@@ -269,21 +273,22 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Saving updated settings to %s/settings.json", s.ds.DataDir)
 	err = s.ds.SaveSettings(datastore.Settings{
-		ServerURL:          s.serverURL,
-		HTTPServerURL:      currentHTTPS,
-		RedactLogs:         currentRedact,
-		LogBodies:          currentLogBody,
-		RecordInteractions: currentRecord,
-		DiscoveryInterval:  s.discoveryInterval.String(),
-		DiscoveryEnabled:   s.discoveryEnabled,
-		DNSEnabled:         s.dnsEnabled,
-		DNSUpstream:        s.dnsUpstream,
-		DNSBindAddr:        s.dnsBindAddr,
-		MirrorEnabled:      s.mirrorEnabled,
-		MirrorEndpoints:    s.mirrorEndpoints,
-		PreferredSource:    s.preferredSource,
-		InternalPaths:      s.internalPaths,
-		Shortcuts:          s.shortcuts,
+		ServerURL:           s.serverURL,
+		HTTPServerURL:       currentHTTPS,
+		RedactLogs:          currentRedact,
+		LogBodies:           currentLogBody,
+		RecordInteractions:  currentRecord,
+		DiscoveryInterval:   s.discoveryInterval.String(),
+		DiscoveryEnabled:    s.discoveryEnabled,
+		DNSEnabled:          s.dnsEnabled,
+		DNSUpstream:         s.dnsUpstream,
+		DNSBindAddr:         s.dnsBindAddr,
+		MirrorEnabled:       s.mirrorEnabled,
+		MirrorEndpoints:     s.mirrorEndpoints,
+		SkipMirrorEndpoints: s.skipMirrorEndpoints,
+		PreferredSource:     s.preferredSource,
+		InternalPaths:       s.internalPaths,
+		Shortcuts:           s.shortcuts,
 	})
 
 	dnsEnabled := s.dnsEnabled

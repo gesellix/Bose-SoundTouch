@@ -73,6 +73,8 @@ type MigrationSummary struct {
 	IsMigrated               bool        `json:"is_migrated"`
 	MirrorEnabled            bool        `json:"mirror_enabled"`
 	MirrorEndpoints          []string    `json:"mirror_endpoints,omitempty"`
+	SkipMirrorEndpoints      []string    `json:"skip_mirror_endpoints,omitempty"`
+	PreferredSource          string      `json:"preferred_source,omitempty"`
 }
 
 // SSHClient defines the interface for SSH operations.
@@ -323,6 +325,8 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		if err == nil {
 			summary.MirrorEnabled = settings.MirrorEnabled
 			summary.MirrorEndpoints = settings.MirrorEndpoints
+			summary.SkipMirrorEndpoints = settings.SkipMirrorEndpoints
+			summary.PreferredSource = settings.PreferredSource
 		}
 	}
 

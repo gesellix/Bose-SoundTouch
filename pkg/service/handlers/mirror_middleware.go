@@ -26,10 +26,10 @@ import (
 // MirrorMiddleware returns a middleware that mirrors specific requests to the Bose upstream.
 func (s *Server) MirrorMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		enabled, endpoints, preferredSource := s.getMirrorSettings()
+		enabled, endpoints, skipEndpoints, preferredSource := s.getMirrorSettings()
 		isMirrorRequest := r.Header.Get("X-Mirror-Request") == "true"
 
-		if !enabled || isMirrorRequest || len(endpoints) == 0 || !s.shouldMirror(r.URL.Path, endpoints) {
+		if !enabled || isMirrorRequest || len(endpoints) == 0 || !s.shouldMirror(r.URL.Path, endpoints) || s.shouldSkipMirror(r.URL.Path, skipEndpoints) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -64,15 +64,25 @@ func (s *Server) MirrorMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) getMirrorSettings() (bool, []string, string) {
+func (s *Server) getMirrorSettings() (bool, []string, []string, string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.mirrorEnabled, s.mirrorEndpoints, s.preferredSource
+	return s.mirrorEnabled, s.mirrorEndpoints, s.skipMirrorEndpoints, s.preferredSource
 }
 
 func (s *Server) shouldMirror(path string, endpoints []string) bool {
 	for _, pattern := range endpoints {
+		if matchPattern(pattern, path) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *Server) shouldSkipMirror(path string, skipEndpoints []string) bool {
+	for _, pattern := range skipEndpoints {
 		if matchPattern(pattern, path) {
 			return true
 		}

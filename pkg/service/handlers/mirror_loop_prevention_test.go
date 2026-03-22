@@ -20,7 +20,7 @@ func TestMirrorMiddleware_InfiniteLoop(t *testing.T) {
 	_ = ds.Initialize()
 
 	server := NewServer(ds, nil, "http://localhost:8000", false, false, false)
-	server.SetMirrorSettings(true, []string{"/loop"}, "upstream")
+	server.SetMirrorSettings(true, []string{"/loop"}, nil, "upstream")
 
 	// Create a handler that would be the "next" in the chain.
 	// If the loop occurs, this will be called repeatedly.

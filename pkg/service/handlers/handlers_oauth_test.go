@@ -81,7 +81,7 @@ func TestHandleBoseSpotifyToken_FallbackToProxy(t *testing.T) {
 
 	// Mirroring must be enabled for HandleBoseProxy to work (based on previous changes)
 	// Actually I reverted that, so it should work regardless of MirrorEnabled now.
-	server.SetMirrorSettings(true, nil, "")
+	server.SetMirrorSettings(true, nil, nil, "")
 
 	// chi.URLParam works when using chi router
 	r := chi.NewRouter()

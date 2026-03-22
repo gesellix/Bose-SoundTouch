@@ -40,6 +40,7 @@ type Server struct {
 	dnsBindAddr         string
 	mirrorEnabled       bool
 	mirrorEndpoints     []string
+	skipMirrorEndpoints []string
 	preferredSource     string
 	internalPaths       []string
 	shortcuts           map[string]int
@@ -319,12 +320,13 @@ func (s *Server) SetMgmtConfig(username, password string) {
 }
 
 // SetMirrorSettings sets the mirroring settings for the server.
-func (s *Server) SetMirrorSettings(enabled bool, endpoints []string, preferredSource string) {
+func (s *Server) SetMirrorSettings(enabled bool, endpoints, skipEndpoints []string, preferredSource string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.mirrorEnabled = enabled
 	s.mirrorEndpoints = endpoints
+	s.skipMirrorEndpoints = skipEndpoints
 	s.preferredSource = preferredSource
 }
 

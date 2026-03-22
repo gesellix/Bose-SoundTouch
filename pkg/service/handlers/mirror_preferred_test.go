@@ -40,7 +40,7 @@ func TestMirrorMiddleware_PreferredSource(t *testing.T) {
 
 	// 3. Setup our server with MirrorMiddleware
 	server := NewServer(ds, nil, "http://localhost:8000", false, false, false)
-	server.SetMirrorSettings(true, []string{"/test/local"}, "local")
+	server.SetMirrorSettings(true, []string{"/test/local"}, nil, "local")
 
 	// We need to trick performMirror to use our mock upstream.
 	// performMirror uses r.Host.
@@ -50,7 +50,7 @@ func TestMirrorMiddleware_PreferredSource(t *testing.T) {
 	middleware := server.MirrorMiddleware(r)
 
 	t.Run("PreferredLocal", func(t *testing.T) {
-		server.SetMirrorSettings(true, []string{"/test/local"}, "local")
+		server.SetMirrorSettings(true, []string{"/test/local"}, nil, "local")
 
 		req := httptest.NewRequest("GET", "/test/local", nil)
 		req.Host = upstreamHost // So performMirror targets the mock upstream
@@ -70,7 +70,7 @@ func TestMirrorMiddleware_PreferredSource(t *testing.T) {
 	})
 
 	t.Run("PreferredUpstream", func(t *testing.T) {
-		server.SetMirrorSettings(true, []string{"/test/local"}, "upstream")
+		server.SetMirrorSettings(true, []string{"/test/local"}, nil, "upstream")
 
 		req := httptest.NewRequest("GET", "/test/local", nil)
 		req.Host = upstreamHost
@@ -90,7 +90,7 @@ func TestMirrorMiddleware_PreferredSource(t *testing.T) {
 	})
 
 	t.Run("FallbackToLocal", func(t *testing.T) {
-		server.SetMirrorSettings(true, []string{"/test/local"}, "upstream")
+		server.SetMirrorSettings(true, []string{"/test/local"}, nil, "upstream")
 
 		// Use a non-existent host for mirror to trigger failure
 		req := httptest.NewRequest("GET", "/test/local", nil)

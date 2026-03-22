@@ -190,6 +190,11 @@ func main() {
 				EnvVars: []string{"MIRROR_ENDPOINTS"},
 			},
 			&cli.StringSliceFlag{
+				Name:    "skip-mirror-endpoints",
+				Usage:   "Endpoints to skip mirroring to Bose Cloud (comma-separated or multiple flags)",
+				EnvVars: []string{"SKIP_MIRROR_ENDPOINTS"},
+			},
+			&cli.StringSliceFlag{
 				Name:    "internal-paths",
 				Usage:   "Paths for internal requests (comma-separated or multiple flags)",
 				EnvVars: []string{"INTERNAL_PATHS"},
@@ -241,7 +246,7 @@ func main() {
 			server.SetVersionInfo(version, commit, date)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
-			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints, persisted.PreferredSource)
+			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints, persisted.SkipMirrorEndpoints, persisted.PreferredSource)
 			server.SetInternalPaths(persisted.InternalPaths)
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
@@ -374,6 +379,7 @@ type serviceConfig struct {
 	dnsBind             string
 	mirrorEnabled       bool
 	mirrorEndpoints     []string
+	skipMirrorEndpoints []string
 	internalPaths       []string
 	discoveryInterval   time.Duration
 	domains             []string
@@ -448,6 +454,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 	mgmtPassword := c.String("mgmt-password")
 	mirrorEnabled := c.Bool("mirror-enabled")
 	mirrorEndpoints := c.StringSlice("mirror-endpoints")
+	skipMirrorEndpoints := c.StringSlice("skip-mirror-endpoints")
 	internalPaths := c.StringSlice("internal-paths")
 	migrationEnabled := c.Bool("migration-enabled")
 	migrationDryRun := c.Bool("migration-dry-run")
@@ -469,6 +476,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		dnsBind:             dnsBind,
 		mirrorEnabled:       mirrorEnabled,
 		mirrorEndpoints:     mirrorEndpoints,
+		skipMirrorEndpoints: skipMirrorEndpoints,
 		internalPaths:       internalPaths,
 		discoveryInterval:   discoveryInterval,
 		domains:             domains,
@@ -565,6 +573,7 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 
 	config.mirrorEnabled = persisted.MirrorEnabled
 	config.mirrorEndpoints = persisted.MirrorEndpoints
+	config.skipMirrorEndpoints = persisted.SkipMirrorEndpoints
 	config.preferredSource = persisted.PreferredSource
 	config.internalPaths = persisted.InternalPaths
 
@@ -573,20 +582,21 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 
 func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datastore.Settings {
 	settings := datastore.Settings{
-		ServerURL:          config.serverURL,
-		HTTPServerURL:      config.httpsServerURL,
-		RedactLogs:         config.redact,
-		LogBodies:          config.logBody,
-		RecordInteractions: config.record,
-		DiscoveryInterval:  config.discoveryInterval.String(),
-		DiscoveryEnabled:   true,
-		DNSEnabled:         config.dnsEnabled,
-		DNSUpstream:        strings.Split(config.dnsUpstream, ","),
-		DNSBindAddr:        config.dnsBind,
-		MirrorEnabled:      config.mirrorEnabled,
-		MirrorEndpoints:    config.mirrorEndpoints,
-		PreferredSource:    config.preferredSource,
-		InternalPaths:      config.internalPaths,
+		ServerURL:           config.serverURL,
+		HTTPServerURL:       config.httpsServerURL,
+		RedactLogs:          config.redact,
+		LogBodies:           config.logBody,
+		RecordInteractions:  config.record,
+		DiscoveryInterval:   config.discoveryInterval.String(),
+		DiscoveryEnabled:    true,
+		DNSEnabled:          config.dnsEnabled,
+		DNSUpstream:         strings.Split(config.dnsUpstream, ","),
+		DNSBindAddr:         config.dnsBind,
+		MirrorEnabled:       config.mirrorEnabled,
+		MirrorEndpoints:     config.mirrorEndpoints,
+		SkipMirrorEndpoints: config.skipMirrorEndpoints,
+		PreferredSource:     config.preferredSource,
+		InternalPaths:       config.internalPaths,
 		Shortcuts: map[string]int{
 			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
 			"/sw.js": http.StatusNotFound,

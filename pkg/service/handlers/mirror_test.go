@@ -45,7 +45,7 @@ func TestMirroring(t *testing.T) {
 	recorder := proxy.NewRecorder(tempDir)
 	server.SetRecorder(recorder)
 	server.SetRecordEnabled(true)
-	server.SetMirrorSettings(true, []string{"/streaming/account/*/device/*/recent"}, "local")
+	server.SetMirrorSettings(true, []string{"/streaming/account/*/device/*/recent"}, nil, "local")
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()
@@ -167,7 +167,7 @@ func TestMirroring(t *testing.T) {
 		defer postUpstream.Close()
 
 		// Setup mirroring for the POST endpoint
-		server.SetMirrorSettings(true, []string{"/v1/scmudc/*"}, "local")
+		server.SetMirrorSettings(true, []string{"/v1/scmudc/*"}, nil, "local")
 
 		requestBody := `{"envelope":{"monoTime":234906,"payloadProtocolVersion":"3.1","payloadType":"scmudc","protocolVersion":"1.0","time":"2026-02-25T23:03:14.976349+00:00","uniqueId":"A81B6A536A98"},"payload":{"deviceInfo":{"boseID":"3230304","deviceID":"A81B6A536A98","deviceType":"SoundTouch 10","serialNumber":"I6332527703739342000020","softwareVersion":"27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29","systemSerialNumber":"069231P63364828AE"},"events":[{"data":{"play-state":"PAUSE_STATE"},"monoTime":234904,"time":"2026-02-25T23:03:14.973466+00:00","type":"play-state-changed"}]}}`
 

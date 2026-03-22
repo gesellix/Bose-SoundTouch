@@ -27,7 +27,7 @@ func TestSnapshotIntegrity_SelfAndMirror(t *testing.T) {
 	recorder := proxy.NewRecorder(tempDir)
 	s := NewServer(ds, nil, "http://localhost:8000", false, false, true)
 	s.SetRecorder(recorder)
-	s.SetMirrorSettings(true, []string{"/mirror/*"}, "local")
+	s.SetMirrorSettings(true, []string{"/mirror/*"}, nil, "local")
 
 	// Upstream mock
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +39,7 @@ func TestSnapshotIntegrity_SelfAndMirror(t *testing.T) {
 	defer upstream.Close()
 
 	// Configure mirror to point to our mock upstream
-	s.SetMirrorSettings(true, []string{"/mirror/*"}, "local")
+	s.SetMirrorSettings(true, []string{"/mirror/*"}, nil, "local")
 	// We need to override the host in performMirror but for tests we can just mock it via env if needed or rely on the fact that performMirror uses r.Host
 
 	handler := s.SnapshotMiddleware(s.MirrorMiddleware(s.RecordMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
