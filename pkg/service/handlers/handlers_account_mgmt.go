@@ -135,10 +135,18 @@ func mapToFullResponseSource(src *models.ConfiguredSource) models.FullResponseSo
 	fs.Credential.Value = src.Secret
 	fs.Credential.Type = src.SecretType
 
+	// If DisplayName is generic (e.g. "Audio") and we have a more specific Account name, use it.
+	if fs.DisplayName == fs.Type && fs.Account != "" {
+		fs.DisplayName = fs.Account
+		fs.Name = fs.Account
+	}
+
 	// Provide fallback for Name and SourceName if missing
 	switch {
 	case fs.Name != "":
 		// Name already set to DisplayName
+	case fs.Account != "":
+		fs.Name = fs.Account
 	case fs.SourceLabel != "":
 		fs.Name = fs.SourceLabel
 	default:
@@ -147,6 +155,10 @@ func mapToFullResponseSource(src *models.ConfiguredSource) models.FullResponseSo
 
 	if fs.SourceName == "" {
 		fs.SourceName = fs.Name
+	}
+
+	if fs.DisplayName == "" {
+		fs.DisplayName = fs.Name
 	}
 
 	return fs

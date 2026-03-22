@@ -146,3 +146,147 @@ func TestHandleMgmtAccountDetails_Recents(t *testing.T) {
 		t.Errorf("Expected button_number '1', got '%s'", p0.ButtonNumber)
 	}
 }
+
+func TestHandleMgmtAccountDetails_Sources(t *testing.T) {
+	tempBaseDir := "sources_test_data"
+	err := os.MkdirAll(tempBaseDir, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempBaseDir)
+
+	ds := datastore.NewDataStore(tempBaseDir)
+	err = ds.Initialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accountID := "1234567"
+	deviceID := "001122334455"
+
+	deviceDir := ds.AccountDeviceDir(accountID, deviceID)
+	err = os.MkdirAll(deviceDir, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mock Sources.xml as it might be read by Sync/Save logic if we were using it,
+	// but here we will save them directly via DataStore.
+	sources := []models.ConfiguredSource{
+		{
+			ID:          "9330201",
+			Type:        "Audio",
+			DisplayName: "Audio",
+			SourceName:  "Audio",
+			Name:        "Audio",
+			SourceKey: struct {
+				Type    string `xml:"type,attr"`
+				Account string `xml:"account,attr"`
+			}{
+				Type: "Audio",
+			},
+		},
+		{
+			ID:          "10863533",
+			Type:        "Audio",
+			DisplayName: "Audio",
+			SourceName:  "Audio",
+			Name:        "Audio",
+			SourceKey: struct {
+				Type    string `xml:"type,attr"`
+				Account string `xml:"account,attr"`
+			}{
+				Type:    "Audio",
+				Account: "gesellix",
+			},
+		},
+	}
+	err = ds.SaveConfiguredSources(accountID, deviceID, sources)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Also need a device info file to be listed
+	deviceInfo := models.ServiceDeviceInfo{
+		AccountID: accountID,
+		DeviceID:  deviceID,
+		Name:      "Test Device",
+	}
+	err = ds.SaveDeviceInfo(accountID, deviceID, &deviceInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := &Server{ds: ds}
+
+	r := chi.NewRouter()
+	r.Get("/mgmt/accounts/{accountId}", server.HandleMgmtAccountDetails)
+
+	req := httptest.NewRequest("GET", "/mgmt/accounts/1234567", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response struct {
+		Devices []struct {
+			Sources []models.FullResponseSource `json:"sources"`
+		} `json:"devices"`
+	}
+
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(response.Devices) == 0 {
+		t.Fatal("Expected one device")
+	}
+
+	if len(response.Devices[0].Sources) < 2 {
+		t.Fatalf("Expected at least 2 sources, got %d", len(response.Devices[0].Sources))
+	}
+
+	// Find the gesellix source
+	var gesellixSource *models.FullResponseSource
+	for i := range response.Devices[0].Sources {
+		if response.Devices[0].Sources[i].ID == "10863533" {
+			gesellixSource = &response.Devices[0].Sources[i]
+			break
+		}
+	}
+
+	if gesellixSource == nil {
+		t.Fatal("gesellix source not found")
+	}
+
+	// It should have fallen back to Account name "gesellix" because DisplayName was generic "Audio"
+	if gesellixSource.DisplayName != "gesellix" {
+		t.Errorf("Expected display_name 'gesellix', got '%s'", gesellixSource.DisplayName)
+	}
+	if gesellixSource.Name != "gesellix" {
+		t.Errorf("Expected name 'gesellix', got '%s'", gesellixSource.Name)
+	}
+	if gesellixSource.Type != "Audio" {
+		t.Errorf("Expected type 'Audio', got '%s'", gesellixSource.Type)
+	}
+
+	// Find the generic audio source
+	var audioSource *models.FullResponseSource
+	for i := range response.Devices[0].Sources {
+		if response.Devices[0].Sources[i].ID == "9330201" {
+			audioSource = &response.Devices[0].Sources[i]
+			break
+		}
+	}
+	if audioSource == nil {
+		t.Fatal("audio source not found")
+	}
+	// It should still be "Audio" as there is no account fallback
+	if audioSource.DisplayName != "Audio" {
+		t.Errorf("Expected display_name 'Audio', got '%s'", audioSource.DisplayName)
+	}
+}
