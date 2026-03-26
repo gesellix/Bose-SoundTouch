@@ -1,0 +1,73 @@
+### Create Account (Official Stockholm endpoint)
+POST {{host}}/streaming/account
+Content-Type: application/vnd.bose.customer-v1.0+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<account>
+    <firstName>John</firstName>
+    <lastName>Doe</lastName>
+    <email>john.doe@example.com</email>
+    <password>password123</password>
+    <countryCode>US</countryCode>
+    <preferredLanguage>en</preferredLanguage>
+</account>
+
+> {%
+    client.test("Account created via XML successfully", function() {
+        client.assert(response.status === 201, "Response status is not 201");
+        client.assert(response.body.includes('<account'), "Response body should contain account XML");
+        var accountId = response.body.match(/id="(\d+)"/)[1];
+        client.global.set("newAccountId", accountId);
+    });
+%}
+
+### Login (Official Stockholm endpoint)
+POST {{host}}/streaming/account/login
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<login>
+    <username>john.doe@example.com</username>
+    <password>password123</password>
+</login>
+
+> {%
+    client.test("Login successful", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.headers.valueOf("Credentials") !== null, "Credentials header missing");
+        client.global.set("authToken", response.headers.valueOf("Credentials"));
+    });
+%}
+
+### Override Account (JSON endpoint)
+POST {{host}}/accounts/{{accountId}}
+Content-Type: application/json
+
+{
+    "preferred_language": "en"
+}
+
+> {%
+    client.test("Account overridden", function() {
+        const expectedAccountId = client.variables.environment.get("accountId");
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.account_id !== undefined, "account_id is missing: " + JSON.stringify(response.body));
+        client.assert(response.body.account_id === expectedAccountId, "account_id should be " + expectedAccountId + " but was " + response.body.account_id);
+    });
+%}
+
+### Create Account with specific ID (JSON endpoint)
+POST {{host}}/accounts/1234567
+Content-Type: application/json
+
+{
+  "preferred_language": "de"
+}
+
+> {%
+    client.test("Account created with specific ID", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+        client.assert(response.body.account_id === "1234567", "account_id should be 1234567");
+        client.assert(response.body.preferred_language === "de", "language should be 'de'");
+    });
+%}

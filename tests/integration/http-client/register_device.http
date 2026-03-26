@@ -1,0 +1,26 @@
+### POST /{{accountId}}/devices (Register Device)
+POST {{host}}/{{accountId}}/devices
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<device deviceid="{{deviceId}}">
+    <name>{{deviceName}}</name>
+</device>
+
+> {%
+    client.test("Device registered successfully", function() {
+        client.assert(response.status === 200 || response.status === 201, "Response status is not 200 or 201");
+        client.assert(response.body.includes('deviceid="' + client.variables.environment.get("deviceId") + '"'), "Response body should contain the deviceId");
+    });
+%}
+
+### DELETE /{{accountId}}/devices/{{deviceId}} (Unregister Device)
+DELETE {{host}}/{{accountId}}/devices/{{deviceId}}
+Authorization: Bearer {{token}}
+
+> {%
+    client.test("Device unregistered successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}
