@@ -7,7 +7,7 @@ import (
 )
 
 func TestFetchTuneInMetadata(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		html := `
 <!doctype html>
 <html>
@@ -30,7 +30,7 @@ func TestFetchTuneInMetadata(t *testing.T) {
 
 	defer func() { httpClient = oldClient }()
 
-	metadata, err := fetchTuneInMetadata("https://tunein.com/radio/WDR-2-Rheinland-1004-s213886/")
+	metadata, err := fetchTuneInMetadata(ts.URL + "/radio/WDR-2-Rheinland-1004-s213886/")
 	if err != nil {
 		t.Fatalf("fetchTuneInMetadata() error = %v", err)
 	}
@@ -162,7 +162,7 @@ func TestResolveLocationSpotify(t *testing.T) {
 }
 
 func TestFetchSpotifyMetadata(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		html := `
 <!doctype html>
 <html>
@@ -185,7 +185,7 @@ func TestFetchSpotifyMetadata(t *testing.T) {
 
 	defer func() { httpClient = oldClient }()
 
-	metadata, err := fetchSpotifyMetadata("https://open.spotify.com/album/7F50uh7oGitmAEScRKV6pD")
+	metadata, err := fetchSpotifyMetadata(ts.URL + "/album/7F50uh7oGitmAEScRKV6pD")
 	if err != nil {
 		t.Fatalf("fetchSpotifyMetadata() error = %v", err)
 	}

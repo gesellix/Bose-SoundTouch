@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"encoding/xml"
 	"io"
 	"log"
@@ -17,72 +16,6 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 )
-
-// HandleMargeAddAccount creates or overrides account information.
-func (s *Server) HandleMargeAddAccount(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return
-	}
-
-	var info models.ServiceAccountInfo
-	if len(body) > 0 {
-		if err := json.Unmarshal(body, &info); err != nil {
-			http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
-
-	account := chi.URLParam(r, "account")
-	if account != "" {
-		info.AccountID = account
-	}
-
-	if info.AccountID == "" {
-		for {
-			// Generate new 7-digit ID: 1000000 to 9999999
-			n, err := rand.Int(rand.Reader, big.NewInt(9000000))
-			if err != nil {
-				http.Error(w, "Internal server error during ID generation", http.StatusInternalServerError)
-				return
-			}
-
-			id := strconv.FormatInt(n.Int64()+1000000, 10)
-
-			// Check if ID already exists
-			existing, err := s.ds.GetAccountInfo(id)
-			if err != nil {
-				http.Error(w, "Internal server error during ID validation", http.StatusInternalServerError)
-				return
-			}
-
-			if existing == nil || existing.IsPlaceholder {
-				info.AccountID = id
-				break
-			}
-		}
-	}
-
-	if info.PreferredLanguage == "" {
-		info.PreferredLanguage = "en"
-	}
-
-	if info.ProviderSettings == nil {
-		info.ProviderSettings = []models.ProviderSetting{}
-	}
-
-	if err := s.ds.SaveAccountInfo(info.AccountID, &info); err != nil {
-		http.Error(w, "Failed to save account: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	if err := json.NewEncoder(w).Encode(info); err != nil {
-		log.Printf("[Marge] Failed to encode account info response: %v", err)
-	}
-}
 
 // HandleMargeCreateAccount creates a new account from Stockholm (XML).
 func (s *Server) HandleMargeCreateAccount(w http.ResponseWriter, r *http.Request) {

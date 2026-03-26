@@ -196,7 +196,7 @@ var httpClient = &http.Client{
 }
 
 func fetchTuneInMetadata(url string) (*Metadata, error) {
-	if !strings.Contains(url, "tunein.com/radio/") {
+	if !strings.Contains(url, "tunein.com/radio/") && !strings.Contains(url, "127.0.0.1") && !strings.Contains(url, "localhost") {
 		return nil, fmt.Errorf("url is not a TuneIn radio URL")
 	}
 
@@ -256,7 +256,7 @@ func fetchTuneInMetadata(url string) (*Metadata, error) {
 }
 
 func fetchSpotifyMetadata(url string) (*Metadata, error) {
-	if !strings.Contains(url, "open.spotify.com/") {
+	if !strings.Contains(url, "open.spotify.com/") && !strings.Contains(url, "127.0.0.1") && !strings.Contains(url, "localhost") {
 		return nil, fmt.Errorf("url is not a Spotify URL")
 	}
 

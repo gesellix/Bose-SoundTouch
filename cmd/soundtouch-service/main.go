@@ -704,8 +704,6 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	}
 
 	accountsRoutes := func(r chi.Router) {
-		r.Post("/", server.HandleMargeAddAccount)
-		r.Post("/{account}", server.HandleMargeAddAccount)
 		r.Get("/{account}/full", server.HandleMargeAccountFull)
 		r.Get("/{account}/devices/{device}/presets", server.HandleMargePresets)
 		r.Post("/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
