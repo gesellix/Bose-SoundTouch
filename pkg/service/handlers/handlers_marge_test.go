@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,8 +12,148 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
+
+func TestMargeCreateAccount(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	r, _ := setupRouter("http://localhost:8001", ds)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	reqBody := `<account>
+		<preferredLanguage>de</preferredLanguage>
+	</account>`
+
+	res, err := http.Post(ts.URL+"/marge/streaming/account", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("Expected status Created, got %v", res.Status)
+	}
+
+	contentType := res.Header.Get("Content-Type")
+	if contentType != "application/vnd.bose.streaming-v1.2+xml" {
+		t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.2+xml, got %v", contentType)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	var resp models.AccountFullResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if resp.AccountStatus != "ACTIVE" {
+		t.Errorf("Expected AccountStatus ACTIVE, got %v", resp.AccountStatus)
+	}
+	if resp.PreferredLanguage != "de" {
+		t.Errorf("Expected PreferredLanguage de, got %v", resp.PreferredLanguage)
+	}
+	if len(resp.ID) != 7 {
+		t.Errorf("Expected 7-digit ID, got %v", resp.ID)
+	}
+
+	// Verify it was saved in datastore
+	info, err := ds.GetAccountInfo(resp.ID)
+	if err != nil {
+		t.Errorf("Failed to get account from datastore: %v", err)
+	}
+	if info == nil {
+		t.Error("Account not found in datastore")
+	} else if info.PreferredLanguage != "de" {
+		t.Errorf("Expected saved PreferredLanguage de, got %v", info.PreferredLanguage)
+	}
+}
+
+func TestMargeLogin(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	accountID := "9876543"
+	_ = ds.SaveAccountInfo(accountID, &models.ServiceAccountInfo{
+		AccountID:         accountID,
+		PreferredLanguage: "fr",
+	})
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	reqBody := `<login>
+		<username>test@example.com</username>
+		<password>secret</password>
+	</login>`
+
+	res, err := http.Post(ts.URL+"/marge/streaming/account/login", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK, got %v", res.Status)
+	}
+
+	credentials := res.Header.Get("Credentials")
+	if credentials != "mock-token-"+accountID {
+		t.Errorf("Expected Credentials mock-token-%s, got %v", accountID, credentials)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	var resp models.AccountFullResponse
+	if err := xml.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if resp.ID != accountID {
+		t.Errorf("Expected ID %s, got %v", accountID, resp.ID)
+	}
+}
+
+func TestMargeLogin_NoAccount(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	r, _ := setupRouter("http://localhost:8001", ds)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	reqBody := `<login>
+		<username>none@example.com</username>
+		<password>secret</password>
+	</login>`
+
+	res, err := http.Post(ts.URL+"/marge/streaming/account/login", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected status Unauthorized, got %v", res.Status)
+	}
+}
 
 func TestMargeSourceProviders(t *testing.T) {
 	r, _ := setupRouter("http://localhost:8001", nil)

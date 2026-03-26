@@ -35,6 +35,10 @@ const (
 	EventTypeRecentsUpdated WebSocketEventType = "recentsUpdated"
 	// EventTypeLanguageUpdated indicates a language setting change
 	EventTypeLanguageUpdated WebSocketEventType = "languageUpdated"
+	// EventTypePairDeviceWithAccount indicates a device pairing request
+	EventTypePairDeviceWithAccount WebSocketEventType = "PairDeviceWithAccount"
+	// EventTypeUnPairDeviceWithAccount indicates a device unpairing request
+	EventTypeUnPairDeviceWithAccount WebSocketEventType = "UnPairDeviceWithAccount"
 	// EventTypeUnknown indicates an unrecognized event type
 	EventTypeUnknown WebSocketEventType = "unknown"
 )
@@ -66,6 +70,10 @@ func (e WebSocketEventType) String() string {
 		return "Recents Updated"
 	case EventTypeLanguageUpdated:
 		return "Language Updated"
+	case EventTypePairDeviceWithAccount:
+		return "Pair Device With Account"
+	case EventTypeUnPairDeviceWithAccount:
+		return "UnPair Device With Account"
 	default:
 		return "Unknown Event"
 	}
@@ -297,6 +305,18 @@ type LanguageUpdatedEvent struct {
 type Language struct {
 	XMLName xml.Name `xml:"language"`
 	Value   string   `xml:",chardata"`
+}
+
+// PairDeviceWithAccount represents a device pairing request message
+type PairDeviceWithAccount struct {
+	XMLName       xml.Name `xml:"PairDeviceWithAccount"`
+	AccountID     string   `xml:"accountId"`
+	UserAuthToken string   `xml:"userAuthToken"`
+}
+
+// UnPairDeviceWithAccount represents a device unpairing request message
+type UnPairDeviceWithAccount struct {
+	XMLName xml.Name `xml:"UnPairDeviceWithAccount"`
 }
 
 // SpecialMessageType represents message types that are not part of <updates>

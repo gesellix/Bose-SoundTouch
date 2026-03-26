@@ -57,6 +57,8 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
 		r.Get("/account/{account}/full", server.HandleMargeAccountFull)
 		r.Get("/software/update/account/{account}", server.HandleMargeSoftwareUpdate)
+		r.Post("/account", server.HandleMargeCreateAccount)
+		r.Post("/account/login", server.HandleMargeLogin)
 	}
 
 	accountsRoutes := func(r chi.Router) {

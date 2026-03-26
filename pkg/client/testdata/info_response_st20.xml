@@ -2,7 +2,7 @@
 <info deviceID="ABCD1234EFGH">
     <name>My SoundTouch Device</name>
     <type>SoundTouch 20</type>
-    <margeAccountUUID>3230304</margeAccountUUID>
+    <margeAccountUUID>1234567</margeAccountUUID>
     <components>
         <component>
             <componentCategory>SCM</componentCategory>

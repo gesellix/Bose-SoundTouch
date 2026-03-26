@@ -656,3 +656,21 @@ type ProviderSetting struct {
 	ProviderID   string `json:"provider_id" xml:"providerId"`
 	ProviderName string `json:"provider_name,omitempty" xml:"-"`
 }
+
+// MargeLoginRequest represents a login request from Stockholm.
+type MargeLoginRequest struct {
+	XMLName  xml.Name `xml:"login"`
+	Username string   `xml:"username"`
+	Password string   `xml:"password"`
+}
+
+// MargeAccountCreateRequest represents an account creation request from Stockholm.
+type MargeAccountCreateRequest struct {
+	XMLName           xml.Name `xml:"account"`
+	FirstName         string   `xml:"firstName"`
+	LastName          string   `xml:"lastName"`
+	Email             string   `xml:"email"`
+	Password          string   `xml:"password"`
+	CountryCode       string   `xml:"countryCode"`
+	PreferredLanguage string   `xml:"preferredLanguage"`
+}

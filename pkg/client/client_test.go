@@ -66,7 +66,7 @@ func TestNewClientFromHost(t *testing.T) {
 
 func TestGetDeviceInfo_Success(t *testing.T) {
 	// Load test data
-	testData := loadTestData(t, "info_response.xml")
+	testData := loadTestData(t, "info_response_st10.xml")
 
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,8 +117,8 @@ func TestGetDeviceInfo_Success(t *testing.T) {
 		t.Errorf("Expected Name 'My SoundTouch Device', got '%s'", deviceInfo.Name)
 	}
 
-	if deviceInfo.MargeAccountUUID != "3230304" {
-		t.Errorf("Expected MargeAccountUUID '3230304', got '%s'", deviceInfo.MargeAccountUUID)
+	if deviceInfo.MargeAccountUUID != "1234567" {
+		t.Errorf("Expected MargeAccountUUID '1234567', got '%s'", deviceInfo.MargeAccountUUID)
 	}
 
 	if deviceInfo.ModuleType != "sm2" {
@@ -227,7 +227,7 @@ func TestGetDeviceInfo_APIError(t *testing.T) {
 }
 
 func TestPing_Success(t *testing.T) {
-	testData := loadTestData(t, "info_response.xml")
+	testData := loadTestData(t, "info_response_st10.xml")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")

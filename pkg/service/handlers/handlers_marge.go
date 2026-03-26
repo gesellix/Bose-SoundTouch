@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/json"
 	"encoding/xml"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"strconv"
@@ -14,6 +17,174 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 )
+
+// HandleMargeAddAccount creates or overrides account information.
+func (s *Server) HandleMargeAddAccount(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	var info models.ServiceAccountInfo
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &info); err != nil {
+			http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	account := chi.URLParam(r, "account")
+	if account != "" {
+		info.AccountID = account
+	}
+
+	if info.AccountID == "" {
+		for {
+			// Generate new 7-digit ID: 1000000 to 9999999
+			n, err := rand.Int(rand.Reader, big.NewInt(9000000))
+			if err != nil {
+				http.Error(w, "Internal server error during ID generation", http.StatusInternalServerError)
+				return
+			}
+
+			id := strconv.FormatInt(n.Int64()+1000000, 10)
+
+			// Check if ID already exists
+			existing, err := s.ds.GetAccountInfo(id)
+			if err != nil {
+				http.Error(w, "Internal server error during ID validation", http.StatusInternalServerError)
+				return
+			}
+
+			if existing == nil || existing.IsPlaceholder {
+				info.AccountID = id
+				break
+			}
+		}
+	}
+
+	if info.PreferredLanguage == "" {
+		info.PreferredLanguage = "en"
+	}
+
+	if info.ProviderSettings == nil {
+		info.ProviderSettings = []models.ProviderSetting{}
+	}
+
+	if err := s.ds.SaveAccountInfo(info.AccountID, &info); err != nil {
+		http.Error(w, "Failed to save account: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(info); err != nil {
+		log.Printf("[Marge] Failed to encode account info response: %v", err)
+	}
+}
+
+// HandleMargeCreateAccount creates a new account from Stockholm (XML).
+func (s *Server) HandleMargeCreateAccount(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	var req models.MargeAccountCreateRequest
+	if err := xml.Unmarshal(body, &req); err != nil {
+		http.Error(w, "Invalid XML body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Generate new 7-digit ID
+	var id string
+
+	for {
+		n, _ := rand.Int(rand.Reader, big.NewInt(9000000))
+		id = strconv.FormatInt(n.Int64()+1000000, 10)
+
+		existing, _ := s.ds.GetAccountInfo(id)
+		if existing == nil || existing.IsPlaceholder {
+			break
+		}
+	}
+
+	info := &models.ServiceAccountInfo{
+		AccountID:         id,
+		PreferredLanguage: req.PreferredLanguage,
+	}
+	if info.PreferredLanguage == "" {
+		info.PreferredLanguage = "en"
+	}
+
+	if err := s.ds.SaveAccountInfo(id, info); err != nil {
+		http.Error(w, "Failed to save account", http.StatusInternalServerError)
+		return
+	}
+
+	// Stockholm expects the account XML in response
+	resp := models.AccountFullResponse{
+		ID:                id,
+		AccountStatus:     "ACTIVE",
+		PreferredLanguage: info.PreferredLanguage,
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.WriteHeader(http.StatusCreated)
+	_ = xml.NewEncoder(w).Encode(resp)
+}
+
+// HandleMargeLogin handles account login from Stockholm.
+func (s *Server) HandleMargeLogin(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	var req models.MargeLoginRequest
+	if err = xml.Unmarshal(body, &req); err != nil {
+		http.Error(w, "Invalid XML body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Simple mock: find account by email or just return a default one if none exists
+	// For now, let's just return a fixed one for testing if nothing else matches
+	accounts, err := s.ds.ListAccounts()
+
+	accountID := ""
+
+	if err == nil {
+		for _, id := range accounts {
+			if id == "default" {
+				continue
+			}
+			// In a real system we'd check email/password
+			// Here we just pick the first one or use fallback
+			accountID = id
+
+			break
+		}
+	}
+
+	if accountID == "" {
+		http.Error(w, "No accounts found", http.StatusUnauthorized)
+		return
+	}
+
+	resp := models.AccountFullResponse{
+		ID:                accountID,
+		AccountStatus:     "ACTIVE",
+		PreferredLanguage: "en",
+	}
+
+	// Bose returns a token in the Credentials header
+	w.Header().Set("Credentials", "mock-token-"+accountID)
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	_ = xml.NewEncoder(w).Encode(resp)
+}
 
 // HandleMargeSourceProviders returns the Marge source providers.
 func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Request) {

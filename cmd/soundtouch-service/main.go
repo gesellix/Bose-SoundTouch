@@ -677,6 +677,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 
 	streamingRoutes := func(r chi.Router) {
 		r.Get("/sourceproviders", server.HandleMargeSourceProviders)
+		r.Post("/account", server.HandleMargeCreateAccount)
+		r.Post("/account/login", server.HandleMargeLogin)
 		r.Get("/account/{account}/device/{device}/recent", server.HandleMargeRecents)
 		r.Post("/account/{account}/device/{device}/recent", server.HandleMargeAddRecent)
 		r.Get("/account/{account}/device/{device}/presets", server.HandleMargePresets)
@@ -702,6 +704,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	}
 
 	accountsRoutes := func(r chi.Router) {
+		r.Post("/", server.HandleMargeAddAccount)
+		r.Post("/{account}", server.HandleMargeAddAccount)
 		r.Get("/{account}/full", server.HandleMargeAccountFull)
 		r.Get("/{account}/devices/{device}/presets", server.HandleMargePresets)
 		r.Post("/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)

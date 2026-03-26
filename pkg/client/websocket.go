@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"log"
 	"net/url"
@@ -517,6 +518,37 @@ func (ws *WebSocketClient) SendMessage(message []byte) error {
 	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 
 	return conn.WriteMessage(websocket.TextMessage, message)
+}
+
+// PairWithAccount sends a request to pair the device with a specific account
+func (ws *WebSocketClient) PairWithAccount(accountID, userAuthToken string) error {
+	request := models.PairDeviceWithAccount{
+		AccountID:     accountID,
+		UserAuthToken: userAuthToken,
+	}
+
+	data, err := xml.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal pairing request: %w", err)
+	}
+
+	ws.logger.Printf("Sending PairDeviceWithAccount for account %s", accountID)
+
+	return ws.SendMessage(data)
+}
+
+// UnPairFromAccount sends a request to unpair the device from its account
+func (ws *WebSocketClient) UnPairFromAccount() error {
+	request := models.UnPairDeviceWithAccount{}
+
+	data, err := xml.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal unpairing request: %w", err)
+	}
+
+	ws.logger.Printf("Sending UnPairDeviceWithAccount")
+
+	return ws.SendMessage(data)
 }
 
 // Wait blocks until the WebSocket connection is closed or context is cancelled

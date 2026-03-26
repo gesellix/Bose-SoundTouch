@@ -652,6 +652,73 @@ func listMusicServiceAccounts(c *cli.Context) error {
 	return nil
 }
 
+// pairDevice triggers the Stockholm registration flow via WebSocket
+func pairDevice(c *cli.Context) error {
+	clientConfig := GetClientConfig(c)
+
+	client, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		return err
+	}
+
+	accountID := c.String("id")
+	token := c.String("token")
+
+	PrintDeviceHeader("Pairing device with Marge account", clientConfig.Host, clientConfig.Port)
+	fmt.Printf("  Account ID: %s\n", accountID)
+
+	// We need a WebSocket client for this
+	ws := client.NewWebSocketClient(nil)
+
+	err = ws.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect to device WebSocket: %w", err)
+	}
+
+	defer func() { _ = ws.Disconnect() }()
+
+	err = ws.PairWithAccount(accountID, token)
+	if err != nil {
+		return fmt.Errorf("failed to send pairing request: %w", err)
+	}
+
+	PrintSuccess("Pairing request sent successfully")
+	fmt.Println("💡 The device will now register itself with the cloud service.")
+
+	return nil
+}
+
+// unpairDevice triggers the Stockholm unregistration flow via WebSocket
+func unpairDevice(c *cli.Context) error {
+	clientConfig := GetClientConfig(c)
+
+	client, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		return err
+	}
+
+	PrintDeviceHeader("Unpairing device from Marge account", clientConfig.Host, clientConfig.Port)
+
+	// We need a WebSocket client for this
+	ws := client.NewWebSocketClient(nil)
+
+	err = ws.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect to device WebSocket: %w", err)
+	}
+
+	defer func() { _ = ws.Disconnect() }()
+
+	err = ws.UnPairFromAccount()
+	if err != nil {
+		return fmt.Errorf("failed to send unpairing request: %w", err)
+	}
+
+	PrintSuccess("Unpairing request sent successfully")
+
+	return nil
+}
+
 // getServiceDisplayName returns a user-friendly display name for a service
 func getServiceDisplayName(source string) string {
 	switch source {

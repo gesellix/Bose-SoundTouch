@@ -2038,6 +2038,30 @@ func main() {
 							},
 						},
 					},
+					{
+						Name:   "pair",
+						Usage:  "Pair the device with a Marge cloud account (Stockholm registration)",
+						Action: pairDevice,
+						Before: RequireHost,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "id",
+								Usage:    "Marge account ID (e.g., 1234567)",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:     "token",
+								Usage:    "User authorization token",
+								Required: true,
+							},
+						},
+					},
+					{
+						Name:   "unpair",
+						Usage:  "Unpair the device from its Marge cloud account",
+						Action: unpairDevice,
+						Before: RequireHost,
+					},
 				},
 			},
 			// Token commands
