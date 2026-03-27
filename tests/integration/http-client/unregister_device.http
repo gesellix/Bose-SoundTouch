@@ -1,0 +1,9 @@
+### DELETE /{{newAccountId}}/devices/{{deviceId}} (Unregister Device)
+DELETE {{host}}/accounts/{{newAccountId}}/devices/{{deviceId}}
+Authorization: Bearer {{authToken}}
+
+> {%
+    client.test("Device unregistered successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}

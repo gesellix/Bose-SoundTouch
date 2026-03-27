@@ -125,6 +125,7 @@ test-http-client:
 		/workdir/get_provider_settings.http \
 		/workdir/get_full_account.http \
 		/workdir/get_group.http \
+		/workdir/unregister_device.http \
 		--report; \
 	EXIT_CODE=$$?; \
 	docker logs soundtouch-service; \
