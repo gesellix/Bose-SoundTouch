@@ -1,7 +1,7 @@
-### POST /{{accountId}}/devices (Register Device)
-POST {{host}}/{{accountId}}/devices
+### POST /{{newAccountId}}/devices (Register Device)
+POST {{host}}/accounts/{{newAccountId}}/devices
 Content-Type: application/vnd.bose.streaming-v1.2+xml
-Authorization: Bearer {{token}}
+Authorization: Bearer {{authToken}}
 
 <?xml version="1.0" encoding="UTF-8" ?>
 <device deviceid="{{deviceId}}">
@@ -11,13 +11,16 @@ Authorization: Bearer {{token}}
 > {%
     client.test("Device registered successfully", function() {
         client.assert(response.status === 200 || response.status === 201, "Response status is not 200 or 201");
-        client.assert(response.body.includes('deviceid="' + client.variables.environment.get("deviceId") + '"'), "Response body should contain the deviceId");
+        const doc = response.body;
+        const device = doc.getElementsByTagName("device")[0];
+        client.assert(device !== undefined, "Response body should contain <device>");
+        client.assert(device.getAttribute("deviceid") === client.variables.environment.get("deviceId"), "Response body should contain the deviceId");
     });
 %}
 
-### DELETE /{{accountId}}/devices/{{deviceId}} (Unregister Device)
-DELETE {{host}}/{{accountId}}/devices/{{deviceId}}
-Authorization: Bearer {{token}}
+### DELETE /{{newAccountId}}/devices/{{deviceId}} (Unregister Device)
+DELETE {{host}}/accounts/{{newAccountId}}/devices/{{deviceId}}
+Authorization: Bearer {{authToken}}
 
 > {%
     client.test("Device unregistered successfully", function() {

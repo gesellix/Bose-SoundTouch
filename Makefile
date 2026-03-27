@@ -120,12 +120,14 @@ test-http-client:
 		--env-file /workdir/http-client.env.json \
 		--env ci \
 		/workdir/create_account.http \
+		/workdir/register_device.http \
 		/workdir/power_on.http \
+		/workdir/get_provider_settings.http \
 		/workdir/get_full_account.http \
 		/workdir/get_group.http \
-		/workdir/get_provider_settings.http \
 		--report; \
 	EXIT_CODE=$$?; \
+	docker logs soundtouch-service; \
 	docker stop soundtouch-service; \
 	docker rm soundtouch-service; \
 	docker rmi soundtouch-service-test; \

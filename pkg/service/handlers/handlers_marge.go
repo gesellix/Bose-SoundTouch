@@ -31,16 +31,20 @@ func (s *Server) HandleMargeCreateAccount(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Generate new 7-digit ID
+	// Use provided ID or generate new 7-digit ID
 	var id string
 
-	for {
-		n, _ := rand.Int(rand.Reader, big.NewInt(9000000))
-		id = strconv.FormatInt(n.Int64()+1000000, 10)
+	if req.ID != "" {
+		id = req.ID
+	} else {
+		for {
+			n, _ := rand.Int(rand.Reader, big.NewInt(9000000))
+			id = strconv.FormatInt(n.Int64()+1000000, 10)
 
-		existing, _ := s.ds.GetAccountInfo(id)
-		if existing == nil || existing.IsPlaceholder {
-			break
+			existing, _ := s.ds.GetAccountInfo(id)
+			if existing == nil || existing.IsPlaceholder {
+				break
+			}
 		}
 	}
 

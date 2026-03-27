@@ -667,6 +667,7 @@ type MargeLoginRequest struct {
 // MargeAccountCreateRequest represents an account creation request from Stockholm.
 type MargeAccountCreateRequest struct {
 	XMLName           xml.Name `xml:"account"`
+	ID                string   `xml:"id,attr,omitempty"` // Optional ID for testing/overrides
 	FirstName         string   `xml:"firstName"`
 	LastName          string   `xml:"lastName"`
 	Email             string   `xml:"email"`
