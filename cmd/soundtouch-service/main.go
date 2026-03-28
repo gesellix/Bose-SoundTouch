@@ -675,7 +675,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 
-	streamingRoutes := func(r chi.Router) {
+	r.Route("/streaming", func(r chi.Router) {
 		r.Get("/sourceproviders", server.HandleMargeSourceProviders)
 		r.Post("/account", server.HandleMargeCreateAccount)
 		r.Post("/account/login", server.HandleMargeLogin)
@@ -701,9 +701,9 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Post("/usage", server.HandleUsageStats)
 			r.Post("/error", server.HandleErrorStats)
 		})
-	}
+	})
 
-	accountsRoutes := func(r chi.Router) {
+	r.Route("/accounts", func(r chi.Router) {
 		r.Get("/{account}/full", server.HandleMargeAccountFull)
 		r.Get("/{account}/devices/{device}/presets", server.HandleMargePresets)
 		r.Post("/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
@@ -715,18 +715,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Get("/{account}/devices/{device}/group/", server.HandleMargeDeviceGroup)
 		r.Get("/{account}/devices/{device}/group/server", server.HandleMargeDeviceGroupServer)
 		r.Get("/{account}/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
-	}
-
-	r.Route("/marge", func(r chi.Router) {
-		r.Route("/streaming", streamingRoutes)
-		r.Route("/accounts", accountsRoutes)
-
-		r.Get("/updates/soundtouch", server.HandleMargeSoftwareUpdate)
 	})
 
-	// Legacy or direct domain calls without /marge prefix
-	r.Route("/streaming", streamingRoutes)
-	r.Route("/accounts", accountsRoutes)
 	r.Get("/updates/soundtouch", server.HandleMargeSoftwareUpdate)
 
 	r.Route("/customer", func(r chi.Router) {
