@@ -707,40 +707,7 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	}
 
 	// Try to load existing device info to avoid overwriting existing details with empty values.
-	existing, _ := ds.getDeviceInfoNoLock(account, device)
-	if existing != nil {
-		if info.Name == "" {
-			info.Name = existing.Name
-		}
-
-		if info.ProductCode == "" {
-			info.ProductCode = existing.ProductCode
-		}
-
-		if info.DeviceSerialNumber == "" {
-			info.DeviceSerialNumber = existing.DeviceSerialNumber
-		}
-
-		if info.ProductSerialNumber == "" {
-			info.ProductSerialNumber = existing.ProductSerialNumber
-		}
-
-		if info.FirmwareVersion == "" {
-			info.FirmwareVersion = existing.FirmwareVersion
-		}
-
-		if info.IPAddress == "" {
-			info.IPAddress = existing.IPAddress
-		}
-
-		if info.MacAddress == "" {
-			info.MacAddress = existing.MacAddress
-		}
-
-		if info.DiscoveryMethod == "" {
-			info.DiscoveryMethod = existing.DiscoveryMethod
-		}
-	}
+	ds.mergeWithExistingDeviceInfo(account, device, info)
 
 	dir := ds.AccountDeviceDir(account, device)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -748,12 +715,6 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	}
 
 	path := filepath.Join(dir, constants.DeviceInfoFile)
-
-	type ComponentXML struct {
-		ComponentCategory string `xml:"componentCategory"`
-		SoftwareVersion   string `xml:"softwareVersion,omitempty"`
-		SerialNumber      string `xml:"serialNumber,omitempty"`
-	}
 
 	type NetworkInfoXML struct {
 		Type       string `xml:"type,attr"`
@@ -767,24 +728,13 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 		Name            string           `xml:"name"`
 		Type            string           `xml:"type"`
 		ModuleType      string           `xml:"moduleType"`
-		Components      []ComponentXML   `xml:"components>component"`
+		Components      []componentXML   `xml:"components>component"`
 		NetworkInfo     []NetworkInfoXML `xml:"networkInfo"`
 		DiscoveryMethod string           `xml:"discoveryMethod,omitempty"`
 	}
 
 	// Parsing product code back to type and moduleType (best effort)
-	// Python: f"{type} {module_type}"
-	devType := info.ProductCode
-	moduleType := ""
-
-	for i := 0; i < len(info.ProductCode); i++ {
-		if info.ProductCode[i] == ' ' {
-			devType = info.ProductCode[:i]
-			moduleType = info.ProductCode[i+1:]
-
-			break
-		}
-	}
+	devType, moduleType := ds.parseProductCode(info.ProductCode)
 
 	ix := InfoXML{
 		DeviceID:        info.DeviceID,
@@ -798,27 +748,7 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 		ix.DiscoveryMethod = "sync_full"
 	}
 
-	for _, comp := range info.Components {
-		ix.Components = append(ix.Components, ComponentXML{
-			ComponentCategory: comp.Category,
-			SoftwareVersion:   comp.SoftwareVersion,
-			SerialNumber:      comp.SerialNumber,
-		})
-	}
-
-	if len(ix.Components) == 0 {
-		ix.Components = []ComponentXML{
-			{
-				ComponentCategory: "SCM",
-				SoftwareVersion:   info.FirmwareVersion,
-				SerialNumber:      info.DeviceSerialNumber,
-			},
-			{
-				ComponentCategory: "PackagedProduct",
-				SerialNumber:      info.ProductSerialNumber,
-			},
-		}
-	}
+	ix.Components = ds.buildComponentsXML(info)
 
 	ix.NetworkInfo = []NetworkInfoXML{
 		{
@@ -838,7 +768,104 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	return os.WriteFile(path, append(header, data...), 0644)
 }
 
-// SaveAccountInfo saves account-level metadata to the datastore.
+func (ds *DataStore) mergeWithExistingDeviceInfo(account, device string, info *models.ServiceDeviceInfo) {
+	existing, _ := ds.getDeviceInfoNoLock(account, device)
+	if existing == nil {
+		return
+	}
+
+	if info.Name == "" {
+		info.Name = existing.Name
+	}
+
+	if info.ProductCode == "" {
+		info.ProductCode = existing.ProductCode
+	}
+
+	if info.DeviceSerialNumber == "" {
+		info.DeviceSerialNumber = existing.DeviceSerialNumber
+	}
+
+	if info.ProductSerialNumber == "" {
+		info.ProductSerialNumber = existing.ProductSerialNumber
+	}
+
+	if info.FirmwareVersion == "" {
+		info.FirmwareVersion = existing.FirmwareVersion
+	}
+
+	if info.IPAddress == "" {
+		info.IPAddress = existing.IPAddress
+	}
+
+	if info.MacAddress == "" {
+		info.MacAddress = existing.MacAddress
+	}
+
+	if info.DiscoveryMethod == "" {
+		info.DiscoveryMethod = existing.DiscoveryMethod
+	}
+}
+
+func (ds *DataStore) parseProductCode(productCode string) (string, string) {
+	devType := productCode
+	moduleType := ""
+
+	for i := 0; i < len(productCode); i++ {
+		if productCode[i] == ' ' {
+			devType = productCode[:i]
+			moduleType = productCode[i+1:]
+
+			break
+		}
+	}
+
+	return devType, moduleType
+}
+
+type componentXML struct {
+	ComponentCategory string `xml:"componentCategory"`
+	SoftwareVersion   string `xml:"softwareVersion,omitempty"`
+	SerialNumber      string `xml:"serialNumber,omitempty"`
+}
+
+func (ds *DataStore) buildComponentsXML(info *models.ServiceDeviceInfo) []componentXML {
+	var components []componentXML
+	for _, comp := range info.Components {
+		components = append(components, componentXML{
+			ComponentCategory: comp.Category,
+			SoftwareVersion:   comp.SoftwareVersion,
+			SerialNumber:      comp.SerialNumber,
+		})
+	}
+
+	if len(components) == 0 && (info.FirmwareVersion != "" || info.DeviceSerialNumber != "" || info.ProductSerialNumber != "") {
+		components = []componentXML{
+			{
+				ComponentCategory: "SCM",
+				SoftwareVersion:   info.FirmwareVersion,
+				SerialNumber:      info.DeviceSerialNumber,
+			},
+			{
+				ComponentCategory: "PackagedProduct",
+				SerialNumber:      info.ProductSerialNumber,
+			},
+		}
+	} else if len(components) > 0 {
+		if info.FirmwareVersion != "" {
+			for i := range components {
+				if components[i].ComponentCategory == "SCM" {
+					components[i].SoftwareVersion = info.FirmwareVersion
+					break
+				}
+			}
+		}
+	}
+
+	return components
+}
+
+// SaveAccountInfo stores account-level metadata in the datastore.
 func (ds *DataStore) SaveAccountInfo(accountID string, info *models.ServiceAccountInfo) error {
 	if ds == nil || ds.DataDir == "" || accountID == "" {
 		return nil

@@ -121,6 +121,7 @@ test-http-client:
 		--env ci \
 		/workdir/create_account.http \
 		/workdir/register_device.http \
+		/workdir/customer_support.http \
 		/workdir/power_on.http \
 		/workdir/get_provider_settings.http \
 		/workdir/get_full_account.http \

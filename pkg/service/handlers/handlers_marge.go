@@ -543,7 +543,7 @@ func (s *Server) HandleMargeCustomerSupport(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req models.CustomerSupportRequest
-	if err := xml.Unmarshal(body, &req); err != nil {
+	if err = xml.Unmarshal(body, &req); err != nil {
 		// Log error but might still return 200 as Bose expects
 		log.Printf("Failed to unmarshal CustomerSupportRequest: %v", err)
 	}
@@ -561,5 +561,34 @@ func (s *Server) HandleMargeCustomerSupport(w http.ResponseWriter, r *http.Reque
 		},
 	}
 	s.ds.AddDeviceEvent(req.Device.ID, event)
+
+	// Update DeviceInfo if possible
+	devices, err := s.ds.ListAllDevices()
+	if err == nil {
+		var account string
+
+		for i := range devices {
+			dev := &devices[i]
+			if dev.DeviceID == req.Device.ID {
+				account = dev.AccountID
+				break
+			}
+		}
+
+		if account != "" {
+			info, err := s.ds.GetDeviceInfo(account, req.Device.ID)
+			if err == nil && info != nil {
+				info.IPAddress = req.DiagnosticData.DeviceLandscape.IPAddress
+
+				info.FirmwareVersion = req.Device.FirmwareVersion
+				if len(req.DiagnosticData.DeviceLandscape.MacAddresses) > 0 {
+					info.MacAddress = req.DiagnosticData.DeviceLandscape.MacAddresses[0]
+				}
+
+				_ = s.ds.SaveDeviceInfo(account, req.Device.ID, info)
+			}
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 }

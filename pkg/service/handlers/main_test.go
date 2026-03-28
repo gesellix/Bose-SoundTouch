@@ -39,6 +39,10 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 
 	streamingRoutes := func(r chi.Router) {
 		r.Get("/sourceproviders", server.HandleMargeSourceProviders)
+		r.Route("/account/{account}/device", func(r chi.Router) {
+			r.Post("/", server.HandleMargeAddDevice)
+			r.Post("/{device}", server.HandleMargeAddDevice)
+		})
 		r.Get("/account/{account}/device/{device}/recent", server.HandleMargeRecents)
 		r.Post("/account/{account}/device/{device}/recent", server.HandleMargeAddRecent)
 		r.Get("/account/{account}/device/{device}/presets", server.HandleMargePresets)

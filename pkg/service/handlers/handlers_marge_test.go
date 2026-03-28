@@ -1030,11 +1030,23 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 	})
 
 	t.Run("CustomerSupport", func(t *testing.T) {
-		payload := `<?xml version="1.0" encoding="UTF-8" ?>
+		account := "A123"
+		deviceId := "587A628A4042"
+		macAddress := "AABBCCDDEEFF"
+		ipAddress := "192.168.1.100"
+		firmware := "27.0.6"
+
+		// Pre-register device
+		_ = ds.SaveDeviceInfo(account, deviceId, &models.ServiceDeviceInfo{
+			DeviceID: deviceId,
+			Name:     "TestDevice",
+		})
+
+		payload := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" ?>
 		<device-data>
-			<device id="587A628A4042">
+			<device id="%s">
 				<serialnumber>P123</serialnumber>
-				<firmware-version>27.0.6</firmware-version>
+				<firmware-version>%s</firmware-version>
 				<product product_code="SoundTouch 10" type="5">
 					<serialnumber>SN123</serialnumber>
 				</product>
@@ -1042,10 +1054,13 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 			<diagnostic-data>
 				<device-landscape>
 					<rssi>Good</rssi>
-					<ip-address>192.168.1.100</ip-address>
+					<macaddresses>
+						<macaddress>%s</macaddress>
+					</macaddresses>
+					<ip-address>%s</ip-address>
 				</device-landscape>
 			</diagnostic-data>
-		</device-data>`
+		</device-data>`, deviceId, firmware, macAddress, ipAddress)
 
 		res, err := http.Post(ts.URL+"/marge/streaming/support/customersupport", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(payload))
 		if err != nil {
@@ -1063,23 +1078,36 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		}
 
 		// Verify event was recorded
-		events := ds.GetDeviceEvents("587A628A4042")
+		events := ds.GetDeviceEvents(deviceId)
 		found := false
 
 		for _, e := range events {
 			if e.Type == "customer-support-upload" {
 				found = true
-
-				if e.Data["firmware"] != "27.0.6" {
-					t.Errorf("Expected firmware 27.0.6, got %v", e.Data["firmware"])
+				if e.Data["firmware"] != firmware {
+					t.Errorf("Expected firmware %s, got %v", firmware, e.Data["firmware"])
 				}
-
 				break
 			}
 		}
 
 		if !found {
 			t.Error("Customer support event not found in event log")
+		}
+
+		// Verify DeviceInfo was updated
+		info, err := ds.GetDeviceInfo(account, deviceId)
+		if err != nil {
+			t.Fatalf("Failed to get device info: %v", err)
+		}
+		if info.IPAddress != ipAddress {
+			t.Errorf("Expected updated IP %s, got %s", ipAddress, info.IPAddress)
+		}
+		if info.MacAddress != macAddress {
+			t.Errorf("Expected updated MAC %s, got %s", macAddress, info.MacAddress)
+		}
+		if info.FirmwareVersion != firmware {
+			t.Errorf("Expected updated firmware %s, got %s", firmware, info.FirmwareVersion)
 		}
 	})
 

@@ -971,16 +971,18 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 // AddDeviceToAccount adds a new device to the specified account.
 func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte) ([]byte, error) {
 	var newDeviceElem struct {
-		DeviceID string `xml:"deviceid,attr"`
-		Name     string `xml:"name"`
+		DeviceID   string `xml:"deviceid,attr"`
+		Name       string `xml:"name"`
+		MACAddress string `xml:"macaddress"`
 	}
 	if err := xml.Unmarshal(sourceXML, &newDeviceElem); err != nil {
 		return nil, err
 	}
 
 	info := &models.ServiceDeviceInfo{
-		DeviceID: newDeviceElem.DeviceID,
-		Name:     newDeviceElem.Name,
+		DeviceID:   newDeviceElem.DeviceID,
+		Name:       newDeviceElem.Name,
+		MacAddress: newDeviceElem.MACAddress,
 		// Other fields will be filled by discovery later or default
 	}
 

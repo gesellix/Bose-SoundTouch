@@ -6,6 +6,7 @@ Authorization: Bearer {{token}}
 <?xml version="1.0" encoding="UTF-8" ?>
 <device deviceid="{{deviceId}}">
     <name>{{deviceName}}</name>
+    <macaddress>{{macAddress1}}</macaddress>
 </device>
 
 > {%
@@ -15,5 +16,41 @@ Authorization: Bearer {{token}}
         const device = doc.getElementsByTagName("device")[0];
         client.assert(device !== undefined, "Response body should contain <device>");
         client.assert(device.getAttribute("deviceid") === client.variables.environment.get("deviceId"), "Response body should contain the deviceId");
+    });
+%}
+
+### POST /streaming/account/{{accountId}}/device/ (Register Device Variant)
+POST {{host}}/streaming/account/{{accountId}}/device/
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<device deviceid="{{deviceId}}">
+    <name>{{deviceName}}</name>
+    <macaddress>{{macAddress1}}mac</macaddress>
+</device>
+
+> {%
+    client.test("Device registered successfully (variant)", function() {
+        client.assert(response.status === 200 || response.status === 201, "Response status is not 200 or 201");
+        const doc = response.body;
+        const device = doc.getElementsByTagName("device")[0];
+        client.assert(device !== undefined, "Response body should contain <device>");
+        client.assert(device.getAttribute("deviceid") === client.variables.environment.get("deviceId"), "Response body should contain the deviceId");
+
+        const createdOn = device.getElementsByTagName("createdOn")[0];
+        client.assert(createdOn !== undefined, "Response body should contain <createdOn>");
+        client.assert(createdOn.textContent.length > 0, "createdOn should not be empty");
+
+        const name = device.getElementsByTagName("name")[0];
+        client.assert(name !== undefined, "Response body should contain <name>");
+        client.assert(name.textContent === client.variables.environment.get("deviceName"), "name should match requested name");
+
+        const updatedOn = device.getElementsByTagName("updatedOn")[0];
+        client.assert(updatedOn !== undefined, "Response body should contain <updatedOn>");
+        client.assert(updatedOn.textContent === createdOn.textContent, "updatedOn should match createdOn for a new device");
+
+        const ipaddress = device.getElementsByTagName("ipaddress")[0];
+        client.assert(ipaddress !== undefined, "Response body should contain <ipaddress>");
     });
 %}
