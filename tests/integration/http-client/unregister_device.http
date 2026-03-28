@@ -1,6 +1,6 @@
-### DELETE /{{newAccountId}}/devices/{{deviceId}} (Unregister Device)
-DELETE {{host}}/accounts/{{newAccountId}}/devices/{{deviceId}}
-Authorization: Bearer {{authToken}}
+### DELETE /{{accountId}}/devices/{{deviceId}} (Unregister Device)
+DELETE {{host}}/accounts/{{accountId}}/devices/{{deviceId}}
+Authorization: Bearer {{token}}
 
 > {%
     client.test("Device unregistered successfully", function() {

@@ -22,7 +22,6 @@ Content-Type: application/vnd.bose.customer-v1.0+xml
         if (client.variables.environment.get("accountId")) {
             client.assert(accountId === client.variables.environment.get("accountId"), "Account ID "+accountId+" should match environment variable if provided");
         }
-        client.global.set("newAccountId", accountId);
     });
 %}
 
@@ -40,6 +39,5 @@ Content-Type: application/vnd.bose.streaming-v1.2+xml
     client.test("Login successful", function() {
         client.assert(response.status === 200, "Response status is not 200");
         client.assert(response.headers.valueOf("Credentials") !== null, "Credentials header missing");
-        client.global.set("authToken", response.headers.valueOf("Credentials"));
     });
 %}

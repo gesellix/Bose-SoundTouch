@@ -1,7 +1,7 @@
-### POST /{{newAccountId}}/devices (Register Device)
-POST {{host}}/accounts/{{newAccountId}}/devices
+### POST /{{accountId}}/devices (Register Device)
+POST {{host}}/accounts/{{accountId}}/devices
 Content-Type: application/vnd.bose.streaming-v1.2+xml
-Authorization: Bearer {{authToken}}
+Authorization: Bearer {{token}}
 
 <?xml version="1.0" encoding="UTF-8" ?>
 <device deviceid="{{deviceId}}">

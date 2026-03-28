@@ -1,8 +1,8 @@
-### GET /streaming/account/{{newAccountId}}/provider_settings
-GET {{host}}/streaming/account/{{newAccountId}}/provider_settings
+### GET /streaming/account/{{accountId}}/provider_settings
+GET {{host}}/streaming/account/{{accountId}}/provider_settings
 Host: streaming.bose.com
 Accept: application/vnd.bose.streaming-v1.2+xml
-Authorization: Bearer {{authToken}}
+Authorization: Bearer {{token}}
 Content-Type: application/vnd.bose.streaming-v1.2+xml
 User-Agent: Bose_Lisa/27.0.6
 

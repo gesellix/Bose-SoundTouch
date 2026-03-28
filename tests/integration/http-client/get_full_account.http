@@ -1,7 +1,7 @@
-### GET /streaming/account/{{newAccountId}}/full
-GET {{host}}/streaming/account/{{newAccountId}}/full
+### GET /streaming/account/{{accountId}}/full
+GET {{host}}/streaming/account/{{accountId}}/full
 Host: streaming.bose.com
-Authorization: Bearer {{authToken}}
+Authorization: Bearer {{token}}
 Content-Type: application/vnd.bose.streaming-v1.2+xml
 User-Agent: Bose_Lisa/27.0.6
 Accept: application/vnd.bose.streaming-v1.2+xml
@@ -13,7 +13,7 @@ Accept: application/vnd.bose.streaming-v1.2+xml
     });
 
     client.test("Response body contains <account>", function() {
-        const expectedAccountId = client.global.get("newAccountId") || client.variables.environment.get("accountId");
+        const expectedAccountId = client.variables.environment.get("accountId");
         const doc = response.body;
         const account = doc.getElementsByTagName("account")[0];
         client.assert(account !== undefined, "Response body does not contain <account>");

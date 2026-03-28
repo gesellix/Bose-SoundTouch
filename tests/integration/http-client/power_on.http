@@ -3,7 +3,7 @@ POST {{host}}/streaming/support/power_on
 Host: streaming.bose.com
 User-Agent: Bose_Lisa/27.0.6
 Accept: application/vnd.bose.streaming-v1.2+xml
-Authorization: Bearer {{authToken}}
+Authorization: Bearer {{token}}
 Content-Type: application/vnd.bose.streaming-v1.2+xml
 
 <?xml version="1.0" encoding="UTF-8" ?><device-data><device id="{{deviceId}}"><serialnumber>{{serialNumber}}</serialnumber><firmware-version>27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29</firmware-version><product product_code="{{productCode}}" type="5"><serialnumber>{{productSerialNumber}}</serialnumber></product></device><diagnostic-data><device-landscape><rssi>Excellent</rssi><gateway-ip-address>{{gatewayIp}}</gateway-ip-address><macaddresses><macaddress>{{macAddress1}}</macaddress><macaddress>{{macAddress2}}</macaddress></macaddresses><ip-address>{{deviceIp}}</ip-address><network-connection-type>Wireless</network-connection-type></device-landscape><network-landscape><network-data xmlns="http://www.Bose.com/Schemas/2012-12/NetworkMonitor/" /></network-landscape></diagnostic-data></device-data>
