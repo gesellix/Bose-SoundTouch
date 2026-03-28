@@ -384,8 +384,24 @@ func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
 
 func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 	serviceIP := "192.168.1.100"
-	// Use an IP that is unroutable or doesn't exist on the network to ensure timeout
-	upstreamDNS := []string{"192.0.2.1:53"} // TEST-NET-1, usually non-routable
+
+	// Mock server that deliberately delays its response
+	mux := dns.NewServeMux()
+	mux.HandleFunc("google.com.", func(w dns.ResponseWriter, r *dns.Msg) {
+		time.Sleep(200 * time.Millisecond) // Longer than the timeout
+		m := new(dns.Msg)
+		m.SetReply(r)
+		_ = w.WriteMsg(m)
+	})
+
+	ts := &dns.Server{Addr: "127.0.0.1:5358", Net: "udp", Handler: mux}
+	go func() { _ = ts.ListenAndServe() }()
+	defer func() { _ = ts.Shutdown() }()
+
+	// Give the server a moment to start
+	time.Sleep(50 * time.Millisecond)
+
+	upstreamDNS := []string{"127.0.0.1:5358"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 	d.timeout = 100 * time.Millisecond
 
@@ -398,12 +414,14 @@ func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 	d.forward(rw, m)
 	duration := time.Since(start)
 
+	// Since we're forwarding to a local server that sleeps for 200ms,
+	// and our timeout is 100ms, it should take at least 100ms.
 	if duration < 100*time.Millisecond {
 		t.Errorf("Expected forward to take at least 100ms (timeout), but took %v", duration)
 	}
 
 	if rw.msg == nil || rw.msg.Rcode != dns.RcodeServerFailure {
-		t.Errorf("Expected RcodeServerFailure after timeout")
+		t.Errorf("Expected RcodeServerFailure after timeout, got msg: %v", rw.msg)
 	}
 }
 
