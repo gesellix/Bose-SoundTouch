@@ -33,8 +33,24 @@ func (s *Server) HandleBMXRegistry(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(content))
 }
 
+func (s *Server) writeBMXUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`<!doctype html>
+<html lang=en>
+<title>401 Unauthorized</title>
+<h1>Unauthorized</h1>
+<p>Authorization not set. No access token found.</p>
+`))
+}
+
 // HandleTuneInPlayback returns TuneIn playback information.
 func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
 	stationID := chi.URLParam(r, "stationID")
 
 	resp, err := bmx.TuneInPlayback(stationID)
@@ -53,6 +69,11 @@ func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 
 // HandleTuneInPodcastInfo returns TuneIn podcast information.
 func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
 	podcastID := chi.URLParam(r, "podcastID")
 	encodedName := r.URL.Query().Get("encoded_name")
 
@@ -72,6 +93,11 @@ func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request)
 
 // HandleTuneInPlaybackPodcast returns TuneIn podcast playback information.
 func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
 	podcastID := chi.URLParam(r, "podcastID")
 
 	resp, err := bmx.TuneInPlaybackPodcast(podcastID)
@@ -88,8 +114,40 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// HandleTuneInToken returns a TuneIn access token.
+func (s *Server) HandleTuneInToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		GrantType    string `json:"grant_type"`
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// For now, we return the provided refresh_token as access_token and refresh_token,
+	// mirroring the behavior seen in the recordings.
+	resp := map[string]string{
+		"access_token":  req.RefreshToken,
+		"refresh_token": req.RefreshToken,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
 // HandleOrionPlayback returns Orion playback information.
 func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
 	data := chi.URLParam(r, "data")
 
 	resp, err := bmx.PlayCustomStream(data)

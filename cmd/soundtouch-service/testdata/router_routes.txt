@@ -71,6 +71,7 @@ POST     /accounts/{account}/devices                                  handlers.(
 POST     /accounts/{account}/devices/{device}/presets/{presetNumber}  handlers.(*Server).HandleMargeUpdatePreset-fm
 POST     /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleMargeAddRecent-fm
 POST     /bmx/orion/v1/playback/station/{data}                        handlers.(*Server).HandleOrionPlayback-fm
+POST     /bmx/tunein/v1/token                                         handlers.(*Server).HandleTuneInToken-fm
 POST     /customer/account/{account}                                  handlers.(*Server).HandleMargeUpdateAccountProfile-fm
 POST     /customer/account/{account}/password                         handlers.(*Server).HandleMargeChangePassword-fm
 POST     /mgmt/accounts/{accountId}/language                          handlers.(*Server).HandleMgmtUpdateAccountLanguage-fm

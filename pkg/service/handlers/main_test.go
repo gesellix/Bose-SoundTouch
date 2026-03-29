@@ -26,15 +26,10 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/tunein/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
 		r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
 		r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
+		r.Post("/tunein/v1/token", server.HandleTuneInToken)
 		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	})
 
-	// Legacy or direct domain calls without /bmx prefix
-	r.Get("/registry/v1/services", server.HandleBMXRegistry)
-	r.Get("/tunein/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
-	r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
-	r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
-	r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 
 	streamingRoutes := func(r chi.Router) {
