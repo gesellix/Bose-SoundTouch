@@ -816,7 +816,7 @@ func TestAccountManager_CreateAccount(t *testing.T) {
             wantErr: true,
         },
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             got, err := manager.CreateAccount(tt.input)
@@ -847,6 +847,18 @@ go test -race ./...
 go test ./... -v -cover
 go test -bench=. ./...
 ```
+
+## Performance Requirements
+
+### Response Time Targets
+- Local API requests: < 100ms (95th percentile)
+- Mirror requests: < 200ms overhead (asynchronous)
+- Discovery time: < 5s for network scan
+
+### Resource Constraints
+- Memory usage: < 64MB for small deployments
+- CPU usage: < 5% on dual-core ARM systems (idle)
+- Storage: < 100MB for interaction logs (rotatable)
 
 ### Security Considerations
 
@@ -949,12 +961,12 @@ func (s *Server) HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
         Version:   version,
         Uptime:    time.Since(startTime).String(),
     }
-    
+
     // Simple checks
     if !s.canWriteToDataDir() {
         health.Status = "error"
     }
-    
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(health)
 }

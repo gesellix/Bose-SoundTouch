@@ -480,7 +480,7 @@ SoundTouch is a trademark of Bose Corporation.
 
 This Go library will continue to work as it uses the local Web API for direct device control, which is unaffected by the cloud service discontinuation. The local preset management functionality implemented in this library (discovered through the [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)) provides an alternative to the cloud-based preset features that will be discontinued.
 
-**Community Alternatives**: See the [Related Projects](#related-projects) section below for additional tools like SoundCork that provide cloud service alternatives and the SoundTouch Plus project that offers comprehensive Home Assistant integration.
+**Community Alternatives**: See the [Related Projects & Credits](#related-projects--credits) section below for additional tools like SoundCork that provide cloud service alternatives and the SoundTouch Plus project that offers comprehensive Home Assistant integration.
 
 ## Related Projects & Credits
 
