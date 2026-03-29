@@ -969,14 +969,14 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 }
 
 // AddDeviceToAccount adds a new device to the specified account.
-func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte) ([]byte, error) {
+func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte) (string, []byte, error) {
 	var newDeviceElem struct {
 		DeviceID   string `xml:"deviceid,attr"`
 		Name       string `xml:"name"`
 		MACAddress string `xml:"macaddress"`
 	}
 	if err := xml.Unmarshal(sourceXML, &newDeviceElem); err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	info := &models.ServiceDeviceInfo{
@@ -987,7 +987,7 @@ func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 	}
 
 	if err := ds.SaveDeviceInfo(account, newDeviceElem.DeviceID, info); err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	createdOn := FormatTime(time.Now())
@@ -1000,7 +1000,7 @@ func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 
 	header := constants.XMLHeader
 
-	return append([]byte(header), []byte(res)...), nil
+	return newDeviceElem.DeviceID, append([]byte(header), []byte(res)...), nil
 }
 
 // RemoveDeviceFromAccount removes a device from the specified account.

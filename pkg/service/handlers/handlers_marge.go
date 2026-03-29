@@ -460,13 +460,15 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := marge.AddDeviceToAccount(s.ds, account, body)
+	deviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.Header().Set("Location", s.serverURL+"/account/"+account+"/device/"+deviceID)
+	w.WriteHeader(http.StatusCreated)
 	_, _ = w.Write(data)
 }
 

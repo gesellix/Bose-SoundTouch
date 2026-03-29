@@ -12,10 +12,27 @@ Authorization: Bearer {{token}}
 > {%
     client.test("Device registered successfully", function() {
         client.assert(response.status === 200 || response.status === 201, "Response status is not 200 or 201");
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.2+xml", "Response Content-Type should be application/vnd.bose.streaming-v1.2+xml");
+
         const doc = response.body;
         const device = doc.getElementsByTagName("device")[0];
         client.assert(device !== undefined, "Response body should contain <device>");
         client.assert(device.getAttribute("deviceid") === client.variables.environment.get("deviceId"), "Response body should contain the deviceId");
+
+        const name = device.getElementsByTagName("name")[0];
+        client.assert(name !== undefined, "Response body should contain <name>");
+        client.assert(name.textContent === client.variables.environment.get("deviceName"), "name should match requested name");
+
+        const createdOn = device.getElementsByTagName("createdOn")[0];
+        client.assert(createdOn !== undefined, "Response body should contain <createdOn>");
+        client.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|(\+\d{2}:\d{2}))$/.test(createdOn.textContent), "createdOn should be a valid ISO8601 timestamp");
+
+        const updatedOn = device.getElementsByTagName("updatedOn")[0];
+        client.assert(updatedOn !== undefined, "Response body should contain <updatedOn>");
+        client.assert(updatedOn.textContent === createdOn.textContent, "updatedOn should match createdOn for a new device");
+
+        const ipaddress = device.getElementsByTagName("ipaddress")[0];
+        client.assert(ipaddress !== undefined, "Response body should contain <ipaddress>");
     });
 %}
 
@@ -32,7 +49,10 @@ Authorization: Bearer {{token}}
 
 > {%
     client.test("Device registered successfully (variant)", function() {
-        client.assert(response.status === 200 || response.status === 201, "Response status is not 200 or 201");
+        client.assert(response.status === 200 || response.status === 201, "Response status should be 200 or 201");
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.2+xml", "Response Content-Type should be application/vnd.bose.streaming-v1.2+xml");
+        client.assert(response.headers.valueOf("Location").includes("/account/" + client.variables.environment.get("accountId") + "/device/" + client.variables.environment.get("deviceId")), "Location header should point to the created device");
+
         const doc = response.body;
         const device = doc.getElementsByTagName("device")[0];
         client.assert(device !== undefined, "Response body should contain <device>");
@@ -40,7 +60,7 @@ Authorization: Bearer {{token}}
 
         const createdOn = device.getElementsByTagName("createdOn")[0];
         client.assert(createdOn !== undefined, "Response body should contain <createdOn>");
-        client.assert(createdOn.textContent.length > 0, "createdOn should not be empty");
+        client.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|(\+\d{2}:\d{2}))$/.test(createdOn.textContent), "createdOn should be a valid ISO8601 timestamp");
 
         const name = device.getElementsByTagName("name")[0];
         client.assert(name !== undefined, "Response body should contain <name>");

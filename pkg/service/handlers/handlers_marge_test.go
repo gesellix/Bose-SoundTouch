@@ -817,8 +817,13 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 
 	_ = res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("AddDevice: Expected status OK, got %v", res.Status)
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("AddDevice: Expected status Created, got %v", res.Status)
+	}
+
+	location := res.Header.Get("Location")
+	if !strings.Contains(location, "/account/"+account+"/device/NEWDEV") {
+		t.Errorf("AddDevice: Expected Location header containing /account/%s/device/NEWDEV, got %s", account, location)
 	}
 
 	deviceFile := filepath.Join(accountDir, "devices", "NEWDEV", "DeviceInfo.xml")
