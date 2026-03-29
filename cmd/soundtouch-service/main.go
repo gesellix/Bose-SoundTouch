@@ -661,45 +661,57 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 
 	r.Route("/bmx", func(r chi.Router) {
 		r.Get("/registry/v1/services", server.HandleBMXRegistry)
-		r.Get("/tunein/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
-		r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
-		r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
+
+		r.Route("/tunein", func(r chi.Router) {
+			r.Get("/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
+			r.Get("/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
+			r.Get("/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
+		})
+
 		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	})
 
-	// Legacy or direct domain calls without /bmx prefix
-	r.Get("/registry/v1/services", server.HandleBMXRegistry)
-	r.Get("/tunein/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
-	r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
-	r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
-	r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 
 	r.Route("/streaming", func(r chi.Router) {
 		r.Get("/sourceproviders", server.HandleMargeSourceProviders)
 		r.Post("/account", server.HandleMargeCreateAccount)
 		r.Post("/account/login", server.HandleMargeLogin)
-		r.Route("/account/{account}/device", func(r chi.Router) {
-			r.Post("/", server.HandleMargeAddDevice)
-			r.Post("/{device}", server.HandleMargeAddDevice)
+
+		r.Route("/account/{account}", func(r chi.Router) {
+			r.Get("/emailaddress", server.HandleMargeGetEmailAddress)
+			r.Get("/full", server.HandleMargeAccountFull)
+			r.Get("/provider_settings", server.HandleMargeProviderSettings)
+
+			r.Route("/device", func(r chi.Router) {
+				r.Post("/", server.HandleMargeAddDevice)
+				r.Post("/{device}", server.HandleMargeAddDevice)
+			})
+
+			r.Route("/device/{device}", func(r chi.Router) {
+				r.Get("/presets", server.HandleMargePresets)
+				r.Post("/presets/{presetNumber}", server.HandleMargeUpdatePreset)
+				r.Get("/recent", server.HandleMargeRecents)
+				r.Post("/recent", server.HandleMargeAddRecent)
+
+				r.Get("/group", server.HandleMargeDeviceGroup)
+				r.Get("/group/", server.HandleMargeDeviceGroup)
+				r.Get("/group/server", server.HandleMargeDeviceGroupServer)
+				r.Get("/group/member", server.HandleMargeDeviceGroupMember)
+			})
 		})
-		r.Get("/account/{account}/device/{device}/recent", server.HandleMargeRecents)
-		r.Post("/account/{account}/device/{device}/recent", server.HandleMargeAddRecent)
-		r.Get("/account/{account}/device/{device}/presets", server.HandleMargePresets)
-		r.Post("/account/{account}/device/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
-		r.Post("/support/power_on", server.HandleMargePowerOn)
-		r.Get("/account/{account}/provider_settings", server.HandleMargeProviderSettings)
+
 		r.Get("/device/{device}/streaming_token", server.HandleMargeStreamingToken)
-		r.Post("/support/customersupport", server.HandleMargeCustomerSupport)
+
 		r.Get("/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeGetDeviceSettings)
-		r.Get("/account/{account}/device/{device}/group", server.HandleMargeDeviceGroup)
-		r.Get("/account/{account}/device/{device}/group/", server.HandleMargeDeviceGroup)
-		r.Get("/account/{account}/device/{device}/group/server", server.HandleMargeDeviceGroupServer)
-		r.Get("/account/{account}/device/{device}/group/member", server.HandleMargeDeviceGroupMember)
 		r.Post("/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
-		r.Get("/account/{account}/emailaddress", server.HandleMargeGetEmailAddress)
-		r.Get("/account/{account}/full", server.HandleMargeAccountFull)
+
 		r.Get("/software/update/account/{account}", server.HandleMargeSoftwareUpdate)
+
+		r.Route("/support", func(r chi.Router) {
+			r.Post("/power_on", server.HandleMargePowerOn)
+			r.Post("/customersupport", server.HandleMargeCustomerSupport)
+		})
 
 		r.Route("/stats", func(r chi.Router) {
 			r.Post("/usage", server.HandleUsageStats)
@@ -708,17 +720,22 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	})
 
 	r.Route("/accounts", func(r chi.Router) {
-		r.Get("/{account}/full", server.HandleMargeAccountFull)
-		r.Get("/{account}/devices/{device}/presets", server.HandleMargePresets)
-		r.Post("/{account}/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
-		r.Get("/{account}/devices/{device}/recents", server.HandleMargeRecents)
-		r.Post("/{account}/devices/{device}/recents", server.HandleMargeAddRecent)
-		r.Post("/{account}/devices", server.HandleMargeAddDevice)
-		r.Delete("/{account}/devices/{device}", server.HandleMargeRemoveDevice)
-		r.Get("/{account}/devices/{device}/group", server.HandleMargeDeviceGroup)
-		r.Get("/{account}/devices/{device}/group/", server.HandleMargeDeviceGroup)
-		r.Get("/{account}/devices/{device}/group/server", server.HandleMargeDeviceGroupServer)
-		r.Get("/{account}/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
+		r.Route("/{account}", func(r chi.Router) {
+			r.Get("/full", server.HandleMargeAccountFull)
+
+			r.Post("/devices", server.HandleMargeAddDevice)
+
+			r.Delete("/devices/{device}", server.HandleMargeRemoveDevice)
+			r.Get("/devices/{device}/group", server.HandleMargeDeviceGroup)
+			r.Get("/devices/{device}/group/", server.HandleMargeDeviceGroup)
+			r.Get("/devices/{device}/group/server", server.HandleMargeDeviceGroupServer)
+			r.Get("/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
+			r.Get("/devices/{device}/presets", server.HandleMargePresets)
+			r.Get("/devices/{device}/recents", server.HandleMargeRecents)
+
+			r.Post("/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
+			r.Post("/devices/{device}/recents", server.HandleMargeAddRecent)
+		})
 	})
 
 	r.Get("/updates/soundtouch", server.HandleMargeSoftwareUpdate)
