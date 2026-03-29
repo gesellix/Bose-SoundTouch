@@ -147,11 +147,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Check documentation links
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
-        with:
-          use-quiet-mode: "yes"
-          use-verbose-mode: "yes"
-          config-file: ".github/markdown-link-check.json"
+        run: |
+          npm install -g markdown-link-check
+          find . -name "*.md" -not -path "./tests/*" -not -path "./node_modules/*" -print0 | xargs -0 -n1 markdown-link-check -q -v -c .github/markdown-link-check.json
 
       - name: Warn on pending images
         run: |
