@@ -22,6 +22,36 @@ func exists(path string) bool {
 	return err == nil
 }
 
+// isSafeIdentifier returns true if the given identifier is safe to use
+// as a single path component (for account IDs, device IDs, etc.).
+// It rejects empty strings, path separators, and parent directory references.
+func isSafeIdentifier(id string) bool {
+	if id == "" {
+		return false
+	}
+
+	// Disallow obvious path traversal / multi-component paths.
+	if strings.Contains(id, "/") || strings.Contains(id, "\\") || strings.Contains(id, "..") {
+		return false
+	}
+
+	// Allow a conservative set of characters commonly found in IDs:
+	// letters, digits, underscore, dash, dot, and colon (for MAC-like IDs).
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		if (c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') ||
+			c == '_' || c == '-' || c == '.' || c == ':' {
+			continue
+		}
+
+		return false
+	}
+
+	return true
+}
+
 // DataStore represents the device and configuration storage.
 type DataStore struct {
 	// DataDir is the (possibly relative) base directory for all datastore files.
@@ -704,6 +734,18 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 
 	if device == "" {
 		return fmt.Errorf("device ID/name cannot be empty")
+	}
+
+	if !isSafeIdentifier(device) {
+		return fmt.Errorf("invalid device ID")
+	}
+
+	if account == "" {
+		return fmt.Errorf("account ID cannot be empty")
+	}
+
+	if !isSafeIdentifier(account) {
+		return fmt.Errorf("invalid account ID")
 	}
 
 	// Try to load existing device info to avoid overwriting existing details with empty values.
