@@ -1,0 +1,57 @@
+### POST /streaming/account/{{accountId}}/source (Cloud Source Registration)
+POST {{host}}/streaming/account/{{accountId}}/source
+Host: streaming.bose.com
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.1+xml
+Authorization: Bearer {{token}}
+Content-Type: application/vnd.bose.streaming-v1.1+xml
+
+<?xml version="1.0" encoding="UTF-8"?><source><username>{{spotifyUserId}}</username><sourceproviderid>15</sourceproviderid><credential type="token_version_3">{{spotifyToken}}</credential><sourcename>{{spotifyDisplayName}}</sourcename></source>
+
+> {%
+    client.test("Response is 201 Created", function() {
+        client.assert(response.status === 201, "Response status is not 201");
+    });
+
+    client.test("Response body is a source", function() {
+        const doc = response.body;
+        const sourceID = doc.getElementsByTagName("sourceID")[0].textContent;
+        client.assert(sourceID !== "", "Response body does not contain a non-empty <sourceID>");
+        client.global.set("sourceID", sourceID);
+        client.assert(doc.getElementsByTagName("sourceProviderID")[0].textContent === "15", "Response body does not contain <sourceProviderID>15</sourceProviderID>");
+    });
+%}
+
+### PUT /streaming/account/{{accountId}}/device/{{deviceId}}/preset/5
+PUT {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/preset/5
+Host: streaming.bose.com
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+
+<?xml version="1.0" encoding="UTF-8" ?><preset buttonNumber="5"><sourceid>{{sourceID}}</sourceid><name>For Lovers, Not Killers</name><username>For Lovers, Not Killers</username><location>/playback/container/c3BvdGlmeTphbGJ1bTo0VUhYUkF3RWswbnQ1QjczNDlvSXVs</location><contentItemType>tracklisturl</contentItemType><containerArt></containerArt></preset>
+
+> {%
+    client.test("Response is 200 OK", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response body is a preset", function() {
+        const doc = response.body;
+        const preset = doc.getElementsByTagName("preset")[0];
+
+        client.assert(preset.getAttribute("buttonNumber") === "5", "Response body does not contain buttonNumber=\"5\"");
+        client.assert(doc.getElementsByTagName("name")[0].textContent === "For Lovers, Not Killers", "Response body does not contain <name>For Lovers, Not Killers</name>");
+        client.assert(doc.getElementsByTagName("location")[0].textContent === "/playback/container/c3BvdGlmeTphbGJ1bTo0VUhYUkF3RWswbnQ1QjczNDlvSXVs", "Response body does not contain <location>...");
+        client.assert(doc.getElementsByTagName("contentItemType")[0].textContent === "tracklisturl", "Response body does not contain <contentItemType>tracklisturl</contentItemType>");
+
+        const source = doc.getElementsByTagName("source")[0];
+        client.assert(source.getAttribute("id") === client.global.get("sourceID"), "Response body does not contain source id=\"" + client.global.get("sourceID") + "\"");
+        client.assert(source.getAttribute("type") === "Audio", "Response body does not contain source type=\"Audio\"");
+        client.assert(source.getAttribute("displayName") === null, "Response body should NOT contain displayName attribute in source");
+        client.assert(doc.getElementsByTagName("sourceproviderid")[0].textContent === "15", "Response body does not contain <sourceproviderid>15</sourceproviderid>");
+        client.assert(source.getElementsByTagName("username")[0].textContent === "", "Response body does not contain empty <username> in source, found: " + source.getElementsByTagName("username")[0].textContent);
+        client.assert(doc.getElementsByTagName("username")[1].textContent === "For Lovers, Not Killers", "Response body does not contain <username>For Lovers, Not Killers</username> in preset, found: " + doc.getElementsByTagName("username")[1].textContent);
+    });
+%}
