@@ -47,6 +47,7 @@ The documentation is organized into three main categories:
 
 ### API Documentation
 - [API Endpoints](reference/API-ENDPOINTS.md) - REST API reference
+- [Spotify Account Addition](reference/spotify-account-addition.md) - Technical requests for Spotify
 - [WebSocket Events](reference/WEBSOCKET-EVENTS.md) - Real-time events
 - [Zone Management](reference/ZONE-MANAGEMENT.md) - Multi-room control
 - [Preset Management](reference/PRESET-MANAGEMENT.md) - Preset operations

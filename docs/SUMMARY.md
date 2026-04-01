@@ -9,6 +9,7 @@
 * [Getting Started](guides/GETTING-STARTED.md)
 * [SoundTouch Service](guides/SOUNDTOUCH-SERVICE.md)
 * [Initial Device Setup](guides/DEVICE-INITIAL-SETUP.md)
+* [Device Setup Flow](DEVICE-SETUP.md)
 * [MAC Address Mapping](guides/MAC-ADDRESS-MAPPING.md)
 * [HTTPS Setup](guides/HTTPS-SETUP.md)
 * [Deployment](guides/DEPLOYMENT.md)
@@ -28,6 +29,7 @@
 ## Technical Reference
 * [API Cookbook](reference/API-COOKBOOK.md)
 * [API Endpoints](reference/API-ENDPOINTS.md)
+* [Spotify Account Addition](reference/spotify-account-addition.md)
 * [Cloud API Emulation](reference/CLOUD-API.md)
 * [System Endpoints](reference/SYSTEM-ENDPOINTS.md)
 * [Speaker Endpoint](reference/SPEAKER-ENDPOINT.md)
@@ -56,12 +58,16 @@
 * [Wiki API Comparison](analysis/WIKI-COMPARISON.md)
 * [IoT Config Summary](analysis/IOT-CONFIG-SUMMARY.md)
 * [IoT Configuration Analysis](analysis/IOT-CONFIGURATION-ANALYSIS.md)
+* [Bose Lab Runbook](analysis/BOSE-LAB-RUNBOOK.md)
+* [Missing Routes Spotify](analysis/MISSING-ROUTES-SPOTIFY.md)
 
 ## Parity Analysis
 * [Parity Improvements](PARITY-IMPROVEMENTS.md)
 * [Parity SoundCork](PARITY-SOUNDCORK.md)
+* [Parity OpenCloudTouch](PARITY-OPENCLOUDTOUCH.md)
 
 ## Appendix (Other Documents)
+* [External Services Abstraction](EXTERNAL-SERVICES-ABSTRACTION.md)
 * [API Navigation Reference](API-NAVIGATION-REFERENCE.md)
 * [Claude Instructions](CLAUDE.md)
 * [Content Selection Implementation](CONTENT-SELECTION-IMPLEMENTATION.md)
