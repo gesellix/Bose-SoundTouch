@@ -353,6 +353,10 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
+	if !validatePathID(account) || !validatePathID(device) {
+		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
+		return
+	}
 
 	etag := strconv.FormatInt(s.ds.GetETagForPresets(account, device), 10)
 	if r.Header.Get("If-None-Match") == etag {
@@ -375,6 +379,10 @@ func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
+	if !validatePathID(account) || !validatePathID(device) {
+		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
+		return
+	}
 
 	etag := strconv.FormatInt(s.ds.GetETagForPresets(account, device), 10)
 	w.Header()["ETag"] = []string{etag}
@@ -407,6 +415,10 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 func (s *Server) HandleMargeRecents(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
+	if !validatePathID(account) || !validatePathID(device) {
+		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
+		return
+	}
 
 	etag := strconv.FormatInt(s.ds.GetETagForRecents(account, device), 10)
 	if r.Header.Get("If-None-Match") == etag {
@@ -429,6 +441,10 @@ func (s *Server) HandleMargeRecents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	device := chi.URLParam(r, "device")
+	if !validatePathID(account) || !validatePathID(device) {
+		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
+		return
+	}
 
 	etag := strconv.FormatInt(s.ds.GetETagForRecents(account, device), 10)
 	w.Header()["ETag"] = []string{etag}
@@ -453,6 +469,10 @@ func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 // HandleMargeAddDevice adds a device to a Marge account.
 func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -475,8 +495,16 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 // HandleMargeRemoveDevice removes a device from a Marge account.
 func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
 
 	device := chi.URLParam(r, "device")
+	if !validatePathID(device) {
+		http.Error(w, "Invalid device ID", http.StatusBadRequest)
+		return
+	}
 	if err := marge.RemoveDeviceFromAccount(s.ds, account, device); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -490,6 +518,10 @@ func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request)
 // POST /streaming/account/{account}/source
 func (s *Server) HandleMargeAddSource(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

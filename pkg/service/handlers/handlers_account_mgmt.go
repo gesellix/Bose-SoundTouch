@@ -4,15 +4,34 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/go-chi/chi/v5"
 )
 
+// validatePathID ensures that an identifier is safe to use as a single path component.
+func validatePathID(id string) bool {
+	if id == "" {
+		return false
+	}
+	if strings.Contains(id, "/") || strings.Contains(id, "\\") {
+		return false
+	}
+	if strings.Contains(id, "..") {
+		return false
+	}
+	return true
+}
+
 // HandleMgmtAccountDetails returns full details for an account for the Web UI.
 func (s *Server) HandleMgmtAccountDetails(w http.ResponseWriter, r *http.Request) {
 	accountID := chi.URLParam(r, "accountId")
+	if !validatePathID(accountID) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
 
 	// 1. Get account info
 	accountInfo, err := s.ds.GetAccountInfo(accountID)
@@ -60,6 +79,10 @@ func (s *Server) HandleMgmtAccountDetails(w http.ResponseWriter, r *http.Request
 // HandleMgmtUpdateAccountLanguage updates the preferred language for an account.
 func (s *Server) HandleMgmtUpdateAccountLanguage(w http.ResponseWriter, r *http.Request) {
 	accountID := chi.URLParam(r, "accountId")
+	if !validatePathID(accountID) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
 
 	var req struct {
 		Language string `json:"language"`
@@ -99,6 +122,10 @@ func (s *Server) HandleMgmtUpdateAccountLanguage(w http.ResponseWriter, r *http.
 // HandleMgmtUpdateAccountProviderSetting updates a specific provider setting for an account.
 func (s *Server) HandleMgmtUpdateAccountProviderSetting(w http.ResponseWriter, r *http.Request) {
 	accountID := chi.URLParam(r, "accountId")
+	if !validatePathID(accountID) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
 
 	var req struct {
 		ProviderID string `json:"provider_id"`
