@@ -352,6 +352,7 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 // HandleMargePresets returns the Marge presets for a device.
 func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	device := chi.URLParam(r, "device")
 	if !validatePathID(account) || !validatePathID(device) {
 		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
@@ -378,6 +379,7 @@ func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 // HandleMargeUpdatePreset updates a Marge preset.
 func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	device := chi.URLParam(r, "device")
 	if !validatePathID(account) || !validatePathID(device) {
 		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
@@ -414,6 +416,7 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 // HandleMargeRecents returns the Marge recents for a device.
 func (s *Server) HandleMargeRecents(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	device := chi.URLParam(r, "device")
 	if !validatePathID(account) || !validatePathID(device) {
 		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
@@ -440,6 +443,7 @@ func (s *Server) HandleMargeRecents(w http.ResponseWriter, r *http.Request) {
 // HandleMargeAddRecent adds a recent item to Marge.
 func (s *Server) HandleMargeAddRecent(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+
 	device := chi.URLParam(r, "device")
 	if !validatePathID(account) || !validatePathID(device) {
 		http.Error(w, "Invalid account or device ID", http.StatusBadRequest)
@@ -505,6 +509,7 @@ func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid device ID", http.StatusBadRequest)
 		return
 	}
+
 	if err := marge.RemoveDeviceFromAccount(s.ds, account, device); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

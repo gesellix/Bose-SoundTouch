@@ -16,12 +16,15 @@ func validatePathID(id string) bool {
 	if id == "" {
 		return false
 	}
+
 	if strings.Contains(id, "/") || strings.Contains(id, "\\") {
 		return false
 	}
+
 	if strings.Contains(id, "..") {
 		return false
 	}
+
 	return true
 }
 
