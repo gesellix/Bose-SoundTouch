@@ -17,9 +17,6 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
-// DateStr is a fixed timestamp used in XML responses for consistency.
-const DateStr = "2012-09-19T12:43:00.000+00:00"
-
 // FormatTime formats a time according to the Bose SoundTouch standard.
 func FormatTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05.000+00:00")
@@ -114,11 +111,11 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 	}
 
 	if s.CreatedOn == "" {
-		s.CreatedOn = DateStr
+		s.CreatedOn = constants.DateStr
 	}
 
 	if s.UpdatedOn == "" {
-		s.UpdatedOn = DateStr
+		s.UpdatedOn = constants.DateStr
 	}
 
 	s.Type = "Audio"
@@ -165,11 +162,11 @@ func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 
 		p.ButtonNumber = p.ID
 		if p.CreatedOn == "" {
-			p.CreatedOn = DateStr
+			p.CreatedOn = constants.DateStr
 		}
 
 		if p.UpdatedOn == "" {
-			p.UpdatedOn = DateStr
+			p.UpdatedOn = constants.DateStr
 		}
 
 		// Find and prepare source
@@ -303,14 +300,14 @@ func CreateAccountDevice(ds *datastore.DataStore, account, deviceID string) (mod
 			ProductCode:  info.ProductCode,
 			ProductLabel: info.ProductCode,
 			SerialNumber: info.ProductSerialNumber,
-			UpdatedOn:    DateStr,
+			UpdatedOn:    constants.DateStr,
 		},
-		CreatedOn:       DateStr,
+		CreatedOn:       constants.DateStr,
 		FirmwareVersion: info.FirmwareVersion,
 		IPAddress:       info.IPAddress,
 		Name:            info.Name,
 		SerialNumber:    info.DeviceSerialNumber,
-		UpdatedOn:       DateStr,
+		UpdatedOn:       constants.DateStr,
 	}
 
 	if device.SerialNumber == "" && info.DeviceID != "" {
@@ -385,11 +382,11 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		p := &presets[i]
 
 		if p.CreatedOn == "" {
-			p.CreatedOn = DateStr
+			p.CreatedOn = constants.DateStr
 		}
 
 		if p.UpdatedOn == "" {
-			p.UpdatedOn = DateStr
+			p.UpdatedOn = constants.DateStr
 		}
 
 		var matchedSource *models.ConfiguredSource
@@ -432,11 +429,11 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 	for i := range recents {
 		r := &recents[i]
 		if r.CreatedOn == "" {
-			r.CreatedOn = DateStr
+			r.CreatedOn = constants.DateStr
 		}
 
 		if r.UpdatedOn == "" {
-			r.UpdatedOn = DateStr
+			r.UpdatedOn = constants.DateStr
 		}
 
 		var matchedSource *models.ConfiguredSource

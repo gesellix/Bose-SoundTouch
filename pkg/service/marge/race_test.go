@@ -33,6 +33,9 @@ func TestRaceConditionFullSync(t *testing.T) {
 		t.Fatalf("Failed to save initial info: %v", err)
 	}
 
+	// Wait for disk sync/OS to stabilize the initial file if needed
+	time.Sleep(100 * time.Millisecond)
+
 	// We'll run a loop where one goroutine reads and another writes
 	// and check if we ever get an empty name.
 
@@ -62,6 +65,7 @@ func TestRaceConditionFullSync(t *testing.T) {
 					mu.Lock()
 					emptyNameFound = true
 					mu.Unlock()
+					t.Logf("RaceConditionFullSync: Found empty <name/> or <name></name> in XML: %s\n", string(xmlData))
 					return
 				}
 				if !contains(string(xmlData), "<name>") && !contains(string(xmlData), "<name/>") {

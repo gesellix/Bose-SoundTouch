@@ -283,6 +283,9 @@ func TestSaveAndLoad(t *testing.T) {
 
 	// Load into new service
 	svc2 := NewSpotifyService("cid", "csecret", "http://localhost/cb", dir)
+	if err := svc2.Load(); err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
 
 	svc2.mu.RLock()
 	defer svc2.mu.RUnlock()
