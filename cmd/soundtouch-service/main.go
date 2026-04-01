@@ -55,6 +55,21 @@ func updateBuildInfo() {
 	}
 }
 
+func initializeDefaultSources(ds *datastore.DataStore) {
+	// Ensure default sources exist for all known devices on startup
+	allDevices, _ := ds.ListAllDevices()
+	for i := range allDevices {
+		dev := &allDevices[i]
+		if sources, errGet := ds.GetConfiguredSources(dev.AccountID, dev.DeviceID); errGet == nil {
+			log.Printf("Initializing default Sources.xml for existing device %s", dev.DeviceID)
+
+			if errSave := ds.SaveConfiguredSources(dev.AccountID, dev.DeviceID, sources); errSave != nil {
+				log.Printf("Failed to save default sources for %s: %v", dev.DeviceID, errSave)
+			}
+		}
+	}
+}
+
 func main() {
 	updateBuildInfo()
 
@@ -258,6 +273,10 @@ func main() {
 					config.spotifyRedirectURI,
 					config.dataDir,
 				)
+				if err := spotifyService.Load(); err != nil {
+					log.Printf("[Spotify] Failed to load accounts: %v", err)
+				}
+
 				server.SetSpotifyService(spotifyService)
 
 				clientIDPrefix := config.spotifyClientID
@@ -320,6 +339,8 @@ func main() {
 			}
 
 			server.SetRecorder(recorder)
+
+			initializeDefaultSources(ds)
 
 			tlsConfig, err := cm.GetServerTLSConfig(config.domains)
 			if err != nil {
@@ -678,6 +699,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Get("/sourceproviders", server.HandleMargeSourceProviders)
 		r.Post("/account", server.HandleMargeCreateAccount)
 		r.Post("/account/login", server.HandleMargeLogin)
+		r.Post("/account/{account}/source", server.HandleMargeAddSource)
 
 		r.Route("/account/{account}", func(r chi.Router) {
 			r.Get("/emailaddress", server.HandleMargeGetEmailAddress)
@@ -692,6 +714,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Route("/device/{device}", func(r chi.Router) {
 				r.Get("/presets", server.HandleMargePresets)
 				r.Post("/presets/{presetNumber}", server.HandleMargeUpdatePreset)
+				r.Put("/preset/{presetNumber}", server.HandleMargeUpdatePreset)
 				r.Get("/recent", server.HandleMargeRecents)
 				r.Post("/recent", server.HandleMargeAddRecent)
 
@@ -750,6 +773,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Route("/oauth", func(r chi.Router) {
 		r.Post("/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3", server.HandleBoseToken)
 		r.Post("/device/{deviceID}/music/musicprovider/{sourceID}/token", server.HandleBoseLegacyToken)
+		r.Post("/account/{account}/music/musicprovider/{sourceID}/token/cs", server.HandleBoseAccountToken)
 		r.HandleFunc("/*", server.HandleBoseProxy)
 	})
 

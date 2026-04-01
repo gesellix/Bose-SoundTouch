@@ -486,6 +486,32 @@ func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request)
 	_, _ = w.Write([]byte(`{"ok": true}`))
 }
 
+// HandleMargeAddSource handles adding a new music source to the account.
+// POST /streaming/account/{account}/source
+func (s *Server) HandleMargeAddSource(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("[Marge] Failed to read body: %v", err)
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+
+		return
+	}
+
+	resp, err := marge.AddSourceToAccount(s.ds, account, body)
+	if err != nil {
+		log.Printf("[Marge] Failed to add source: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.WriteHeader(http.StatusCreated)
+	_, _ = w.Write(resp)
+}
+
 // HandleMargeProviderSettings returns Marge provider settings.
 func (s *Server) HandleMargeProviderSettings(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")

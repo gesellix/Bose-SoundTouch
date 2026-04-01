@@ -78,17 +78,17 @@ func TestParityMismatchReproduction_V3(t *testing.T) {
 
 		// 4. Source Learning
 		// Check for provider ID 25
-		if !strings.Contains(bodyStr, `sourceproviderid="25"`) {
-			t.Errorf("Source provider ID mismatch: expected 25 for TuneIn in attribute. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<sourceproviderid>25</sourceproviderid>`) {
+			t.Errorf("Source provider ID mismatch: expected 25 for TuneIn in element. Body: %s", bodyStr)
 		}
 		// Check for credential
-		if !strings.Contains(bodyStr, `secret="dummy-token-base64"`) {
-			t.Errorf("Secret value was not preserved in attribute. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<credential type="token">dummy-token-base64</credential>`) {
+			t.Errorf("Secret value was not preserved in element. Body: %s", bodyStr)
 		}
 
 		// 6. Indentation check (2 spaces)
-		if !strings.Contains(bodyStr, "\n  <contentItem source=\"TUNEIN\"") {
-			t.Errorf("Incorrect indentation for contentItem: expected 2 spaces. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, "\n  <location>/v1/playback/station/s104811</location>") {
+			t.Errorf("Incorrect indentation for location: expected 2 spaces. Body: %s", bodyStr)
 		}
 	})
 
@@ -105,7 +105,7 @@ func TestParityMismatchReproduction_V3(t *testing.T) {
 
 		t.Logf("GET /recents Local Response:\n%s\n", bodyStr)
 
-		if !strings.Contains(bodyStr, `sourceproviderid="25"`) {
+		if !strings.Contains(bodyStr, `<sourceproviderid>25</sourceproviderid>`) {
 			t.Error("Source provider ID missing in GET /recents")
 		}
 	})

@@ -407,6 +407,41 @@ func TestMargeUpdatePreset(t *testing.T) {
 	if !strings.Contains(string(presetData), "New Preset") {
 		t.Error("Preset was not saved to datastore")
 	}
+
+	// Verify response body has correct XML structure (upstream parity)
+	body, _ := io.ReadAll(res.Body)
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "<preset buttonNumber=\"1\">") {
+		t.Errorf("Response missing <preset buttonNumber=\"1\">: %s", bodyStr)
+	}
+	if strings.Contains(bodyStr, "source=\"TUNEIN\"") {
+		t.Errorf("Response should NOT have source attribute on root element: %s", bodyStr)
+	}
+	if strings.Contains(bodyStr, "<sourceid>") {
+		t.Errorf("Response should NOT have <sourceid> element: %s", bodyStr)
+	}
+	if !strings.Contains(bodyStr, "<source") || !strings.Contains(bodyStr, "id=\"SRC1\"") {
+		t.Errorf("Response missing nested <source id=\"SRC1\">: %s", bodyStr)
+	}
+	// Verify two distinct <username> elements
+	usernameCount := strings.Count(bodyStr, "<username>")
+	if usernameCount != 2 {
+		t.Errorf("Expected 2 <username> elements, got %d: %s", usernameCount, bodyStr)
+	}
+	if !strings.Contains(bodyStr, "<username>New Preset</username>") {
+		t.Errorf("Response missing <username>New Preset</username>: %s", bodyStr)
+	}
+
+	// Verify empty tags are present (parity requirement)
+	//if !strings.Contains(bodyStr, "<sourcename></sourcename>") && !strings.Contains(bodyStr, "<sourcename/>") {
+	//	t.Errorf("Response missing empty <sourcename>: %s", bodyStr)
+	//}
+	//if !strings.Contains(bodyStr, "<name></name>") && !strings.Contains(bodyStr, "<name/>") {
+	//	t.Errorf("Response missing empty <name>: %s", bodyStr)
+	//}
+	if !strings.Contains(bodyStr, "<sourceSettings></sourceSettings>") && !strings.Contains(bodyStr, "<sourceSettings/>") {
+		t.Errorf("Response missing empty <sourceSettings>: %s", bodyStr)
+	}
 }
 
 func TestMargeAddRecentRoute(t *testing.T) {
@@ -669,6 +704,74 @@ func TestMargeNativeStreamingRoutes(t *testing.T) {
 		defer res2.Body.Close()
 		if res2.StatusCode != http.StatusNotModified {
 			t.Errorf("Expected 304 Not Modified, got %v", res2.Status)
+		}
+	})
+
+	t.Run("PUT /streaming/account/{account}/device/{device}/preset/{presetNumber} - missing Sources.xml", func(t *testing.T) {
+		// Delete Sources.xml to trigger the error
+		sourcesPath := filepath.Join(deviceDir, "Sources.xml")
+		if err := os.Remove(sourcesPath); err != nil {
+			t.Fatalf("Failed to remove Sources.xml: %v", err)
+		}
+		defer func() {
+			// Restore Sources.xml for other tests
+			_ = os.WriteFile(sourcesPath, []byte(`
+				<sources>
+					<source id="SRC1" displayName="TUNEIN" secret="" secretType="Audio">
+						<sourceKey type="TUNEIN" account=""/>
+					</source>
+				</sources>
+			`), 0644)
+		}()
+
+		payload := `
+			<preset>
+				<name>PUT Native Preset Singular</name>
+				<sourceid>TUNEIN</sourceid>
+				<location>/station/s888</location>
+				<contentItemType>station</contentItemType>
+			</preset>`
+
+		req, _ := http.NewRequest(http.MethodPut, ts.URL+"/streaming/account/"+account+"/device/"+deviceID+"/preset/6", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/xml")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+	})
+
+	t.Run("PUT /streaming/account/{account}/device/{device}/preset/{presetNumber}", func(t *testing.T) {
+		payload := `
+			<preset>
+				<name>PUT Native Preset Singular</name>
+				<sourceid>SRC1</sourceid>
+				<location>/station/s888</location>
+				<contentItemType>station</contentItemType>
+			</preset>`
+
+		req, _ := http.NewRequest(http.MethodPut, ts.URL+"/streaming/account/"+account+"/device/"+deviceID+"/preset/6", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/xml")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Errorf("Expected status OK, got %v: %s", res.Status, string(body))
+		}
+
+		// Verify file was saved
+		presetData, _ := os.ReadFile(filepath.Join(deviceDir, "Presets.xml"))
+		if !strings.Contains(string(presetData), "PUT Native Preset Singular") {
+			t.Error("Preset from singular native PUT route was not saved to datastore")
 		}
 	})
 

@@ -188,7 +188,9 @@ func (s *Server) getDeviceDetail(accountID string, d *models.ServiceDeviceInfo) 
 
 	// Fetch sources
 	var configuredSources []models.ConfiguredSource
-	if sources, err := s.ds.GetConfiguredSources(accountID, d.DeviceID); err == nil {
+
+	sources, err := s.ds.GetConfiguredSources(accountID, d.DeviceID)
+	if err == nil {
 		configuredSources = sources
 		for j := range sources {
 			fs := mapToFullResponseSource(&sources[j])

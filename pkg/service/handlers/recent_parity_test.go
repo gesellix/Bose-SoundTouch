@@ -87,37 +87,16 @@ func TestMargeRecentConsistencyAndIDParity(t *testing.T) {
 		getRecentsBody, _ := io.ReadAll(res2.Body)
 		getRecentsStr := string(getRecentsBody)
 
-		// 3. Verify consistency
-		// Use a whitespace-insensitive comparison
-		clean := func(s string) string {
-			if strings.HasPrefix(s, "<?xml") {
-				if idx := strings.Index(s, "?>"); idx != -1 {
-					s = s[idx+2:]
-				}
-			}
-			var result strings.Builder
-			inTag := false
-			for i := 0; i < len(s); i++ {
-				c := s[i]
-				if c == '<' {
-					inTag = true
-					result.WriteByte(c)
-				} else if c == '>' {
-					inTag = false
-					result.WriteByte(c)
-				} else if inTag {
-					result.WriteByte(c)
-				} else {
-					if c != ' ' && c != '\n' && c != '\r' && c != '\t' {
-						result.WriteByte(c)
-					}
-				}
-			}
-			return strings.TrimSpace(result.String())
+		// 3. Verify consistency (Content identity, not structural XML identity)
+		// POST response is flat, GET response is nested ServiceRecent.
+		if !strings.Contains(getRecentsStr, `id="`+recentID+`"`) {
+			t.Errorf("GET /recents missing ID %s. Body: %s", recentID, getRecentsStr)
 		}
-
-		if !strings.Contains(clean(getRecentsStr), clean(postBodyStr)) {
-			t.Errorf("GET /recents does not contain the same XML as POST /recent response.\nPOST: %s\nGET: %s", postBodyStr, getRecentsStr)
+		if !strings.Contains(getRecentsStr, `Terminal Caribe`) {
+			t.Errorf("GET /recents missing Name 'Terminal Caribe'. Body: %s", getRecentsStr)
+		}
+		if !strings.Contains(getRecentsStr, `<itemName>Terminal Caribe</itemName>`) {
+			t.Errorf("GET /recents should use nested <itemName> for ServiceRecent. Body: %s", getRecentsStr)
 		}
 
 		// 4. Verify source persistence

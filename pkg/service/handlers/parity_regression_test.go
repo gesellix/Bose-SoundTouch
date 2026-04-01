@@ -69,8 +69,8 @@ func TestMargeParityRegressions(t *testing.T) {
 		}
 
 		// Check for displayName when it's "Other"
-		if !strings.Contains(bodyStr, `displayName="Other"`) {
-			t.Errorf("Expected displayName=\"Other\", but got: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<name>Other</name>`) {
+			t.Errorf("Expected <name>Other</name> in RecentItemParity, but got: %s", bodyStr)
 		}
 
 		// Check for date format (should have .000+00:00)
@@ -98,8 +98,8 @@ func TestMargeParityRegressions(t *testing.T) {
 		body, _ := io.ReadAll(res.Body)
 		bodyStr := string(body)
 
-		if !strings.Contains(bodyStr, `displayName="My Spotify"`) {
-			t.Errorf("Expected displayName=\"My Spotify\", body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<name>My Spotify</name>`) {
+			t.Errorf("Expected <name>My Spotify</name> in RecentItemParity, body: %s", bodyStr)
 		}
 	})
 }

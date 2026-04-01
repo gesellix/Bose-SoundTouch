@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 
@@ -32,7 +33,62 @@ func (s *Server) HandleBoseLegacyToken(w http.ResponseWriter, r *http.Request) {
 	s.HandleBoseToken(w, r)
 }
 
-// HandleBoseSpotifyToken handles the Bose-specific Spotify token refresh request from the speaker.
+// HandleBoseAccountToken handles the Bose-specific token refresh/exchange request from the app.
+// POST /oauth/account/{account}/music/musicprovider/{sourceID}/token/cs
+func (s *Server) HandleBoseAccountToken(w http.ResponseWriter, r *http.Request) {
+	sourceID := chi.URLParam(r, "sourceID")
+
+	// If it's Spotify (15), handle it.
+	if sourceID == "15" {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("[OAuth Proxy] Failed to read body: %v", err)
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+
+			return
+		}
+
+		_ = r.Body.Close()
+
+		var tokenReq struct {
+			GrantType   string `json:"grant_type"`
+			Code        string `json:"code"`
+			RedirectURI string `json:"redirect_uri"`
+		}
+
+		if err := json.Unmarshal(body, &tokenReq); err == nil && tokenReq.GrantType == "authorization_code" {
+			log.Printf("[Spotify Proxy] Handling authorization_code grant for account addition")
+
+			s.mu.RLock()
+			svc := s.spotifyService
+			s.mu.RUnlock()
+
+			if svc == nil {
+				log.Printf("[Spotify Proxy] Spotify service not configured")
+				http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+
+				return
+			}
+
+			if err := svc.ExchangeCodeAndStore(tokenReq.Code); err != nil {
+				log.Printf("[Spotify Proxy] Failed to exchange code: %v", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
+				return
+			}
+
+			// After successful exchange, we can return the token for the newly added account.
+			// HandleBoseSpotifyToken will pick the first account, which is fine if this is the only one.
+			s.HandleBoseSpotifyToken(w, r)
+
+			return
+		}
+	}
+
+	s.HandleBoseSpotifyToken(w, r)
+}
+
+// HandleBoseSpotifyToken handles the Bose-specific Spotify token refresh request.
 // POST /oauth/device/{deviceID}/music/musicprovider/15/token/cs3
 func (s *Server) HandleBoseSpotifyToken(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceID")

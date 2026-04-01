@@ -77,18 +77,23 @@ func TestParityMismatchReproduction_New(t *testing.T) {
 		}
 
 		// 3. SourceProviderID learned (25)
-		if !strings.Contains(bodyStr, `sourceproviderid="25"`) {
-			t.Errorf("SourceProviderID was not learned from POST, expected 25 in attribute. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<sourceproviderid>25</sourceproviderid>`) {
+			t.Errorf("SourceProviderID was not learned from POST, expected 25 in element. Body: %s", bodyStr)
 		}
 
 		// 4. Credential learned
-		if !strings.Contains(bodyStr, `secret="dummy-token-base64"`) {
-			t.Errorf("Secret was not learned from POST in attribute. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<credential type="token">dummy-token-base64</credential>`) {
+			t.Errorf("Secret was not learned from POST in element. Body: %s", bodyStr)
 		}
 
 		// 6. Source CreatedOn/UpdatedOn learned
-		if !strings.Contains(bodyStr, `createdOn="2017-07-20T16:43:48.000+00:00"`) {
-			t.Errorf("Source CreatedOn was not learned from POST in attribute. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<createdOn>2017-07-20T16:43:48.000+00:00</createdOn>`) {
+			t.Errorf("Source CreatedOn was not learned from POST in element. Body: %s", bodyStr)
+		}
+
+		// 7. sourceAccount should be present (parity)
+		if !strings.Contains(bodyStr, `<sourceAccount></sourceAccount>`) {
+			t.Errorf("Missing <sourceAccount></sourceAccount> in flat response. Body: %s", bodyStr)
 		}
 	})
 
@@ -102,8 +107,9 @@ func TestParityMismatchReproduction_New(t *testing.T) {
 		body, _ := io.ReadAll(res.Body)
 		bodyStr := string(body)
 
-		if !strings.Contains(bodyStr, `sourceproviderid="25"`) {
-			t.Errorf("GET /recents missing learned sourceproviderid 25 in attribute. Body: %s", bodyStr)
+		// GET /recents uses ServiceRecent (nested) which now uses elements for source details in MarshalXML
+		if !strings.Contains(bodyStr, `<sourceproviderid>25</sourceproviderid>`) {
+			t.Errorf("GET /recents missing learned sourceproviderid 25 in element. Body: %s", bodyStr)
 		}
 	})
 }

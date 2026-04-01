@@ -53,7 +53,7 @@ type Service struct {
 
 // NewSpotifyService creates a new Service and loads any persisted accounts.
 func NewSpotifyService(clientID, clientSecret, redirectURI, dataDir string) *Service {
-	s := &Service{
+	return &Service{
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		redirectURI:  redirectURI,
@@ -62,11 +62,24 @@ func NewSpotifyService(clientID, clientSecret, redirectURI, dataDir string) *Ser
 		tokenURL:     SpotifyTokenURL,
 		apiBase:      SpotifyAPIBase,
 	}
+}
+
+// Load loads persisted accounts from disk.
+func (s *Service) Load() error {
 	if err := s.load(); err != nil {
-		log.Printf("[Spotify] Failed to load accounts: %v", err)
+		return err
 	}
 
-	return s
+	return nil
+}
+
+// SetEndpoints allows overriding default Spotify API endpoints (for testing).
+func (s *Service) SetEndpoints(tokenURL, apiBase string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.tokenURL = tokenURL
+	s.apiBase = apiBase
 }
 
 // BuildAuthorizeURL constructs the Spotify OAuth authorization URL.

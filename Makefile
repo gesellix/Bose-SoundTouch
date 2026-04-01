@@ -125,6 +125,7 @@ test-http-client:
 		/workdir/power_on.http \
 		/workdir/get_provider_settings.http \
 		/workdir/tunein_playback_station.http \
+		/workdir/set_preset_6.http \
 		/workdir/get_full_account.http \
 		/workdir/get_group.http \
 		/workdir/unregister_device.http \

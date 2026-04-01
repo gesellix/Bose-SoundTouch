@@ -68,12 +68,12 @@ func TestParityMismatchReproduction_V2(t *testing.T) {
 			t.Errorf("Date format mismatch. Expected .000+00:00. Body: %s", bodyStr)
 		}
 
-		if !strings.Contains(bodyStr, `sourceproviderid="25"`) {
-			t.Errorf("sourceproviderid mismatch. Expected 25 in attribute. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<sourceproviderid>25</sourceproviderid>`) {
+			t.Errorf("sourceproviderid mismatch. Expected 25 in element. Body: %s", bodyStr)
 		}
 
-		if !strings.Contains(bodyStr, `secret="dummy-token-base64"`) {
-			t.Errorf("Secret value mismatch in attribute. Body: %s", bodyStr)
+		if !strings.Contains(bodyStr, `<credential type="token">dummy-token-base64</credential>`) {
+			t.Errorf("Secret value mismatch in element. Body: %s", bodyStr)
 		}
 
 		if !strings.Contains(bodyStr, "<lastplayedat>2026-03-14T12:50:10.000+00:00</lastplayedat>") {

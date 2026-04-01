@@ -567,6 +567,15 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 		return
 	}
 
+	// 8. Ensure default sources exist if missing
+	if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
+		log.Printf("Creating default Sources.xml for device %s", deviceID)
+
+		if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
+			log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+		}
+	}
+
 	log.Printf("Successfully saved device %s (%s) with MAC-based deviceID: %s", info.Name, d.Host, deviceID)
 }
 
@@ -607,6 +616,15 @@ func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
 		log.Printf("Failed to save device info for %s: %v", deviceID, err)
 		return
+	}
+
+	// Ensure default sources exist if missing
+	if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
+		log.Printf("Creating default Sources.xml for device %s (fallback)", deviceID)
+
+		if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
+			log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+		}
 	}
 
 	log.Printf("Successfully saved device %s (%s) with fallback deviceID: %s", info.Name, d.Host, deviceID)

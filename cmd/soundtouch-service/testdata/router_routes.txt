@@ -81,6 +81,7 @@ POST     /mgmt/spotify/entity                                         handlers.(
 POST     /mgmt/spotify/init                                           handlers.(*Server).HandleMgmtSpotifyInit-fm
 POST     /mgmt/spotify/prime                                          handlers.(*Server).HandleMgmtPrimeDevice-fm
 POST     /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
+POST     /oauth/account/{account}/music/musicprovider/{sourceID}/token/cs handlers.(*Server).HandleBoseAccountToken-fm
 POST     /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token handlers.(*Server).HandleBoseLegacyToken-fm
 POST     /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3 handlers.(*Server).HandleBoseToken-fm
 POST     /setup/backup/{deviceId}                                     handlers.(*Server).HandleBackupConfig-fm
@@ -104,6 +105,7 @@ POST     /streaming/account/{account}/device/                         handlers.(
 POST     /streaming/account/{account}/device/{device}                 handlers.(*Server).HandleMargeAddDevice-fm
 POST     /streaming/account/{account}/device/{device}/presets/{presetNumber} handlers.(*Server).HandleMargeUpdatePreset-fm
 POST     /streaming/account/{account}/device/{device}/recent          handlers.(*Server).HandleMargeAddRecent-fm
+POST     /streaming/account/{account}/source                          handlers.(*Server).HandleMargeAddSource-fm
 POST     /streaming/device_setting/account/{account}/device/{device}/device_settings handlers.(*Server).HandleMargeUpdateDeviceSettings-fm
 POST     /streaming/stats/error                                       handlers.(*Server).HandleErrorStats-fm
 POST     /streaming/stats/usage                                       handlers.(*Server).HandleUsageStats-fm
@@ -112,4 +114,5 @@ POST     /streaming/support/power_on                                  handlers.(
 POST     /v1/scmudc/{deviceId}                                        handlers.(*Server).HandleAppEvents-fm
 POST     /v1/stapp/{deviceId}                                         handlers.(*Server).HandleAppEvents-fm
 PUT      /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
+PUT      /streaming/account/{account}/device/{device}/preset/{presetNumber} handlers.(*Server).HandleMargeUpdatePreset-fm
 TRACE    /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm

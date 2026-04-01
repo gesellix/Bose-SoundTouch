@@ -5,6 +5,8 @@ package models
 
 import (
 	"encoding/xml"
+	"strconv"
+	"time"
 )
 
 // Link represents a navigational link with URL and client usage preferences.
@@ -135,10 +137,10 @@ type ServiceContentItem struct {
 	ID              string `json:"id" xml:"id,attr"`
 	Name            string `json:"name" xml:"name"`
 	Source          string `json:"source,omitempty" xml:"source,attr,omitempty"`
-	Type            string `json:"type" xml:"type,attr"`
-	ContentItemType string `json:"content_item_type" xml:"contentItemType"`
+	Type            string `json:"type,omitempty" xml:"type,attr,omitempty"`
+	ContentItemType string `json:"content_item_type,omitempty" xml:"contentItemType,omitempty"`
 	Location        string `json:"location,omitempty" xml:"location,attr,omitempty"`
-	SourceAccount   string `json:"source_account" xml:"sourceAccount,attr"`
+	SourceAccount   string `json:"source_account,omitempty" xml:"sourceAccount,attr,omitempty"`
 	SourceID        string `json:"source_id,omitempty" xml:"sourceid,omitempty"`
 	IsPresetable    string `json:"is_presetable,omitempty" xml:"isPresetable,attr,omitempty"`
 }
@@ -146,7 +148,7 @@ type ServiceContentItem struct {
 // ServicePreset represents a user-defined preset for quick access to media content.
 type ServicePreset struct {
 	ServiceContentItem
-	ID           string            `json:"id,omitempty" xml:"id,attr"`
+	ID           string            `json:"id,omitempty" xml:"id,attr,omitempty"`
 	ContainerArt string            `json:"container_art" xml:"containerArt"`
 	CreatedOn    string            `json:"created_on" xml:"createdOn"`
 	UpdatedOn    string            `json:"updated_on" xml:"updatedOn"`
@@ -155,31 +157,107 @@ type ServicePreset struct {
 	SourceConfig *ConfiguredSource `json:"-" xml:"source,omitempty"`
 }
 
-// ServiceRecent represents recently played media content.
+// MarshalXML implements the xml.Marshaler interface for ServicePreset to match upstream parity.
+func (p ServicePreset) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	type Alias struct {
+		ButtonNumber    string            `xml:"buttonNumber,attr,omitempty"`
+		ContainerArt    string            `xml:"containerArt"`
+		ContentItemType string            `xml:"contentItemType"`
+		CreatedOn       string            `xml:"createdOn"`
+		Location        string            `xml:"location"`
+		Name            string            `xml:"name"`
+		Source          *ConfiguredSource `xml:"source,omitempty"`
+		UpdatedOn       string            `xml:"updatedOn"`
+		Username        string            `xml:"username"`
+	}
+
+	createdOn := p.CreatedOn
+	if _, err := strconv.ParseInt(createdOn, 10, 64); err == nil {
+		if t, err := strconv.ParseInt(createdOn, 10, 64); err == nil {
+			createdOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+		}
+	}
+
+	updatedOn := p.UpdatedOn
+	if _, err := strconv.ParseInt(updatedOn, 10, 64); err == nil {
+		if t, err := strconv.ParseInt(updatedOn, 10, 64); err == nil {
+			updatedOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+		}
+	}
+
+	a := Alias{
+		ButtonNumber:    p.ButtonNumber,
+		ContainerArt:    p.ContainerArt,
+		ContentItemType: p.ContentItemType,
+		CreatedOn:       createdOn,
+		Location:        p.Location,
+		Name:            p.Name,
+		Source:          p.SourceConfig,
+		UpdatedOn:       updatedOn,
+		Username:        p.Username,
+	}
+
+	start.Name.Local = "preset"
+	// Remove all attributes because they are handled in Alias
+	start.Attr = nil
+
+	return e.EncodeElement(a, start)
+}
+
+// ServiceRecent represents recently played media content as stored in Recents.xml.
 type ServiceRecent struct {
 	XMLName xml.Name `json:"-" xml:"recent"`
 	ServiceContentItem
-	DeviceID     string            `json:"device_id" xml:"deviceID,attr"`
-	UtcTime      string            `json:"utc_time" xml:"utcTime,attr"`
-	CreatedOn    string            `json:"created_on,omitempty" xml:"createdOn"`
-	UpdatedOn    string            `json:"updated_on,omitempty" xml:"updatedOn"`
+	DeviceID     string            `json:"device_id" xml:"deviceID,attr,omitempty"`
+	UtcTime      string            `json:"utc_time" xml:"utcTime,attr,omitempty"`
+	CreatedOn    string            `json:"created_on,omitempty" xml:"createdOn,omitempty"`
+	UpdatedOn    string            `json:"updated_on,omitempty" xml:"updatedOn,omitempty"`
 	ContainerArt string            `json:"container_art,omitempty" xml:"containerArt,omitempty"`
 	SourceConfig *ConfiguredSource `json:"-" xml:"source,omitempty"`
-	LastPlayedAt string            `json:"last_played_at,omitempty" xml:"lastplayedat"`
-	ContentItem  *struct {
-		Source        string `xml:"source,attr"`
-		Type          string `xml:"type,attr"`
-		Location      string `xml:"location,attr"`
-		SourceAccount string `xml:"sourceAccount,attr"`
-		IsPresetable  string `xml:"isPresetable,attr"`
-		ItemName      string `xml:"itemName"`
-		ContainerArt  string `xml:"containerArt,omitempty"`
-	} `xml:"contentItem,omitempty"`
+	LastPlayedAt string            `json:"last_played_at,omitempty" xml:"lastplayedat,omitempty"`
 }
 
-// UnmarshalXML implements the xml.Unmarshaler interface to handle both nested and flat formats.
+// RecentItemParity represents recently played media content for web API responses (flat format).
+type RecentItemParity struct {
+	XMLName         xml.Name                `xml:"recent"`
+	ID              string                  `xml:"id,attr"`
+	ContentItemType string                  `xml:"contentItemType"`
+	CreatedOn       string                  `xml:"createdOn"`
+	LastPlayedAt    string                  `xml:"lastplayedat"`
+	Location        string                  `xml:"location"`
+	Name            string                  `xml:"name"`
+	Source          *RecentItemParitySource `xml:"source,omitempty"`
+	SourceID        string                  `xml:"sourceid"`
+	UpdatedOn       string                  `xml:"updatedOn"`
+	Username        string                  `xml:"username"`
+	ContainerArt    string                  `xml:"containerArt"`
+	SourceAccount   string                  `xml:"sourceAccount"`
+	IsPresetable    string                  `xml:"isPresetable"`
+}
+
+// RecentItemParitySource represents the source in a RecentItemParity.
+type RecentItemParitySource struct {
+	ID               string                      `xml:"id,attr"`
+	Type             string                      `xml:"type,attr"`
+	CreatedOn        string                      `xml:"createdOn"`
+	Credential       *RecentItemParityCredential `xml:"credential,omitempty"`
+	Name             string                      `xml:"name"`
+	SourceProviderID string                      `xml:"sourceproviderid"`
+	SourceName       string                      `xml:"sourcename"`
+	SourceSettings   string                      `xml:"sourceSettings"`
+	UpdatedOn        string                      `xml:"updatedOn"`
+	Username         string                      `xml:"username"`
+}
+
+// RecentItemParityCredential represents the credential in a RecentItemParitySource.
+type RecentItemParityCredential struct {
+	Type  string `xml:"type,attr"`
+	Value string `xml:",chardata"`
+}
+
+// UnmarshalXML implements the xml.Unmarshaler interface to handle both nested and flat formats for ServiceRecent.
 func (r *ServiceRecent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	type ContentItem struct {
+	type NestedContentItem struct {
 		Source        string `xml:"source,attr"`
 		Type          string `xml:"type,attr"`
 		Location      string `xml:"location,attr"`
@@ -192,15 +270,24 @@ func (r *ServiceRecent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 	type Alias struct {
 		XMLName xml.Name `xml:"recent"`
 		ServiceContentItem
-		DeviceID     string            `xml:"deviceID,attr"`
-		UtcTime      string            `xml:"utcTime,attr"`
-		ID           string            `xml:"id,attr"`
-		CreatedOn    string            `xml:"createdOn,omitempty"`
-		UpdatedOn    string            `xml:"updatedOn,omitempty"`
-		ContainerArt string            `xml:"containerArt,omitempty"`
-		SourceConfig *ConfiguredSource `xml:"source,omitempty"`
-		LastPlayedAt string            `xml:"lastplayedat"`
-		ContentItem  *ContentItem      `xml:"contentItem,omitempty"`
+		DeviceID     string             `xml:"deviceID,attr"`
+		UtcTime      string             `xml:"utcTime,attr"`
+		ID           string             `xml:"id,attr"`
+		CreatedOn    string             `xml:"createdOn,omitempty"`
+		UpdatedOn    string             `xml:"updatedOn,omitempty"`
+		ContainerArt string             `xml:"containerArt,omitempty"`
+		SourceConfig *ConfiguredSource  `xml:"source,omitempty"`
+		LastPlayedAt string             `xml:"lastplayedat"`
+		ContentItem  *NestedContentItem `xml:"contentItem,omitempty"`
+		// Flat format might use these tags
+		FlatLocation        string `xml:"location"`
+		FlatContentItemType string `xml:"contentItemType"`
+		FlatName            string `xml:"name"`
+		FlatSourceID        string `xml:"sourceid"`
+		FlatSource          string `xml:"source_key"`
+		FlatTypeTag         string `xml:"type"`
+		FlatSourceAccount   string `xml:"sourceAccount"`
+		FlatIsPresetable    string `xml:"isPresetable"`
 	}
 
 	var a Alias
@@ -208,23 +295,18 @@ func (r *ServiceRecent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		return err
 	}
 
+	r.ServiceContentItem = a.ServiceContentItem
 	r.DeviceID = a.DeviceID
 	r.UtcTime = a.UtcTime
 	r.ID = a.ID
-
-	r.SourceID = a.SourceID
-	if r.SourceID == "" {
-		r.SourceID = a.SourceID
-	}
-
 	r.CreatedOn = a.CreatedOn
 	r.UpdatedOn = a.UpdatedOn
 	r.ContainerArt = a.ContainerArt
 	r.SourceConfig = a.SourceConfig
 	r.LastPlayedAt = a.LastPlayedAt
-	// Ensure the embedded ServiceContentItem.ID is populated from the attribute
-	r.ID = a.ID
+	r.SourceID = a.FlatSourceID
 
+	// Prefer nested contentItem data if present
 	if a.ContentItem != nil {
 		r.Source = a.ContentItem.Source
 		r.Type = a.ContentItem.Type
@@ -237,40 +319,46 @@ func (r *ServiceRecent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 			r.ContainerArt = a.ContentItem.ContainerArt
 		}
 	} else {
-		// Fallback for flat format: populate ContentItem fields from root fields
-		r.Source = a.Source
-		r.Type = a.Type
-		r.Location = a.Location
-		r.SourceAccount = a.SourceAccount
-		r.IsPresetable = a.IsPresetable
-		r.Name = a.Name
-	}
+		// Fallback to flat fields
+		if a.FlatLocation != "" {
+			r.Location = a.FlatLocation
+		}
 
-	// Always ensure the nested struct is populated for MarshalXML
-	r.ContentItem = &struct {
-		Source        string `xml:"source,attr"`
-		Type          string `xml:"type,attr"`
-		Location      string `xml:"location,attr"`
-		SourceAccount string `xml:"sourceAccount,attr"`
-		IsPresetable  string `xml:"isPresetable,attr"`
-		ItemName      string `xml:"itemName"`
-		ContainerArt  string `xml:"containerArt,omitempty"`
-	}{
-		Source:        r.Source,
-		Type:          r.Type,
-		Location:      r.Location,
-		SourceAccount: r.SourceAccount,
-		IsPresetable:  r.IsPresetable,
-		ItemName:      r.Name,
-		ContainerArt:  r.ContainerArt,
+		if a.FlatContentItemType != "" {
+			r.ContentItemType = a.FlatContentItemType
+		}
+
+		if a.FlatName != "" {
+			r.Name = a.FlatName
+		}
+
+		if a.FlatSourceID != "" {
+			r.SourceID = a.FlatSourceID
+		}
+
+		if a.FlatSource != "" {
+			r.Source = a.FlatSource
+		}
+
+		if a.FlatTypeTag != "" {
+			r.Type = a.FlatTypeTag
+		}
+
+		if a.FlatSourceAccount != "" {
+			r.SourceAccount = a.FlatSourceAccount
+		}
+
+		if a.FlatIsPresetable != "" {
+			r.IsPresetable = a.FlatIsPresetable
+		}
 	}
 
 	return nil
 }
 
-// MarshalXML implements the xml.Marshaler interface for custom XML encoding of ServiceRecent.
+// MarshalXML implements the xml.Marshaler interface for custom XML encoding of ServiceRecent (nested format).
 func (r ServiceRecent) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	type ContentItem struct {
+	type NestedContentItem struct {
 		Source        string `xml:"source,attr"`
 		Type          string `xml:"type,attr"`
 		Location      string `xml:"location,attr"`
@@ -281,24 +369,30 @@ func (r ServiceRecent) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 	}
 
 	type Alias struct {
-		XMLName      xml.Name          `xml:"recent"`
-		DeviceID     string            `xml:"deviceID,attr"`
-		UtcTime      string            `xml:"utcTime,attr"`
-		ID           string            `xml:"id,attr"`
-		ContentItem  ContentItem       `xml:"contentItem"`
-		CreatedOn    string            `xml:"createdOn,omitempty"`
-		UpdatedOn    string            `xml:"updatedOn,omitempty"`
-		LastPlayedAt string            `xml:"lastplayedat,omitempty"`
-		SourceID     string            `xml:"sourceid,omitempty"`
-		Source       *ConfiguredSource `xml:"source,omitempty"`
+		XMLName      xml.Name           `xml:"recent"`
+		ID           string             `xml:"id,attr"`
+		DeviceID     string             `xml:"deviceID,attr,omitempty"`
+		UtcTime      string             `xml:"utcTime,attr,omitempty"`
+		ContentItem  *NestedContentItem `xml:"contentItem"`
+		CreatedOn    string             `xml:"createdOn"`
+		UpdatedOn    string             `xml:"updatedOn"`
+		LastPlayedAt string             `xml:"lastplayedat"`
+		SourceID     string             `xml:"sourceid"`
+		Username     string             `xml:"username"`
+		SourceConfig *ConfiguredSource  `xml:"source,omitempty"`
 	}
 
 	a := Alias{
-		DeviceID: r.DeviceID,
-		UtcTime:  r.UtcTime,
-		ID:       r.ID,
-		SourceID: r.SourceID,
-		ContentItem: ContentItem{
+		ID:           r.ID,
+		DeviceID:     r.DeviceID,
+		UtcTime:      r.UtcTime,
+		CreatedOn:    r.CreatedOn,
+		UpdatedOn:    r.UpdatedOn,
+		LastPlayedAt: r.LastPlayedAt,
+		SourceID:     r.SourceID,
+		Username:     r.Name, // Using Name as Username for parity
+		SourceConfig: r.SourceConfig,
+		ContentItem: &NestedContentItem{
 			Source:        r.Source,
 			Type:          r.Type,
 			Location:      r.Location,
@@ -307,35 +401,6 @@ func (r ServiceRecent) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 			ItemName:      r.Name,
 			ContainerArt:  r.ContainerArt,
 		},
-		CreatedOn:    r.CreatedOn,
-		UpdatedOn:    r.UpdatedOn,
-		LastPlayedAt: r.LastPlayedAt,
-		Source:       r.SourceConfig,
-	}
-
-	if a.SourceID == "" && r.SourceID != "" {
-		a.SourceID = r.SourceID
-	}
-
-	if r.ContentItem != nil {
-		a.ContentItem.Source = r.ContentItem.Source
-		a.ContentItem.Type = r.ContentItem.Type
-		a.ContentItem.Location = r.ContentItem.Location
-		a.ContentItem.SourceAccount = r.ContentItem.SourceAccount
-		a.ContentItem.IsPresetable = r.ContentItem.IsPresetable
-
-		a.ContentItem.ItemName = r.ContentItem.ItemName
-		if r.ContentItem.ContainerArt != "" {
-			a.ContentItem.ContainerArt = r.ContentItem.ContainerArt
-		}
-	}
-
-	if a.Source == nil && r.SourceConfig != nil {
-		a.Source = r.SourceConfig
-	}
-
-	if a.ContentItem.IsPresetable == "" {
-		a.ContentItem.IsPresetable = "true"
 	}
 
 	start.Name.Local = "recent"
@@ -348,22 +413,26 @@ type ConfiguredSource struct {
 	XMLName     xml.Name `json:"-" xml:"source"`
 	DisplayName string   `json:"display_name" xml:"displayName,attr,omitempty"`
 	ID          string   `json:"id" xml:"id,attr,omitempty"`
-	Secret      string   `json:"secret" xml:"secret,attr"`
-	SecretType  string   `json:"secret_type" xml:"secretType,attr"`
-	SourceKey   struct {
+	Secret      string   `json:"secret" xml:"-"`
+	SecretType  string   `json:"secret_type" xml:"-"`
+	Credential  struct {
+		Type  string `xml:"type,attr"`
+		Value string `xml:",chardata"`
+	} `json:"-" xml:"credential"`
+	SourceKey struct {
 		Type    string `xml:"type,attr"`
 		Account string `xml:"account,attr"`
 	} `json:"source_key" xml:"sourceKey"`
 	Type string `xml:"type,attr,omitempty"`
 
 	// Parity fields
-	CreatedOn        string `json:"created_on,omitempty" xml:"createdOn,attr,omitempty"`
-	UpdatedOn        string `json:"updated_on,omitempty" xml:"updatedOn,attr,omitempty"`
-	SourceProviderID string `json:"sourceproviderid,omitempty" xml:"sourceproviderid,attr,omitempty"`
-	Username         string `json:"username,omitempty" xml:"-"`
-	SourceName       string `json:"source_name,omitempty" xml:"-"`
-	Name             string `json:"name,omitempty" xml:"-"`
-	SourceSettings   string `json:"-" xml:"-"`
+	CreatedOn        string `json:"created_on,omitempty" xml:"createdOn,omitempty"`
+	UpdatedOn        string `json:"updated_on,omitempty" xml:"updatedOn,omitempty"`
+	SourceProviderID string `json:"sourceproviderid,omitempty" xml:"sourceproviderid,omitempty"`
+	Username         string `json:"username,omitempty" xml:"username,omitempty"`
+	SourceName       string `json:"source_name,omitempty" xml:"sourcename,omitempty"`
+	Name             string `json:"name,omitempty" xml:"name,omitempty"`
+	SourceSettings   string `json:"-" xml:"sourceSettings,omitempty"`
 	Status           string `json:"status,omitempty" xml:"-"`
 
 	// Legacy fields for backward compatibility in code if needed,
@@ -372,37 +441,79 @@ type ConfiguredSource struct {
 	SourceKeyAccount string `json:"source_key_account" xml:"-"`
 }
 
-// MarshalXML implements the xml.Marshaler interface for custom XML encoding of ConfiguredSource.
-func (s ConfiguredSource) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	type Alias struct {
-		DisplayName      string `xml:"displayName,attr,omitempty"`
-		Secret           string `xml:"secret,attr"`
-		SecretType       string `xml:"secretType,attr"`
-		ID               string `xml:"id,attr,omitempty"`
-		Type             string `xml:"type,attr,omitempty"`
-		CreatedOn        string `xml:"createdOn,attr,omitempty"`
-		UpdatedOn        string `xml:"updatedOn,attr,omitempty"`
-		SourceProviderID string `xml:"sourceproviderid,attr,omitempty"`
-		SourceKey        struct {
-			Type    string `xml:"type,attr"`
-			Account string `xml:"account,attr"`
-		} `xml:"sourceKey"`
+type sourceCredential struct {
+	Type  string `xml:"type,attr"`
+	Value string `xml:",chardata"`
+}
+
+type sourceAlias struct {
+	XMLName          xml.Name          `xml:"source"`
+	DisplayName      string            `xml:"displayName,attr,omitempty"`
+	ID               string            `xml:"id,attr,omitempty"`
+	Type             string            `xml:"type,attr,omitempty"`
+	CreatedOn        string            `xml:"createdOn,omitempty"`
+	Credential       *sourceCredential `xml:"credential,omitempty"`
+	Name             string            `xml:"name"`
+	SourceProviderID string            `xml:"sourceproviderid,omitempty"`
+	SourceName       string            `xml:"sourcename"`
+	SourceSettings   string            `xml:"sourceSettings"`
+	UpdatedOn        string            `xml:"updatedOn,omitempty"`
+	Username         string            `xml:"username"`
+}
+
+func (s ConfiguredSource) getFirstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
 	}
 
-	a := Alias{
+	return ""
+}
+
+// MarshalXML implements the xml.Marshaler interface for custom XML encoding of ConfiguredSource.
+func (s ConfiguredSource) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	a := sourceAlias{
+		XMLName:          xml.Name{Local: start.Name.Local},
 		DisplayName:      s.DisplayName,
-		Secret:           s.Secret,
-		SecretType:       s.SecretType,
 		ID:               s.ID,
 		Type:             s.Type,
 		CreatedOn:        s.CreatedOn,
-		UpdatedOn:        s.UpdatedOn,
+		Name:             s.Name,
 		SourceProviderID: s.SourceProviderID,
+		SourceName:       s.SourceName,
+		SourceSettings:   s.SourceSettings,
+		UpdatedOn:        s.UpdatedOn,
+		Username:         s.Username,
 	}
-	a.SourceKey.Type = s.SourceKey.Type
-	a.SourceKey.Account = s.SourceKey.Account
 
-	start.Name.Local = "source"
+	// Bose XML for sources usually does NOT include displayName attribute
+	// except for when it's explicitly stored in our datastore as such.
+	// For parity with official responses, we omit it if ID is present or for standard sources.
+	if s.ID != "" || s.SourceKeyType != "" || s.Type != "" {
+		a.DisplayName = ""
+	}
+
+	a.Name = s.getFirstNonEmpty(s.Name, s.SourceName, s.Username, s.DisplayName)
+	a.SourceName = s.getFirstNonEmpty(s.SourceName, s.Name, s.Username, s.DisplayName)
+	a.Username = s.getFirstNonEmpty(s.Username, s.Name, s.SourceName, s.DisplayName)
+
+	if s.Secret != "" || s.SecretType != "" {
+		a.Credential = &sourceCredential{
+			Type:  s.SecretType,
+			Value: s.Secret,
+		}
+	} else if s.Credential.Value != "" || s.Credential.Type != "" {
+		a.Credential = &sourceCredential{
+			Type:  s.Credential.Type,
+			Value: s.Credential.Value,
+		}
+	}
+
+	if a.SourceSettings == "" {
+		a.SourceSettings = ""
+	}
+
 	// Important: Clear automatically generated attributes from the start element
 	// because we are using Alias to control attribute order and presence.
 	start.Attr = nil
@@ -607,6 +718,7 @@ type FullResponseRecent struct {
 	Source          FullResponseSource `json:"source" xml:"source"`
 	SourceID        string             `json:"source_id" xml:"sourceid"`
 	UpdatedOn       string             `json:"updated_on" xml:"updatedOn"`
+	Username        string             `json:"username" xml:"username"`
 }
 
 // AccountFullResponse represents the complete account XML structure.
@@ -674,4 +786,13 @@ type MargeAccountCreateRequest struct {
 	Password          string   `xml:"password"`
 	CountryCode       string   `xml:"countryCode"`
 	PreferredLanguage string   `xml:"preferredLanguage"`
+}
+
+// MargeAddSourceResponse represents the response after adding a source to Marge.
+type MargeAddSourceResponse struct {
+	XMLName          xml.Name `xml:"source"`
+	SourceID         string   `xml:"sourceID"`
+	SourceProviderID string   `xml:"sourceProviderID"`
+	CreatedOn        string   `xml:"createdOn"`
+	UpdatedOn        string   `xml:"updatedOn"`
 }

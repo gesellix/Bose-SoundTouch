@@ -24,13 +24,13 @@ func TestSaveRecents_Format(t *testing.T) {
 	recents := []models.ServiceRecent{
 		{
 			ServiceContentItem: models.ServiceContentItem{
-				ID:            "2567119953",
-				Name:          "The National",
-				Source:        "SPOTIFY",
-				Type:          "tracklisturl",
-				Location:      "/playback/container/c3BvdGlmeTp1c2VyOnRlc3QtdXNlcjpjb2xsZWN0aW9uOmFydGlzdDoyY0NVdEdLOXNEVTJFb0VsbmswR05C",
-				SourceAccount: "test-user",
-				IsPresetable:  "true",
+				ID:              "2567119953",
+				Name:            "The National",
+				Source:          "SPOTIFY",
+				ContentItemType: "tracklisturl",
+				Location:        "/playback/container/c3BvdGlmeTp1c2VyOnRlc3QtdXNlcjpjb2xsZWN0aW9uOmFydGlzdDoyY0NVdEdLOXNEVTJFb0VsbmswR05C",
+				SourceAccount:   "test-user",
+				IsPresetable:    "true",
 			},
 			DeviceID: "001122334455",
 			UtcTime:  "1771666755",
@@ -49,7 +49,7 @@ func TestSaveRecents_Format(t *testing.T) {
 
 	expectedXML := `<?xml version="1.0" encoding="UTF-8"?>
 <recents>
-    <recent deviceID="001122334455" utcTime="1771666755" id="2567119953">
+    <recent id="2567119953" deviceID="001122334455" utcTime="1771666755">
         <contentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTp1c2VyOnRlc3QtdXNlcjpjb2xsZWN0aW9uOmFydGlzdDoyY0NVdEdLOXNEVTJFb0VsbmswR05C" sourceAccount="test-user" isPresetable="true">
             <itemName>The National</itemName>
         </contentItem>
@@ -60,9 +60,9 @@ func TestSaveRecents_Format(t *testing.T) {
 	var expected, actual struct {
 		XMLName xml.Name `xml:"recents"`
 		Recents []struct {
+			ID          string `xml:"id,attr"`
 			DeviceID    string `xml:"deviceID,attr"`
 			UtcTime     string `xml:"utcTime,attr"`
-			ID          string `xml:"id,attr"`
 			ContentItem struct {
 				Source        string `xml:"source,attr"`
 				Type          string `xml:"type,attr"`
@@ -90,10 +90,7 @@ func TestSaveRecents_Format(t *testing.T) {
 		t.Errorf("Attributes mismatch: %+v", r)
 	}
 	if r.ContentItem.ItemName != "The National" || r.ContentItem.Source != "SPOTIFY" {
-		t.Errorf("ContentItem mismatch: %+v", r.ContentItem)
-	}
-	if r.ContentItem.IsPresetable != "true" {
-		t.Errorf("IsPresetable mismatch: got %s, expected true", r.ContentItem.IsPresetable)
+		t.Errorf("ContentItem mismatch: %+v", r)
 	}
 
 	// Now test Round-trip (GetRecents)

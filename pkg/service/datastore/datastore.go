@@ -2,6 +2,7 @@
 package datastore
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -525,6 +526,10 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.ServicePreset{}, nil
+		}
+
 		return nil, err
 	}
 
@@ -642,10 +647,21 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 
 	header := []byte(xml.Header)
 
-	return os.WriteFile(path, append(header, data...), 0644)
+	return ds.atomicWriteFile(path, append(header, data...))
 }
 
-// GetRecents retrieves all recent items for the specified account and device.
+func (ds *DataStore) atomicWriteFile(filename string, data []byte) error {
+	perm := os.FileMode(0644)
+
+	tempFile := filename + ".tmp"
+	if err := os.WriteFile(tempFile, data, perm); err != nil {
+		return err
+	}
+
+	return os.Rename(tempFile, filename)
+}
+
+// GetRecents returns the list of recently played items for the specified account and device.
 func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent, error) {
 	ds.fileMutex.RLock()
 	defer ds.fileMutex.RUnlock()
@@ -724,7 +740,7 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 
 	header := []byte(xml.Header)
 
-	return os.WriteFile(path, append(header, data...), 0644)
+	return ds.atomicWriteFile(path, append(header, data...))
 }
 
 // SaveDeviceInfo saves device information for the specified account and device.
@@ -807,7 +823,7 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 
 	header := []byte(xml.Header)
 
-	return os.WriteFile(path, append(header, data...), 0644)
+	return ds.atomicWriteFile(path, append(header, data...))
 }
 
 func (ds *DataStore) mergeWithExistingDeviceInfo(account, device string, info *models.ServiceDeviceInfo) {
@@ -925,7 +941,7 @@ func (ds *DataStore) SaveAccountInfo(accountID string, info *models.ServiceAccou
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return ds.atomicWriteFile(path, data)
 }
 
 // GetAccountInfo retrieves account-level metadata from the datastore.
@@ -977,6 +993,10 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return ds.getDefaultSources(), nil
+		}
+
 		return nil, err
 	}
 
@@ -990,6 +1010,15 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 
 	for i := range sourcesWrap.Sources {
 		s := &sourcesWrap.Sources[i]
+
+		// Ensure Secret/SecretType values are prioritized from legacy fields
+		if s.Secret == "" && s.Credential.Value != "" {
+			s.Secret = s.Credential.Value
+		}
+
+		if s.SecretType == "" && s.Credential.Type != "" {
+			s.SecretType = s.Credential.Type
+		}
 
 		// Ensure SourceKey values are prioritized for legacy fields
 		if s.SourceKey.Type != "" {
@@ -1006,7 +1035,7 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		}
 
 		if s.ID == "" {
-			s.ID = strconv.Itoa(100001 + i)
+			s.ID = strconv.Itoa(2000001 + i)
 		}
 	}
 
@@ -1023,12 +1052,29 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 		return err
 	}
 
+	type persistentSource struct {
+		DisplayName      string `xml:"displayName,attr,omitempty"`
+		ID               string `xml:"id,attr,omitempty"`
+		Secret           string `xml:"secret,attr"`
+		SecretType       string `xml:"secretType,attr"`
+		Type             string `xml:"type,attr,omitempty"`
+		CreatedOn        string `xml:"createdOn,attr,omitempty"`
+		UpdatedOn        string `xml:"updatedOn,attr,omitempty"`
+		SourceProviderID string `xml:"sourceproviderid,attr,omitempty"`
+		SourceKey        struct {
+			Type    string `xml:"type,attr"`
+			Account string `xml:"account,attr"`
+		} `xml:"sourceKey"`
+	}
+
 	type sourcesWrap struct {
-		XMLName xml.Name                  `xml:"sources"`
-		Sources []models.ConfiguredSource `xml:"source"`
+		XMLName xml.Name           `xml:"sources"`
+		Sources []persistentSource `xml:"source"`
 	}
 
 	// Ensure SourceKey is populated from legacy fields if necessary before saving
+	// and map to persistentSource to avoid custom MarshalXML for disk storage
+	persistSources := make([]persistentSource, len(sources))
 	for i := range sources {
 		s := &sources[i]
 		if s.SourceKey.Type == "" && s.SourceKeyType != "" {
@@ -1038,10 +1084,31 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 		if s.SourceKey.Account == "" && s.SourceKeyAccount != "" {
 			s.SourceKey.Account = s.SourceKeyAccount
 		}
+
+		persistSources[i] = persistentSource{
+			DisplayName:      s.DisplayName,
+			ID:               s.ID,
+			Secret:           s.Secret,
+			SecretType:       s.SecretType,
+			Type:             s.Type,
+			CreatedOn:        s.CreatedOn,
+			UpdatedOn:        s.UpdatedOn,
+			SourceProviderID: s.SourceProviderID,
+		}
+		if persistSources[i].Secret == "" && s.Credential.Value != "" {
+			persistSources[i].Secret = s.Credential.Value
+		}
+
+		if persistSources[i].SecretType == "" && s.Credential.Type != "" {
+			persistSources[i].SecretType = s.Credential.Type
+		}
+
+		persistSources[i].SourceKey.Type = s.SourceKey.Type
+		persistSources[i].SourceKey.Account = s.SourceKey.Account
 	}
 
 	wrap := sourcesWrap{
-		Sources: sources,
+		Sources: persistSources,
 	}
 
 	data, err := xml.MarshalIndent(wrap, "", "    ")
@@ -1051,7 +1118,7 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 
 	header := []byte(xml.Header)
 
-	return os.WriteFile(path, append(header, data...), 0644)
+	return ds.atomicWriteFile(path, append(header, data...))
 }
 
 // updateDeviceMappings creates bidirectional mappings for device resolution
@@ -1099,6 +1166,57 @@ func (ds *DataStore) UpdateMapping(mac, serial string) {
 	if normalizedMAC != mac {
 		ds.deviceMappings[normalizedMAC] = serial
 	}
+}
+
+// GenerateSerialSecret generates a base64 encoded JSON object with the specified serial.
+func GenerateSerialSecret(serial string) string {
+	m := map[string]string{"serial": serial}
+
+	b, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
+	sources := []models.ConfiguredSource{
+		{
+			ID:               "10001",
+			DisplayName:      "AUX IN",
+			SourceKeyType:    "AUX",
+			SourceKeyAccount: "AUX",
+			Status:           "READY",
+		},
+		{
+			ID:            "10002",
+			SourceKeyType: "INTERNET_RADIO",
+			SecretType:    "token",
+			Status:        "READY",
+		},
+		{
+			ID:            "10003",
+			SourceKeyType: "LOCAL_INTERNET_RADIO",
+			Secret:        GenerateSerialSecret("local-internet-radio"),
+			SecretType:    "token",
+			Status:        "READY",
+		},
+		{
+			ID:            "10004",
+			SourceKeyType: "TUNEIN",
+			Secret:        GenerateSerialSecret("tunein"),
+			SecretType:    "token",
+			Status:        "READY",
+		},
+	}
+
+	for i := range sources {
+		sources[i].SourceKey.Type = sources[i].SourceKeyType
+		sources[i].SourceKey.Account = sources[i].SourceKeyAccount
+	}
+
+	return sources
 }
 
 // isMACAddressFormat checks if a string looks like a MAC address
@@ -1267,7 +1385,7 @@ func (ds *DataStore) SaveSettings(settings Settings) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return ds.atomicWriteFile(path, data)
 }
 
 // SaveUsageStats saves usage statistics to the datastore.
@@ -1285,7 +1403,7 @@ func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return ds.atomicWriteFile(path, data)
 }
 
 // SaveErrorStats saves error statistics to the datastore.
@@ -1303,7 +1421,7 @@ func (ds *DataStore) SaveErrorStats(stats models.ErrorStats) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return ds.atomicWriteFile(path, data)
 }
 
 // AddDeviceEvent adds a device event to the in-memory event store.
@@ -1373,7 +1491,7 @@ func (ds *DataStore) SaveDNSDiscoveries(discoveries []DNSDiscoveryEntry) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return ds.atomicWriteFile(path, data)
 }
 
 // LoadDNSDiscoveries loads DNS discoveries from the datastore.

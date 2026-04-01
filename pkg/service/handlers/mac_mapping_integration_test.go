@@ -175,11 +175,11 @@ func TestMacMappingIntegration_HTTPHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusInternalServerError {
-			t.Errorf("Expected status 500 for non-existent device, got %d", rr.Code)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for non-existent device (empty presets), got %d", rr.Code)
 		}
 
-		t.Logf("✓ Correctly returned error for non-existent device")
+		t.Logf("✓ Correctly returned empty list for non-existent device")
 	})
 
 	// Test 4: Case sensitivity test

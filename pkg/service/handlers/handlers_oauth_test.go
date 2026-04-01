@@ -44,6 +44,9 @@ func TestHandleBoseSpotifyToken_LocalResponse(t *testing.T) {
 
 	// Initialize ss so it loads the data
 	ss := spotify.NewSpotifyService("client-id", "client-secret", "http://localhost/callback", tmpDir)
+	if err := ss.Load(); err != nil {
+		t.Fatalf("Failed to load account: %v", err)
+	}
 
 	server.SetSpotifyService(ss)
 
