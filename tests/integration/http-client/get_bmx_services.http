@@ -1,0 +1,30 @@
+### GET /bmx/registry/v1/services
+GET {{host}}/bmx/registry/v1/services
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+X-Bmx-Api-Key: {{bmxApiKey}}
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content-type is application/json", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/json", "Expected 'application/json' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        client.assert(response.body.hasOwnProperty("_links"), "Missing '_links'");
+        client.assert(response.body.hasOwnProperty("askAgainAfter"), "Missing 'askAgainAfter'");
+        client.assert(Array.isArray(response.body.bmx_services), "'bmx_services' should be an array");
+    });
+
+    client.test("All bmx_services have id.name and id.value", function() {
+        response.body.bmx_services.forEach(function(service, index) {
+            client.assert(service.hasOwnProperty("id"), "Service at index " + index + " missing 'id'");
+            client.assert(typeof service.id.name === "string", "Service at index " + index + " 'id.name' should be a string");
+            client.assert(typeof service.id.value === "number", "Service at index " + index + " 'id.value' should be a number");
+        });
+    });
+%}

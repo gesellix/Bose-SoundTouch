@@ -1,0 +1,43 @@
+### GET /streaming/sourceproviders
+GET {{host}}/streaming/sourceproviders
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content-type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        client.assert(response.body.getElementsByTagName("sourceProviders").length > 0, "Missing 'sourceProviders' root element");
+        client.assert(response.body.getElementsByTagName("sourceprovider").length > 0, "Missing 'sourceprovider' elements");
+    });
+
+    client.test("Check specific source providers", function() {
+        var providers = response.body.getElementsByTagName("sourceprovider");
+        var foundSpotify = false;
+        var foundTuneIn = false;
+
+        for (var i = 0; i < providers.length; i++) {
+            var provider = providers[i];
+            var id = provider.getAttribute("id");
+            var nameElement = provider.getElementsByTagName("name")[0];
+            var name = nameElement ? nameElement.textContent : "";
+
+            if (id === "15" && name === "SPOTIFY") {
+                foundSpotify = true;
+            }
+            if (id === "25" && name === "TUNEIN") {
+                foundTuneIn = true;
+            }
+        }
+
+        client.assert(foundSpotify, "SPOTIFY (id=15) not found");
+        client.assert(foundTuneIn, "TUNEIN (id=25) not found");
+    });
+%}

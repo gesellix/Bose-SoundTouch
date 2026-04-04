@@ -9,11 +9,26 @@ User-Agent: Bose_Lisa/27.0.6
 > {%
     client.test("Request executed successfully", function() {
         client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + response.contentType.mimeType + "'");
     });
 
-    client.test("Response body contains <providerSettings>", function() {
-        const doc = response.body;
-        client.assert(doc.getElementsByTagName("providerSettings").length > 0, "Response body does not contain <providerSettings>");
+    client.test("Response content-type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        client.assert(response.body.getElementsByTagName("providerSettings").length > 0, "Missing 'providerSettings' root element");
+        client.assert(response.body.getElementsByTagName("providerSetting").length > 0, "Missing 'providerSetting' elements");
+    });
+
+    client.test("All providerSettings have required children", function() {
+        var settings = response.body.getElementsByTagName("providerSetting");
+        for (var i = 0; i < settings.length; i++) {
+            var setting = settings[i];
+            client.assert(setting.getElementsByTagName("boseId").length > 0, "Setting " + i + " missing 'boseId'");
+            client.assert(setting.getElementsByTagName("keyName").length > 0, "Setting " + i + " missing 'keyName'");
+            client.assert(setting.getElementsByTagName("value").length > 0, "Setting " + i + " missing 'value'");
+            client.assert(setting.getElementsByTagName("providerId").length > 0, "Setting " + i + " missing 'providerId'");
+        }
     });
 %}
