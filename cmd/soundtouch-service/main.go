@@ -714,6 +714,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 
 	r.Route("/bmx", func(r chi.Router) {
 		r.Get("/registry/v1/services", server.HandleBMXRegistry)
+		r.Get("/registry/v1/servicesAvailability", server.HandleBMXServicesAvailability)
 
 		r.Route("/tunein", func(r chi.Router) {
 			r.Get("/v1/playback/station/{stationID}", server.HandleTuneInPlayback)

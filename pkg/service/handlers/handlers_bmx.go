@@ -33,6 +33,12 @@ func (s *Server) HandleBMXRegistry(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(content))
 }
 
+// HandleBMXServicesAvailability returns the BMX services availability.
+func (s *Server) HandleBMXServicesAvailability(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(bmxServicesAvailabilityJSON)
+}
+
 func (s *Server) writeBMXUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)

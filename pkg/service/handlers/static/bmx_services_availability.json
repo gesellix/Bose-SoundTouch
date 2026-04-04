@@ -1,0 +1,14 @@
+{
+    "services": [
+        {
+            "canAdd": true,
+            "canRemove": false,
+            "service": "TUNEIN"
+        },
+        {
+            "canAdd": false,
+            "canRemove": true,
+            "service": "SIRIUSXM_EVEREST"
+        }
+    ]
+}

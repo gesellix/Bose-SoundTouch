@@ -23,6 +23,7 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 	// Setup BMX for tests
 	r.Route("/bmx", func(r chi.Router) {
 		r.Get("/registry/v1/services", server.HandleBMXRegistry)
+		r.Get("/registry/v1/servicesAvailability", server.HandleBMXServicesAvailability)
 		r.Get("/tunein/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
 		r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
 		r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)

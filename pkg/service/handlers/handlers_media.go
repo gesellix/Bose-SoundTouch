@@ -20,6 +20,9 @@ var mediaFS embed.FS
 //go:embed static/bmx_services.json
 var bmxServicesJSON []byte
 
+//go:embed static/bmx_services_availability.json
+var bmxServicesAvailabilityJSON []byte
+
 // Upstream source available at https://worldwide.bose.com/updates/soundtouch?serialnumber=_serial_
 // which results in a redirect to https://downloads.bose.com/ced/soundtouch/mr4_22097fe2/index.xml
 //
