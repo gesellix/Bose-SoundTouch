@@ -139,6 +139,7 @@ test-http-client:
 		/workdir/delete_preset_6.http \
 		/workdir/set_preset_5.http \
 		/workdir/post_recent.http \
+		/workdir/get_recents.http \
 		/workdir/get_full_account.http \
 		/workdir/get_group.http \
 		/workdir/unregister_device.http \

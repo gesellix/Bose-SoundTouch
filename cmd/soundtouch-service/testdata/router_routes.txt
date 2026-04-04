@@ -56,6 +56,7 @@ GET      /streaming/account/{account}/device/{device}/group/member    handlers.(
 GET      /streaming/account/{account}/device/{device}/group/server    handlers.(*Server).HandleMargeDeviceGroupServer-fm
 GET      /streaming/account/{account}/device/{device}/presets         handlers.(*Server).HandleMargePresets-fm
 GET      /streaming/account/{account}/device/{device}/recent          handlers.(*Server).HandleMargeRecents-fm
+GET      /streaming/account/{account}/device/{device}/recents         handlers.(*Server).HandleMargeRecents-fm
 GET      /streaming/account/{account}/emailaddress                    handlers.(*Server).HandleMargeGetEmailAddress-fm
 GET      /streaming/account/{account}/full                            handlers.(*Server).HandleMargeAccountFull-fm
 GET      /streaming/account/{account}/provider_settings               handlers.(*Server).HandleMargeProviderSettings-fm

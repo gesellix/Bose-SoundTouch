@@ -267,33 +267,28 @@ func RecentsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 		return nil, err
 	}
 
-	type RecentsXML struct {
-		XMLName xml.Name               `xml:"recents"`
-		Recents []models.ServiceRecent `xml:"recent"`
+	type recentsParityXML struct {
+		XMLName xml.Name `xml:"recents"`
+		Recents []recent `xml:"recent"`
 	}
 
-	rxml := RecentsXML{
-		Recents: recents,
+	rxml := recentsParityXML{
+		Recents: make([]recent, len(recents)),
 	}
 
-	for i := range rxml.Recents {
-		r := &rxml.Recents[i]
+	sources, _ := ds.GetConfiguredSources(account, deviceID)
+
+	for i := range recents {
+		r := &recents[i]
 		if r.SourceConfig == nil && r.SourceID != "" {
-			sources, err2 := ds.GetConfiguredSources(account, deviceID)
-			if err2 == nil {
-				r.SourceConfig = findMatchingSource(sources, r.SourceID)
-			}
+			r.SourceConfig = findMatchingSource(sources, r.SourceID)
 		}
 
 		if r.SourceConfig != nil {
 			PrepareConfiguredSource(r.SourceConfig)
 		}
 
-		if r.UtcTime != "" {
-			if t, parseErr := strconv.ParseInt(r.UtcTime, 10, 64); parseErr == nil {
-				r.LastPlayedAt = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
-			}
-		}
+		rxml.Recents[i] = recentToXML(r)
 	}
 
 	data, err := xml.MarshalIndent(rxml, "", "  ")
@@ -307,6 +302,129 @@ func RecentsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 	header := constants.XMLHeader
 
 	return append([]byte(header+"\n"), data...), nil
+}
+
+type recent struct {
+	ID              string                         `xml:"id,attr"`
+	ContentItem     *contentItem                   `xml:"contentItem"`
+	ContentItemType string                         `xml:"contentItemType"`
+	CreatedOn       string                         `xml:"createdOn"`
+	LastPlayedAt    string                         `xml:"lastplayedat"`
+	Location        string                         `xml:"location"`
+	Name            string                         `xml:"name"`
+	Source          *models.RecentItemParitySource `xml:"source,omitempty"`
+	SourceID        string                         `xml:"sourceid"`
+	UpdatedOn       string                         `xml:"updatedOn"`
+}
+
+type contentItem struct {
+	Source        string `xml:"source,attr"`
+	Type          string `xml:"type,attr"`
+	Location      string `xml:"location,attr"`
+	SourceAccount string `xml:"sourceAccount,attr"`
+	IsPresetable  string `xml:"isPresetable,attr"`
+	ItemName      string `xml:"itemName"`
+	ContainerArt  string `xml:"containerArt,omitempty"`
+}
+
+func recentToXML(r *models.ServiceRecent) recent {
+	utcTime := int64(0)
+
+	if r.UtcTime != "" {
+		if t, parseErr := strconv.ParseInt(r.UtcTime, 10, 64); parseErr == nil {
+			utcTime = t
+		}
+	}
+
+	createdOn := r.CreatedOn
+	if createdOn == "" {
+		createdOn = FormatTime(time.Now())
+	}
+
+	updatedOn := r.UpdatedOn
+	if updatedOn == "" {
+		updatedOn = createdOn
+	}
+
+	lastPlayedAt := r.LastPlayedAt
+	if lastPlayedAt == "" && utcTime > 0 {
+		lastPlayedAt = time.Unix(utcTime, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+	}
+
+	res := recent{
+		ID:              r.ID,
+		ContentItemType: r.ContentItemType,
+		CreatedOn:       createdOn,
+		UpdatedOn:       updatedOn,
+		LastPlayedAt:    lastPlayedAt,
+		Location:        r.Location,
+		Name:            r.Name,
+		SourceID:        r.SourceID,
+		ContentItem: &contentItem{
+			Source:        r.Source,
+			Type:          r.Type,
+			Location:      r.Location,
+			SourceAccount: r.SourceAccount,
+			IsPresetable:  r.IsPresetable,
+			ItemName:      r.Name,
+			ContainerArt:  r.ContainerArt,
+		},
+	}
+
+	if r.SourceConfig != nil {
+		res.Source = sourceToParity(r.SourceConfig)
+	}
+
+	return res
+}
+
+func sourceToParity(src *models.ConfiguredSource) *models.RecentItemParitySource {
+	sxml := &models.RecentItemParitySource{
+		ID:               src.ID,
+		Type:             src.Type,
+		CreatedOn:        src.CreatedOn,
+		UpdatedOn:        src.UpdatedOn,
+		Name:             src.DisplayName,
+		SourceProviderID: src.SourceProviderID,
+		SourceName:       src.SourceName,
+		Username:         src.Username,
+	}
+
+	if sxml.Name == "TuneIn" || sxml.Name == "LOCAL_INTERNET_RADIO" {
+		sxml.Name = ""
+	}
+
+	switch {
+	case src.Secret != "":
+		sxml.Credential = &models.RecentItemParityCredential{
+			Type:  src.SecretType,
+			Value: src.Secret,
+		}
+	case src.Credential.Value != "":
+		sxml.Credential = &models.RecentItemParityCredential{
+			Type:  src.Credential.Type,
+			Value: src.Credential.Value,
+		}
+	default:
+		sxml.Credential = &models.RecentItemParityCredential{
+			Type:  "token",
+			Value: "",
+		}
+	}
+
+	if sxml.Credential.Value == "" && src.Secret != "" {
+		sxml.Credential.Value = src.Secret
+	}
+
+	if sxml.Credential.Type == "" && src.SecretType != "" {
+		sxml.Credential.Type = src.SecretType
+	}
+
+	if sxml.SourceName == "" {
+		sxml.SourceName = sxml.Username
+	}
+
+	return sxml
 }
 
 // ProviderSettingsToXML generates provider settings XML for the specified account.
@@ -1295,6 +1413,10 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 
 		if res.Source.Credential.Type == "" && matchingSrc.SecretType != "" {
 			res.Source.Credential.Type = matchingSrc.SecretType
+		}
+
+		if res.Source.SourceName == "" {
+			res.Source.SourceName = res.Source.Username
 		}
 	}
 
