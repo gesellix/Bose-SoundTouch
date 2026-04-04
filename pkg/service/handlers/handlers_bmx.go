@@ -201,3 +201,42 @@ func (s *Server) HandleCustomPlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// HandleTuneInReport handles TuneIn playback reporting.
+func (s *Server) HandleTuneInReport(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
+	var req struct {
+		EventType string `json:"eventType"`
+	}
+
+	// We don't strictly need the body to determine the response,
+	// but we decode it to see the eventType.
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if req.EventType == "START" {
+		// Mirroring the response from 0196-20260329-233306.072-POST.http
+		resp := map[string]interface{}{
+			"_links": map[string]interface{}{
+				"self": map[string]interface{}{
+					"href": "/v1/report?" + r.URL.RawQuery,
+				},
+			},
+			"nextReportIn": 1800,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	// For STOP and other events, return an empty object
+	_, _ = w.Write([]byte("{}"))
+}

@@ -27,6 +27,7 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/tunein/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
 		r.Get("/tunein/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
 		r.Post("/tunein/v1/token", server.HandleTuneInToken)
+		r.Post("/tunein/v1/report", server.HandleTuneInReport)
 		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	})
 
