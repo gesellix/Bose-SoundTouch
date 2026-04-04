@@ -1000,16 +1000,44 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		return nil, err
 	}
 
+	type persistentSource struct {
+		DisplayName      string `xml:"displayName,attr,omitempty"`
+		ID               string `xml:"id,attr,omitempty"`
+		Secret           string `xml:"secret,attr"`
+		SecretType       string `xml:"secretType,attr"`
+		Type             string `xml:"type,attr,omitempty"`
+		CreatedOn        string `xml:"createdOn,attr,omitempty"`
+		UpdatedOn        string `xml:"updatedOn,attr,omitempty"`
+		SourceProviderID string `xml:"sourceproviderid,attr,omitempty"`
+		SourceKey        struct {
+			Type    string `xml:"type,attr"`
+			Account string `xml:"account,attr"`
+		} `xml:"sourceKey"`
+	}
+
 	var sourcesWrap struct {
-		Sources []models.ConfiguredSource `xml:"source"`
+		Sources []persistentSource `xml:"source"`
 	}
 
 	if err := xml.Unmarshal(data, &sourcesWrap); err != nil {
 		return nil, fmt.Errorf("malformed sources XML at %s: %w", path, err)
 	}
 
+	sources := make([]models.ConfiguredSource, len(sourcesWrap.Sources))
 	for i := range sourcesWrap.Sources {
-		s := &sourcesWrap.Sources[i]
+		ps := &sourcesWrap.Sources[i]
+		s := &sources[i]
+
+		s.DisplayName = ps.DisplayName
+		s.ID = ps.ID
+		s.Secret = ps.Secret
+		s.SecretType = ps.SecretType
+		s.Type = ps.Type
+		s.CreatedOn = ps.CreatedOn
+		s.UpdatedOn = ps.UpdatedOn
+		s.SourceProviderID = ps.SourceProviderID
+		s.SourceKey.Type = ps.SourceKey.Type
+		s.SourceKey.Account = ps.SourceKey.Account
 
 		// Ensure Secret/SecretType values are prioritized from legacy fields
 		if s.Secret == "" && s.Credential.Value != "" {
@@ -1039,7 +1067,7 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		}
 	}
 
-	return sourcesWrap.Sources, nil
+	return sources, nil
 }
 
 // SaveConfiguredSources saves the configured sources list for the specified account and device.
@@ -1067,16 +1095,11 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 		} `xml:"sourceKey"`
 	}
 
-	type sourcesWrap struct {
-		XMLName xml.Name           `xml:"sources"`
-		Sources []persistentSource `xml:"source"`
-	}
-
 	// Ensure SourceKey is populated from legacy fields if necessary before saving
 	// and map to persistentSource to avoid custom MarshalXML for disk storage
 	persistSources := make([]persistentSource, len(sources))
 	for i := range sources {
-		s := &sources[i]
+		s := sources[i]
 		if s.SourceKey.Type == "" && s.SourceKeyType != "" {
 			s.SourceKey.Type = s.SourceKeyType
 		}
@@ -1095,6 +1118,7 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 			UpdatedOn:        s.UpdatedOn,
 			SourceProviderID: s.SourceProviderID,
 		}
+
 		if persistSources[i].Secret == "" && s.Credential.Value != "" {
 			persistSources[i].Secret = s.Credential.Value
 		}
@@ -1107,7 +1131,10 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 		persistSources[i].SourceKey.Account = s.SourceKey.Account
 	}
 
-	wrap := sourcesWrap{
+	wrap := struct {
+		XMLName xml.Name           `xml:"sources"`
+		Sources []persistentSource `xml:"source"`
+	}{
 		Sources: persistSources,
 	}
 

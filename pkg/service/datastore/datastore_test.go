@@ -370,20 +370,26 @@ func TestConfiguredSources(t *testing.T) {
 		t.Fatalf("Expected %d sources, got %d", len(sources), len(loadedSources))
 	}
 
-	for i, s := range sources {
+	for i := range sources {
 		ls := loadedSources[i]
-		s.Secret = ""
-		s.SecretType = ""
-		s.Type = ls.Type // Ignore Type mismatch in this test if it's auto-populated
-		if ls.DisplayName != s.DisplayName || ls.ID != s.ID || ls.Secret != s.Secret ||
-			ls.SecretType != s.SecretType || ls.SourceKeyType != s.SourceKeyType ||
-			ls.SourceKeyAccount != s.SourceKeyAccount || ls.Type != s.Type {
+		expected := sources[i]
+		expected.Secret = ""
+		expected.SecretType = ""
+		expected.Type = ls.Type // Ignore Type mismatch in this test if it's auto-populated
+
+		// Clear secrets for comparison since they are not loaded by GetConfiguredSources
+		ls.Secret = ""
+		ls.SecretType = ""
+
+		if ls.DisplayName != expected.DisplayName || ls.ID != expected.ID || ls.Secret != expected.Secret ||
+			ls.SecretType != expected.SecretType || ls.SourceKeyType != expected.SourceKeyType ||
+			ls.SourceKeyAccount != expected.SourceKeyAccount || ls.Type != expected.Type {
 			// Clean XMLName for comparison
 			ls.XMLName = xml.Name{}
-			if ls.DisplayName != s.DisplayName || ls.ID != s.ID || ls.Secret != s.Secret ||
-				ls.SecretType != s.SecretType || ls.SourceKeyType != s.SourceKeyType ||
-				ls.SourceKeyAccount != s.SourceKeyAccount || ls.Type != s.Type {
-				t.Errorf("Source %d mismatch. Expected %+v, got %+v", i, s, ls)
+			if ls.DisplayName != expected.DisplayName || ls.ID != expected.ID || ls.Secret != expected.Secret ||
+				ls.SecretType != expected.SecretType || ls.SourceKeyType != expected.SourceKeyType ||
+				ls.SourceKeyAccount != expected.SourceKeyAccount || ls.Type != expected.Type {
+				t.Errorf("Source %d mismatch. Expected %+v, got %+v", i, expected, ls)
 			}
 		}
 	}

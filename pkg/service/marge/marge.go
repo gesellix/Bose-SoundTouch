@@ -86,7 +86,14 @@ func GetConfiguredSourceXML(cs models.ConfiguredSource) string {
 
 // PrepareConfiguredSource sets up the source for XML marshaling.
 func PrepareConfiguredSource(s *models.ConfiguredSource) {
-	// Ensure dates are populated
+	ensureTimestamps(s)
+	ensureSourceType(s)
+	ensureSourceProviderID(s)
+	syncCredentials(s)
+	syncLegacySourceKey(s)
+}
+
+func ensureTimestamps(s *models.ConfiguredSource) {
 	if s.CreatedOn == "" {
 		s.CreatedOn = constants.DateStr
 	}
@@ -94,13 +101,15 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 	if s.UpdatedOn == "" {
 		s.UpdatedOn = constants.DateStr
 	}
+}
 
-	// Default type for media sources
+func ensureSourceType(s *models.ConfiguredSource) {
 	if s.Type == "" || (s.SourceKey.Type != "" && s.SourceKey.Type != "AUX" && s.SourceKey.Type != "BLUETOOTH") {
 		s.Type = "Audio"
 	}
+}
 
-	// Ensure SourceProviderID is populated if possible
+func ensureSourceProviderID(s *models.ConfiguredSource) {
 	if s.SourceProviderID == "" && s.SourceKey.Type != "" {
 		for _, p := range constants.StaticProviders {
 			if p.Name == s.SourceKey.Type {
@@ -109,8 +118,9 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 			}
 		}
 	}
+}
 
-	// Map secret types
+func syncCredentials(s *models.ConfiguredSource) {
 	if s.SecretType == "" {
 		if s.SourceKey.Type == "SPOTIFY" {
 			s.SecretType = "token_version_3"
@@ -127,7 +137,16 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 		s.Credential.Value = s.Secret
 	}
 
-	// Ensure SourceKey fields are synced with legacy fields if they were used
+	if s.Secret == "" && s.Credential.Value != "" {
+		s.Secret = s.Credential.Value
+	}
+
+	if s.SecretType == "" && s.Credential.Type != "" {
+		s.SecretType = s.Credential.Type
+	}
+}
+
+func syncLegacySourceKey(s *models.ConfiguredSource) {
 	if s.SourceKey.Type == "" && s.SourceKeyType != "" {
 		s.SourceKey.Type = s.SourceKeyType
 	}
@@ -162,6 +181,67 @@ func (p presetParityXML) MarshalXML(e *xml.Encoder, start xml.StartElement) erro
 	start.Name.Local = "preset"
 
 	return e.EncodeElement(Alias(p), start)
+}
+
+func prepareRecentItemParitySource(src *models.ConfiguredSource) *models.RecentItemParitySource {
+	sxml := &models.RecentItemParitySource{
+		ID:               src.ID,
+		Type:             src.Type,
+		CreatedOn:        src.CreatedOn,
+		UpdatedOn:        src.UpdatedOn,
+		Name:             src.DisplayName,
+		SourceProviderID: src.SourceProviderID,
+		SourceName:       src.SourceName,
+		Username:         src.Username,
+		Credential: &models.RecentItemParityCredential{
+			Type:  src.Credential.Type,
+			Value: src.Credential.Value,
+		},
+	}
+
+	if sxml.Name == "TuneIn" || sxml.Name == "LOCAL_INTERNET_RADIO" {
+		sxml.Name = ""
+	}
+
+	secret := src.Secret
+	if secret == "" {
+		secret = src.Credential.Value
+	}
+
+	secretType := src.SecretType
+	if secretType == "" {
+		secretType = src.Credential.Type
+	}
+
+	if secretType == "" {
+		secretType = "token"
+	}
+
+	if sxml.Credential.Value == "" {
+		sxml.Credential.Value = secret
+	}
+
+	if sxml.Credential.Type == "" {
+		sxml.Credential.Type = secretType
+	}
+
+	if sxml.SourceName == "" {
+		sxml.SourceName = src.SourceKeyType
+	}
+
+	if sxml.SourceName == "" {
+		sxml.SourceName = sxml.Username
+	}
+
+	if sxml.Username == "" {
+		sxml.Username = sxml.SourceName
+	}
+
+	if sxml.Name == "" {
+		sxml.Name = sxml.SourceName
+	}
+
+	return sxml
 }
 
 // PresetsToXML converts account presets to XML format for Marge responses.
@@ -286,6 +366,16 @@ func RecentsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 
 		if r.SourceConfig != nil {
 			PrepareConfiguredSource(r.SourceConfig)
+		} else if r.Source != "" {
+			// Try to find by Source and SourceAccount if SourceID didn't match
+			for j := range sources {
+				if sources[j].SourceKeyType == r.Source && sources[j].SourceKeyAccount == r.SourceAccount {
+					r.SourceConfig = &sources[j]
+					PrepareConfiguredSource(r.SourceConfig)
+
+					break
+				}
+			}
 		}
 
 		rxml.Recents[i] = recentToXML(r)
@@ -372,59 +462,10 @@ func recentToXML(r *models.ServiceRecent) recent {
 	}
 
 	if r.SourceConfig != nil {
-		res.Source = sourceToParity(r.SourceConfig)
+		res.Source = prepareRecentItemParitySource(r.SourceConfig)
 	}
 
 	return res
-}
-
-func sourceToParity(src *models.ConfiguredSource) *models.RecentItemParitySource {
-	sxml := &models.RecentItemParitySource{
-		ID:               src.ID,
-		Type:             src.Type,
-		CreatedOn:        src.CreatedOn,
-		UpdatedOn:        src.UpdatedOn,
-		Name:             src.DisplayName,
-		SourceProviderID: src.SourceProviderID,
-		SourceName:       src.SourceName,
-		Username:         src.Username,
-	}
-
-	if sxml.Name == "TuneIn" || sxml.Name == "LOCAL_INTERNET_RADIO" {
-		sxml.Name = ""
-	}
-
-	switch {
-	case src.Secret != "":
-		sxml.Credential = &models.RecentItemParityCredential{
-			Type:  src.SecretType,
-			Value: src.Secret,
-		}
-	case src.Credential.Value != "":
-		sxml.Credential = &models.RecentItemParityCredential{
-			Type:  src.Credential.Type,
-			Value: src.Credential.Value,
-		}
-	default:
-		sxml.Credential = &models.RecentItemParityCredential{
-			Type:  "token",
-			Value: "",
-		}
-	}
-
-	if sxml.Credential.Value == "" && src.Secret != "" {
-		sxml.Credential.Value = src.Secret
-	}
-
-	if sxml.Credential.Type == "" && src.SecretType != "" {
-		sxml.Credential.Type = src.SecretType
-	}
-
-	if sxml.SourceName == "" {
-		sxml.SourceName = sxml.Username
-	}
-
-	return sxml
 }
 
 // ProviderSettingsToXML generates provider settings XML for the specified account.
@@ -1033,6 +1074,14 @@ func syncMatchingSource(matchingSrc *models.ConfiguredSource, input recentInput)
 
 	if matchingSrc.DisplayName == "" && matchingSrc.SourceName != "" {
 		matchingSrc.DisplayName = matchingSrc.SourceName
+	}
+
+	if matchingSrc.SourceName == "" && matchingSrc.DisplayName != "" {
+		matchingSrc.SourceName = matchingSrc.DisplayName
+	}
+
+	if matchingSrc.Username == "" && matchingSrc.DisplayName != "" {
+		matchingSrc.Username = matchingSrc.DisplayName
 	}
 }
 
