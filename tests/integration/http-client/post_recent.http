@@ -1,0 +1,66 @@
+### POST /streaming/account/{{accountId}}/device/{{deviceId}}/recent
+POST {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/recent
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<recent>
+    <lastplayedat>2026-03-29T21:33:00+00:00</lastplayedat>
+    <sourceid>14774275</sourceid>
+    <name>SMOOTH JAZZ</name>
+    <location>/v1/playback/station/s166521</location>
+    <contentItemType>stationurl</contentItemType>
+</recent>
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 201, "Response status is not 201");
+    });
+
+    client.test("Response content-type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        var recent = response.body.getElementsByTagName("recent")[0];
+        client.assert(recent !== null, "Missing 'recent' root element");
+        client.assert(recent.getAttribute("id").length > 0, "Missing or empty 'id' attribute on 'recent' element");
+
+        client.assert(recent.getElementsByTagName("contentItemType")[0].textContent.length > 0, "Missing or empty 'contentItemType'");
+        client.assert(recent.getElementsByTagName("createdOn")[0].textContent.length > 0, "Missing or empty 'createdOn'");
+        client.assert(recent.getElementsByTagName("lastplayedat")[0].textContent.length > 0, "Missing or empty 'lastplayedat'");
+        client.assert(recent.getElementsByTagName("location")[0].textContent.length > 0, "Missing or empty 'location'");
+        client.assert(recent.getElementsByTagName("name")[0].textContent.length > 0, "Missing or empty 'name'");
+
+        var source = recent.getElementsByTagName("source")[0];
+        client.assert(source !== null, "Missing 'source' element");
+        client.assert(source.getAttribute("id").length > 0, "Missing or empty 'source' id");
+        client.assert(source.getAttribute("type").length > 0, "Missing or empty 'source' type");
+
+        var source_createdOn = source.getElementsByTagName("createdOn");
+        if (source_createdOn.length > 0) {
+            client.assert(source_createdOn[0].textContent.length > 0, "Empty source 'createdOn'");
+        }
+        var credential = source.getElementsByTagName("credential")[0];
+        client.assert(credential.getAttribute("type").length > 0, "Missing or empty credential 'type'");
+        client.assert(credential.textContent.length > 0, "Missing or empty credential value");
+        client.assert(source.getElementsByTagName("name")[0] !== null, "Missing source 'name'");
+        client.assert(source.getElementsByTagName("sourceproviderid")[0].textContent.length > 0, "Missing or empty source 'sourceproviderid'");
+        client.assert(source.getElementsByTagName("sourcename")[0] !== null, "Missing source 'sourcename'");
+        var source_sourceSettings = source.getElementsByTagName("sourceSettings");
+        if (source_sourceSettings.length > 0) {
+            client.assert(source_sourceSettings[0] !== null, "Missing 'sourceSettings'");
+        }
+        var source_updatedOn = source.getElementsByTagName("updatedOn");
+        if (source_updatedOn.length > 0) {
+            client.assert(source_updatedOn[0].textContent.length > 0, "Empty source 'updatedOn'");
+        }
+        client.assert(source.getElementsByTagName("username")[0] !== null, "Missing source 'username'");
+
+        client.assert(recent.getElementsByTagName("sourceid")[0].textContent.length > 0, "Missing or empty 'sourceid'");
+        client.assert(recent.getElementsByTagName("updatedOn")[0].textContent.length > 0, "Missing or empty 'updatedOn'");
+    });
+%}
