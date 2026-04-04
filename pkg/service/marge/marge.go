@@ -119,6 +119,14 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 		}
 	}
 
+	if s.Credential.Type == "" {
+		s.Credential.Type = s.SecretType
+	}
+
+	if s.Credential.Value == "" {
+		s.Credential.Value = s.Secret
+	}
+
 	// Ensure SourceKey fields are synced with legacy fields if they were used
 	if s.SourceKey.Type == "" && s.SourceKeyType != "" {
 		s.SourceKey.Type = s.SourceKeyType
@@ -850,17 +858,30 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 
 	sourceName := getSourceNameFromXML(sourceXML, input)
 
+	// 1. learnSource handles persistence AND returns a matching source.
 	matchingSrc, learned := learnSource(ds, account, device, sources, input.SourceID, input.Location, sourceName, input.Source.Credential.Value, input.Source.SourceProviderID, input.Source.CreatedOn, input.Source.UpdatedOn)
+
+	// Parity: ensure generic tokens for TUNEIN and LOCAL_INTERNET_RADIO if missing.
+	// This covers both learned and already existing sources.
+	if (matchingSrc.SourceProviderID == "25" || matchingSrc.ID == "TUNEIN" || strings.Contains(input.Location, "/v1/playback/station/")) && matchingSrc.Secret == "" {
+		matchingSrc.Secret = datastore.GenerateSerialSecret("tunein")
+		matchingSrc.SecretType = "token"
+	} else if matchingSrc.ID == "LOCAL_INTERNET_RADIO" && matchingSrc.Secret == "" {
+		matchingSrc.Secret = datastore.GenerateSerialSecret("local-internet-radio")
+		matchingSrc.SecretType = "token"
+	}
+
 	if learned {
-		// Re-fetch sources to ensure we have the newly learned one
+		// Re-fetch sources to ensure we have the newly learned one in the slice
 		if updatedSources, err := ds.GetConfiguredSources(account, device); err == nil {
 			sources = updatedSources
+			_ = sources // avoid ineffectual assignment
 		}
-
-		matchingSrc = findMatchingSource(sources, input.SourceID)
 	}
 
 	if matchingSrc == nil {
+		// This should technically not happen as learnSource always returns something,
+		// but we keep it as a fallback for safety.
 		matchingSrc = &models.ConfiguredSource{
 			ID:               input.SourceID,
 			SourceProviderID: input.Source.SourceProviderID,
@@ -895,6 +916,15 @@ func learnSource(ds *datastore.DataStore, account, device string, sources []mode
 	}
 
 	if sourceLearned {
+		// Ensure generic tokens for TUNEIN and LOCAL_INTERNET_RADIO if missing
+		if (matchingSrc.SourceProviderID == "25" || matchingSrc.ID == "TUNEIN" || strings.Contains(location, "/v1/playback/station/")) && matchingSrc.Secret == "" {
+			matchingSrc.Secret = datastore.GenerateSerialSecret("tunein")
+			matchingSrc.SecretType = "token"
+		} else if matchingSrc.ID == "LOCAL_INTERNET_RADIO" && matchingSrc.Secret == "" {
+			matchingSrc.Secret = datastore.GenerateSerialSecret("local-internet-radio")
+			matchingSrc.SecretType = "token"
+		}
+
 		persistLearnedSource(ds, account, device, sources, matchingSrc)
 	}
 
@@ -929,8 +959,25 @@ func createLearnedSource(sourceID, location, sourceName, credentialValue, source
 		src.Type = "Audio"
 		src.SecretType = "token"
 
+		if src.Secret == "" {
+			src.Secret = datastore.GenerateSerialSecret("tunein")
+		}
+
 		if src.DisplayName == "Other" || src.DisplayName == "TuneIn" || src.DisplayName == "" {
 			src.DisplayName = "TuneIn"
+		}
+	case sourceID == "LOCAL_INTERNET_RADIO":
+		src.SourceKey.Type = "LOCAL_INTERNET_RADIO"
+		src.SourceKeyType = "LOCAL_INTERNET_RADIO"
+		src.Type = "Audio"
+		src.SecretType = "token"
+
+		if src.Secret == "" {
+			src.Secret = datastore.GenerateSerialSecret("local-internet-radio")
+		}
+
+		if src.DisplayName == "Other" || src.DisplayName == "Local Internet Radio" || src.DisplayName == "" {
+			src.DisplayName = "Local Internet Radio"
 		}
 	case strings.Contains(location, "spotify") || strings.Contains(location, "c3BvdGlme") || sourceID == "SPOTIFY":
 		src.SourceKey.Type = "SPOTIFY"
@@ -1117,17 +1164,15 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 		ID:              recentObj.ID,
 		ContentItemType: recentObj.ContentItemType,
 		CreatedOn:       createdOn,
-		UpdatedOn:       createdOn,
+		UpdatedOn:       recentObj.UpdatedOn,
 		LastPlayedAt:    time.Unix(utcTime, 0).UTC().Format("2006-01-02T15:04:05.000+00:00"),
 		Location:        recentObj.Location,
 		Name:            recentObj.Name,
 		SourceID:        recentObj.SourceID,
-		SourceAccount:   recentObj.SourceAccount,
-		IsPresetable:    recentObj.IsPresetable,
 	}
 
-	if res.SourceAccount == "" {
-		res.SourceAccount = "" // Ensure it's not nil if it was a pointer, but it's a string.
+	if res.UpdatedOn == "" {
+		res.UpdatedOn = createdOn
 	}
 
 	if matchingSrc != nil {
@@ -1143,16 +1188,34 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 			Username:         matchingSrc.Username,
 		}
 
-		if matchingSrc.Secret != "" {
+		if res.Source.Name == "TuneIn" || res.Source.Name == "LOCAL_INTERNET_RADIO" {
+			res.Source.Name = ""
+		}
+
+		switch {
+		case matchingSrc.Secret != "":
 			res.Source.Credential = &models.RecentItemParityCredential{
 				Type:  matchingSrc.SecretType,
 				Value: matchingSrc.Secret,
 			}
-		} else if matchingSrc.Credential.Value != "" {
+		case matchingSrc.Credential.Value != "":
 			res.Source.Credential = &models.RecentItemParityCredential{
 				Type:  matchingSrc.Credential.Type,
 				Value: matchingSrc.Credential.Value,
 			}
+		default:
+			res.Source.Credential = &models.RecentItemParityCredential{
+				Type:  "token",
+				Value: "",
+			}
+		}
+
+		if res.Source.Credential.Value == "" && matchingSrc.Secret != "" {
+			res.Source.Credential.Value = matchingSrc.Secret
+		}
+
+		if res.Source.Credential.Type == "" && matchingSrc.SecretType != "" {
+			res.Source.Credential.Type = matchingSrc.SecretType
 		}
 	}
 

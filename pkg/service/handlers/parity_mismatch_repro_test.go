@@ -90,11 +90,6 @@ func TestParityMismatchReproduction_New(t *testing.T) {
 		if !strings.Contains(bodyStr, `<createdOn>2017-07-20T16:43:48.000+00:00</createdOn>`) {
 			t.Errorf("Source CreatedOn was not learned from POST in element. Body: %s", bodyStr)
 		}
-
-		// 7. sourceAccount should be present (parity)
-		if !strings.Contains(bodyStr, `<sourceAccount></sourceAccount>`) {
-			t.Errorf("Missing <sourceAccount></sourceAccount> in flat response. Body: %s", bodyStr)
-		}
 	})
 
 	t.Run("Subsequent GET /recents should also show learned source details", func(t *testing.T) {

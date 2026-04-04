@@ -63,8 +63,40 @@ func initializeDefaultSources(ds *datastore.DataStore) {
 		if sources, errGet := ds.GetConfiguredSources(dev.AccountID, dev.DeviceID); errGet == nil {
 			log.Printf("Initializing default Sources.xml for existing device %s", dev.DeviceID)
 
-			if errSave := ds.SaveConfiguredSources(dev.AccountID, dev.DeviceID, sources); errSave != nil {
-				log.Printf("Failed to save default sources for %s: %v", dev.DeviceID, errSave)
+			// Find default sources and merge them if missing or outdated tokens
+			defaults := ds.GetDefaultSources()
+			modified := false
+
+			for i := range defaults {
+				def := defaults[i]
+				found := false
+
+				for j := range sources {
+					if sources[j].SourceKeyType == def.SourceKeyType {
+						found = true
+
+						if sources[j].Secret == "" && def.Secret != "" {
+							log.Printf("Initializing missing token for source %s on device %s", def.SourceKeyType, dev.DeviceID)
+							sources[j].Secret = def.Secret
+							sources[j].SecretType = def.SecretType
+							modified = true
+						}
+
+						break
+					}
+				}
+
+				if !found {
+					log.Printf("Adding missing default source %s to device %s", def.SourceKeyType, dev.DeviceID)
+					sources = append(sources, def)
+					modified = true
+				}
+			}
+
+			if modified {
+				if errSave := ds.SaveConfiguredSources(dev.AccountID, dev.DeviceID, sources); errSave != nil {
+					log.Printf("Failed to save updated sources for %s: %v", dev.DeviceID, errSave)
+				}
 			}
 		}
 	}

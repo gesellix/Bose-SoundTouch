@@ -120,6 +120,14 @@ func TestServiceRecent_Parity(t *testing.T) {
 			CreatedOn:       "2026-03-22T10:00:04.000+00:00",
 			UpdatedOn:       "2026-03-22T10:53:50.719+00:00",
 			LastPlayedAt:    "2026-03-22T10:53:48.000+00:00",
+			Source: &RecentItemParitySource{
+				ID:   "10863533",
+				Type: "Audio",
+				Credential: &RecentItemParityCredential{
+					Type:  "token",
+					Value: "",
+				},
+			},
 		}
 
 		data, err := xml.MarshalIndent(recent, "", "  ")
@@ -137,6 +145,7 @@ func TestServiceRecent_Parity(t *testing.T) {
 			`<name>Dopamine</name>`,
 			`<sourceid>10863533</sourceid>`,
 			`<updatedOn>2026-03-22T10:53:50.719+00:00</updatedOn>`,
+			`<credential type="token"></credential>`,
 		}
 
 		for _, expected := range expectedElements {

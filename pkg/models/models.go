@@ -229,10 +229,6 @@ type RecentItemParity struct {
 	Source          *RecentItemParitySource `xml:"source,omitempty"`
 	SourceID        string                  `xml:"sourceid"`
 	UpdatedOn       string                  `xml:"updatedOn"`
-	Username        string                  `xml:"username"`
-	ContainerArt    string                  `xml:"containerArt"`
-	SourceAccount   string                  `xml:"sourceAccount"`
-	IsPresetable    string                  `xml:"isPresetable"`
 }
 
 // RecentItemParitySource represents the source in a RecentItemParity.
@@ -240,7 +236,7 @@ type RecentItemParitySource struct {
 	ID               string                      `xml:"id,attr"`
 	Type             string                      `xml:"type,attr"`
 	CreatedOn        string                      `xml:"createdOn"`
-	Credential       *RecentItemParityCredential `xml:"credential,omitempty"`
+	Credential       *RecentItemParityCredential `xml:"credential"`
 	Name             string                      `xml:"name"`
 	SourceProviderID string                      `xml:"sourceproviderid"`
 	SourceName       string                      `xml:"sourcename"`

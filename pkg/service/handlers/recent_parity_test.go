@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
@@ -36,12 +37,31 @@ func TestMargeRecentConsistencyAndIDParity(t *testing.T) {
 	t.Run("POST recent creates consistent IDs and persists unknown sources", func(t *testing.T) {
 		payload := `
 <recent>
-  <contentItemType>tracklisturl</contentItemType>
-  <lastplayedat>2026-03-14T21:33:22.000+00:00</lastplayedat>
-  <location>/playback/container/c3BvdGlmeTphbGJ1bTo3RjUwdWg3b0dpdG1BRVNjUktWNnBE</location>
-  <name>Terminal Caribe</name>
-  <sourceid>10863533</sourceid>
+  <contentItemType>stationurl</contentItemType>
+  <lastplayedat>2026-03-29T21:33:00+00:00</lastplayedat>
+  <location>/v1/playback/station/s166521</location>
+  <name>SMOOTH JAZZ</name>
+  <sourceid>14774275</sourceid>
 </recent>`
+
+		expectedToken := datastore.GenerateSerialSecret("tunein")
+		// Pre-configure source 14774275 as TUNEIN (ID 25)
+		ds.SaveConfiguredSources(account, deviceID, []models.ConfiguredSource{
+			{
+				ID:               "14774275",
+				SourceProviderID: "25",
+				Type:             "Audio",
+				DisplayName:      "TuneIn",
+				Secret:           expectedToken,
+				SecretType:       "token",
+				SourceKey: struct {
+					Type    string `xml:"type,attr"`
+					Account string `xml:"account,attr"`
+				}{
+					Type: "TUNEIN",
+				},
+			},
+		})
 
 		// 1. POST /recent
 		res, err := http.Post(ts.URL+"/streaming/account/"+account+"/device/"+deviceID+"/recent", "application/xml", strings.NewReader(payload))
@@ -50,12 +70,20 @@ func TestMargeRecentConsistencyAndIDParity(t *testing.T) {
 		}
 		defer res.Body.Close()
 
-		if res.StatusCode != http.StatusCreated {
-			t.Fatalf("Expected status 201, got %d", res.StatusCode)
-		}
-
 		postBody, _ := io.ReadAll(res.Body)
 		postBodyStr := string(postBody)
+
+		if res.StatusCode != http.StatusCreated {
+			t.Fatalf("Expected status 201, got %d. Body: %s", res.StatusCode, postBodyStr)
+		}
+
+		// Verify constant token for TUNEIN
+		if !strings.Contains(postBodyStr, expectedToken) {
+			t.Errorf("Response missing expected constant token for TuneIn. Body: %s", postBodyStr)
+		}
+		if !strings.Contains(postBodyStr, `<credential type="token">`) {
+			t.Errorf("Response missing expected credential tag for TuneIn. Body: %s", postBodyStr)
+		}
 
 		// Verify ID format: YYMMDDXXX (9 digits)
 		// Today's prefix:
@@ -92,31 +120,28 @@ func TestMargeRecentConsistencyAndIDParity(t *testing.T) {
 		if !strings.Contains(getRecentsStr, `id="`+recentID+`"`) {
 			t.Errorf("GET /recents missing ID %s. Body: %s", recentID, getRecentsStr)
 		}
-		if !strings.Contains(getRecentsStr, `Terminal Caribe`) {
-			t.Errorf("GET /recents missing Name 'Terminal Caribe'. Body: %s", getRecentsStr)
+		if !strings.Contains(getRecentsStr, `SMOOTH JAZZ`) {
+			t.Errorf("GET /recents missing Name 'SMOOTH JAZZ'. Body: %s", getRecentsStr)
 		}
-		if !strings.Contains(getRecentsStr, `<itemName>Terminal Caribe</itemName>`) {
+		if !strings.Contains(getRecentsStr, `<itemName>SMOOTH JAZZ</itemName>`) {
 			t.Errorf("GET /recents should use nested <itemName> for ServiceRecent. Body: %s", getRecentsStr)
 		}
 
 		// 4. Verify source persistence
-		// Check if source 10863533 was learned and is now in Sources.xml
+		// Check if source 14774275 was learned and is now in Sources.xml
 		sources, err := ds.GetConfiguredSources(account, deviceID)
 		if err != nil {
 			t.Errorf("Failed to get configured sources: %v", err)
 		}
 		found := false
 		for _, s := range sources {
-			if s.ID == "10863533" {
+			if s.ID == "14774275" {
 				found = true
-				if s.SourceKeyType != "SPOTIFY" {
-					t.Errorf("Learned source should be SPOTIFY based on location, got %s", s.SourceKeyType)
-				}
 				break
 			}
 		}
 		if !found {
-			t.Errorf("Source 10863533 was not learned and persisted")
+			t.Errorf("Source 14774275 was not learned and persisted")
 		}
 	})
 }

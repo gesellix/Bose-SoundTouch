@@ -111,6 +111,9 @@ test-http-client:
 	@docker build -t soundtouch-service-test .
 	@docker run -d --name soundtouch-service --network soundtouch-test-net \
 		-e PORT=8000 \
+		-e SPOTIFY_CLIENT_ID=mock-id \
+		-e SPOTIFY_CLIENT_SECRET=mock-secret \
+		-v $(PWD)/tests/integration/testdata:/app/data \
 		soundtouch-service-test
 	@echo "Waiting for service to start..."
 	@sleep 5
@@ -128,10 +131,12 @@ test-http-client:
 		/workdir/get_software_update.http \
 		/workdir/get_soundtouch_updates.http \
 		/workdir/get_streaming_token.http \
+		/workdir/post_oauth_token.http \
 		/workdir/get_provider_settings.http \
 		/workdir/tunein_playback_station.http \
 		/workdir/set_preset_6.http \
 		/workdir/set_preset_5.http \
+		/workdir/post_recent.http \
 		/workdir/get_full_account.http \
 		/workdir/get_group.http \
 		/workdir/unregister_device.http \

@@ -1180,6 +1180,11 @@ func GenerateSerialSecret(serial string) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
+// GetDefaultSources returns the list of default sources.
+func (ds *DataStore) GetDefaultSources() []models.ConfiguredSource {
+	return ds.getDefaultSources()
+}
+
 func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 	sources := []models.ConfiguredSource{
 		{
