@@ -1,0 +1,37 @@
+### POST /oauth/device/{{deviceId}}/music/musicprovider/15/token/cs3
+POST {{host}}/oauth/device/{{deviceId}}/music/musicprovider/15/token/cs3
+Accept: */*
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "code": "",
+  "grant_type": "refresh_token",
+  "redirect_uri": "",
+  "refresh_token": "{{spotifyRefreshToken}}"
+}
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content type is JSON", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/json", "Expected 'application/json' but received '" + type + "'");
+    });
+
+    client.test("Response body has expected structure", function() {
+        client.assert(response.body.hasOwnProperty("access_token"), "Response body missing 'access_token'");
+        client.assert(response.body.access_token.length > 0, "access_token is empty");
+
+        client.assert(response.body.hasOwnProperty("expires_in"), "Response body missing 'expires_in'");
+        client.assert(typeof response.body.expires_in === "number", "expires_in is not a number");
+
+        client.assert(response.body.hasOwnProperty("scope"), "Response body missing 'scope'");
+        client.assert(response.body.scope.length > 0, "scope is empty");
+
+        client.assert(response.body.hasOwnProperty("token_type"), "Response body missing 'token_type'");
+        client.assert(response.body.token_type === "Bearer", "token_type is not 'Bearer'");
+    });
+%}
