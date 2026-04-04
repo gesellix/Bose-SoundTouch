@@ -7,3 +7,13 @@ Authorization: Bearer {{token}}
         client.assert(response.status === 200, "Response status is not 200");
     });
 %}
+
+### DELETE /streaming/account/{{accountId}}/device/{{deviceId}} (Unregister Device Variant)
+DELETE {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}
+Authorization: Bearer {{token}}
+
+> {%
+    client.test("Device unregistered successfully (variant)", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}

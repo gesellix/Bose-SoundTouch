@@ -756,6 +756,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 				r.Get("/group/server", server.HandleMargeDeviceGroupServer)
 				r.Get("/group/member", server.HandleMargeDeviceGroupMember)
 			})
+
+			r.Delete("/device/{device}", server.HandleMargeRemoveDevice)
 		})
 
 		r.Get("/device/{device}/streaming_token", server.HandleMargeStreamingToken)
