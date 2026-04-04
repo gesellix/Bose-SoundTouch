@@ -18,16 +18,20 @@ Accept: application/vnd.bose.streaming-v1.2+xml
         client.assert(response.body.getElementsByTagName("sourceprovider").length > 0, "Missing 'sourceprovider' elements");
     });
 
-    client.test("Check specific source providers", function() {
+    client.test("Check source providers", function() {
         var providers = response.body.getElementsByTagName("sourceprovider");
+        client.assert(providers.length > 0, "No 'sourceprovider' elements found");
+
         var foundSpotify = false;
         var foundTuneIn = false;
-
         for (var i = 0; i < providers.length; i++) {
             var provider = providers[i];
             var id = provider.getAttribute("id");
             var nameElement = provider.getElementsByTagName("name")[0];
             var name = nameElement ? nameElement.textContent : "";
+
+            client.assert(id && id.length > 0, "Source provider at index " + i + " missing or empty 'id' attribute");
+            client.assert(name && name.length > 0, "Source provider at index " + i + " missing or empty 'name' element");
 
             if (id === "15" && name === "SPOTIFY") {
                 foundSpotify = true;

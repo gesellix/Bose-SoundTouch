@@ -1,0 +1,24 @@
+### GET /streaming/device/{{deviceId}}/streaming_token
+GET {{host}}/streaming/device/{{deviceId}}/streaming_token
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content-type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        client.assert(response.body.getElementsByTagName("bearertoken").length > 0, "Missing 'bearertoken' element");
+        var tokenValue = response.body.getElementsByTagName("bearertoken")[0].getAttribute("value");
+        client.assert(tokenValue.startsWith("Bearer "), "Token value should start with 'Bearer '");
+        client.assert(tokenValue.length > 7, "Bearer token should not be empty");
+    });
+%}

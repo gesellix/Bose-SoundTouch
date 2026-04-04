@@ -1,0 +1,20 @@
+### GET /updates/soundtouch
+GET {{host}}/updates/soundtouch?serialnumber={{serialNumber}}
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content-type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        client.assert(response.body.getElementsByTagName("INDEX").length > 0, "Missing 'INDEX' root element");
+        client.assert(response.body.getElementsByTagName("DEVICE").length > 0, "Missing 'DEVICE' elements");
+    });
+%}

@@ -125,6 +125,9 @@ test-http-client:
 		/workdir/power_on.http \
 		/workdir/get_bmx_services.http \
 		/workdir/get_sourceproviders.http \
+		/workdir/get_software_update.http \
+		/workdir/get_soundtouch_updates.http \
+		/workdir/get_streaming_token.http \
 		/workdir/get_provider_settings.http \
 		/workdir/tunein_playback_station.http \
 		/workdir/set_preset_6.http \

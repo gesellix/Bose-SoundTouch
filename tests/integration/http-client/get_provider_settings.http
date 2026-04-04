@@ -25,10 +25,10 @@ User-Agent: Bose_Lisa/27.0.6
         var settings = response.body.getElementsByTagName("providerSetting");
         for (var i = 0; i < settings.length; i++) {
             var setting = settings[i];
-            client.assert(setting.getElementsByTagName("boseId").length > 0, "Setting " + i + " missing 'boseId'");
-            client.assert(setting.getElementsByTagName("keyName").length > 0, "Setting " + i + " missing 'keyName'");
-            client.assert(setting.getElementsByTagName("value").length > 0, "Setting " + i + " missing 'value'");
-            client.assert(setting.getElementsByTagName("providerId").length > 0, "Setting " + i + " missing 'providerId'");
+            client.assert(setting.getElementsByTagName("boseId")[0].textContent.length > 0, "Setting " + i + " missing or empty 'boseId'");
+            client.assert(setting.getElementsByTagName("keyName")[0].textContent.length > 0, "Setting " + i + " missing or empty 'keyName'");
+            client.assert(setting.getElementsByTagName("value")[0].textContent.length > 0, "Setting " + i + " missing or empty 'value'");
+            client.assert(setting.getElementsByTagName("providerId")[0].textContent.length > 0, "Setting " + i + " missing or empty 'providerId'");
         }
     });
 %}

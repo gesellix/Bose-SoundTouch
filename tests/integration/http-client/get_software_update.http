@@ -1,0 +1,22 @@
+### GET /streaming/software/update/account/{{accountId}}
+GET {{host}}/streaming/software/update/account/{{accountId}}
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content-type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        client.assert(response.body.getElementsByTagName("software_update").length > 0, "Missing 'software_update' root element");
+        client.assert(response.body.getElementsByTagName("softwareUpdateLocation").length > 0, "Missing 'softwareUpdateLocation' element");
+    });
+%}
