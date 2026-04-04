@@ -1,0 +1,65 @@
+### GET /streaming/account/{{accountId}}/device/{{deviceId}}/presets
+GET {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/presets
+Host: streaming.bose.com
+Accept: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+User-Agent: Bose_Lisa/27.0.6
+
+> {%
+    client.test("Response is 200 OK", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response body contains presets", function() {
+        const doc = response.body;
+        const presets = doc.getElementsByTagName("presets")[0];
+        client.assert(presets !== null, "Response body does not contain <presets>");
+
+        const presetList = doc.getElementsByTagName("preset");
+        // Based on the flow: set_preset_6, get_presets, delete_preset_6, set_preset_5
+        // The service is fresh, so only what we set is there.
+        client.assert(presetList.length === 1, "Response body should contain exactly one <preset>, but found " + presetList.length);
+
+        const firstPreset = presetList[0];
+        client.assert(firstPreset.getAttribute("buttonNumber") === "6", "First preset should have buttonNumber=\"6\"");
+
+        // Check <name>
+        const name = firstPreset.getElementsByTagName("name")[0];
+        client.assert(name.textContent === "SMOOTH JAZZ", "Preset name should be 'SMOOTH JAZZ'");
+
+        // Check <location>
+        const location = firstPreset.getElementsByTagName("location")[0];
+        client.assert(location.textContent === "/v1/playback/station/s166521", "Preset location mismatch");
+
+        // Check <source> and its attributes/children
+        const source = firstPreset.getElementsByTagName("source")[0];
+        client.assert(source !== null, "Preset should have a <source>");
+        // The source ID is set in HandleMargeUpdatePreset based on matching source, or in UpdatePreset.
+        // For TUNEIN it might be 10004 or similar in our mocks.
+        client.assert(source.getAttribute("id") !== null && source.getAttribute("id") !== "", "Source id should be non-empty");
+        client.assert(source.getAttribute("type") === "Audio", "Source type should be 'Audio'");
+
+        const sourceproviderid = source.getElementsByTagName("sourceproviderid")[0];
+        client.assert(sourceproviderid.textContent === "25", "sourceproviderid should be '25'");
+
+        // Check <username> inside <preset> (not the one in <source> if present)
+        const presetUsernames = firstPreset.getElementsByTagName("username");
+        // In the reference, there's one in <source> (empty) and one in <preset> (SMOOTH JAZZ)
+        // Usually, getElementsByTagName on firstPreset returns all descendants.
+        // Let's be careful about the index or use a more specific selector if possible,
+        // but here we can check the values.
+        let foundPresetUsername = false;
+        for (let i = 0; i < presetUsernames.length; i++) {
+            if (presetUsernames[i].textContent === "SMOOTH JAZZ") {
+                foundPresetUsername = true;
+                break;
+            }
+        }
+        client.assert(foundPresetUsername, "Preset should have <username>SMOOTH JAZZ</username>");
+
+        // Ensure <containerArt> is non-empty
+        const containerArt = firstPreset.getElementsByTagName("containerArt")[0];
+        client.assert(containerArt.textContent.startsWith("https://"), "containerArt should be a valid URL");
+    });
+%}

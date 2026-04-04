@@ -197,6 +197,10 @@ func (p ServicePreset) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 		Username:        p.Username,
 	}
 
+	if a.Username == "" && a.Name != "" {
+		a.Username = a.Name
+	}
+
 	start.Name.Local = "preset"
 	// Remove all attributes because they are handled in Alias
 	start.Attr = nil

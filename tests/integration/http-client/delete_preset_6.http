@@ -1,0 +1,13 @@
+### DELETE /streaming/account/{{accountId}}/device/{{deviceId}}/preset/6
+DELETE {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/preset/6
+Host: streaming.bose.com
+Accept: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+User-Agent: Bose_Lisa/27.0.6
+
+> {%
+    client.test("Response is 200 OK", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+%}

@@ -496,6 +496,36 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// HandleMargeRemovePreset removes a preset for the specified account and device.
+func (s *Server) HandleMargeRemovePreset(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
+
+	device := chi.URLParam(r, "device")
+	if !validatePathID(device) {
+		http.Error(w, "Invalid device ID", http.StatusBadRequest)
+		return
+	}
+
+	presetStr := chi.URLParam(r, "presetNumber")
+
+	presetNumber, err := strconv.Atoi(presetStr)
+	if err != nil || presetNumber < 1 || presetNumber > 6 {
+		http.Error(w, "Invalid preset number", http.StatusBadRequest)
+		return
+	}
+
+	if err := marge.RemovePreset(s.ds, account, device, presetNumber); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 // HandleMargeRemoveDevice removes a device from a Marge account.
 func (s *Server) HandleMargeRemoveDevice(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")

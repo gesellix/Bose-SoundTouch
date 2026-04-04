@@ -137,6 +137,33 @@ func PrepareConfiguredSource(s *models.ConfiguredSource) {
 	}
 }
 
+// PresetsXML is the XML wrapper for a list of presets.
+type PresetsXML struct {
+	XMLName xml.Name               `xml:"presets"`
+	Presets []models.ServicePreset `xml:"preset"`
+}
+
+type presetParityXML struct {
+	ButtonNumber    string                   `xml:"buttonNumber,attr,omitempty"`
+	ContainerArt    string                   `xml:"containerArt"`
+	ContentItemType string                   `xml:"contentItemType"`
+	CreatedOn       string                   `xml:"createdOn"`
+	Location        string                   `xml:"location"`
+	Name            string                   `xml:"name"`
+	Source          *models.ConfiguredSource `xml:"source,omitempty"`
+	SourceID        string                   `xml:"sourceid,omitempty"`
+	UpdatedOn       string                   `xml:"updatedOn"`
+	Username        string                   `xml:"username"`
+}
+
+func (p presetParityXML) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	type Alias presetParityXML
+
+	start.Name.Local = "preset"
+
+	return e.EncodeElement(Alias(p), start)
+}
+
 // PresetsToXML converts account presets to XML format for Marge responses.
 func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, error) {
 	presets, err := ds.GetPresets(account, deviceID)
@@ -149,34 +176,63 @@ func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 		return nil, err
 	}
 
-	type PresetsXML struct {
-		XMLName xml.Name               `xml:"presets"`
-		Presets []models.ServicePreset `xml:"preset"`
+	type presetsParityWrapper struct {
+		XMLName xml.Name          `xml:"presets"`
+		Presets []presetParityXML `xml:"preset"`
 	}
 
-	pxml := PresetsXML{
-		Presets: make([]models.ServicePreset, 0, len(presets)),
+	pxml := presetsParityWrapper{
+		Presets: make([]presetParityXML, 0, len(presets)),
 	}
 
 	for i := range presets {
 		p := presets[i]
 
+		// Find and prepare source
+		matchedSource := findMatchingSourceForPreset(sources, p)
+		if matchedSource != nil {
+			PrepareConfiguredSource(matchedSource)
+		}
+
+		if p.ContentItemType == "" && p.Name == "" && p.Location == "" && (matchedSource == nil || matchedSource.ID == "") {
+			continue
+		}
+
 		p.ButtonNumber = p.ID
 		if p.CreatedOn == "" {
 			p.CreatedOn = constants.DateStr
+		} else if t, e := strconv.ParseInt(p.CreatedOn, 10, 64); e == nil {
+			p.CreatedOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
 		}
 
 		if p.UpdatedOn == "" {
 			p.UpdatedOn = constants.DateStr
+		} else if t, e := strconv.ParseInt(p.UpdatedOn, 10, 64); e == nil {
+			p.UpdatedOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
 		}
 
-		// Find and prepare source
-		if matchedSource := findMatchingSourceForPreset(sources, p); matchedSource != nil {
-			PrepareConfiguredSource(matchedSource)
-			p.SourceConfig = matchedSource
+		username := p.Username
+		if username == "" {
+			username = p.Name
 		}
 
-		pxml.Presets = append(pxml.Presets, p)
+		sourceID := p.SourceID
+		if sourceID == "" && matchedSource != nil {
+			sourceID = matchedSource.ID
+		}
+
+		pxml.Presets = append(pxml.Presets, presetParityXML{
+			ButtonNumber:    p.ButtonNumber,
+			ContainerArt:    p.ContainerArt,
+			ContentItemType: p.ContentItemType,
+			CreatedOn:       p.CreatedOn,
+			Location:        p.Location,
+			Name:            p.Name,
+			Source:          matchedSource,
+			SourceID:        sourceID,
+			UpdatedOn:       p.UpdatedOn,
+			Username:        username,
+		})
 	}
 
 	data, err := xml.MarshalIndent(pxml, "", "  ")
@@ -679,6 +735,23 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	return append([]byte(constants.XMLHeader), data...), nil
 }
 
+// RemovePreset clears a preset for the specified account and device.
+func RemovePreset(ds *datastore.DataStore, account, device string, presetNumber int) error {
+	presets, err := ds.GetPresets(account, device)
+	if err != nil {
+		return err
+	}
+
+	if presetNumber < 1 || presetNumber > len(presets) {
+		// Preset doesn't exist or index out of range, nothing to do
+		return nil
+	}
+
+	presets[presetNumber-1] = models.ServicePreset{}
+
+	return ds.SavePresets(account, device, presets)
+}
+
 // UpdatePreset updates or creates a preset for the specified account and device.
 func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber int, sourceXML []byte) ([]byte, error) {
 	sources, err := ds.GetConfiguredSources(account, device)
@@ -760,8 +833,14 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	// Return XML for the single preset
 	PrepareConfiguredSource(matchingSrc)
 	presetObj.SourceConfig = matchingSrc
+	presetObj.Username = newPresetElem.Name
 
-	data, err := xml.Marshal(presetObj)
+	// Parity: return the preset wrapped in <presets>
+	px := PresetsXML{
+		Presets: []models.ServicePreset{presetObj},
+	}
+
+	data, err := xml.Marshal(px)
 	if err != nil {
 		return nil, err
 	}

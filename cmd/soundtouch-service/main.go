@@ -747,6 +747,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 				r.Get("/presets", server.HandleMargePresets)
 				r.Post("/presets/{presetNumber}", server.HandleMargeUpdatePreset)
 				r.Put("/preset/{presetNumber}", server.HandleMargeUpdatePreset)
+				r.Delete("/preset/{presetNumber}", server.HandleMargeRemovePreset)
 				r.Get("/recent", server.HandleMargeRecents)
 				r.Post("/recent", server.HandleMargeAddRecent)
 

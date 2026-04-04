@@ -135,6 +135,8 @@ test-http-client:
 		/workdir/get_provider_settings.http \
 		/workdir/tunein_playback_station.http \
 		/workdir/set_preset_6.http \
+		/workdir/get_presets.http \
+		/workdir/delete_preset_6.http \
 		/workdir/set_preset_5.http \
 		/workdir/post_recent.http \
 		/workdir/get_full_account.http \
