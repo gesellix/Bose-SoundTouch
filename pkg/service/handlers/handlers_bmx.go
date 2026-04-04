@@ -246,3 +246,25 @@ func (s *Server) HandleTuneInReport(w http.ResponseWriter, r *http.Request) {
 	// For STOP and other events, return an empty object
 	_, _ = w.Write([]byte("{}"))
 }
+
+// HandleTuneInNavigate returns TuneIn navigation information.
+func (s *Server) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(tuneInNavigateJSON)
+}
+
+// HandleTuneInSearch returns TuneIn search results.
+func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(tuneInSearchJSON)
+}

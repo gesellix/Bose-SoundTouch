@@ -722,6 +722,9 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Get("/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
 			r.Post("/v1/token", server.HandleTuneInToken)
 			r.Post("/v1/report", server.HandleTuneInReport)
+			r.Get("/v1/navigate", server.HandleTuneInNavigate)
+			r.Get("/v1/navigate/*", server.HandleTuneInNavigate)
+			r.Get("/v1/search", server.HandleTuneInSearch)
 		})
 
 		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)

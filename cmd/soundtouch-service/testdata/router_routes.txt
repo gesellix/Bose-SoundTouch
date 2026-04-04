@@ -17,9 +17,12 @@ GET      /accounts/{account}/devices/{device}/recents                 handlers.(
 GET      /accounts/{account}/full                                     handlers.(*Server).HandleMargeAccountFull-fm
 GET      /bmx/registry/v1/services                                    handlers.(*Server).HandleBMXRegistry-fm
 GET      /bmx/registry/v1/servicesAvailability                        handlers.(*Server).HandleBMXServicesAvailability-fm
+GET      /bmx/tunein/v1/navigate                                      handlers.(*Server).HandleTuneInNavigate-fm
+GET      /bmx/tunein/v1/navigate/*                                    handlers.(*Server).HandleTuneInNavigate-fm
 GET      /bmx/tunein/v1/playback/episode/{podcastID}                  handlers.(*Server).HandleTuneInPlaybackPodcast-fm
 GET      /bmx/tunein/v1/playback/episodes/{podcastID}                 handlers.(*Server).HandleTuneInPodcastInfo-fm
 GET      /bmx/tunein/v1/playback/station/{stationID}                  handlers.(*Server).HandleTuneInPlayback-fm
+GET      /bmx/tunein/v1/search                                        handlers.(*Server).HandleTuneInSearch-fm
 GET      /custom/v1/playback/{encodedURL}                             handlers.(*Server).HandleCustomPlayback-fm
 GET      /customer/account/{account}                                  handlers.(*Server).HandleMargeAccountProfile-fm
 GET      /docs/*                                                      handlers.(*Server).HandleDocs-fm
