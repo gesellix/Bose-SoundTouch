@@ -780,6 +780,10 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/stapp/{deviceId}", server.HandleAppEvents)
 		r.Post("/scmudc/{deviceId}", server.HandleAppEvents)
+		// Return 405 Method Not Allowed as the upstream behavior also returns 405
+		r.Get("/blacklist/{deviceId}", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		})
 	})
 
 	r.Route("/mgmt", func(r chi.Router) {

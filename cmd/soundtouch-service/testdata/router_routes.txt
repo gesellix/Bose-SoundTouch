@@ -63,6 +63,7 @@ GET      /streaming/device_setting/account/{account}/device/{device}/device_sett
 GET      /streaming/software/update/account/{account}                 handlers.(*Server).HandleMargeSoftwareUpdate-fm
 GET      /streaming/sourceproviders                                   handlers.(*Server).HandleMargeSourceProviders-fm
 GET      /updates/soundtouch                                          handlers.(*Server).HandleMargeSoftwareUpdate-fm
+GET      /v1/blacklist/{deviceId}                                     setupRouter
 GET      /web/*                                                       setupRouter.(*Server).HandleWeb
 HEAD     /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
 OPTIONS  /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
