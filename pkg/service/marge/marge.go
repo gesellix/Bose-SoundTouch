@@ -826,11 +826,17 @@ func getAccountDevices(ds *datastore.DataStore, account string, entries []os.Dir
 }
 
 func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []models.FullResponseSource {
-	if lastDeviceID == "" {
-		return nil
+	var (
+		sources []models.ConfiguredSource
+		err     error
+	)
+
+	if lastDeviceID != "" {
+		sources, err = ds.GetConfiguredSources(account, lastDeviceID)
+	} else {
+		sources = ds.GetDefaultSources()
 	}
 
-	sources, err := ds.GetConfiguredSources(account, lastDeviceID)
 	if err != nil {
 		return nil
 	}
@@ -846,36 +852,50 @@ func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []
 	return fullSources
 }
 
+// AccountSourcesToXML generates the account sources XML.
+func AccountSourcesToXML(ds *datastore.DataStore, account string) ([]byte, error) {
+	devicesDir := ds.AccountDevicesDir(account)
+
+	entries, err := os.ReadDir(devicesDir)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	_, lastDeviceID := getAccountDevices(ds, account, entries)
+	resp := models.AccountSourcesResponse{
+		Sources: getAccountSources(ds, account, lastDeviceID),
+	}
+
+	data, err := xml.Marshal(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parity: use self-closing tags and handle empty sourceproviderid
+	data = bytes.ReplaceAll(data, []byte("<sourceSettings></sourceSettings>"), []byte("<sourceSettings/>"))
+	data = bytes.ReplaceAll(data, []byte("<sourceproviderid></sourceproviderid>"), []byte(""))
+
+	return append([]byte(constants.XMLHeader), data...), nil
+}
+
 // AccountFullToXML generates a complete account XML with devices, presets, and recents.
 func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	devicesDir := ds.AccountDevicesDir(account)
 
-	entries, err := os.ReadDir(devicesDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			resp := models.AccountFullResponse{
-				ID:                account,
-				AccountStatus:     "OK",
-				Mode:              "global",
-				PreferredLanguage: "en",
-			}
-			data, _ := xml.Marshal(resp)
-
-			return append([]byte(constants.XMLHeader), data...), nil
-		}
-
-		return nil, err
-	}
-
 	resp := models.AccountFullResponse{
 		ID:                account,
-		AccountStatus:     "OK",
+		AccountStatus:     "ACTIVE",
 		Mode:              "global",
 		PreferredLanguage: "en",
 	}
 
 	fillDefaultProviderSettings(account, &resp)
 	fillAccountInfo(ds, account, &resp)
+
+	entries, err := os.ReadDir(devicesDir)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
 
 	devices, lastDeviceID := getAccountDevices(ds, account, entries)
 	resp.Devices = devices
@@ -991,6 +1011,22 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 
 	// Return XML for the single preset
 	PrepareConfiguredSource(matchingSrc)
+	syncMatchingSource(matchingSrc, recentInput{
+		Source: struct {
+			ID               string `xml:"id,attr"`
+			Type             string `xml:"type,attr"`
+			SourceName       string `xml:"sourcename"`
+			SourceProviderID string `xml:"sourceproviderid"`
+			CreatedOn        string `xml:"createdOn"`
+			UpdatedOn        string `xml:"updatedOn"`
+			Credential       struct {
+				Type  string `xml:"type,attr"`
+				Value string `xml:",chardata"`
+			} `xml:"credential"`
+		}{
+			SourceName: newPresetElem.Name,
+		},
+	})
 	presetObj.SourceConfig = matchingSrc
 	presetObj.Username = newPresetElem.Name
 
@@ -1064,10 +1100,9 @@ func syncMatchingSource(matchingSrc *models.ConfiguredSource, input recentInput)
 		matchingSrc.ID = input.SourceID
 	}
 
-	// Ensure DisplayName and SourceName are consistent
 	if matchingSrc.SourceName == "" && matchingSrc.DisplayName != "" {
 		// Parity: for some services like TuneIn, sourcename should be empty
-		if matchingSrc.DisplayName != "TuneIn" && matchingSrc.DisplayName != "Other" {
+		if !strings.EqualFold(matchingSrc.DisplayName, "TUNEIN") && matchingSrc.DisplayName != "Other" {
 			matchingSrc.SourceName = matchingSrc.DisplayName
 		}
 	}
@@ -1076,12 +1111,11 @@ func syncMatchingSource(matchingSrc *models.ConfiguredSource, input recentInput)
 		matchingSrc.DisplayName = matchingSrc.SourceName
 	}
 
-	if matchingSrc.SourceName == "" && matchingSrc.DisplayName != "" {
-		matchingSrc.SourceName = matchingSrc.DisplayName
-	}
-
 	if matchingSrc.Username == "" && matchingSrc.DisplayName != "" {
-		matchingSrc.Username = matchingSrc.DisplayName
+		// Parity: for some services like TuneIn, username should be empty
+		if !strings.EqualFold(matchingSrc.DisplayName, "TUNEIN") && matchingSrc.DisplayName != "Other" {
+			matchingSrc.Username = matchingSrc.DisplayName
+		}
 	}
 }
 

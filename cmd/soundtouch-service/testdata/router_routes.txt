@@ -64,6 +64,7 @@ GET      /streaming/account/{account}/device/{device}/recents         handlers.(
 GET      /streaming/account/{account}/emailaddress                    handlers.(*Server).HandleMargeGetEmailAddress-fm
 GET      /streaming/account/{account}/full                            handlers.(*Server).HandleMargeAccountFull-fm
 GET      /streaming/account/{account}/provider_settings               handlers.(*Server).HandleMargeProviderSettings-fm
+GET      /streaming/account/{account}/sources                         handlers.(*Server).HandleMargeAccountSources-fm
 GET      /streaming/device/{device}/streaming_token                   handlers.(*Server).HandleMargeStreamingToken-fm
 GET      /streaming/device_setting/account/{account}/device/{device}/device_settings handlers.(*Server).HandleMargeGetDeviceSettings-fm
 GET      /streaming/software/update/account/{account}                 handlers.(*Server).HandleMargeSoftwareUpdate-fm

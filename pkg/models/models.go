@@ -6,6 +6,7 @@ package models
 import (
 	"encoding/xml"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -494,9 +495,25 @@ func (s ConfiguredSource) MarshalXML(e *xml.Encoder, start xml.StartElement) err
 		a.DisplayName = ""
 	}
 
-	a.Name = s.getFirstNonEmpty(s.Name, s.SourceName, s.Username, s.DisplayName)
-	a.SourceName = s.getFirstNonEmpty(s.SourceName, s.Name, s.Username, s.DisplayName)
-	a.Username = s.getFirstNonEmpty(s.Username, s.Name, s.SourceName, s.DisplayName)
+	a.Name = s.Name
+	a.SourceName = s.SourceName
+	a.Username = s.Username
+
+	// Parity: for TuneIn and some others, sourcename, name and username should NOT automatically fall back to displayName
+	// if they are intended to be empty. However, if they are ALL empty, we need some value.
+	isTuneIn := strings.EqualFold(s.DisplayName, "TUNEIN") || strings.EqualFold(s.SourceKeyType, "TUNEIN") || strings.EqualFold(s.ID, "TUNEIN")
+
+	if a.Name == "" {
+		a.Name = s.getFirstNonEmpty(s.Name, s.SourceName, s.Username, s.DisplayName)
+	}
+
+	if a.SourceName == "" && !isTuneIn {
+		a.SourceName = s.getFirstNonEmpty(s.SourceName, s.Name, s.Username, s.DisplayName)
+	}
+
+	if a.Username == "" && !isTuneIn {
+		a.Username = s.getFirstNonEmpty(s.Username, s.Name, s.SourceName, s.DisplayName)
+	}
 
 	if s.Secret != "" || s.SecretType != "" {
 		a.Credential = &sourceCredential{
@@ -678,7 +695,7 @@ type EmailAddressResponse struct {
 type FullResponseSource struct {
 	ID          string `json:"id" xml:"id,attr"`
 	Type        string `json:"type" xml:"type,attr"`
-	DisplayName string `json:"display_name,omitempty" xml:"displayName,attr,omitempty"`
+	DisplayName string `json:"display_name" xml:"displayName,attr"`
 	CreatedOn   string `json:"created_on" xml:"createdOn"`
 	Credential  struct {
 		Type  string `json:"type" xml:"type,attr"`
@@ -731,6 +748,12 @@ type AccountFullResponse struct {
 	PreferredLanguage string               `xml:"preferredLanguage"`
 	ProviderSettings  []ProviderSetting    `xml:"providerSettings>providerSetting"`
 	Sources           []FullResponseSource `xml:"sources>source"`
+}
+
+// AccountSourcesResponse represents the response from /streaming/account/{accountId}/sources.
+type AccountSourcesResponse struct {
+	XMLName xml.Name             `xml:"sources"`
+	Sources []FullResponseSource `xml:"source"`
 }
 
 // AccountDevice represents a device in the account response.

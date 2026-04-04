@@ -1,0 +1,41 @@
+### GET /streaming/account/{accountId}/sources
+GET {{host}}/streaming/account/3230304/sources
+Accept: application/vnd.bose.streaming-v1.1+xml
+Authorization: Bearer dummy-token
+
+> {%
+    client.test("Response is 200 OK", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Content-Type is correct", function() {
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.1+xml", "Wrong content type");
+    });
+
+    client.test("Response is XML and contains sources", function() {
+        const doc = response.body;
+        const sources = doc.documentElement;
+        client.assert(sources.nodeName === "sources", "Root element is not 'sources'");
+
+        const sourceList = sources.getElementsByTagName("source");
+        client.assert(sourceList.length === 4, "Expected 4 source elements, found " + sourceList.length);
+
+        const expectedIds = ["10001", "10002", "10003", "10004"];
+        for (let i = 0; i < sourceList.length; i++) {
+            const source = sourceList.item(i);
+            client.assert(source.getAttribute("id") === expectedIds[i], "Wrong source ID at index " + i);
+            client.assert(source.getAttribute("type") === "Audio", "Wrong source type at index " + i);
+
+            const credentials = source.getElementsByTagName("credential");
+            client.assert(credentials.length > 0, "Missing credential for source " + expectedIds[i]);
+            const credential = credentials.item(0);
+            client.assert(credential.getAttribute("type") === "token", "Wrong credential type for source " + expectedIds[i]);
+
+            const expectedChildren = ["createdOn", "updatedOn", "name", "sourceproviderid", "sourcename", "sourceSettings", "username"];
+            expectedChildren.forEach(childName => {
+                const children = source.getElementsByTagName(childName);
+                client.assert(children.length > 0, "Missing " + childName + " for source " + expectedIds[i]);
+            });
+        }
+    });
+%}

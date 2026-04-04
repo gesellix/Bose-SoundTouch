@@ -64,6 +64,15 @@ func TestMargeCreateAccount(t *testing.T) {
 		t.Errorf("Expected 7-digit ID, got %v", resp.ID)
 	}
 
+	// Verify it has default sources
+	if len(resp.Sources) != 4 {
+		t.Errorf("Expected 4 default sources, got %d", len(resp.Sources))
+	} else {
+		if resp.Sources[0].ID != "10001" {
+			t.Errorf("Expected first source ID 10001, got %s", resp.Sources[0].ID)
+		}
+	}
+
 	// Verify it was saved in datastore
 	info, err := ds.GetAccountInfo(resp.ID)
 	if err != nil {
@@ -266,6 +275,123 @@ func TestMargeAccountFull(t *testing.T) {
 	body, _ := io.ReadAll(res.Body)
 	if !strings.Contains(string(body), "ABCDE") || !strings.Contains(string(body), "Test Speaker") {
 		t.Errorf("Response missing expected device data: %s", string(body))
+	}
+}
+
+func TestMargeAccountSources(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	account := "12345"
+	deviceID := "DEV1"
+
+	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", deviceID)
+	_ = os.MkdirAll(deviceDir, 0755)
+
+	// Mock Sources.xml
+	sourcesXML := `
+		<sources>
+			<source id="SRC1" type="Audio" createdOn="2024-01-01T00:00:00Z" updatedOn="2024-01-01T00:00:00Z" displayName="Source1" secret="TOKEN1" secretType="token" sourceProviderId="2" sourceName="SourceName1">
+				<sourceKey type="NOT_TUNEIN" account="User1"/>
+			</source>
+		</sources>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(sourcesXML), 0644)
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/streaming/account/" + account + "/sources")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK, got %v", res.Status)
+	}
+
+	contentType := res.Header.Get("Content-Type")
+	if contentType != "application/vnd.bose.streaming-v1.1+xml" {
+		t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.1+xml, got %v", contentType)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "SRC1") {
+		t.Errorf("Response missing expected source ID: %s", bodyStr)
+	}
+
+	// Verify current XML structure produced by marge.go
+	expectedSnippets := []string{
+		"<sources>",
+		"<source id=\"SRC1\" type=\"Audio\"",
+		"<createdOn>2024-01-01T00:00:00Z</createdOn>",
+		"<updatedOn>2024-01-01T00:00:00Z</updatedOn>",
+		"<credential type=\"token\">TOKEN1</credential>",
+		"<name>User1</name>",
+		"<sourcename></sourcename>",
+		"<sourceSettings/>",
+		"<username>User1</username>",
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(bodyStr, snippet) {
+			t.Errorf("Response missing expected snippet [%s]: %s", snippet, bodyStr)
+		}
+	}
+}
+
+func TestMargeAccountSourcesNoDevices(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	account := "12345"
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/streaming/account/" + account + "/sources")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK, got %v", res.Status)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	bodyStr := string(body)
+
+	// Verify that we get the default sources with correct IDs and empty display names
+	expectedSnippets := []string{
+		"<sources>",
+		"<source id=\"10004\" type=\"Audio\"",
+		"<source id=\"10003\" type=\"Audio\"",
+		"<source id=\"10002\" type=\"Audio\"",
+		"<source id=\"10001\" type=\"Audio\" displayName=\"AUX IN\">",
+		"displayName=\"\"", // for the other sources
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(bodyStr, snippet) {
+			t.Errorf("Response missing expected snippet [%s]: %s", snippet, bodyStr)
+		}
+	}
+
+	// Verify that 3 sources have empty display names
+	if strings.Count(bodyStr, "displayName=\"\"") != 3 {
+		t.Errorf("Expected 3 sources with empty displayName, got %d: %s", strings.Count(bodyStr, "displayName=\"\""), bodyStr)
 	}
 }
 
@@ -707,27 +833,11 @@ func TestMargeNativeStreamingRoutes(t *testing.T) {
 		}
 	})
 
-	t.Run("PUT /streaming/account/{account}/device/{device}/preset/{presetNumber} - missing Sources.xml", func(t *testing.T) {
-		// Delete Sources.xml to trigger the error
-		sourcesPath := filepath.Join(deviceDir, "Sources.xml")
-		if err := os.Remove(sourcesPath); err != nil {
-			t.Fatalf("Failed to remove Sources.xml: %v", err)
-		}
-		defer func() {
-			// Restore Sources.xml for other tests
-			_ = os.WriteFile(sourcesPath, []byte(`
-				<sources>
-					<source id="SRC1" displayName="TUNEIN" secret="" secretType="Audio">
-						<sourceKey type="TUNEIN" account=""/>
-					</source>
-				</sources>
-			`), 0644)
-		}()
-
+	t.Run("PUT /streaming/account/{account}/device/{device}/preset/{presetNumber} - valid Sources.xml", func(t *testing.T) {
 		payload := `
 			<preset>
 				<name>PUT Native Preset Singular</name>
-				<sourceid>TUNEIN</sourceid>
+				<sourceid>SRC1</sourceid>
 				<location>/station/s888</location>
 				<contentItemType>station</contentItemType>
 			</preset>`

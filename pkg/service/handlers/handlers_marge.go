@@ -26,7 +26,9 @@ func (s *Server) HandleMargeCreateAccount(w http.ResponseWriter, r *http.Request
 	}
 
 	var req models.MargeAccountCreateRequest
-	if err := xml.Unmarshal(body, &req); err != nil {
+
+	err = xml.Unmarshal(body, &req)
+	if err != nil {
 		http.Error(w, "Invalid XML body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -56,21 +58,22 @@ func (s *Server) HandleMargeCreateAccount(w http.ResponseWriter, r *http.Request
 		info.PreferredLanguage = "en"
 	}
 
-	if err := s.ds.SaveAccountInfo(id, info); err != nil {
+	err = s.ds.SaveAccountInfo(id, info)
+	if err != nil {
 		http.Error(w, "Failed to save account", http.StatusInternalServerError)
 		return
 	}
 
 	// Stockholm expects the account XML in response
-	resp := models.AccountFullResponse{
-		ID:                id,
-		AccountStatus:     "ACTIVE",
-		PreferredLanguage: info.PreferredLanguage,
+	data, err := marge.AccountFullToXML(s.ds, id)
+	if err != nil {
+		http.Error(w, "Failed to generate account XML", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	w.WriteHeader(http.StatusCreated)
-	_ = xml.NewEncoder(w).Encode(resp)
+	_, _ = w.Write(data)
 }
 
 // HandleMargeLogin handles account login from Stockholm.
@@ -111,16 +114,16 @@ func (s *Server) HandleMargeLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := models.AccountFullResponse{
-		ID:                accountID,
-		AccountStatus:     "ACTIVE",
-		PreferredLanguage: "en",
+	data, err := marge.AccountFullToXML(s.ds, accountID)
+	if err != nil {
+		http.Error(w, "Failed to generate account XML", http.StatusInternalServerError)
+		return
 	}
 
 	// Bose returns a token in the Credentials header
 	w.Header().Set("Credentials", "mock-token-"+accountID)
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
-	_ = xml.NewEncoder(w).Encode(resp)
+	_, _ = w.Write(data)
 }
 
 // HandleMargeSourceProviders returns the Marge source providers.
@@ -161,6 +164,29 @@ func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.Header()["ETag"] = []string{etag}
+	_, _ = w.Write(data)
+}
+
+// HandleMargeAccountSources returns the Marge account sources.
+func (s *Server) HandleMargeAccountSources(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+
+	device := r.URL.Query().Get("device")
+
+	etag := strconv.FormatInt(s.ds.GetETagForAccount(account, device), 10)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	data, err := marge.AccountSourcesToXML(s.ds, account)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.1+xml")
 	w.Header()["ETag"] = []string{etag}
 	_, _ = w.Write(data)
 }

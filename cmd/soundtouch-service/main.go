@@ -741,6 +741,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Route("/account/{account}", func(r chi.Router) {
 			r.Get("/emailaddress", server.HandleMargeGetEmailAddress)
 			r.Get("/full", server.HandleMargeAccountFull)
+			r.Get("/sources", server.HandleMargeAccountSources)
 			r.Get("/provider_settings", server.HandleMargeProviderSettings)
 
 			r.Route("/device", func(r chi.Router) {
