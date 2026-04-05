@@ -878,6 +878,52 @@ func AccountSourcesToXML(ds *datastore.DataStore, account string) ([]byte, error
 	return append([]byte(constants.XMLHeader), data...), nil
 }
 
+// AccountDevicesToXML generates the account devices XML.
+func AccountDevicesToXML(ds *datastore.DataStore, account string) ([]byte, error) {
+	devicesDir := ds.AccountDevicesDir(account)
+
+	entries, err := os.ReadDir(devicesDir)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	devices, _ := getAccountDevices(ds, account, entries)
+
+	var margeDevices []models.MargeAccountDevice
+
+	for i := range devices {
+		d := &devices[i]
+		margeDevices = append(margeDevices, models.MargeAccountDevice{
+			DeviceID:        d.DeviceID,
+			AttachedProduct: d.AttachedProduct,
+			CreatedOn:       d.CreatedOn,
+			IPAddress:       d.IPAddress,
+			Name:            d.Name,
+			UpdatedOn:       d.UpdatedOn,
+		})
+	}
+
+	resp := models.AccountDevicesResponse{
+		Devices: margeDevices,
+	}
+
+	// Fill provider settings
+	fullResp := &models.AccountFullResponse{}
+	fillDefaultProviderSettings(account, fullResp)
+	fillAccountInfo(ds, account, fullResp)
+	resp.ProviderSettings = fullResp.ProviderSettings
+
+	data, err := xml.Marshal(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parity: use self-closing tags for empty components
+	data = bytes.ReplaceAll(data, []byte("<components></components>"), []byte("<components/>"))
+
+	return append([]byte(constants.XMLHeader), data...), nil
+}
+
 // AccountFullToXML generates a complete account XML with devices, presets, and recents.
 func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	devicesDir := ds.AccountDevicesDir(account)

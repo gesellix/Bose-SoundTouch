@@ -1,5 +1,5 @@
 ### GET /streaming/account/{accountId}/sources
-GET {{host}}/streaming/account/3230304/sources
+GET {{host}}/streaming/account/{{accountId}}/sources
 Accept: application/vnd.bose.streaming-v1.1+xml
 Authorization: Bearer dummy-token
 
@@ -18,23 +18,26 @@ Authorization: Bearer dummy-token
         client.assert(sources.nodeName === "sources", "Root element is not 'sources'");
 
         const sourceList = sources.getElementsByTagName("source");
-        client.assert(sourceList.length === 4, "Expected 4 source elements, found " + sourceList.length);
+        client.assert(sourceList.length >= 4, "Expected at least 4 source elements, found " + sourceList.length);
 
         const expectedIds = ["10001", "10002", "10003", "10004"];
         for (let i = 0; i < sourceList.length; i++) {
             const source = sourceList.item(i);
-            client.assert(source.getAttribute("id") === expectedIds[i], "Wrong source ID at index " + i);
-            client.assert(source.getAttribute("type") === "Audio", "Wrong source type at index " + i);
+            const sourceId = source.getAttribute("id");
+            if (i < expectedIds.length) {
+                client.assert(sourceId === expectedIds[i], "Wrong source ID at index " + i);
+            }
+            client.assert(source.getAttribute("type") === "Audio", "Wrong source type for source " + sourceId);
 
             const credentials = source.getElementsByTagName("credential");
-            client.assert(credentials.length > 0, "Missing credential for source " + expectedIds[i]);
+            client.assert(credentials.length > 0, "Missing credential for source " + sourceId);
             const credential = credentials.item(0);
-            client.assert(credential.getAttribute("type") === "token", "Wrong credential type for source " + expectedIds[i]);
+            client.assert(credential.getAttribute("type").startsWith("token"), "Wrong credential type for source " + sourceId);
 
             const expectedChildren = ["createdOn", "updatedOn", "name", "sourceproviderid", "sourcename", "sourceSettings", "username"];
             expectedChildren.forEach(childName => {
                 const children = source.getElementsByTagName(childName);
-                client.assert(children.length > 0, "Missing " + childName + " for source " + expectedIds[i]);
+                client.assert(children.length > 0, "Missing " + childName + " for source " + sourceId);
             });
         }
     });

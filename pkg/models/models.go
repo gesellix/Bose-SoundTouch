@@ -756,18 +756,36 @@ type AccountSourcesResponse struct {
 	Sources []FullResponseSource `xml:"source"`
 }
 
+// AccountDevicesResponse represents the response from /streaming/account/{accountId}/devices.
+type AccountDevicesResponse struct {
+	XMLName          xml.Name             `xml:"devices"`
+	Devices          []MargeAccountDevice `xml:"device"`
+	ProviderSettings []ProviderSetting    `xml:"providerSettings>providerSetting"`
+}
+
+// MargeAccountDevice represents a device specifically for the /devices response.
+// It matches the structure in 06_orig.xml, which is a subset of AccountDevice.
+type MargeAccountDevice struct {
+	DeviceID        string           `json:"device_id" xml:"deviceid,attr"`
+	AttachedProduct *AttachedProduct `json:"attached_product" xml:"attachedProduct"`
+	CreatedOn       string           `json:"created_on" xml:"createdOn"`
+	IPAddress       string           `json:"ip_address" xml:"ipaddress"`
+	Name            string           `json:"name" xml:"name"`
+	UpdatedOn       string           `json:"updated_on" xml:"updatedOn"`
+}
+
 // AccountDevice represents a device in the account response.
 type AccountDevice struct {
 	DeviceID           string               `json:"device_id" xml:"deviceid,attr"`
 	AttachedProduct    *AttachedProduct     `json:"attached_product" xml:"attachedProduct"`
 	CreatedOn          string               `json:"created_on" xml:"createdOn"`
-	FirmwareVersion    string               `json:"firmware_version" xml:"firmwareVersion"`
+	FirmwareVersion    string               `json:"firmware_version" xml:"firmwareVersion,omitempty"`
 	IPAddress          string               `json:"ip_address" xml:"ipaddress"`
 	Name               string               `json:"name" xml:"name"`
-	Presets            []FullResponsePreset `json:"presets" xml:"presets>preset"`
+	Presets            []FullResponsePreset `json:"presets" xml:"presets>preset,omitempty"`
 	ProductCode        string               `json:"product_code" xml:"-"`
-	Recents            []FullResponseRecent `json:"recents" xml:"recents>recent"`
-	SerialNumber       string               `json:"serial_number" xml:"serialNumber"`
+	Recents            []FullResponseRecent `json:"recents" xml:"recents>recent,omitempty"`
+	SerialNumber       string               `json:"serial_number" xml:"serialNumber,omitempty"`
 	DeviceSerialNumber string               `json:"device_serial_number,omitempty" xml:"-"`
 	MacAddress         string               `json:"mac_address,omitempty" xml:"-"`
 	DiscoveryMethod    string               `json:"discovery_method,omitempty" xml:"-"`
@@ -777,7 +795,7 @@ type AccountDevice struct {
 // AttachedProduct represents product information for a device.
 type AttachedProduct struct {
 	ProductCode  string             `json:"product_code" xml:"product_code,attr"`
-	Components   []ServiceComponent `json:"components" xml:"components>component"`
+	Components   []ServiceComponent `json:"components" xml:"components>component,omitempty"`
 	ProductLabel string             `json:"product_label" xml:"productlabel"`
 	SerialNumber string             `json:"serial_number" xml:"serialnumber"`
 	UpdatedOn    string             `json:"updated_on" xml:"updatedOn"`

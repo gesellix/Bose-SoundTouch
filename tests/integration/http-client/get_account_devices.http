@@ -1,0 +1,54 @@
+### GET /streaming/account/{accountId}/devices
+GET {{host}}/streaming/account/{{accountId}}/devices
+Accept: application/vnd.bose.streaming-v1.1+xml
+Authorization: Bearer dummy-token
+
+> {%
+    client.test("Response is 200 OK", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Content-Type is correct", function() {
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.1+xml", "Wrong content type");
+    });
+
+    client.test("Response is XML and contains devices", function() {
+        const doc = response.body;
+        const devices = doc.documentElement;
+        client.assert(devices.nodeName === "devices", "Root element is not 'devices'");
+
+        const deviceList = devices.getElementsByTagName("device");
+        client.assert(deviceList.length === 1, "Expected 1 device element, found " + deviceList.length);
+
+        const expectedDeviceId = "B05ECAFE";
+        const expectedName = "SoundTouch-11";
+        const expectedIp = "192.168.1.100";
+
+        const device = deviceList.item(0);
+        client.assert(device.getAttribute("deviceid") === expectedDeviceId, "Wrong device ID");
+
+        const nameElements = device.getElementsByTagName("name");
+        client.assert(nameElements.length > 0, "Missing 'name' element for device " + expectedDeviceId);
+        client.assert(nameElements.item(0).textContent === expectedName, "Wrong name for device " + expectedDeviceId);
+
+        const ipElements = device.getElementsByTagName("ipaddress");
+        client.assert(ipElements.length > 0, "Missing 'ipaddress' element for device " + expectedDeviceId);
+        client.assert(ipElements.item(0).textContent === expectedIp, "Wrong IP address for device " + expectedDeviceId);
+
+        const attachedProducts = device.getElementsByTagName("attachedProduct");
+        client.assert(attachedProducts.length > 0, "Missing 'attachedProduct' for device " + expectedDeviceId);
+
+        const providerSettings = devices.getElementsByTagName("providerSettings");
+        client.assert(providerSettings.length > 0, "Missing 'providerSettings' element");
+        const settingList = providerSettings.item(0).getElementsByTagName("providerSetting");
+        client.assert(settingList.length === 2, "Expected 2 providerSetting elements, found " + settingList.length);
+
+        const expectedBoseId = "7654321";
+        for (let i = 0; i < settingList.length; i++) {
+            const setting = settingList.item(i);
+            const boseIdElements = setting.getElementsByTagName("boseId");
+            client.assert(boseIdElements.length > 0, "Missing 'boseId' element in providerSetting " + i);
+            client.assert(boseIdElements.item(0).textContent === expectedBoseId, "Wrong boseId in providerSetting " + i);
+        }
+    });
+%}

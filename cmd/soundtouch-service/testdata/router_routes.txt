@@ -8,6 +8,7 @@ DELETE   /setup/interactions/sessions/{session}                       handlers.(
 DELETE   /setup/parity-mismatches                                     handlers.(*Server).HandleClearParityMismatches-fm
 DELETE   /streaming/account/{account}/device/{device}/preset/{presetNumber} handlers.(*Server).HandleMargeRemovePreset-fm
 GET      /                                                            handlers.(*Server).HandleRoot-fm
+GET      /accounts/{account}/devices                                  handlers.(*Server).HandleMargeAccountDevices-fm
 GET      /accounts/{account}/devices/{device}/group                   handlers.(*Server).HandleMargeDeviceGroup-fm
 GET      /accounts/{account}/devices/{device}/group/                  handlers.(*Server).HandleMargeDeviceGroup-fm
 GET      /accounts/{account}/devices/{device}/group/member            handlers.(*Server).HandleMargeDeviceGroupMember-fm
@@ -15,6 +16,7 @@ GET      /accounts/{account}/devices/{device}/group/server            handlers.(
 GET      /accounts/{account}/devices/{device}/presets                 handlers.(*Server).HandleMargePresets-fm
 GET      /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleMargeRecents-fm
 GET      /accounts/{account}/full                                     handlers.(*Server).HandleMargeAccountFull-fm
+GET      /accounts/{account}/sources                                  handlers.(*Server).HandleMargeAccountSources-fm
 GET      /bmx/registry/v1/services                                    handlers.(*Server).HandleBMXRegistry-fm
 GET      /bmx/registry/v1/servicesAvailability                        handlers.(*Server).HandleBMXServicesAvailability-fm
 GET      /bmx/tunein/v1/navigate                                      handlers.(*Server).HandleTuneInNavigate-fm
@@ -61,6 +63,7 @@ GET      /streaming/account/{account}/device/{device}/group/server    handlers.(
 GET      /streaming/account/{account}/device/{device}/presets         handlers.(*Server).HandleMargePresets-fm
 GET      /streaming/account/{account}/device/{device}/recent          handlers.(*Server).HandleMargeRecents-fm
 GET      /streaming/account/{account}/device/{device}/recents         handlers.(*Server).HandleMargeRecents-fm
+GET      /streaming/account/{account}/devices                         handlers.(*Server).HandleMargeAccountDevices-fm
 GET      /streaming/account/{account}/emailaddress                    handlers.(*Server).HandleMargeGetEmailAddress-fm
 GET      /streaming/account/{account}/full                            handlers.(*Server).HandleMargeAccountFull-fm
 GET      /streaming/account/{account}/provider_settings               handlers.(*Server).HandleMargeProviderSettings-fm

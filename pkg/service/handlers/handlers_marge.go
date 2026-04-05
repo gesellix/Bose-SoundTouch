@@ -191,6 +191,29 @@ func (s *Server) HandleMargeAccountSources(w http.ResponseWriter, r *http.Reques
 	_, _ = w.Write(data)
 }
 
+// HandleMargeAccountDevices returns the Marge account devices.
+func (s *Server) HandleMargeAccountDevices(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+
+	device := r.URL.Query().Get("device")
+
+	etag := strconv.FormatInt(s.ds.GetETagForAccount(account, device), 10)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	data, err := marge.AccountDevicesToXML(s.ds, account)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.1+xml")
+	w.Header()["ETag"] = []string{etag}
+	_, _ = w.Write(data)
+}
+
 // HandleMargePowerOn handles the Marge power on request.
 func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)

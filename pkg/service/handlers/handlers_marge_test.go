@@ -346,6 +346,70 @@ func TestMargeAccountSources(t *testing.T) {
 	}
 }
 
+func TestMargeAccountDevices(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	account := "12345"
+	deviceID := "DEV1"
+
+	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", deviceID)
+	_ = os.MkdirAll(deviceDir, 0755)
+
+	// Mock DeviceInfo.json
+	deviceInfo := models.ServiceDeviceInfo{
+		DeviceID:            deviceID,
+		Name:                "Test Device",
+		IPAddress:           "192.168.1.100",
+		DeviceSerialNumber:  "ABCDE12345",
+		ProductCode:         "SoundTouch 20",
+		ProductSerialNumber: "066802942560222AE",
+	}
+	_ = ds.SaveDeviceInfo(account, deviceID, &deviceInfo)
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/streaming/account/" + account + "/devices")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK, got %v", res.Status)
+	}
+
+	contentType := res.Header.Get("Content-Type")
+	if contentType != "application/vnd.bose.streaming-v1.1+xml" {
+		t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.1+xml, got %v", contentType)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	bodyStr := string(body)
+
+	// Verify current XML structure produced by marge.go
+	expectedSnippets := []string{
+		"<devices>",
+		"<device deviceid=\"DEV1\">",
+		"<name>Test Device</name>",
+		"<ipaddress>192.168.1.100</ipaddress>",
+		"<providerSettings>",
+		"ELIGIBLE_FOR_TRIAL",
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(bodyStr, snippet) {
+			t.Errorf("Response missing expected snippet [%s]: %s", snippet, bodyStr)
+		}
+	}
+}
+
 func TestMargeAccountSourcesNoDevices(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
