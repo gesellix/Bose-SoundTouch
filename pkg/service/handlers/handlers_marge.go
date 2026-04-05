@@ -693,6 +693,38 @@ func (s *Server) HandleMargeDeviceGroupMember(w http.ResponseWriter, r *http.Req
 	http.NotFound(w, r)
 }
 
+// HandleMusicProviderIsEligible returns the music provider eligibility.
+func (s *Server) HandleMusicProviderIsEligible(w http.ResponseWriter, _ *http.Request) {
+	// For now, we return false as seen in the interaction sample.
+	resp := models.EligibilityResponse{
+		IsEligible: false,
+	}
+
+	data, err := xml.Marshal(resp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.1+xml")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(constants.XMLHeader))
+	_, _ = w.Write(data)
+}
+
+// HandleMargeAPIVersions returns the XML response for Marge API versions.
+func (s *Server) HandleMargeAPIVersions(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/xml")
+
+	output, err := marge.APIVersionsToXML()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, _ = w.Write(output)
+}
+
 // HandleMargeCustomerSupport handles Marge customer support uploads.
 func (s *Server) HandleMargeCustomerSupport(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)

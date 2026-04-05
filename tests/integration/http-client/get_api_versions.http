@@ -1,0 +1,53 @@
+### GET /streaming/resources/api_versions.xml
+GET {{host}}/streaming/resources/api_versions.xml
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content type is text/xml", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "text/xml", "Expected 'text/xml' but received '" + type + "'");
+    });
+
+    client.test("Response body has correct structure", function() {
+        var doc = response.body;
+        client.assert(doc !== undefined, "Response body is undefined");
+
+        var marge = doc.getElementsByTagName("marge")[0];
+        client.assert(marge !== null, "Root element <marge> not found");
+
+        var version = marge.getAttribute("version");
+        client.assert(version === "221", "Expected version '221' but received '" + version + "'");
+
+        var project = marge.getAttribute("project");
+        client.assert(project === "origin/master", "Expected project 'origin/master' but received '" + project + "'");
+
+        var apiList = doc.getElementsByTagName("api");
+        client.assert(apiList.length === 3, "Expected 3 <api> elements but found " + apiList.length);
+
+        // Helper to find API by type attribute
+        function findApiByType(list, type) {
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].getAttribute("type") === type) {
+                    return list[i];
+                }
+            }
+            return null;
+        }
+
+        var streamingApi = findApiByType(apiList, "streaming");
+        client.assert(streamingApi !== null, "API type 'streaming' not found");
+        client.assert(streamingApi.getElementsByTagName("xml")[0].textContent === "application/vnd.bose.streaming-v1.0+xml", "Incorrect XML for streaming API");
+        client.assert(streamingApi.getElementsByTagName("json")[0].textContent === "application/vnd.bose.streaming-v1.0+json", "Incorrect JSON for streaming API");
+
+        var customerApi = findApiByType(apiList, "customer");
+        client.assert(customerApi !== null, "API type 'customer' not found");
+        client.assert(customerApi.getElementsByTagName("xml")[0].textContent === "application/vnd.bose.customer-v1.0+xml", "Incorrect XML for customer API");
+
+        var supportApi = findApiByType(apiList, "support");
+        client.assert(supportApi !== null, "API type 'support' not found");
+        client.assert(supportApi.getElementsByTagName("xml")[0].textContent === "application/vnd.bose.support-v1.0+xml", "Incorrect XML for support API");
+    });
+%}

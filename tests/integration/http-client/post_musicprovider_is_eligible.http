@@ -1,0 +1,31 @@
+### POST /streaming/music/musicprovider/{{qplayProviderID}}/is_eligible
+POST {{host}}/streaming/music/musicprovider/{{qplayProviderID}}/is_eligible
+Accept: application/vnd.bose.streaming-v1.1+xml
+Content-Type: application/vnd.bose.streaming-v1.1+xml
+
+<account><accountId>{{accountId}}</accountId></account>
+
+> {%
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Response content type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.1+xml", "Expected 'application/vnd.bose.streaming-v1.1+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body has correct structure", function() {
+        var doc = response.body;
+        client.assert(doc !== undefined, "Response body is undefined");
+
+        var eligibility = doc.getElementsByTagName("eligibility")[0];
+        client.assert(eligibility !== null, "Root element <eligibility> not found");
+
+        var isEligibleElement = eligibility.getElementsByTagName("isEligible")[0];
+        client.assert(isEligibleElement !== null, "Element <isEligible> not found");
+
+        var isEligible = isEligibleElement.textContent;
+        client.assert(isEligible === "false", "Expected isEligible to be 'false' but received '" + isEligible + "'");
+    });
+%}

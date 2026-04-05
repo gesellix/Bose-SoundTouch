@@ -1500,4 +1500,61 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 			t.Errorf("Expected name 'My top tracks playlist', got '%s'", recents[0].Name)
 		}
 	})
+
+	t.Run("MusicProviderIsEligible", func(t *testing.T) {
+		path := "/marge/streaming/music/musicprovider/26/is_eligible"
+		payload := `<?xml version = "1.0" encoding = "utf-8"?><account><accountId>12345</accountId></account>`
+
+		res, err := http.Post(ts.URL+path, "application/vnd.bose.streaming-v1.1+xml", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected status OK, got %v", res.Status)
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "application/vnd.bose.streaming-v1.1+xml" {
+			t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.1+xml, got %v", ct)
+		}
+
+		body, _ := io.ReadAll(res.Body)
+		expected := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><eligibility><isEligible>false</isEligible></eligibility>`
+		if string(body) != expected {
+			t.Errorf("Expected body %s, got %s", expected, string(body))
+		}
+	})
+
+	t.Run("APIVersions", func(t *testing.T) {
+		path := "/marge/streaming/resources/api_versions.xml"
+
+		res, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected status OK, got %v", res.Status)
+		}
+
+		if ct := res.Header.Get("Content-Type"); ct != "text/xml" {
+			t.Errorf("Expected Content-Type text/xml, got %v", ct)
+		}
+
+		body, _ := io.ReadAll(res.Body)
+		if !strings.HasPrefix(string(body), "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<marge ") {
+			t.Errorf("Response body has incorrect header or root element: %s", body)
+		}
+		if !strings.Contains(string(body), `<api type="streaming">`) {
+			t.Error("Response body missing streaming API")
+		}
+		if !strings.Contains(string(body), `<api type="customer">`) {
+			t.Error("Response body missing customer API")
+		}
+		if !strings.Contains(string(body), `<api type="support">`) {
+			t.Error("Response body missing support API")
+		}
+	})
 }

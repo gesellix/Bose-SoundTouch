@@ -572,6 +572,38 @@ func SoftwareUpdateToXML() string {
 </software_update>`
 }
 
+// APIVersionsToXML returns the XML response for Marge API versions.
+func APIVersionsToXML() ([]byte, error) {
+	resp := models.MargeAPIVersionsResponse{
+		Version: "221",
+		Project: "origin/master",
+		Apis: []models.MargeAPI{
+			{
+				Type: "streaming",
+				XML:  "application/vnd.bose.streaming-v1.0+xml",
+				JSON: "application/vnd.bose.streaming-v1.0+json",
+			},
+			{
+				Type: "customer",
+				XML:  "application/vnd.bose.customer-v1.0+xml",
+				JSON: "application/vnd.bose.customer-v1.0+json",
+			},
+			{
+				Type: "support",
+				XML:  "application/vnd.bose.support-v1.0+xml",
+				JSON: "application/vnd.bose.support-v1.0+json",
+			},
+		},
+	}
+
+	output, err := xml.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return append([]byte(constants.XMLHeader+"\n"), output...), nil
+}
+
 // CreateAccountDevice creates an AccountDevice model for the given account and device.
 func CreateAccountDevice(ds *datastore.DataStore, account, deviceID string) (models.AccountDevice, error) {
 	info, err := ds.GetDeviceInfo(account, deviceID)

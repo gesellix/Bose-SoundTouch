@@ -68,6 +68,8 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/software/update/account/{account}", server.HandleMargeSoftwareUpdate)
 		r.Post("/account", server.HandleMargeCreateAccount)
 		r.Post("/account/login", server.HandleMargeLogin)
+		r.Post("/music/musicprovider/{providerID}/is_eligible", server.HandleMusicProviderIsEligible)
+		r.Get("/resources/api_versions.xml", server.HandleMargeAPIVersions)
 	}
 
 	accountsRoutes := func(r chi.Router) {

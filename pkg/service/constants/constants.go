@@ -55,6 +55,11 @@ var StaticProviders = []SourceProvider{
 	{ID: 39, Name: "RADIO_BROWSER", Label: "Radio Browser", CreatedOn: "2026-03-14T22:47:00.000+00:00", UpdatedOn: "2026-03-14T22:47:00.000+00:00"},
 }
 
+const (
+	// QPlayProviderID is the provider identifier for QPlay.
+	QPlayProviderID = 26
+)
+
 // GetSourceLabel returns a user-friendly label for a source type.
 func GetSourceLabel(sourceType string) string {
 	for _, provider := range StaticProviders {

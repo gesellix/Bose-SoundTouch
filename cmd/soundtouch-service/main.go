@@ -786,6 +786,14 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Post("/usage", server.HandleUsageStats)
 			r.Post("/error", server.HandleErrorStats)
 		})
+
+		r.Route("/music", func(r chi.Router) {
+			r.Route("/musicprovider/{providerID}", func(r chi.Router) {
+				r.Post("/is_eligible", server.HandleMusicProviderIsEligible)
+			})
+		})
+
+		r.Get("/resources/api_versions.xml", server.HandleMargeAPIVersions)
 	})
 
 	r.Route("/accounts", func(r chi.Router) {

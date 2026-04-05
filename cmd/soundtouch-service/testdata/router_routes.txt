@@ -72,6 +72,7 @@ GET      /streaming/account/{account}/provider_settings               handlers.(
 GET      /streaming/account/{account}/sources                         handlers.(*Server).HandleMargeAccountSources-fm
 GET      /streaming/device/{device}/streaming_token                   handlers.(*Server).HandleMargeStreamingToken-fm
 GET      /streaming/device_setting/account/{account}/device/{device}/device_settings handlers.(*Server).HandleMargeGetDeviceSettings-fm
+GET      /streaming/resources/api_versions.xml                        handlers.(*Server).HandleMargeAPIVersions-fm
 GET      /streaming/software/update/account/{account}                 handlers.(*Server).HandleMargeSoftwareUpdate-fm
 GET      /streaming/sourceproviders                                   handlers.(*Server).HandleMargeSourceProviders-fm
 GET      /updates/soundtouch                                          handlers.(*Server).HandleMargeSoftwareUpdate-fm
@@ -121,6 +122,7 @@ POST     /streaming/account/{account}/device/{device}/presets/{presetNumber} han
 POST     /streaming/account/{account}/device/{device}/recent          handlers.(*Server).HandleMargeAddRecent-fm
 POST     /streaming/account/{account}/source                          handlers.(*Server).HandleMargeAddSource-fm
 POST     /streaming/device_setting/account/{account}/device/{device}/device_settings handlers.(*Server).HandleMargeUpdateDeviceSettings-fm
+POST     /streaming/music/musicprovider/{providerID}/is_eligible      handlers.(*Server).HandleMusicProviderIsEligible-fm
 POST     /streaming/stats/error                                       handlers.(*Server).HandleErrorStats-fm
 POST     /streaming/stats/usage                                       handlers.(*Server).HandleUsageStats-fm
 POST     /streaming/support/customersupport                           handlers.(*Server).HandleMargeCustomerSupport-fm

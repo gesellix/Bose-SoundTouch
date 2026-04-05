@@ -143,6 +143,8 @@ test-http-client:
 		/workdir/get_account_presets.http \
 		/workdir/get_account_devices.http \
 		/workdir/get_account_sources.http \
+		/workdir/get_api_versions.http \
+		/workdir/post_musicprovider_is_eligible.http \
 		/workdir/get_full_account.http \
 		/workdir/get_group.http \
 		/workdir/unregister_device.http \

@@ -837,3 +837,25 @@ type MargeAddSourceResponse struct {
 	CreatedOn        string   `xml:"createdOn"`
 	UpdatedOn        string   `xml:"updatedOn"`
 }
+
+// EligibilityResponse represents the XML response for music provider eligibility.
+type EligibilityResponse struct {
+	XMLName    xml.Name `xml:"eligibility"`
+	IsEligible bool     `xml:"isEligible"`
+}
+
+// MargeAPIVersionsResponse represents the XML response for Marge API versions.
+type MargeAPIVersionsResponse struct {
+	XMLName      xml.Name   `xml:"marge"`
+	Version      string     `xml:"version,attr"`
+	Project      string     `xml:"project,attr"`
+	Apis         []MargeAPI `xml:"apis>api"`
+	Dependencies string     `xml:"dependencies"`
+}
+
+// MargeAPI represents a single API entry in MargeAPIVersionsResponse.
+type MargeAPI struct {
+	Type string `xml:"type,attr"`
+	XML  string `xml:"xml"`
+	JSON string `xml:"json"`
+}
