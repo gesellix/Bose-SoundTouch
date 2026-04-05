@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -244,6 +245,127 @@ func prepareRecentItemParitySource(src *models.ConfiguredSource) *models.RecentI
 	return sxml
 }
 
+func mapPresetToParityXML(p models.ServicePreset, sources []models.ConfiguredSource) *presetParityXML {
+	// Find and prepare source
+	matchedSource := findMatchingSourceForPreset(sources, p)
+	if matchedSource != nil {
+		PrepareConfiguredSource(matchedSource)
+	}
+
+	if p.ContentItemType == "" && p.Name == "" && p.Location == "" && (matchedSource == nil || matchedSource.ID == "") {
+		return nil
+	}
+
+	p.ButtonNumber = p.ID
+	if p.CreatedOn == "" {
+		p.CreatedOn = constants.DateStr
+	} else if t, e := strconv.ParseInt(p.CreatedOn, 10, 64); e == nil {
+		p.CreatedOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+	}
+
+	if p.UpdatedOn == "" {
+		p.UpdatedOn = constants.DateStr
+	} else if t, e := strconv.ParseInt(p.UpdatedOn, 10, 64); e == nil {
+		p.UpdatedOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+	}
+
+	username := p.Username
+	if username == "" {
+		username = p.Name
+	}
+
+	sourceID := p.SourceID
+	if sourceID == "" && matchedSource != nil {
+		sourceID = matchedSource.ID
+	}
+
+	return &presetParityXML{
+		ButtonNumber:    p.ButtonNumber,
+		ContainerArt:    p.ContainerArt,
+		ContentItemType: p.ContentItemType,
+		CreatedOn:       p.CreatedOn,
+		Location:        p.Location,
+		Name:            p.Name,
+		Source:          matchedSource,
+		SourceID:        sourceID,
+		UpdatedOn:       p.UpdatedOn,
+		Username:        username,
+	}
+}
+
+// AccountPresetsToXML aggregates presets from all account devices and converts to XML format.
+func AccountPresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
+	accountDir := ds.AccountDevicesDir(account)
+
+	entries, err := os.ReadDir(accountDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []byte(constants.XMLHeader + "\n<presets/>"), nil
+		}
+
+		return nil, err
+	}
+
+	type presetsParityWrapper struct {
+		XMLName xml.Name          `xml:"presets"`
+		Presets []presetParityXML `xml:"preset"`
+	}
+
+	pxml := presetsParityWrapper{
+		Presets: make([]presetParityXML, 0),
+	}
+
+	seenPresets := make(map[string]bool)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		deviceID := entry.Name()
+
+		presets, gerr := ds.GetPresets(account, deviceID)
+		if gerr != nil {
+			continue
+		}
+
+		sources, serr := ds.GetConfiguredSources(account, deviceID)
+		if serr != nil {
+			continue
+		}
+
+		for i := range presets {
+			p := presets[i]
+
+			// Deduplicate by ID (which is the buttonNumber in our store)
+			if seenPresets[p.ID] {
+				continue
+			}
+
+			if pXML := mapPresetToParityXML(p, sources); pXML != nil {
+				seenPresets[p.ID] = true
+
+				pxml.Presets = append(pxml.Presets, *pXML)
+			}
+		}
+	}
+
+	// Sort by buttonNumber (optional but nice)
+	sort.Slice(pxml.Presets, func(i, j int) bool {
+		ni, _ := strconv.Atoi(pxml.Presets[i].ButtonNumber)
+		nj, _ := strconv.Atoi(pxml.Presets[j].ButtonNumber)
+
+		return ni < nj
+	})
+
+	data, err := xml.MarshalIndent(pxml, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return append([]byte(constants.XMLHeader+"\n"), data...), nil
+}
+
 // PresetsToXML converts account presets to XML format for Marge responses.
 func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, error) {
 	presets, err := ds.GetPresets(account, deviceID)
@@ -266,53 +388,9 @@ func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 	}
 
 	for i := range presets {
-		p := presets[i]
-
-		// Find and prepare source
-		matchedSource := findMatchingSourceForPreset(sources, p)
-		if matchedSource != nil {
-			PrepareConfiguredSource(matchedSource)
+		if pXML := mapPresetToParityXML(presets[i], sources); pXML != nil {
+			pxml.Presets = append(pxml.Presets, *pXML)
 		}
-
-		if p.ContentItemType == "" && p.Name == "" && p.Location == "" && (matchedSource == nil || matchedSource.ID == "") {
-			continue
-		}
-
-		p.ButtonNumber = p.ID
-		if p.CreatedOn == "" {
-			p.CreatedOn = constants.DateStr
-		} else if t, e := strconv.ParseInt(p.CreatedOn, 10, 64); e == nil {
-			p.CreatedOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
-		}
-
-		if p.UpdatedOn == "" {
-			p.UpdatedOn = constants.DateStr
-		} else if t, e := strconv.ParseInt(p.UpdatedOn, 10, 64); e == nil {
-			p.UpdatedOn = time.Unix(t, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
-		}
-
-		username := p.Username
-		if username == "" {
-			username = p.Name
-		}
-
-		sourceID := p.SourceID
-		if sourceID == "" && matchedSource != nil {
-			sourceID = matchedSource.ID
-		}
-
-		pxml.Presets = append(pxml.Presets, presetParityXML{
-			ButtonNumber:    p.ButtonNumber,
-			ContainerArt:    p.ContainerArt,
-			ContentItemType: p.ContentItemType,
-			CreatedOn:       p.CreatedOn,
-			Location:        p.Location,
-			Name:            p.Name,
-			Source:          matchedSource,
-			SourceID:        sourceID,
-			UpdatedOn:       p.UpdatedOn,
-			Username:        username,
-		})
 	}
 
 	data, err := xml.MarshalIndent(pxml, "", "  ")

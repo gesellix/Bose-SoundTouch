@@ -398,6 +398,21 @@ func (s *Server) HandleMargeSoftwareUpdate(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// HandleMargeAccountPresets handles the GET /streaming/account/{account}/presets/all request.
+func (s *Server) HandleMargeAccountPresets(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+
+	data, err := marge.AccountPresetsToXML(s.ds, account)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.1+xml")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
 // HandleMargePresets returns the Marge presets for a device.
 func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")

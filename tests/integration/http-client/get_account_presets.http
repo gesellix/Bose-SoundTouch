@@ -1,0 +1,47 @@
+### GET /streaming/account/{{accountId}}/presets/all
+GET {{host}}/streaming/account/{{accountId}}/presets/all
+Accept: application/vnd.bose.streaming-v1.1+xml
+Authorization: Bearer dummy-token
+
+> {%
+    client.test("Response is 200 OK", function() {
+        client.assert(response.status === 200, "Response status is not 200");
+    });
+
+    client.test("Content-Type is correct", function() {
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.1+xml", "Wrong content type");
+    });
+
+    client.test("Response is XML and contains presets", function() {
+        const doc = response.body;
+        const root = doc.documentElement;
+        client.assert(root.nodeName === "presets", "Root element is not 'presets'");
+
+        const presetList = doc.getElementsByTagName("preset");
+        // Based on Makefile flow: set_preset_6, delete_preset_6, set_preset_5.
+        // There should be at exactly one preset (number 6) by the time this is run.
+        client.assert(presetList.length >= 1, "Expected at least 1 preset elements, found " + presetList.length);
+
+        // Map presets by buttonNumber for easier validation
+        const presetsMap = {};
+        for (let i = 0; i < presetList.length; i++) {
+            const p = presetList.item(i);
+            const bn = p.getAttribute("buttonNumber");
+            presetsMap[bn] = p;
+        }
+
+        client.assert(presetsMap["5"] !== undefined, "Missing preset with buttonNumber=\"5\"");
+
+        // Validate structure of a preset (using #5 as example)
+        const preset5 = presetsMap["5"];
+        client.assert(preset5.getElementsByTagName("name").length > 0, "Missing 'name' in preset 5");
+        client.assert(preset5.getElementsByTagName("location").length > 0, "Missing 'location' in preset 5");
+        client.assert(preset5.getElementsByTagName("contentItemType").length > 0, "Missing 'contentItemType' in preset 5");
+
+        const source = preset5.getElementsByTagName("source")[0];
+        client.assert(source !== null, "Missing 'source' in preset 5");
+        client.assert(source.getAttribute("id") !== null, "Missing 'id' attribute in source of preset 5");
+        client.assert(source.getAttribute("type") !== null, "Missing 'type' attribute in source of preset 5");
+        client.assert(source.getElementsByTagName("sourceproviderid").length > 0, "Missing 'sourceproviderid' in source of preset 5");
+    });
+%}

@@ -140,6 +140,7 @@ test-http-client:
 		/workdir/set_preset_5.http \
 		/workdir/post_recent.http \
 		/workdir/get_recents.http \
+		/workdir/get_account_presets.http \
 		/workdir/get_account_devices.http \
 		/workdir/get_account_sources.http \
 		/workdir/get_full_account.http \

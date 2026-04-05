@@ -346,6 +346,78 @@ func TestMargeAccountSources(t *testing.T) {
 	}
 }
 
+func TestMargeAccountPresets(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	account := "12345"
+	device1 := "DEVICE1"
+	device2 := "DEVICE2"
+
+	// Setup presets for device1
+	presets1 := []models.ServicePreset{
+		{
+			ID: "1",
+			ServiceContentItem: models.ServiceContentItem{
+				Name: "Station 1",
+			},
+		},
+	}
+	if err := ds.SavePresets(account, device1, presets1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Setup presets for device2
+	presets2 := []models.ServicePreset{
+		{
+			ID: "2",
+			ServiceContentItem: models.ServiceContentItem{
+				Name: "Station 2",
+			},
+		},
+	}
+	if err := ds.SavePresets(account, device2, presets2); err != nil {
+		t.Fatal(err)
+	}
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// Test /streaming/account/{account}/presets/all
+	res, err := http.Get(ts.URL + "/streaming/account/" + account + "/presets/all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK, got %v", res.Status)
+	}
+
+	contentType := res.Header.Get("Content-Type")
+	if contentType != "application/vnd.bose.streaming-v1.1+xml" {
+		t.Errorf("Expected Content-Type application/vnd.bose.streaming-v1.1+xml, got %v", contentType)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	bodyStr := string(body)
+
+	if !strings.Contains(bodyStr, "<presets>") {
+		t.Error("Response body missing <presets>")
+	}
+	if !strings.Contains(bodyStr, "buttonNumber=\"1\"") {
+		t.Error("Response body missing preset 1")
+	}
+	if !strings.Contains(bodyStr, "buttonNumber=\"2\"") {
+		t.Error("Response body missing preset 2")
+	}
+}
+
 func TestMargeAccountDevices(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {
