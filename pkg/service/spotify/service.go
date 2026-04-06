@@ -350,13 +350,15 @@ func (s *Service) GetAccountBySecret(secret string) (*Account, bool) {
 }
 
 func (s *Service) generateBoseSecret() string {
+	prefix := "bs-"
+
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		// Fallback to timestamp-based if RNG fails
-		return fmt.Sprintf("bs-%d", time.Now().UnixNano())
+		return fmt.Sprintf("%s%d", prefix, time.Now().UnixNano())
 	}
 
-	return hex.EncodeToString(b)
+	return prefix + hex.EncodeToString(b)
 }
 
 // ResolveEntity resolves a Spotify URI to a name and image URL.

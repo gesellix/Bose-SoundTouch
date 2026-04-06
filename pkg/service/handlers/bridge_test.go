@@ -139,8 +139,8 @@ func TestSpotifyBridge(t *testing.T) {
 		t.Fatal("Could not find surrogate token in Marge sources")
 	}
 
-	if len(surrogate) != 32 {
-		t.Errorf("Expected surrogate to be 32 hex chars, got %s", surrogate)
+	if !strings.HasPrefix(surrogate, "bs-") || len(surrogate) != 35 {
+		t.Errorf("Expected surrogate to have 'bs-' prefix and be 35 chars, got %s", surrogate)
 	}
 
 	// Request refresh
