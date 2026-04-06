@@ -77,7 +77,15 @@ GET {{host}}/accounts/{{accountId}}/sources
      client.assert(id !== undefined && id !== "", "Spotify source ID missing");
      client.global.set("spotify_source_id", id);
 
-     const secretType = spotifySource.getAttribute("secretType");
+     function getCredentialType(source) {
+         const credentials = source.getElementsByTagName("credential");
+         if (credentials && credentials.length > 0) {
+             return credentials[0].getAttribute("type");
+         }
+         return null;
+     }
+
+     const secretType = getCredentialType(spotifySource);
      client.assert(secretType === "token_version_3", "Wrong secret type in Marge: " + secretType);
  });
  %}

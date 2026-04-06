@@ -695,7 +695,7 @@ type EmailAddressResponse struct {
 type FullResponseSource struct {
 	ID          string `json:"id" xml:"id,attr"`
 	Type        string `json:"type" xml:"type,attr"`
-	DisplayName string `json:"display_name" xml:"displayName,attr"`
+	DisplayName string `json:"display_name" xml:"displayName,attr,omitempty"`
 	CreatedOn   string `json:"created_on" xml:"createdOn"`
 	Credential  struct {
 		Type  string `json:"type" xml:"type,attr"`
@@ -709,7 +709,6 @@ type FullResponseSource struct {
 	Username         string `json:"username" xml:"username"`
 	Account          string `json:"account,omitempty" xml:"account,attr,omitempty"`
 	SourceLabel      string `json:"source_label" xml:"-"`
-	SecretType       string `json:"secret_type,omitempty" xml:"secretType,attr,omitempty"`
 }
 
 // FullResponsePreset represents a preset specifically for the /full response.

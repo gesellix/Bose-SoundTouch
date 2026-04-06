@@ -515,8 +515,7 @@ func TestMargeAccountSourcesNoDevices(t *testing.T) {
 		"<source id=\"10004\" type=\"Audio\"",
 		"<source id=\"10003\" type=\"Audio\"",
 		"<source id=\"10002\" type=\"Audio\"",
-		"<source id=\"10001\" type=\"Audio\" displayName=\"AUX IN\" secretType=\"token\">",
-		"displayName=\"\"", // for the other sources
+		"<source id=\"10001\" type=\"Audio\" displayName=\"AUX IN\">",
 	}
 
 	for _, snippet := range expectedSnippets {
@@ -525,9 +524,9 @@ func TestMargeAccountSourcesNoDevices(t *testing.T) {
 		}
 	}
 
-	// Verify that 3 sources have empty display names
-	if strings.Count(bodyStr, "displayName=\"\"") != 3 {
-		t.Errorf("Expected 3 sources with empty displayName, got %d: %s", strings.Count(bodyStr, "displayName=\"\""), bodyStr)
+	// Verify that no sources have empty display names
+	if strings.Count(bodyStr, "displayName=\"\"") != 0 {
+		t.Errorf("Expected no sources with empty displayName, got %d: %s", strings.Count(bodyStr, "displayName=\"\""), bodyStr)
 	}
 }
 

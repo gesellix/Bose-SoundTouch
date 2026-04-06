@@ -30,10 +30,10 @@ func TestMargeParityRegressions(t *testing.T) {
 	// One with "Other" and one with a specific name.
 	sourcesXML := `
 <sources>
-  <source id="14774275" displayName="Other" secret="" secretType="Audio">
+  <source id="14774275" displayName="Other" secret="">
     <sourceKey type="TUNEIN" account=""/>
   </source>
-  <source id="SPOT1" displayName="My Spotify" secret="token123" secretType="Audio">
+  <source id="SPOT1" displayName="My Spotify" secret="token123">
     <sourceKey type="SPOTIFY" account="user123"/>
   </source>
 </sources>`

@@ -751,7 +751,6 @@ func mapToFullResponseSource(s models.ConfiguredSource) models.FullResponseSourc
 		SourceSettings:   "",
 		UpdatedOn:        s.UpdatedOn,
 		Username:         s.Username,
-		SecretType:       s.SecretType,
 	}
 
 	mapToFullResponseCredential(s, &fullSource)

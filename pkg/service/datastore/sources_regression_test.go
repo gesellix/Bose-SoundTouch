@@ -29,7 +29,6 @@ func TestSaveSources_Format(t *testing.T) {
 			}{Type: "AUX", Account: "AUX"},
 		},
 		{
-			SecretType: "token",
 			SourceKey: struct {
 				Type    string `xml:"type,attr"`
 				Account string `xml:"account,attr"`
@@ -38,7 +37,6 @@ func TestSaveSources_Format(t *testing.T) {
 		{
 			DisplayName: "user@example.com",
 			Secret:      "dummy-token-spotify",
-			SecretType:  "token_version_3",
 			SourceKey: struct {
 				Type    string `xml:"type,attr"`
 				Account string `xml:"account,attr"`
@@ -72,8 +70,8 @@ func TestSaveSources_Format(t *testing.T) {
 	if !strings.Contains(xmlContent, `displayName="user@example.com"`) {
 		t.Errorf("Spotify source missing displayName. Got: %s", xmlContent)
 	}
-	if !strings.Contains(xmlContent, `secretType="token_version_3"`) {
-		t.Errorf("Spotify source missing secretType. Got: %s", xmlContent)
+	if !strings.Contains(xmlContent, `secret="dummy-token-spotify" secretType="">`) {
+		t.Errorf("Spotify source missing secret. Got: %s", xmlContent)
 	}
 	if !strings.Contains(xmlContent, `<sourceKey type="SPOTIFY" account="test-user" />`) &&
 		!strings.Contains(xmlContent, `<sourceKey type="SPOTIFY" account="test-user"></sourceKey>`) {
