@@ -1,12 +1,4 @@
 {
-  "mock-user-id": {
-    "user_id": "mock-user-id",
-    "display_name": "Mock User",
-    "email": "mock@example.com",
-    "access_token": "mock-access-token",
-    "refresh_token": "mock-refresh-token",
-    "expires_at": 1775483553
-  },
   "test-user": {
     "user_id": "test-user",
     "display_name": "Integration Test User",
