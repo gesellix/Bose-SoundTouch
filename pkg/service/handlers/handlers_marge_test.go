@@ -515,7 +515,7 @@ func TestMargeAccountSourcesNoDevices(t *testing.T) {
 		"<source id=\"10004\" type=\"Audio\"",
 		"<source id=\"10003\" type=\"Audio\"",
 		"<source id=\"10002\" type=\"Audio\"",
-		"<source id=\"10001\" type=\"Audio\" displayName=\"AUX IN\">",
+		"<source id=\"10001\" type=\"Audio\" displayName=\"AUX IN\" secretType=\"token\">",
 		"displayName=\"\"", // for the other sources
 	}
 

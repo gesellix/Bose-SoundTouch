@@ -457,19 +457,25 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 
 	presetNumber, err := strconv.Atoi(presetNumberStr)
 	if err != nil {
+		log.Printf("[Marge] Invalid preset number: %s", presetNumberStr)
 		http.Error(w, "Invalid preset number", http.StatusBadRequest)
+
 		return
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		log.Printf("[Marge] Failed to read body: %v", err)
 		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+
 		return
 	}
 
 	data, err := marge.UpdatePreset(s.ds, account, device, presetNumber, body)
 	if err != nil {
+		log.Printf("[Marge] UpdatePreset failed for account=%s, device=%s, preset=%d: %v", account, device, presetNumber, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 

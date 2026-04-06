@@ -1,0 +1,209 @@
+### Spotify Full Flow: Registration, Preset, and Token Refresh
+
+# 1. Initialize Spotify Flow
+# @name Init Spotify Flow
+POST {{host}}/mgmt/spotify/init
+Authorization: Basic admin change_me!
+
+###
+
+# 2. Spotify Callback
+# Simulates the user being redirected back from Spotify with a code
+# This should also trigger the Bridge (Marge registration + Speaker notification)
+# @name Spotify Callback
+GET {{host}}/mgmt/spotify/callback?code=mock-auth-code&account={{accountId}}
+
+###
+
+# 3. Verify Spotify Account and extract Bose Secret
+# @name Verify Accounts
+GET {{host}}/mgmt/spotify/accounts
+Authorization: Basic admin change_me!
+
+> {%
+ client.test("Account exists and has Bose Secret", function() {
+     client.assert(response.body.accounts.length > 0, "No accounts found");
+     var found = false;
+     for (var i = 0; i < response.body.accounts.length; i++) {
+         if (response.body.accounts[i].user_id === "spotify-user-id") {
+             found = true;
+             client.assert(response.body.accounts[i].bose_secret !== undefined, "Bose Secret missing");
+             client.global.set("bose_secret", response.body.accounts[i].bose_secret);
+             break;
+         }
+     }
+     client.assert(found, "Account 'spotify-user-id' not found");
+ });
+ %}
+
+###
+
+# 4. Verify Marge Source Registration and extract Spotify Source ID
+# @name Get Marge Sources
+GET {{host}}/accounts/{{accountId}}/sources
+
+> {%
+ client.test("Spotify source registered in Marge", function() {
+     const doc = response.body;
+
+     const spotifySourceProviderID = client.variables.environment.get("spotifyProviderID");
+
+     function findSpotifySource(parent) {
+         const children = parent.childNodes;
+         if (!children) return null;
+         for (var i = 0; i < children.length; i++) {
+             const node = children[i];
+             if (node.nodeName && (node.nodeName.toLowerCase() === "source")) {
+                 // Check sourceKey
+                 const sourceproviderids = node.getElementsByTagName("sourceproviderid");
+                 for (var j = 0; j < (sourceproviderids ? sourceproviderids.length : 0); j++) {
+                     const sourceproviderid = sourceproviderids[j].textContent;
+                     if (sourceproviderid == spotifySourceProviderID) {
+                         return node;
+                     }
+                 }
+             }
+             // Recurse
+             const found = findSpotifySource(node);
+             if (found) return found;
+         }
+         return null;
+     }
+
+     const spotifySource = findSpotifySource(doc);
+     client.assert(spotifySource !== null, "Spotify source not found in Marge for 'spotify-user-id'");
+
+     const id = spotifySource.getAttribute("id");
+     client.assert(id !== undefined && id !== "", "Spotify source ID missing");
+     client.global.set("spotify_source_id", id);
+
+     const secretType = spotifySource.getAttribute("secretType");
+     client.assert(secretType === "token_version_3", "Wrong secret type in Marge: " + secretType);
+ });
+ %}
+
+###
+
+# 5. Add a Spotify Preset
+# @name Update Preset
+POST {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/presets/1
+Content-Type: application/xml
+
+<preset id="1">
+    <name>Test Track</name>
+    <sourceid>{{spotify_source_id}}</sourceid>
+    <contentItemType>track</contentItemType>
+    <location>spotify:track:123</location>
+</preset>
+
+> {%
+ client.test("Preset added successfully", function() {
+     client.assert(response.status === 200, "Failed to update preset");
+ });
+ %}
+
+###
+
+# 6. Verify Preset in Marge
+# @name Get Presets
+GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/presets
+
+> {%
+ client.test("Verify preset content", function() {
+     const doc = response.body;
+     const spotifySourceProviderID = client.variables.environment.get("spotifyProviderID");
+
+     function findSpotifyPreset(parent) {
+         const children = parent.childNodes;
+         if (!children) return null;
+         for (var i = 0; i < children.length; i++) {
+             const node = children[i];
+             // Handle both uppercase and lowercase tag names just in case
+             const nodeName = node.nodeName ? node.nodeName.toLowerCase() : "";
+             if (nodeName === "preset") {
+                 // Check source provider inside the preset
+                 const providers = node.getElementsByTagName("sourceproviderid");
+                 for (var j = 0; j < (providers ? providers.length : 0); j++) {
+                     if (providers[j].textContent === spotifySourceProviderID) {
+                         return node;
+                     }
+                 }
+             }
+             // Recurse
+             const found = findSpotifyPreset(node);
+             if (found) return found;
+         }
+         return null;
+     }
+
+     const spotifyPreset = findSpotifyPreset(doc);
+     client.assert(spotifyPreset !== null, "Spotify preset not found in Marge for provider '" + spotifySourceProviderID + "'");
+
+     // Verify preset elements (flat structure)
+     function getTagContent(parent, tagName) {
+         const elements = parent.getElementsByTagName(tagName);
+         if (elements && elements.length > 0) return elements[0].textContent;
+         // Try case-insensitive fallback
+         const all = parent.getElementsByTagName("*");
+         for (var i = 0; i < all.length; i++) {
+             if (all[i].nodeName.toLowerCase() === tagName.toLowerCase()) return all[i].textContent;
+         }
+         return null;
+     }
+
+     client.assert(getTagContent(spotifyPreset, "contentItemType") === "track", "Wrong contentItemType");
+     client.assert(getTagContent(spotifyPreset, "location") === "spotify:track:123", "Wrong location");
+     client.assert(getTagContent(spotifyPreset, "name") === "Test Track", "Wrong name");
+
+     // Verify nested source info
+     const sources = spotifyPreset.getElementsByTagName("source");
+     var source = (sources && sources.length > 0) ? sources[0] : null;
+     if (!source) {
+         // Fallback search for 'Source'
+         const all = spotifyPreset.getElementsByTagName("*");
+         for (var i = 0; i < all.length; i++) {
+             if (all[i].nodeName.toLowerCase() === "source") {
+                 source = all[i];
+                 break;
+             }
+         }
+     }
+     client.assert(source !== null, "Missing nested source");
+
+     const credentials = source.getElementsByTagName("credential");
+     var credential = (credentials && credentials.length > 0) ? credentials[0] : null;
+     if (!credential) {
+         const all = source.getElementsByTagName("*");
+         for (var i = 0; i < all.length; i++) {
+             if (all[i].nodeName.toLowerCase() === "credential") {
+                 credential = all[i];
+                 break;
+             }
+         }
+     }
+     client.assert(credential !== null, "Missing source credential");
+     client.assert(credential.getAttribute("type") === "token_version_3", "Wrong credential type in preset");
+     client.assert(credential.textContent !== "", "Credential value (secret) missing");
+ });
+ %}
+
+###
+
+# 7. Token Refresh via Surrogate (Bose Secret)
+# Simulates the speaker requesting a fresh access token
+# @name Token Refresh
+POST {{host}}/oauth/device/{{deviceId}}/music/musicprovider/15/token/cs3
+Content-Type: application/json
+
+{
+  "grant_type": "refresh_token",
+  "refresh_token": "{{bose_secret}}"
+}
+
+> {%
+ client.test("Token refreshed successfully", function() {
+     client.assert(response.status === 200, "Refresh failed");
+     client.assert(response.body.access_token !== undefined, "No access token in response");
+     client.assert(response.body.token_type === "Bearer", "Wrong token type");
+ });
+ %}

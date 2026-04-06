@@ -119,6 +119,7 @@ test-http-client:
 		/workdir/spotify_registration.http \
 		/workdir/create_account.http \
 		/workdir/register_device.http \
+		/workdir/spotify_full_flow.http \
 		/workdir/customer_support.http \
 		/workdir/power_on.http \
 		/workdir/get_bmx_services.http \

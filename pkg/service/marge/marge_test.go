@@ -244,7 +244,7 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	}
 
 	// Global Sources
-	if !strings.Contains(xmlStr, `<source id="10863533" type="Audio" displayName="test-user">`) {
+	if !strings.Contains(xmlStr, `<source id="10863533" type="Audio" displayName="test-user" secretType="token_version_3">`) {
 		t.Errorf("Expected source tag with displayName attribute, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<name>test-user</name>`) {

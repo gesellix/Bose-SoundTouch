@@ -709,6 +709,7 @@ type FullResponseSource struct {
 	Username         string `json:"username" xml:"username"`
 	Account          string `json:"account,omitempty" xml:"account,attr,omitempty"`
 	SourceLabel      string `json:"source_label" xml:"-"`
+	SecretType       string `json:"secret_type,omitempty" xml:"secretType,attr,omitempty"`
 }
 
 // FullResponsePreset represents a preset specifically for the /full response.

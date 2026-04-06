@@ -17,23 +17,23 @@ User-Agent: Bose_Lisa/27.0.6
         client.assert(presets !== null, "Response body does not contain <presets>");
 
         const presetList = doc.getElementsByTagName("preset");
-        // Based on the flow: set_preset_6, get_presets, delete_preset_6, set_preset_5
+        // Based on the flow: spotify_full_flow, set_preset_6, get_presets, delete_preset_6, set_preset_5
         // The service is fresh, so only what we set is there.
-        client.assert(presetList.length === 1, "Response body should contain exactly one <preset>, but found " + presetList.length);
+        client.assert(presetList.length >= 2, "Response body should contain at least one <preset>, but found " + presetList.length);
 
-        const firstPreset = presetList[0];
-        client.assert(firstPreset.getAttribute("buttonNumber") === "6", "First preset should have buttonNumber=\"6\"");
+        const secondPreset = presetList[1];
+        client.assert(secondPreset.getAttribute("buttonNumber") === "6", "Second preset should have buttonNumber=\"6\"");
 
         // Check <name>
-        const name = firstPreset.getElementsByTagName("name")[0];
+        const name = secondPreset.getElementsByTagName("name")[0];
         client.assert(name.textContent === "SMOOTH JAZZ", "Preset name should be 'SMOOTH JAZZ'");
 
         // Check <location>
-        const location = firstPreset.getElementsByTagName("location")[0];
+        const location = secondPreset.getElementsByTagName("location")[0];
         client.assert(location.textContent === "/v1/playback/station/s166521", "Preset location mismatch");
 
         // Check <source> and its attributes/children
-        const source = firstPreset.getElementsByTagName("source")[0];
+        const source = secondPreset.getElementsByTagName("source")[0];
         client.assert(source !== null, "Preset should have a <source>");
         // The source ID is set in HandleMargeUpdatePreset based on matching source, or in UpdatePreset.
         // For TUNEIN it might be 10004 or similar in our mocks.
@@ -44,9 +44,9 @@ User-Agent: Bose_Lisa/27.0.6
         client.assert(sourceproviderid.textContent === "25", "sourceproviderid should be '25'");
 
         // Check <username> inside <preset> (not the one in <source> if present)
-        const presetUsernames = firstPreset.getElementsByTagName("username");
+        const presetUsernames = secondPreset.getElementsByTagName("username");
         // In the reference, there's one in <source> (empty) and one in <preset> (SMOOTH JAZZ)
-        // Usually, getElementsByTagName on firstPreset returns all descendants.
+        // Usually, getElementsByTagName on secondPreset returns all descendants.
         // Let's be careful about the index or use a more specific selector if possible,
         // but here we can check the values.
         let foundPresetUsername = false;
@@ -59,7 +59,7 @@ User-Agent: Bose_Lisa/27.0.6
         client.assert(foundPresetUsername, "Preset should have <username>SMOOTH JAZZ</username>");
 
         // Ensure <containerArt> is non-empty
-        const containerArt = firstPreset.getElementsByTagName("containerArt")[0];
+        const containerArt = secondPreset.getElementsByTagName("containerArt")[0];
         client.assert(containerArt.textContent.startsWith("https://"), "containerArt should be a valid URL");
     });
 %}

@@ -159,6 +159,16 @@ The app notifies the physical SoundTouch speaker about the new source. This is u
 
 ---
 
+## Implementation in SoundTouch-Service
+
+This project implements the "Bose-mediated token" flow as follows:
+
+1.  **Surrogate Secrets**: When a user links their Spotify account via `soundtouch-service`, the service generates a 32-character hex string (a "Bose Secret").
+2.  **Marge & LISA registration**: This secret is sent to the speaker and stored in the emulated Marge cloud as the `credential`. The raw Spotify refresh token never leaves the server.
+3.  **Token Refresh Proxy**: When the speaker needs a fresh Spotify `access_token`, it calls the `soundtouch-service` proxy (`/oauth/device/.../token/cs3`) providing this secret. The server maps the secret back to the actual Spotify account, performs the refresh with Spotify, and returns a fresh short-lived `access_token` to the speaker.
+
+---
+
 ## Placeholders and Constants
 
 | Placeholder       | Description                                         |

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
+	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -114,12 +115,61 @@ func (s *Server) HandleBoseSpotifyToken(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// We use the first linked account.
-	accessToken, _, err := svc.GetFreshToken()
-	if err != nil {
-		log.Printf("[Spotify Proxy] Failed to get fresh token: %v. Falling back to upstream", err)
-		s.HandleBoseProxy(w, r)
+	// However, if the request provides a "secret" (which we use as our Bose surrogate token),
+	// we should use that to find the specific account.
+	var (
+		account     *spotify.Account
+		accessToken string
+		userID      string
+	)
 
-		return
+	// Spotify registration/refresh often passes the secret in the body as "refresh_token"
+	// or in the registration flow as "code".
+	body, _ := io.ReadAll(r.Body)
+	_ = r.Body.Close()
+
+	var tokenReq struct {
+		RefreshToken string `json:"refresh_token"`
+		GrantType    string `json:"grant_type"`
+		Code         string `json:"code"`
+	}
+
+	_ = json.Unmarshal(body, &tokenReq)
+
+	secret := tokenReq.RefreshToken
+	if secret == "" {
+		secret = tokenReq.Code
+	}
+
+	if secret != "" {
+		if acc, ok := svc.GetAccountBySecret(secret); ok {
+			account = acc
+			log.Printf("[Spotify Proxy] Found account for secret %s: %s", secret, acc.UserID)
+		}
+	}
+
+	if account != nil {
+		if err := svc.RefreshAccessToken(account); err != nil {
+			log.Printf("[Spotify Proxy] Failed to refresh token for %s: %v. Falling back to upstream", account.UserID, err)
+			s.HandleBoseProxy(w, r)
+
+			return
+		}
+
+		accessToken = account.AccessToken
+	} else {
+		// Fallback to first account for backward compatibility or when secret is missing
+		var err error
+
+		accessToken, userID, err = svc.GetFreshToken()
+		if err != nil {
+			log.Printf("[Spotify Proxy] Failed to get fresh token: %v. Falling back to upstream", err)
+			s.HandleBoseProxy(w, r)
+
+			return
+		}
+
+		log.Printf("[Spotify Proxy] Using default account %s", userID)
 	}
 
 	// Format response as expected by Bose firmware.

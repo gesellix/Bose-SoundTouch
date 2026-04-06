@@ -3,6 +3,8 @@
 package spotify
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,6 +37,7 @@ type Account struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
+	BoseSecret   string `json:"bose_secret,omitempty"`
 }
 
 // Service manages Spotify OAuth flow and token lifecycle.
@@ -121,6 +124,9 @@ func (s *Service) ExchangeCodeAndStore(code string) error {
 	displayName, _ := profile["display_name"].(string)
 	email, _ := profile["email"].(string)
 
+	// Generate a Bose surrogate secret (represented as a 32-char hex string)
+	boseSecret := s.generateBoseSecret()
+
 	account := &Account{
 		UserID:       userID,
 		DisplayName:  displayName,
@@ -128,6 +134,7 @@ func (s *Service) ExchangeCodeAndStore(code string) error {
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresAt:    time.Now().Unix() + int64(expiresIn),
+		BoseSecret:   boseSecret,
 	}
 
 	s.mu.Lock()
@@ -320,11 +327,36 @@ func (s *Service) GetAccounts() []Account {
 			DisplayName: a.DisplayName,
 			Email:       a.Email,
 			ExpiresAt:   a.ExpiresAt,
+			BoseSecret:  a.BoseSecret,
 			// AccessToken and RefreshToken deliberately omitted
 		})
 	}
 
 	return result
+}
+
+// GetAccountBySecret retrieves a Spotify account by its Bose surrogate secret.
+func (s *Service) GetAccountBySecret(secret string) (*Account, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, a := range s.accounts {
+		if a.BoseSecret == secret {
+			return a, true
+		}
+	}
+
+	return nil, false
+}
+
+func (s *Service) generateBoseSecret() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based if RNG fails
+		return fmt.Sprintf("bs-%d", time.Now().UnixNano())
+	}
+
+	return hex.EncodeToString(b)
 }
 
 // ResolveEntity resolves a Spotify URI to a name and image URL.

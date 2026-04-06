@@ -751,6 +751,7 @@ func mapToFullResponseSource(s models.ConfiguredSource) models.FullResponseSourc
 		SourceSettings:   "",
 		UpdatedOn:        s.UpdatedOn,
 		Username:         s.Username,
+		SecretType:       s.SecretType,
 	}
 
 	mapToFullResponseCredential(s, &fullSource)
@@ -1112,7 +1113,11 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 
 	var matchingSrc *models.ConfiguredSource
 
+	log.Printf("[Marge] Searching for source matching ID=%s in %d sources", newPresetElem.SourceID, len(sources))
+
 	for i := range sources {
+		log.Printf("[Marge]   Source[%d]: ID=%s, Type=%s, SourceKeyType=%s, SourceKeyAccount=%s", i, sources[i].ID, sources[i].Type, sources[i].SourceKeyType, sources[i].SourceKeyAccount)
+
 		if sources[i].ID == newPresetElem.SourceID {
 			matchingSrc = &sources[i]
 			break
@@ -1120,7 +1125,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	}
 
 	if matchingSrc == nil {
-		if newPresetElem.SourceID == "INTERNET_RADIO" || newPresetElem.SourceID == "TUNEIN" {
+		if newPresetElem.SourceID == "INTERNET_RADIO" || newPresetElem.SourceID == "TUNEIN" || newPresetElem.SourceID == "SPOTIFY" {
 			// Find by SourceKeyType instead of ID if it's a default source
 			for i := range sources {
 				if sources[i].SourceKeyType == newPresetElem.SourceID {
@@ -1180,6 +1185,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 				Value string `xml:",chardata"`
 			} `xml:"credential"`
 		}{
+			ID:         matchingSrc.ID,
 			SourceName: newPresetElem.Name,
 		},
 	})
@@ -1238,6 +1244,15 @@ func syncMatchingSource(matchingSrc *models.ConfiguredSource, input recentInput)
 	if matchingSrc == nil {
 		return
 	}
+
+	if input.Source.ID != "" {
+		matchingSrc.ID = input.Source.ID
+	}
+
+	if input.Source.Type != "" {
+		matchingSrc.Type = input.Source.Type
+	}
+
 	// Ensure we use the latest secret from the input if it was just learned/updated
 	if input.Source.Credential.Value != "" {
 		matchingSrc.Secret = input.Source.Credential.Value

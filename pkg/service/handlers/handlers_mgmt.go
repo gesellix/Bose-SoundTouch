@@ -227,7 +227,14 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 		log.Printf("[Spotify Bridge] Registering Spotify user %s in Marge for account %s", acc.UserID, accountID)
 
 		// 1. Register in Marge (updates configuredsources.xml for all devices in the account)
-		_, err := marge.AddSource(s.ds, accountID, acc.UserID, "15", acc.AccessToken, "token_version_3", acc.DisplayName)
+		// We use the BoseSecret as the credential instead of the AccessToken
+		credential := acc.BoseSecret
+		if credential == "" {
+			// Fallback to AccessToken if BoseSecret is not available (for old accounts)
+			credential = acc.AccessToken
+		}
+
+		_, err := marge.AddSource(s.ds, accountID, acc.UserID, "15", credential, "token_version_3", acc.DisplayName)
 		if err != nil {
 			log.Printf("[Spotify Bridge] Failed to register source in Marge: %v", err)
 			continue
@@ -240,7 +247,7 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 			continue
 		}
 
-		creds := models.NewSpotifyOAuthCredentials(acc.UserID, acc.AccessToken, acc.DisplayName)
+		creds := models.NewSpotifyOAuthCredentials(acc.UserID, credential, acc.DisplayName)
 
 		for i := range allDevices {
 			dev := &allDevices[i]

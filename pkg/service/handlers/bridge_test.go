@@ -122,4 +122,54 @@ func TestSpotifyBridge(t *testing.T) {
 	if !speakerReceived {
 		t.Errorf("Speaker did not receive /setMusicServiceOAuthAccount notification")
 	}
+
+	// 3. Verify Token Refresh via Surrogate
+	// Now simulate the speaker asking for a fresh token using the surrogate secret it received.
+	// We need to find the surrogate first.
+	sources, _ = ds.GetConfiguredSources("acc123", "DEV123")
+	var surrogate string
+	for _, src := range sources {
+		if src.SourceKey.Type == "SPOTIFY" {
+			surrogate = src.Secret
+			break
+		}
+	}
+
+	if surrogate == "" {
+		t.Fatal("Could not find surrogate token in Marge sources")
+	}
+
+	if len(surrogate) != 32 {
+		t.Errorf("Expected surrogate to be 32 hex chars, got %s", surrogate)
+	}
+
+	// Request refresh
+	refreshReqBody := map[string]string{
+		"grant_type":    "refresh_token",
+		"refresh_token": surrogate,
+	}
+	body, err := json.Marshal(refreshReqBody)
+	if err != nil {
+		t.Fatalf("Failed to marshal refresh request: %v", err)
+	}
+
+	refreshReq := httptest.NewRequest("POST", "/oauth/device/DEV123/music/musicprovider/15/token/cs3", strings.NewReader(string(body)))
+	refreshW := httptest.NewRecorder()
+
+	// Need to register the route for testing
+	r.Post("/oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3", server.HandleBoseToken)
+	r.ServeHTTP(refreshW, refreshReq)
+
+	if refreshW.Code != http.StatusOK {
+		t.Fatalf("Token refresh failed: %d: %s", refreshW.Code, refreshW.Body.String())
+	}
+
+	var refreshResp map[string]interface{}
+	if err := json.Unmarshal(refreshW.Body.Bytes(), &refreshResp); err != nil {
+		t.Fatalf("Failed to parse refresh response: %v", err)
+	}
+
+	if refreshResp["access_token"] != "access-123" {
+		t.Errorf("Expected access_token 'access-123', got '%v'", refreshResp["access_token"])
+	}
 }
