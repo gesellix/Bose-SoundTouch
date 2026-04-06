@@ -1009,7 +1009,11 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		CreatedOn        string `xml:"createdOn,attr,omitempty"`
 		UpdatedOn        string `xml:"updatedOn,attr,omitempty"`
 		SourceProviderID string `xml:"sourceproviderid,attr,omitempty"`
-		SourceKey        struct {
+		Credential       struct {
+			Type  string `xml:"type,attr"`
+			Value string `xml:",chardata"`
+		} `xml:"credential,omitempty"`
+		SourceKey struct {
 			Type    string `xml:"type,attr"`
 			Account string `xml:"account,attr"`
 		} `xml:"sourceKey"`
@@ -1039,7 +1043,16 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		s.SourceKey.Type = ps.SourceKey.Type
 		s.SourceKey.Account = ps.SourceKey.Account
 
-		// Ensure Secret/SecretType values are prioritized from legacy fields
+		// Prioritize Credential element if present, otherwise use secret/secretType attributes
+		if ps.Credential.Value != "" {
+			s.Secret = ps.Credential.Value
+			s.SecretType = ps.Credential.Type
+		} else {
+			s.Secret = ps.Secret
+			s.SecretType = ps.SecretType
+		}
+
+		// Ensure Secret/SecretType values are prioritized from legacy fields if still missing
 		if s.Secret == "" && s.Credential.Value != "" {
 			s.Secret = s.Credential.Value
 		}
@@ -1089,7 +1102,11 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 		CreatedOn        string `xml:"createdOn,attr,omitempty"`
 		UpdatedOn        string `xml:"updatedOn,attr,omitempty"`
 		SourceProviderID string `xml:"sourceproviderid,attr,omitempty"`
-		SourceKey        struct {
+		Credential       struct {
+			Type  string `xml:"type,attr"`
+			Value string `xml:",chardata"`
+		} `xml:"credential,omitempty"`
+		SourceKey struct {
 			Type    string `xml:"type,attr"`
 			Account string `xml:"account,attr"`
 		} `xml:"sourceKey"`
@@ -1117,6 +1134,15 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 			CreatedOn:        s.CreatedOn,
 			UpdatedOn:        s.UpdatedOn,
 			SourceProviderID: s.SourceProviderID,
+		}
+
+		// Save to Credential element as well for parity with official Bose format
+		if s.Secret != "" {
+			persistSources[i].Credential.Value = s.Secret
+			persistSources[i].Credential.Type = s.SecretType
+		} else if s.Credential.Value != "" {
+			persistSources[i].Credential.Value = s.Credential.Value
+			persistSources[i].Credential.Type = s.Credential.Type
 		}
 
 		if persistSources[i].Secret == "" && s.Credential.Value != "" {

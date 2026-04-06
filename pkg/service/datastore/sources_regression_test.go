@@ -37,6 +37,7 @@ func TestSaveSources_Format(t *testing.T) {
 		{
 			DisplayName: "user@example.com",
 			Secret:      "dummy-token-spotify",
+			SecretType:  "token_version_3",
 			SourceKey: struct {
 				Type    string `xml:"type,attr"`
 				Account string `xml:"account,attr"`
@@ -66,11 +67,16 @@ func TestSaveSources_Format(t *testing.T) {
 		t.Errorf("First sourceKey incorrect. Got: %s", xmlContent)
 	}
 
+	// Check for credential element (new format)
+	if !strings.Contains(xmlContent, `<credential type="token_version_3">dummy-token-spotify</credential>`) {
+		t.Errorf("Spotify source missing <credential> element. Got: %s", xmlContent)
+	}
+
 	// Check for third source (Spotify)
 	if !strings.Contains(xmlContent, `displayName="user@example.com"`) {
 		t.Errorf("Spotify source missing displayName. Got: %s", xmlContent)
 	}
-	if !strings.Contains(xmlContent, `secret="dummy-token-spotify" secretType="">`) {
+	if !strings.Contains(xmlContent, `secret="dummy-token-spotify" secretType="token_version_3">`) {
 		t.Errorf("Spotify source missing secret. Got: %s", xmlContent)
 	}
 	if !strings.Contains(xmlContent, `<sourceKey type="SPOTIFY" account="test-user" />`) &&

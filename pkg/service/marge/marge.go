@@ -703,7 +703,9 @@ func mapToFullResponseCredential(s models.ConfiguredSource, fullSource *models.F
 	if s.Credential.Value != "" {
 		fullSource.Credential.Value = s.Credential.Value
 		fullSource.Credential.Type = s.Credential.Type
-	} else if s.Secret != "" {
+	}
+
+	if fullSource.Credential.Value == "" && s.Secret != "" {
 		fullSource.Credential.Value = s.Secret
 		fullSource.Credential.Type = s.SecretType
 	}
@@ -784,7 +786,7 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 
 		for j := range sources {
 			s := sources[j]
-			if s.ID == p.SourceID || s.SourceKeyType == p.Source {
+			if s.ID == p.SourceID || (s.SourceKeyType == p.Source && (p.SourceAccount == "" || s.SourceKeyAccount == p.SourceAccount)) {
 				// Use a new variable to avoid pointer-to-iterator-variable bug
 				copySource := s
 				PrepareConfiguredSource(&copySource)
@@ -831,7 +833,7 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 
 		for j := range sources {
 			s := sources[j]
-			if s.ID == r.SourceID || s.SourceKeyType == r.Source {
+			if s.ID == r.SourceID || (s.SourceKeyType == r.Source && (r.SourceAccount == "" || s.SourceKeyAccount == r.SourceAccount)) {
 				// Use a new variable to avoid pointer-to-iterator-variable bug
 				copySource := s
 				PrepareConfiguredSource(&copySource)
