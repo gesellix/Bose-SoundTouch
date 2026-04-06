@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -97,7 +98,7 @@ func (s *Server) HandleMgmtDeviceEvents(w http.ResponseWriter, r *http.Request) 
 }
 
 // HandleMgmtSpotifyInit starts the Spotify OAuth flow by returning an authorization URL.
-func (s *Server) HandleMgmtSpotifyInit(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) HandleMgmtSpotifyInit(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	svc := s.spotifyService
 	s.mu.RUnlock()
@@ -107,7 +108,8 @@ func (s *Server) HandleMgmtSpotifyInit(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	redirectURL := svc.BuildAuthorizeURL()
+	state := r.URL.Query().Get("account")
+	redirectURL := svc.BuildAuthorizeURL(state)
 
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
@@ -163,7 +165,12 @@ func (s *Server) HandleMgmtSpotifyCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Register account in Marge and notify speakers
-	s.bridgeSpotifyToMarge(r.URL.Query().Get("account"))
+	accountID := r.URL.Query().Get("account")
+	if accountID == "" {
+		accountID = r.URL.Query().Get("state")
+	}
+
+	s.bridgeSpotifyToMarge(accountID)
 
 	w.Header().Set("Content-Type", "text/html")
 	_, _ = w.Write([]byte(`<html><body><h1>Spotify Connected</h1><p>You can close this window.</p></body></html>`))
@@ -196,7 +203,12 @@ func (s *Server) HandleMgmtSpotifyConfirm(w http.ResponseWriter, r *http.Request
 	}
 
 	// Register account in Marge and notify speakers
-	s.bridgeSpotifyToMarge(r.URL.Query().Get("account"))
+	accountID := r.URL.Query().Get("account")
+	if accountID == "" {
+		accountID = r.URL.Query().Get("state")
+	}
+
+	s.bridgeSpotifyToMarge(accountID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -247,8 +259,6 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 			continue
 		}
 
-		creds := models.NewSpotifyOAuthCredentials(acc.UserID, credential, acc.DisplayName)
-
 		for i := range allDevices {
 			dev := &allDevices[i]
 			if dev.AccountID != accountID && accountID != "default" {
@@ -263,8 +273,47 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 				log.Printf("[Spotify Bridge] Notifying speaker %s (%s) about new Spotify account", d.Name, d.IPAddress)
 
 				c := client.NewClientFromHost(d.IPAddress)
+				creds := models.NewSpotifyOAuthCredentials(acc.UserID, credential, acc.DisplayName)
+
 				if err := c.SetMusicServiceOAuthAccount(creds); err != nil {
-					log.Printf("[Spotify Bridge] Failed to notify speaker %s: %v", d.Name, err)
+					log.Printf("[Spotify Bridge] Failed to notify speaker %s via OAuth: %v", d.Name, err)
+
+					// Fallback if OAuth is not supported (Error 1029)
+					errs := &models.ErrorsResponse{}
+					if errors.As(err, &errs) {
+						isUnsupported := false
+
+						for _, e := range errs.Errors {
+							if e.Value == 1029 {
+								isUnsupported = true
+								break
+							}
+						}
+
+						if isUnsupported {
+							log.Printf("[Spotify Bridge] Speaker %s doesn't support OAuth, falling back to Marge sync notification", d.Name)
+
+							// Some speakers (especially Stockholm-based) don't support /setMusicServiceOAuthAccount
+							// via LISA but will pick up the new source from Marge if notified.
+							if err := c.NotifySourcesUpdated(d.DeviceID); err != nil {
+								log.Printf("[Spotify Bridge] Sync notification failed for speaker %s: %v", d.Name, err)
+
+								// Final fallback to legacy account creation
+								log.Printf("[Spotify Bridge] Falling back to legacy account creation for speaker %s", d.Name)
+
+								legacyCreds := models.NewSpotifyCredentials(acc.UserID, credential)
+								if err := c.SetMusicServiceAccount(legacyCreds); err != nil {
+									log.Printf("[Spotify Bridge] Legacy fallback failed for speaker %s: %v", d.Name, err)
+								} else {
+									log.Printf("[Spotify Bridge] Legacy fallback successful for speaker %s", d.Name)
+								}
+							} else {
+								log.Printf("[Spotify Bridge] Sync notification successful for speaker %s", d.Name)
+							}
+
+							return
+						}
+					}
 				} else {
 					log.Printf("[Spotify Bridge] Successfully notified speaker %s", d.Name)
 				}

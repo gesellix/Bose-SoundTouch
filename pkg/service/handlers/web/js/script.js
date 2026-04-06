@@ -492,7 +492,9 @@ async function fetchAccountDetails(accountId) {
     if (!accountId) return;
     const metadataEl = document.getElementById("account-metadata");
     const devicesEl = document.getElementById("account-devices-list");
+    const regStatus = document.getElementById("spotify-reg-status");
 
+    if (regStatus) regStatus.innerText = "";
     if (metadataEl) metadataEl.innerHTML = "Loading...";
     if (devicesEl) devicesEl.innerHTML = "Loading devices...";
 
@@ -758,6 +760,50 @@ async function fetchAccountDetails(accountId) {
     } catch (error) {
         if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Error: ${error.message}</span>`;
         console.error("Failed to fetch account details", error);
+    }
+}
+
+async function connectSpotifyToAccount() {
+    const selector = document.getElementById("account-selector");
+    const accountId = selector ? selector.value : "default";
+    const statusEl = document.getElementById("spotify-reg-status");
+
+    if (statusEl) statusEl.innerHTML = "Initializing Spotify authorization...";
+
+    try {
+        const response = await fetch(`/mgmt/spotify/init?account=${encodeURIComponent(accountId)}`, {
+            method: "POST"
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || response.statusText);
+        }
+
+        const data = await response.json();
+        const redirectUrl = data.redirectUrl;
+
+        if (statusEl) {
+            statusEl.innerHTML = `Spotify authorization window opened. <br/>If it didn't open, <a href="${redirectUrl}" target="_blank">click here to authorize</a>.`;
+        }
+
+        // Open Spotify auth in a new window
+        window.open(redirectUrl, "SpotifyAuth", "width=600,height=800");
+
+        // Simple poll to see when we might be done (refresh every 5s for 5 mins)
+        let pollCount = 0;
+        const interval = setInterval(async () => {
+            pollCount++;
+            if (pollCount > 60) {
+                clearInterval(interval);
+                return;
+            }
+            // Refresh account details to see if source appeared
+            await fetchAccountDetails(accountId);
+        }, 5000);
+
+    } catch (error) {
+        if (statusEl) statusEl.innerHTML = `<span style="color:red">Error: ${error.message}</span>`;
+        console.error("Spotify link failed", error);
     }
 }
 

@@ -14,7 +14,8 @@ import (
 func TestBuildAuthorizeURL(t *testing.T) {
 	svc := NewSpotifyService("test-client-id", "test-secret", "http://localhost/callback", t.TempDir())
 
-	url := svc.BuildAuthorizeURL()
+	state := "test-state"
+	url := svc.BuildAuthorizeURL(state)
 
 	if !strings.Contains(url, "client_id=test-client-id") {
 		t.Errorf("URL should contain client_id, got: %s", url)
@@ -27,6 +28,9 @@ func TestBuildAuthorizeURL(t *testing.T) {
 	}
 	if !strings.Contains(url, "response_type=code") {
 		t.Errorf("URL should contain response_type=code, got: %s", url)
+	}
+	if !strings.Contains(url, "state=test-state") {
+		t.Errorf("URL should contain state=test-state, got: %s", url)
 	}
 	if !strings.HasPrefix(url, SpotifyAuthorizeURL) {
 		t.Errorf("URL should start with %s, got: %s", SpotifyAuthorizeURL, url)

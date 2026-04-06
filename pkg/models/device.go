@@ -36,6 +36,22 @@ type NetworkInfo struct {
 	IPAddress  string `xml:"ipAddress"`
 }
 
+// SourcesUpdatedNotification represents the notification XML sent to the device
+type SourcesUpdatedNotification struct {
+	XMLName  xml.Name `xml:"updates"`
+	DeviceID string   `xml:"deviceID,attr"`
+	Sources  struct {
+		XMLName xml.Name `xml:"sourcesUpdated"`
+	} `xml:"sourcesUpdated"`
+}
+
+// NewSourcesUpdatedNotification creates a new sources updated notification
+func NewSourcesUpdatedNotification(deviceID string) *SourcesUpdatedNotification {
+	return &SourcesUpdatedNotification{
+		DeviceID: deviceID,
+	}
+}
+
 // XMLResponse is a generic wrapper for API responses
 type XMLResponse struct {
 	XMLName xml.Name
@@ -51,6 +67,29 @@ type APIError struct {
 // Error implements the error interface
 func (e *APIError) Error() string {
 	return e.Message
+}
+
+// ErrorsResponse represents a multi-error response from the API (common in some firmware versions)
+type ErrorsResponse struct {
+	XMLName  xml.Name      `xml:"errors"`
+	DeviceID string        `xml:"deviceID,attr"`
+	Errors   []DeviceError `xml:"error"`
+}
+
+// Error implements the error interface for ErrorsResponse
+func (e *ErrorsResponse) Error() string {
+	if len(e.Errors) > 0 {
+		return e.Errors[0].Message
+	}
+
+	return "unknown API error"
+}
+
+// DeviceError represents a single error in an ErrorsResponse
+type DeviceError struct {
+	Value   int    `xml:"value,attr"`
+	Name    string `xml:"name,attr"`
+	Message string `xml:",chardata"`
 }
 
 // DiscoveredDevice represents a device found through network discovery

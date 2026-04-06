@@ -14,34 +14,35 @@ import (
 
 func TestHandleMgmtSpotifyInit(t *testing.T) {
 	s := NewServer(nil, nil, "http://localhost", false, false, false)
-	// No spotify service configured
-	req := httptest.NewRequest("POST", "/mgmt/spotify/init", nil)
-	w := httptest.NewRecorder()
-	s.HandleMgmtSpotifyInit(w, req)
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("expected 503, got %d", w.Code)
-	}
+	t.Run("POST - No spotify service configured", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/mgmt/spotify/init", nil)
+		w := httptest.NewRecorder()
+		s.HandleMgmtSpotifyInit(w, req)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Errorf("expected 503, got %d", w.Code)
+		}
+	})
 
 	// With spotify service
 	svc := spotify.NewSpotifyService("cid", "secret", "http://localhost/cb", t.TempDir())
 	s.SetSpotifyService(svc)
 
-	w = httptest.NewRecorder()
-	s.HandleMgmtSpotifyInit(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	var resp map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.Contains(resp["redirectUrl"], "client_id=cid") {
-		t.Errorf("expected redirectUrl to contain client_id=cid, got %s", resp["redirectUrl"])
-	}
+	t.Run("POST - Success", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/mgmt/spotify/init", nil)
+		w := httptest.NewRecorder()
+		s.HandleMgmtSpotifyInit(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(resp["redirectUrl"], "client_id=cid") {
+			t.Errorf("expected redirectUrl to contain client_id=cid, got %s", resp["redirectUrl"])
+		}
+	})
 }
 
 func TestHandleMgmtSpotifyAccounts(t *testing.T) {

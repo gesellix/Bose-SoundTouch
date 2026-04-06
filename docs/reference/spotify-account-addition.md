@@ -121,15 +121,14 @@ curl -X POST "https://streaming.bose.com/streaming/account/[ACCOUNT_ID]/source" 
 
 ---
 
-## 3. Local Device Notification (LISA API)
+### Local Device Sync (LISA API)
 
 The app notifies the physical SoundTouch speaker about the new source. This is usually done via the device's management API on port 8090.
 
-### Request Details
+#### Modern Flow (OAuth)
 - **Endpoint**: `http://[DEVICE_IP]:8090/setMusicServiceOAuthAccount`
 - **Method**: `POST`
-
-### Payload (XML)
+- **Payload**:
 ```xml
 <OAuthCredentials source="SPOTIFY" displayName="[DISPLAY_NAME]">
     <user>[SPOTIFY_USER_ID]</user>
@@ -138,23 +137,27 @@ The app notifies the physical SoundTouch speaker about the new source. This is u
 </OAuthCredentials>
 ```
 
-**Note**: In some cases, the app sends a wrapped message format if communicating over WebSockets:
+#### Marge-Sync Notification (Fall-back)
+If the speaker returns `1029 UNKNOWN_ACTION_ERROR`, it signifies the LISA API version is too old for the OAuth flow. Stockholm-based firmware often expects the account to be registered in Marge first, followed by a notification to sync.
+- **Endpoint**: `http://[DEVICE_IP]:8090/notification`
+- **Method**: `POST`
+- **Payload**:
 ```xml
-<msg>
-    <header deviceID="[DEVICE_UID]" url="setMusicServiceOAuthAccount" method="POST">
-        <request requestID="1">
-            <info type="new" />
-            <sourceItem source="SPOTIFY" />
-        </request>
-    </header>
-    <body>
-        <OAuthCredentials source="SPOTIFY" displayName="[NAME]">
-            <user>[USER]</user>
-            <code>[TOKEN]</code>
-            <version>token_version_3</version>
-        </OAuthCredentials>
-    </body>
-</msg>
+<updates deviceID="[DEVICE_UID]">
+    <sourcesUpdated></sourcesUpdated>
+</updates>
+```
+
+#### Legacy Flow (Fall-back)
+For older firmware that doesn't use Marge for Spotify:
+- **Endpoint**: `http://[DEVICE_IP]:8090/setMusicServiceAccount`
+- **Method**: `POST`
+- **Payload**:
+```xml
+<credentials source="SPOTIFY" displayName="Spotify Premium">
+    <user>[USER]</user>
+    <pass>[TOKEN]</pass>
+</credentials>
 ```
 
 ---

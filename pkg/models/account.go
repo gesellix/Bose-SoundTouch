@@ -141,7 +141,13 @@ type MusicServiceAccountResponse struct {
 	Status  string   `xml:",chardata"`
 }
 
+// SourcesUpdatedResponse represents the response from /notification
+type SourcesUpdatedResponse struct {
+	XMLName xml.Name `xml:"status"`
+	Status  string   `xml:",chardata"`
+}
+
 // IsSuccess returns true if the account operation was successful
 func (resp *MusicServiceAccountResponse) IsSuccess() bool {
-	return resp.Status == "/setMusicServiceAccount" || resp.Status == "/removeMusicServiceAccount"
+	return resp.Status == "/setMusicServiceAccount" || resp.Status == "/removeMusicServiceAccount" || resp.Status == "/notification"
 }

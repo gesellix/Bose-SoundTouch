@@ -1157,6 +1157,19 @@ func (c *Client) post(endpoint string, payload interface{}) error {
 
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
+
+		// Try to parse as ErrorsResponse (speaker error format)
+		var errs models.ErrorsResponse
+		if xmlErr := xml.Unmarshal(responseBody, &errs); xmlErr == nil && len(errs.Errors) > 0 {
+			return &errs
+		}
+
+		// Try to parse as APIError (standard format)
+		var apiError models.APIError
+		if xmlErr := xml.Unmarshal(responseBody, &apiError); xmlErr == nil && apiError.Message != "" {
+			return &apiError
+		}
+
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
@@ -1201,6 +1214,19 @@ func (c *Client) postWithResponse(endpoint string, payload, result interface{}) 
 
 	if resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
+
+		// Try to parse as ErrorsResponse (speaker error format)
+		var errs models.ErrorsResponse
+		if xmlErr := xml.Unmarshal(responseBody, &errs); xmlErr == nil && len(errs.Errors) > 0 {
+			return &errs
+		}
+
+		// Try to parse as APIError (standard format)
+		var apiError models.APIError
+		if xmlErr := xml.Unmarshal(responseBody, &apiError); xmlErr == nil && apiError.Message != "" {
+			return &apiError
+		}
+
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
@@ -1213,6 +1239,11 @@ func (c *Client) postWithResponse(endpoint string, payload, result interface{}) 
 		// Parse the actual response first
 		if err := xml.Unmarshal(responseBody, result); err != nil {
 			// Check if it might be an API error response instead
+			var errs models.ErrorsResponse
+			if xmlErr := xml.Unmarshal(responseBody, &errs); xmlErr == nil && len(errs.Errors) > 0 {
+				return &errs
+			}
+
 			var apiError models.APIError
 			if xmlErr := xml.Unmarshal(responseBody, &apiError); xmlErr == nil && apiError.Message != "" {
 				return &apiError
@@ -1948,6 +1979,24 @@ func (c *Client) SetMusicServiceOAuthAccount(credentials *models.OAuthCredential
 	// The speaker returns /setMusicServiceOAuthAccount on success
 	if response.Status != "/setMusicServiceOAuthAccount" {
 		return fmt.Errorf("music service OAuth account operation failed: unexpected response %s", response.Status)
+	}
+
+	return nil
+}
+
+// NotifySourcesUpdated notifies the device that sources have been updated in Marge
+func (c *Client) NotifySourcesUpdated(deviceID string) error {
+	notification := models.NewSourcesUpdatedNotification(deviceID)
+
+	var response models.MusicServiceAccountResponse
+
+	err := c.postWithResponse("/notification", notification, &response)
+	if err != nil {
+		return fmt.Errorf("failed to send sources updated notification: %w", err)
+	}
+
+	if response.Status != "/notification" {
+		return fmt.Errorf("sources updated notification failed: unexpected response %s", response.Status)
 	}
 
 	return nil

@@ -1463,6 +1463,21 @@
             <div id="account-metadata">Loading...</div>
         </div>
 
+        <div id="spotify-registration-container" class="summary-box" style="margin-top: 20px;">
+            <h3>Spotify Integration</h3>
+            <p style="font-size: 0.9em; color: #555;">
+                Register a new Spotify source for this local account. This mimics the official SoundTouch app flow:
+            </p>
+            <ol style="font-size: 0.85em; color: #555; margin-bottom: 15px;">
+                <li>Exchange OAuth code for a Bose-mediated token.</li>
+                <li>Register the source in the local Marge cloud profile.</li>
+            </ol>
+            <button id="connect-spotify-account-btn" onclick="connectSpotifyToAccount()" style="background: #1db954; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                Connect Spotify to this Account
+            </button>
+            <div id="spotify-reg-status" style="margin-top: 10px; font-size: 0.9em;"></div>
+        </div>
+
         <div id="account-devices-container">
             <h3>Connected Devices</h3>
             <div id="account-devices-list">Select an account to view devices.</div>

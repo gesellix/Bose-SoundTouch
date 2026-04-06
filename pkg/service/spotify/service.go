@@ -86,12 +86,15 @@ func (s *Service) SetEndpoints(tokenURL, apiBase string) {
 }
 
 // BuildAuthorizeURL constructs the Spotify OAuth authorization URL.
-func (s *Service) BuildAuthorizeURL() string {
+func (s *Service) BuildAuthorizeURL(state string) string {
 	params := url.Values{
 		"client_id":     {s.clientID},
 		"response_type": {"code"},
 		"redirect_uri":  {s.redirectURI},
 		"scope":         {SpotifyScopes},
+	}
+	if state != "" {
+		params.Set("state", state)
 	}
 
 	return SpotifyAuthorizeURL + "?" + params.Encode()
