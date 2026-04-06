@@ -25,12 +25,12 @@ Authorization: Basic admin change_me!
      client.assert(response.body.accounts.length > 0, "No accounts found");
      var found = false;
      for (var i = 0; i < response.body.accounts.length; i++) {
-         if (response.body.accounts[i].user_id === "mock-user-id") {
+         if (response.body.accounts[i].user_id === "spotify-user-id") {
              found = true;
-             client.assert(response.body.accounts[i].display_name === "Mock User", "Display name mismatch");
+             client.assert(response.body.accounts[i].display_name === "Spotify Test User", "Display name mismatch");
              break;
          }
      }
-     client.assert(found, "Account 'mock-user-id' not found in " + JSON.stringify(response.body.accounts));
+     client.assert(found, "Account 'spotify-user-id' not found in " + JSON.stringify(response.body.accounts));
  });
  %}

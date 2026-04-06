@@ -23,7 +23,7 @@ Content-Type: application/json
 
     client.test("Response body has expected structure", function() {
         client.assert(response.body.hasOwnProperty("access_token"), "Response body missing 'access_token'");
-        client.assert(response.body.access_token === "mock-access-token", "access_token is not 'mock-access-token'");
+        client.assert(response.body.access_token === "spotify-access-token", "access_token is not 'spotify-access-token'");
 
         client.assert(response.body.hasOwnProperty("expires_in"), "Response body missing 'expires_in'");
         client.assert(typeof response.body.expires_in === "number", "expires_in is not a number");

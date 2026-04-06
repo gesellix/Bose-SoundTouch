@@ -39,10 +39,10 @@ func HandleToken(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Spotify Mock] Grant type: %s", grantType)
 
 	resp := map[string]interface{}{
-		"access_token":  "mock-access-token",
+		"access_token":  "spotify-access-token",
 		"token_type":    "Bearer",
 		"expires_in":    3600,
-		"refresh_token": "mock-refresh-token",
+		"refresh_token": "spotify-refresh-token",
 		"scope":         "user-read-private user-read-email",
 	}
 
@@ -76,16 +76,16 @@ func HandleMe(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Spotify Mock] Profile request: %s", r.Method)
 
 	auth := r.Header.Get("Authorization")
-	if auth != "Bearer mock-access-token" {
+	if auth != "Bearer spotify-access-token" {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
 	resp := map[string]interface{}{
-		"id":           "mock-user-id",
-		"display_name": "Mock User",
-		"email":        "mock@example.com",
-		"uri":          "spotify:user:mock-user-id",
+		"id":           "spotify-user-id",
+		"display_name": "Spotify Test User",
+		"email":        "spotify-test@example.com",
+		"uri":          "spotify:user:spotify-user-id",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
