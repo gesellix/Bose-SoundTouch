@@ -7,6 +7,9 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gesellix/bose-soundtouch/pkg/client"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -159,6 +162,9 @@ func (s *Server) HandleMgmtSpotifyCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Register account in Marge and notify speakers
+	s.bridgeSpotifyToMarge(r.URL.Query().Get("account"))
+
 	w.Header().Set("Content-Type", "text/html")
 	_, _ = w.Write([]byte(`<html><body><h1>Spotify Connected</h1><p>You can close this window.</p></body></html>`))
 }
@@ -189,9 +195,75 @@ func (s *Server) HandleMgmtSpotifyConfirm(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Register account in Marge and notify speakers
+	s.bridgeSpotifyToMarge(r.URL.Query().Get("account"))
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"ok":true}`))
+}
+
+func (s *Server) bridgeSpotifyToMarge(accountID string) {
+	if accountID == "" {
+		accountID = "default"
+	}
+
+	s.mu.RLock()
+	svc := s.spotifyService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		return
+	}
+
+	accounts := svc.GetAccounts()
+	if len(accounts) == 0 {
+		return
+	}
+
+	// For now, we use the first account found or match by ID if possible.
+	// In this bridge, we'll ensure all linked Spotify accounts are registered in Marge.
+	for _, acc := range accounts {
+		log.Printf("[Spotify Bridge] Registering Spotify user %s in Marge for account %s", acc.UserID, accountID)
+
+		// 1. Register in Marge (updates configuredsources.xml for all devices in the account)
+		_, err := marge.AddSource(s.ds, accountID, acc.UserID, "15", acc.AccessToken, "token_version_3", acc.DisplayName)
+		if err != nil {
+			log.Printf("[Spotify Bridge] Failed to register source in Marge: %v", err)
+			continue
+		}
+
+		// 2. Notify discovered speakers via LISA API (/setMusicServiceOAuthAccount)
+		allDevices, err := s.ds.ListAllDevices()
+		if err != nil {
+			log.Printf("[Spotify Bridge] Failed to list devices: %v", err)
+			continue
+		}
+
+		creds := models.NewSpotifyOAuthCredentials(acc.UserID, acc.AccessToken, acc.DisplayName)
+
+		for i := range allDevices {
+			dev := &allDevices[i]
+			if dev.AccountID != accountID && accountID != "default" {
+				continue
+			}
+
+			if dev.IPAddress == "" {
+				continue
+			}
+
+			go func(d models.ServiceDeviceInfo) {
+				log.Printf("[Spotify Bridge] Notifying speaker %s (%s) about new Spotify account", d.Name, d.IPAddress)
+
+				c := client.NewClientFromHost(d.IPAddress)
+				if err := c.SetMusicServiceOAuthAccount(creds); err != nil {
+					log.Printf("[Spotify Bridge] Failed to notify speaker %s: %v", d.Name, err)
+				} else {
+					log.Printf("[Spotify Bridge] Successfully notified speaker %s", d.Name)
+				}
+			}(*dev)
+		}
+	}
 }
 
 // HandleMgmtSpotifyAccounts returns linked Spotify accounts (tokens stripped).

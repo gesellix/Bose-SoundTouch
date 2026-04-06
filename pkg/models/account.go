@@ -110,6 +110,31 @@ func (cred *MusicServiceCredentials) GetDescription() string {
 	}
 }
 
+// OAuthCredentials represents the credentials sent to /setMusicServiceOAuthAccount
+type OAuthCredentials struct {
+	XMLName     xml.Name `xml:"OAuthCredentials"`
+	Source      string   `xml:"source,attr"`
+	DisplayName string   `xml:"displayName,attr,omitempty"`
+	User        string   `xml:"user"`
+	Code        string   `xml:"code"`
+	Version     string   `xml:"version"`
+}
+
+// NewSpotifyOAuthCredentials creates OAuth credentials for Spotify
+func NewSpotifyOAuthCredentials(user, code, displayName string) *OAuthCredentials {
+	if displayName == "" {
+		displayName = user
+	}
+
+	return &OAuthCredentials{
+		Source:      "SPOTIFY",
+		DisplayName: displayName,
+		User:        user,
+		Code:        code,
+		Version:     "token_version_3",
+	}
+}
+
 // MusicServiceAccountResponse represents the response from account management operations
 type MusicServiceAccountResponse struct {
 	XMLName xml.Name `xml:"status"`

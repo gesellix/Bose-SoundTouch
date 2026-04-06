@@ -1059,12 +1059,7 @@ func loadTestData(t *testing.T, filename string) string {
 }
 
 func createTestClient(serverURL string) *Client {
-	config := DefaultConfig()
-	config.Host = "localhost" // Will be overridden by baseURL
-	client := NewClient(config)
-	client.baseURL = serverURL
-
-	return client
+	return NewClientFromHost(serverURL)
 }
 
 func contains(s, substr string) bool {

@@ -146,7 +146,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -192,12 +194,51 @@ func NewClient(config *Config) *Client {
 		config.UserAgent = "Bose-SoundTouch-Go-Client/1.0"
 	}
 
-	if config.Port == 0 {
-		config.Port = 8090
+	host := config.Host
+	if !strings.Contains(host, "://") {
+		host = "http://" + host
+	}
+
+	u, err := url.Parse(host)
+	if err != nil {
+		// Fallback for invalid URLs
+		port := config.Port
+		if port == 0 {
+			port = 8090
+		}
+
+		return &Client{
+			baseURL: fmt.Sprintf("http://%s:%d", config.Host, port),
+			httpClient: &http.Client{
+				Timeout: config.Timeout,
+			},
+			timeout:   config.Timeout,
+			userAgent: config.UserAgent,
+		}
+	}
+
+	// Use SplitHostPort to check for port in the host string
+	_, p, splitErr := net.SplitHostPort(u.Host)
+	if splitErr != nil {
+		// No port in the host string, use the one from config or default
+		port := config.Port
+		if port == 0 {
+			port = 8090
+		}
+
+		u.Host = net.JoinHostPort(u.Host, fmt.Sprintf("%d", port))
+	} else if p == "" {
+		// Empty port, use config or default
+		port := config.Port
+		if port == 0 {
+			port = 8090
+		}
+
+		u.Host = net.JoinHostPort(u.Hostname(), fmt.Sprintf("%d", port))
 	}
 
 	return &Client{
-		baseURL: fmt.Sprintf("http://%s:%d", config.Host, config.Port),
+		baseURL: u.String(),
 		httpClient: &http.Client{
 			Timeout: config.Timeout,
 		},
@@ -1885,6 +1926,28 @@ func (c *Client) SetMusicServiceAccount(credentials *models.MusicServiceCredenti
 
 	if !response.IsSuccess() {
 		return fmt.Errorf("music service account operation failed: unexpected response %s", response.Status)
+	}
+
+	return nil
+}
+
+// SetMusicServiceOAuthAccount adds or updates a music service account using OAuth credentials
+func (c *Client) SetMusicServiceOAuthAccount(credentials *models.OAuthCredentials) error {
+	if credentials == nil {
+		return fmt.Errorf("credentials cannot be nil")
+	}
+
+	var response models.MusicServiceAccountResponse
+
+	// Note: Modern firmware uses /setMusicServiceOAuthAccount, but we reuse the success logic
+	err := c.postWithResponse("/setMusicServiceOAuthAccount", credentials, &response)
+	if err != nil {
+		return fmt.Errorf("failed to set music service OAuth account for %s: %w", credentials.Source, err)
+	}
+
+	// The speaker returns /setMusicServiceOAuthAccount on success
+	if response.Status != "/setMusicServiceOAuthAccount" {
+		return fmt.Errorf("music service OAuth account operation failed: unexpected response %s", response.Status)
 	}
 
 	return nil

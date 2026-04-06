@@ -1727,6 +1727,26 @@ func AddSourceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 		return nil, fmt.Errorf("failed to unmarshal source XML: %w", err)
 	}
 
+	sourceID, err := AddSource(ds, account, input.Username, input.SourceProviderID, input.Credential.Value, input.Credential.Type, input.SourceName)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := models.MargeAddSourceResponse{
+		SourceID:         sourceID,
+		SourceProviderID: input.SourceProviderID,
+		CreatedOn:        FormatTime(time.Now()),
+		UpdatedOn:        FormatTime(time.Now()),
+	}
+
+	res, _ := xml.Marshal(resp)
+	header := constants.XMLHeader
+
+	return append([]byte(header), res...), nil
+}
+
+// AddSource adds a new music source to the account and returns the generated source ID.
+func AddSource(ds *datastore.DataStore, account, username, providerID, secret, secretType, sourceName string) (string, error) {
 	now := time.Now()
 	createdOn := FormatTime(now)
 	sourceID := "SRC_" + strconv.FormatInt(now.Unix(), 10)
@@ -1745,23 +1765,25 @@ func AddSourceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 
 		newSrc := models.ConfiguredSource{
 			ID:               sourceID,
-			SourceProviderID: input.SourceProviderID,
-			Username:         input.Username,
-			Secret:           input.Credential.Value,
-			SecretType:       input.Credential.Type,
-			SourceName:       input.SourceName,
-			Name:             input.Username,
+			SourceProviderID: providerID,
+			Username:         username,
+			Secret:           secret,
+			SecretType:       secretType,
+			SourceName:       sourceName,
+			Name:             username,
 			CreatedOn:        createdOn,
 			UpdatedOn:        createdOn,
 			Status:           "READY",
 		}
 
-		newSrc.SourceKey.Account = input.Username
-		if input.SourceProviderID == "15" {
+		newSrc.SourceKey.Account = username
+		if providerID == "15" {
 			newSrc.SourceKey.Type = "SPOTIFY"
 		} else {
-			newSrc.SourceKey.Type = input.SourceProviderID
+			newSrc.SourceKey.Type = providerID
 		}
+
+		log.Printf("[Marge] Adding source %s (%s) for device %s", newSrc.SourceKey.Type, username, devID)
 
 		PrepareConfiguredSource(&newSrc)
 
@@ -1769,8 +1791,8 @@ func AddSourceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 		replaced := false
 
 		for i := range sources {
-			if sources[i].SourceProviderID == input.SourceProviderID ||
-				(input.SourceProviderID == "15" && sources[i].SourceKey.Type == "SPOTIFY") {
+			if sources[i].SourceProviderID == providerID ||
+				(providerID == "15" && sources[i].SourceKey.Type == "SPOTIFY") {
 				sources[i] = newSrc
 				replaced = true
 
@@ -1785,15 +1807,5 @@ func AddSourceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 		_ = ds.SaveConfiguredSources(account, devID, sources)
 	}
 
-	resp := models.MargeAddSourceResponse{
-		SourceID:         sourceID,
-		SourceProviderID: input.SourceProviderID,
-		CreatedOn:        createdOn,
-		UpdatedOn:        createdOn,
-	}
-
-	res, _ := xml.Marshal(resp)
-	header := constants.XMLHeader
-
-	return append([]byte(header), res...), nil
+	return sourceID, nil
 }
