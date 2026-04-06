@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,10 +23,10 @@ func TestSpotifyBridge(t *testing.T) {
 	server := NewServer(ds, nil, "http://localhost", false, false, false)
 
 	// Mock Speaker (LISA API)
-	speakerReceived := false
+	var speakerReceived atomic.Bool
 	speakerTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/setMusicServiceOAuthAccount" {
-			speakerReceived = true
+			speakerReceived.Store(true)
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8" ?><status>/setMusicServiceOAuthAccount</status>`))
@@ -115,11 +116,11 @@ func TestSpotifyBridge(t *testing.T) {
 	// Using time.Sleep for simplicity in this test
 	// Wait up to 1 second
 	deadline := time.Now().Add(1 * time.Second)
-	for time.Now().Before(deadline) && !speakerReceived {
+	for time.Now().Before(deadline) && !speakerReceived.Load() {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	if !speakerReceived {
+	if !speakerReceived.Load() {
 		t.Errorf("Speaker did not receive /setMusicServiceOAuthAccount notification")
 	}
 
