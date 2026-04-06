@@ -8,6 +8,8 @@ services:
     ports:
       - "8000:8000"
       - "8443:8443"
+    networks:
+      - soundtouch-test-net
     environment:
       - PORT=8000
       - HTTPS_PORT=8443
@@ -34,6 +36,22 @@ services:
         reservations:
           cpus: '0.25'
           memory: 128M
+
+  spotify-mock:
+    image: golang:1.26.1-alpine
+    container_name: spotify-mock
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: go run ./cmd/mock-spotify/main.go -port 8080
+    ports:
+      - "8081:8080"
+    networks:
+      - soundtouch-test-net
+
+networks:
+  soundtouch-test-net:
+    name: soundtouch-test-net
 
 volumes:
   soundtouch-data:

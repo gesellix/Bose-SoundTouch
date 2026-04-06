@@ -1,0 +1,10 @@
+services:
+  soundtouch-service:
+    build: .
+    volumes:
+      - ./tests/integration/testdata:/app/data
+    environment:
+      - SPOTIFY_CLIENT_ID=mock-id
+      - SPOTIFY_CLIENT_SECRET=mock-secret
+      - SPOTIFY_TOKEN_URL=http://spotify-mock:8080/api/token
+      - SPOTIFY_API_BASE=http://spotify-mock:8080

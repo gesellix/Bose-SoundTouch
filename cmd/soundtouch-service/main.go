@@ -210,6 +210,16 @@ func main() {
 				EnvVars: []string{"SPOTIFY_REDIRECT_URI"},
 			},
 			&cli.StringFlag{
+				Name:    "spotify-token-url",
+				Usage:   "Spotify OAuth token URL (for testing)",
+				EnvVars: []string{"SPOTIFY_TOKEN_URL"},
+			},
+			&cli.StringFlag{
+				Name:    "spotify-api-base",
+				Usage:   "Spotify API base URL (for testing)",
+				EnvVars: []string{"SPOTIFY_API_BASE"},
+			},
+			&cli.StringFlag{
 				Name:    "mgmt-username",
 				Usage:   "Management API username for HTTP Basic Auth",
 				Value:   "admin",
@@ -305,6 +315,10 @@ func main() {
 					config.spotifyRedirectURI,
 					config.dataDir,
 				)
+				if config.spotifyTokenURL != "" || config.spotifyAPIBase != "" {
+					spotifyService.SetEndpoints(config.spotifyTokenURL, config.spotifyAPIBase)
+				}
+
 				if err := spotifyService.Load(); err != nil {
 					log.Printf("[Spotify] Failed to load accounts: %v", err)
 				}
@@ -439,6 +453,8 @@ type serviceConfig struct {
 	spotifyClientID     string
 	spotifyClientSecret string
 	spotifyRedirectURI  string
+	spotifyTokenURL     string
+	spotifyAPIBase      string
 	mgmtUsername        string
 	mgmtPassword        string
 	migrationEnabled    bool
@@ -503,6 +519,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 	spotifyClientID := c.String("spotify-client-id")
 	spotifyClientSecret := c.String("spotify-client-secret")
 	spotifyRedirectURI := c.String("spotify-redirect-uri")
+	spotifyTokenURL := c.String("spotify-token-url")
+	spotifyAPIBase := c.String("spotify-api-base")
 	mgmtUsername := c.String("mgmt-username")
 	mgmtPassword := c.String("mgmt-password")
 	mirrorEnabled := c.Bool("mirror-enabled")
@@ -536,6 +554,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 		spotifyClientID:     spotifyClientID,
 		spotifyClientSecret: spotifyClientSecret,
 		spotifyRedirectURI:  spotifyRedirectURI,
+		spotifyTokenURL:     spotifyTokenURL,
+		spotifyAPIBase:      spotifyAPIBase,
 		mgmtUsername:        mgmtUsername,
 		mgmtPassword:        mgmtPassword,
 		migrationEnabled:    migrationEnabled,

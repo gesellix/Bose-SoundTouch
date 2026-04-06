@@ -6,7 +6,7 @@ Accept: application/vnd.bose.streaming-v1.1+xml
 Authorization: Bearer {{token}}
 Content-Type: application/vnd.bose.streaming-v1.1+xml
 
-<?xml version="1.0" encoding="UTF-8"?><source><username>{{spotifyUserId}}</username><sourceproviderid>15</sourceproviderid><credential type="token_version_3">{{spotifyToken}}</credential><sourcename>{{spotifyDisplayName}}</sourcename></source>
+<?xml version="1.0" encoding="UTF-8"?><source><username>{{spotifyUserId}}</username><sourceproviderid>{{spotifyProviderID}}</sourceproviderid><credential type="token_version_3">{{spotifyToken}}</credential><sourcename>{{spotifyDisplayName}}</sourcename></source>
 
 > {%
     client.test("Response is 201 Created", function() {
@@ -15,10 +15,11 @@ Content-Type: application/vnd.bose.streaming-v1.1+xml
 
     client.test("Response body is a source", function() {
         const doc = response.body;
+        const spotifySourceProviderID = client.variables.environment.get("spotifyProviderID");
         const sourceID = doc.getElementsByTagName("sourceID")[0].textContent;
         client.assert(sourceID !== "", "Response body does not contain a non-empty <sourceID>");
         client.global.set("sourceID", sourceID);
-        client.assert(doc.getElementsByTagName("sourceProviderID")[0].textContent === "15", "Response body does not contain <sourceProviderID>15</sourceProviderID>");
+        client.assert(doc.getElementsByTagName("sourceProviderID")[0].textContent === spotifySourceProviderID, "Response body does not contain <sourceProviderID>{{spotifySourceProviderID}}</sourceProviderID>");
     });
 %}
 
@@ -47,10 +48,11 @@ Content-Type: application/vnd.bose.streaming-v1.2+xml
         client.assert(doc.getElementsByTagName("contentItemType")[0].textContent === "tracklisturl", "Response body does not contain <contentItemType>tracklisturl</contentItemType>");
 
         const source = doc.getElementsByTagName("source")[0];
+        const spotifySourceProviderID = client.variables.environment.get("spotifyProviderID");
         client.assert(source.getAttribute("id") === client.global.get("sourceID"), "Response body does not contain source id=\"" + client.global.get("sourceID") + "\"");
         client.assert(source.getAttribute("type") === "Audio", "Response body does not contain source type=\"Audio\"");
         client.assert(source.getAttribute("displayName") === null, "Response body should NOT contain displayName attribute in source");
-        client.assert(doc.getElementsByTagName("sourceproviderid")[0].textContent === "15", "Response body does not contain <sourceproviderid>15</sourceproviderid>");
+        client.assert(doc.getElementsByTagName("sourceproviderid")[0].textContent === spotifySourceProviderID, "Response body does not contain <sourceproviderid>{{spotifySourceProviderID}}</sourceproviderid>");
         client.assert(source.getElementsByTagName("username")[0].textContent === "", "Response body does not contain empty <username> in source, found: " + source.getElementsByTagName("username")[0].textContent);
         client.assert(doc.getElementsByTagName("username")[1].textContent === "For Lovers, Not Killers", "Response body does not contain <username>For Lovers, Not Killers</username> in preset, found: " + doc.getElementsByTagName("username")[1].textContent);
     });

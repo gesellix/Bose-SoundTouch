@@ -106,22 +106,17 @@ test-coverage:
 check: fmt vet test test-http-client
 
 test-http-client:
-	@echo "Running HTTP client integration tests..."
-	@docker network create soundtouch-test-net || true
-	@docker build -t soundtouch-service-test .
-	@docker run -d --name soundtouch-service --network soundtouch-test-net \
-		-e PORT=8000 \
-		-e SPOTIFY_CLIENT_ID=mock-id \
-		-e SPOTIFY_CLIENT_SECRET=mock-secret \
-		-v $(PWD)/tests/integration/testdata:/app/data \
-		soundtouch-service-test
-	@echo "Waiting for service to start..."
-	@sleep 5
+	@echo "Starting services with docker-compose..."
+	@docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+	@echo "Waiting for services to start..."
+	@sleep 10
+	@echo "Running .http tests..."
 	@docker run --rm --network soundtouch-test-net \
-		-v $(PWD)/tests/integration/http-client:/workdir \
+		-v "$(PWD)/tests/integration/http-client:/workdir" \
 		jetbrains/intellij-http-client:2026.1 \
 		--env-file /workdir/http-client.env.json \
 		--env ci \
+		/workdir/spotify_registration.http \
 		/workdir/create_account.http \
 		/workdir/register_device.http \
 		/workdir/customer_support.http \
@@ -150,11 +145,9 @@ test-http-client:
 		/workdir/unregister_device.http \
 		--report; \
 	EXIT_CODE=$$?; \
-	docker logs soundtouch-service; \
-	docker stop soundtouch-service; \
-	docker rm soundtouch-service; \
-	docker rmi soundtouch-service-test; \
-	docker network rm soundtouch-test-net; \
+	docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs soundtouch-service; \
+	docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs spotify-mock; \
+	docker-compose -f docker-compose.yml -f docker-compose.ci.yml down; \
 	exit $$EXIT_CODE
 
 fmt:
