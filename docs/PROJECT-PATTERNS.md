@@ -21,7 +21,7 @@ This document describes the most important patterns for the Bose SoundTouch API 
 
 **Key Aspects:**
 - **Native Builds**: Full API functionality for CLI and server
-- **WASM Builds**: Browser-compatible subset functionality  
+- **WASM Builds**: Browser-compatible subset functionality
 - **Cross-Platform**: Linux, macOS, Windows support
 - **Embedded Assets**: Web UI directly embedded in binary
 
@@ -66,7 +66,7 @@ func (c *Client) GetNowPlaying() (*models.NowPlaying, error) {
         return nil, err
     }
     defer resp.Body.Close()
-    
+
     var nowPlaying models.NowPlaying
     err = xml.NewDecoder(resp.Body).Decode(&nowPlaying)
     return &nowPlaying, err
@@ -77,7 +77,7 @@ func (c *Client) GetNowPlaying() (*models.NowPlaying, error) {
 ```go
 func (c *Client) SendKey(key models.Key) error {
     keyXML := fmt.Sprintf(`<key state="press" sender="GoClient">%s</key>`, key)
-    
+
     resp, err := c.httpClient.Post(
         c.baseURL+"/key",
         "application/xml",
@@ -117,14 +117,14 @@ func (d *DiscoveryService) DiscoverDevices() ([]Device, error) {
         return nil, err
     }
     defer conn.Close()
-    
+
     // Send M-SEARCH request
     searchRequest := "M-SEARCH * HTTP/1.1\r\n" +
         "HOST: 239.255.255.250:1900\r\n" +
         "MAN: \"ssdp:discover\"\r\n" +
         "ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n" +
         "MX: 3\r\n\r\n"
-    
+
     // Implementation details...
     return devices, nil
 }
@@ -158,13 +158,13 @@ func (e *EventClient) Subscribe(eventType string, handler EventHandler) {
 
 func (e *EventClient) Start() error {
     u := url.URL{Scheme: "ws", Host: e.client.host + ":8090", Path: "/"}
-    
+
     conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
     if err != nil {
         return err
     }
     e.conn = conn
-    
+
     go e.eventLoop()
     return nil
 }
@@ -184,7 +184,7 @@ func (e *EventClient) eventLoop() {
                 }
                 return
             }
-            
+
             if handler, exists := e.handlers[event.Type]; exists {
                 go handler(event)
             }
@@ -220,7 +220,7 @@ func wasmDiscoverDevices(this js.Value, args []js.Value) interface{} {
     handler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
         go func() {
             devices, err := discovery.NewDiscoveryService(5*time.Second).DiscoverDevices()
-            
+
             result := make(map[string]interface{})
             if err != nil {
                 result["error"] = err.Error()
@@ -228,13 +228,13 @@ func wasmDiscoverDevices(this js.Value, args []js.Value) interface{} {
                 devicesJSON, _ := json.Marshal(devices)
                 result["devices"] = string(devicesJSON)
             }
-            
+
             // Call JavaScript callback
             args[0].Invoke(js.ValueOf(result))
         }()
         return nil
     })
-    
+
     return handler
 }
 ```
@@ -280,7 +280,7 @@ func main() {
                     if err != nil {
                         return err
                     }
-                    
+
                     for i, device := range devices {
                         fmt.Printf("%d: %s (%s)\n", i+1, device.Name, device.Host)
                     }
@@ -300,7 +300,7 @@ func main() {
             },
         },
     }
-    
+
     app.Run(os.Args)
 }
 
@@ -311,7 +311,7 @@ func getClientFromContext(c *cli.Context) *client.Client {
         devices, _ := discovery.DiscoverDevices()
         deviceHost = selectDeviceInteractive(devices)
     }
-    
+
     return client.NewClient(deviceHost, 8090)
 }
 ```
@@ -327,34 +327,34 @@ var webAssets embed.FS
 
 func main() {
     mux := http.NewServeMux()
-    
+
     // Embedded web assets
     webFS, err := fs.Sub(webAssets, "web")
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // SPA routing
     mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
         if r.URL.Path != "/" {
             http.FileServer(http.FS(webFS)).ServeHTTP(w, r)
             return
         }
-        
+
         data, err := webAssets.ReadFile("web/index.html")
         if err != nil {
             http.Error(w, "Not found", http.StatusNotFound)
             return
         }
-        
+
         w.Header().Set("Content-Type", "text/html")
         w.Write(data)
     })
-    
+
     // API endpoints
     mux.HandleFunc("/api/devices", handleDeviceDiscovery)
     mux.HandleFunc("/api/client/", handleClientProxy)
-    
+
     log.Println("SoundTouch Web UI starting on :8080")
     log.Fatal(http.ListenAndServe(":8080", mux))
 }
@@ -370,36 +370,36 @@ func handleClientProxy(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid path", http.StatusBadRequest)
         return
     }
-    
+
     deviceIP := pathParts[3]
     apiPath := "/" + strings.Join(pathParts[4:], "/")
-    
+
     // Proxy request to SoundTouch device
     targetURL := fmt.Sprintf("http://%s:8090%s", deviceIP, apiPath)
-    
+
     proxyReq, err := http.NewRequest(r.Method, targetURL, r.Body)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    
+
     // Copy headers
     for k, v := range r.Header {
         proxyReq.Header[k] = v
     }
-    
+
     resp, err := http.DefaultClient.Do(proxyReq)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
     defer resp.Body.Close()
-    
+
     // Enable CORS
     w.Header().Set("Access-Control-Allow-Origin", "*")
     w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
     w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-    
+
     // Copy response
     w.WriteHeader(resp.StatusCode)
     io.Copy(w, resp.Body)
@@ -448,7 +448,7 @@ func (p *PlayStatus) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error 
     if err := d.DecodeElement(&s, &start); err != nil {
         return err
     }
-    
+
     switch s {
     case string(PlayStatusPlaying), string(PlayStatusPaused), string(PlayStatusStopped):
         *p = PlayStatus(s)
@@ -469,41 +469,41 @@ type Config struct {
     // Server configuration
     WebPort      int           `env:"WEB_PORT" default:"8080"`
     APITimeout   time.Duration `env:"API_TIMEOUT" default:"10s"`
-    
+
     // Discovery configuration
     DiscoveryTimeout time.Duration `env:"DISCOVERY_TIMEOUT" default:"5s"`
     CacheDevices     bool          `env:"CACHE_DEVICES" default:"true"`
-    
+
     // CORS configuration (for web proxy)
     CORSOrigins []string `env:"CORS_ORIGINS" default:"*"`
-    
+
     // Logging
     LogLevel string `env:"LOG_LEVEL" default:"info"`
 }
 
 func Load() Config {
     var cfg Config
-    
+
     // Load from .env file
     loadDotEnv()
-    
+
     // Parse environment variables with reflection
     parseEnvVars(&cfg)
-    
+
     return cfg
 }
 
 func parseEnvVars(cfg interface{}) {
     v := reflect.ValueOf(cfg).Elem()
     t := v.Type()
-    
+
     for i := 0; i < v.NumField(); i++ {
         field := v.Field(i)
         fieldType := t.Field(i)
-        
+
         envTag := fieldType.Tag.Get("env")
         defaultTag := fieldType.Tag.Get("default")
-        
+
         if envTag != "" {
             if envValue := os.Getenv(envTag); envValue != "" {
                 setFieldValue(field, envValue)
@@ -545,11 +545,11 @@ func (m *MockClient) GetNowPlaying() (*models.NowPlaying, error) {
     if err, exists := m.errors["now_playing"]; exists {
         return nil, err
     }
-    
+
     if resp, exists := m.responses["now_playing"]; exists {
         return resp.(*models.NowPlaying), nil
     }
-    
+
     return &models.NowPlaying{
         Track:  "Mock Track",
         Artist: "Mock Artist",
@@ -577,8 +577,8 @@ CMD ["go", "test", "-v", "./..."]
 ```bash
 # Makefile test target
 test-integration:
-	docker-compose -f test/docker-compose.yml up --build --abort-on-container-exit
-	docker-compose -f test/docker-compose.yml down
+	docker compose -f test/docker-compose.yml up --build --abort-on-container-exit
+	docker compose -f test/docker-compose.yml down
 ```
 
 ## Recommended Project Structure
@@ -741,7 +741,7 @@ type APIError struct {
     Message string `xml:",innerxml"`
 }
 
-// pkg/models/device.go  
+// pkg/models/device.go
 type DeviceInfo struct {
     XMLResponse
     Name     string `xml:"name"`
@@ -773,7 +773,7 @@ func main() {
             },
         },
     }
-    
+
     app.Run(os.Args)
 }
 ```

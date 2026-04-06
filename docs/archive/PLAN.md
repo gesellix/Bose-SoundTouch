@@ -185,7 +185,7 @@ type NowPlaying struct {
 type PlayStatus string
 const (
     PlayStatusPlaying PlayStatus = "PLAY_STATE"
-    PlayStatusPaused  PlayStatus = "PAUSE_STATE" 
+    PlayStatusPaused  PlayStatus = "PAUSE_STATE"
     PlayStatusStopped PlayStatus = "STOP_STATE"
 )
 
@@ -277,19 +277,19 @@ type Config struct {
     // Server configuration
     WebPort      int           `env:"WEB_PORT" default:"8080"`
     APITimeout   time.Duration `env:"API_TIMEOUT" default:"10s"`
-    
-    // Discovery configuration  
+
+    // Discovery configuration
     DiscoveryTimeout time.Duration `env:"DISCOVERY_TIMEOUT" default:"5s"`
     CacheDevices     bool          `env:"CACHE_DEVICES" default:"true"`
     CacheTTL         time.Duration `env:"CACHE_TTL" default:"5m"`
-    
+
     // CORS configuration (for web proxy)
     CORSOrigins      []string `env:"CORS_ORIGINS" default:"*"`
-    
+
     // Logging
     LogLevel    string `env:"LOG_LEVEL" default:"info"`
     LogFormat   string `env:"LOG_FORMAT" default:"json"`
-    
+
     // Development
     DevMode     bool `env:"DEV_MODE" default:"false"`
 }
@@ -537,7 +537,7 @@ build-all: build-linux build-darwin build-windows
 dev-cli:
 	air -c .air-cli.toml
 
-dev-webapp: 
+dev-webapp:
 	air -c .air-webapp.toml
 
 dev-wasm:
@@ -556,7 +556,7 @@ check: fmt vet lint test
 
 # Docker development environment
 docker-dev:
-	docker-compose up --build
+	docker compose up --build
 
 # Release packaging
 release: build-all
@@ -596,7 +596,7 @@ import (
     "fmt"
     "log"
     "time"
-    
+
     "github.com/gesellix/bose-soundtouch/pkg/client"
     "github.com/gesellix/bose-soundtouch/pkg/discovery"
     "github.com/gesellix/bose-soundtouch/pkg/models"
@@ -609,36 +609,36 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     if len(devices) == 0 {
         log.Fatal("No SoundTouch devices found")
     }
-    
+
     // Create client for first device
     client := client.NewClient(client.ClientConfig{
         Host:    devices[0].Host,
         Port:    8090,
         Timeout: 10 * time.Second,
     })
-    
+
     // Get device info
     info, err := client.GetDeviceInfo()
     if err != nil {
         log.Fatal(err)
     }
     fmt.Printf("Connected to: %s\n", info.Name)
-    
+
     // Get current playback
     nowPlaying, err := client.GetNowPlaying()
     if err != nil {
         log.Fatal(err)
     }
-    
+
     if nowPlaying.PlayStatus == models.PlayStatusPlaying {
-        fmt.Printf("Playing: %s - %s (%s)\n", 
+        fmt.Printf("Playing: %s - %s (%s)\n",
             nowPlaying.Artist, nowPlaying.Track, nowPlaying.Album)
     }
-    
+
     // Control playback
     if nowPlaying.PlayStatus == models.PlayStatusPlaying {
         client.SendKey(models.KeyPause)
@@ -737,11 +737,11 @@ docker run -p 8080:8080 soundtouch-webapp
 ```bash
 # Local development with hot reload
 make dev-webapp    # Web app development
-make dev-wasm      # WASM development  
+make dev-wasm      # WASM development
 make dev-cli       # CLI development
 
 # Full development environment
-docker-compose up  # Mock devices + web app
+docker compose up  # Mock devices + web app
 ```
 
 ## Success Criteria
@@ -781,7 +781,7 @@ docker-compose up  # Mock devices + web app
 
 - [Bose SoundTouch Web API Documentation](https://assets.bosecreative.com/m/496577402d128874/original/SoundTouch-Web-API.pdf)
 - [Go WebAssembly](https://github.com/golang/go/wiki/WebAssembly)
-- [UPnP Device Architecture](http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.0.pdf) 
+- [UPnP Device Architecture](http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.0.pdf)
 - [Go Embed Directive](https://pkg.go.dev/embed)
 - [Gorilla WebSocket](https://github.com/gorilla/websocket)
 - [PROJECT-PATTERNS.md](../PROJECT-PATTERNS.md) - Detailed pattern documentation

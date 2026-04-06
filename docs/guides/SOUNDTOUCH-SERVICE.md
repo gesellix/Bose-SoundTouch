@@ -116,7 +116,7 @@ volumes:
 And run:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Quick Start

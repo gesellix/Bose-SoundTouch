@@ -106,8 +106,8 @@ test-coverage:
 check: fmt vet test test-http-client
 
 test-http-client:
-	@echo "Starting services with docker-compose..."
-	@docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+	@echo "Starting services with docker compose..."
+	@docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 	@echo "Waiting for services to start..."
 	@sleep 10
 	@echo "Running .http tests..."
@@ -145,9 +145,9 @@ test-http-client:
 		/workdir/unregister_device.http \
 		--report; \
 	EXIT_CODE=$$?; \
-	docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs soundtouch-service; \
-	docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs spotify-mock; \
-	docker-compose -f docker-compose.yml -f docker-compose.ci.yml down; \
+	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs soundtouch-service; \
+	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs spotify-mock; \
+	docker compose -f docker-compose.yml -f docker-compose.ci.yml down; \
 	exit $$EXIT_CODE
 
 fmt:
