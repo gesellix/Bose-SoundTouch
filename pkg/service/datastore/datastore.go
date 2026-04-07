@@ -546,7 +546,7 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 				IsPresetable  string `xml:"isPresetable,attr"`
 				ItemName      string `xml:"itemName"`
 				ContainerArt  string `xml:"containerArt"`
-			} `xml:"ContentItem"`
+			} `xml:"contentItem"`
 			Source *models.ConfiguredSource `xml:"source"`
 		} `xml:"preset"`
 	}
@@ -606,7 +606,7 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 			IsPresetable  string `xml:"isPresetable,attr"`
 			ItemName      string `xml:"itemName"`
 			ContainerArt  string `xml:"containerArt"`
-		} `xml:"ContentItem"`
+		} `xml:"contentItem"`
 		Source *models.ConfiguredSource `xml:"source,omitempty"`
 	}
 

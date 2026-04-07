@@ -402,11 +402,20 @@ func PresetsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 }
 
 func findMatchingSourceForPreset(sources []models.ConfiguredSource, p models.ServicePreset) *models.ConfiguredSource {
+	// First try exact ID match
+	if p.SourceID != "" {
+		for j := range sources {
+			if sources[j].ID == p.SourceID {
+				return &sources[j]
+			}
+		}
+	}
+
+	// Then try type and account match
 	for j := range sources {
 		s := &sources[j]
-		if (p.SourceID != "" && s.ID == p.SourceID) ||
-			(s.SourceKey.Type == p.Source && s.SourceKey.Account == p.SourceAccount) ||
-			(s.SourceKeyType == p.Source && s.SourceKeyAccount == p.SourceAccount) {
+		if (s.SourceKey.Type == p.Source && (p.SourceAccount == "" || s.SourceKey.Account == p.SourceAccount)) ||
+			(s.SourceKeyType == p.Source && (p.SourceAccount == "" || s.SourceKeyAccount == p.SourceAccount)) {
 			return s
 		}
 	}
@@ -820,6 +829,10 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 			UpdatedOn:       p.UpdatedOn,
 			Username:        p.Username,
 		}
+		if fullPreset.ContentItemType == "" && p.Type != "" {
+			fullPreset.ContentItemType = p.Type
+		}
+
 		if matchedSource != nil {
 			fullPreset.Source = mapToFullResponseSource(*matchedSource)
 		}
@@ -882,6 +895,10 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 			UpdatedOn:       r.UpdatedOn,
 			Username:        r.Name,
 		}
+		if fullRecent.ContentItemType == "" && r.Type != "" {
+			fullRecent.ContentItemType = r.Type
+		}
+
 		if matchedSource != nil {
 			fullRecent.Source = mapToFullResponseSource(*matchedSource)
 		}

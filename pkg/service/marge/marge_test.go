@@ -428,13 +428,14 @@ func TestPresetsToXML_SourceIncluded(t *testing.T) {
 	presets := []models.ServicePreset{
 		{
 			ServiceContentItem: models.ServiceContentItem{
-				ID:            "1",
-				Name:          "Test Preset",
-				SourceID:      "100001",
-				Source:        "SPOTIFY",
-				SourceAccount: "testuser",
-				Type:          "tracklisturl",
-				Location:      "/test",
+				ID:              "1",
+				Name:            "Test Preset",
+				SourceID:        "100001",
+				Source:          "SPOTIFY",
+				SourceAccount:   "testuser",
+				Type:            "tracklisturl",
+				ContentItemType: "tracklisturl",
+				Location:        "/test",
 			},
 			ID: "1",
 		},
@@ -746,9 +747,9 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	presetsXML := `<?xml version="1.0" encoding="UTF-8"?>
 <presets>
     <preset id="1" createdOn="1719128436" updatedOn="1728740382">
-        <ContentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh" itemName="test-playlist" isPresetable="true" contentItemType="tracklisturl">
+        <contentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh" itemName="test-playlist" isPresetable="true" contentItemType="tracklisturl">
             <containerArt>https://i.scdn.co/image/art</containerArt>
-        </ContentItem>
+        </contentItem>
     </preset>
 </presets>`
 	_ = os.WriteFile(filepath.Join(presetsDir, "Presets.xml"), []byte(presetsXML), 0644)

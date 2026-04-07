@@ -363,3 +363,86 @@ func TestAccountFullToXML_RecentsSourceAccountMatching(t *testing.T) {
 		t.Errorf("token-2 should appear twice (source list and recent). XML: %s", xmlStr)
 	}
 }
+
+func TestAccountFullToXML_ContentItemTypeParity(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "content-item-type-parity-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	account := "123"
+	device := "ABC"
+	deviceDir := ds.AccountDeviceDir(account, device)
+	_ = os.MkdirAll(deviceDir, 0755)
+
+	// 0. Setup DeviceInfo.xml
+	deviceInfoXML := `<?xml version="1.0" encoding="UTF-8"?>
+<info deviceID="ABC">
+    <name>Test Device</name>
+    <type>SoundTouch 10</type>
+    <components><component componentCategory="SCM"><serialNumber>ABC123</serialNumber></component></components>
+</info>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(deviceInfoXML), 0644)
+
+	// 1. Setup Sources.xml
+	sourcesXML := `<?xml version="1.0" encoding="UTF-8"?>
+<sources>
+    <source id="100" type="TUNEIN">
+        <credential type="token"></credential>
+        <sourceKey type="TUNEIN" account=""></sourceKey>
+    </source>
+</sources>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(sourcesXML), 0644)
+
+	// 2. Setup Presets.xml and Recents.xml with contentItem elements
+	presetsXML := `<?xml version="1.0" encoding="UTF-8"?>
+<presets>
+    <preset id="1" createdOn="123456789" updatedOn="123456789">
+        <contentItem source="TUNEIN" type="stationurl" location="/v1/playback/stations/s166521" sourceAccount="" isPresetable="true">
+            <itemName>Station Name</itemName>
+        </contentItem>
+    </preset>
+</presets>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "Presets.xml"), []byte(presetsXML), 0644)
+
+	recentsXML := `<?xml version="1.0" encoding="UTF-8"?>
+<recents>
+    <recent id="1" deviceID="ABC" utcTime="123456789">
+        <contentItem source="TUNEIN" type="stationurl" location="/v1/playback/stations/s166521" sourceAccount="" isPresetable="true">
+            <itemName>Station Name</itemName>
+        </contentItem>
+    </recent>
+</recents>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "Recents.xml"), []byte(recentsXML), 0644)
+
+	// 3. Generate Account Full XML
+	fullXML, err := AccountFullToXML(ds, account)
+	if err != nil {
+		t.Fatalf("AccountFullToXML failed: %v", err)
+	}
+
+	xmlStr := string(fullXML)
+
+	// 4. Verify that contentItemType is present and matches the contentItem's type
+	if !strings.Contains(xmlStr, `<contentItemType>stationurl</contentItemType>`) {
+		t.Errorf("Missing expected <contentItemType>stationurl</contentItemType> in XML. XML: %s", xmlStr)
+	}
+
+	// It should appear twice: once in preset, once in recent
+	count := strings.Count(xmlStr, `<contentItemType>stationurl</contentItemType>`)
+	if count != 2 {
+		t.Errorf("Expected <contentItemType>stationurl</contentItemType> to appear twice, got %d. XML: %s", count, xmlStr)
+	}
+
+	// Verify itemName is present
+	if !strings.Contains(xmlStr, `<name>Station Name</name>`) {
+		t.Errorf("Missing expected <name>Station Name</name> in XML. XML: %s", xmlStr)
+	}
+
+	// Verify location is present
+	if !strings.Contains(xmlStr, `<location>/v1/playback/stations/s166521</location>`) {
+		t.Errorf("Missing expected <location>/v1/playback/stations/s166521</location> in XML. XML: %s", xmlStr)
+	}
+}

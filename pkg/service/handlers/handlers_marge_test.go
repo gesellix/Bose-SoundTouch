@@ -570,10 +570,10 @@ func TestMargePresets(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(deviceDir, "Presets.xml"), []byte(`
 		<presets>
 			<preset id="1">
-				<ContentItem source="TUNEIN" type="station" location="/station/s123" sourceAccount="" isPresetable="true">
+				<contentItem source="TUNEIN" type="station" location="/station/s123" sourceAccount="" isPresetable="true">
 					<itemName>Test Station</itemName>
 					<containerArt>http://example.com/art.jpg</containerArt>
-				</ContentItem>
+				</contentItem>
 			</preset>
 		</presets>
 	`), 0644); err != nil {

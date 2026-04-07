@@ -108,9 +108,9 @@ func TestHandleMgmtAccountDetails_Recents(t *testing.T) {
 	presetsXML := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <presets>
     <preset id="1" createdOn="1690000001">
-        <ContentItem source="SPOTIFY" type="tracklisturl" sourceAccount="test-user">
+        <contentItem source="SPOTIFY" type="tracklisturl" sourceAccount="test-user">
             <itemName>test-playlist</itemName>
-        </ContentItem>
+        </contentItem>
     </preset>
 </presets>`
 	err = os.WriteFile(deviceDir+"/Presets.xml", []byte(presetsXML), 0644)
