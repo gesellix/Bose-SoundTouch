@@ -656,6 +656,7 @@ func CreateAccountDevice(ds *datastore.DataStore, account, deviceID string) (mod
 				Category:        comp.Category,
 				SoftwareVersion: comp.SoftwareVersion,
 				SerialNumber:    comp.SerialNumber,
+				Label:           comp.Label,
 			})
 		}
 	}

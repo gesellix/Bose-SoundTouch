@@ -579,7 +579,7 @@ type ServiceComponent struct {
 	Category        string `json:"category,omitempty" xml:"category,attr,omitempty"`
 	SoftwareVersion string `json:"firmware_version" xml:"firmware-version"`
 	SerialNumber    string `json:"serial_number" xml:"serialnumber"`
-	Label           string `json:"label,omitempty" xml:"componentlabel,omitempty"`
+	Label           string `json:"label,omitempty" xml:"componentlabel"`
 }
 
 // ServiceAccountInfo represents account-level metadata.
@@ -799,7 +799,7 @@ type AccountDevice struct {
 	DeviceID           string               `json:"device_id" xml:"deviceid,attr"`
 	AttachedProduct    *AttachedProduct     `json:"attached_product" xml:"attachedProduct"`
 	CreatedOn          string               `json:"created_on" xml:"createdOn"`
-	FirmwareVersion    string               `json:"firmware_version" xml:"firmwareVersion,omitempty"`
+	FirmwareVersion    string               `json:"firmware_version" xml:"firmwareVersion"`
 	IPAddress          string               `json:"ip_address" xml:"ipaddress"`
 	Name               string               `json:"name" xml:"name"`
 	Presets            []FullResponsePreset `json:"presets" xml:"presets>preset,omitempty"`
