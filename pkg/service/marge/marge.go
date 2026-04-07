@@ -1087,7 +1087,7 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 
 	resp := models.AccountFullResponse{
 		ID:                account,
-		AccountStatus:     "ACTIVE",
+		AccountStatus:     "OK",
 		Mode:              "global",
 		PreferredLanguage: "en",
 	}

@@ -54,8 +54,8 @@ func TestMargeCreateAccount(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 
-	if resp.AccountStatus != "ACTIVE" {
-		t.Errorf("Expected AccountStatus ACTIVE, got %v", resp.AccountStatus)
+	if resp.AccountStatus != "OK" {
+		t.Errorf("Expected AccountStatus OK, got %v", resp.AccountStatus)
 	}
 	if resp.PreferredLanguage != "de" {
 		t.Errorf("Expected PreferredLanguage de, got %v", resp.PreferredLanguage)
