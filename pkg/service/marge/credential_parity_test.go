@@ -103,6 +103,92 @@ func TestCredentialParity_LegacyAndNewFormat(t *testing.T) {
 	}
 }
 
+func TestAccountFullToXML_RecentsCredentialConsistency(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "recents-consistency-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	account := "12345"
+	device := "DEV123"
+	deviceDir := ds.AccountDeviceDir(account, device)
+	_ = os.MkdirAll(deviceDir, 0755)
+
+	// 1. Setup Sources.xml
+	// 9330201 comes first and matches type "Audio" but has NO token.
+	// 14774275 comes later and matches the sourceid exactly and HAS token.
+	sourcesXML := `<?xml version="1.0" encoding="UTF-8"?>
+<sources>
+    <source id="9330201" type="Audio">
+        <credential type="token"></credential>
+        <sourceKey type="Audio" account=""></sourceKey>
+    </source>
+    <source id="14774275" secret="token-value" secretType="token" type="Audio">
+        <credential type="token">token-value</credential>
+        <sourceKey type="Audio" account=""></sourceKey>
+    </source>
+</sources>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(sourcesXML), 0644)
+
+	// 2. Setup Recents.xml
+	recentsXML := `<?xml version="1.0" encoding="UTF-8"?>
+<recents>
+    <recent id="2270445222">
+        <contentItem source="Audio" type="" location="/v1/playback/episodes/t104218136" sourceAccount="" isPresetable="">
+            <itemName>Atemlos durch die Charts</itemName>
+        </contentItem>
+        <createdOn>2019-07-29T15:29:59.000+00:00</createdOn>
+        <updatedOn>2019-07-29T15:29:59.000+00:00</updatedOn>
+        <lastplayedat>2019-07-29T11:29:54.000+00:00</lastplayedat>
+        <sourceid>14774275</sourceid>
+        <username>Atemlos durch die Charts</username>
+    </recent>
+</recents>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "Recents.xml"), []byte(recentsXML), 0644)
+
+	// Setup DeviceInfo.xml so CreateAccountDevice works
+	deviceInfoXML := `<?xml version="1.0" encoding="UTF-8"?>
+<info deviceID="DEV123">
+	<name>Test Device</name>
+	<type>SoundTouch 10</type>
+</info>`
+	_ = os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(deviceInfoXML), 0644)
+
+	// 3. Verify RecentsToXML (used by /recents)
+	recentsBytes, err := RecentsToXML(ds, account, device)
+	if err != nil {
+		t.Fatalf("RecentsToXML failed: %v", err)
+	}
+	recentsStr := string(recentsBytes)
+	// t.Logf("Recents XML: %s", recentsStr)
+	if !strings.Contains(recentsStr, `<sourceid>14774275</sourceid>`) {
+		t.Errorf("/recents response should have sourceid 14774275. XML: %s", recentsStr)
+	}
+	if !strings.Contains(recentsStr, `<credential type="token">token-value</credential>`) {
+		t.Errorf("/recents response missing credential. XML: %s", recentsStr)
+	}
+
+	// 4. Verify AccountFullToXML (used by /full)
+	fullBytes, err := AccountFullToXML(ds, account)
+	if err != nil {
+		t.Fatalf("AccountFullToXML failed: %v", err)
+	}
+	fullStr := string(fullBytes)
+	// t.Logf("Full XML: %s", fullStr)
+	// In AccountFullToXML, recents are grouped under devices
+	if !strings.Contains(fullStr, `<recent id="2270445222">`) {
+		t.Errorf("/full response missing recent item. XML: %s", fullStr)
+	}
+	if !strings.Contains(fullStr, `<sourceid>14774275</sourceid>`) {
+		t.Errorf("/full response should have sourceid 14774275. XML: %s", fullStr)
+	}
+	if !strings.Contains(fullStr, `<credential type="token">token-value</credential>`) {
+		t.Errorf("/full response missing credential. XML: %s", fullStr)
+	}
+}
+
 func TestAccountSourcesToXML_CredentialParity(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "sources-parity-test-*")
 	if err != nil {

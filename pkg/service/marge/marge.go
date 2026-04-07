@@ -783,16 +783,30 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		}
 
 		var matchedSource *models.ConfiguredSource
+		// 1. Try exact ID match first
+		if p.SourceID != "" {
+			for j := range sources {
+				if sources[j].ID == p.SourceID {
+					copySource := sources[j]
+					PrepareConfiguredSource(&copySource)
+					matchedSource = &copySource
 
-		for j := range sources {
-			s := sources[j]
-			if s.ID == p.SourceID || (s.SourceKeyType == p.Source && (p.SourceAccount == "" || s.SourceKeyAccount == p.SourceAccount)) {
-				// Use a new variable to avoid pointer-to-iterator-variable bug
-				copySource := s
-				PrepareConfiguredSource(&copySource)
-				matchedSource = &copySource
+					break
+				}
+			}
+		}
 
-				break
+		// 2. Fallback to type/account match if ID didn't match or was empty
+		if matchedSource == nil {
+			for j := range sources {
+				s := sources[j]
+				if s.SourceKeyType == p.Source && (p.SourceAccount == "" || s.SourceKeyAccount == p.SourceAccount) {
+					copySource := s
+					PrepareConfiguredSource(&copySource)
+					matchedSource = &copySource
+
+					break
+				}
 			}
 		}
 
@@ -830,16 +844,30 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 		}
 
 		var matchedSource *models.ConfiguredSource
+		// 1. Try exact ID match first
+		if r.SourceID != "" {
+			for j := range sources {
+				if sources[j].ID == r.SourceID {
+					copySource := sources[j]
+					PrepareConfiguredSource(&copySource)
+					matchedSource = &copySource
 
-		for j := range sources {
-			s := sources[j]
-			if s.ID == r.SourceID || (s.SourceKeyType == r.Source && (r.SourceAccount == "" || s.SourceKeyAccount == r.SourceAccount)) {
-				// Use a new variable to avoid pointer-to-iterator-variable bug
-				copySource := s
-				PrepareConfiguredSource(&copySource)
-				matchedSource = &copySource
+					break
+				}
+			}
+		}
 
-				break
+		// 2. Fallback to type/account match if ID didn't match or was empty
+		if matchedSource == nil {
+			for j := range sources {
+				s := sources[j]
+				if s.SourceKeyType == r.Source && (r.SourceAccount == "" || s.SourceKeyAccount == r.SourceAccount) {
+					copySource := s
+					PrepareConfiguredSource(&copySource)
+					matchedSource = &copySource
+
+					break
+				}
 			}
 		}
 
