@@ -373,6 +373,9 @@ func mapToFullResponseRecent(r *models.ServiceRecent, configuredSources []models
 
 	if r.SourceConfig != nil {
 		fr.Source = mapToFullResponseSource(r.SourceConfig)
+		if fr.SourceID == "" {
+			fr.SourceID = fr.Source.ID
+		}
 	} else {
 		// Attempt to find matching source in configuredSources
 		found := false
@@ -381,6 +384,10 @@ func mapToFullResponseRecent(r *models.ServiceRecent, configuredSources []models
 			src := &configuredSources[k]
 			if src.SourceKey.Type == r.Source && (src.SourceKey.Account == r.SourceAccount || r.SourceAccount == "") {
 				fr.Source = mapToFullResponseSource(src)
+				if fr.SourceID == "" {
+					fr.SourceID = fr.Source.ID
+				}
+
 				found = true
 
 				break
@@ -394,7 +401,11 @@ func mapToFullResponseRecent(r *models.ServiceRecent, configuredSources []models
 			}
 			dummy.SourceKey.Type = r.Source
 			dummy.SourceKey.Account = r.SourceAccount
+
 			fr.Source = mapToFullResponseSource(dummy)
+			if fr.SourceID == "" {
+				fr.SourceID = fr.Source.ID
+			}
 		}
 	}
 

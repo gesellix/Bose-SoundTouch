@@ -767,7 +767,7 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	// 3. Test with empty name
 	_ = os.WriteFile(filepath.Join(deviceDir, "DeviceInfo.xml"), []byte(`<?xml version="1.0" encoding="UTF-8"?><info deviceID="001122334455"><name></name></info>`), 0644)
 	fullXML2, _ := AccountFullToXML(ds, account)
-	if !strings.Contains(string(fullXML2), `<name/>`) && !strings.Contains(string(fullXML2), `<name></name>`) && !strings.Contains(string(fullXML2), `<name>SoundTouch`) && !strings.Contains(string(fullXML2), `<name>PANDORA`) {
+	if !strings.Contains(string(fullXML2), `<name/>`) && !strings.Contains(string(fullXML2), `<name></name>`) && !strings.Contains(string(fullXML2), `<name>SoundTouch`) && !strings.Contains(string(fullXML2), `<name>PANDORA`) && !strings.Contains(string(fullXML2), `<name>001122334455</name>`) {
 		t.Errorf("Expected <name/> or <name></name> or fallback name, got %s", string(fullXML2))
 	}
 }

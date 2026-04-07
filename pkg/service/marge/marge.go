@@ -770,7 +770,7 @@ func mapToFullResponseSource(s models.ConfiguredSource) models.FullResponseSourc
 		fullSource.SourceName = ""
 	}
 
-	if fullSource.Username == "" {
+	if fullSource.Username == "" && s.SourceKeyType != "TUNEIN" && s.SourceKeyType != "INTERNET_RADIO" && s.SourceKeyType != "LOCAL_INTERNET_RADIO" {
 		fullSource.Username = s.SourceKeyAccount
 	}
 
@@ -901,6 +901,9 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 
 		if matchedSource != nil {
 			fullRecent.Source = mapToFullResponseSource(*matchedSource)
+			if fullRecent.SourceID == "" {
+				fullRecent.SourceID = fullRecent.Source.ID
+			}
 		}
 
 		fullRecents = append(fullRecents, fullRecent)

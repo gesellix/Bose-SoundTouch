@@ -724,13 +724,63 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 
 	path := filepath.Join(dir, constants.RecentsFile)
 
+	type RecentXML struct {
+		DeviceID    string `xml:"deviceID,attr,omitempty"`
+		UtcTime     string `xml:"utcTime,attr,omitempty"`
+		ID          string `xml:"id,attr"`
+		ContentItem struct {
+			Source        string `xml:"source,attr"`
+			Type          string `xml:"type,attr"`
+			Location      string `xml:"location,attr"`
+			SourceAccount string `xml:"sourceAccount,attr"`
+			IsPresetable  string `xml:"isPresetable,attr"`
+			ItemName      string `xml:"itemName"`
+			ContainerArt  string `xml:"containerArt,omitempty"`
+		} `xml:"contentItem"`
+		CreatedOn    string                   `xml:"createdOn,omitempty"`
+		UpdatedOn    string                   `xml:"updatedOn,omitempty"`
+		LastPlayedAt string                   `xml:"lastplayedat,omitempty"`
+		SourceID     string                   `xml:"sourceid,omitempty"`
+		Username     string                   `xml:"username,omitempty"`
+		Source       *models.ConfiguredSource `xml:"source,omitempty"`
+	}
+
 	type RecentsXML struct {
-		XMLName xml.Name               `xml:"recents"`
-		Recents []models.ServiceRecent `xml:"recent"`
+		XMLName xml.Name    `xml:"recents"`
+		Recents []RecentXML `xml:"recent"`
 	}
 
 	wrap := RecentsXML{
-		Recents: recents,
+		Recents: make([]RecentXML, 0, len(recents)),
+	}
+
+	for i := range recents {
+		r := &recents[i]
+		rx := RecentXML{
+			DeviceID:     r.DeviceID,
+			UtcTime:      r.UtcTime,
+			ID:           r.ID,
+			CreatedOn:    r.CreatedOn,
+			UpdatedOn:    r.UpdatedOn,
+			LastPlayedAt: r.LastPlayedAt,
+			SourceID:     r.SourceID,
+			Username:     r.Username,
+		}
+		rx.ContentItem.Source = r.Source
+		rx.ContentItem.Type = r.Type
+		rx.ContentItem.Location = r.Location
+		rx.ContentItem.SourceAccount = r.SourceAccount
+
+		rx.ContentItem.IsPresetable = r.IsPresetable
+		if rx.ContentItem.IsPresetable == "" {
+			rx.ContentItem.IsPresetable = "true"
+		}
+
+		rx.ContentItem.ItemName = r.Name
+		rx.ContentItem.ContainerArt = r.ContainerArt
+		rx.Source = r.SourceConfig
+
+		wrap.Recents = append(wrap.Recents, rx)
 	}
 
 	data, err := xml.MarshalIndent(wrap, "", "    ")

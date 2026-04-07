@@ -144,6 +144,7 @@ type ServiceContentItem struct {
 	SourceAccount   string `json:"source_account,omitempty" xml:"sourceAccount,attr,omitempty"`
 	SourceID        string `json:"source_id,omitempty" xml:"sourceid,omitempty"`
 	IsPresetable    string `json:"is_presetable,omitempty" xml:"isPresetable,attr,omitempty"`
+	Username        string `json:"username,omitempty" xml:"username,omitempty"`
 }
 
 // ServicePreset represents a user-defined preset for quick access to media content.
@@ -282,13 +283,17 @@ func (r *ServiceRecent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		ContentItem  *NestedContentItem `xml:"contentItem,omitempty"`
 		// Flat format might use these tags
 		FlatLocation        string `xml:"location"`
-		FlatContentItemType string `xml:"contentItemType"`
-		FlatName            string `xml:"name"`
-		FlatSourceID        string `xml:"sourceid"`
-		FlatSource          string `xml:"source_key"`
 		FlatTypeTag         string `xml:"type"`
+		AttrType            string `xml:"type,attr"`
 		FlatSourceAccount   string `xml:"sourceAccount"`
 		FlatIsPresetable    string `xml:"isPresetable"`
+		FlatContentItemType string `xml:"contentItemType"`
+		AttrContentItemType string `xml:"contentItemType,attr"`
+		FlatName            string `xml:"name"`
+		FlatSourceID        string `xml:"sourceid"`
+		FlatSourceIDAttr    string `xml:"sourceid,attr"`
+		FlatSource          string `xml:"source_key"`
+		AttrSource          string `xml:"source,attr"`
 	}
 
 	var a Alias
@@ -326,24 +331,38 @@ func (r *ServiceRecent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 			r.Location = a.FlatLocation
 		}
 
-		if a.FlatContentItemType != "" {
+		switch {
+		case a.FlatContentItemType != "":
 			r.ContentItemType = a.FlatContentItemType
+		case a.FlatTypeTag != "":
+			r.ContentItemType = a.FlatTypeTag
+		case a.AttrType != "":
+			r.ContentItemType = a.AttrType
+		}
+
+		switch {
+		case a.FlatTypeTag != "":
+			r.Type = a.FlatTypeTag
+		case a.AttrType != "":
+			r.Type = a.AttrType
+		}
+
+		switch {
+		case a.FlatSourceID != "":
+			r.SourceID = a.FlatSourceID
+		case a.FlatSourceIDAttr != "":
+			r.SourceID = a.FlatSourceIDAttr
+		}
+
+		switch {
+		case a.FlatSource != "":
+			r.Source = a.FlatSource
+		case a.AttrSource != "":
+			r.Source = a.AttrSource
 		}
 
 		if a.FlatName != "" {
 			r.Name = a.FlatName
-		}
-
-		if a.FlatSourceID != "" {
-			r.SourceID = a.FlatSourceID
-		}
-
-		if a.FlatSource != "" {
-			r.Source = a.FlatSource
-		}
-
-		if a.FlatTypeTag != "" {
-			r.Type = a.FlatTypeTag
 		}
 
 		if a.FlatSourceAccount != "" {

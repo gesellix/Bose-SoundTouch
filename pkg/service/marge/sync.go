@@ -178,12 +178,14 @@ func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSou
 		p := &presetsSource[i]
 		preset := models.ServicePreset{
 			ServiceContentItem: models.ServiceContentItem{
+				ID:              p.ButtonNumber,
 				ContentItemType: p.ContentItemType,
 				Location:        p.Location,
 				Name:            p.Name,
 				Source:          p.Source.Type,
 				SourceID:        p.Source.ID,
 				SourceAccount:   p.Source.Username,
+				Type:            p.ContentItemType,
 			},
 			ButtonNumber: p.ButtonNumber,
 			ID:           p.ButtonNumber,
@@ -226,6 +228,7 @@ func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSou
 				Source:          r.Source.Type,
 				SourceID:        r.Source.ID,
 				SourceAccount:   r.Source.Username,
+				Type:            r.ContentItemType,
 			},
 			CreatedOn:    r.CreatedOn,
 			UpdatedOn:    r.UpdatedOn,
