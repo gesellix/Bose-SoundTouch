@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
@@ -310,7 +312,12 @@ func mapToFullResponsePreset(p *models.ServicePreset, configuredSources []models
 		Location:        p.Location,
 		Name:            p.Name,
 		UpdatedOn:       p.UpdatedOn,
+		Username:        p.Username,
 	}
+	if fp.Username == "" {
+		fp.Username = p.Name
+	}
+
 	if fp.Name == "" {
 		fp.Name = p.Name
 	}
@@ -355,6 +362,16 @@ func mapToFullResponseRecent(r *models.ServiceRecent, configuredSources []models
 		Name:            r.Name,
 		SourceID:        r.SourceID,
 		UpdatedOn:       r.UpdatedOn,
+		Username:        r.Username,
+	}
+	if fr.LastPlayedAt == "" && r.UtcTime != "" {
+		if ut, err := strconv.ParseInt(r.UtcTime, 10, 64); err == nil {
+			fr.LastPlayedAt = time.Unix(ut, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+		}
+	}
+
+	if fr.Username == "" {
+		fr.Username = r.Name
 	}
 
 	if fr.Name == "" {

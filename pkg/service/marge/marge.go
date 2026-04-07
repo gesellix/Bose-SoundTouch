@@ -826,6 +826,10 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 			UpdatedOn:       p.UpdatedOn,
 			Username:        p.Username,
 		}
+		if fullPreset.Username == "" {
+			fullPreset.Username = p.Name
+		}
+
 		if fullPreset.ContentItemType == "" && p.Type != "" {
 			fullPreset.ContentItemType = p.Type
 		}
@@ -890,8 +894,18 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 			Name:            r.Name,
 			SourceID:        r.SourceID,
 			UpdatedOn:       r.UpdatedOn,
-			Username:        r.Name,
+			Username:        r.Username,
 		}
+		if fullRecent.LastPlayedAt == "" && r.UtcTime != "" {
+			if ut, err := strconv.ParseInt(r.UtcTime, 10, 64); err == nil {
+				fullRecent.LastPlayedAt = time.Unix(ut, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+			}
+		}
+
+		if fullRecent.Username == "" {
+			fullRecent.Username = r.Name
+		}
+
 		if fullRecent.ContentItemType == "" && r.Type != "" {
 			fullRecent.ContentItemType = r.Type
 		}
