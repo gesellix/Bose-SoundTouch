@@ -560,17 +560,15 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 	for i := range presetsWrap.Presets {
 		p := &presetsWrap.Presets[i]
 
-		cit := p.ContentItem.Type
-
 		presets = append(presets, models.ServicePreset{
 			ServiceContentItem: models.ServiceContentItem{
 				Name:            p.ContentItem.ItemName,
 				Source:          p.ContentItem.Source,
 				Type:            p.ContentItem.Type,
+				ContentItemType: p.ContentItem.Type,
 				Location:        p.ContentItem.Location,
 				SourceAccount:   p.ContentItem.SourceAccount,
 				IsPresetable:    p.ContentItem.IsPresetable,
-				ContentItemType: cit,
 			},
 			ID:           p.ID,
 			ButtonNumber: p.ID,
@@ -700,7 +698,9 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 	for i := range recents {
 		r := &recents[i]
 		if r.ContentItemType == "" {
-			r.ContentItemType = r.Type
+			if r.Type != "" {
+				r.ContentItemType = r.Type
+			}
 		}
 
 		if _, err := strconv.Atoi(recents[i].ID); err != nil || recents[i].ID == "" {

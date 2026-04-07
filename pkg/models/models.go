@@ -311,6 +311,7 @@ func (r *ServiceRecent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 	if a.ContentItem != nil {
 		r.Source = a.ContentItem.Source
 		r.Type = a.ContentItem.Type
+		r.ContentItemType = a.ContentItem.Type // Set ContentItemType from nested type
 		r.Location = a.ContentItem.Location
 		r.SourceAccount = a.ContentItem.SourceAccount
 		r.IsPresetable = a.ContentItem.IsPresetable
@@ -414,8 +415,8 @@ type ConfiguredSource struct {
 	XMLName     xml.Name `json:"-" xml:"source"`
 	DisplayName string   `json:"display_name" xml:"displayName,attr,omitempty"`
 	ID          string   `json:"id" xml:"id,attr,omitempty"`
-	Secret      string   `json:"secret" xml:"-"`
-	SecretType  string   `json:"secret_type" xml:"-"`
+	Secret      string   `json:"secret" xml:"secret,attr,omitempty"`
+	SecretType  string   `json:"secret_type" xml:"secretType,attr,omitempty"`
 	Credential  struct {
 		Type  string `xml:"type,attr"`
 		Value string `xml:",chardata"`
