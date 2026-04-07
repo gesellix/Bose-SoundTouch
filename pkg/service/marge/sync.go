@@ -192,19 +192,6 @@ func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSou
 			CreatedOn:    p.CreatedOn,
 			UpdatedOn:    p.UpdatedOn,
 			ContainerArt: p.ContainerArt,
-			SourceConfig: &models.ConfiguredSource{
-				ID:               p.Source.ID,
-				Type:             p.Source.Type,
-				CreatedOn:        p.Source.CreatedOn,
-				UpdatedOn:        p.Source.UpdatedOn,
-				SourceName:       p.Source.SourceName,
-				DisplayName:      p.Source.Name,
-				Name:             p.Source.Name,
-				SourceProviderID: p.Source.SourceProviderID,
-				Secret:           p.Source.Credential.Value,
-				SecretType:       p.Source.Credential.Type,
-				Username:         p.Source.Username,
-			},
 		}
 		presets = append(presets, preset)
 	}
@@ -233,19 +220,6 @@ func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSou
 			CreatedOn:    r.CreatedOn,
 			UpdatedOn:    r.UpdatedOn,
 			LastPlayedAt: r.LastPlayedAt,
-			SourceConfig: &models.ConfiguredSource{
-				ID:               r.Source.ID,
-				Type:             r.Source.Type,
-				CreatedOn:        r.Source.CreatedOn,
-				UpdatedOn:        r.Source.UpdatedOn,
-				SourceName:       r.Source.SourceName,
-				DisplayName:      r.Source.Name,
-				Name:             r.Source.Name,
-				SourceProviderID: r.Source.SourceProviderID,
-				Secret:           r.Source.Credential.Value,
-				SecretType:       r.Source.Credential.Type,
-				Username:         r.Source.Username,
-			},
 		}
 		recents = append(recents, recent)
 	}

@@ -415,15 +415,8 @@ func TestSyncSourcesAttributes(t *testing.T) {
 	}
 
 	lp := presets[0]
-	if lp.SourceConfig == nil {
-		t.Fatal("SourceConfig is nil for synced preset")
-	}
-
-	if lp.SourceConfig.ID != "10863533" {
-		t.Errorf("Synced preset source ID mismatch: expected 10863533, got '%s'", lp.SourceConfig.ID)
-	}
-	if lp.SourceConfig.Type != "Audio" {
-		t.Errorf("Synced preset source Type mismatch: expected Audio, got '%s'", lp.SourceConfig.Type)
+	if lp.SourceID != "10863533" {
+		t.Errorf("Synced preset source ID mismatch: expected 10863533, got '%s'", lp.SourceID)
 	}
 
 	recents, err := ds.GetRecents("1234567", "08DF1F0BA325")
@@ -434,14 +427,8 @@ func TestSyncSourcesAttributes(t *testing.T) {
 		t.Fatal("No recents found in datastore after sync")
 	}
 	lr := recents[0]
-	if lr.SourceConfig == nil {
-		t.Fatal("SourceConfig is nil for synced recent")
-	}
-	if lr.SourceConfig.ID != "10863533" {
-		t.Errorf("Synced recent source ID mismatch: expected 10863533, got '%s'", lr.SourceConfig.ID)
-	}
-	if lr.SourceConfig.Type != "Audio" {
-		t.Errorf("Synced recent source Type mismatch: expected Audio, got '%s'", lr.SourceConfig.Type)
+	if lr.SourceID != "10863533" {
+		t.Errorf("Synced recent source ID mismatch: expected 10863533, got '%s'", lr.SourceID)
 	}
 }
 

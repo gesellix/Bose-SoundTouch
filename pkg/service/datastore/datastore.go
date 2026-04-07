@@ -547,7 +547,7 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 				ItemName      string `xml:"itemName"`
 				ContainerArt  string `xml:"containerArt"`
 			} `xml:"contentItem"`
-			Source *models.ConfiguredSource `xml:"source"`
+			SourceID string `xml:"sourceid"`
 		} `xml:"preset"`
 	}
 
@@ -569,13 +569,13 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 				Location:        p.ContentItem.Location,
 				SourceAccount:   p.ContentItem.SourceAccount,
 				IsPresetable:    p.ContentItem.IsPresetable,
+				SourceID:        p.SourceID,
 			},
 			ID:           p.ID,
 			ButtonNumber: p.ID,
 			ContainerArt: p.ContentItem.ContainerArt,
 			CreatedOn:    p.CreatedOn,
 			UpdatedOn:    p.UpdatedOn,
-			SourceConfig: p.Source,
 		})
 	}
 
@@ -605,7 +605,7 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 			ItemName      string `xml:"itemName"`
 			ContainerArt  string `xml:"containerArt"`
 		} `xml:"contentItem"`
-		Source *models.ConfiguredSource `xml:"source,omitempty"`
+		SourceID string `xml:"sourceid,omitempty"`
 	}
 
 	type PresetsXML struct {
@@ -634,7 +634,7 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 		pxml.ContentItem.IsPresetable = "true"
 		pxml.ContentItem.ItemName = p.Name
 		pxml.ContentItem.ContainerArt = p.ContainerArt
-		pxml.Source = p.SourceConfig
+		pxml.SourceID = p.SourceID
 		px.Presets = append(px.Presets, pxml)
 	}
 
@@ -668,31 +668,74 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.ServiceRecent{}, nil
+		}
+
 		return nil, err
 	}
 
-	type RecentsXML struct {
-		XMLName xml.Name               `xml:"recents"`
-		Recents []models.ServiceRecent `xml:"recent"`
+	type RecentXML struct {
+		DeviceID    string `xml:"deviceID,attr,omitempty"`
+		UtcTime     string `xml:"utcTime,attr,omitempty"`
+		ID          string `xml:"id,attr"`
+		ContentItem struct {
+			Source        string `xml:"source,attr"`
+			Type          string `xml:"type,attr"`
+			Location      string `xml:"location,attr"`
+			SourceAccount string `xml:"sourceAccount,attr"`
+			IsPresetable  string `xml:"isPresetable,attr"`
+			ItemName      string `xml:"itemName"`
+			ContainerArt  string `xml:"containerArt,omitempty"`
+		} `xml:"contentItem"`
+		CreatedOn    string `xml:"createdOn,omitempty"`
+		UpdatedOn    string `xml:"updatedOn,omitempty"`
+		LastPlayedAt string `xml:"lastplayedat,omitempty"`
+		SourceID     string `xml:"sourceid,omitempty"`
+		Username     string `xml:"username,omitempty"`
 	}
 
-	var recentsWrap RecentsXML
+	type RecentsXML struct {
+		XMLName xml.Name    `xml:"recents"`
+		Recents []RecentXML `xml:"recent"`
+	}
 
-	if err := xml.Unmarshal(data, &recentsWrap); err != nil {
+	var wrap RecentsXML
+	if err := xml.Unmarshal(data, &wrap); err != nil {
 		return nil, fmt.Errorf("malformed recents XML at %s: %w", path, err)
 	}
 
-	recents := recentsWrap.Recents
+	recents := make([]models.ServiceRecent, 0, len(wrap.Recents))
 	maxID := 0
 
-	for i := range recents {
-		r := &recents[i]
+	for i := range wrap.Recents {
+		rx := &wrap.Recents[i]
+		r := models.ServiceRecent{
+			DeviceID: rx.DeviceID,
+			UtcTime:  rx.UtcTime,
+			ServiceContentItem: models.ServiceContentItem{
+				ID:            rx.ID,
+				Name:          rx.ContentItem.ItemName,
+				Source:        rx.ContentItem.Source,
+				Type:          rx.ContentItem.Type,
+				Location:      rx.ContentItem.Location,
+				SourceAccount: rx.ContentItem.SourceAccount,
+				IsPresetable:  rx.ContentItem.IsPresetable,
+				ContainerArt:  rx.ContentItem.ContainerArt,
+			},
+			CreatedOn:    rx.CreatedOn,
+			UpdatedOn:    rx.UpdatedOn,
+			LastPlayedAt: rx.LastPlayedAt,
+		}
+		r.SourceID = rx.SourceID
 
 		if id, err := strconv.Atoi(r.ID); err == nil {
 			if id > maxID {
 				maxID = id
 			}
 		}
+
+		recents = append(recents, r)
 	}
 
 	for i := range recents {
@@ -737,12 +780,11 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 			ItemName      string `xml:"itemName"`
 			ContainerArt  string `xml:"containerArt,omitempty"`
 		} `xml:"contentItem"`
-		CreatedOn    string                   `xml:"createdOn,omitempty"`
-		UpdatedOn    string                   `xml:"updatedOn,omitempty"`
-		LastPlayedAt string                   `xml:"lastplayedat,omitempty"`
-		SourceID     string                   `xml:"sourceid,omitempty"`
-		Username     string                   `xml:"username,omitempty"`
-		Source       *models.ConfiguredSource `xml:"source,omitempty"`
+		CreatedOn    string `xml:"createdOn,omitempty"`
+		UpdatedOn    string `xml:"updatedOn,omitempty"`
+		LastPlayedAt string `xml:"lastplayedat,omitempty"`
+		SourceID     string `xml:"sourceid,omitempty"`
+		Username     string `xml:"username,omitempty"`
 	}
 
 	type RecentsXML struct {
@@ -778,7 +820,7 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 
 		rx.ContentItem.ItemName = r.Name
 		rx.ContentItem.ContainerArt = r.ContainerArt
-		rx.Source = r.SourceConfig
+		rx.SourceID = r.SourceID
 
 		wrap.Recents = append(wrap.Recents, rx)
 	}

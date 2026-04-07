@@ -319,31 +319,27 @@ func mapToFullResponsePreset(p *models.ServicePreset, configuredSources []models
 		fp.CreatedOn = p.CreatedOn
 	}
 
-	if p.SourceConfig != nil {
-		fp.Source = mapToFullResponseSource(p.SourceConfig)
-	} else {
-		// Attempt to find matching source in configuredSources
-		found := false
+	// Attempt to find matching source in configuredSources
+	found := false
 
-		for k := range configuredSources {
-			src := &configuredSources[k]
-			if src.SourceKey.Type == p.Source && (src.SourceKey.Account == p.SourceAccount || p.SourceAccount == "") {
-				fp.Source = mapToFullResponseSource(src)
-				found = true
+	for k := range configuredSources {
+		src := &configuredSources[k]
+		if src.SourceKey.Type == p.Source && (src.SourceKey.Account == p.SourceAccount || p.SourceAccount == "") {
+			fp.Source = mapToFullResponseSource(src)
+			found = true
 
-				break
-			}
+			break
 		}
+	}
 
-		if !found && p.Source != "" {
-			// Create a dummy source for UI purposes if not found in configured sources
-			dummy := &models.ConfiguredSource{
-				Type: p.Source,
-			}
-			dummy.SourceKey.Type = p.Source
-			dummy.SourceKey.Account = p.SourceAccount
-			fp.Source = mapToFullResponseSource(dummy)
+	if !found && p.Source != "" {
+		// Create a dummy source for UI purposes if not found in configured sources
+		dummy := &models.ConfiguredSource{
+			Type: p.Source,
 		}
+		dummy.SourceKey.Type = p.Source
+		dummy.SourceKey.Account = p.SourceAccount
+		fp.Source = mapToFullResponseSource(dummy)
 	}
 
 	return fp
@@ -371,41 +367,34 @@ func mapToFullResponseRecent(r *models.ServiceRecent, configuredSources []models
 		fr.CreatedOn = r.UtcTime
 	}
 
-	if r.SourceConfig != nil {
-		fr.Source = mapToFullResponseSource(r.SourceConfig)
-		if fr.SourceID == "" {
-			fr.SourceID = fr.Source.ID
-		}
-	} else {
-		// Attempt to find matching source in configuredSources
-		found := false
+	// Attempt to find matching source in configuredSources
+	found := false
 
-		for k := range configuredSources {
-			src := &configuredSources[k]
-			if src.SourceKey.Type == r.Source && (src.SourceKey.Account == r.SourceAccount || r.SourceAccount == "") {
-				fr.Source = mapToFullResponseSource(src)
-				if fr.SourceID == "" {
-					fr.SourceID = fr.Source.ID
-				}
-
-				found = true
-
-				break
-			}
-		}
-
-		if !found && r.Source != "" {
-			// Create a dummy source for UI purposes if not found in configured sources
-			dummy := &models.ConfiguredSource{
-				Type: r.Source,
-			}
-			dummy.SourceKey.Type = r.Source
-			dummy.SourceKey.Account = r.SourceAccount
-
-			fr.Source = mapToFullResponseSource(dummy)
+	for k := range configuredSources {
+		src := &configuredSources[k]
+		if src.SourceKey.Type == r.Source && (src.SourceKey.Account == r.SourceAccount || r.SourceAccount == "") {
+			fr.Source = mapToFullResponseSource(src)
 			if fr.SourceID == "" {
 				fr.SourceID = fr.Source.ID
 			}
+
+			found = true
+
+			break
+		}
+	}
+
+	if !found && r.Source != "" {
+		// Create a dummy source for UI purposes if not found in configured sources
+		dummy := &models.ConfiguredSource{
+			Type: r.Source,
+		}
+		dummy.SourceKey.Type = r.Source
+		dummy.SourceKey.Account = r.SourceAccount
+
+		fr.Source = mapToFullResponseSource(dummy)
+		if fr.SourceID == "" {
+			fr.SourceID = fr.Source.ID
 		}
 	}
 

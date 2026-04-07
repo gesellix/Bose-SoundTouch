@@ -2212,10 +2212,10 @@ func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
 				SourceAccount: r.ContentItem.SourceAccount,
 				SourceID:      "", // RecentsResponseItem doesn't have SourceID usually
 				IsPresetable:  strconv.FormatBool(r.ContentItem.IsPresetable),
+				ContainerArt:  r.ContentItem.ContainerArt,
 			},
-			DeviceID:     r.DeviceID,
-			UtcTime:      strconv.FormatInt(r.UTCTime, 10),
-			ContainerArt: r.ContentItem.ContainerArt,
+			DeviceID: r.DeviceID,
+			UtcTime:  strconv.FormatInt(r.UTCTime, 10),
 		})
 	}
 
