@@ -38,7 +38,7 @@ services:
           memory: 128M
 
   spotify-mock:
-    image: golang:1.26.1-alpine
+    image: golang:1.26.2-alpine
     container_name: spotify-mock
     working_dir: /app
     volumes:
