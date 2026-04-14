@@ -440,7 +440,7 @@ jobs:
           echo "release_notes_file=release_notes.md" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag }}
           name: "Bose SoundTouch Go Library ${{ github.event.inputs.tag }}"
@@ -470,7 +470,7 @@ jobs:
           path: ./release-assets
 
       - name: Upload additional assets to existing release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
