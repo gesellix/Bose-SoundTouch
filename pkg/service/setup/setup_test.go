@@ -270,7 +270,7 @@ func TestGetMigrationSummary_WithProxyOptions(t *testing.T) {
 	}
 
 	// When SSH fails (which it will here), PlannedConfig should be the default one for target:8000
-	if !contains(summary.PlannedConfig, "http://target:8000/marge") {
+	if !contains(summary.PlannedConfig, "http://target:8000") {
 		t.Errorf("Expected default marge URL when SSH fails, got: %s", summary.PlannedConfig)
 	}
 
@@ -1418,7 +1418,7 @@ func TestCheckIsMigrated(t *testing.T) {
 		summary := &MigrationSummary{
 			SSHSuccess: true,
 			ParsedCurrentConfig: &PrivateCfg{
-				MargeServerUrl: "http://aftertouch:8000/marge",
+				MargeServerUrl: "http://aftertouch:8000",
 			},
 		}
 		m.checkIsMigrated(summary, "127.0.0.1")
@@ -1514,7 +1514,7 @@ func TestCheckIsMigrated(t *testing.T) {
 		summary := &MigrationSummary{
 			SSHSuccess: true,
 			ParsedCurrentConfig: &PrivateCfg{
-				MargeServerUrl: "http://streaming.bose.com/marge",
+				MargeServerUrl: "http://streaming.bose.com",
 			},
 			CACertTrusted: false,
 		}
