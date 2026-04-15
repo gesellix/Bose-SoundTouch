@@ -217,7 +217,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 
 	// 1. Initial planned config
 	plannedCfg := PrivateCfg{
-		MargeServerUrl:             fmt.Sprintf("%s", targetURL),
+		MargeServerUrl:             targetURL,
 		StatsServerUrl:             targetURL,
 		SwUpdateUrl:                fmt.Sprintf("%s/updates/soundtouch", targetURL),
 		UsePandoraProductionServer: true,
@@ -708,7 +708,7 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 	}
 
 	cfg := PrivateCfg{
-		MargeServerUrl:             fmt.Sprintf("%s", targetURL),
+		MargeServerUrl:             targetURL,
 		StatsServerUrl:             targetURL,
 		SwUpdateUrl:                fmt.Sprintf("%s/updates/soundtouch", targetURL),
 		UsePandoraProductionServer: true,
