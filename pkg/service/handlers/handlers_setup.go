@@ -86,7 +86,6 @@ func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, _ *http.Request) 
 	go s.DiscoverDevices(context.Background())
 
 	w.WriteHeader(http.StatusAccepted)
-	_, _ = w.Write([]byte(`{"status": "Discovery started"}`))
 }
 
 // HandleGetDiscoveryStatus returns the current discovery status.

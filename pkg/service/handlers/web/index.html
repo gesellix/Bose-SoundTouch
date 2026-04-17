@@ -152,9 +152,12 @@
             <span style="font-size: 0.8em; color: #666">(Standard services URL)</span>
         </div>
         <div style="margin-bottom: 20px">
-            <label for="discovery-interval">Discovery Interval:</label>
-            <input type="text" id="discovery-interval" placeholder="5m" style="width: 100px"/>
-            <label style="margin-left: 15px"><input type="checkbox" id="discovery-enabled"/> Enable Automated Discovery</label>
+            <strong>Device Discovery:</strong>
+            <div style="margin-top: 5px">
+                <label><input type="checkbox" id="discovery-enabled"/> Enable Automated Discovery</label>
+                <label for="discovery-interval" style="margin-left: 15px">Discovery Interval:</label>
+                <input type="text" id="discovery-interval" placeholder="5m" style="width: 100px"/>
+            </div>
         </div>
         <div style="margin-bottom: 20px">
             <strong>DNS Discovery:</strong>

@@ -1535,7 +1535,13 @@ async function triggerDiscovery() {
     const indicator = document.getElementById("discovery-indicator");
     if (indicator) indicator.style.display = "inline";
     try {
-        await fetch("/setup/discover", {method: "POST"});
+        const response = await fetch("/setup/discover", {method: "POST"});
+        if (!response.ok) {
+            const err = await response.text();
+            alert("Failed to start discovery: " + err);
+            if (indicator) indicator.style.display = "none";
+            return;
+        }
         pollDiscoveryStatus();
     } catch (error) {
         console.error("Failed to trigger discovery", error);
