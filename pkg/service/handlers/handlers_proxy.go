@@ -18,6 +18,7 @@ func (s *Server) HandleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Bose-Proxy-Hop") != "" {
 		log.Printf("[PROXY_LOOP] Loop detected for %s %s, breaking loop", r.Method, r.URL.Path)
 		http.Error(w, "Loop detected", http.StatusNotFound)
+
 		return
 	}
 
@@ -112,6 +113,7 @@ func (s *Server) HandleBoseProxy(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Bose-Proxy-Hop") != "" {
 		log.Printf("[PROXY_LOOP] Loop detected for %s %s, breaking loop", r.Method, r.URL.Path)
 		http.Error(w, "Loop detected", http.StatusNotFound)
+
 		return
 	}
 
