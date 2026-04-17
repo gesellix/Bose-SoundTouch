@@ -50,6 +50,7 @@ type Server struct {
 	Version             string
 	Commit              string
 	Date                string
+	RepoURL             string
 	mgmtUsername        string
 	mgmtPassword        string
 	spotifyClientID     string
@@ -96,13 +97,14 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 }
 
 // SetVersionInfo sets the version information for the server.
-func (s *Server) SetVersionInfo(version, commit, date string) {
+func (s *Server) SetVersionInfo(version, commit, date, repoURL string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.Version = version
 	s.Commit = commit
 	s.Date = date
+	s.RepoURL = repoURL
 }
 
 // SetDiscoverySettings sets the discovery settings for the server.

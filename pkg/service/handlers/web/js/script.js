@@ -464,7 +464,16 @@ async function fetchVersion() {
         const data = await response.json();
         const info = document.getElementById("version-info");
         if (info && data.version) {
-            info.innerText = `AfterTouch ${data.version} (${data.commit}) - ${data.date}`;
+            let versionStr = data.version;
+            if (data.release_url) {
+                versionStr = `<a href="${data.release_url}" target="_blank" style="color: inherit; text-decoration: underline;">${data.version}</a>`;
+            }
+            let commitStr = data.commit;
+            if (data.commit_url) {
+                const shortCommit = data.commit.substring(0, 7);
+                commitStr = `<a href="${data.commit_url}" target="_blank" style="color: inherit; text-decoration: underline;">${shortCommit}</a>`;
+            }
+            info.innerHTML = `AfterTouch ${versionStr} (${commitStr}) - ${data.date}`;
         }
     } catch (error) {
         console.error("Failed to fetch version info", error);

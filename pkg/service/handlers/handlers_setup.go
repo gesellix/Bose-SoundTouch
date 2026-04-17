@@ -1084,14 +1084,34 @@ func (s *Server) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
 // HandleGetVersionInfo returns version information for the service.
 func (s *Server) HandleGetVersionInfo(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	version := s.Version
+	commit := s.Commit
+	date := s.Date
+	repoURL := s.RepoURL
+	s.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 
+	var releaseURL string
+	var commitURL string
+
+	if commit != "" && commit != "unknown" {
+		commitURL = fmt.Sprintf("%s/commit/%s", repoURL, commit)
+	}
+
+	// Release version: should point to the release, e.g. https://github.com/gesellix/Bose-SoundTouch/releases/tag/v0.58.0
+	// "dirty" versions don't get a release link (only the commit).
+	if version != "" && version != "dev" && version != "(devel)" && !strings.Contains(version, "dirty") {
+		releaseURL = fmt.Sprintf("%s/releases/tag/%s", repoURL, version)
+	}
+
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"version": s.Version,
-		"commit":  s.Commit,
-		"date":    s.Date,
+		"version":     version,
+		"commit":      commit,
+		"date":        date,
+		"repo_url":    repoURL,
+		"release_url": releaseURL,
+		"commit_url":  commitURL,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return

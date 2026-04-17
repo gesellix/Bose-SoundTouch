@@ -34,10 +34,14 @@ var (
 	version = "dev"
 	commit  = "unknown"
 	date    = "unknown"
+	repoURL = "https://github.com/gesellix/bose-soundtouch"
 )
 
 func updateBuildInfo() {
 	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Path != "" {
+			repoURL = "https://" + info.Main.Path
+		}
 		if info.Main.Version != "" && info.Main.Version != "(devel)" {
 			version = info.Main.Version
 		}
@@ -48,7 +52,7 @@ func updateBuildInfo() {
 				commit = setting.Value
 			case "vcs.time":
 				if t, err := time.Parse(time.RFC3339, setting.Value); err == nil {
-					date = t.Format("2006-01-02_15:04:05")
+					date = t.Format("2006-01-02 15:04:05")
 				}
 			}
 		}
@@ -300,7 +304,7 @@ func main() {
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetHTTPServerURL(config.httpsServerURL)
-			server.SetVersionInfo(version, commit, date)
+			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
 			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints, persisted.SkipMirrorEndpoints, persisted.PreferredSource)
