@@ -42,6 +42,7 @@ func updateBuildInfo() {
 		if info.Main.Path != "" {
 			repoURL = "https://" + info.Main.Path
 		}
+
 		if info.Main.Version != "" && info.Main.Version != "(devel)" {
 			version = info.Main.Version
 		}

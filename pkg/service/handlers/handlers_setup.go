@@ -1092,8 +1092,10 @@ func (s *Server) HandleGetVersionInfo(w http.ResponseWriter, _ *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	var releaseURL string
-	var commitURL string
+	var (
+		releaseURL string
+		commitURL  string
+	)
 
 	if commit != "" && commit != "unknown" {
 		commitURL = fmt.Sprintf("%s/commit/%s", repoURL, commit)
