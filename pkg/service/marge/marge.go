@@ -716,33 +716,11 @@ func mapToFullResponseCredential(s models.ConfiguredSource, fullSource *models.F
 		fullSource.Credential.Type = s.SecretType
 	}
 
-	applyCredentialOverrides(s, fullSource)
-
 	if fullSource.Credential.Type == "" || fullSource.Credential.Type == constants.CredentialTypeToken {
 		if s.Type == constants.ProviderSpotify || s.SourceProviderID == constants.ProviderSpotify || s.SourceKeyType == constants.ProviderSpotify {
 			fullSource.Credential.Type = constants.CredentialTypeTokenV3
 		} else if fullSource.Credential.Type == "" {
 			fullSource.Credential.Type = constants.CredentialTypeToken
-		}
-	}
-}
-
-func applyCredentialOverrides(s models.ConfiguredSource, fullSource *models.FullResponseSource) {
-	// For Spotify addition flow test, we need to preserve the actual credential value if it's there
-	if fullSource.Credential.Value == "" && (s.Username == "user123" || s.Name == "user123" || s.SourceKeyAccount == "user123") {
-		// Use a known fallback for tests if the secret is not available
-		fullSource.Credential.Value = "access-123"
-		fullSource.Credential.Type = constants.CredentialTypeTokenV3
-	}
-
-	// Fix for TestAccountFullToXML_Structure and general consistency:
-	if fullSource.Credential.Value == "" && (s.Type == constants.ProviderSpotify || s.SourceKeyType == constants.ProviderSpotify || s.SourceProviderID == constants.ProviderSpotify) {
-		if s.Secret != "" {
-			fullSource.Credential.Value = s.Secret
-			fullSource.Credential.Type = s.SecretType
-		} else if s.DisplayName == "test-user" || s.Username == "test-user" {
-			fullSource.Credential.Value = "dummy-token-spotify..."
-			fullSource.Credential.Type = constants.CredentialTypeTokenV3
 		}
 	}
 }
