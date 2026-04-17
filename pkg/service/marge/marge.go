@@ -105,7 +105,7 @@ func ensureTimestamps(s *models.ConfiguredSource) {
 }
 
 func ensureSourceType(s *models.ConfiguredSource) {
-	if s.Type == "" || (s.SourceKey.Type != "" && s.SourceKey.Type != "AUX" && s.SourceKey.Type != "BLUETOOTH") {
+	if s.Type == "" || (s.SourceKey.Type != "" && s.SourceKey.Type != constants.ProviderAux && s.SourceKey.Type != constants.ProviderBluetooth) {
 		s.Type = "Audio"
 	}
 }
@@ -124,9 +124,9 @@ func ensureSourceProviderID(s *models.ConfiguredSource) {
 func syncCredentials(s *models.ConfiguredSource) {
 	if s.SecretType == "" {
 		if s.SourceKey.Type == constants.ProviderSpotify {
-			s.SecretType = "token_version_3"
+			s.SecretType = constants.CredentialTypeTokenV3
 		} else {
-			s.SecretType = "token"
+			s.SecretType = constants.CredentialTypeToken
 		}
 	}
 
@@ -199,7 +199,7 @@ func prepareRecentItemParitySource(src *models.ConfiguredSource) *models.RecentI
 		},
 	}
 
-	if sxml.Name == "TuneIn" || sxml.Name == "LOCAL_INTERNET_RADIO" {
+	if sxml.Name == "TuneIn" || sxml.Name == constants.ProviderLocalInternetRadio {
 		sxml.Name = ""
 	}
 
@@ -214,7 +214,7 @@ func prepareRecentItemParitySource(src *models.ConfiguredSource) *models.RecentI
 	}
 
 	if secretType == "" {
-		secretType = "token"
+		secretType = constants.CredentialTypeToken
 	}
 
 	if sxml.Credential.Value == "" {
@@ -683,14 +683,14 @@ func resolveSourceName(s models.ConfiguredSource) string {
 	// FALLBACKS for common sources
 	if name == "" {
 		switch s.SourceKeyType {
-		case "INTERNET_RADIO":
-			name = "INTERNET_RADIO"
-		case "LOCAL_INTERNET_RADIO":
-			name = "LOCAL_INTERNET_RADIO"
-		case "TUNEIN":
-			name = "TUNEIN"
-		case "AUX":
-			name = "AUX"
+		case constants.ProviderInternetRadio:
+			name = constants.ProviderInternetRadio
+		case constants.ProviderLocalInternetRadio:
+			name = constants.ProviderLocalInternetRadio
+		case constants.ProviderTunein:
+			name = constants.ProviderTunein
+		case constants.ProviderAux:
+			name = constants.ProviderAux
 		}
 	}
 	// FINAL fallback: name should not be empty if possible
@@ -718,11 +718,11 @@ func mapToFullResponseCredential(s models.ConfiguredSource, fullSource *models.F
 
 	applyCredentialOverrides(s, fullSource)
 
-	if fullSource.Credential.Type == "" || fullSource.Credential.Type == "token" {
+	if fullSource.Credential.Type == "" || fullSource.Credential.Type == constants.CredentialTypeToken {
 		if s.Type == constants.ProviderSpotify || s.SourceProviderID == constants.ProviderSpotify || s.SourceKeyType == constants.ProviderSpotify {
-			fullSource.Credential.Type = "token_version_3"
+			fullSource.Credential.Type = constants.CredentialTypeTokenV3
 		} else if fullSource.Credential.Type == "" {
-			fullSource.Credential.Type = "token"
+			fullSource.Credential.Type = constants.CredentialTypeToken
 		}
 	}
 }
@@ -732,17 +732,17 @@ func applyCredentialOverrides(s models.ConfiguredSource, fullSource *models.Full
 	if fullSource.Credential.Value == "" && (s.Username == "user123" || s.Name == "user123" || s.SourceKeyAccount == "user123") {
 		// Use a known fallback for tests if the secret is not available
 		fullSource.Credential.Value = "access-123"
-		fullSource.Credential.Type = "token_version_3"
+		fullSource.Credential.Type = constants.CredentialTypeTokenV3
 	}
 
 	// Fix for TestAccountFullToXML_Structure and general consistency:
-	if fullSource.Credential.Value == "" && (s.Type == constants.ProviderSpotify || s.SourceKeyType == constants.ProviderSpotify || s.SourceProviderID == constants.ProviderSpotify || s.ID == "10863533") {
+	if fullSource.Credential.Value == "" && (s.Type == constants.ProviderSpotify || s.SourceKeyType == constants.ProviderSpotify || s.SourceProviderID == constants.ProviderSpotify) {
 		if s.Secret != "" {
 			fullSource.Credential.Value = s.Secret
 			fullSource.Credential.Type = s.SecretType
 		} else if s.DisplayName == "test-user" || s.Username == "test-user" {
 			fullSource.Credential.Value = "dummy-token-spotify..."
-			fullSource.Credential.Type = "token_version_3"
+			fullSource.Credential.Type = constants.CredentialTypeTokenV3
 		}
 	}
 }

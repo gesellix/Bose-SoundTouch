@@ -293,4 +293,9 @@ const (
 
 	// XMLHeader is the standard XML declaration for Bose SoundTouch responses
 	XMLHeader = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+
+	// CredentialTypeToken is the standard token credential type.
+	CredentialTypeToken = "token"
+	// CredentialTypeTokenV3 is the token version 3 credential type, used for Spotify.
+	CredentialTypeTokenV3 = "token_version_3"
 )
