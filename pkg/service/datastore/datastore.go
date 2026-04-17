@@ -2,6 +2,7 @@
 package datastore
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -1076,6 +1077,124 @@ func (ds *DataStore) RemoveDeviceDir(account, device string) error {
 	return ds.RemoveDevice(account, device)
 }
 
+// DeduceSourceIDs updates the source IDs in the given slice by deducing them from recents and presets.
+func (ds *DataStore) DeduceSourceIDs(account, device string, sources []models.ConfiguredSource) {
+	// Deduce source IDs from recents and presets
+	deducedIDs := ds.collectDeducedIDs(account, device)
+
+	for i := range sources {
+		if id, ok := deducedIDs[sources[i].SourceProviderID]; ok {
+			sources[i].ID = id
+		} else if sources[i].SourceKeyType == "AUX" {
+			if id, ok := deducedIDs["9"]; ok {
+				sources[i].ID = id
+				sources[i].SourceProviderID = "9"
+			}
+		}
+	}
+}
+
+func (ds *DataStore) collectDeducedIDs(account, device string) map[string]string {
+	deducedIDs := make(map[string]string)
+
+	// Check recents and presets to find source IDs for provider IDs 2, 9, 11, 25
+	for _, filename := range []string{constants.RecentsFile, constants.PresetsFile} {
+		fileContent, err := os.ReadFile(filepath.Join(ds.AccountDeviceDir(account, device), filename))
+		if err != nil {
+			continue
+		}
+
+		ds.parseIDsFromFile(fileContent, deducedIDs)
+	}
+
+	return deducedIDs
+}
+
+func (ds *DataStore) parseIDsFromFile(fileContent []byte, deducedIDs map[string]string) {
+	decoder := xml.NewDecoder(bytes.NewReader(fileContent))
+	for {
+		token, _ := decoder.Token()
+		if token == nil {
+			break
+		}
+
+		if se, ok := token.(xml.StartElement); ok {
+			switch se.Name.Local {
+			case "source":
+				ds.parseSourceElement(decoder, &se, deducedIDs)
+			case "recent", "preset":
+				ds.parseRecentPresetElement(decoder, &se, deducedIDs)
+			}
+		}
+	}
+}
+
+func (ds *DataStore) parseSourceElement(decoder *xml.Decoder, se *xml.StartElement, deducedIDs map[string]string) {
+	var s struct {
+		ID               string `xml:"id,attr"`
+		SourceProviderID string `xml:"sourceproviderid"`
+		// Also check for sourceproviderid as attribute just in case
+		SourceProviderIDAttr string `xml:"sourceproviderid,attr"`
+	}
+	if err := decoder.DecodeElement(&s, se); err == nil {
+		pid := s.SourceProviderID
+		if pid == "" {
+			pid = s.SourceProviderIDAttr
+		}
+
+		ds.extractIDs(pid, s.ID, deducedIDs)
+	}
+}
+
+func (ds *DataStore) parseRecentPresetElement(decoder *xml.Decoder, se *xml.StartElement, deducedIDs map[string]string) {
+	var s struct {
+		SourceID         string `xml:"sourceid"`
+		SourceProviderID string `xml:"sourceproviderid"`
+		ContentItem      struct {
+			Source string `xml:"source,attr"`
+			Type   string `xml:"type,attr"`
+		} `xml:"contentItem"`
+		Source struct {
+			SourceProviderID string `xml:"sourceproviderid"`
+		} `xml:"source"`
+	}
+	if err := decoder.DecodeElement(&s, se); err == nil {
+		pid := s.SourceProviderID
+		if pid == "" {
+			pid = s.Source.SourceProviderID
+		}
+
+		if pid == "" {
+			// For AUX, we often don't have provider ID 9 but we know its name/source
+			switch s.ContentItem.Source {
+			case "AUX":
+				pid = "9"
+			case "INTERNET_RADIO":
+				pid = "2"
+			case "LOCAL_INTERNET_RADIO":
+				pid = "11"
+			case "TUNEIN":
+				pid = "25"
+			}
+		}
+
+		ds.extractIDs(pid, s.SourceID, deducedIDs)
+	}
+}
+
+func (ds *DataStore) extractIDs(providerID, sourceID string, deducedIDs map[string]string) {
+	if sourceID == "" || providerID == "" {
+		return
+	}
+	// Stick to the provider ids mentioned: 2, 9, 11, 25
+	switch providerID {
+	case "2", "9", "11", "25":
+		if _, exists := deducedIDs[providerID]; !exists {
+			deducedIDs[providerID] = sourceID
+		}
+	}
+}
+
 // GetConfiguredSources retrieves all configured sources for the specified account and device.
 func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.ConfiguredSource, error) {
 	ds.fileMutex.RLock()
@@ -1086,7 +1205,10 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ds.getDefaultSources(), nil
+			sources := ds.getDefaultSources()
+			ds.DeduceSourceIDs(account, device, sources)
+
+			return sources, nil
 		}
 
 		return nil, err
@@ -1139,9 +1261,6 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 		if ps.Credential.Value != "" {
 			s.Secret = ps.Credential.Value
 			s.SecretType = ps.Credential.Type
-		} else {
-			s.Secret = ps.Secret
-			s.SecretType = ps.SecretType
 		}
 
 		// Ensure Secret/SecretType values are prioritized from legacy fields if still missing

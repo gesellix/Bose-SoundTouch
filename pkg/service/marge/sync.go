@@ -33,14 +33,14 @@ func SyncFromAccountFull(ds *datastore.DataStore, resp *models.AccountFullRespon
 		// 1. Update Device Info
 		syncDeviceInfo(ds, accountID, dev)
 
-		// 2. Update Configured Sources for this device
-		syncConfiguredSources(ds, accountID, deviceID, resp.Sources, dev)
-
-		// 3. Update Presets
+		// 2. Update Presets
 		syncPresets(ds, accountID, deviceID, dev.Presets)
 
-		// 4. Update Recents
+		// 3. Update Recents
 		syncRecents(ds, accountID, deviceID, dev.Recents)
+
+		// 4. Update Configured Sources for this device (requires presets and recents to be on disk for deduction)
+		syncConfiguredSources(ds, accountID, deviceID, resp.Sources, dev)
 	}
 
 	log.Printf("[SYNC] Synchronization completed for account %s", accountID)
@@ -165,6 +165,9 @@ func syncConfiguredSources(ds *datastore.DataStore, accountID, deviceID string, 
 			seen[r.Source.ID] = true
 		}
 	}
+
+	// 4. Add deduction based on local presets/recents
+	ds.DeduceSourceIDs(accountID, deviceID, deviceSources)
 
 	if err := ds.SaveConfiguredSources(accountID, deviceID, deviceSources); err != nil {
 		log.Printf("[SYNC_ERR] Failed to save sources for %s: %v", deviceID, err)

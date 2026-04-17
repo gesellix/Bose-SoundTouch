@@ -394,17 +394,17 @@ func TestHandleMgmtAccountDetails_Sources(t *testing.T) {
 
 	if gesellixSource == nil {
 		t.Fatal("gesellix source not found")
-	}
-
-	// It should have fallen back to Account name "gesellix" because DisplayName was generic "Audio"
-	if gesellixSource.DisplayName != "gesellix" {
-		t.Errorf("Expected display_name 'gesellix', got '%s'", gesellixSource.DisplayName)
-	}
-	if gesellixSource.Name != "gesellix" {
-		t.Errorf("Expected name 'gesellix', got '%s'", gesellixSource.Name)
-	}
-	if gesellixSource.Type != "Audio" {
-		t.Errorf("Expected type 'Audio', got '%s'", gesellixSource.Type)
+	} else {
+		// It should have fallen back to Account name "gesellix" because DisplayName was generic "Audio"
+		if gesellixSource.DisplayName != "gesellix" {
+			t.Errorf("Expected display_name 'gesellix', got '%s'", gesellixSource.DisplayName)
+		}
+		if gesellixSource.Name != "gesellix" {
+			t.Errorf("Expected name 'gesellix', got '%s'", gesellixSource.Name)
+		}
+		if gesellixSource.Type != "Audio" {
+			t.Errorf("Expected type 'Audio', got '%s'", gesellixSource.Type)
+		}
 	}
 
 	// Find the generic audio source
@@ -417,9 +417,10 @@ func TestHandleMgmtAccountDetails_Sources(t *testing.T) {
 	}
 	if audioSource == nil {
 		t.Fatal("audio source not found")
-	}
-	// It should still be "Audio" as there is no account fallback
-	if audioSource.DisplayName != "Audio" {
-		t.Errorf("Expected display_name 'Audio', got '%s'", audioSource.DisplayName)
+	} else {
+		// It should still be "Audio" as there is no account fallback
+		if audioSource.DisplayName != "Audio" {
+			t.Errorf("Expected display_name 'Audio', got '%s'", audioSource.DisplayName)
+		}
 	}
 }

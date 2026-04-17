@@ -37,16 +37,16 @@ func TestFetchTuneInMetadata(t *testing.T) {
 
 	if metadata == nil {
 		t.Fatal("fetchTuneInMetadata() returned nil metadata")
-	}
+	} else {
+		expectedName := "WDR 2 Rheinland"
+		if metadata.Name != expectedName {
+			t.Errorf("metadata.Name = %v, want %v", metadata.Name, expectedName)
+		}
 
-	expectedName := "WDR 2 Rheinland"
-	if metadata.Name != expectedName {
-		t.Errorf("metadata.Name = %v, want %v", metadata.Name, expectedName)
-	}
-
-	expectedArtwork := "https://cdn-radiotime-logos.tunein.com/s213886g.png"
-	if metadata.Artwork != expectedArtwork {
-		t.Errorf("metadata.Artwork = %v, want %v", metadata.Artwork, expectedArtwork)
+		expectedArtwork := "https://cdn-radiotime-logos.tunein.com/s213886g.png"
+		if metadata.Artwork != expectedArtwork {
+			t.Errorf("metadata.Artwork = %v, want %v", metadata.Artwork, expectedArtwork)
+		}
 	}
 }
 
@@ -192,15 +192,15 @@ func TestFetchSpotifyMetadata(t *testing.T) {
 
 	if metadata == nil {
 		t.Fatal("fetchSpotifyMetadata() returned nil metadata")
-	}
+	} else {
+		expectedName := "Terminal Caribe - Album by Santi & Tuğçe"
+		if metadata.Name != expectedName {
+			t.Errorf("metadata.Name = %v, want %v", metadata.Name, expectedName)
+		}
 
-	expectedName := "Terminal Caribe - Album by Santi & Tuğçe"
-	if metadata.Name != expectedName {
-		t.Errorf("metadata.Name = %v, want %v", metadata.Name, expectedName)
-	}
-
-	expectedArtwork := "https://i.scdn.co/image/ab67616d0000b273f0e55478f4a15182405bcb47"
-	if metadata.Artwork != expectedArtwork {
-		t.Errorf("metadata.Artwork = %v, want %v", metadata.Artwork, expectedArtwork)
+		expectedArtwork := "https://i.scdn.co/image/ab67616d0000b273f0e55478f4a15182405bcb47"
+		if metadata.Artwork != expectedArtwork {
+			t.Errorf("metadata.Artwork = %v, want %v", metadata.Artwork, expectedArtwork)
+		}
 	}
 }
