@@ -1,6 +1,5 @@
 ### GET /streaming/account/{{accountId}}/device/{{deviceId}}/group/
 GET {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/group/
-Host: streaming.bose.com
 Content-Type: application/vnd.bose.streaming-v1.2+xml
 User-Agent: Bose_Lisa/27.0.6
 Accept: application/vnd.bose.streaming-v1.2+xml

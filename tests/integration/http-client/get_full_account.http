@@ -1,22 +1,50 @@
 ### GET /streaming/account/{{accountId}}/full
 GET {{host}}/streaming/account/{{accountId}}/full
-Host: streaming.bose.com
-Authorization: Bearer {{token}}
-Content-Type: application/vnd.bose.streaming-v1.2+xml
 User-Agent: Bose_Lisa/27.0.6
 Accept: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
 
 > {%
     client.test("Request executed successfully", function() {
         client.assert(response.status === 200, "Response status is not 200");
-        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + response.contentType.mimeType + "'");
     });
 
-    client.test("Response body contains <account>", function() {
-        const expectedAccountId = client.variables.environment.get("accountId");
-        const doc = response.body;
-        const account = doc.getElementsByTagName("account")[0];
-        client.assert(account !== undefined, "Response body does not contain <account>");
+    client.test("Response content-type is correct", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/vnd.bose.streaming-v1.2+xml", "Expected 'application/vnd.bose.streaming-v1.2+xml' but received '" + type + "'");
+    });
+
+    client.test("Response body structure", function() {
+        var account = response.body.getElementsByTagName("account")[0];
+        client.assert(account !== null, "Missing 'account' root element");
+        // We use accountId from environment variables
+        var expectedAccountId = client.variables.environment.get("accountId");
         client.assert(account.getAttribute("id") === expectedAccountId, "Expected account id '" + expectedAccountId + "' but received '" + account.getAttribute("id") + "'");
+
+        var accountStatus = account.getElementsByTagName("accountStatus")[0];
+        client.assert(accountStatus.textContent === "OK", "Account status is not OK");
+
+        var devices = account.getElementsByTagName("devices")[0];
+        client.assert(devices !== null, "Missing 'devices' element");
+
+        var deviceList = devices.getElementsByTagName("device");
+        client.assert(deviceList.length > 0, "No 'device' elements found");
+
+        var firstDevice = deviceList[0];
+        client.assert(firstDevice.getAttribute("deviceid").length > 0, "Missing deviceid attribute");
+
+        var attachedProduct = firstDevice.getElementsByTagName("attachedProduct")[0];
+        client.assert(attachedProduct !== null, "Missing 'attachedProduct'");
+        client.assert(attachedProduct.getAttribute("product_code").length > 0, "Missing product_code");
+
+        var presets = firstDevice.getElementsByTagName("presets")[0];
+        client.assert(presets !== undefined, "Missing 'presets' element");
+
+        var recents = firstDevice.getElementsByTagName("recents")[0];
+        client.assert(recents !== undefined, "Missing 'recents' element");
+
+        var sources = account.getElementsByTagName("sources")[0];
+        client.assert(sources !== null, "Missing 'sources' element");
+        client.assert(sources.getElementsByTagName("source").length > 0, "No 'source' elements found in account sources");
     });
 %}

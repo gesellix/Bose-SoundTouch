@@ -1,6 +1,5 @@
 ### POST /streaming/account/{{accountId}}/source (Cloud Source Registration)
 POST {{host}}/streaming/account/{{accountId}}/source
-Host: streaming.bose.com
 User-Agent: Bose_Lisa/27.0.6
 Accept: application/vnd.bose.streaming-v1.1+xml
 Authorization: Bearer {{token}}
@@ -25,7 +24,6 @@ Content-Type: application/vnd.bose.streaming-v1.1+xml
 
 ### PUT /streaming/account/{{accountId}}/device/{{deviceId}}/preset/5
 PUT {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/preset/5
-Host: streaming.bose.com
 User-Agent: Bose_Lisa/27.0.6
 Accept: application/vnd.bose.streaming-v1.2+xml
 Authorization: Bearer {{token}}

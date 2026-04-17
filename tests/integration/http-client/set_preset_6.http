@@ -1,6 +1,5 @@
 ### PUT /streaming/account/{{accountId}}/device/{{deviceId}}/preset/6
 PUT {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/preset/6
-Host: streaming.bose.com
 User-Agent: Bose_Lisa/27.0.6
 Accept: application/vnd.bose.streaming-v1.2+xml
 Authorization: Bearer {{token}}

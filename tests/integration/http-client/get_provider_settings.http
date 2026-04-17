@@ -1,6 +1,5 @@
 ### GET /streaming/account/{{accountId}}/provider_settings
 GET {{host}}/streaming/account/{{accountId}}/provider_settings
-Host: streaming.bose.com
 Accept: application/vnd.bose.streaming-v1.2+xml
 Authorization: Bearer {{token}}
 Content-Type: application/vnd.bose.streaming-v1.2+xml

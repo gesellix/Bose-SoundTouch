@@ -1,6 +1,5 @@
 ### GET /streaming/account/{{accountId}}/device/{{deviceId}}/presets
 GET {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/presets
-Host: streaming.bose.com
 Accept: application/vnd.bose.streaming-v1.2+xml
 Authorization: Bearer {{token}}
 Content-Type: application/vnd.bose.streaming-v1.2+xml
