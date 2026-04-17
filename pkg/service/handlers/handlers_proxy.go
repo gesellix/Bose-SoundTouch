@@ -15,6 +15,12 @@ import (
 
 // HandleProxyRequest handles requests to the logging proxy.
 func (s *Server) HandleProxyRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Bose-Proxy-Hop") != "" {
+		log.Printf("[PROXY_LOOP] Loop detected for %s %s, breaking loop", r.Method, r.URL.Path)
+		http.Error(w, "Loop detected", http.StatusNotFound)
+		return
+	}
+
 	targetURLStr := strings.TrimPrefix(r.URL.Path, "/proxy/")
 	if targetURLStr == "" {
 		http.Error(w, "Target URL is required", http.StatusBadRequest)
@@ -65,6 +71,8 @@ func (s *Server) ServeProxy(target *url.URL) http.HandlerFunc {
 					pr.Out.URL.Path = target.Path
 				}
 
+				pr.Out.Header.Set("X-Bose-Proxy-Hop", "1")
+
 				lp.LogRequest(pr.Out)
 			},
 			Transport: &http.Transport{
@@ -101,6 +109,12 @@ func (s *Server) HandleNotFound(w http.ResponseWriter, r *http.Request) {
 
 // HandleBoseProxy proxies the request to the Bose upstream.
 func (s *Server) HandleBoseProxy(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Bose-Proxy-Hop") != "" {
+		log.Printf("[PROXY_LOOP] Loop detected for %s %s, breaking loop", r.Method, r.URL.Path)
+		http.Error(w, "Loop detected", http.StatusNotFound)
+		return
+	}
+
 	host := r.Host
 	if host == "" {
 		host = "streaming.bose.com"
