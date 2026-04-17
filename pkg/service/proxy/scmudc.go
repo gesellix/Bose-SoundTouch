@@ -6,6 +6,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"strings"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 )
 
 // SCMUDCRequest represents the structure of SCMUDC telemetry requests
@@ -173,13 +175,13 @@ func formatButton(buttonID string) string {
 // summarizeContent creates a brief summary of content items
 func summarizeContent(decoded *DecodedContent) string {
 	switch decoded.ContentType {
-	case "SPOTIFY":
+	case constants.ProviderSpotify:
 		return fmt.Sprintf("Spotify: %s", decoded.ItemName)
-	case "PANDORA":
+	case constants.ProviderPandora:
 		return fmt.Sprintf("Pandora: %s", decoded.ItemName)
-	case "INTERNET_RADIO":
+	case constants.ProviderInternetRadio:
 		return fmt.Sprintf("Radio: %s", decoded.ItemName)
-	case "STORED_MUSIC":
+	case constants.ProviderStoredMusic:
 		return fmt.Sprintf("Library: %s", decoded.ItemName)
 	default:
 		if decoded.ItemName != "" {

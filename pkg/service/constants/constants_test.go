@@ -13,7 +13,7 @@ func TestConstants(t *testing.T) {
 		t.Errorf("Expected SpeakerHTTPPort 8090, got %d", SpeakerHTTPPort)
 	}
 
-	if len(Providers) == 0 {
+	if len(GetProviders()) == 0 {
 		t.Error("Providers should not be empty")
 	}
 }

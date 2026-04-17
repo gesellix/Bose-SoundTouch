@@ -8,8 +8,11 @@ import (
 	"log"
 	"net/http"
 
+	"strconv"
+
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -246,7 +249,7 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 			credential = acc.AccessToken
 		}
 
-		_, err := marge.AddSource(s.ds, accountID, acc.UserID, "15", credential, "token_version_3", acc.DisplayName)
+		_, err := marge.AddSource(s.ds, accountID, acc.UserID, strconv.Itoa(constants.SpotifyProviderID), credential, "token_version_3", acc.DisplayName)
 		if err != nil {
 			log.Printf("[Spotify Bridge] Failed to register source in Marge: %v", err)
 			continue

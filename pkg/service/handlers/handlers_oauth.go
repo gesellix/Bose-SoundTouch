@@ -19,7 +19,7 @@ func (s *Server) HandleBoseToken(w http.ResponseWriter, r *http.Request) {
 	sourceID := chi.URLParam(r, "sourceID")
 
 	for _, provider := range constants.StaticProviders {
-		if strconv.Itoa(provider.ID) == sourceID && provider.Name == "SPOTIFY" {
+		if strconv.Itoa(provider.ID) == sourceID && provider.Name == constants.ProviderSpotify {
 			s.HandleBoseSpotifyToken(w, r)
 			return
 		}
@@ -39,8 +39,8 @@ func (s *Server) HandleBoseLegacyToken(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleBoseAccountToken(w http.ResponseWriter, r *http.Request) {
 	sourceID := chi.URLParam(r, "sourceID")
 
-	// If it's Spotify (15), handle it.
-	if sourceID == "15" {
+	// If it's Spotify, handle it.
+	if sourceID == strconv.Itoa(constants.SpotifyProviderID) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			log.Printf("[OAuth Proxy] Failed to read body: %v", err)

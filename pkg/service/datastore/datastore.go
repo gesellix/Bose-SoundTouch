@@ -1086,9 +1086,10 @@ func (ds *DataStore) DeduceSourceIDs(account, device string, sources []models.Co
 		if id, ok := deducedIDs[sources[i].SourceProviderID]; ok {
 			sources[i].ID = id
 		} else if sources[i].SourceKeyType == "AUX" {
-			if id, ok := deducedIDs["9"]; ok {
+			auxID := strconv.Itoa(constants.AuxProviderID)
+			if id, ok := deducedIDs[auxID]; ok {
 				sources[i].ID = id
-				sources[i].SourceProviderID = "9"
+				sources[i].SourceProviderID = auxID
 			}
 		}
 	}
@@ -1167,14 +1168,14 @@ func (ds *DataStore) parseRecentPresetElement(decoder *xml.Decoder, se *xml.Star
 		if pid == "" {
 			// For AUX, we often don't have provider ID 9 but we know its name/source
 			switch s.ContentItem.Source {
-			case "AUX":
-				pid = "9"
-			case "INTERNET_RADIO":
-				pid = "2"
-			case "LOCAL_INTERNET_RADIO":
-				pid = "11"
-			case "TUNEIN":
-				pid = "25"
+			case constants.ProviderAux:
+				pid = strconv.Itoa(constants.AuxProviderID)
+			case constants.ProviderInternetRadio:
+				pid = strconv.Itoa(constants.InternetRadioProviderID)
+			case constants.ProviderLocalInternetRadio:
+				pid = strconv.Itoa(constants.LocalInternetRadioProviderID)
+			case constants.ProviderTunein:
+				pid = strconv.Itoa(constants.TuneinProviderID)
 			}
 		}
 
@@ -1188,7 +1189,10 @@ func (ds *DataStore) extractIDs(providerID, sourceID string, deducedIDs map[stri
 	}
 	// Stick to the provider ids mentioned: 2, 9, 11, 25
 	switch providerID {
-	case "2", "9", "11", "25":
+	case strconv.Itoa(constants.InternetRadioProviderID),
+		strconv.Itoa(constants.AuxProviderID),
+		strconv.Itoa(constants.LocalInternetRadioProviderID),
+		strconv.Itoa(constants.TuneinProviderID):
 		if _, exists := deducedIDs[providerID]; !exists {
 			deducedIDs[providerID] = sourceID
 		}
@@ -1454,8 +1458,8 @@ func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 		{
 			ID:               "10001",
 			DisplayName:      "AUX IN",
-			SourceKeyType:    "AUX",
-			SourceKeyAccount: "AUX",
+			SourceKeyType:    constants.ProviderAux,
+			SourceKeyAccount: constants.ProviderAux,
 			Type:             "Audio",
 			Status:           "READY",
 			CreatedOn:        "2015-03-11T19:12:38.000+00:00",
@@ -1464,9 +1468,9 @@ func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 		{
 			ID:               "10002",
 			DisplayName:      "",
-			SourceKeyType:    "INTERNET_RADIO",
+			SourceKeyType:    constants.ProviderInternetRadio,
 			SourceKeyAccount: "",
-			SourceProviderID: "2",
+			SourceProviderID: strconv.Itoa(constants.InternetRadioProviderID),
 			Type:             "Audio",
 			SecretType:       "token",
 			Status:           "READY",
@@ -1476,9 +1480,9 @@ func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 		{
 			ID:               "10003",
 			DisplayName:      "",
-			SourceKeyType:    "LOCAL_INTERNET_RADIO",
+			SourceKeyType:    constants.ProviderLocalInternetRadio,
 			SourceKeyAccount: "",
-			SourceProviderID: "11",
+			SourceProviderID: strconv.Itoa(constants.LocalInternetRadioProviderID),
 			Type:             "Audio",
 			Secret:           GenerateSerialSecret("local-internet-radio"),
 			SecretType:       "token",
@@ -1489,9 +1493,9 @@ func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 		{
 			ID:               "10004",
 			DisplayName:      "",
-			SourceKeyType:    "TUNEIN",
+			SourceKeyType:    constants.ProviderTunein,
 			SourceKeyAccount: "",
-			SourceProviderID: "25",
+			SourceProviderID: strconv.Itoa(constants.TuneinProviderID),
 			Type:             "Audio",
 			Secret:           GenerateSerialSecret("tunein"),
 			SecretType:       "token",

@@ -17,6 +17,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/ssh"
 )
@@ -2271,7 +2272,7 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 				cs.SecretType = "token"
 			}
 
-			if s.Source == "SPOTIFY" {
+			if s.Source == constants.ProviderSpotify {
 				cs.SecretType = "token_version_3"
 			}
 

@@ -123,7 +123,7 @@ func ensureSourceProviderID(s *models.ConfiguredSource) {
 
 func syncCredentials(s *models.ConfiguredSource) {
 	if s.SecretType == "" {
-		if s.SourceKey.Type == "SPOTIFY" {
+		if s.SourceKey.Type == constants.ProviderSpotify {
 			s.SecretType = "token_version_3"
 		} else {
 			s.SecretType = "token"
@@ -719,7 +719,7 @@ func mapToFullResponseCredential(s models.ConfiguredSource, fullSource *models.F
 	applyCredentialOverrides(s, fullSource)
 
 	if fullSource.Credential.Type == "" || fullSource.Credential.Type == "token" {
-		if s.Type == "SPOTIFY" || s.SourceProviderID == "SPOTIFY" || s.SourceKeyType == "SPOTIFY" {
+		if s.Type == constants.ProviderSpotify || s.SourceProviderID == constants.ProviderSpotify || s.SourceKeyType == constants.ProviderSpotify {
 			fullSource.Credential.Type = "token_version_3"
 		} else if fullSource.Credential.Type == "" {
 			fullSource.Credential.Type = "token"
@@ -736,7 +736,7 @@ func applyCredentialOverrides(s models.ConfiguredSource, fullSource *models.Full
 	}
 
 	// Fix for TestAccountFullToXML_Structure and general consistency:
-	if fullSource.Credential.Value == "" && (s.Type == "SPOTIFY" || s.SourceKeyType == "SPOTIFY" || s.SourceProviderID == "SPOTIFY" || s.ID == "10863533") {
+	if fullSource.Credential.Value == "" && (s.Type == constants.ProviderSpotify || s.SourceKeyType == constants.ProviderSpotify || s.SourceProviderID == constants.ProviderSpotify || s.ID == "10863533") {
 		if s.Secret != "" {
 			fullSource.Credential.Value = s.Secret
 			fullSource.Credential.Type = s.SecretType
@@ -763,11 +763,11 @@ func mapToFullResponseSource(s models.ConfiguredSource) models.FullResponseSourc
 
 	mapToFullResponseCredential(s, &fullSource)
 
-	if s.SourceKeyType == "TUNEIN" {
+	if s.SourceKeyType == constants.ProviderTunein {
 		fullSource.SourceName = ""
 	}
 
-	if fullSource.Username == "" && s.SourceKeyType != "TUNEIN" && s.SourceKeyType != "INTERNET_RADIO" && s.SourceKeyType != "LOCAL_INTERNET_RADIO" {
+	if fullSource.Username == "" && s.SourceKeyType != constants.ProviderTunein && s.SourceKeyType != constants.ProviderInternetRadio && s.SourceKeyType != constants.ProviderLocalInternetRadio {
 		fullSource.Username = s.SourceKeyAccount
 	}
 
