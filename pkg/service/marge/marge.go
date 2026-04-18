@@ -1230,10 +1230,8 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	presetObj.SourceID = matchingSrc.ID
 	presetObj.Username = newPresetElem.Name
 
-	// Parity: return the preset wrapped in <presets>
-	px := PresetsXML{
-		Presets: []presetParityXML{*mapPresetToParityXML(presetObj, sources)},
-	}
+	// Parity: return the single preset
+	px := mapPresetToParityXML(presetObj, sources)
 
 	data, err := xml.Marshal(px)
 	if err != nil {

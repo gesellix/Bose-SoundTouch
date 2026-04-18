@@ -672,6 +672,12 @@ func TestMargeUpdatePreset(t *testing.T) {
 	// Verify response body has correct XML structure (upstream parity)
 	body, _ := io.ReadAll(res.Body)
 	bodyStr := string(body)
+
+	// Verify no wrapping <presets> element
+	if strings.HasPrefix(bodyStr, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><presets>") {
+		t.Errorf("Response should NOT be wrapped in <presets>: %s", bodyStr)
+	}
+
 	if !strings.Contains(bodyStr, "<preset buttonNumber=\"1\">") {
 		t.Errorf("Response missing <preset buttonNumber=\"1\">: %s", bodyStr)
 	}
