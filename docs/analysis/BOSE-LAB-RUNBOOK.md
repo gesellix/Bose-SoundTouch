@@ -585,7 +585,72 @@ adb install Bose-SoundTouch-patched.apk
 2.  On the phone, use a File Manager to open the APK.
 3.  If prompted, allow "Install from Unknown Sources" for your File Manager.
 
-### Option C: Patching the App with Frida (Requires Root)
+### Option C: Using the macOS Bose SoundTouch App (No Root/Patching Required)
+
+If you have a Mac, using the macOS version of the Bose SoundTouch app is often a good alternative. However, because the app is built on an **older version of Qt (5.7.0)**, it has specific trust and TLS compatibility issues that require extra steps.
+
+#### 1. Install the Custom CA in macOS Keychain
+
+1.  Open **Keychain Access** on your Mac.
+2.  Select the **System** keychain (or **login** if System is locked).
+3.  Drag and drop your `ca.crt` file into the list.
+4.  Double-click the newly added certificate (e.g., "Bose-Lab Root CA").
+5.  Expand the **Trust** section.
+6.  Set "When using this certificate" to **Always Trust**.
+7.  Close the window and authenticate with your Mac password.
+
+#### 2. Configure the Proxy
+
+You can either configure the macOS system proxy manually or use `mitmproxy`'s automatic interception.
+
+**Method 1: System Proxy (Manual)**
+1.  Go to **System Settings → Network → Wi-Fi → Details... → Proxies**.
+2.  Enable **HTTP Proxy** and **HTTPS Proxy**.
+3.  Set Server to your Pi's IP (`192.168.10.1`) and Port to `8080`.
+4.  Click **OK** and **Apply**.
+
+**Method 2: mitmproxy Local Redirect (Automatic)**
+If you are running `mitmproxy` directly on your Mac (instead of the Pi), you can use the modern "Local Redirect" mode which doesn't require proxy settings:
+```bash
+# Install mitmproxy via Homebrew
+brew install mitmproxy
+
+# Start mitmproxy in local redirect mode
+# This uses a macOS Network Extension to intercept traffic from specific apps
+mitmproxy --mode local
+```
+
+#### 3. Special Troubleshooting: Legacy Qt 5.7.0 SSL Failures
+
+If you see `SSL handshake failed` in the `mitmproxy` logs or the app's internal log (`log.txt`), the app's older networking stack is rejecting the connection. This is common because Qt 5.7.0 (2016) lacks support for **TLS 1.3** and many modern root certificates (like Let's Encrypt's **ISRG Root X1**).
+
+**The Solution: Launch with SSL Bypass Flags**
+
+Since the Bose macOS app is a hybrid of **Qt/Chromium** and **Node.js**, you must bypass the trust checks for both engines by launching the app from the terminal:
+
+```bash
+# 1. Bypass QtWebEngine/Chromium (Qt 5.7) trust
+export QTWEBENGINE_CHROMIUM_FLAGS="--ignore-certificate-errors"
+
+# 2. Bypass Node.js (SoundTouch Music Server) trust
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+
+# 3. (Optional) Provide your custom CA directly to Node.js
+export NODE_EXTRA_CA_CERTS="/path/to/your/ca.crt"
+
+# 4. Launch the application
+"/Applications/SoundTouch/SoundTouch.app/Contents/MacOS/SoundTouch"
+```
+
+#### 4. Verify and Capture
+
+1.  Open Safari and visit `https://neverssl.com`. Verify the certificate is issued by your custom CA.
+2.  Launch the Bose app using the terminal command above.
+3.  Watch the traffic flow in `mitmproxy`.
+
+> **Note:** Even on macOS, **Certificate Pinning** is still possible if Bose implemented it specifically in the desktop app code. However, it is much less common on desktop apps than on mobile apps. If it works, you've saved yourself hours of Android patching!
+
+### Option D: Patching the App with Frida (Requires Root)
 
 If the app uses **Certificate Pinning** (hardcoded hashes), even moving the CA to the System store won't work. You must disable the pinning check in the app's code.
 
@@ -625,38 +690,57 @@ mitmproxy --listen-port 8080
 
 ## Step 13 – Extracting for soundtouch-service
 
+You can extract interactions (especially unencrypted WebSockets on port 8090) from a `.pcap` and format them for use in `soundtouch-service`.
+
+### 1. Extract Traffic using Go
+
+A helper script is provided in `scripts/extract-ws.go`. It automatically detects, unmasks, and decompresses (GZIP) WebSocket frames, and also extracts DNS, MDNS, and SSDP traffic.
+
 ```bash
-# Which IPs did the phone receive?
-cat /var/lib/misc/dnsmasq.leases
+# Install dependencies
+go get github.com/google/gopacket
 
-# Is the access point active?
-sudo systemctl status hostapd
+# Run extraction (outputs multiple files: .ws.http, .dns.txt, .mdns.txt, .ssdp.txt)
+# The results will be saved beside your .pcap file
+go run scripts/extract-ws.go your_capture.pcap [filter_ip]
 
-# Is dnsmasq active?
-sudo systemctl status dnsmasq
+# Example: Filter for a specific speaker's IP in WebSocket messages
+go run scripts/extract-ws.go capture.pcap 192.168.100.1
+```
 
-# Check interfaces and IPs
-ip addr show
+### 2. Manual Extraction with tshark
 
-# Check routing table
-ip route show
+If you only need a quick look at the payloads:
 
-# Show active nftables rules
-sudo nft list ruleset
-
-# All running tcpdump processes
-pgrep -a tcpdump
-
-# Test the Pi's own DNS resolution
-dig @127.0.0.1 -p 5353 global.api.bose.io
-
-# Check network connectivity from the phone (from the Pi)
-ping 192.168.10.101   # Phone IP from dnsmasq.leases
+```bash
+# Extract all WebSocket text payloads
+tshark -r your_capture.pcap -Y "websocket.payload.text" -T fields -e websocket.payload.text
 ```
 
 ---
 
-## Restart Sequence
+## Step 14 – Extracting from Internal App Logs (macOS)
+
+If you are using the macOS app and cannot decrypt the cloud traffic due to pinning, you can still extract the JSON/XML messages from the app's internal communication log.
+
+A helper script is provided in `scripts/extract-log-interactions.go`. It parses the interleaved "Native" and "Network" calls to reconstruct the application's internal state and cloud requests.
+
+```bash
+# Run extraction from the log file
+# Outputs a chronological record of internal events and network URLs
+go run scripts/extract-log-interactions.go path/to/log.txt > extracted-interactions.http
+```
+
+**What this shows:**
+- **TO NETWORK:** The URLs the app is about to call (intercepted before encryption).
+- **FROM NATIVE:** Data being returned from the OS or Cloud to the UI.
+- **TO NATIVE:** Commands being sent from the UI to the underlying engines.
+
+This is a powerful "Plan B" when HTTPS decryption is blocked, as the app essentially logs its own decrypted data for you.
+
+---
+
+## Helper Commands / Troubleshooting
 
 After a Pi reboot, everything should come up automatically. If not:
 
@@ -775,3 +859,34 @@ sudo openssl x509 -req -in bose.csr -CA ca.crt -CAkey ca.key \
 ### 3. Usage in your DNS/HTTPS Server
 
 Your custom server (e.g., a small Go or Python script) would then use `bose.crt` and `bose.key` to serve HTTPS traffic for those domains.
+
+## Appendix B – Helpful Commands
+
+```bash
+# Which IPs did the phone receive?
+cat /var/lib/misc/dnsmasq.leases
+
+# Is the access point active?
+sudo systemctl status hostapd
+
+# Is dnsmasq active?
+sudo systemctl status dnsmasq
+
+# Check interfaces and IPs
+ip addr show
+
+# Check routing table
+ip route show
+
+# Show active nftables rules
+sudo nft list ruleset
+
+# All running tcpdump processes
+pgrep -a tcpdump
+
+# Test the Pi's own DNS resolution
+dig @127.0.0.1 -p 5353 global.api.bose.io
+
+# Check network connectivity from the phone (from the Pi)
+ping 192.168.10.101   # Phone IP from dnsmasq.leases
+```

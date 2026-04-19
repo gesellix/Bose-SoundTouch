@@ -60,6 +60,7 @@
 * [IoT Configuration Analysis](analysis/IOT-CONFIGURATION-ANALYSIS.md)
 * [Bose Lab Runbook](analysis/BOSE-LAB-RUNBOOK.md)
 * [Missing Routes Spotify](analysis/MISSING-ROUTES-SPOTIFY.md)
+* [Bose App ADB Emulator](analysis/BOSE-APP-ADB-Emulator.md)
 
 ## Parity Analysis
 * [Parity Improvements](PARITY-IMPROVEMENTS.md)
