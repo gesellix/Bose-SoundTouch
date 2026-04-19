@@ -284,7 +284,7 @@ function handleWebSocketMessage(data) {
             renderDeviceList();
             break;
         case "status_update":
-            if (devices[data.deviceId]) {
+            if (Object.hasOwn(devices, data.deviceId)) {
                 devices[data.deviceId].status = data.data;
                 if (currentDeviceId === data.deviceId) {
                     updateDeviceStatus(data.data);
@@ -406,12 +406,12 @@ function renderDeviceList() {
                         <h5 class="card-title d-flex align-items-center justify-content-between">
                             <span>
                                 <span class="status-indicator status-${isConnected ? "connected" : "disconnected"}"></span>
-                                ${device.info?.Name || "Unknown Device"}
+                                ${escapeHtml(device.info?.Name || "Unknown Device")}
                             </span>
                             <i class="bi ${powerIcon}" title="Power Status"></i>
                         </h5>
                         <p class="card-text">
-                            <strong>Type:</strong> ${device.info?.Type || "Unknown"}<br>
+                            <strong>Type:</strong> ${escapeHtml(device.info?.Type || "Unknown")}<br>
                             <strong>Status:</strong> ${statusText}<br>
                             <strong>Last Seen:</strong> ${lastSeen}
                         </p>
@@ -468,8 +468,8 @@ function renderDeviceControl(deviceId, device) {
     const html = `
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
-                <h2 class="mb-1">${info.Name || "Unknown Device"}</h2>
-                <p class="text-muted mb-0">${info.Type || "Unknown Type"}</p>
+                <h2 class="mb-1">${escapeHtml(info.Name || "Unknown Device")}</h2>
+                <p class="text-muted mb-0">${escapeHtml(info.Type || "Unknown Type")}</p>
             </div>
             <button class="btn ${powerButtonClass} btn-sm device-header-power" onclick="toggleDevicePower('${deviceId}')" title="${powerButtonTitle}">
                 <i class="bi bi-power"></i>
@@ -486,9 +486,9 @@ function renderDeviceControl(deviceId, device) {
                         </div>
                     </div>
                     <div class="col">
-                        <h6 class="mb-1" id="track-title">${nowPlaying.Track || nowPlaying.track || "No track playing"}</h6>
-                        <p class="mb-1" id="track-artist">${nowPlaying.Artist || nowPlaying.artist || "Unknown artist"}</p>
-                        <small id="track-album">${nowPlaying.Album || nowPlaying.album || "Unknown album"}</small>
+                        <h6 class="mb-1" id="track-title">${escapeHtml(nowPlaying.Track || nowPlaying.track || "No track playing")}</h6>
+                        <p class="mb-1" id="track-artist">${escapeHtml(nowPlaying.Artist || nowPlaying.artist || "Unknown artist")}</p>
+                        <small id="track-album">${escapeHtml(nowPlaying.Album || nowPlaying.album || "Unknown album")}</small>
                     </div>
                 </div>
             </div>
@@ -890,10 +890,10 @@ function showToast(title, message, type = "info") {
         <div class="toast" id="${toastId}" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-header">
                 <i class="bi bi-${getToastIcon(type)} me-2"></i>
-                <strong class="me-auto">${title}</strong>
+                <strong class="me-auto">${escapeHtml(title)}</strong>
                 <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
             </div>
-            <div class="toast-body">${message}</div>
+            <div class="toast-body">${escapeHtml(message)}</div>
         </div>
     `;
 

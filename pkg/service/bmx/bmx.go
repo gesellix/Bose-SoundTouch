@@ -27,7 +27,26 @@ const (
 
 var tuneInClient = &http.Client{Timeout: 10 * time.Second}
 
+// allowedTuneInHosts restricts outbound fetches to known TuneIn domains.
+var allowedTuneInHosts = map[string]bool{
+	"opml.radiotime.com": true,
+	"api.radiotime.com":  true,
+}
+
+func isTuneInURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	return allowedTuneInHosts[u.Hostname()]
+}
+
 func fetchJSON(fetchURL string) (map[string]interface{}, error) {
+	if !isTuneInURL(fetchURL) {
+		return nil, fmt.Errorf("URL not in allowed list: %s", fetchURL)
+	}
+
 	resp, err := tuneInClient.Get(fetchURL)
 	if err != nil {
 		return nil, err
