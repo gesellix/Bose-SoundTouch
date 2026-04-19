@@ -165,12 +165,16 @@ jobs:
 
           # Build Service
           build_binary "soundtouch-service" "./cmd/soundtouch-service"
+
+          # Build Web
+          build_binary "soundtouch-web" "./cmd/soundtouch-web"
         id: build
 
       - name: Generate individual checksums
         run: |
           CLI_NAME="${{ steps.build.outputs.soundtouch-cli }}"
           SVC_NAME="${{ steps.build.outputs.soundtouch-service }}"
+          WEB_NAME="${{ steps.build.outputs.soundtouch-web }}"
 
           # Use atomic operations to avoid conflicts
           TEMP_DIR=$(mktemp -d)
@@ -186,6 +190,7 @@ jobs:
 
           generate_checksums "$CLI_NAME"
           generate_checksums "$SVC_NAME"
+          generate_checksums "$WEB_NAME"
 
           # Cleanup
           rm -rf "$TEMP_DIR"
@@ -198,6 +203,7 @@ jobs:
           path: |
             build/soundtouch-cli-v*
             build/soundtouch-service-v*
+            build/soundtouch-web-v*
           retention-days: 1
 
   checksums:
@@ -224,7 +230,7 @@ jobs:
           mkdir -p release-files
 
           # Move all files from subdirectories to the collection directory
-          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" \) -exec mv {} release-files/ \;
+          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" -o -name "soundtouch-web-*" \) -exec mv {} release-files/ \;
 
           # Remove empty directories
           find . -type d -empty -delete
@@ -246,7 +252,7 @@ jobs:
             cat checksums.sha256
 
             # Verify all expected files are present (binaries only, not checksum files)
-            EXPECTED_COUNT=14  # 7 platforms * 2 binaries
+            EXPECTED_COUNT=21  # 7 platforms * 3 binaries
             ACTUAL_COUNT=$(ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | wc -l)
 
             if [[ $ACTUAL_COUNT -ne $EXPECTED_COUNT ]]; then
@@ -377,6 +383,12 @@ jobs:
           ./soundtouch-service
           \`\`\`
 
+          ### SoundTouch Web
+          \`\`\`bash
+          # Start the web app
+          ./soundtouch-web
+          \`\`\`
+
           ## 🧪 Tested Hardware
 
           - Bose SoundTouch 10
@@ -395,7 +407,7 @@ jobs:
           - Windows (amd64)
           - FreeBSD (amd64)
 
-          Both `soundtouch-cli` and `soundtouch-service` are included.
+          `soundtouch-cli`, `soundtouch-service`, and `soundtouch-web` are included.
 
           ## 🔐 Checksums
 
@@ -450,6 +462,7 @@ jobs:
           files: |
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
+            release-assets/soundtouch-web-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
           fail_on_unmatched_files: true
@@ -476,6 +489,7 @@ jobs:
           files: |
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
+            release-assets/soundtouch-web-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
           fail_on_unmatched_files: true
@@ -532,7 +546,7 @@ jobs:
       - name: Notify success
         run: |
           echo "🎉 Release ${{ needs.validate.outputs.version }} completed successfully!"
-          echo "📦 Binaries built for 7 platforms (CLI and Service)"
+          echo "📦 Binaries built for 7 platforms (CLI, Service, and Web)"
           echo "🐳 Docker image published to ghcr.io"
           echo "🔐 Checksums generated and verified"
           echo "📋 Release notes automatically generated"
