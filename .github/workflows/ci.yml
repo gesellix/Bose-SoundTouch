@@ -34,6 +34,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Install libpcap
+        run: sudo apt-get install -y libpcap-dev
+
       - name: Download dependencies
         run: go mod download
 
@@ -129,6 +132,9 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
+
+      - name: Install libpcap
+        run: sudo apt-get install -y libpcap-dev
 
       - name: Run basic vulnerability check
         run: |

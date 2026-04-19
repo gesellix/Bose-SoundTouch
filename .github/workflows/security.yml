@@ -26,6 +26,9 @@ jobs:
         with:
           go-version-file: "go.mod"
 
+      - name: Install libpcap
+        run: sudo apt-get install -y libpcap-dev
+
       - name: Install security scanning tools
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -67,6 +70,9 @@ jobs:
         with:
           go-version-file: "go.mod"
 
+      - name: Install libpcap
+        run: sudo apt-get install -y libpcap-dev
+
       - name: Install static analysis tools
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
@@ -105,6 +111,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Install libpcap
+        run: sudo apt-get install -y libpcap-dev
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
