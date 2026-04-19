@@ -14,6 +14,8 @@ BINARY_NAME=soundtouch-cli
 BINARY_PATH=./cmd/$(BINARY_NAME)
 SERVICE_NAME=soundtouch-service
 SERVICE_PATH=./cmd/$(SERVICE_NAME)
+WEB_NAME=soundtouch-web
+WEB_PATH=./cmd/$(WEB_NAME)
 EXAMPLE_MDNS_NAME=example-mdns
 EXAMPLE_MDNS_PATH=./cmd/$(EXAMPLE_MDNS_NAME)
 EXAMPLE_UPNP_NAME=example-upnp
@@ -29,7 +31,7 @@ BUILD_DIR=./build
 
 all: check build
 
-build: build-cli build-service build-examples build-favicon-gen
+build: build-cli build-service build-web build-examples build-favicon-gen
 
 build-cli:
 	@echo "Building $(BINARY_NAME)..."
@@ -40,6 +42,11 @@ build-service:
 	@echo "Building $(SERVICE_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME) $(SERVICE_PATH)
+
+build-web:
+	@echo "Building $(WEB_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) -o $(BUILD_DIR)/$(WEB_NAME) $(WEB_PATH)
 
 build-examples:
 	@echo "Building $(EXAMPLE_MDNS_NAME)..."
@@ -240,10 +247,31 @@ dev-scan-http: build-examples
 	@echo "Scanning for HTTP mDNS services..."
 	$(BUILD_DIR)/$(SCANNER_NAME) -service _http._tcp -v
 
-install: build-cli build-service
+dev-web: build-web
+	@echo "Starting web UI (default port 8080)..."
+	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME)
+
+dev-web-port: build-web
+	@echo "Starting web UI on custom port..."
+	@if [ -z "$(PORT)" ]; then \
+		echo "Usage: make dev-web-port PORT=8888"; \
+		exit 1; \
+	fi
+	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME) -port $(PORT)
+
+dev-web-host: build-web
+	@echo "Starting web UI with specific host..."
+	@if [ -z "$(HOST)" ]; then \
+		echo "Usage: make dev-web-host HOST=192.168.1.10"; \
+		exit 1; \
+	fi
+	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME) -host $(HOST)
+
+install: build-cli build-service build-web
 	@echo "Installing binaries to $(GOPATH)/bin..."
 	cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(SERVICE_NAME) $(GOPATH)/bin/
+	cp $(BUILD_DIR)/$(WEB_NAME) $(GOPATH)/bin/
 
 clean:
 	@echo "Cleaning..."
@@ -303,6 +331,9 @@ help:
 	@echo "  dev-scan-all     - Scan all mDNS services on network"
 	@echo "  dev-scan-soundtouch - Scan specifically for SoundTouch mDNS services"
 	@echo "  dev-scan-http    - Scan for HTTP mDNS services"
+	@echo "  dev-web          - Build and run web UI (default port 8080)"
+	@echo "  dev-web-port     - Build and run web UI on custom port (PORT=8888)"
+	@echo "  dev-web-host     - Build and run web UI with specific device (HOST=ip)"
 	@echo "  install       - Install binaries to GOPATH/bin"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  release       - Create release binaries"
@@ -324,5 +355,8 @@ help:
 	@echo "  make dev-upnp-timeout TIMEOUT=10s"
 	@echo "  make dev-scan-all"
 	@echo "  make dev-scan-soundtouch"
+	@echo "  make dev-web"
+	@echo "  make dev-web-port PORT=8888"
+	@echo "  make dev-web-host HOST=192.168.1.10"
 	@echo "  make test"
 	@echo "  make build-all"

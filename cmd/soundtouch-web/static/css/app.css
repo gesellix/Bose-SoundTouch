@@ -1,0 +1,826 @@
+/* SoundTouch Web UI - Application Styles */
+/* Bose-inspired design system with modern web standards and proper dark mode */
+
+:root {
+    /* Light mode colors (default) */
+    --bose-primary: #1a1a1a;
+    --bose-secondary: #333;
+    --bose-accent: #0066cc;
+    --bose-light: #f8f9fa;
+    --bose-green: #28a745;
+    --bose-red: #dc3545;
+
+    /* UI colors that adapt to theme */
+    --bg-primary: var(--bose-light);
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f8f9fa;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #6c757d;
+    --border-color: #dee2e6;
+    --border-subtle: #e9ecef;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --card-bg: #ffffff;
+    --control-bg: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    --toast-bg: #ffffff;
+    --toast-header-bg: #f8f9fa;
+    --navbar-text: #ffffff;
+}
+
+/* Dark mode colors */
+[data-theme="dark"] {
+    --bose-accent: #66b3ff;
+    --bose-green: #4caf50;
+    --bose-red: #f44336;
+
+    --bg-primary: #121212;
+    --bg-secondary: #1e1e1e;
+    --bg-tertiary: #2d2d2d;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b0b0;
+    --text-muted: #999999;
+    --border-color: #333333;
+    --border-subtle: #404040;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --card-bg: #1e1e1e;
+    --control-bg: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+    --toast-bg: #2d2d2d;
+    --toast-header-bg: #1e1e1e;
+    --navbar-text: #ffffff;
+}
+
+/* Auto dark mode (system preference) */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bose-accent: #66b3ff;
+        --bose-green: #4caf50;
+        --bose-red: #f44336;
+
+        --bg-primary: #121212;
+        --bg-secondary: #1e1e1e;
+        --bg-tertiary: #2d2d2d;
+        --text-primary: #e0e0e0;
+        --text-secondary: #b0b0b0;
+        --text-muted: #999999;
+        --border-color: #333333;
+        --border-subtle: #404040;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+        --card-bg: #1e1e1e;
+        --control-bg: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+        --toast-bg: #2d2d2d;
+        --toast-header-bg: #1e1e1e;
+        --navbar-text: #ffffff;
+    }
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    transition:
+        background-color 0.3s ease,
+        color 0.3s ease;
+}
+
+/* Smooth transitions for all theme-related properties */
+* {
+    transition:
+        background-color 0.3s ease,
+        color 0.3s ease,
+        border-color 0.3s ease,
+        box-shadow 0.3s ease;
+}
+
+/* Navigation */
+.navbar {
+    background-color: var(--bose-primary) !important;
+    border-bottom: 3px solid var(--bose-accent);
+}
+
+.navbar-brand {
+    font-weight: 600;
+    color: var(--navbar-text) !important;
+}
+
+.nav-link {
+    color: var(--text-secondary) !important;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    padding: 8px 12px !important;
+}
+
+.nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--navbar-text) !important;
+    transform: scale(1.05);
+}
+
+.theme-toggle {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--navbar-text);
+    transform: rotate(180deg);
+}
+
+.theme-toggle:active {
+    transform: rotate(180deg) scale(0.95);
+}
+
+/* Theme toggle animation */
+@keyframes themeSwitch {
+    0% {
+        transform: rotate(0deg);
+    }
+    50% {
+        transform: rotate(180deg) scale(1.1);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.theme-toggle.switching {
+    animation: themeSwitch 0.6s ease-in-out;
+}
+
+/* Cards */
+.card {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px var(--shadow-color);
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        background-color 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px var(--shadow-color);
+}
+
+.card-title {
+    color: var(--text-primary);
+}
+
+/* Device Cards */
+.device-card {
+    border-left: 4px solid var(--bose-accent);
+}
+
+.device-card.connected {
+    border-left-color: var(--bose-green);
+}
+
+.device-card.disconnected {
+    border-left-color: var(--bose-red);
+}
+
+.device-card.standby {
+    border-left-color: #ffc107;
+}
+
+.device-card.playing {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: var(--bose-accent);
+    border-color: var(--bose-accent);
+    color: #000000;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+    color: #000000;
+}
+
+.btn-outline-primary {
+    color: var(--bose-accent);
+    border-color: var(--bose-accent);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--bose-accent);
+    border-color: var(--bose-accent);
+    color: #000000;
+}
+
+.btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--border-color);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Power Button Styles */
+.btn-outline-danger {
+    color: var(--bose-red);
+    border-color: var(--bose-red);
+    background: transparent;
+}
+
+.btn-outline-danger:hover {
+    background-color: var(--bose-red);
+    border-color: var(--bose-red);
+    color: #ffffff;
+    transform: scale(1.05);
+}
+
+.btn-outline-danger:active {
+    transform: scale(0.95);
+}
+
+.btn-outline-danger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-success {
+    background-color: var(--bose-green);
+    border-color: var(--bose-green);
+    color: #ffffff;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+    color: #ffffff;
+    transform: scale(1.05);
+}
+
+/* Power Button Animation */
+.power-loading {
+    animation: powerPulse 1s infinite;
+}
+
+@keyframes powerPulse {
+    0% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.6;
+    }
+}
+
+/* Enhanced Button States */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1rem;
+    height: 1rem;
+    margin: -0.5rem 0 0 -0.5rem;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: btn-spin 1s linear infinite;
+}
+
+@keyframes btn-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Compact Power Button */
+.btn-outline-danger.btn-sm {
+    min-width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.btn-outline-danger.btn-sm:hover {
+    transform: scale(1.05);
+}
+
+.btn-outline-danger.btn-sm i {
+    font-size: 1rem;
+}
+
+/* Device Header Power Button */
+.device-header-power {
+    min-width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.device-header-power:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.device-header-power i {
+    font-size: 1.1rem;
+}
+
+/* Status Indicators */
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-connected {
+    background-color: var(--bose-green);
+}
+
+.status-disconnected {
+    background-color: var(--bose-red);
+}
+
+.status-unknown {
+    background-color: var(--text-muted);
+}
+
+/* Power Status Icons */
+.text-success {
+    color: var(--bose-green) !important;
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+.card-title .bi-power {
+    font-size: 1.1em;
+    margin-left: 8px;
+}
+
+/* Control Panels */
+.control-panel {
+    background: var(--control-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition:
+        background 0.3s ease,
+        border-color 0.3s ease;
+}
+
+/* Audio Controls */
+.volume-slider {
+    accent-color: var(--bose-accent);
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--bose-accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-secondary);
+    box-shadow: 0 2px 4px var(--shadow-color);
+    transition: all 0.2s ease;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+.volume-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--bose-accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-secondary);
+    box-shadow: 0 2px 4px var(--shadow-color);
+    transition: all 0.2s ease;
+}
+
+.bass-slider {
+    accent-color: var(--bose-secondary);
+}
+
+.bass-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bose-secondary);
+    cursor: pointer;
+    border: 2px solid var(--bg-secondary);
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+/* Now Playing */
+.now-playing {
+    background: linear-gradient(
+        135deg,
+        var(--bose-primary) 0%,
+        var(--bose-secondary) 100%
+    );
+    color: white;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.artwork {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+    background-color: var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.artwork:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 16px var(--shadow-color);
+}
+
+/* Preset Grid */
+.preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.preset-btn {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.preset-btn:hover {
+    border-color: var(--bose-accent);
+    color: var(--bose-accent);
+    transform: scale(1.02);
+}
+
+.preset-btn.active {
+    background: var(--bose-accent);
+    color: #000000;
+    border-color: var(--bose-accent);
+}
+
+.preset-btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: var(--bose-accent);
+    opacity: 0.3;
+    transform: translate(-50%, -50%);
+    transition:
+        width 0.3s ease,
+        height 0.3s ease;
+}
+
+.preset-btn:active::after {
+    width: 100px;
+    height: 100px;
+}
+
+/* Source Grid */
+.source-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+}
+
+.source-btn {
+    padding: 12px;
+    text-align: center;
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.source-btn:hover {
+    border-color: var(--bose-accent);
+    color: var(--bose-accent);
+}
+
+.source-btn.ready {
+    border-color: var(--bose-green);
+}
+
+.source-btn.unavailable {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.source-btn.unavailable:hover {
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    border: 3px solid var(--border-subtle);
+    border-top: 3px solid var(--bose-accent);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-primary);
+    opacity: 0.9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: inherit;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Notifications */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+}
+
+.toast {
+    background-color: var(--toast-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    backdrop-filter: blur(10px);
+}
+
+.toast-header {
+    background: var(--toast-header-bg);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 10px 10px 0 0;
+}
+
+.toast-body {
+    background: var(--toast-bg);
+    color: var(--text-primary);
+    border-radius: 0 0 10px 10px;
+}
+
+/* Progress Bar */
+.progress {
+    background-color: var(--border-subtle);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--bose-accent) 0%, #66b3ff 100%);
+    transition: width 0.5s ease;
+    border-radius: 10px;
+}
+
+/* SPA Navigation */
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+.back-button {
+    margin-bottom: 20px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 50px;
+    padding: 20px 0;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.footer a {
+    color: var(--bose-accent);
+    text-decoration: none;
+}
+
+/* Text utilities */
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Device Card Enhancements */
+.device-card .btn-group {
+    width: 100%;
+}
+
+.device-card .power-btn {
+    min-width: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Quick Controls Section */
+.quick-controls-header {
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.quick-controls-header h6 {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.quick-controls-power {
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.quick-controls-power:hover {
+    opacity: 1;
+}
+
+/* Accessibility */
+.btn:focus,
+.form-range:focus,
+.preset-btn:focus,
+.source-btn:focus {
+    outline: 2px solid var(--bose-accent);
+    outline-offset: 2px;
+}
+
+/* Enhanced Focus States */
+.btn-outline-danger:focus {
+    outline: 2px solid var(--bose-red);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    .card {
+        margin-bottom: 15px;
+    }
+
+    .control-panel {
+        padding: 15px;
+    }
+
+    .preset-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .source-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .control-panel {
+        padding: 15px;
+    }
+
+    .now-playing .artwork {
+        width: 60px;
+        height: 60px;
+    }
+
+    .preset-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .source-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .device-card.playing {
+        animation: none;
+    }
+}
