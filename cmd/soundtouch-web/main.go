@@ -100,6 +100,12 @@ func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscov
 	// Device control endpoints
 	http.HandleFunc("/api/control/", app.HandleAPIControl)
 
+	// TuneIn browse, search, and playback
+	http.HandleFunc("/api/tunein/search", app.HandleTuneInSearch)
+	http.HandleFunc("/api/tunein/navigate", app.HandleTuneInNavigate)
+	http.HandleFunc("/api/tunein/navigate/", app.HandleTuneInNavigate)
+	http.HandleFunc("/api/tunein/play/", app.HandlePlayTuneIn)
+
 	// Enhanced device control endpoints with specific patterns
 	http.HandleFunc("/api/device-key/", app.HandleDeviceKey)
 	http.HandleFunc("/api/device-volume/", app.HandleDirectVolumeControl)

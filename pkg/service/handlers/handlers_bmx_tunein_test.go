@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +33,9 @@ func TestHandleTuneInNavigate(t *testing.T) {
 	})
 
 	t.Run("Sub navigate", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/bmx/tunein/v1/navigate/some-path", nil)
+		// Use the top-level OPML URL as a valid encoded navigate target
+		encodedURI := base64.URLEncoding.EncodeToString([]byte("http://opml.radiotime.com/?render=json"))
+		req := httptest.NewRequest("GET", "/bmx/tunein/v1/navigate/"+encodedURI, nil)
 		req.Header.Set("Authorization", "Bearer mock-token")
 		w := httptest.NewRecorder()
 

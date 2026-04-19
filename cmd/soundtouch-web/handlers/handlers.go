@@ -12,6 +12,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gorilla/websocket"
 )
 
@@ -555,5 +556,152 @@ func (app *WebApp) BroadcastDiscoveryStatus(status string, deviceCount int) {
 	for _, client := range failedClients {
 		delete(app.WSClients, client)
 		client.Close()
+	}
+}
+
+// HandleTuneInSearch handles TuneIn search requests, proxying directly to the bmx package.
+func (app *WebApp) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		app.sendError(w, "query parameter 'q' is required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := bmxpkg.TuneInSearch(query)
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: resp}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleTuneInNavigate handles TuneIn browse/navigate requests, proxying directly to the bmx package.
+// Supported path suffixes (relative to /api/tunein/navigate):
+//   - (empty)                             → top-level browse
+//   - /{encodedURI}                       → browse the given TuneIn URI
+//   - /sub/{n}/{encodedURI}               → single subsection
+//   - /profiles/{type}/{id}/{encodedURI}  → artist/program profile
+func (app *WebApp) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
+	const navPrefix = "/api/tunein/navigate"
+
+	path := r.URL.Path
+	wildcard := ""
+
+	if len(path) > len(navPrefix) {
+		wildcard = strings.TrimPrefix(path[len(navPrefix):], "/")
+	}
+
+	var (
+		resp interface{}
+		err  error
+	)
+
+	if wildcard == "" {
+		resp, err = bmxpkg.TuneInNavigate("", nil)
+	} else {
+		firstSlash := strings.Index(wildcard, "/")
+		if firstSlash == -1 {
+			resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
+		} else {
+			pfx := wildcard[:firstSlash]
+			rest := wildcard[firstSlash+1:]
+
+			switch pfx {
+			case "sub":
+				secondSlash := strings.Index(rest, "/")
+				if secondSlash == -1 {
+					resp, err = bmxpkg.TuneInNavigate(rest, nil)
+				} else {
+					n, parseErr := strconv.Atoi(rest[:secondSlash])
+					if parseErr != nil {
+						resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
+					} else {
+						resp, err = bmxpkg.TuneInNavigate(rest[secondSlash+1:], &n)
+					}
+				}
+			case "profiles":
+				parts := strings.SplitN(rest, "/", 3)
+				if len(parts) < 3 {
+					resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
+				} else {
+					resp, err = bmxpkg.TuneInNavigateProfile(parts[2])
+				}
+			default:
+				resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
+			}
+		}
+	}
+
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: resp}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandlePlayTuneIn plays a TuneIn content item on a specific device via POST /select.
+func (app *WebApp) HandlePlayTuneIn(w http.ResponseWriter, r *http.Request) {
+	deviceID := strings.TrimPrefix(r.URL.Path, "/api/tunein/play/")
+	if deviceID == "" {
+		app.sendError(w, "Device ID required", http.StatusBadRequest)
+		return
+	}
+
+	device, exists := app.Devices[deviceID]
+	if !exists {
+		app.sendError(w, fmt.Sprintf("Device '%s' not found", deviceID), http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		Location     string `json:"location"`
+		Name         string `json:"name"`
+		Type         string `json:"type"`
+		ContainerArt string `json:"containerArt"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		app.sendError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Location == "" {
+		app.sendError(w, "location is required", http.StatusBadRequest)
+		return
+	}
+
+	itemType := req.Type
+	if itemType == "" {
+		itemType = "stationurl"
+	}
+
+	contentItem := &models.ContentItem{
+		Source:       "TUNEIN",
+		Type:         itemType,
+		Location:     req.Location,
+		ItemName:     req.Name,
+		IsPresetable: true,
+		ContainerArt: req.ContainerArt,
+	}
+
+	if err := device.Client.SelectContentItem(contentItem); err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]string{"message": "Playing " + req.Name}}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }

@@ -810,6 +810,326 @@ body {
     }
 }
 
+/* TuneIn brand icons */
+.tunein-nav-icon {
+    width: 28px;
+    height: auto;
+    vertical-align: middle;
+    display: block;
+}
+
+.tunein-heading-icon {
+    width: 40px;
+    height: auto;
+    vertical-align: middle;
+}
+
+[data-theme="dark"] .tunein-heading-icon {
+    filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tunein-heading-icon {
+        filter: invert(1);
+    }
+}
+
+/* TuneIn Browse */
+.tunein-search-bar .form-control {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.tunein-search-bar .form-control:focus {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border-color: var(--bose-accent);
+    box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+}
+
+.tunein-section {
+    margin-bottom: 2rem;
+}
+
+.tunein-section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid var(--bose-accent);
+}
+
+/* Ribbon — horizontal scroll row */
+.tunein-ribbon {
+    display: flex;
+    overflow-x: auto;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.tunein-ribbon::-webkit-scrollbar {
+    height: 4px;
+}
+
+.tunein-ribbon::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 4px;
+}
+
+.tunein-ribbon-item {
+    flex: 0 0 120px;
+    text-align: center;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 8px;
+}
+
+/* Grid layout */
+.tunein-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+}
+
+.tunein-grid-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+}
+
+/* List layout */
+.tunein-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tunein-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+/* Hero layout */
+.tunein-hero {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 1rem;
+}
+
+.tunein-hero-item {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    aspect-ratio: 16/9;
+}
+
+.tunein-hero-item .tunein-item-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0;
+}
+
+.tunein-hero-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 10px 12px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+    color: #fff;
+}
+
+.tunein-hero-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.3;
+}
+
+.tunein-hero-subtitle {
+    font-size: 0.78rem;
+    opacity: 0.85;
+}
+
+.tunein-hero-play {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+/* Shared item styles */
+.tunein-item-image {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.tunein-ribbon-item .tunein-item-image,
+.tunein-grid-item .tunein-item-image {
+    width: 100%;
+    height: 88px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+}
+
+.tunein-item-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-size: 1.4rem;
+}
+
+.tunein-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.tunein-item-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tunein-item-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+    margin-top: 2px;
+}
+
+.tunein-item-subtitle {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+.tunein-item-chevron {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-size: 0.85rem;
+}
+
+/* Clickable items */
+.tunein-nav-item {
+    cursor: pointer;
+}
+
+.tunein-nav-item:hover,
+.tunein-nav-item:focus {
+    border-color: var(--bose-accent);
+    outline: none;
+}
+
+.tunein-list-item.tunein-nav-item:hover {
+    transform: translateX(2px);
+}
+
+.tunein-ribbon-item.tunein-nav-item:hover,
+.tunein-grid-item.tunein-nav-item:hover,
+.tunein-hero-item.tunein-nav-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px var(--shadow-color);
+}
+
+/* Play button on TuneIn items */
+.tunein-play-btn {
+    background: var(--bose-accent);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.tunein-play-btn:hover {
+    background: #0056b3;
+    transform: scale(1.1);
+}
+
+.tunein-play-btn:active {
+    transform: scale(0.95);
+}
+
+.tunein-ribbon-item .tunein-play-btn,
+.tunein-grid-item .tunein-play-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    font-size: 0.8rem;
+    margin: 4px auto 0;
+}
+
+/* Modal theming */
+.modal-content {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.modal-header {
+    border-bottom-color: var(--border-color);
+}
+
+/* Play icon badge on audio-only items */
+.tunein-item-play-badge {
+    font-size: 0.7rem;
+    color: var(--bose-accent);
+    margin-left: 4px;
+}
+
+@media (max-width: 576px) {
+    .tunein-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 8px;
+    }
+
+    .tunein-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .tunein-ribbon-item {
+        flex: 0 0 100px;
+    }
+}
+
 /* Reduced Motion Support */
 @media (prefers-reduced-motion: reduce) {
     *,

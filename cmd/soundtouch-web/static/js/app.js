@@ -8,6 +8,8 @@ let reconnectAttempts = 0;
 let maxReconnectAttempts = 5;
 let devices = {};
 let currentDeviceId = null;
+let tuneInNavStack = [];
+let tuneInPendingPlay = null;
 
 // Page navigation
 function showPage(pageId) {
@@ -19,7 +21,214 @@ function showPage(pageId) {
     if (pageId === "devices") {
         currentDeviceId = null;
         loadDevices();
+    } else if (pageId === "tunein" && tuneInNavStack.length === 0) {
+        tuneInBrowse();
     }
+}
+
+// ── TuneIn Browse ──────────────────────────────────────────────────────────────
+
+function tuneInBrowse() {
+    tuneInNavStack = [{ fetchUrl: "/api/tunein/navigate", label: "TuneIn" }];
+    tuneInRenderBreadcrumb();
+    tuneInFetchAndRender("/api/tunein/navigate");
+}
+
+function tuneInSearch(query) {
+    if (!query || !query.trim()) return;
+    const q = query.trim();
+    document.getElementById("tunein-search-input").value = q;
+    const url = "/api/tunein/search?q=" + encodeURIComponent(q);
+    tuneInNavStack = [
+        { fetchUrl: "/api/tunein/navigate", label: "TuneIn" },
+        { fetchUrl: url, label: "Search: " + q },
+    ];
+    tuneInRenderBreadcrumb();
+    tuneInFetchAndRender(url);
+}
+
+function tuneInNavigate(navPath, label) {
+    const url = "/api/tunein/navigate/" + navPath;
+    tuneInNavStack.push({ fetchUrl: url, label: label || "Browse" });
+    tuneInRenderBreadcrumb();
+    tuneInFetchAndRender(url);
+}
+
+function tuneInNavTo(index) {
+    tuneInNavStack = tuneInNavStack.slice(0, index + 1);
+    tuneInRenderBreadcrumb();
+    tuneInFetchAndRender(tuneInNavStack[tuneInNavStack.length - 1].fetchUrl);
+}
+
+function tuneInRenderBreadcrumb() {
+    const nav = document.getElementById("tunein-breadcrumb");
+    if (tuneInNavStack.length <= 1) {
+        nav.style.display = "none";
+        return;
+    }
+    nav.style.display = "";
+    const items = tuneInNavStack
+        .map((entry, i) => {
+            if (i === tuneInNavStack.length - 1) {
+                return `<li class="breadcrumb-item active" aria-current="page">${escapeHtml(entry.label)}</li>`;
+            }
+            return `<li class="breadcrumb-item"><a href="#" onclick="tuneInNavTo(${i}); return false;">${escapeHtml(entry.label)}</a></li>`;
+        })
+        .join("");
+    nav.innerHTML = `<ol class="breadcrumb mb-0">${items}</ol>`;
+}
+
+function tuneInFetchAndRender(url) {
+    const el = document.getElementById("tunein-results");
+    el.innerHTML = '<div class="loading-spinner mx-auto mt-4"></div>';
+    fetch(url)
+        .then((r) => r.json())
+        .then((data) => {
+            if (data.success) {
+                renderTuneInResponse(data.data);
+            } else {
+                el.innerHTML = `<div class="alert alert-danger mt-3">${escapeHtml(data.error || "Failed to load TuneIn content")}</div>`;
+            }
+        })
+        .catch(() => {
+            el.innerHTML =
+                '<div class="alert alert-danger mt-3">Failed to load TuneIn content. Check your connection.</div>';
+        });
+}
+
+function renderTuneInResponse(data) {
+    const el = document.getElementById("tunein-results");
+    if (!data || !data.bmx_sections || data.bmx_sections.length === 0) {
+        el.innerHTML =
+            '<div class="text-center text-muted py-5"><i class="bi bi-music-note display-4"></i><p class="mt-2">No results found</p></div>';
+        return;
+    }
+    el.innerHTML = data.bmx_sections.map(renderTuneInSection).join("");
+}
+
+function renderTuneInSection(section) {
+    const layout = section.layout || "list";
+    const items = section.items || [];
+    if (items.length === 0) return "";
+
+    const titleHtml = section.name
+        ? `<h5 class="tunein-section-title">${escapeHtml(section.name)}</h5>`
+        : "";
+
+    let itemsHtml;
+    if (layout === "ribbon") {
+        itemsHtml = `<div class="tunein-ribbon">${items.map((item) => renderTuneInItem(item, "ribbon")).join("")}</div>`;
+    } else if (layout === "hero") {
+        itemsHtml = `<div class="tunein-hero">${items.map((item) => renderTuneInItem(item, "hero")).join("")}</div>`;
+    } else if (layout === "responsiveGrid") {
+        itemsHtml = `<div class="tunein-grid">${items.map((item) => renderTuneInItem(item, "grid")).join("")}</div>`;
+    } else {
+        itemsHtml = `<div class="tunein-list">${items.map((item) => renderTuneInItem(item, "list")).join("")}</div>`;
+    }
+
+    return `<div class="tunein-section">${titleHtml}${itemsHtml}</div>`;
+}
+
+function tuneInNavPath(item) {
+    const href = item._links?.bmx_navigate?.href;
+    return href ? href.replace(/^\/v1\/navigate\/?/, "") : null;
+}
+
+function renderTuneInItem(item, layout) {
+    const navPath = tuneInNavPath(item);
+    const isNavigable = !!navPath;
+    const playHref = item._links?.bmx_playback?.href;
+    const playType = item._links?.bmx_playback?.type || "stationurl";
+    const isPlayable = !!playHref;
+    const name = item.name || "";
+    const subtitle = item.subtitle || "";
+    const imageUrl = item.imageUrl || "";
+
+    const navAttrs = isNavigable
+        ? `data-nav-path="${escapeHtml(navPath)}" data-nav-label="${escapeHtml(name)}" role="button" tabindex="0"`
+        : "";
+    const navClass = isNavigable ? " tunein-nav-item" : "";
+
+    const playBtn = isPlayable
+        ? `<button class="tunein-play-btn" data-play-location="${escapeHtml(playHref)}" data-play-name="${escapeHtml(name)}" data-play-type="${escapeHtml(playType)}" data-play-art="${escapeHtml(imageUrl)}" title="Play ${escapeHtml(name)}" aria-label="Play ${escapeHtml(name)}"><i class="bi bi-play-fill"></i></button>`
+        : "";
+
+    const imgHtml = imageUrl
+        ? `<img src="${escapeHtml(imageUrl)}" alt="" class="tunein-item-image" loading="lazy" onerror="this.style.display='none'">`
+        : `<div class="tunein-item-image tunein-item-placeholder"><i class="bi bi-music-note-beamed"></i></div>`;
+
+    if (layout === "ribbon") {
+        return `<div class="tunein-ribbon-item${navClass}" ${navAttrs}>${imgHtml}<div class="tunein-item-label">${escapeHtml(name)}</div>${playBtn}</div>`;
+    }
+
+    if (layout === "hero") {
+        return `<div class="tunein-hero-item${navClass}" ${navAttrs}>${imgHtml}<div class="tunein-hero-overlay"><div class="tunein-hero-name">${escapeHtml(name)}</div>${subtitle ? `<div class="tunein-hero-subtitle">${escapeHtml(subtitle)}</div>` : ""}</div>${playBtn ? `<div class="tunein-hero-play">${playBtn}</div>` : ""}</div>`;
+    }
+
+    if (layout === "grid") {
+        return `<div class="tunein-grid-item${navClass}" ${navAttrs}>${imgHtml}<div class="tunein-item-label">${escapeHtml(name)}</div>${subtitle ? `<div class="tunein-item-subtitle">${escapeHtml(subtitle)}</div>` : ""}${playBtn ? `<div class="mt-1 text-center">${playBtn}</div>` : ""}</div>`;
+    }
+
+    // list / shortList / default
+    return `<div class="tunein-list-item${navClass}" ${navAttrs}>${imgHtml}<div class="tunein-item-info"><div class="tunein-item-name">${escapeHtml(name)}</div>${subtitle ? `<div class="tunein-item-subtitle">${escapeHtml(subtitle)}</div>` : ""}</div>${isNavigable ? '<i class="bi bi-chevron-right tunein-item-chevron ms-auto"></i>' : ""}${playBtn}</div>`;
+}
+
+function tuneInPlayClick(location, name, type, art) {
+    const deviceIds = Object.keys(devices);
+    if (deviceIds.length === 0) {
+        showToast("No Devices", "No SoundTouch devices found. Try discovering devices first.", "warning");
+        return;
+    }
+    if (deviceIds.length === 1) {
+        tuneInPlay(deviceIds[0], location, name, type, art);
+    } else {
+        tuneInShowDevicePicker(location, name, type, art);
+    }
+}
+
+function tuneInPlay(deviceId, location, name, type, art) {
+    fetch(`/api/tunein/play/${deviceId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location, name, type, containerArt: art }),
+    })
+        .then((r) => r.json())
+        .then((data) => {
+            if (data.success) {
+                showToast("Now Playing", data.data?.message || name, "success");
+            } else {
+                showToast("Playback Failed", data.error || "Could not play station", "error");
+            }
+        })
+        .catch(() => showToast("Playback Failed", "Could not reach device", "error"));
+}
+
+function tuneInShowDevicePicker(location, name, type, art) {
+    tuneInPendingPlay = { location, name, type, art };
+    const list = document.getElementById("devicePickerList");
+    list.innerHTML = Object.entries(devices)
+        .map(
+            ([id, dev]) =>
+                `<button class="btn btn-outline-secondary w-100 text-start mb-1" data-device-id="${escapeHtml(id)}" onclick="tuneInPlayOnDevice('${escapeHtml(id)}')"><i class="bi bi-speaker me-2"></i>${escapeHtml(dev.info?.Name || id)}</button>`,
+        )
+        .join("");
+    new bootstrap.Modal(document.getElementById("devicePickerModal")).show();
+}
+
+function tuneInPlayOnDevice(deviceId) {
+    if (!tuneInPendingPlay) return;
+    const { location, name, type, art } = tuneInPendingPlay;
+    tuneInPendingPlay = null;
+    bootstrap.Modal.getInstance(document.getElementById("devicePickerModal")).hide();
+    tuneInPlay(deviceId, location, name, type, art);
+}
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 }
 
 // WebSocket connection management
@@ -843,4 +1052,47 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeTheme();
     connectWebSocket();
     loadDevices();
+
+    // TuneIn: keyboard search
+    document
+        .getElementById("tunein-search-input")
+        .addEventListener("keydown", function (e) {
+            if (e.key === "Enter") tuneInSearch(this.value);
+        });
+
+    // TuneIn: event delegation — play buttons take priority over navigation
+    document
+        .getElementById("tunein-results")
+        .addEventListener("click", function (e) {
+            const playBtn = e.target.closest(".tunein-play-btn");
+            if (playBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                tuneInPlayClick(
+                    playBtn.dataset.playLocation,
+                    playBtn.dataset.playName,
+                    playBtn.dataset.playType || "stationurl",
+                    playBtn.dataset.playArt || "",
+                );
+                return;
+            }
+            const item = e.target.closest("[data-nav-path]");
+            if (item) {
+                e.preventDefault();
+                tuneInNavigate(item.dataset.navPath, item.dataset.navLabel || "");
+            }
+        });
+
+    // TuneIn: keyboard activation for navigable items
+    document
+        .getElementById("tunein-results")
+        .addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") {
+                const item = e.target.closest("[data-nav-path]");
+                if (item) {
+                    e.preventDefault();
+                    tuneInNavigate(item.dataset.navPath, item.dataset.navLabel || "");
+                }
+            }
+        });
 });

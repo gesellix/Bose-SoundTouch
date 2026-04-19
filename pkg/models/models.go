@@ -12,8 +12,13 @@ import (
 
 // Link represents a navigational link with URL and client usage preferences.
 type Link struct {
-	Href              string `json:"href" xml:"href,attr"`
-	UseInternalClient string `json:"useInternalClient,omitempty" xml:"useInternalClient,attr,omitempty"`
+	Href              string      `json:"href" xml:"href,attr"`
+	UseInternalClient string      `json:"useInternalClient,omitempty" xml:"useInternalClient,attr,omitempty"`
+	ContainerArt      string      `json:"containerArt,omitempty" xml:"-"`
+	Filters           interface{} `json:"filters,omitempty" xml:"-"`
+	Name              string      `json:"name,omitempty" xml:"-"`
+	Templated         *bool       `json:"templated,omitempty" xml:"-"`
+	Type              string      `json:"type,omitempty" xml:"-"`
 }
 
 // Links contains various navigation links used by BMX services.
@@ -28,6 +33,32 @@ type Links struct {
 	BmxFavorite             *Link `json:"bmx_favorite,omitempty" xml:"bmx_favorite,omitempty"`
 	BmxNowPlaying           *Link `json:"bmx_nowplaying,omitempty" xml:"bmx_nowplaying,omitempty"`
 	BmxTrack                *Link `json:"bmx_track,omitempty" xml:"bmx_track,omitempty"`
+	BmxSearch               *Link `json:"bmx_search,omitempty" xml:"-"`
+	BmxPlayback             *Link `json:"bmx_playback,omitempty" xml:"-"`
+	BmxPreset               *Link `json:"bmx_preset,omitempty" xml:"-"`
+}
+
+// BmxNavItem represents a single item in a TuneIn browse or search result.
+type BmxNavItem struct {
+	Links    *Links `json:"_links,omitempty"`
+	ImageUrl string `json:"imageUrl,omitempty"`
+	Name     string `json:"name"`
+	Subtitle string `json:"subtitle"`
+}
+
+// BmxNavSection represents a group of navigation items with a layout hint.
+type BmxNavSection struct {
+	Links  *Links       `json:"_links,omitempty"`
+	Items  []BmxNavItem `json:"items"`
+	Layout string       `json:"layout,omitempty"`
+	Name   string       `json:"name"`
+}
+
+// BmxNavResponse is the top-level response for TuneIn navigate and search endpoints.
+type BmxNavResponse struct {
+	Links       *Links          `json:"_links,omitempty"`
+	BmxSections []BmxNavSection `json:"bmx_sections"`
+	Layout      string          `json:"layout"`
 }
 
 // IconSet represents a collection of icons with different sizes for media content.

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
@@ -247,24 +248,96 @@ func (s *Server) HandleTuneInReport(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("{}"))
 }
 
-// HandleTuneInNavigate returns TuneIn navigation information.
+// HandleTuneInNavigate returns live TuneIn navigation results.
+// Path variants handled via chi wildcard:
+//   - (empty)                               → top-level browse
+//   - {encodedURI}                          → browse the given TuneIn URI
+//   - sub/{n}/{encodedURI}                  → single subsection of a browse page
+//   - profiles/{type}/{id}/{encodedURI}     → artist/program profile page
 func (s *Server) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") == "" {
 		s.writeBMXUnauthorized(w)
 		return
 	}
 
+	wildcard := chi.URLParam(r, "*")
+
+	resp, err := parseTuneInNavigatePath(wildcard)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(tuneInNavigateJSON)
+
+	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
-// HandleTuneInSearch returns TuneIn search results.
+func parseTuneInNavigatePath(wildcard string) (interface{}, error) {
+	if wildcard == "" {
+		return bmx.TuneInNavigate("", nil)
+	}
+
+	firstSlash := strings.Index(wildcard, "/")
+	if firstSlash == -1 {
+		return bmx.TuneInNavigate(wildcard, nil)
+	}
+
+	prefix := wildcard[:firstSlash]
+	rest := wildcard[firstSlash+1:]
+
+	switch prefix {
+	case "sub":
+		secondSlash := strings.Index(rest, "/")
+		if secondSlash == -1 {
+			return bmx.TuneInNavigate(rest, nil)
+		}
+
+		n, err := strconv.Atoi(rest[:secondSlash])
+		if err != nil {
+			return bmx.TuneInNavigate(wildcard, nil)
+		}
+
+		return bmx.TuneInNavigate(rest[secondSlash+1:], &n)
+
+	case "profiles":
+		// profiles/{type}/{id}/{encodedURI}
+		parts := strings.SplitN(rest, "/", 3)
+		if len(parts) < 3 {
+			return bmx.TuneInNavigate(wildcard, nil)
+		}
+
+		return bmx.TuneInNavigateProfile(parts[2])
+
+	default:
+		return bmx.TuneInNavigate(wildcard, nil)
+	}
+}
+
+// HandleTuneInSearch returns live TuneIn search results for the given query.
 func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") == "" {
 		s.writeBMXUnauthorized(w)
 		return
 	}
 
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		http.Error(w, "query parameter 'q' is required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := bmx.TuneInSearch(query)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(tuneInSearchJSON)
+
+	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }

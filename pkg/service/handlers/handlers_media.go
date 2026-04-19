@@ -23,12 +23,6 @@ var bmxServicesJSON []byte
 //go:embed static/bmx_services_availability.json
 var bmxServicesAvailabilityJSON []byte
 
-//go:embed static/tunein_navigate.json
-var tuneInNavigateJSON []byte
-
-//go:embed static/tunein_search.json
-var tuneInSearchJSON []byte
-
 // Upstream source available at https://worldwide.bose.com/updates/soundtouch?serialnumber=_serial_
 // which results in a redirect to https://downloads.bose.com/ced/soundtouch/mr4_22097fe2/index.xml
 //

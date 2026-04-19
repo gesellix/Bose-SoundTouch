@@ -31,6 +31,18 @@
                         <i class="bi bi-house"></i>
                     </a>
                     <a
+                        class="nav-link tunein-nav-link"
+                        href="#"
+                        onclick="showPage('tunein')"
+                        title="TuneIn Browse"
+                    >
+                        <img
+                            src="/static/img/tunein-mono.svg"
+                            alt="TuneIn"
+                            class="tunein-nav-icon"
+                        />
+                    </a>
+                    <a
                         class="nav-link"
                         href="#"
                         onclick="discoverDevices()"
@@ -86,6 +98,46 @@
                 </div>
             </div>
 
+            <!-- TuneIn Browse Page -->
+            <div id="tunein-page" class="page">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2><img src="/static/img/tunein-dark.svg" alt="TuneIn" class="tunein-heading-icon me-2" />TuneIn Browse</h2>
+                </div>
+
+                <div class="tunein-search-bar mb-3">
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            id="tunein-search-input"
+                            class="form-control"
+                            placeholder="Search stations, podcasts..."
+                        />
+                        <button
+                            class="btn btn-primary"
+                            onclick="tuneInSearch(document.getElementById('tunein-search-input').value)"
+                        >
+                            <i class="bi bi-search"></i>
+                            Search
+                        </button>
+                        <button
+                            class="btn btn-outline-secondary"
+                            onclick="tuneInBrowse()"
+                            title="Browse top level"
+                        >
+                            <i class="bi bi-house"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <nav id="tunein-breadcrumb" class="mb-3" style="display: none">
+                    <!-- filled by JavaScript -->
+                </nav>
+
+                <div id="tunein-results">
+                    <!-- filled by JavaScript -->
+                </div>
+            </div>
+
             <!-- Device Control Page -->
             <div id="device-page" class="page">
                 <div class="back-button">
@@ -121,6 +173,23 @@
 
         <!-- Toast container for notifications -->
         <div class="toast-container"></div>
+
+        <!-- Device picker for TuneIn playback -->
+        <div class="modal fade" id="devicePickerModal" tabindex="-1" aria-labelledby="devicePickerLabel" aria-hidden="true">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title" id="devicePickerLabel">
+                            <i class="bi bi-speaker me-2"></i>Play on device
+                        </h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-2" id="devicePickerList">
+                        <!-- device buttons filled by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Bootstrap JS -->
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
