@@ -65,8 +65,8 @@ func TestMargeCreateAccount(t *testing.T) {
 	}
 
 	// Verify it has default sources
-	if len(resp.Sources) != 4 {
-		t.Errorf("Expected 4 default sources, got %d", len(resp.Sources))
+	if len(resp.Sources) != 5 {
+		t.Errorf("Expected 5 default sources, got %d", len(resp.Sources))
 	} else {
 		if resp.Sources[0].ID != "10001" {
 			t.Errorf("Expected first source ID 10001, got %s", resp.Sources[0].ID)

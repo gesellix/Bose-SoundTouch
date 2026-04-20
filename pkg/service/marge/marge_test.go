@@ -638,7 +638,7 @@ func TestDefaultSources(t *testing.T) {
 		t.Fatalf("Failed to get sources: %v", err)
 	}
 
-	expectedCount := 4
+	expectedCount := 5
 	if len(sources) != expectedCount {
 		t.Errorf("Expected %d sources, got %d", expectedCount, len(sources))
 	}
@@ -667,6 +667,11 @@ func TestDefaultSources(t *testing.T) {
 			foundIR = true
 			if s.SecretType != "token" {
 				t.Errorf("Expected INTERNET_RADIO secretType token, got %s", s.SecretType)
+			}
+		case "RADIO_BROWSER":
+			foundIR = true
+			if s.SecretType != "token" {
+				t.Errorf("Expected RADIO_BROWSER secretType token, got %s", s.SecretType)
 			}
 		case "AUX":
 			foundAux = true

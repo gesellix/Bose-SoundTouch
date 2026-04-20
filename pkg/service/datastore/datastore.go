@@ -1503,6 +1503,18 @@ func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 			CreatedOn:        "2017-07-20T16:43:48.000+00:00",
 			UpdatedOn:        "2017-07-20T16:43:48.000+00:00",
 		},
+		{
+			ID:               "10005",
+			DisplayName:      "",
+			SourceKeyType:    constants.ProviderRadioBrowser,
+			SourceKeyAccount: "",
+			SourceProviderID: strconv.Itoa(constants.RadioBrowserProviderID),
+			Type:             "Audio",
+			SecretType:       "token",
+			Status:           "READY",
+			CreatedOn:        "2026-02-16T01:01:01.000+00:00",
+			UpdatedOn:        "2026-02-16T01:01:01.000+00:00",
+		},
 	}
 
 	for i := range sources {
