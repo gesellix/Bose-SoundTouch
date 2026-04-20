@@ -151,7 +151,7 @@ func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) 
 
 	device := r.URL.Query().Get("device")
 
-	etag := strconv.FormatInt(s.ds.GetETagForAccount(account, device), 10)
+	etag := s.ds.GetETagForAccount(account, device)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
@@ -174,7 +174,7 @@ func (s *Server) HandleMargeAccountSources(w http.ResponseWriter, r *http.Reques
 
 	device := r.URL.Query().Get("device")
 
-	etag := strconv.FormatInt(s.ds.GetETagForAccount(account, device), 10)
+	etag := s.ds.GetETagForAccount(account, device)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
@@ -197,7 +197,7 @@ func (s *Server) HandleMargeAccountDevices(w http.ResponseWriter, r *http.Reques
 
 	device := r.URL.Query().Get("device")
 
-	etag := strconv.FormatInt(s.ds.GetETagForAccount(account, device), 10)
+	etag := s.ds.GetETagForAccount(account, device)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

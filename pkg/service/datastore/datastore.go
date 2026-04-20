@@ -3,10 +3,13 @@ package datastore
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1612,22 +1615,61 @@ func (ds *DataStore) GetETagForRecents(account, device string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
-// GetETagForAccount returns the highest ETag among presets, sources, and recents for the account and device.
-func (ds *DataStore) GetETagForAccount(account, device string) int64 {
-	e1 := ds.GetETagForPresets(account, device)
-	e2 := ds.GetETagForSources(account, device)
-	e3 := ds.GetETagForRecents(account, device)
+// contentHashForFiles returns a SHA-256 hex digest over the concatenated contents of the given file paths.
+func contentHashForFiles(paths ...string) string {
+	h := sha256.New()
 
-	maxETag := e1
-	if e2 > maxETag {
-		maxETag = e2
+	for _, p := range paths {
+		f, err := os.Open(p)
+		if err != nil {
+			continue
+		}
+
+		_, _ = io.Copy(h, f)
+		_ = f.Close()
 	}
 
-	if e3 > maxETag {
-		maxETag = e3
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// GetETagForAccount returns a content hash (SHA-256) over presets, sources, and recents for the account and device.
+// If device is empty, it hashes across all devices in the account.
+func (ds *DataStore) GetETagForAccount(account, device string) string {
+	if device != "" {
+		deviceDir := ds.AccountDeviceDir(account, device)
+
+		return contentHashForFiles(
+			filepath.Join(deviceDir, constants.PresetsFile),
+			filepath.Join(deviceDir, constants.SourcesFile),
+			filepath.Join(deviceDir, constants.RecentsFile),
+		)
 	}
 
-	return maxETag
+	devicesDir := ds.AccountDevicesDir(account)
+
+	// Ignore error: missing directory is treated as no devices, producing a
+	// stable non-empty hash rather than "" which would false-match an absent
+	// If-None-Match header and return 304 on the first request.
+	entries, _ := os.ReadDir(devicesDir)
+
+	h := sha256.New()
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			deviceDir := ds.AccountDeviceDir(account, entry.Name())
+			for _, name := range []string{constants.PresetsFile, constants.SourcesFile, constants.RecentsFile} {
+				f, err := os.Open(filepath.Join(deviceDir, name))
+				if err != nil {
+					continue
+				}
+
+				_, _ = io.Copy(h, f)
+				_ = f.Close()
+			}
+		}
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // Settings represents the global service settings.
