@@ -68,31 +68,43 @@ func initializeDefaultSources(ds *datastore.DataStore) {
 		if sources, errGet := ds.GetConfiguredSources(dev.AccountID, dev.DeviceID); errGet == nil {
 			log.Printf("Initializing default Sources.xml for existing device %s", dev.DeviceID)
 
-			// Find default sources and merge them if missing or outdated tokens
+			// Find default sources and merge them if missing or outdated tokens.
+			// claimed tracks which stored sources have already been matched by a default,
+			// so two defaults with the same SourceKeyType but different SourceProviderIDs
+			// (e.g. INTERNET_RADIO/2 and INTERNET_RADIO/39) are treated as distinct entries.
 			defaults := ds.GetDefaultSources()
 			modified := false
+			claimed := make(map[int]bool)
 
 			for i := range defaults {
 				def := defaults[i]
-				found := false
+				foundIdx := -1
 
 				for j := range sources {
-					if sources[j].SourceKeyType == def.SourceKeyType {
-						found = true
-
-						if sources[j].Secret == "" && def.Secret != "" {
-							log.Printf("Initializing missing token for source %s on device %s", def.SourceKeyType, dev.DeviceID)
-							sources[j].Secret = def.Secret
-							sources[j].SecretType = def.SecretType
-							modified = true
-						}
-
-						break
+					if claimed[j] || sources[j].SourceKeyType != def.SourceKeyType {
+						continue
 					}
+					// When both sides have a providerID, require it to match.
+					if def.SourceProviderID != "" && sources[j].SourceProviderID != "" && sources[j].SourceProviderID != def.SourceProviderID {
+						continue
+					}
+
+					foundIdx = j
+
+					break
 				}
 
-				if !found {
-					log.Printf("Adding missing default source %s to device %s", def.SourceKeyType, dev.DeviceID)
+				if foundIdx >= 0 {
+					claimed[foundIdx] = true
+
+					if sources[foundIdx].Secret == "" && def.Secret != "" {
+						log.Printf("Initializing missing token for source %s on device %s", def.SourceKeyType, dev.DeviceID)
+						sources[foundIdx].Secret = def.Secret
+						sources[foundIdx].SecretType = def.SecretType
+						modified = true
+					}
+				} else {
+					log.Printf("Adding missing default source %s (providerID=%s) to device %s", def.SourceKeyType, def.SourceProviderID, dev.DeviceID)
 					sources = append(sources, def)
 					modified = true
 				}
