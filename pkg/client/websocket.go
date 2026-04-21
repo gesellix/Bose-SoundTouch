@@ -20,6 +20,7 @@ type WebSocketClient struct {
 	conn       *websocket.Conn
 	handlers   *models.WebSocketEventHandlers
 	mu         sync.RWMutex
+	writeMu    sync.Mutex // serializes all writes; gorilla/websocket allows one concurrent writer
 	connected  bool
 	reconnect  bool
 	ctx        context.Context
@@ -337,8 +338,11 @@ func (ws *WebSocketClient) pingLoop(config *WebSocketConfig) {
 			}
 
 			// Set write deadline for ping
+			ws.writeMu.Lock()
 			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			err := conn.WriteMessage(websocket.PingMessage, nil)
+			ws.writeMu.Unlock()
+			if err != nil {
 				ws.logger.Printf("Failed to send ping: %v", err)
 				return
 			}
@@ -515,9 +519,12 @@ func (ws *WebSocketClient) SendMessage(message []byte) error {
 		return fmt.Errorf("not connected")
 	}
 
+	ws.writeMu.Lock()
 	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	err := conn.WriteMessage(websocket.TextMessage, message)
+	ws.writeMu.Unlock()
 
-	return conn.WriteMessage(websocket.TextMessage, message)
+	return err
 }
 
 // PairWithAccount sends a request to pair the device with a specific account
