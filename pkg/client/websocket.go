@@ -342,6 +342,7 @@ func (ws *WebSocketClient) pingLoop(config *WebSocketConfig) {
 			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			err := conn.WriteMessage(websocket.PingMessage, nil)
 			ws.writeMu.Unlock()
+
 			if err != nil {
 				ws.logger.Printf("Failed to send ping: %v", err)
 				return
