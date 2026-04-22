@@ -82,6 +82,7 @@ const (
 	// ProviderAlexa is the identifier for Amazon Alexa.
 	ProviderAlexa = "ALEXA"
 	// ProviderRadioplayer is the identifier for Radioplayer.
+	// RADIOPLAYER is deprecated: https://www.radioplayer.de/apps/bose.html
 	ProviderRadioplayer = "RADIOPLAYER"
 	// ProviderRadioDotCom is the identifier for Radio.com.
 	ProviderRadioDotCom = "RADIO.COM"
