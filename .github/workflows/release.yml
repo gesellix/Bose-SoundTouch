@@ -518,8 +518,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
+      - name: Extract metadata (tags, labels) for soundtouch-service
+        id: meta-service
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
@@ -528,14 +528,37 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=v${{ needs.validate.outputs.version }}
             type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
 
-      - name: Build and push Docker image
+      - name: Build and push soundtouch-service Docker image
         uses: docker/build-push-action@v7
         with:
           context: .
+          target: soundtouch-service
           platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-service.outputs.tags }}
+          labels: ${{ steps.meta-service.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata (tags, labels) for soundtouch-web
+        id: meta-web
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}-web
+          tags: |
+            type=semver,pattern={{version}},value=v${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.validate.outputs.version }}
+            type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
+
+      - name: Build and push soundtouch-web Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: soundtouch-web
+          platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

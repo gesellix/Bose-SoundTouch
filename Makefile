@@ -291,7 +291,7 @@ release: clean check build-all
 
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t soundtouch-service .
+	docker build --target soundtouch-service -t soundtouch-service .
 
 docker-run-host:
 	@echo "Running Docker container..."

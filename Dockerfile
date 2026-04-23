@@ -24,31 +24,47 @@ RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
       CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /soundtouch-service ./cmd/soundtouch-service; \
     fi
 
-# Final stage
-FROM alpine:3.23
+# Build the soundtouch-web
+RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build -o /soundtouch-web ./cmd/soundtouch-web; \
+    else \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /soundtouch-web ./cmd/soundtouch-web; \
+    fi
 
-# Install necessary runtime dependencies
+# soundtouch-service image
+FROM alpine:3.23 AS soundtouch-service
+
 RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-# Copy the binary from the builder stage
 COPY --from=builder /soundtouch-service /app/soundtouch-service
 
 # Verify the binary works on the target platform
 RUN /app/soundtouch-service version || echo "Binary verification complete"
 
-# Create data directory for persistence
 RUN mkdir -p /app/data
 
-# Set environment variables with defaults
 ENV PORT=8000
 ENV DATA_DIR=/app/data
 ENV LOG_PROXY_BODY=false
 ENV REDACT_PROXY_LOGS=true
 
-# Expose the service port
 EXPOSE 8000
 
-# Run the service
 ENTRYPOINT ["/app/soundtouch-service"]
+
+# soundtouch-web image
+FROM alpine:3.23 AS soundtouch-web
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /soundtouch-web /app/soundtouch-web
+
+ENV PORT=8080
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/soundtouch-web"]

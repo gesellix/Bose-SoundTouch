@@ -64,7 +64,7 @@ func main() {
 	r := setupRoutes(app, discoveryService)
 
 	// Start web server
-	log.Printf("SoundTouch Web UI starting on http://localhost:%s", *port)
+	log.Printf("SoundTouch Web UI starting on http://0.0.0.0:%s", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, r))
 }
 

@@ -1,6 +1,8 @@
 services:
   soundtouch-service:
-    build: .
+    build:
+      context: .
+      target: soundtouch-service
     volumes:
       - ./tests/integration/testdata:/app/data
     environment:
