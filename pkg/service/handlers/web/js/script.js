@@ -707,8 +707,8 @@ async function fetchAccountDetails(accountId) {
                                             itemName = p.name || (p.source ? (p.source.source_label || p.source.name || p.source.type) : "Unknown");
                                             if (p.source) {
                                                 const s = p.source;
-                                                const name = s.source_label || s.source_name || s.name || s.type;
-                                                const account = (s.account && s.account !== s.username) ? ` [${s.account}]` : "";
+                                                const name = s.provider_label || s.display_name || s.source_name || s.name || s.type;
+                                                const account = (s.account && s.account !== s.username && s.account !== name) ? ` [${s.account}]` : "";
                                                 const finalName = name || s.type || "Unknown Source";
                                                 if (finalName) {
                                                     sourceLabel = `<br><small style="color: #666; font-size: 0.85em;">via ${finalName}${account}</small>`;
@@ -732,14 +732,17 @@ async function fetchAccountDetails(accountId) {
                                             let sourceLabel = "";
                                             if (r.source) {
                                                 const s = r.source;
-                                                const sName = s.source_label || s.source_name || s.name || s.type;
-                                                const account = (s.account && s.account !== s.username) ? ` [${s.account}]` : "";
+                                                const sName = s.provider_label || s.display_name || s.source_name || s.name || s.type;
+                                                const account = (s.account && s.account !== s.username && s.account !== sName) ? ` [${s.account}]` : "";
                                                 const finalSName = sName || s.type || "Unknown Source";
                                                 if (finalSName) {
                                                     sourceLabel = `<br><small style="color: #666; font-size: 0.9em;">via ${finalSName}${account}</small>`;
                                                 }
                                             }
-                                            return `<li>${name}${sourceLabel} <br><small style="color:#888">${r.created_on ? new Date(r.created_on * 1000).toLocaleString() : 'N/A'}</small></li>`;
+                                            const dateRaw = r.last_played_at || r.created_on;
+                                            const dateObj = dateRaw ? (isNaN(Number(dateRaw)) ? new Date(dateRaw) : new Date(Number(dateRaw) * 1000)) : null;
+                                            const dateStr = dateObj ? dateObj.toLocaleString('sv-SE') : 'N/A'; // sv-SE produces YYYY-MM-DD HH:MM:SS with 24h time
+                                            return `<li>${name}${sourceLabel} <br><small style="color:#888">${dateStr}</small></li>`;
                                         }).join("") : "<li>No recents</li>"}
                                     </ul>
                                 </div>
@@ -750,9 +753,9 @@ async function fetchAccountDetails(accountId) {
                             <h5 style="margin: 0 0 5px 0">Configured Sources</h5>
                             <div style="display: flex; flex-wrap: wrap; gap: 5px">
                                 ${device.sources ? device.sources.filter(s => (s.source_label || s.source_name || s.name || s.type)).map(s => {
-                                    const sourceName = s.source_label || s.source_name || s.name || s.type;
+                                    const sourceName = s.provider_label || s.display_name || s.source_name || s.name || s.type;
                                     const usernameSuffix = (s.username && s.username !== "Local") ? ` (${s.username})` : "";
-                                    const accountSuffix = (s.account && s.account !== s.username) ? ` [${s.account}]` : "";
+                                    const accountSuffix = (s.account && s.account !== s.username && s.account !== sourceName) ? ` [${s.account}]` : "";
                                     return `
                                         <span style="background: #eefbff; color: #0056b3; border: 1px solid #b8daff; padding: 2px 8px; border-radius: 12px; font-size: 0.75em" title="Source Type: ${s.type}">
                                             ${sourceName}${usernameSuffix}${accountSuffix}

@@ -269,6 +269,7 @@ func mapToFullResponseSource(src *models.ConfiguredSource) models.FullResponseSo
 		UpdatedOn:        src.UpdatedOn,
 		Account:          src.SourceKey.Account,
 		SourceLabel:      constants.GetSourceLabel(src.Type),
+		ProviderLabel:    constants.GetProviderLabel(src.SourceProviderID),
 		SourceSettings:   src.SourceSettings,
 	}
 	fs.Credential.Value = src.Secret

@@ -265,6 +265,22 @@ func GetProviderName(providerID string) string {
 	return providerID
 }
 
+// GetProviderLabel returns the user-friendly label for a provider ID (e.g. "TuneIn Radio", "Spotify").
+func GetProviderLabel(providerID string) string {
+	id, err := strconv.Atoi(providerID)
+	if err != nil {
+		return ""
+	}
+
+	for _, p := range StaticProviders {
+		if p.ID == id {
+			return p.Label
+		}
+	}
+
+	return ""
+}
+
 // GetProviders returns a list of known source provider names.
 func GetProviders() []string {
 	var providers []string
