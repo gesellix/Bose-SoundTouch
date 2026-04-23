@@ -569,12 +569,14 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 		return
 	}
 
-	// 8. Ensure default sources exist if missing
-	if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
-		log.Printf("Creating default Sources.xml for device %s", deviceID)
+	// 8. Create default Sources.xml only when no sources file exists yet
+	if !s.ds.HasConfiguredSources(accountID, deviceID) {
+		if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
+			log.Printf("Creating default Sources.xml for device %s", deviceID)
 
-		if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
-			log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+			if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
+				log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+			}
 		}
 	}
 
@@ -620,12 +622,14 @@ func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
 		return
 	}
 
-	// Ensure default sources exist if missing
-	if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
-		log.Printf("Creating default Sources.xml for device %s (fallback)", deviceID)
+	// Create default Sources.xml only when no sources file exists yet
+	if !s.ds.HasConfiguredSources(accountID, deviceID) {
+		if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
+			log.Printf("Creating default Sources.xml for device %s (fallback)", deviceID)
 
-		if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
-			log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+			if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
+				log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+			}
 		}
 	}
 

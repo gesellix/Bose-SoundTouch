@@ -1330,6 +1330,25 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 		} `xml:"sourceKey"`
 	}
 
+	// Deduplicate by ID before saving; first occurrence wins to preserve established data
+	seen := make(map[string]bool)
+
+	deduped := make([]models.ConfiguredSource, 0, len(sources))
+	for i := range sources {
+		s := &sources[i]
+		if s.ID != "" {
+			if seen[s.ID] {
+				continue
+			}
+
+			seen[s.ID] = true
+		}
+
+		deduped = append(deduped, *s)
+	}
+
+	sources = deduped
+
 	// Ensure SourceKey is populated from legacy fields if necessary before saving
 	// and map to persistentSource to avoid custom MarshalXML for disk storage
 	persistSources := make([]persistentSource, len(sources))
@@ -1589,6 +1608,14 @@ func (ds *DataStore) GetETagForPresets(account, device string) int64 {
 	}
 
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
+}
+
+// HasConfiguredSources reports whether a Sources.xml file exists for the given account and device.
+func (ds *DataStore) HasConfiguredSources(account, device string) bool {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
+	_, err := os.Stat(path)
+
+	return err == nil
 }
 
 // GetETagForSources returns the ETag (modification time) for the sources file for a specific device.
