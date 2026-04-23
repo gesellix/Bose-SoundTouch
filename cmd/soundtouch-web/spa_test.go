@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,16 @@ import (
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/handlers"
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/go-chi/chi/v5"
 )
+
+func withChiParams(r *http.Request, params map[string]string) *http.Request {
+	rctx := chi.NewRouteContext()
+	for k, v := range params {
+		rctx.URLParams.Add(k, v)
+	}
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}
 
 func TestSPARouting(t *testing.T) {
 	tests := []struct {
@@ -134,6 +144,8 @@ func TestAPIEndpoints(t *testing.T) {
 				app.HandleAPIDiscover(w, req)
 			default:
 				if strings.HasPrefix(tt.path, "/api/device/") {
+					deviceID := strings.TrimPrefix(tt.path, "/api/device/")
+					req = withChiParams(req, map[string]string{"id": deviceID})
 					app.HandleAPIDevice(w, req)
 				}
 			}
@@ -200,6 +212,7 @@ func TestControlAPIValidation(t *testing.T) {
 		method         string
 		body           string
 		expectedStatus int
+		chiParams      map[string]string
 	}{
 		{
 			name:           "missing device ID",
@@ -218,18 +231,21 @@ func TestControlAPIValidation(t *testing.T) {
 			path:           "/api/control/nonexistent/invalid",
 			method:         "GET",
 			expectedStatus: http.StatusNotFound,
+			chiParams:      map[string]string{"id": "nonexistent", "action": "invalid"},
 		},
 		{
 			name:           "nonexistent device",
 			path:           "/api/control/nonexistent/play",
 			method:         "GET",
 			expectedStatus: http.StatusNotFound,
+			chiParams:      map[string]string{"id": "nonexistent", "action": "play"},
 		},
 		{
 			name:           "unknown action with valid device",
 			path:           "/api/control/testdevice/unknownaction",
 			method:         "GET",
 			expectedStatus: http.StatusBadRequest,
+			chiParams:      map[string]string{"id": "testdevice", "action": "unknownaction"},
 		},
 	}
 
@@ -250,6 +266,9 @@ func TestControlAPIValidation(t *testing.T) {
 				req.Header.Set("Content-Type", "application/json")
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
+			}
+			if tt.chiParams != nil {
+				req = withChiParams(req, tt.chiParams)
 			}
 
 			w := httptest.NewRecorder()
@@ -319,6 +338,8 @@ func TestJSONAPIConsistency(t *testing.T) {
 				app.HandleAPIDevices(w, req)
 			default:
 				if strings.HasPrefix(endpoint, "/api/device/") {
+					deviceID := strings.TrimPrefix(endpoint, "/api/device/")
+					req = withChiParams(req, map[string]string{"id": deviceID})
 					app.HandleAPIDevice(w, req)
 				}
 			}

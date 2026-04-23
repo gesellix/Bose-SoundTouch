@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -224,13 +224,7 @@ func (app *WebApp) UpdateDeviceStatus(_ string, conn *webtypes.DeviceConnection)
 
 // HandleDeviceWebSocket handles individual device WebSocket connections for real-time device-specific updates
 func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request) {
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 4 || pathParts[1] != "api" || pathParts[2] != "device-ws" {
-		http.Error(w, "Invalid path format", http.StatusBadRequest)
-		return
-	}
-
-	deviceID := pathParts[3]
+	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
 		http.Error(w, "Device ID required", http.StatusBadRequest)
 		return

@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/go-chi/chi/v5"
 )
 
 func createTestApp() *WebApp {
@@ -40,6 +42,14 @@ func createTestApp() *WebApp {
 
 	app.Devices["test-device"] = device
 	return app
+}
+
+func withChiParams(r *http.Request, params map[string]string) *http.Request {
+	rctx := chi.NewRouteContext()
+	for k, v := range params {
+		rctx.URLParams.Add(k, v)
+	}
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 }
 
 func TestNewWebApp(t *testing.T) {
@@ -102,24 +112,28 @@ func TestHandleAPIDevice(t *testing.T) {
 	tests := []struct {
 		name           string
 		path           string
+		chiID          string
 		expectedStatus int
 		expectSuccess  bool
 	}{
 		{
 			name:           "valid device",
 			path:           "/api/device/test-device",
+			chiID:          "test-device",
 			expectedStatus: http.StatusOK,
 			expectSuccess:  true,
 		},
 		{
 			name:           "missing device ID",
 			path:           "/api/device/",
+			chiID:          "",
 			expectedStatus: http.StatusBadRequest,
 			expectSuccess:  false,
 		},
 		{
 			name:           "unknown device",
 			path:           "/api/device/unknown",
+			chiID:          "unknown",
 			expectedStatus: http.StatusNotFound,
 			expectSuccess:  false,
 		},
@@ -128,6 +142,9 @@ func TestHandleAPIDevice(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tt.path, nil)
+			if tt.chiID != "" {
+				req = withChiParams(req, map[string]string{"id": tt.chiID})
+			}
 			w := httptest.NewRecorder()
 
 			app.HandleAPIDevice(w, req)
@@ -157,6 +174,7 @@ func TestHandleAPIControl_InvalidDevice(t *testing.T) {
 	app := createTestApp()
 
 	req := httptest.NewRequest("GET", "/api/control/unknown-device/play", nil)
+	req = withChiParams(req, map[string]string{"id": "unknown-device", "action": "play"})
 	w := httptest.NewRecorder()
 
 	app.HandleAPIControl(w, req)
@@ -261,6 +279,7 @@ func TestHandleAPIControl_VolumeValidation(t *testing.T) {
 			} else {
 				req = httptest.NewRequest(tt.method, "/api/control/test-device/volume", nil)
 			}
+			req = withChiParams(req, map[string]string{"id": "test-device", "action": "volume"})
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -311,6 +330,7 @@ func TestHandleAPIControl_BassValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, "/api/control/test-device/bass", strings.NewReader(tt.body))
+			req = withChiParams(req, map[string]string{"id": "test-device", "action": "bass"})
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -358,6 +378,7 @@ func TestHandleAPIControl_PresetValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/control/test-device/preset"+tt.query, nil)
+			req = withChiParams(req, map[string]string{"id": "test-device", "action": "preset"})
 			w := httptest.NewRecorder()
 
 			app.HandleAPIControl(w, req)
@@ -382,6 +403,7 @@ func TestHandleAPIControl_SourceValidation(t *testing.T) {
 	app := createTestApp()
 
 	req := httptest.NewRequest("GET", "/api/control/test-device/source", nil)
+	req = withChiParams(req, map[string]string{"id": "test-device", "action": "source"})
 	w := httptest.NewRecorder()
 
 	app.HandleAPIControl(w, req)
@@ -497,6 +519,7 @@ func TestHandleAPIControl_UnsupportedAction(t *testing.T) {
 	app := createTestApp()
 
 	req := httptest.NewRequest("GET", "/api/control/test-device/unsupported", nil)
+	req = withChiParams(req, map[string]string{"id": "test-device", "action": "unsupported"})
 	w := httptest.NewRecorder()
 
 	app.HandleAPIControl(w, req)
@@ -545,6 +568,7 @@ func BenchmarkHandleAPIDevices(b *testing.B) {
 func BenchmarkHandleAPIDevice(b *testing.B) {
 	app := createTestApp()
 	req := httptest.NewRequest("GET", "/api/device/test-device", nil)
+	req = withChiParams(req, map[string]string{"id": "test-device"})
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

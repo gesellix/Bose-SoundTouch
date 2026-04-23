@@ -13,6 +13,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -61,7 +62,7 @@ func (app *WebApp) HandleAPIDevices(w http.ResponseWriter, _ *http.Request) {
 
 // HandleAPIDevice returns a specific device as JSON
 func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
-	deviceID := strings.TrimPrefix(r.URL.Path, "/api/device/")
+	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
 		app.sendError(w, "Device ID required", http.StatusBadRequest)
 		return
@@ -98,18 +99,9 @@ func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 
 // HandleAPIControl handles device control commands
 func (app *WebApp) HandleAPIControl(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/control/")
+	deviceID := chi.URLParam(r, "id")
+	action := chi.URLParam(r, "action")
 
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 {
-		app.sendError(w, "Invalid control path", http.StatusBadRequest)
-		return
-	}
-
-	deviceID := parts[0]
-	action := parts[1]
-
-	// Check for empty device ID
 	if deviceID == "" {
 		app.sendError(w, "Device ID required", http.StatusBadRequest)
 		return
@@ -323,19 +315,8 @@ func (app *WebApp) sendError(w http.ResponseWriter, message string, statusCode i
 
 // HandleDeviceKey handles sending key commands to devices
 func (app *WebApp) HandleDeviceKey(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		app.sendError(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 5 || pathParts[1] != "api" || pathParts[2] != "device-key" {
-		app.sendError(w, "Invalid path format", http.StatusBadRequest)
-		return
-	}
-
-	deviceID := pathParts[3]
-	key := pathParts[4]
+	deviceID := chi.URLParam(r, "id")
+	key := chi.URLParam(r, "key")
 
 	device, exists := app.Devices[deviceID]
 	if !exists {
@@ -361,20 +342,9 @@ func (app *WebApp) HandleDeviceKey(w http.ResponseWriter, r *http.Request) {
 
 // HandleDirectVolumeControl handles direct volume setting via URL parameter
 func (app *WebApp) HandleDirectVolumeControl(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		app.sendError(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
+	deviceID := chi.URLParam(r, "id")
 
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 5 || pathParts[1] != "api" || pathParts[2] != "device-volume" {
-		app.sendError(w, "Invalid path format", http.StatusBadRequest)
-		return
-	}
-
-	deviceID := pathParts[3]
-
-	volumeLevel, err := strconv.Atoi(pathParts[4])
+	volumeLevel, err := strconv.Atoi(chi.URLParam(r, "volume"))
 	if err != nil || volumeLevel < 0 || volumeLevel > 100 {
 		app.sendError(w, "Invalid volume level (0-100)", http.StatusBadRequest)
 		return
@@ -404,18 +374,7 @@ func (app *WebApp) HandleDirectVolumeControl(w http.ResponseWriter, r *http.Requ
 
 // HandleDevicePower handles power toggle commands for devices
 func (app *WebApp) HandleDevicePower(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		app.sendError(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 4 || pathParts[1] != "api" || pathParts[2] != "device-power" {
-		app.sendError(w, "Invalid path format", http.StatusBadRequest)
-		return
-	}
-
-	deviceID := pathParts[3]
+	deviceID := chi.URLParam(r, "id")
 
 	device, exists := app.Devices[deviceID]
 	if !exists {
@@ -442,18 +401,7 @@ func (app *WebApp) HandleDevicePower(w http.ResponseWriter, r *http.Request) {
 
 // HandleDevicePowerStatus handles lightweight power status check
 func (app *WebApp) HandleDevicePowerStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		app.sendError(w, "GET required", http.StatusMethodNotAllowed)
-		return
-	}
-
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 4 || pathParts[1] != "api" || pathParts[2] != "device-power-status" {
-		app.sendError(w, "Invalid path format", http.StatusBadRequest)
-		return
-	}
-
-	deviceID := pathParts[3]
+	deviceID := chi.URLParam(r, "id")
 
 	device, exists := app.Devices[deviceID]
 	if !exists {
@@ -587,14 +535,7 @@ func (app *WebApp) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 //   - /sub/{n}/{encodedURI}               → single subsection
 //   - /profiles/{type}/{id}/{encodedURI}  → artist/program profile
 func (app *WebApp) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
-	const navPrefix = "/api/tunein/navigate"
-
-	path := r.URL.Path
-	wildcard := ""
-
-	if len(path) > len(navPrefix) {
-		wildcard = strings.TrimPrefix(path[len(navPrefix):], "/")
-	}
+	wildcard := chi.URLParam(r, "*")
 
 	var (
 		resp interface{}
@@ -651,7 +592,7 @@ func (app *WebApp) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) 
 
 // HandlePlayTuneIn plays a TuneIn content item on a specific device via POST /select.
 func (app *WebApp) HandlePlayTuneIn(w http.ResponseWriter, r *http.Request) {
-	deviceID := strings.TrimPrefix(r.URL.Path, "/api/tunein/play/")
+	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
 		app.sendError(w, "Device ID required", http.StatusBadRequest)
 		return

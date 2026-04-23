@@ -3,10 +3,11 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
+	"io/fs"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/handlers"
@@ -14,7 +15,11 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/config"
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
+	"github.com/go-chi/chi/v5"
 )
+
+//go:embed static
+var staticFS embed.FS
 
 var (
 	port = flag.String("port", "8080", "Web server port")
@@ -56,29 +61,35 @@ func main() {
 	}()
 
 	// Setup HTTP routes
-	setupRoutes(app, discoveryService)
+	r := setupRoutes(app, discoveryService)
 
 	// Start web server
 	log.Printf("SoundTouch Web UI starting on http://localhost:%s", *port)
-	log.Fatal(http.ListenAndServe(":"+*port, nil))
+	log.Fatal(http.ListenAndServe(":"+*port, r))
 }
 
-func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) {
-	// Static files - try both relative paths
-	staticDir := "cmd/soundtouch-web/static/"
-	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
-		staticDir = "static/"
+func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
+	r := chi.NewRouter()
+
+	// Static assets (embedded in binary)
+	subFS, _ := fs.Sub(staticFS, "static")
+	r.Get("/static/*", http.StripPrefix("/static", http.FileServer(http.FS(subFS))).ServeHTTP)
+
+	// Serve index.html for SPA routes
+	serveIndex := func(w http.ResponseWriter, _ *http.Request) {
+		data, _ := staticFS.ReadFile("static/index.html")
+
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write(data)
 	}
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-
 	// WebSocket endpoint
-	http.HandleFunc("/ws", app.HandleWebSocket)
+	r.Get("/ws", app.HandleWebSocket)
 
 	// API endpoints
-	http.HandleFunc("/api/devices", app.HandleAPIDevices)
-	http.HandleFunc("/api/device/", app.HandleAPIDevice)
-	http.HandleFunc("/api/discover", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/api/devices", app.HandleAPIDevices)
+	r.Get("/api/device/{id}", app.HandleAPIDevice)
+	r.Post("/api/discover", func(w http.ResponseWriter, r *http.Request) {
 		app.HandleAPIDiscover(w, r)
 		// Trigger discovery
 		//nolint:contextcheck // Context is created within goroutine
@@ -97,39 +108,29 @@ func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscov
 		}()
 	})
 
-	// Device control endpoints
-	http.HandleFunc("/api/control/", app.HandleAPIControl)
+	// Device control endpoints (GET for most actions, POST for volume/bass)
+	r.Get("/api/control/{id}/{action}", app.HandleAPIControl)
+	r.Post("/api/control/{id}/{action}", app.HandleAPIControl)
 
 	// TuneIn browse, search, and playback
-	http.HandleFunc("/api/tunein/search", app.HandleTuneInSearch)
-	http.HandleFunc("/api/tunein/navigate", app.HandleTuneInNavigate)
-	http.HandleFunc("/api/tunein/navigate/", app.HandleTuneInNavigate)
-	http.HandleFunc("/api/tunein/play/", app.HandlePlayTuneIn)
+	r.Get("/api/tunein/search", app.HandleTuneInSearch)
+	r.Get("/api/tunein/navigate", app.HandleTuneInNavigate)
+	r.Get("/api/tunein/navigate/*", app.HandleTuneInNavigate)
+	r.Post("/api/tunein/play/{id}", app.HandlePlayTuneIn)
 
-	// Enhanced device control endpoints with specific patterns
-	http.HandleFunc("/api/device-key/", app.HandleDeviceKey)
-	http.HandleFunc("/api/device-volume/", app.HandleDirectVolumeControl)
-	http.HandleFunc("/api/device-power/", app.HandleDevicePower)
-	http.HandleFunc("/api/device-power-status/", app.HandleDevicePowerStatus)
-	http.HandleFunc("/api/device-ws/", app.HandleDeviceWebSocket)
+	// Enhanced device control endpoints
+	r.Post("/api/device-key/{id}/{key}", app.HandleDeviceKey)
+	r.Post("/api/device-volume/{id}/{volume}", app.HandleDirectVolumeControl)
+	r.Post("/api/device-power/{id}", app.HandleDevicePower)
+	r.Get("/api/device-power-status/{id}", app.HandleDevicePowerStatus)
+	r.Get("/api/device-ws/{id}", app.HandleDeviceWebSocket)
 
-	// SPA routes - serve index.html for specific routes only
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Serve the SPA index.html file for root path
-		spaPath := staticDir + "index.html"
-		http.ServeFile(w, r, spaPath)
-	})
+	// SPA routes - serve index.html for client-side routing
+	r.Get("/", serveIndex)
+	r.Get("/devices", serveIndex)
+	r.Get("/device/*", serveIndex)
 
-	// Additional SPA routes for client-side routing
-	http.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {
-		spaPath := staticDir + "index.html"
-		http.ServeFile(w, r, spaPath)
-	})
-
-	http.HandleFunc("/device/", func(w http.ResponseWriter, r *http.Request) {
-		spaPath := staticDir + "index.html"
-		http.ServeFile(w, r, spaPath)
-	})
+	return r
 }
 
 func discoverDevices(ctx context.Context, app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) {
