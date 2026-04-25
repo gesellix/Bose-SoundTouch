@@ -4,10 +4,10 @@ package main
 import (
 	"context"
 	"embed"
-	"flag"
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/handlers"
@@ -16,56 +16,79 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/config"
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/go-chi/chi/v5"
+	"github.com/urfave/cli/v2"
 )
 
 //go:embed static
 var staticFS embed.FS
 
-var (
-	port = flag.String("port", "8080", "Web server port")
-	_    = flag.String("host", "", "Specific SoundTouch device host (optional)")
-)
-
 func main() {
-	flag.Parse()
+	app := &cli.App{
+		Name:  "soundtouch-web",
+		Usage: "Web UI for controlling Bose SoundTouch devices",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "port",
+				Aliases: []string{"p"},
+				Usage:   "HTTP port to listen on",
+				Value:   "8080",
+				EnvVars: []string{"PORT"},
+			},
+			&cli.StringFlag{
+				Name:    "bind",
+				Usage:   "Network interface to bind to",
+				EnvVars: []string{"BIND_ADDR"},
+			},
+		},
+		Action: func(c *cli.Context) error {
+			port := c.String("port")
+			bindAddr := c.String("bind")
 
-	// Create web app without templates (SPA mode)
-	app := handlers.NewWebApp()
+			addr := ":" + port
+			if bindAddr != "" {
+				addr = bindAddr + ":" + port
+			}
 
-	// Initialize discovery service
-	cfg, err := config.LoadFromEnv()
-	if err != nil {
-		log.Printf("Failed to load config: %v, using defaults", err)
+			// Create web app without templates (SPA mode)
+			webApp := handlers.NewWebApp()
 
-		cfg = config.DefaultConfig()
+			// Initialize discovery service
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				log.Printf("Failed to load config: %v, using defaults", err)
+
+				cfg = config.DefaultConfig()
+			}
+
+			cfg.DiscoveryTimeout = 10 * time.Second
+			cfg.CacheEnabled = true
+
+			discoveryService := discovery.NewUnifiedDiscoveryService(cfg)
+
+			// Discover devices on startup
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+
+				webApp.BroadcastDiscoveryStatus("starting", len(webApp.Devices))
+
+				discoverDevices(ctx, webApp, discoveryService)
+
+				webApp.BroadcastDiscoveryStatus("completed", len(webApp.Devices))
+				webApp.BroadcastDeviceList()
+			}()
+
+			r := setupRoutes(webApp, discoveryService)
+
+			log.Printf("SoundTouch Web UI starting on http://%s", addr)
+
+			return http.ListenAndServe(addr, r)
+		},
 	}
 
-	cfg.DiscoveryTimeout = 10 * time.Second
-	cfg.CacheEnabled = true
-
-	discoveryService := discovery.NewUnifiedDiscoveryService(cfg)
-
-	// Discover devices on startup
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		// Broadcast discovery start
-		app.BroadcastDiscoveryStatus("starting", len(app.Devices))
-
-		discoverDevices(ctx, app, discoveryService)
-
-		// Broadcast discovery completion and updated device list
-		app.BroadcastDiscoveryStatus("completed", len(app.Devices))
-		app.BroadcastDeviceList()
-	}()
-
-	// Setup HTTP routes
-	r := setupRoutes(app, discoveryService)
-
-	// Start web server
-	log.Printf("SoundTouch Web UI starting on http://0.0.0.0:%s", *port)
-	log.Fatal(http.ListenAndServe(":"+*port, r))
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
