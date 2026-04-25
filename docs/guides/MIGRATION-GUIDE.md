@@ -129,7 +129,7 @@ For each SoundTouch device:
 1. **Prepare a USB drive**:
    - Format as FAT32
    - Create an empty file named `remote_services` (no extension)
-   - (Optional) Firmware update/reset, see [Bose SoundTouch USB Update](https://downloads.bose.com/ced/soundtouch/soundtouch_usb/index.html)
+   - ~~(Optional) Firmware update/reset.~~ The official Bose SoundTouch USB update website is not available anymore.
 
 2. **Insert USB drive** into your SoundTouch speaker
 3. **Power cycle** the device (unplug for 10 seconds, then reconnect)
