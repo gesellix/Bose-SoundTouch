@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bufio"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -21,6 +22,8 @@ func TestDocsConsistency(t *testing.T) {
 	}
 
 	summaryText := string(summaryContent)
+
+	docsIgnore := readDocsIgnore(t, filepath.Join(projectRoot, ".docsignore"))
 
 	// List of directories to check
 	dirsToCheck := []string{".", "guides", "reference", "analysis"}
@@ -48,6 +51,13 @@ func TestDocsConsistency(t *testing.T) {
 				return nil
 			}
 
+			// Skip files listed in .docsignore at the project root
+			for _, skip := range docsIgnore {
+				if strings.HasSuffix(path, filepath.FromSlash(skip)) {
+					return nil
+				}
+			}
+
 			// Get relative path from docs/
 			relPath, err := filepath.Rel(docsDir, path)
 			if err != nil {
@@ -68,4 +78,32 @@ func TestDocsConsistency(t *testing.T) {
 			t.Errorf("Error walking directory %s: %v", dir, err)
 		}
 	}
+}
+
+// readDocsIgnore reads a .docsignore file and returns the non-empty, non-comment lines.
+// If the file does not exist it returns nil without failing the test.
+func readDocsIgnore(t *testing.T, path string) []string {
+	t.Helper()
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", path, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	var patterns []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		patterns = append(patterns, line)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("Error reading %s: %v", path, err)
+	}
+	return patterns
 }

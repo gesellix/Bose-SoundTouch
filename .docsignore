@@ -1,0 +1,5 @@
+# Files intentionally not linked in docs/SUMMARY.md.
+# Paths are relative to the docs/ directory.
+# Lines starting with # and blank lines are ignored.
+
+analysis/bose-soundtouch-community-tools.md

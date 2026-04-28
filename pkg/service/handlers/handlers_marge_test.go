@@ -1563,3 +1563,177 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		}
 	})
 }
+
+func TestMargeGroupCRUD(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-group-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	account := "ACC001"
+	device1 := "AABBCCDDEEFF"
+	device2 := "112233445566"
+
+	groupXML := `<?xml version="1.0" encoding="UTF-8"?>
+<group>
+  <name>Living Room Stereo</name>
+  <masterDeviceId>` + device1 + `</masterDeviceId>
+  <roles>
+    <groupRole><deviceId>` + device1 + `</deviceId><role>LEFT</role><ipAddress>192.168.1.10</ipAddress></groupRole>
+    <groupRole><deviceId>` + device2 + `</deviceId><role>RIGHT</role><ipAddress>192.168.1.11</ipAddress></groupRole>
+  </roles>
+  <senderIPAddress>192.168.1.10</senderIPAddress>
+</group>`
+
+	var groupID string
+
+	t.Run("GET device group returns empty group before creation", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/marge/streaming/account/" + account + "/device/" + device1 + "/group")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected 200, got %d", res.StatusCode)
+		}
+		body, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(body), "<group") {
+			t.Errorf("Expected <group> element, got: %s", body)
+		}
+	})
+
+	t.Run("POST group creates a new group and returns 201 with ID", func(t *testing.T) {
+		res, err := http.Post(
+			ts.URL+"/marge/streaming/account/"+account+"/group",
+			"application/xml",
+			bytes.NewBufferString(groupXML),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		if res.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("Expected 201 Created, got %d: %s", res.StatusCode, body)
+		}
+
+		body, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(body), `<group `) {
+			t.Errorf("Response missing <group> with id attr: %s", body)
+		}
+
+		// Parse out the group ID from the response XML
+		type groupResp struct {
+			ID string `xml:"id,attr"`
+		}
+		var gr groupResp
+		if err := xml.Unmarshal(body, &gr); err != nil {
+			t.Fatalf("Failed to unmarshal group response: %v", err)
+		}
+		if gr.ID == "" {
+			t.Fatalf("Response group has no ID: %s", body)
+		}
+		groupID = gr.ID
+	})
+
+	t.Run("GET device group returns the group after creation", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/marge/streaming/account/" + account + "/device/" + device1 + "/group")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("Expected 200, got %d", res.StatusCode)
+		}
+		body, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(body), "Living Room Stereo") {
+			t.Errorf("Expected group name in response: %s", body)
+		}
+	})
+
+	t.Run("POST group/{groupId} renames the group", func(t *testing.T) {
+		if groupID == "" {
+			t.Skip("No group ID from prior subtest")
+		}
+		modXML := `<group><name>Bedroom Stereo</name><masterDeviceId>` + device1 + `</masterDeviceId></group>`
+		req, _ := http.NewRequest(http.MethodPost,
+			ts.URL+"/marge/streaming/account/"+account+"/group/"+groupID,
+			bytes.NewBufferString(modXML),
+		)
+		req.Header.Set("Content-Type", "application/xml")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("Expected 200, got %d: %s", res.StatusCode, body)
+		}
+		body, _ := io.ReadAll(res.Body)
+		if !strings.Contains(string(body), "Bedroom Stereo") {
+			t.Errorf("Expected updated name in response: %s", body)
+		}
+	})
+
+	t.Run("DELETE group/{groupId} removes the group", func(t *testing.T) {
+		if groupID == "" {
+			t.Skip("No group ID from prior subtest")
+		}
+		req, _ := http.NewRequest(http.MethodDelete,
+			ts.URL+"/marge/streaming/account/"+account+"/group/"+groupID,
+			nil,
+		)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			t.Fatalf("Expected 200, got %d: %s", res.StatusCode, body)
+		}
+	})
+
+	t.Run("DELETE group/{groupId} returns 404 for missing group", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete,
+			ts.URL+"/marge/streaming/account/"+account+"/group/9999999",
+			nil,
+		)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("Expected 404, got %d", res.StatusCode)
+		}
+	})
+
+	t.Run("GET device group is empty after deletion", func(t *testing.T) {
+		res, err := http.Get(ts.URL + "/marge/streaming/account/" + account + "/device/" + device1 + "/group")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+
+		body, _ := io.ReadAll(res.Body)
+		// Should be back to empty <group/>
+		if strings.Contains(string(body), "Bedroom Stereo") {
+			t.Errorf("Group should be gone after deletion: %s", body)
+		}
+	})
+}

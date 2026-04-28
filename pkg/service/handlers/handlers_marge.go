@@ -679,24 +679,140 @@ func (s *Server) HandleMargeStreamingToken(w http.ResponseWriter, _ *http.Reques
 	_, _ = w.Write(data)
 }
 
-// HandleMargeDeviceGroup returns grouping information for a device (empty group by default).
-func (s *Server) HandleMargeDeviceGroup(w http.ResponseWriter, _ *http.Request) {
-	// Native firmware expects vnd.bose.streaming content type
+// HandleMargeDeviceGroup returns grouping information for a device.
+func (s *Server) HandleMargeDeviceGroup(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	device := chi.URLParam(r, "device")
+
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+
+	group, err := s.ds.GetGroupForDevice(account, device)
+	if err != nil || group == nil {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(constants.XMLHeader + `<group/>`))
+
+		return
+	}
+
+	data, err := xml.Marshal(group)
+	if err != nil {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(constants.XMLHeader + `<group/>`))
+
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(constants.XMLHeader + `<group/>`))
+	_, _ = w.Write([]byte(constants.XMLHeader))
+	_, _ = w.Write(data)
 }
 
 // HandleMargeDeviceGroupServer returns grouping server information (404 by default if not a server).
 func (s *Server) HandleMargeDeviceGroupServer(w http.ResponseWriter, r *http.Request) {
-	// Not in a group as server
 	http.NotFound(w, r)
 }
 
 // HandleMargeDeviceGroupMember returns grouping member information (404 by default if not a member).
 func (s *Server) HandleMargeDeviceGroupMember(w http.ResponseWriter, r *http.Request) {
-	// Not in a group as member
 	http.NotFound(w, r)
+}
+
+// HandleMargeAddGroup creates a new stereo group for an account.
+func (s *Server) HandleMargeAddGroup(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		return
+	}
+
+	var group models.Group
+	if err := xml.Unmarshal(body, &group); err != nil {
+		http.Error(w, "Invalid XML", http.StatusBadRequest)
+		return
+	}
+
+	id, err := s.ds.AddGroup(account, &group)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data, err := xml.Marshal(&group)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.Header().Set("Location", s.serverURL+"/account/"+account+"/group/"+id)
+	w.WriteHeader(http.StatusCreated)
+	_, _ = w.Write([]byte(constants.XMLHeader))
+	_, _ = w.Write(data)
+}
+
+// HandleMargeModifyGroup updates the name of an existing stereo group.
+func (s *Server) HandleMargeModifyGroup(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	groupID := chi.URLParam(r, "groupId")
+
+	if !validatePathID(account) || !validatePathID(groupID) {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		return
+	}
+
+	var req models.Group
+	if err := xml.Unmarshal(body, &req); err != nil {
+		http.Error(w, "Invalid XML", http.StatusBadRequest)
+		return
+	}
+
+	updated, err := s.ds.ModifyGroup(account, groupID, req.Name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	data, err := xml.Marshal(updated)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	_, _ = w.Write([]byte(constants.XMLHeader))
+	_, _ = w.Write(data)
+}
+
+// HandleMargeDeleteGroup removes a stereo group.
+func (s *Server) HandleMargeDeleteGroup(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	groupID := chi.URLParam(r, "groupId")
+
+	if !validatePathID(account) || !validatePathID(groupID) {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.ds.DeleteGroup(account, groupID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(constants.XMLHeader + `<status>Group deleted successfully</status>`))
 }
 
 // HandleMusicProviderIsEligible returns the music provider eligibility.

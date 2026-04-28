@@ -10,6 +10,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1905,4 +1906,129 @@ func (ds *DataStore) ClearDNSDiscoveries() error {
 	}
 
 	return os.Remove(path)
+}
+
+// groupFilePath returns the on-disk path for a group file.
+func (ds *DataStore) groupFilePath(account, groupID string) string {
+	return filepath.Join(ds.AccountDevicesDir(account), "Group_"+groupID+".xml")
+}
+
+// generateGroupID returns a unique 7-digit group ID that has no existing file.
+func (ds *DataStore) generateGroupID(account string) string {
+	for {
+		id := fmt.Sprintf("%07d", rand.Int63n(10_000_000)) //nolint:gosec
+		if !exists(ds.groupFilePath(account, id)) {
+			return id
+		}
+	}
+}
+
+// GetGroupForDevice returns the group containing the given device, or nil if ungrouped.
+func (ds *DataStore) GetGroupForDevice(account, deviceID string) (*models.Group, error) {
+	ds.fileMutex.RLock()
+	defer ds.fileMutex.RUnlock()
+
+	dir := ds.AccountDevicesDir(account)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), "Group_") || !strings.HasSuffix(e.Name(), ".xml") {
+			continue
+		}
+
+		data, readErr := os.ReadFile(filepath.Join(dir, e.Name()))
+		if readErr != nil {
+			continue
+		}
+
+		var g models.Group
+		if unmarshalErr := xml.Unmarshal(data, &g); unmarshalErr != nil {
+			continue
+		}
+
+		for _, role := range g.Roles.Roles {
+			if role.DeviceID == deviceID {
+				return &g, nil
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// AddGroup saves a new group to disk and returns its generated ID.
+func (ds *DataStore) AddGroup(account string, group *models.Group) (string, error) {
+	ds.fileMutex.Lock()
+	defer ds.fileMutex.Unlock()
+
+	dir := ds.AccountDevicesDir(account)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+
+	id := ds.generateGroupID(account)
+	group.ID = id
+
+	data, err := xml.MarshalIndent(group, "", "    ")
+	if err != nil {
+		return "", err
+	}
+
+	return id, ds.atomicWriteFile(ds.groupFilePath(account, id), append([]byte(xml.Header), data...))
+}
+
+// ModifyGroup updates the name of an existing group and returns the updated group.
+func (ds *DataStore) ModifyGroup(account, groupID, newName string) (*models.Group, error) {
+	ds.fileMutex.Lock()
+	defer ds.fileMutex.Unlock()
+
+	path := ds.groupFilePath(account, groupID)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("group %s not found", groupID)
+		}
+
+		return nil, err
+	}
+
+	var g models.Group
+	if err := xml.Unmarshal(data, &g); err != nil {
+		return nil, err
+	}
+
+	g.Name = newName
+
+	updated, err := xml.MarshalIndent(&g, "", "    ")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ds.atomicWriteFile(path, append([]byte(xml.Header), updated...)); err != nil {
+		return nil, err
+	}
+
+	return &g, nil
+}
+
+// DeleteGroup removes a group from disk.
+func (ds *DataStore) DeleteGroup(account, groupID string) error {
+	ds.fileMutex.Lock()
+	defer ds.fileMutex.Unlock()
+
+	err := os.Remove(ds.groupFilePath(account, groupID))
+	if os.IsNotExist(err) {
+		return fmt.Errorf("group %s not found", groupID)
+	}
+
+	return err
 }

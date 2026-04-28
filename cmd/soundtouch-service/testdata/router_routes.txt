@@ -1,5 +1,6 @@
 CONNECT  /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
 DELETE   /accounts/{account}/devices/{device}                         handlers.(*Server).HandleMargeRemoveDevice-fm
+DELETE   /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeDeleteGroup-fm
 DELETE   /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
 DELETE   /setup/devices/{deviceId}                                    handlers.(*Server).HandleRemoveDevice-fm
 DELETE   /setup/dns-discoveries                                       handlers.(*Server).HandleClearDNSDiscoveries-fm
@@ -7,6 +8,7 @@ DELETE   /setup/interactions/sessions                                 handlers.(
 DELETE   /setup/interactions/sessions/{session}                       handlers.(*Server).HandleDeleteSession-fm
 DELETE   /setup/parity-mismatches                                     handlers.(*Server).HandleClearParityMismatches-fm
 DELETE   /streaming/account/{account}/device/{device}/preset/{presetNumber} handlers.(*Server).HandleMargeRemovePreset-fm
+DELETE   /streaming/account/{account}/group/{groupId}                 handlers.(*Server).HandleMargeDeleteGroup-fm
 GET      /                                                            handlers.(*Server).HandleRoot-fm
 GET      /accounts/{account}/devices                                  handlers.(*Server).HandleMargeAccountDevices-fm
 GET      /accounts/{account}/devices/{device}/group                   handlers.(*Server).HandleMargeDeviceGroup-fm
@@ -84,6 +86,8 @@ PATCH    /oauth/*                                                     handlers.(
 POST     /accounts/{account}/devices                                  handlers.(*Server).HandleMargeAddDevice-fm
 POST     /accounts/{account}/devices/{device}/presets/{presetNumber}  handlers.(*Server).HandleMargeUpdatePreset-fm
 POST     /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleMargeAddRecent-fm
+POST     /accounts/{account}/group                                    handlers.(*Server).HandleMargeAddGroup-fm
+POST     /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeModifyGroup-fm
 POST     /bmx/orion/v1/playback/station/{data}                        handlers.(*Server).HandleOrionPlayback-fm
 POST     /bmx/tunein/v1/report                                        handlers.(*Server).HandleTuneInReport-fm
 POST     /bmx/tunein/v1/token                                         handlers.(*Server).HandleTuneInToken-fm
@@ -120,6 +124,8 @@ POST     /streaming/account/{account}/device/                         handlers.(
 POST     /streaming/account/{account}/device/{device}                 handlers.(*Server).HandleMargeAddDevice-fm
 POST     /streaming/account/{account}/device/{device}/presets/{presetNumber} handlers.(*Server).HandleMargeUpdatePreset-fm
 POST     /streaming/account/{account}/device/{device}/recent          handlers.(*Server).HandleMargeAddRecent-fm
+POST     /streaming/account/{account}/group                           handlers.(*Server).HandleMargeAddGroup-fm
+POST     /streaming/account/{account}/group/{groupId}                 handlers.(*Server).HandleMargeModifyGroup-fm
 POST     /streaming/account/{account}/source                          handlers.(*Server).HandleMargeAddSource-fm
 POST     /streaming/device_setting/account/{account}/device/{device}/device_settings handlers.(*Server).HandleMargeUpdateDeviceSettings-fm
 POST     /streaming/music/musicprovider/{providerID}/is_eligible      handlers.(*Server).HandleMusicProviderIsEligible-fm

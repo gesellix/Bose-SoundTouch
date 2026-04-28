@@ -804,6 +804,10 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 				r.Get("/group/member", server.HandleMargeDeviceGroupMember)
 			})
 
+			r.Post("/group", server.HandleMargeAddGroup)
+			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
+			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
+
 			r.Delete("/device/{device}", server.HandleMargeRemoveDevice)
 		})
 
@@ -846,6 +850,10 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Get("/devices/{device}/group/", server.HandleMargeDeviceGroup)
 			r.Get("/devices/{device}/group/server", server.HandleMargeDeviceGroupServer)
 			r.Get("/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
+
+			r.Post("/group", server.HandleMargeAddGroup)
+			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
+			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
 			r.Get("/devices/{device}/presets", server.HandleMargePresets)
 			r.Get("/devices/{device}/recents", server.HandleMargeRecents)
 
