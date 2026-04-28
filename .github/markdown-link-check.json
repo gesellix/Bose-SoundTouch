@@ -37,6 +37,12 @@
     },
     {
       "pattern": "https://apkpure.com/bose-soundtouch/com.bose.soundtouch"
+    },
+    {
+      "pattern": "^https://bose\\.fandom\\.com/"
+    },
+    {
+      "pattern": "^https://www\\.reddit\\.com/"
     }
   ],
   "replacementPatterns": [

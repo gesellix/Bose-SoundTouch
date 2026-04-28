@@ -61,6 +61,7 @@
 * [Bose Lab Runbook](analysis/BOSE-LAB-RUNBOOK.md)
 * [Missing Routes Spotify](analysis/MISSING-ROUTES-SPOTIFY.md)
 * [Bose App ADB Emulator](analysis/BOSE-APP-ADB-Emulator.md)
+* [Community Tools](analysis/bose-soundtouch-community-tools.md)
 
 ## Parity Analysis
 * [Parity Improvements](PARITY-IMPROVEMENTS.md)
