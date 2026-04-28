@@ -12,6 +12,35 @@ The implementation mirrors the [Spotify OAuth integration](spotify-oauth.md) clo
 
 ---
 
+## Secret Format (confirmed from a live Bose system)
+
+A real Amazon source entry from a migrated device's `Sources.xml`:
+
+```xml
+<source secretType="token">
+    <credential type="token">{"AmazonSecret":{"refresh_token":"Atzr|...","site_id":"1464855981"}}</credential>
+    <sourceKey type="AMAZON" account="user@example.com"/>
+</source>
+```
+
+Key observations:
+
+- **Secret envelope**: `{"AmazonSecret":{"refresh_token":"...","site_id":"..."}}` — JSON-encoded, HTML-entity-escaped in XML attributes, stored as the credential value.
+- **`Atzr|` prefix**: This is the standard Amazon LWA (Login with Amazon) refresh token prefix from the **authorization code grant** — confirming that Web OAuth is the correct flow, not CBL.
+- **`site_id`**: A numeric string (`"1464855981"`). Origin is not yet fully confirmed; candidates are:
+  - A static Bose partner identifier baked into the Bose app/firmware (same value for all users), or
+  - A per-user Amazon Music identifier returned by a Music API device registration call.
+  - Needs verification — possibly obtained by calling the Amazon Music API after initial authentication.
+- **`account` field**: The user's Amazon email address (obtained from the LWA `/user/profile` endpoint).
+
+When `HandleBoseAmazonToken` receives a refresh request from the speaker, it must:
+1. Parse the `AmazonSecret` JSON from the stored credential to extract `refresh_token`.
+2. Call the LWA token endpoint with a `refresh_token` grant.
+3. Return the fresh `access_token` to the speaker.
+4. Persist the rotated `refresh_token` back into the `AmazonSecret` envelope.
+
+---
+
 ## How the Speaker Uses This
 
 When the SoundTouch firmware tries to play Amazon Music after migration, it sends a token refresh request to the local service:
@@ -20,7 +49,7 @@ When the SoundTouch firmware tries to play Amazon Music after migration, it send
 POST /oauth/device/{deviceID}/music/musicprovider/20/token/cs1
 ```
 
-The service must respond with a fresh Amazon access token in the same JSON envelope Bose uses for Spotify. The speaker then uses that token directly with Amazon's playback infrastructure.
+The service must respond with a fresh Amazon access token. The speaker then uses that token directly with Amazon's playback infrastructure.
 
 The `cs1` suffix (credential schema 1) is Amazon-specific; Spotify uses `cs3`. This route is already registered.
 
@@ -94,11 +123,12 @@ sequenceDiagram
     participant Amazon as Amazon Token API (LWA)
 
     Speaker->>Service: POST /oauth/device/{deviceID}/music/musicprovider/20/token/cs1
-    Note over Service: Parse refresh_token from body
+    Note over Service: Body contains stored AmazonSecret JSON;<br/>extract refresh_token from {"AmazonSecret":{...}}
 
     alt Token expired or near expiry
-        Service->>Amazon: POST /auth/o2/token (refresh_token grant)
-        Amazon-->>Service: {access_token, refresh_token}
+        Service->>Amazon: POST /auth/o2/token (refresh_token grant, body credentials)
+        Amazon-->>Service: {access_token, refresh_token, expires_in}
+        Note over Service: Persist rotated refresh_token back into AmazonSecret envelope
     end
 
     Service-->>Speaker: {"access_token": "...", "token_type": "Bearer", "expires_in": 3600}
@@ -122,15 +152,15 @@ Mirror `pkg/service/spotify/service.go`. The `Account` struct is identical; copy
 
 **Amazon-specific differences:**
 
-| Item | Spotify | Amazon |
-|---|---|---|
-| Authorization URL | `https://accounts.spotify.com/authorize` | `https://www.amazon.com/ap/oa` |
-| Token endpoint | `https://accounts.spotify.com/api/token` | `https://api.amazon.com/auth/o2/token` |
-| Profile endpoint | `https://api.spotify.com/v1/me` | `https://api.amazon.com/user/profile` |
-| Token request credentials | HTTP Basic Auth (clientID:clientSecret) | POST body fields `client_id` / `client_secret` |
-| Profile fields | `id`, `display_name`, `email` | `user_id`, `name`, `email` |
-| Scopes | `streaming user-read-private ...` | `profile` (expand to `music::*` when available) |
-| Entity resolution | `ResolveEntity()` via Spotify API | Not implemented (API in closed beta) |
+| Item                      | Spotify                                  | Amazon                                          |
+|---------------------------|------------------------------------------|-------------------------------------------------|
+| Authorization URL         | `https://accounts.spotify.com/authorize` | `https://www.amazon.com/ap/oa`                  |
+| Token endpoint            | `https://accounts.spotify.com/api/token` | `https://api.amazon.com/auth/o2/token`          |
+| Profile endpoint          | `https://api.spotify.com/v1/me`          | `https://api.amazon.com/user/profile`           |
+| Token request credentials | HTTP Basic Auth (clientID:clientSecret)  | POST body fields `client_id` / `client_secret`  |
+| Profile fields            | `id`, `display_name`, `email`            | `user_id`, `name`, `email`                      |
+| Scopes                    | `streaming user-read-private ...`        | `profile` (expand to `music::*` when available) |
+| Entity resolution         | `ResolveEntity()` via Spotify API        | Not implemented (API in closed beta)            |
 
 Accounts persist to `{dataDir}/amazon/accounts.json`.
 
@@ -166,16 +196,16 @@ Add methods: `SetAmazonConfig`, `SetAmazonService`, `IsAmazonConfigured`, `Prime
 
 In `pkg/service/handlers/handlers_mgmt.go`, add six handlers mirroring Spotify:
 
-| Handler | Notes |
-|---|---|
-| `HandleMgmtAmazonInit` | Returns LWA authorize URL |
-| `HandleMgmtAmazonCallback` | No auth; calls `bridgeAmazonToMarge` |
-| `HandleMgmtAmazonConfirm` | Basic Auth; calls `bridgeAmazonToMarge` |
-| `HandleMgmtAmazonAccounts` | Returns account list (tokens stripped) |
-| `HandleMgmtAmazonToken` | Returns fresh access token |
-| `HandleMgmtPrimeDeviceAmazon` | Pushes token to speaker via ZeroConf |
+| Handler                       | Notes                                   |
+|-------------------------------|-----------------------------------------|
+| `HandleMgmtAmazonInit`        | Returns LWA authorize URL               |
+| `HandleMgmtAmazonCallback`    | No auth; calls `bridgeAmazonToMarge`    |
+| `HandleMgmtAmazonConfirm`     | Basic Auth; calls `bridgeAmazonToMarge` |
+| `HandleMgmtAmazonAccounts`    | Returns account list (tokens stripped)  |
+| `HandleMgmtAmazonToken`       | Returns fresh access token              |
+| `HandleMgmtPrimeDeviceAmazon` | Pushes token to speaker via ZeroConf    |
 
-`bridgeAmazonToMarge` uses `CredentialTypeToken` ("token") — **not** `CredentialTypeTokenV3`. Amazon uses `cs1` semantics.
+`bridgeAmazonToMarge` must encode the stored secret as `{"AmazonSecret":{"refresh_token":"<token>","site_id":"<id>"}}` and use `CredentialTypeToken` ("token") — **not** `CredentialTypeTokenV3`. Amazon uses `cs1` semantics.
 
 ### Step 7 — Wire CLI flags and router
 
@@ -210,15 +240,15 @@ Update `cmd/soundtouch-service/testdata/router_routes.txt` snapshot after wiring
 
 ## Endpoints
 
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| `POST` | `/oauth/device/{deviceID}/music/musicprovider/20/token/cs1` | None | Token refresh from speaker (stub → to implement) |
-| `GET` | `/mgmt/amazon/callback` | None | Browser OAuth callback (redirect from Amazon LWA) |
-| `POST` | `/mgmt/amazon/init` | Basic | Start OAuth flow, returns authorization URL |
-| `POST` | `/mgmt/amazon/confirm` | Basic | Mobile app confirm (deep link delivers code) |
-| `GET` | `/mgmt/amazon/accounts` | Basic | List linked Amazon accounts (tokens stripped) |
-| `GET` | `/mgmt/amazon/token` | Basic | Get fresh access token (auto-refreshes if expired) |
-| `POST` | `/mgmt/amazon/prime` | Basic | Push token to speaker via ZeroConf |
+| Method | Path                                                        | Auth  | Purpose                                            |
+|--------|-------------------------------------------------------------|-------|----------------------------------------------------|
+| `POST` | `/oauth/device/{deviceID}/music/musicprovider/20/token/cs1` | None  | Token refresh from speaker (stub → to implement)   |
+| `GET`  | `/mgmt/amazon/callback`                                     | None  | Browser OAuth callback (redirect from Amazon LWA)  |
+| `POST` | `/mgmt/amazon/init`                                         | Basic | Start OAuth flow, returns authorization URL        |
+| `POST` | `/mgmt/amazon/confirm`                                      | Basic | Mobile app confirm (deep link delivers code)       |
+| `GET`  | `/mgmt/amazon/accounts`                                     | Basic | List linked Amazon accounts (tokens stripped)      |
+| `GET`  | `/mgmt/amazon/token`                                        | Basic | Get fresh access token (auto-refreshes if expired) |
+| `POST` | `/mgmt/amazon/prime`                                        | Basic | Push token to speaker via ZeroConf                 |
 
 ## Security
 
@@ -229,6 +259,10 @@ Same model as Spotify:
 - `GetAccounts` strips `AccessToken` and `RefreshToken` from responses.
 
 ## Key Design Decisions
+
+**Secret is a JSON envelope, not a bare token.** The stored credential is `{"AmazonSecret":{"refresh_token":"Atzr|...","site_id":"..."}}`, HTML-entity-escaped when written to XML attributes. This was confirmed from a real migrated device's `Sources.xml`. `HandleBoseAmazonToken` must parse this structure to extract the `refresh_token`, and `bridgeAmazonToMarge` must produce it when storing after OAuth.
+
+**`site_id` origin is unconfirmed.** It may be a static Bose partner ID or a per-user Amazon Music identifier. Needs verification — likely obtained by calling the Amazon Music API or the LWA profile endpoint post-authentication.
 
 **Credential type is `token`, not `token_version_3`.** `CredentialTypeTokenV3` is Spotify-specific (`cs3`). Amazon uses `cs1`, which maps to the plain `CredentialTypeToken` ("token") constant. Do not upgrade Amazon credentials to v3 in `marge.go`.
 
