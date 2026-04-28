@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -465,40 +464,13 @@ func (s *Server) PrimeDeviceWithSpotify(deviceIP string) {
 }
 
 func (s *Server) pushSpotifyTokenToDevice(deviceIP, username, accessToken string) error {
-	// ZeroConf API endpoint on the speaker
 	var zcURL string
 	if _, _, err := net.SplitHostPort(deviceIP); err == nil {
-		// If port is specified (e.g. in tests), keep it but usually it's just IP
 		zcURL = fmt.Sprintf("http://%s/zc", deviceIP)
 	} else {
-		// If no port specified, default to 8200
 		zcURL = fmt.Sprintf("http://%s:8200/zc", deviceIP)
 	}
-
-	data := url.Values{}
-	data.Set("action", "addUser")
-	data.Set("userName", username)
-	data.Set("blob", accessToken)
-	data.Set("clientKey", "")
-	data.Set("tokenType", "accesstoken")
-
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	resp, err := client.PostForm(zcURL, data)
-	if err != nil {
-		return fmt.Errorf("POST to %s failed: %w", zcURL, err)
-	}
-
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("POST to %s returned status %d: %s", zcURL, resp.StatusCode, string(body))
-	}
-
-	return nil
+	return spotify.PushSpotifyCredentials(zcURL, username, accessToken)
 }
 
 func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {

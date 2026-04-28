@@ -4,7 +4,31 @@ This document outlines the strategy for ensuring Bose SoundTouch devices are cor
 
 ## Overview
 
-To enable Spotify Connect for SoundTouch devices, especially for remote availability outside the local network, the speaker must be associated with a Spotify account via a process called "priming." This involves sending an `addUser` command to the speaker's ZeroConf API (port 8200) containing a valid Spotify username and OAuth access token.
+To enable Spotify Connect for SoundTouch devices, especially for remote availability outside the local network, the speaker must be associated with a Spotify account via a process called "priming." This involves a two-step exchange with the speaker's ZeroConf API (port 8200):
+
+1. **`getInfo`** — retrieve the speaker's Diffie-Hellman public key and device metadata.
+2. **`addUser`** — push encrypted Spotify credentials using the shared DH secret.
+
+This is the standard Spotify Connect ZeroConf protocol. Once the speaker holds a properly encrypted credential blob it can independently authenticate with Spotify's servers and refresh its own session without any further involvement from AfterTouch.
+
+### ZeroConf Protocol
+
+The current implementation follows the full Spotify Connect ZeroConf protocol (`pkg/service/spotify/zeroconf.go`):
+
+1. `GET http://{ip}:8200/zc?action=getInfo` → parse `publicKey` (base64 DH key, 768-bit Oakley Group 1 prime) from the response.
+2. Generate a client DH key pair using the same group parameters.
+3. Compute `sharedSecret = DH(clientPrivate, speakerPublicKey)`.
+4. Derive keys: `baseKey = SHA1(sharedSecret)[:16]`, then HMAC-SHA1 with labels `"encryption"` and `"checksum"`.
+5. Encrypt a protobuf-encoded `LoginCredentials` blob (username, `AUTHENTICATION_SPOTIFY_TOKEN=4`, access token) using AES-128-CTR + HMAC-SHA1 checksum.
+6. `POST http://{ip}:8200/zc?action=addUser` with `blob={encryptedBlob}`, `clientKey={clientPublicKeyBase64}`.
+
+The speaker decrypts the blob, stores long-lived credentials, and can handle token refresh with Spotify independently. No periodic re-priming is required for token expiry.
+
+The algorithm is based on [librespot](https://github.com/librespot-org/librespot) (Rust reference implementation).
+
+### Fallback for Older Firmware
+
+If `getInfo` fails (e.g. firmware that does not implement the DH exchange), `PushSpotifyCredentials` automatically falls back to the simplified `tokenType=accesstoken` approach: the raw OAuth access token is sent as the `blob` with an empty `clientKey`. This token expires after ~60 minutes and the speaker cannot self-refresh, so periodic re-priming is required in that case.
 
 AfterTouch adopts a **Server-Centric Hybrid Model** that prioritizes device cleanliness and user intent while providing automated self-healing.
 
@@ -53,6 +77,8 @@ The logic for account management and device interaction remains decoupled:
 4. AfterTouch pushes a fresh token from the Spotify Service.
 5. UI reflects that the device is "Managed by AfterTouch" and healthy.
 
+> **Note:** With the proper encrypted-blob flow now in place, the watchdog is only needed for the "speaker reboots and loses state" case — not for token expiry. Speakers running older firmware that trigger the `tokenType=accesstoken` fallback still require periodic re-priming (~45 min) because the raw access token expires.
+
 ### Manual Override
 Users can manually trigger a "Re-prime" or "Refresh Link" from the device list in the UI if they suspect the automated self-healing is delayed or if they want to force a specific account onto a device.
 
@@ -76,9 +102,11 @@ As AfterTouch moves to the Server-Centric model, we will:
 2.  **Consolidated Directory:** We maintain the `/mnt/nv/soundtouch-service/` base directory for other configuration needs (e.g., `aftertouch.resolv.conf`), but it will no longer contain Spotify-specific credentials or scripts.
 3.  **No On-Device Credentials:** The `/mnt/nv/soundtouch-service/spotify-primer.conf` will be removed, ensuring that no sensitive AfterTouch login details are stored on the speaker in plain text.
 
-## Implementation Roadmap (Conceptual)
+## Implementation Roadmap
 
-1. **Revert On-Device Migration:** Update the Setup Manager to remove legacy scripts and `rc.local` hooks.
-2. **Server-Side Priming Logic:** Implement a `PrimeDevice(ip)` method in the server that fetches a fresh token and calls the ZeroConf API.
-3. **Discovery Hook:** Integrate `PrimeDevice` into the discovery handler (`handleDiscoveredDevice`) with a check for unprimed state.
-4. **UI Enhancements:** Update the Speaker List to show "Spotify Linked" status and provide manual refresh buttons.
+1. ✅ **Server-Side Priming Logic:** `PrimeDeviceWithSpotify(ip)` and `pushSpotifyTokenToDevice` in `pkg/service/handlers/server.go`. Triggered on device registration (marge handlers) and via the manual `HandleMgmtPrimeDevice` endpoint.
+2. ✅ **Discovery Hook:** `handleDiscoveredDevice` calls `PrimeDeviceWithSpotify` when a speaker is found.
+3. ✅ **Proper ZeroConf Blob:** Full DH key exchange + AES-128-CTR encrypted `LoginCredentials` blob implemented in `pkg/service/spotify/zeroconf.go`. Automatically falls back to `tokenType=accesstoken` if `getInfo` fails (older firmware).
+4. ⬜ **Watchdog / Session Refresh:** Background timer to re-prime all known devices on a schedule. Only strictly needed for older firmware (fallback path) or "speaker lost state" recovery; not required for token expiry on modern firmware.
+5. ⬜ **Revert On-Device Migration:** Update the Setup Manager to remove legacy `spotify-boot-primer` scripts and `rc.local` hooks from the speakers.
+6. ⬜ **UI Enhancements:** Update the Speaker List to show "Spotify Linked" status and provide manual refresh buttons.
