@@ -20,7 +20,7 @@ This document provides a comparative analysis of the current Go implementation a
 ## 3. Key Strengths of SoundCork
 - **Group Pairing Logic**: Includes logic to manage master/slave relationships for SoundTouch 10 stereo pairs.
 - **Service Extensibility**: JSON-based registry for BMX services makes it easier to mock multiple providers (SiriusXM, Spotify) without code changes.
-- **Mock Coverage**: Better coverage of "dummy" endpoints that respond with plausible XML (e.g., `customerSupport`).
+- ~~**Mock Coverage**: Better coverage of "dummy" endpoints that respond with plausible XML (e.g., `customerSupport`).~~ **Addressed**: AfterTouch's `HandleNotFound` (registered via `r.NotFound`) logs every unimplemented endpoint as `[UNHANDLED]` and forwards the request to the Bose upstream via `HandleBoseProxy`. This provides at least the same coverage as static dummy responses, while also aiding discovery of new endpoints.
 
 ## 4. Suggested Implementation Steps for Bose-SoundTouch
 
@@ -35,6 +35,7 @@ This document provides a comparative analysis of the current Go implementation a
 - Speaker can self-refresh credentials independently; no periodic re-priming needed for token expiry.
 - Automatic fallback to `tokenType=accesstoken` if `getInfo` fails (older firmware without DH support).
 - See `docs/concepts/spotify-priming-strategy.md` for full protocol details.
+- **Remaining gap**: Background watchdog to re-prime devices that lose their session (reboot / power loss). Not required for token expiry on modern firmware; only needed for the "speaker rebooted and lost state" recovery path and for older firmware on the fallback path (~45 min token expiry).
 
 ### C. Modularize BMX Registry (Medium Priority)
 - Extract the hardcoded service list in `HandleBMXRegistry` into an external `bmx-services.json` file.
@@ -47,4 +48,10 @@ This document provides a comparative analysis of the current Go implementation a
 - Develop a minimal internal status page to list active accounts and connected devices, improving usability over raw API calls.
 
 ## 5. Summary
-While our Go implementation is structurally more consistent with recent reference recordings (e.g., `buttonNumber`, detailed `components`), SoundCork provides better coverage of multi-device coordination (Groups) and service emulation (BMX) that we should adopt for a more complete offline experience.
+
+Group support and ZeroConf Spotify priming are now feature-complete in AfterTouch. The Go implementation is structurally more consistent with recent reference recordings (e.g., `buttonNumber`, detailed `components`). SoundCork's remaining functional advantages are:
+
+- **BMX service extensibility**: the `bmx_services.json` registry makes it trivial to add or mock new streaming providers without code changes (step C above).
+- **Group pairing logic**: master/slave relationship management for SoundTouch 10 stereo pairs goes beyond the CRUD AfterTouch implements.
+
+For the broader ecosystem context (feature matrix across all community projects, AfterTouch open tasks, and cross-project observations) see [docs/analysis/bose-soundtouch-community-tools.md](analysis/bose-soundtouch-community-tools.md).

@@ -38,7 +38,7 @@ AfterTouch adopts a **Server-Centric Hybrid Model** that prioritizes device clea
 AfterTouch replicates the native Bose "Add Source" experience. No Spotify priming occurs until a user explicitly links their Spotify account through the AfterTouch Management Dashboard. This ensures privacy and respects users who do not wish to use Spotify.
 
 ### 2. Device Cleanliness (Minimalist Footprint)
-We avoid invasive modifications to the speaker's filesystem. 
+We avoid invasive modifications to the speaker's filesystem.
 - **No On-Device Scripts:** We deprecate the use of internal boot-primer scripts.
 - **Native Communication:** We rely on the speaker's native ability to talk to Bose services, which are intercepted via DNS to point to the AfterTouch server.
 
