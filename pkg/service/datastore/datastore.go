@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -22,6 +23,9 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 )
+
+// ErrGroupNotFound is returned when no group is found for a given device.
+var ErrGroupNotFound = errors.New("group not found")
 
 func exists(path string) bool {
 	_, err := os.Stat(path)
@@ -1933,7 +1937,7 @@ func (ds *DataStore) GetGroupForDevice(account, deviceID string) (*models.Group,
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, ErrGroupNotFound
 		}
 
 		return nil, err
@@ -1961,7 +1965,7 @@ func (ds *DataStore) GetGroupForDevice(account, deviceID string) (*models.Group,
 		}
 	}
 
-	return nil, nil
+	return nil, ErrGroupNotFound
 }
 
 // AddGroup saves a new group to disk and returns its generated ID.
@@ -2002,8 +2006,8 @@ func (ds *DataStore) ModifyGroup(account, groupID, newName string) (*models.Grou
 	}
 
 	var g models.Group
-	if err := xml.Unmarshal(data, &g); err != nil {
-		return nil, err
+	if xmlErr := xml.Unmarshal(data, &g); xmlErr != nil {
+		return nil, xmlErr
 	}
 
 	g.Name = newName

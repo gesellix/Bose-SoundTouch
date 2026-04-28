@@ -51,9 +51,11 @@ func generateDHKeyPair() (privateKey *big.Int, publicKeyBytes []byte, err error)
 	if _, err = rand.Read(privBytes); err != nil {
 		return
 	}
+
 	privateKey = new(big.Int).SetBytes(privBytes)
 	pub := new(big.Int).Exp(dhGenerator, privateKey, dhPrime)
 	publicKeyBytes = padBigInt(pub, dhKeySize)
+
 	return
 }
 
@@ -61,6 +63,7 @@ func generateDHKeyPair() (privateKey *big.Int, publicKeyBytes []byte, err error)
 func computeSharedSecret(privateKey *big.Int, remotePublicKeyBytes []byte) []byte {
 	remote := new(big.Int).SetBytes(remotePublicKeyBytes)
 	shared := new(big.Int).Exp(remote, privateKey, dhPrime)
+
 	return padBigInt(shared, dhKeySize)
 }
 
@@ -76,6 +79,7 @@ func deriveKeys(sharedSecret []byte) (encKey, macKey []byte) {
 	hMac := hmac.New(sha1.New, baseKey)
 	hMac.Write([]byte("checksum"))
 	macKey = hMac.Sum(nil)
+
 	return
 }
 
@@ -125,6 +129,7 @@ func encryptBlob(encKey, macKey, plaintext []byte) ([]byte, error) {
 	out = append(out, iv...)
 	out = append(out, ciphertext...)
 	out = append(out, mac.Sum(nil)...)
+
 	return out, nil
 }
 
@@ -141,6 +146,7 @@ func decryptBlob(encKey, macKey, blob []byte) ([]byte, error) {
 
 	mac := hmac.New(sha1.New, macKey)
 	mac.Write(ciphertext)
+
 	if !hmac.Equal(mac.Sum(nil), gotMAC) {
 		return nil, fmt.Errorf("blob HMAC verification failed")
 	}
@@ -152,16 +158,19 @@ func decryptBlob(encKey, macKey, blob []byte) ([]byte, error) {
 
 	plaintext := make([]byte, len(ciphertext))
 	cipher.NewCTR(block, iv).XORKeyStream(plaintext, ciphertext)
+
 	return plaintext, nil
 }
 
 // ZeroConfGetInfo fetches the speaker's DH public key via GET ?action=getInfo.
 func ZeroConfGetInfo(zcBaseURL string) ([]byte, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
+
 	resp, err := client.Get(zcBaseURL + "?action=getInfo")
 	if err != nil {
 		return nil, fmt.Errorf("getInfo: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -169,9 +178,10 @@ func ZeroConfGetInfo(zcBaseURL string) ([]byte, error) {
 	}
 
 	var info zcGetInfoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, fmt.Errorf("getInfo: decode: %w", err)
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&info); decodeErr != nil {
+		return nil, fmt.Errorf("getInfo: decode: %w", decodeErr)
 	}
+
 	if info.PublicKey == "" {
 		return nil, fmt.Errorf("getInfo: empty publicKey")
 	}
@@ -184,6 +194,7 @@ func ZeroConfGetInfo(zcBaseURL string) ([]byte, error) {
 			return nil, fmt.Errorf("getInfo: invalid base64 publicKey: %w", err)
 		}
 	}
+
 	return pubKey, nil
 }
 
@@ -208,6 +219,7 @@ func PushSpotifyCredentials(zcBaseURL, username, accessToken string) error {
 	encKey, macKey := deriveKeys(sharedSecret)
 
 	plaintext := buildCredentialsBlob(username, accessToken)
+
 	encryptedBlob, err := encryptBlob(encKey, macKey, plaintext)
 	if err != nil {
 		return fmt.Errorf("pushSpotifyCredentials: encrypt: %w", err)
@@ -219,16 +231,19 @@ func PushSpotifyCredentials(zcBaseURL, username, accessToken string) error {
 	data.Set("clientKey", base64.StdEncoding.EncodeToString(ourPublicKeyBytes))
 
 	client := &http.Client{Timeout: 10 * time.Second}
+
 	resp, err := client.PostForm(zcBaseURL+"?action=addUser", data)
 	if err != nil {
 		return fmt.Errorf("pushSpotifyCredentials: addUser: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("pushSpotifyCredentials: addUser status %d: %s", resp.StatusCode, body)
 	}
+
 	return nil
 }
 
@@ -243,16 +258,19 @@ func pushSimplifiedToken(zcBaseURL, username, accessToken string) error {
 	data.Set("tokenType", "accesstoken")
 
 	client := &http.Client{Timeout: 10 * time.Second}
+
 	resp, err := client.PostForm(zcBaseURL+"?action=addUser", data)
 	if err != nil {
 		return fmt.Errorf("pushSimplifiedToken: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("pushSimplifiedToken: status %d: %s", resp.StatusCode, body)
 	}
+
 	return nil
 }
 
@@ -261,8 +279,10 @@ func padBigInt(n *big.Int, size int) []byte {
 	if len(b) >= size {
 		return b
 	}
+
 	out := make([]byte, size)
 	copy(out[size-len(b):], b)
+
 	return out
 }
 
@@ -271,5 +291,6 @@ func writeVarint(buf *bytes.Buffer, v uint64) {
 		buf.WriteByte(byte(v) | 0x80)
 		v >>= 7
 	}
+
 	buf.WriteByte(byte(v))
 }

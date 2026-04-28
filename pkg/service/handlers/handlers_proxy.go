@@ -113,6 +113,7 @@ func (s *Server) HandleNotFound(w http.ResponseWriter, r *http.Request) {
 
 		preview := body
 		truncated := ""
+
 		if len(preview) > 512 {
 			preview = preview[:512]
 			truncated = "…"

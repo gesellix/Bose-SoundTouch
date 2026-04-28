@@ -470,6 +470,7 @@ func (s *Server) pushSpotifyTokenToDevice(deviceIP, username, accessToken string
 	} else {
 		zcURL = fmt.Sprintf("http://%s:8200/zc", deviceIP)
 	}
+
 	return spotify.PushSpotifyCredentials(zcURL, username, accessToken)
 }
 

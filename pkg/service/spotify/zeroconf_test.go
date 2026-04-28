@@ -152,9 +152,9 @@ func TestPushSpotifyCredentials_FullRoundTrip(t *testing.T) {
 		case "getInfo":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":      101,
+				"status":       101,
 				"statusString": "OK",
-				"publicKey":   base64.StdEncoding.EncodeToString(speakerPublicBytes),
+				"publicKey":    base64.StdEncoding.EncodeToString(speakerPublicBytes),
 			})
 
 		case "addUser":
@@ -310,7 +310,6 @@ func parseCredentialsBlob(data []byte) (*parsedCredentials, error) {
 	}
 	return &r, nil
 }
-
 
 func readProtoVarint(data []byte) (uint64, int) {
 	var val uint64

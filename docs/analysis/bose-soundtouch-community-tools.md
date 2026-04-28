@@ -71,7 +71,6 @@ The only native installable phone app in the ecosystem. Pairs with the Überbös
 
 ### 4. SoundTouch Hybrid 2026
 **[github.com/TJGigs/Bose-SoundTouch-Hybrid-2026](https://github.com/TJGigs/Bose-SoundTouch-Hybrid-2026)**
-(V3 variant: [github.com/TJGigs/Bose-SoundTouch-Hybrid-2026-V3](https://github.com/TJGigs/Bose-SoundTouch-Hybrid-2026-V3))
 | | |
 |---|---|
 | Language | Node.js (JavaScript) |

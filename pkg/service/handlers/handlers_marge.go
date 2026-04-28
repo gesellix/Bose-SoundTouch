@@ -687,7 +687,7 @@ func (s *Server) HandleMargeDeviceGroup(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 
 	group, err := s.ds.GetGroupForDevice(account, device)
-	if err != nil || group == nil {
+	if err != nil {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(constants.XMLHeader + `<group/>`))
 
@@ -732,7 +732,7 @@ func (s *Server) HandleMargeAddGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var group models.Group
-	if err := xml.Unmarshal(body, &group); err != nil {
+	if xmlErr := xml.Unmarshal(body, &group); xmlErr != nil {
 		http.Error(w, "Invalid XML", http.StatusBadRequest)
 		return
 	}
@@ -773,7 +773,7 @@ func (s *Server) HandleMargeModifyGroup(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req models.Group
-	if err := xml.Unmarshal(body, &req); err != nil {
+	if xmlErr := xml.Unmarshal(body, &req); xmlErr != nil {
 		http.Error(w, "Invalid XML", http.StatusBadRequest)
 		return
 	}
