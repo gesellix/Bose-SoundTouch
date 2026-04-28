@@ -681,6 +681,8 @@ func TestDefaultSources(t *testing.T) {
 			if s.SourceKey.Account != "AUX" {
 				t.Errorf("Expected AUX account 'AUX', got %s", s.SourceKey.Account)
 			}
+		case "AMAZON":
+			t.Errorf("AMAZON must not appear in defaults — it requires real OAuth credentials")
 		}
 
 		if s.Status != "READY" {

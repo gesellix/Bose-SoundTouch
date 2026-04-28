@@ -278,6 +278,124 @@ func TestMargeAccountFull(t *testing.T) {
 	}
 }
 
+// TestMargeAccountFullExcludesEmptyAmazonSource is a regression test for the two-device scenario
+// observed in production: device A81B6A536A98 (alphabetically last, used as lastDeviceID)
+// has Sources.xml with 6 sources but no Amazon. The first device has Amazon with empty
+// credentials (written before OAuth was implemented). Amazon must NOT appear in /full —
+// an empty-credential Amazon causes the speaker's AmazonController to fail JSON parsing.
+func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-amazon-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+
+	account := "3230304"
+
+	// First device (alphabetically): has Amazon in Sources.xml
+	firstDeviceID := "08DF1F0BA325"
+	firstDir := filepath.Join(tempDir, "accounts", account, "devices", firstDeviceID)
+	if err := os.MkdirAll(firstDir, 0755); err != nil {
+		t.Fatalf("Failed to create first device dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(firstDir, "DeviceInfo.xml"), []byte(`
+		<info deviceID="08DF1F0BA325">
+			<name>A Sound Machine</name>
+			<type>SoundTouch 20 scm</type>
+		</info>
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write first device DeviceInfo.xml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(firstDir, "Sources.xml"), []byte(`<sources>
+		<source id="10006" type="Audio" createdOn="2026-01-01T00:00:00.000+00:00" updatedOn="2026-01-01T00:00:00.000+00:00" displayName="Amazon Music" secret="" secretType="token" sourceproviderid="20">
+			<sourceKey type="AMAZON" account=""/>
+		</source>
+	</sources>`), 0644); err != nil {
+		t.Fatalf("Failed to write first device Sources.xml: %v", err)
+	}
+
+	// Second device (alphabetically last = lastDeviceID): 6 sources but NO Amazon.
+	// This reproduces the real full.xml returned by the live service.
+	lastDeviceID := "A81B6A536A98"
+	lastDir := filepath.Join(tempDir, "accounts", account, "devices", lastDeviceID)
+	if err := os.MkdirAll(lastDir, 0755); err != nil {
+		t.Fatalf("Failed to create last device dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(lastDir, "DeviceInfo.xml"), []byte(`
+		<info deviceID="A81B6A536A98">
+			<name>Another Speaker</name>
+			<type>SoundTouch 300</type>
+		</info>
+	`), 0644); err != nil {
+		t.Fatalf("Failed to write last device DeviceInfo.xml: %v", err)
+	}
+	// Sources.xml mirrors the real persisted file: AUX, INTERNET_RADIO, LOCAL_INTERNET_RADIO,
+	// TUNEIN, RADIO_BROWSER, Spotify — no Amazon.
+	lastSourcesXML := `<sources>
+		<source id="10001" type="Audio" createdOn="2015-03-11T19:12:38.000+00:00" updatedOn="2015-03-11T19:12:38.000+00:00" displayName="AUX IN" secret="" secretType="token" sourceproviderid="9">
+			<sourceKey type="AUX" account="AUX"/>
+		</source>
+		<source id="10002" type="Audio" createdOn="2015-03-11T19:12:38.000+00:00" updatedOn="2015-03-11T19:12:38.000+00:00" displayName="" secret="" secretType="token" sourceproviderid="2">
+			<sourceKey type="INTERNET_RADIO" account=""/>
+		</source>
+		<source id="10003" type="Audio" createdOn="2019-01-24T08:18:37.000+00:00" updatedOn="2019-02-03T18:35:45.000+00:00" displayName="" secret="eyJzZXJpYWwiOiJsb2NhbC1pbnRlcm5ldC1yYWRpbyJ9" secretType="token" sourceproviderid="11">
+			<sourceKey type="LOCAL_INTERNET_RADIO" account=""/>
+		</source>
+		<source id="10004" type="Audio" createdOn="2017-07-20T16:43:48.000+00:00" updatedOn="2017-07-20T16:43:48.000+00:00" displayName="" secret="eyJzZXJpYWwiOiJ0dW5laW4ifQ==" secretType="token" sourceproviderid="25">
+			<sourceKey type="TUNEIN" account=""/>
+		</source>
+		<source id="10005" type="Audio" createdOn="2026-02-16T01:01:01.000+00:00" updatedOn="2026-02-16T01:01:01.000+00:00" displayName="" secret="" secretType="token" sourceproviderid="39">
+			<sourceKey type="RADIO_BROWSER" account=""/>
+		</source>
+		<source id="SRC_1776706409" type="Audio" createdOn="2026-04-20T17:33:29.483+00:00" updatedOn="2026-04-20T17:33:29.483+00:00" displayName="" secret="bs-6c58d056c2d35df85f57ad2334b0cdc4" secretType="token_version_3" sourceproviderid="15">
+			<sourceKey type="SPOTIFY" account="gesellix"/>
+		</source>
+	</sources>`
+	if err := os.WriteFile(filepath.Join(lastDir, "Sources.xml"), []byte(lastSourcesXML), 0644); err != nil {
+		t.Fatalf("Failed to write last device Sources.xml: %v", err)
+	}
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/marge/accounts/" + account + "/full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK, got %v", res.Status)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	bodyStr := string(body)
+
+	// Amazon with empty credentials must not appear — the speaker's AmazonController
+	// fails to parse an empty secret and returns MUSIC_SERVICE_ACCOUNT_LOGIN_FAILED.
+	if strings.Contains(bodyStr, "<sourceproviderid>20</sourceproviderid>") {
+		t.Errorf("/full response must not include an empty-credential Amazon source; body:\n%s", bodyStr)
+	}
+
+	// The 6 sources from lastDeviceID's stored Sources.xml must all be present.
+	// Checked by sourceproviderid since <name> may hold a display name rather than the type string.
+	for _, wantProviderID := range []string{
+		"<sourceproviderid>9</sourceproviderid>",  // AUX
+		"<sourceproviderid>2</sourceproviderid>",  // INTERNET_RADIO
+		"<sourceproviderid>11</sourceproviderid>", // LOCAL_INTERNET_RADIO
+		"<sourceproviderid>25</sourceproviderid>", // TUNEIN
+		"<sourceproviderid>39</sourceproviderid>", // RADIO_BROWSER
+		"<sourceproviderid>15</sourceproviderid>", // Spotify
+	} {
+		if !strings.Contains(bodyStr, wantProviderID) {
+			t.Errorf("/full response is missing source with %s; body:\n%s", wantProviderID, bodyStr)
+		}
+	}
+}
+
 func TestMargeAccountSources(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "st-test-*")
 	if err != nil {

@@ -45,6 +45,8 @@ Authorization: Bearer {{token}}
 
         var sources = account.getElementsByTagName("sources")[0];
         client.assert(sources !== null, "Missing 'sources' element");
-        client.assert(sources.getElementsByTagName("source").length > 0, "No 'source' elements found in account sources");
+        var sourceCount = sources.getElementsByTagName("source").length;
+        client.assert(sourceCount > 0, "No 'source' elements found in account sources");
+        client.assert(sourceCount === 6, "Expected 6 sources (AUX, INTERNET_RADIO, LOCAL_INTERNET_RADIO, TUNEIN, RADIO_BROWSER, Spotify) but got " + sourceCount);
     });
 %}

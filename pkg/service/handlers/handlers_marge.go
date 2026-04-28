@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"log"
 	"math/big"
@@ -16,6 +18,19 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 )
+
+// sourceProvidersETag returns a stable ETag for the source providers list,
+// derived from the serialized content so it only changes when the list changes.
+func sourceProvidersETag() string {
+	data, err := marge.SourceProvidersToXML()
+	if err != nil {
+		return "source-providers-v1"
+	}
+
+	sum := sha256.Sum256(data)
+
+	return fmt.Sprintf("%x", sum[:8])
+}
 
 // HandleMargeCreateAccount creates a new account from Stockholm (XML).
 func (s *Server) HandleMargeCreateAccount(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +143,7 @@ func (s *Server) HandleMargeLogin(w http.ResponseWriter, r *http.Request) {
 
 // HandleMargeSourceProviders returns the Marge source providers.
 func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Request) {
-	etag := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	etag := sourceProvidersETag()
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

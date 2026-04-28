@@ -1647,34 +1647,32 @@ func (ds *DataStore) GetETagForRecents(account, device string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
-// contentHashForFiles returns a SHA-256 hex digest over the concatenated contents of the given file paths.
-func contentHashForFiles(paths ...string) string {
-	h := sha256.New()
-
-	for _, p := range paths {
-		f, err := os.Open(p)
-		if err != nil {
-			continue
-		}
-
-		_, _ = io.Copy(h, f)
-		_ = f.Close()
-	}
-
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 // GetETagForAccount returns a content hash (SHA-256) over presets, sources, and recents for the account and device.
 // If device is empty, it hashes across all devices in the account.
+// The default sources fingerprint is always included so that newly added defaults (e.g. Amazon)
+// invalidate cached responses even when the stored Sources.xml has not changed.
 func (ds *DataStore) GetETagForAccount(account, device string) string {
+	h := sha256.New()
+
+	// Include the default sources fingerprint so mergeDefaultSources changes are visible.
+	defaults := ds.GetDefaultSources()
+	for i := range defaults {
+		_, _ = io.WriteString(h, defaults[i].ID+defaults[i].SourceKeyType+defaults[i].DisplayName)
+	}
+
 	if device != "" {
 		deviceDir := ds.AccountDeviceDir(account, device)
+		for _, name := range []string{constants.PresetsFile, constants.SourcesFile, constants.RecentsFile} {
+			f, err := os.Open(filepath.Join(deviceDir, name))
+			if err != nil {
+				continue
+			}
 
-		return contentHashForFiles(
-			filepath.Join(deviceDir, constants.PresetsFile),
-			filepath.Join(deviceDir, constants.SourcesFile),
-			filepath.Join(deviceDir, constants.RecentsFile),
-		)
+			_, _ = io.Copy(h, f)
+			_ = f.Close()
+		}
+
+		return hex.EncodeToString(h.Sum(nil))
 	}
 
 	devicesDir := ds.AccountDevicesDir(account)
@@ -1683,8 +1681,6 @@ func (ds *DataStore) GetETagForAccount(account, device string) string {
 	// stable non-empty hash rather than "" which would false-match an absent
 	// If-None-Match header and return 304 on the first request.
 	entries, _ := os.ReadDir(devicesDir)
-
-	h := sha256.New()
 
 	for _, entry := range entries {
 		if entry.IsDir() {

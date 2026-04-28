@@ -982,6 +982,9 @@ func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []
 
 	if lastDeviceID != "" {
 		sources, err = ds.GetConfiguredSources(account, lastDeviceID)
+		if err == nil {
+			sources = mergeDefaultSources(sources, ds.GetDefaultSources())
+		}
 	} else {
 		sources = ds.GetDefaultSources()
 	}
@@ -999,6 +1002,27 @@ func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []
 	}
 
 	return fullSources
+}
+
+// mergeDefaultSources adds any default sources missing from stored that are not already present
+// (matched by SourceKeyType). It does not persist — initializeDefaultSources handles persistence at startup.
+func mergeDefaultSources(stored, defaults []models.ConfiguredSource) []models.ConfiguredSource {
+	for i := range defaults {
+		found := false
+
+		for j := range stored {
+			if stored[j].SourceKeyType == defaults[i].SourceKeyType {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			stored = append(stored, defaults[i])
+		}
+	}
+
+	return stored
 }
 
 // AccountSourcesToXML generates the account sources XML.
@@ -1163,7 +1187,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	}
 
 	if matchingSrc == nil {
-		if newPresetElem.SourceID == constants.ProviderInternetRadio || newPresetElem.SourceID == constants.ProviderTunein || newPresetElem.SourceID == constants.ProviderSpotify {
+		if newPresetElem.SourceID == constants.ProviderInternetRadio || newPresetElem.SourceID == constants.ProviderTunein || newPresetElem.SourceID == constants.ProviderSpotify || newPresetElem.SourceID == constants.ProviderAmazon {
 			// Find by SourceKeyType instead of ID if it's a default source
 			for i := range sources {
 				if sources[i].SourceKeyType == newPresetElem.SourceID {
@@ -1420,12 +1444,12 @@ func learnSource(ds *datastore.DataStore, account, device string, sources []mode
 
 func createLearnedSource(sourceID, location, sourceName, credentialValue, sourceProviderID, createdOn, updatedOn string) *models.ConfiguredSource {
 	displayName := sourceName
-	// For TuneIn, we often see empty DisplayName/SourceName in recent items
-	// if it's already a known source or if it's a generic TuneIn request.
 	if displayName == "" && sourceID != "" {
-		// Try to deduce from sourceID if it looks like a known service
-		if sourceID == constants.ProviderSpotify {
+		switch sourceID {
+		case constants.ProviderSpotify:
 			displayName = constants.ProviderSpotify
+		case constants.ProviderAmazon:
+			displayName = "Amazon Music"
 		}
 	}
 
@@ -1439,48 +1463,77 @@ func createLearnedSource(sourceID, location, sourceName, credentialValue, source
 		UpdatedOn:        updatedOn,
 	}
 
+	classifyLearnedSource(src, sourceID, location, sourceProviderID)
+
+	return src
+}
+
+func classifyLearnedSource(src *models.ConfiguredSource, sourceID, location, sourceProviderID string) {
 	switch {
 	case sourceProviderID == strconv.Itoa(constants.TuneinProviderID) || sourceID == constants.ProviderTunein || strings.Contains(location, "/v1/playback/station/"):
-		src.SourceKey.Type = constants.ProviderTunein
-		src.SourceKeyType = constants.ProviderTunein
-		src.Type = "Audio"
-		src.SecretType = constants.CredentialTypeToken
-
-		if src.Secret == "" {
-			src.Secret = datastore.GenerateSerialSecret(strings.ToLower(constants.ProviderTunein))
-		}
-
-		if src.DisplayName == "Other" || src.DisplayName == constants.ProviderTunein || src.DisplayName == "" {
-			src.DisplayName = constants.ProviderTunein
-		}
+		classifyAsTuneIn(src)
 	case sourceID == constants.ProviderLocalInternetRadio:
-		src.SourceKey.Type = constants.ProviderLocalInternetRadio
-		src.SourceKeyType = constants.ProviderLocalInternetRadio
-		src.Type = "Audio"
-		src.SecretType = constants.CredentialTypeToken
-
-		if src.Secret == "" {
-			src.Secret = datastore.GenerateSerialSecret("local-internet-radio")
-		}
-
-		if src.DisplayName == "Other" || src.DisplayName == "Local Internet Radio" || src.DisplayName == "" {
-			src.DisplayName = "Local Internet Radio"
-		}
+		classifyAsLocalInternetRadio(src)
 	case strings.Contains(location, "spotify") || strings.Contains(location, "c3BvdGlme") || sourceID == constants.ProviderSpotify:
-		src.SourceKey.Type = constants.ProviderSpotify
-		src.SourceKeyType = constants.ProviderSpotify
-		src.Type = "Audio"
-		src.SecretType = constants.CredentialTypeTokenV3
-
-		if src.DisplayName == "Other" {
-			src.DisplayName = constants.ProviderSpotify
-		}
+		classifyAsSpotify(src)
+	case strings.Contains(location, "amazon") || sourceID == constants.ProviderAmazon || sourceProviderID == strconv.Itoa(constants.AmazonProviderID):
+		classifyAsAmazon(src)
 	default:
 		src.SourceKey.Type = "INVALID"
 		src.SourceKeyType = "INVALID"
 	}
+}
 
-	return src
+func classifyAsTuneIn(src *models.ConfiguredSource) {
+	src.SourceKey.Type = constants.ProviderTunein
+	src.SourceKeyType = constants.ProviderTunein
+	src.Type = "Audio"
+	src.SecretType = constants.CredentialTypeToken
+
+	if src.Secret == "" {
+		src.Secret = datastore.GenerateSerialSecret(strings.ToLower(constants.ProviderTunein))
+	}
+
+	if src.DisplayName == "Other" || src.DisplayName == constants.ProviderTunein || src.DisplayName == "" {
+		src.DisplayName = constants.ProviderTunein
+	}
+}
+
+func classifyAsLocalInternetRadio(src *models.ConfiguredSource) {
+	src.SourceKey.Type = constants.ProviderLocalInternetRadio
+	src.SourceKeyType = constants.ProviderLocalInternetRadio
+	src.Type = "Audio"
+	src.SecretType = constants.CredentialTypeToken
+
+	if src.Secret == "" {
+		src.Secret = datastore.GenerateSerialSecret("local-internet-radio")
+	}
+
+	if src.DisplayName == "Other" || src.DisplayName == "Local Internet Radio" || src.DisplayName == "" {
+		src.DisplayName = "Local Internet Radio"
+	}
+}
+
+func classifyAsSpotify(src *models.ConfiguredSource) {
+	src.SourceKey.Type = constants.ProviderSpotify
+	src.SourceKeyType = constants.ProviderSpotify
+	src.Type = "Audio"
+	src.SecretType = constants.CredentialTypeTokenV3
+
+	if src.DisplayName == "Other" {
+		src.DisplayName = constants.ProviderSpotify
+	}
+}
+
+func classifyAsAmazon(src *models.ConfiguredSource) {
+	src.SourceKey.Type = constants.ProviderAmazon
+	src.SourceKeyType = constants.ProviderAmazon
+	src.Type = "Audio"
+	src.SecretType = constants.CredentialTypeToken
+
+	if src.DisplayName == "" || src.DisplayName == "Other" {
+		src.DisplayName = "Amazon Music"
+	}
 }
 
 func updateSourceFields(src *models.ConfiguredSource, credentialValue, sourceName, sourceProviderID, createdOn, updatedOn string) bool {
@@ -1828,9 +1881,13 @@ func AddSource(ds *datastore.DataStore, account, username, providerID, secret, s
 		}
 
 		newSrc.SourceKey.Account = username
-		if providerID == strconv.Itoa(constants.SpotifyProviderID) {
+
+		switch providerID {
+		case strconv.Itoa(constants.SpotifyProviderID):
 			newSrc.SourceKey.Type = constants.ProviderSpotify
-		} else {
+		case strconv.Itoa(constants.AmazonProviderID):
+			newSrc.SourceKey.Type = constants.ProviderAmazon
+		default:
 			newSrc.SourceKey.Type = providerID
 		}
 
