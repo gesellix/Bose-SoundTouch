@@ -871,9 +871,10 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	})
 
 	r.Route("/oauth", func(r chi.Router) {
-		r.Post("/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3", server.HandleBoseToken)
 		r.Post("/device/{deviceID}/music/musicprovider/{sourceID}/token", server.HandleBoseLegacyToken)
 		r.Post("/account/{account}/music/musicprovider/{sourceID}/token/cs", server.HandleBoseAccountToken)
+		r.Post("/device/{deviceID}/music/musicprovider/{sourceID}/token/cs1", server.HandleBoseToken)
+		r.Post("/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3", server.HandleBoseToken)
 		r.HandleFunc("/*", server.HandleBoseProxy)
 	})
 

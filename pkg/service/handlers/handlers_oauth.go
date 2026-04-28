@@ -14,13 +14,22 @@ import (
 )
 
 // HandleBoseToken handles the Bose-specific token refresh request from the speaker.
+// POST /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs1
 // POST /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3
 func (s *Server) HandleBoseToken(w http.ResponseWriter, r *http.Request) {
 	sourceID := chi.URLParam(r, "sourceID")
 
 	for _, provider := range constants.StaticProviders {
-		if strconv.Itoa(provider.ID) == sourceID && provider.Name == constants.ProviderSpotify {
+		if strconv.Itoa(provider.ID) != sourceID {
+			continue
+		}
+
+		switch provider.Name {
+		case constants.ProviderSpotify:
 			s.HandleBoseSpotifyToken(w, r)
+			return
+		case constants.ProviderAmazon:
+			s.HandleBoseAmazonToken(w, r)
 			return
 		}
 	}
@@ -87,6 +96,15 @@ func (s *Server) HandleBoseAccountToken(w http.ResponseWriter, r *http.Request) 
 	}
 
 	s.HandleBoseSpotifyToken(w, r)
+}
+
+// HandleBoseAmazonToken is a stub for Amazon Music OAuth token handling.
+// POST /oauth/device/{deviceID}/music/musicprovider/20/token/cs1
+// Amazon Music API integration is not yet implemented.
+func (s *Server) HandleBoseAmazonToken(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "deviceID")
+	log.Printf("[Amazon] Token request for device %s — Amazon Music not yet supported", deviceID)
+	http.Error(w, "Amazon Music integration not yet supported", http.StatusNotImplemented)
 }
 
 // HandleBoseSpotifyToken handles the Bose-specific Spotify token refresh request.

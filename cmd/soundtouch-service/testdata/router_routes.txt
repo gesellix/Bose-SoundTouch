@@ -102,6 +102,7 @@ POST     /mgmt/spotify/prime                                          handlers.(
 POST     /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
 POST     /oauth/account/{account}/music/musicprovider/{sourceID}/token/cs handlers.(*Server).HandleBoseAccountToken-fm
 POST     /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token handlers.(*Server).HandleBoseLegacyToken-fm
+POST     /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs1 handlers.(*Server).HandleBoseToken-fm
 POST     /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs3 handlers.(*Server).HandleBoseToken-fm
 POST     /setup/backup/{deviceId}                                     handlers.(*Server).HandleBackupConfig-fm
 POST     /setup/devices                                               handlers.(*Server).HandleAddManualDevice-fm
