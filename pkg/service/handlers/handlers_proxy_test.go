@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,102 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 )
+
+func TestHandleNotFound_UnhandledLogging(t *testing.T) {
+	// backend absorbs proxied requests so the test doesn't hit the real Bose upstream
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	backendHost := strings.TrimPrefix(backend.URL, "http://")
+
+	captureLog := func(fn func()) string {
+		var buf bytes.Buffer
+		log.SetOutput(&buf)
+		defer log.SetOutput(os.Stderr)
+		fn()
+		return buf.String()
+	}
+
+	t.Run("always logs [UNHANDLED] with method and path", func(t *testing.T) {
+		ds := datastore.NewDataStore(t.TempDir())
+		server := NewServer(ds, nil, "http://localhost", false, false, false)
+
+		req := httptest.NewRequest("GET", "/some/unknown/path", nil)
+		req.Host = backendHost
+
+		logged := captureLog(func() {
+			server.HandleNotFound(httptest.NewRecorder(), req)
+		})
+
+		if !strings.Contains(logged, "[UNHANDLED]") {
+			t.Errorf("expected [UNHANDLED] in log, got: %s", logged)
+		}
+		if !strings.Contains(logged, "GET") || !strings.Contains(logged, "/some/unknown/path") {
+			t.Errorf("expected method and path in log, got: %s", logged)
+		}
+	})
+
+	t.Run("includes body in log when proxyLogBody is true", func(t *testing.T) {
+		ds := datastore.NewDataStore(t.TempDir())
+		server := NewServer(ds, nil, "http://localhost", false, true, false)
+
+		req := httptest.NewRequest("POST", "/marge/unknown", bytes.NewBufferString("<payload/>"))
+		req.Host = backendHost
+
+		logged := captureLog(func() {
+			server.HandleNotFound(httptest.NewRecorder(), req)
+		})
+
+		if !strings.Contains(logged, "<payload/>") {
+			t.Errorf("expected body in log when proxyLogBody=true, got: %s", logged)
+		}
+	})
+
+	t.Run("omits body from log when proxyLogBody is false", func(t *testing.T) {
+		ds := datastore.NewDataStore(t.TempDir())
+		server := NewServer(ds, nil, "http://localhost", false, false, false)
+
+		req := httptest.NewRequest("POST", "/marge/unknown", bytes.NewBufferString("<secret/>"))
+		req.Host = backendHost
+
+		logged := captureLog(func() {
+			server.HandleNotFound(httptest.NewRecorder(), req)
+		})
+
+		if strings.Contains(logged, "<secret/>") {
+			t.Errorf("expected body omitted when proxyLogBody=false, got: %s", logged)
+		}
+		if !strings.Contains(logged, "[UNHANDLED]") {
+			t.Errorf("expected [UNHANDLED] even without body, got: %s", logged)
+		}
+	})
+
+	t.Run("body is still forwarded to proxy after being read for logging", func(t *testing.T) {
+		var receivedBody string
+		forwardCheck := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			b, _ := io.ReadAll(r.Body)
+			receivedBody = string(b)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer forwardCheck.Close()
+
+		ds := datastore.NewDataStore(t.TempDir())
+		server := NewServer(ds, nil, "http://localhost", false, true, false)
+
+		req := httptest.NewRequest("POST", "/marge/unknown", bytes.NewBufferString("<forwarded/>"))
+		req.Host = strings.TrimPrefix(forwardCheck.URL, "http://")
+
+		captureLog(func() {
+			server.HandleNotFound(httptest.NewRecorder(), req)
+		})
+
+		if receivedBody != "<forwarded/>" {
+			t.Errorf("expected body forwarded to proxy, got: %q", receivedBody)
+		}
+	})
+}
 
 func TestHandleProxyRequest_RequestBodyRecording(t *testing.T) {
 	t.Setenv("RECORDER_ASYNC", "false")
