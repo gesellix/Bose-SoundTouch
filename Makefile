@@ -135,6 +135,7 @@ test-http-client:
 		/workdir/get_soundtouch_updates.http \
 		/workdir/get_streaming_token.http \
 		/workdir/post_oauth_token.http \
+		/workdir/post_oauth_token_amazon.http \
 		/workdir/get_provider_settings.http \
 		/workdir/tunein_playback_station.http \
 		/workdir/set_preset_6.http \
