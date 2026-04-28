@@ -3,8 +3,154 @@ package bmx
 import (
 	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 )
+
+func TestTuneInRenderJSONURI(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "empty URL returns empty",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "URL with no query params gets render=json added",
+			input: "http://opml.radiotime.com/Browse.ashx",
+			want:  "http://opml.radiotime.com/Browse.ashx?render=json",
+		},
+		{
+			name:  "URL with other params gets render=json appended",
+			input: "http://opml.radiotime.com/Browse.ashx?c=news",
+			want:  "http://opml.radiotime.com/Browse.ashx?c=news&render=json",
+		},
+		{
+			name:  "URL already containing render=json is not duplicated",
+			input: "http://opml.radiotime.com/?render=json",
+			want:  "http://opml.radiotime.com/?render=json",
+		},
+		{
+			name:  "URL with render=xml gets render replaced with json",
+			input: "http://opml.radiotime.com/Browse.ashx?c=podcast&render=xml",
+			want:  "http://opml.radiotime.com/Browse.ashx?c=podcast&render=json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tuneInRenderJSONURI(tt.input)
+			if got != tt.want {
+				t.Errorf("tuneInRenderJSONURI(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsTuneInOpmlURI(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"http://opml.radiotime.com/Browse.ashx", true},
+		{"https://opml.radiotime.com/Browse.ashx", true},
+		{"http://opml.radiotime.com/?render=json", true},
+		{"http://api.radiotime.com/profiles?fulltextsearch=true", false},
+		{"http://example.com", false},
+		{"not-a-url", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := isTuneInOpmlURI(tt.input)
+			if got != tt.want {
+				t.Errorf("isTuneInOpmlURI(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTuneInSearchURI(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		check func(string) bool
+	}{
+		{
+			name:  "spaces are percent-encoded",
+			query: "radio paradise",
+			check: func(u string) bool { return !strings.Contains(u, " ") && strings.Contains(u, "radio+paradise") },
+		},
+		{
+			name:  "ampersand is encoded",
+			query: "news & talk",
+			check: func(u string) bool { return !strings.Contains(u, " ") && strings.Contains(u, "%26") },
+		},
+		{
+			name:  "plain query is appended to base URL",
+			query: "jazz",
+			check: func(u string) bool { return u == TuneInSearchAPI+"jazz" },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tuneInSearchURI(tt.query)
+			if !tt.check(got) {
+				t.Errorf("tuneInSearchURI(%q) = %q: check failed", tt.query, got)
+			}
+		})
+	}
+}
+
+func TestTuneInNavigateLinkEncodesRenderJSON(t *testing.T) {
+	item := map[string]interface{}{
+		"URL":     "http://opml.radiotime.com/Browse.ashx?c=news",
+		"text":    "News",
+		"subtext": "Latest",
+		"image":   "http://example.com/news.png",
+	}
+
+	result := tuneInNavigateLink(item)
+
+	href := result.Links.BmxNavigate.Href
+	encoded := strings.TrimPrefix(href, "/v1/navigate/")
+	decoded, err := base64.URLEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("failed to decode navigate href: %v", err)
+	}
+
+	got := string(decoded)
+	if !strings.Contains(got, "render=json") {
+		t.Errorf("navigate href %q missing render=json", got)
+	}
+	if strings.Count(got, "render=json") > 1 {
+		t.Errorf("navigate href %q has duplicate render=json", got)
+	}
+}
+
+func TestTuneInNavigateLinkNoDuplicateRenderJSON(t *testing.T) {
+	item := map[string]interface{}{
+		"URL": "http://opml.radiotime.com/Browse.ashx?c=podcast&render=json",
+	}
+
+	result := tuneInNavigateLink(item)
+
+	href := result.Links.BmxNavigate.Href
+	encoded := strings.TrimPrefix(href, "/v1/navigate/")
+	decoded, err := base64.URLEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("failed to decode navigate href: %v", err)
+	}
+
+	got := string(decoded)
+	if strings.Count(got, "render=json") != 1 {
+		t.Errorf("navigate href %q should contain render=json exactly once", got)
+	}
+}
 
 func TestPlayCustomStream(t *testing.T) {
 	// Simple test for custom stream XML generation

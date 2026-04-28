@@ -42,6 +42,41 @@ func isTuneInURL(rawURL string) bool {
 	return allowedTuneInHosts[u.Hostname()]
 }
 
+// isTuneInOpmlURI returns true when the URL's host is opml.radiotime.com,
+// used to select the OPML/ashx parser over the JSON API parser.
+func isTuneInOpmlURI(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	return strings.EqualFold(u.Hostname(), "opml.radiotime.com")
+}
+
+// tuneInRenderJSONURI returns the URL with render=json set as a query parameter,
+// replacing any existing render value instead of appending a duplicate.
+func tuneInRenderJSONURI(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+
+	q := u.Query()
+	q.Set("render", "json")
+	u.RawQuery = q.Encode()
+
+	return u.String()
+}
+
+// tuneInSearchURI returns the TuneIn search API URL with the query properly URL-encoded.
+func tuneInSearchURI(query string) string {
+	return TuneInSearchAPI + url.QueryEscape(query)
+}
+
 func fetchJSON(fetchURL string) (map[string]interface{}, error) {
 	if !isTuneInURL(fetchURL) {
 		return nil, fmt.Errorf("URL not in allowed list: %s", fetchURL)
@@ -110,7 +145,7 @@ func TuneInNavigate(encodedURI string, subsection *int) (*models.BmxNavResponse,
 		err      error
 	)
 
-	if strings.HasPrefix(tuneInURI, "http://opml.radiotime.com/") {
+	if isTuneInOpmlURI(tuneInURI) {
 		sections, err = tuneInSectionsAshx(tuneInURI, subsection)
 	} else {
 		sections, err = tuneInSectionsJSONAPI(tuneInURI, subsection)
@@ -291,7 +326,7 @@ func tuneInNavigateLink(item map[string]interface{}) models.BmxNavItem {
 	text, _ := item["text"].(string)
 	subtext, _ := item["subtext"].(string)
 
-	encURL := base64.URLEncoding.EncodeToString([]byte(rawURL + "&render=json"))
+	encURL := base64.URLEncoding.EncodeToString([]byte(tuneInRenderJSONURI(rawURL)))
 
 	return models.BmxNavItem{
 		Links:    &models.Links{BmxNavigate: &models.Link{Href: fmt.Sprintf("/v1/navigate/%s", encURL)}},
@@ -303,7 +338,7 @@ func tuneInNavigateLink(item map[string]interface{}) models.BmxNavItem {
 
 // TuneInSearch returns live search results from TuneIn for the given query.
 func TuneInSearch(query string) (*models.BmxNavResponse, error) {
-	tuneInURI := TuneInSearchAPI + url.QueryEscape(query)
+	tuneInURI := tuneInSearchURI(query)
 
 	templated := true
 	bmxSearchLink := &models.Link{
@@ -336,7 +371,7 @@ func TuneInSearch(query string) (*models.BmxNavResponse, error) {
 
 	return &models.BmxNavResponse{
 		Links: &models.Links{
-			Self:      &models.Link{Href: fmt.Sprintf("/v1/search?q=%s", query)},
+			Self:      &models.Link{Href: fmt.Sprintf("/v1/search?q=%s", url.QueryEscape(query))},
 			BmxSearch: bmxSearchLink,
 		},
 		BmxSections: sections,
@@ -353,7 +388,7 @@ func tuneInSearchSection(item map[string]interface{}, idx int, query, layout str
 	if pivotURL != "" {
 		href = fmt.Sprintf("/v1/navigate/%s", base64.URLEncoding.EncodeToString([]byte(pivotURL)))
 	} else {
-		encodedQuery := base64.URLEncoding.EncodeToString([]byte(TuneInSearchAPI + query))
+		encodedQuery := base64.URLEncoding.EncodeToString([]byte(tuneInSearchURI(query)))
 		href = fmt.Sprintf("/v1/navigate/sub/%d/%s", idx, encodedQuery)
 	}
 
