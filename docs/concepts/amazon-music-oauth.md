@@ -12,7 +12,7 @@ All eight implementation steps are done. The OAuth flow (account linking, token 
 
 However, real-world testing shows that the speaker then calls `https://music-api.amazon.com/` with that token and receives a `401 Unauthorized` (no redirect to a regional endpoint). This means the token does not carry the scopes required to access the Amazon Music streaming API.
 
-**Root cause:** `music-api.amazon.com` is a partner-gated API. Standard Login with Amazon apps only receive `profile` scope. Amazon Music streaming requires additional `music::*` scopes that are only granted to registered Amazon Music partners (such as Bose was). Without a partner agreement, end users cannot obtain these scopes through a self-hosted LWA app.
+**Root cause (confirmed):** Amazon Music streaming requires the `amazon_music:access` scope, which is only available to **device client IDs** — a separate credential type obtained through Amazon's Music partner programme. Standard Login with Amazon application client IDs (`amzn1.application-oa2-client.*`) cannot request this scope: attempting to include it in the authorization URL returns `lwa-invalid-parameter-bad-scope` (HTTP 400) from the LWA authorization endpoint. Bose would have held a device client ID as a registered Amazon Music partner.
 
 **What still works:**
 - Account linking and token storage
@@ -22,7 +22,7 @@ However, real-world testing shows that the speaker then calls `https://music-api
 **What does not work:**
 - Actual music playback — the speaker's `AmazonClient` cannot authenticate to `music-api.amazon.com` with a standard LWA token
 
-**Path forward:** If Amazon opens up `music::*` scopes to developer apps, or if a partner token is obtained through other means, the infrastructure is ready to use without further code changes. The `site_id` field (see below) is a secondary open question that may also affect regional routing once the scope issue is resolved.
+**Path forward:** Obtaining a device client ID requires registering with Amazon's Music partner programme. If such a credential is obtained, the only code change needed is swapping the `client_id`/`client_secret` for the device credentials and adding `amazon_music:access` to `AmazonScopes` in `pkg/service/amazon/service.go` — everything else is already in place. The `site_id` field is a secondary open question that may also affect regional routing once the scope issue is resolved.
 
 ---
 

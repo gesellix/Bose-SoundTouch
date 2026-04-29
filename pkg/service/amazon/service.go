@@ -26,7 +26,10 @@ const (
 	// AmazonProfileURL is the LWA user profile endpoint.
 	AmazonProfileURL = "https://api.amazon.com/user/profile"
 	// AmazonScopes are the OAuth scopes for account linking.
-	// Expand to "music::*" scopes once Amazon Music API access is available.
+	// amazon_music:access is required for music-api.amazon.com but is only available
+	// to device client IDs (Amazon Music partner apps), not standard application
+	// client IDs (amzn1.application-oa2-client.*). Requesting it returns a 400
+	// lwa-invalid-parameter-bad-scope error from the LWA authorization endpoint.
 	AmazonScopes = "profile"
 )
 
