@@ -352,6 +352,22 @@ func (s *Service) GetAccountBySecret(secret string) (*Account, bool) {
 	return nil, false
 }
 
+// GetAccountByRefreshToken retrieves an Amazon account by its current refresh token.
+// Used by the token handler because the speaker sends back the actual LWA refresh token
+// (extracted from the AmazonSecret JSON in Sources.xml), not a surrogate.
+func (s *Service) GetAccountByRefreshToken(refreshToken string) (*Account, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, a := range s.accounts {
+		if a.RefreshToken == refreshToken {
+			return a, true
+		}
+	}
+
+	return nil, false
+}
+
 func (s *Service) generateBoseSecret() string {
 	prefix := "ba-"
 

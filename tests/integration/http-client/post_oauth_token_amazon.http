@@ -14,31 +14,26 @@ Content-Type: application/json
 }
 
 > {%
-    // TODO: upgrade to 200 + JSON structure assertions once the Amazon service is implemented
-    // and a mock Amazon OAuth server is wired into the CI docker-compose (mirroring spotify-mock).
-    client.test("Route is registered (stub returns 501, not 404)", function() {
-        client.assert(response.status === 501, "Expected 501 Not Implemented from stub, got " + response.status);
+    client.test("Request executed successfully", function() {
+        client.assert(response.status === 200, "Response status is not 200");
     });
 
-    // client.test("Request executed successfully", function() {
-    //     client.assert(response.status === 200, "Response status is not 200");
-    // });
+    client.test("Response content type is JSON", function() {
+        var type = response.contentType.mimeType;
+        client.assert(type === "application/json", "Expected 'application/json' but received '" + type + "'");
+    });
 
-    // client.test("Response content type is JSON", function() {
-    //     var type = response.contentType.mimeType;
-    //     client.assert(type === "application/json", "Expected 'application/json' but received '" + type + "'");
-    // });
+    client.test("Response body has expected structure", function() {
+        client.assert(response.body.hasOwnProperty("access_token"), "Response body missing 'access_token'");
+        client.assert(response.body.access_token.length > 0, "access_token is empty");
 
-    // client.test("Response body has expected structure", function() {
-    //     client.assert(response.body.hasOwnProperty("access_token"), "Response body missing 'access_token'");
-    //     client.assert(response.body.access_token.length > 0, "access_token is empty");
-    //
-    //     client.assert(response.body.hasOwnProperty("expires_in"), "Response body missing 'expires_in'");
-    //     client.assert(typeof response.body.expires_in === "number", "expires_in is not a number");
-    //
-    //     client.assert(response.body.hasOwnProperty("token_type"), "Response body missing 'token_type'");
-    //     client.assert(response.body.token_type === "Bearer", "token_type is not 'Bearer'");
-    //
-    //     // Amazon omits 'scope' — do not assert its presence.
-    // });
+        client.assert(response.body.hasOwnProperty("expires_in"), "Response body missing 'expires_in'");
+        client.assert(typeof response.body.expires_in === "number", "expires_in is not a number");
+
+        client.assert(response.body.hasOwnProperty("token_type"), "Response body missing 'token_type'");
+        client.assert(response.body.token_type === "Bearer", "token_type is not 'Bearer'");
+
+        // Amazon omits 'scope' — do not assert its presence.
+        client.assert(!response.body.hasOwnProperty("scope"), "Response must NOT include 'scope' for Amazon");
+    });
 %}

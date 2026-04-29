@@ -14,6 +14,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
@@ -56,6 +57,7 @@ type Server struct {
 	spotifyClientSecret string
 	spotifyRedirectURI  string
 	spotifyService      *spotify.Service
+	amazonService       *amazon.Service
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -337,6 +339,22 @@ func (s *Server) SetInternalPaths(paths []string) {
 	defer s.mu.Unlock()
 
 	s.internalPaths = paths
+}
+
+// SetAmazonService sets the Amazon OAuth service.
+func (s *Server) SetAmazonService(as *amazon.Service) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.amazonService = as
+}
+
+// IsAmazonConfigured returns whether Amazon Music integration is configured.
+func (s *Server) IsAmazonConfigured() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.amazonService != nil
 }
 
 // SetSpotifyService sets the Spotify OAuth service.

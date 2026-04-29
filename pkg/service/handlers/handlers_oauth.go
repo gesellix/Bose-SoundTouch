@@ -8,6 +8,7 @@ import (
 
 	"strconv"
 
+	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/go-chi/chi/v5"
@@ -98,13 +99,100 @@ func (s *Server) HandleBoseAccountToken(w http.ResponseWriter, r *http.Request) 
 	s.HandleBoseSpotifyToken(w, r)
 }
 
-// HandleBoseAmazonToken is a stub for Amazon Music OAuth token handling.
+// HandleBoseAmazonToken handles the Amazon Music token refresh request from the speaker.
 // POST /oauth/device/{deviceID}/music/musicprovider/20/token/cs1
-// Amazon Music API integration is not yet implemented.
+// The speaker sends the bare refresh token extracted from the stored AmazonSecret JSON.
 func (s *Server) HandleBoseAmazonToken(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceID")
-	log.Printf("[Amazon] Token request for device %s — Amazon Music not yet supported", deviceID)
-	http.Error(w, "Amazon Music integration not yet supported", http.StatusNotImplemented)
+	log.Printf("[Amazon] Token request for device %s", deviceID)
+
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		log.Printf("[Amazon] Amazon service not configured, falling back to upstream")
+		s.HandleBoseProxy(w, r)
+
+		return
+	}
+
+	accounts := svc.GetAccounts()
+	if len(accounts) == 0 {
+		log.Printf("[Amazon] No Amazon accounts linked, falling back to upstream")
+		s.HandleBoseProxy(w, r)
+
+		return
+	}
+
+	body, _ := io.ReadAll(r.Body)
+	_ = r.Body.Close()
+
+	var tokenReq struct {
+		RefreshToken string `json:"refresh_token"`
+		GrantType    string `json:"grant_type"`
+		Code         string `json:"code"`
+	}
+
+	_ = json.Unmarshal(body, &tokenReq)
+
+	// The speaker extracts the bare refresh token from AmazonSecret JSON and sends it here.
+	secret := tokenReq.RefreshToken
+	if secret == "" {
+		secret = tokenReq.Code
+	}
+
+	var (
+		account     *amazon.Account
+		accessToken string
+		userID      string
+	)
+
+	if secret != "" {
+		if acc, ok := svc.GetAccountByRefreshToken(secret); ok {
+			account = acc
+			log.Printf("[Amazon] Found account for refresh token: %s", acc.UserID)
+		}
+	}
+
+	if account != nil {
+		if err := svc.RefreshAccessToken(account); err != nil {
+			log.Printf("[Amazon] Failed to refresh token for %s: %v. Falling back to upstream", account.UserID, err)
+			s.HandleBoseProxy(w, r)
+
+			return
+		}
+
+		accessToken = account.AccessToken
+	} else {
+		var err error
+
+		accessToken, userID, err = svc.GetFreshToken()
+		if err != nil {
+			log.Printf("[Amazon] Failed to get fresh token: %v. Falling back to upstream", err)
+			s.HandleBoseProxy(w, r)
+
+			return
+		}
+
+		log.Printf("[Amazon] Using default account %s", userID)
+	}
+
+	// Omit "scope" — Amazon Music scopes are undocumented; sending invented values
+	// risks firmware rejection.
+	response := map[string]interface{}{
+		"access_token": accessToken,
+		"token_type":   "Bearer",
+		"expires_in":   3600,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Proxy-Origin", "self")
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("[Amazon] Failed to encode response: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
 
 // HandleBoseSpotifyToken handles the Bose-specific Spotify token refresh request.
