@@ -124,6 +124,7 @@ test-http-client:
 		--env-file /workdir/http-client.env.json \
 		--env ci \
 		/workdir/spotify_registration.http \
+		/workdir/amazon_registration.http \
 		/workdir/create_account.http \
 		/workdir/register_device.http \
 		/workdir/spotify_full_flow.http \
@@ -156,6 +157,7 @@ test-http-client:
 	EXIT_CODE=$$?; \
 	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs soundtouch-service; \
 	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs spotify-mock; \
+	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs amazon-mock; \
 	docker compose -f docker-compose.yml -f docker-compose.ci.yml down; \
 	exit $$EXIT_CODE
 

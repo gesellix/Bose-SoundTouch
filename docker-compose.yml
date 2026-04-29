@@ -49,6 +49,18 @@ services:
     networks:
       - soundtouch-test-net
 
+  amazon-mock:
+    image: golang:1.26.2-alpine
+    container_name: amazon-mock
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: go run ./cmd/mock-amazon/main.go -port 8080
+    ports:
+      - "8082:8080"
+    networks:
+      - soundtouch-test-net
+
 networks:
   soundtouch-test-net:
     name: soundtouch-test-net

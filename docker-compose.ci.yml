@@ -10,3 +10,7 @@ services:
       - SPOTIFY_CLIENT_SECRET=mock-secret
       - SPOTIFY_TOKEN_URL=http://spotify-mock:8080/api/token
       - SPOTIFY_API_BASE=http://spotify-mock:8080
+      - AMAZON_CLIENT_ID=mock-amazon-id
+      - AMAZON_CLIENT_SECRET=mock-amazon-secret
+      - AMAZON_TOKEN_URL=http://amazon-mock:8080/auth/o2/token
+      - AMAZON_PROFILE_URL=http://amazon-mock:8080/user/profile

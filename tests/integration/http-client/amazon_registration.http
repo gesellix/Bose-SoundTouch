@@ -1,0 +1,36 @@
+### Amazon Music Initial Registration Flow
+
+# @name Init Amazon Flow
+POST {{host}}/mgmt/amazon/init
+Authorization: Basic admin change_me!
+
+> {%
+ client.global.set("redirectUrl", response.body.redirectUrl);
+ %}
+
+###
+
+# @name Amazon Callback
+# Simulates the user being redirected back from Amazon LWA with a code
+GET {{host}}/mgmt/amazon/callback?code=mock-auth-code
+
+###
+
+# @name Verify Accounts
+GET {{host}}/mgmt/amazon/accounts
+Authorization: Basic admin change_me!
+
+> {%
+ client.test("Account exists", function() {
+     client.assert(response.body.accounts.length > 0, "No accounts found");
+     var found = false;
+     for (var i = 0; i < response.body.accounts.length; i++) {
+         if (response.body.accounts[i].user_id === "amzn1.account.TESTUSER") {
+             found = true;
+             client.assert(response.body.accounts[i].display_name === "Amazon Test User", "Display name mismatch");
+             break;
+         }
+     }
+     client.assert(found, "Account 'amzn1.account.TESTUSER' not found in " + JSON.stringify(response.body.accounts));
+ });
+ %}
