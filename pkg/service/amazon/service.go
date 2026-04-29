@@ -39,6 +39,9 @@ type Account struct {
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
 	BoseSecret   string `json:"bose_secret,omitempty"`
+	// SiteID is written into the AmazonSecret credential envelope. Its origin is
+	// unconfirmed (may be a static Bose partner ID or a per-user Music API value).
+	SiteID string `json:"site_id,omitempty"`
 }
 
 // Service manages Amazon OAuth flow and token lifecycle.
@@ -350,6 +353,20 @@ func (s *Service) GetAccountBySecret(secret string) (*Account, bool) {
 	}
 
 	return nil, false
+}
+
+// GetAllAccounts returns all accounts including tokens. Used internally by
+// bridgeAmazonToMarge to build the AmazonSecret credential envelope.
+func (s *Service) GetAllAccounts() []*Account {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]*Account, 0, len(s.accounts))
+	for _, a := range s.accounts {
+		result = append(result, a)
+	}
+
+	return result
 }
 
 // GetAccountByRefreshToken retrieves an Amazon account by its current refresh token.

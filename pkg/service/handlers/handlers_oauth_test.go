@@ -145,16 +145,19 @@ func TestHandleBoseAmazonToken_LocalResponse_ByRefreshToken(t *testing.T) {
 	amazonDir := filepath.Join(tmpDir, "amazon")
 	_ = os.MkdirAll(amazonDir, 0755)
 
-	account := map[string]interface{}{
-		"amzn1.account.USER1": map[string]interface{}{
-			"user_id":       "amzn1.account.USER1",
-			"display_name":  "Amazon User",
-			"access_token":  "Atza|old-access-token",
-			"refresh_token": "Atzr|stored-refresh-token",
-			"expires_at":    time.Now().Add(-1 * time.Hour).Unix(), // expired
+	accounts := map[string]amazon.Account{
+		"amzn1.account.USER1": {
+			UserID:       "amzn1.account.USER1",
+			DisplayName:  "Amazon User",
+			AccessToken:  "Atza|old-access-token",
+			RefreshToken: "Atzr|stored-refresh-token",
+			ExpiresAt:    time.Now().Add(-1 * time.Hour).Unix(),
 		},
 	}
-	data, _ := json.Marshal(account)
+	data, err := json.Marshal(accounts)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = os.WriteFile(filepath.Join(amazonDir, "accounts.json"), data, 0644)
 
 	as := amazon.NewAmazonService("client-id", "client-secret", "ueberboese-login://amazon", tmpDir)
@@ -203,16 +206,19 @@ func TestHandleBoseAmazonToken_LocalResponse_DefaultAccount(t *testing.T) {
 	amazonDir := filepath.Join(tmpDir, "amazon")
 	_ = os.MkdirAll(amazonDir, 0755)
 
-	account := map[string]interface{}{
-		"amzn1.account.USER1": map[string]interface{}{
-			"user_id":       "amzn1.account.USER1",
-			"display_name":  "Amazon User",
-			"access_token":  "Atza|valid-access-token",
-			"refresh_token": "Atzr|valid-refresh-token",
-			"expires_at":    time.Now().Add(1 * time.Hour).Unix(),
+	accounts := map[string]amazon.Account{
+		"amzn1.account.USER1": {
+			UserID:       "amzn1.account.USER1",
+			DisplayName:  "Amazon User",
+			AccessToken:  "Atza|valid-access-token",
+			RefreshToken: "Atzr|valid-refresh-token",
+			ExpiresAt:    time.Now().Add(1 * time.Hour).Unix(),
 		},
 	}
-	data, _ := json.Marshal(account)
+	data, err := json.Marshal(accounts)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = os.WriteFile(filepath.Join(amazonDir, "accounts.json"), data, 0644)
 
 	as := amazon.NewAmazonService("client-id", "client-secret", "ueberboese-login://amazon", tmpDir)

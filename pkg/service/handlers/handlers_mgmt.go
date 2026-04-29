@@ -442,3 +442,299 @@ func (s *Server) HandleMgmtPrimeDevice(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"status":"Priming triggered"}`))
 }
+
+// HandleMgmtAmazonInit starts the Amazon OAuth flow by returning an authorization URL.
+func (s *Server) HandleMgmtAmazonInit(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		http.Error(w, `{"error":"amazon not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	state := r.URL.Query().Get("account")
+	redirectURL := svc.BuildAuthorizeURL(state)
+
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+
+	if err := enc.Encode(map[string]string{
+		"redirectUrl": redirectURL,
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode Amazon redirect URL: %v", err)
+	}
+}
+
+// HandleMgmtAmazonCallback is the browser OAuth callback from Amazon LWA.
+// Not protected by Basic Auth — Amazon redirects the user's browser here directly.
+// Returns an HTML page the user can close.
+func (s *Server) HandleMgmtAmazonCallback(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`<html><body><h1>Error</h1><p>Amazon Music integration not configured</p></body></html>`))
+
+		return
+	}
+
+	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`<html><body><h1>Amazon Authorization Failed</h1><p>Error: ` + errMsg + `</p></body></html>`))
+
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`<html><body><h1>Missing authorization code</h1></body></html>`))
+
+		return
+	}
+
+	if err := svc.ExchangeCodeAndStore(code); err != nil {
+		log.Printf("[Mgmt] Amazon callback failed: %v", err)
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`<html><body><h1>Error</h1><p>Token exchange failed</p></body></html>`))
+
+		return
+	}
+
+	accountID := r.URL.Query().Get("account")
+	if accountID == "" {
+		accountID = r.URL.Query().Get("state")
+	}
+
+	s.bridgeAmazonToMarge(accountID)
+
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = w.Write([]byte(`<html><body><h1>Amazon Music Connected</h1><p>You can close this window.</p></body></html>`))
+}
+
+// HandleMgmtAmazonConfirm exchanges an authorization code for tokens.
+// Used by the ueberboese mobile app after the deep link callback delivers the code.
+// Protected by Basic Auth.
+func (s *Server) HandleMgmtAmazonConfirm(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		http.Error(w, `{"error":"amazon not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, `{"error":"missing code parameter"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := svc.ExchangeCodeAndStore(code); err != nil {
+		log.Printf("[Mgmt] Amazon confirm failed: %v", err)
+		http.Error(w, `{"error":"token exchange failed"}`, http.StatusInternalServerError)
+
+		return
+	}
+
+	accountID := r.URL.Query().Get("account")
+	if accountID == "" {
+		accountID = r.URL.Query().Get("state")
+	}
+
+	s.bridgeAmazonToMarge(accountID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"ok":true}`))
+}
+
+func (s *Server) bridgeAmazonToMarge(accountID string) {
+	if accountID == "" {
+		accountID = "default"
+	}
+
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		return
+	}
+
+	accounts := svc.GetAllAccounts()
+	if len(accounts) == 0 {
+		return
+	}
+
+	for _, acc := range accounts {
+		log.Printf("[Amazon Bridge] Registering Amazon user %s in Marge for account %s", acc.UserID, accountID)
+
+		// Build the AmazonSecret credential envelope expected by the speaker firmware.
+		credMap := map[string]interface{}{
+			"AmazonSecret": map[string]string{
+				"refresh_token": acc.RefreshToken,
+				"site_id":       acc.SiteID,
+			},
+		}
+
+		credJSON, err := json.Marshal(credMap)
+		if err != nil {
+			log.Printf("[Amazon Bridge] Failed to marshal credential: %v", err)
+			continue
+		}
+
+		_, err = marge.AddSource(s.ds, accountID, acc.UserID, strconv.Itoa(constants.AmazonProviderID), string(credJSON), constants.CredentialTypeToken, acc.DisplayName)
+		if err != nil {
+			log.Printf("[Amazon Bridge] Failed to register source in Marge: %v", err)
+			continue
+		}
+
+		allDevices, err := s.ds.ListAllDevices()
+		if err != nil {
+			log.Printf("[Amazon Bridge] Failed to list devices: %v", err)
+			continue
+		}
+
+		for i := range allDevices {
+			dev := &allDevices[i]
+			if dev.AccountID != accountID && accountID != "default" {
+				continue
+			}
+
+			if dev.IPAddress == "" {
+				continue
+			}
+
+			go func(d models.ServiceDeviceInfo) {
+				log.Printf("[Amazon Bridge] Notifying speaker %s (%s) about new Amazon account", d.Name, d.IPAddress)
+
+				c := client.NewClientFromHost(d.IPAddress)
+				creds := models.NewAmazonOAuthCredentials(acc.UserID, string(credJSON), acc.DisplayName)
+
+				if err := c.SetMusicServiceOAuthAccount(creds); err != nil {
+					log.Printf("[Amazon Bridge] Failed to notify speaker %s via OAuth: %v", d.Name, err)
+
+					errs := &models.ErrorsResponse{}
+					if errors.As(err, &errs) {
+						isUnsupported := false
+
+						for _, e := range errs.Errors {
+							if e.Value == 1029 {
+								isUnsupported = true
+								break
+							}
+						}
+
+						if isUnsupported {
+							log.Printf("[Amazon Bridge] Speaker %s doesn't support OAuth, falling back to Marge sync notification", d.Name)
+
+							if err := c.NotifySourcesUpdated(d.DeviceID); err != nil {
+								log.Printf("[Amazon Bridge] Sync notification failed for speaker %s: %v", d.Name, err)
+
+								log.Printf("[Amazon Bridge] Falling back to legacy account creation for speaker %s", d.Name)
+
+								legacyCreds := models.NewAmazonMusicCredentials(acc.UserID, string(credJSON))
+								if err := c.SetMusicServiceAccount(legacyCreds); err != nil {
+									log.Printf("[Amazon Bridge] Legacy fallback failed for speaker %s: %v", d.Name, err)
+								} else {
+									log.Printf("[Amazon Bridge] Legacy fallback successful for speaker %s", d.Name)
+								}
+							} else {
+								log.Printf("[Amazon Bridge] Sync notification successful for speaker %s", d.Name)
+							}
+
+							return
+						}
+					}
+				} else {
+					log.Printf("[Amazon Bridge] Successfully notified speaker %s", d.Name)
+				}
+			}(*dev)
+		}
+	}
+}
+
+// HandleMgmtAmazonAccounts returns linked Amazon accounts (tokens stripped).
+func (s *Server) HandleMgmtAmazonAccounts(w http.ResponseWriter, _ *http.Request) {
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		http.Error(w, `{"error":"amazon not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	accounts := svc.GetAccounts()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"accounts": accounts,
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode Amazon accounts: %v", err)
+	}
+}
+
+// HandleMgmtAmazonToken returns a fresh Amazon access token for the linked account.
+func (s *Server) HandleMgmtAmazonToken(w http.ResponseWriter, _ *http.Request) {
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		http.Error(w, `{"error":"amazon not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	accessToken, username, err := svc.GetFreshToken()
+	if err != nil {
+		log.Printf("[Mgmt] Amazon token error: %v", err)
+		http.Error(w, `{"error":"no token available"}`, http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"access_token": accessToken,
+		"username":     username,
+	}); err != nil {
+		log.Printf("[Mgmt] Failed to encode Amazon token: %v", err)
+	}
+}
+
+// HandleMgmtPrimeDeviceAmazon triggers Amazon Music priming for a specific device.
+func (s *Server) HandleMgmtPrimeDeviceAmazon(w http.ResponseWriter, r *http.Request) {
+	deviceID := r.URL.Query().Get("deviceId")
+
+	if deviceID == "" {
+		http.Error(w, `{"error":"missing deviceId"}`, http.StatusBadRequest)
+		return
+	}
+
+	deviceIP, err := s.resolveDeviceIDToIP(deviceID)
+	if err != nil {
+		log.Printf("[Mgmt] Amazon prime failed: %v", err)
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusNotFound)
+
+		return
+	}
+
+	go s.PrimeDeviceWithAmazon(deviceIP)
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"status":"Priming triggered"}`))
+}

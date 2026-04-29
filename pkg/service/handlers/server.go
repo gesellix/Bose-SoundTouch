@@ -492,6 +492,47 @@ func (s *Server) pushSpotifyTokenToDevice(deviceIP, username, accessToken string
 	return spotify.PushSpotifyCredentials(zcURL, username, accessToken)
 }
 
+// PrimeDeviceWithAmazon triggers an Amazon Music priming of the speaker if an Amazon account is linked.
+func (s *Server) PrimeDeviceWithAmazon(deviceIP string) {
+	s.mu.RLock()
+	svc := s.amazonService
+	s.mu.RUnlock()
+
+	if svc == nil {
+		return
+	}
+
+	accounts := svc.GetAccounts()
+	if len(accounts) == 0 {
+		return
+	}
+
+	accessToken, username, err := svc.GetFreshToken()
+	if err != nil {
+		log.Printf("[Amazon Watchdog] Failed to get fresh token for %s: %v", deviceIP, err)
+		return
+	}
+
+	log.Printf("[Amazon Watchdog] Proactively priming %s with Amazon user %s", deviceIP, username)
+
+	if err := s.pushAmazonTokenToDevice(deviceIP, username, accessToken); err != nil {
+		log.Printf("[Amazon Watchdog] Failed to prime %s: %v", deviceIP, err)
+	} else {
+		log.Printf("[Amazon Watchdog] Successfully primed %s", deviceIP)
+	}
+}
+
+func (s *Server) pushAmazonTokenToDevice(deviceIP, username, accessToken string) error {
+	var zcURL string
+	if _, _, err := net.SplitHostPort(deviceIP); err == nil {
+		zcURL = fmt.Sprintf("http://%s/zc", deviceIP)
+	} else {
+		zcURL = fmt.Sprintf("http://%s:8200/zc", deviceIP)
+	}
+
+	return amazon.PushAmazonCredentials(zcURL, username, accessToken)
+}
+
 func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	log.Printf("Discovered Bose device: %s at %s (Serial: %s)", d.Name, d.Host, d.SerialNo)
 

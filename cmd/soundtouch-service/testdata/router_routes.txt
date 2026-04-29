@@ -36,6 +36,9 @@ GET      /media/*                                                     handlers.(
 GET      /mgmt/accounts/                                              handlers.(*Server).HandleMgmtListAccounts-fm
 GET      /mgmt/accounts/{accountId}                                   handlers.(*Server).HandleMgmtAccountDetails-fm
 GET      /mgmt/accounts/{accountId}/speakers                          handlers.(*Server).HandleMgmtListSpeakers-fm
+GET      /mgmt/amazon/accounts                                        handlers.(*Server).HandleMgmtAmazonAccounts-fm
+GET      /mgmt/amazon/callback                                        handlers.(*Server).HandleMgmtAmazonCallback-fm
+GET      /mgmt/amazon/token                                           handlers.(*Server).HandleMgmtAmazonToken-fm
 GET      /mgmt/devices/{deviceId}/events                              handlers.(*Server).HandleMgmtDeviceEvents-fm
 GET      /mgmt/spotify/accounts                                       handlers.(*Server).HandleMgmtSpotifyAccounts-fm
 GET      /mgmt/spotify/callback                                       handlers.(*Server).HandleMgmtSpotifyCallback-fm
@@ -95,6 +98,9 @@ POST     /customer/account/{account}                                  handlers.(
 POST     /customer/account/{account}/password                         handlers.(*Server).HandleMargeChangePassword-fm
 POST     /mgmt/accounts/{accountId}/language                          handlers.(*Server).HandleMgmtUpdateAccountLanguage-fm
 POST     /mgmt/accounts/{accountId}/provider-settings                 handlers.(*Server).HandleMgmtUpdateAccountProviderSetting-fm
+POST     /mgmt/amazon/confirm                                         handlers.(*Server).HandleMgmtAmazonConfirm-fm
+POST     /mgmt/amazon/init                                            handlers.(*Server).HandleMgmtAmazonInit-fm
+POST     /mgmt/amazon/prime                                           handlers.(*Server).HandleMgmtPrimeDeviceAmazon-fm
 POST     /mgmt/spotify/confirm                                        handlers.(*Server).HandleMgmtSpotifyConfirm-fm
 POST     /mgmt/spotify/entity                                         handlers.(*Server).HandleMgmtSpotifyEntity-fm
 POST     /mgmt/spotify/init                                           handlers.(*Server).HandleMgmtSpotifyInit-fm

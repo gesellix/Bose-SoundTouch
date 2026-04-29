@@ -135,6 +135,22 @@ func NewSpotifyOAuthCredentials(user, code, displayName string) *OAuthCredential
 	}
 }
 
+// NewAmazonOAuthCredentials creates OAuth credentials for Amazon Music (cs1 / "token").
+// code is the AmazonSecret JSON envelope stored as the credential in Sources.xml.
+func NewAmazonOAuthCredentials(user, code, displayName string) *OAuthCredentials {
+	if displayName == "" {
+		displayName = user
+	}
+
+	return &OAuthCredentials{
+		Source:      "AMAZON",
+		DisplayName: displayName,
+		User:        user,
+		Code:        code,
+		Version:     "token",
+	}
+}
+
 // MusicServiceAccountResponse represents the response from account management operations
 type MusicServiceAccountResponse struct {
 	XMLName xml.Name `xml:"status"`

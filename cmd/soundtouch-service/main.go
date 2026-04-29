@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
+	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
@@ -116,6 +117,58 @@ func initializeDefaultSources(ds *datastore.DataStore) {
 				}
 			}
 		}
+	}
+}
+
+func initMusicServices(config serviceConfig, server *handlers.Server) {
+	if config.spotifyClientID != "" {
+		spotifyService := spotify.NewSpotifyService(
+			config.spotifyClientID,
+			config.spotifyClientSecret,
+			config.spotifyRedirectURI,
+			config.dataDir,
+		)
+		if config.spotifyTokenURL != "" || config.spotifyAPIBase != "" {
+			spotifyService.SetEndpoints(config.spotifyTokenURL, config.spotifyAPIBase)
+		}
+
+		if err := spotifyService.Load(); err != nil {
+			log.Printf("[Spotify] Failed to load accounts: %v", err)
+		}
+
+		server.SetSpotifyService(spotifyService)
+
+		clientIDPrefix := config.spotifyClientID
+		if len(clientIDPrefix) > 8 {
+			clientIDPrefix = clientIDPrefix[:8]
+		}
+
+		log.Printf("Spotify service initialized (client ID: %s...)", clientIDPrefix)
+	}
+
+	if config.amazonClientID != "" {
+		amazonService := amazon.NewAmazonService(
+			config.amazonClientID,
+			config.amazonClientSecret,
+			config.amazonRedirectURI,
+			config.dataDir,
+		)
+		if config.amazonTokenURL != "" || config.amazonProfileURL != "" {
+			amazonService.SetEndpoints(config.amazonTokenURL, config.amazonProfileURL)
+		}
+
+		if err := amazonService.Load(); err != nil {
+			log.Printf("[Amazon] Failed to load accounts: %v", err)
+		}
+
+		server.SetAmazonService(amazonService)
+
+		clientIDPrefix := config.amazonClientID
+		if len(clientIDPrefix) > 8 {
+			clientIDPrefix = clientIDPrefix[:8]
+		}
+
+		log.Printf("Amazon Music service initialized (client ID: %s...)", clientIDPrefix)
 	}
 }
 
@@ -237,6 +290,32 @@ func main() {
 				EnvVars: []string{"SPOTIFY_API_BASE"},
 			},
 			&cli.StringFlag{
+				Name:    "amazon-client-id",
+				Usage:   "Amazon LWA OAuth client ID",
+				EnvVars: []string{"AMAZON_CLIENT_ID"},
+			},
+			&cli.StringFlag{
+				Name:    "amazon-client-secret",
+				Usage:   "Amazon LWA OAuth client secret",
+				EnvVars: []string{"AMAZON_CLIENT_SECRET"},
+			},
+			&cli.StringFlag{
+				Name:    "amazon-redirect-uri",
+				Usage:   "Amazon LWA OAuth redirect URI",
+				Value:   "ueberboese-login://amazon",
+				EnvVars: []string{"AMAZON_REDIRECT_URI"},
+			},
+			&cli.StringFlag{
+				Name:    "amazon-token-url",
+				Usage:   "Amazon LWA token URL (for testing)",
+				EnvVars: []string{"AMAZON_TOKEN_URL"},
+			},
+			&cli.StringFlag{
+				Name:    "amazon-profile-url",
+				Usage:   "Amazon LWA profile URL (for testing)",
+				EnvVars: []string{"AMAZON_PROFILE_URL"},
+			},
+			&cli.StringFlag{
 				Name:    "mgmt-username",
 				Usage:   "Management API username for HTTP Basic Auth",
 				Value:   "admin",
@@ -325,30 +404,7 @@ func main() {
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
 
-			if config.spotifyClientID != "" {
-				spotifyService := spotify.NewSpotifyService(
-					config.spotifyClientID,
-					config.spotifyClientSecret,
-					config.spotifyRedirectURI,
-					config.dataDir,
-				)
-				if config.spotifyTokenURL != "" || config.spotifyAPIBase != "" {
-					spotifyService.SetEndpoints(config.spotifyTokenURL, config.spotifyAPIBase)
-				}
-
-				if err := spotifyService.Load(); err != nil {
-					log.Printf("[Spotify] Failed to load accounts: %v", err)
-				}
-
-				server.SetSpotifyService(spotifyService)
-
-				clientIDPrefix := config.spotifyClientID
-				if len(clientIDPrefix) > 8 {
-					clientIDPrefix = clientIDPrefix[:8]
-				}
-
-				log.Printf("Spotify service initialized (client ID: %s...)", clientIDPrefix)
-			}
+			initMusicServices(config, server)
 
 			// Load and set initial DNS discoveries
 			dnsDiscoveries, err := ds.LoadDNSDiscoveries()
@@ -472,6 +528,11 @@ type serviceConfig struct {
 	spotifyRedirectURI  string
 	spotifyTokenURL     string
 	spotifyAPIBase      string
+	amazonClientID      string
+	amazonClientSecret  string
+	amazonRedirectURI   string
+	amazonTokenURL      string
+	amazonProfileURL    string
 	mgmtUsername        string
 	mgmtPassword        string
 	migrationEnabled    bool
@@ -538,6 +599,11 @@ func loadConfig(c *cli.Context) serviceConfig {
 	spotifyRedirectURI := c.String("spotify-redirect-uri")
 	spotifyTokenURL := c.String("spotify-token-url")
 	spotifyAPIBase := c.String("spotify-api-base")
+	amazonClientID := c.String("amazon-client-id")
+	amazonClientSecret := c.String("amazon-client-secret")
+	amazonRedirectURI := c.String("amazon-redirect-uri")
+	amazonTokenURL := c.String("amazon-token-url")
+	amazonProfileURL := c.String("amazon-profile-url")
 	mgmtUsername := c.String("mgmt-username")
 	mgmtPassword := c.String("mgmt-password")
 	mirrorEnabled := c.Bool("mirror-enabled")
@@ -573,6 +639,11 @@ func loadConfig(c *cli.Context) serviceConfig {
 		spotifyRedirectURI:  spotifyRedirectURI,
 		spotifyTokenURL:     spotifyTokenURL,
 		spotifyAPIBase:      spotifyAPIBase,
+		amazonClientID:      amazonClientID,
+		amazonClientSecret:  amazonClientSecret,
+		amazonRedirectURI:   amazonRedirectURI,
+		amazonTokenURL:      amazonTokenURL,
+		amazonProfileURL:    amazonProfileURL,
 		mgmtUsername:        mgmtUsername,
 		mgmtPassword:        mgmtPassword,
 		migrationEnabled:    migrationEnabled,
@@ -888,10 +959,11 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	})
 
 	r.Route("/mgmt", func(r chi.Router) {
-		// Browser OAuth callback — no auth required (Spotify redirects the
+		// Browser OAuth callbacks — no auth required (provider redirects the
 		// user's browser here directly). The authorization code is single-use,
 		// short-lived, and useless without the client_secret.
 		r.Get("/spotify/callback", server.HandleMgmtSpotifyCallback)
+		r.Get("/amazon/callback", server.HandleMgmtAmazonCallback)
 
 		// All other management endpoints require Basic Auth.
 		r.Group(func(r chi.Router) {
@@ -912,6 +984,14 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 				r.Get("/token", server.HandleMgmtSpotifyToken)
 				r.Post("/entity", server.HandleMgmtSpotifyEntity)
 				r.Post("/prime", server.HandleMgmtPrimeDevice)
+			})
+
+			r.Route("/amazon", func(r chi.Router) {
+				r.Post("/init", server.HandleMgmtAmazonInit)
+				r.Post("/confirm", server.HandleMgmtAmazonConfirm)
+				r.Get("/accounts", server.HandleMgmtAmazonAccounts)
+				r.Get("/token", server.HandleMgmtAmazonToken)
+				r.Post("/prime", server.HandleMgmtPrimeDeviceAmazon)
 			})
 
 			r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)
