@@ -6,7 +6,7 @@ The implementation mirrors the [Spotify OAuth integration](spotify-oauth.md) clo
 
 ## Status
 
-**Not yet implemented.** The stub handler at `HandleBoseAmazonToken` returns HTTP 501. The plan below describes what needs to be built.
+**Implemented.** All eight steps from the plan below are complete. The integration is ready to test with a real Login with Amazon developer app — see [Trying It Out](#trying-it-out) below.
 
 > **Note on Amazon Music API access:** Amazon Music's `music::` OAuth scopes are in closed beta. The OAuth infrastructure (account linking, token storage, token refresh) can be fully implemented and tested using a plain Login with Amazon (LWA) developer app. Actual music playback depends on the speaker using the token natively — the service only brokers tokens, it does not call the Amazon Music API directly.
 
@@ -238,11 +238,86 @@ Update `cmd/soundtouch-service/testdata/router_routes.txt` snapshot after wiring
 
 ---
 
+## Trying It Out
+
+### 1. Create a Login with Amazon (LWA) app
+
+Go to [developer.amazon.com](https://developer.amazon.com) → **Login with Amazon** → **Create a New Security Profile**.
+
+You will receive a **Client ID** and **Client Secret**. Under *Web Settings*, add an **Allowed Return URL** that matches `--amazon-redirect-uri`:
+
+- **Browser flow** (easiest to test): `http://<your-host>:8000/mgmt/amazon/callback`
+- **Mobile deep-link flow**: `ueberboese-login://amazon` (the default)
+
+The `profile` scope is sufficient — `music::` scopes are in closed beta and not required. The service only brokers tokens; the speaker communicates with Amazon's playback infrastructure directly.
+
+### 2. Start the service
+
+```bash
+./soundtouch-service \
+  --amazon-client-id  amzn1.application-oa2-client.xxx \
+  --amazon-client-secret yyy \
+  --amazon-redirect-uri http://<your-host>:8000/mgmt/amazon/callback
+```
+
+Or set the equivalent environment variables: `AMAZON_CLIENT_ID`, `AMAZON_CLIENT_SECRET`, `AMAZON_REDIRECT_URI`.
+
+### 3. Trigger the OAuth flow
+
+```bash
+# Get the LWA authorization URL
+curl -u admin:change_me! -X POST http://localhost:8000/mgmt/amazon/init
+# → {"redirectUrl":"https://www.amazon.com/ap/oa?client_id=...&scope=profile&..."}
+```
+
+Open the `redirectUrl` in a browser, log in with your Amazon account, and authorize the app. Amazon redirects back to `/mgmt/amazon/callback`, which responds with an HTML page saying "Amazon Music Connected".
+
+### 4. Verify the account is linked
+
+```bash
+curl -u admin:change_me! http://localhost:8000/mgmt/amazon/accounts
+# → {"accounts":[{"user_id":"amzn1.account.xxx","display_name":"Your Name","email":"you@example.com",...}]}
+```
+
+### 5. Prime a speaker
+
+```bash
+# Discover device IDs first
+curl -u admin:change_me! http://localhost:8000/mgmt/accounts/default/speakers
+
+# Push the token to a specific speaker via ZeroConf
+curl -u admin:change_me! -X POST \
+  "http://localhost:8000/mgmt/amazon/prime?deviceId=<deviceId>"
+# → {"status":"Priming triggered"}
+```
+
+### 6. Verify token refresh from the speaker
+
+Once a speaker has Amazon Music as a source, it will periodically POST to:
+
+```
+POST /oauth/device/{deviceID}/music/musicprovider/20/token/cs1
+```
+
+The service looks up the account by refresh token, refreshes it via LWA, and returns a fresh `access_token`. Check the service logs for `[Amazon]` entries confirming this flow.
+
+### DNS requirement
+
+The speaker derives the OAuth hostname by appending `oauth` to its configured streaming subdomain. If the service is at `myhost.local`, the speaker calls `myhostoauth.local`. A DNS alias pointing `myhostoauth.<domain>` to the same IP is required — the built-in DNS discovery server handles this automatically when `--dns-discovery` is enabled.
+
+### Open question: `site_id`
+
+The `AmazonSecret` credential envelope contains a `site_id` field (e.g. `"1464855981"` seen in a real migrated device). Its origin is unconfirmed — it may be a static Bose partner ID or a per-user Amazon Music identifier. The service currently stores an empty string.
+
+**To investigate:** after linking an account and priming a speaker, watch whether the speaker accepts the credential and successfully plays Amazon Music. If it fails, capturing the speaker's token request and comparing the credential envelope with one from a pre-shutdown Bose cloud migration will reveal whether `site_id` is load-bearing.
+
+---
+
 ## Endpoints
 
 | Method | Path                                                        | Auth  | Purpose                                            |
 |--------|-------------------------------------------------------------|-------|----------------------------------------------------|
-| `POST` | `/oauth/device/{deviceID}/music/musicprovider/20/token/cs1` | None  | Token refresh from speaker (stub → to implement)   |
+| `POST` | `/oauth/device/{deviceID}/music/musicprovider/20/token/cs1` | None  | Token refresh from speaker                         |
 | `GET`  | `/mgmt/amazon/callback`                                     | None  | Browser OAuth callback (redirect from Amazon LWA)  |
 | `POST` | `/mgmt/amazon/init`                                         | Basic | Start OAuth flow, returns authorization URL        |
 | `POST` | `/mgmt/amazon/confirm`                                      | Basic | Mobile app confirm (deep link delivers code)       |
