@@ -7,8 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
-
 	"strconv"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -619,43 +619,28 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 			go func(d models.ServiceDeviceInfo) {
 				log.Printf("[Amazon Bridge] Notifying speaker %s (%s) about new Amazon account", d.Name, d.IPAddress)
 
-				c := client.NewClientFromHost(d.IPAddress)
+				cfg := client.DefaultConfig()
+				cfg.Host = d.IPAddress
+				cfg.Timeout = 5 * time.Second
+				c := client.NewClient(cfg)
 				creds := models.NewAmazonOAuthCredentials(acc.UserID, string(credJSON), acc.DisplayName)
 
 				if err := c.SetMusicServiceOAuthAccount(creds); err != nil {
 					log.Printf("[Amazon Bridge] Failed to notify speaker %s via OAuth: %v", d.Name, err)
+					log.Printf("[Amazon Bridge] Speaker %s doesn't support OAuth or is unreachable, falling back to Marge sync notification", d.Name)
 
-					errs := &models.ErrorsResponse{}
-					if errors.As(err, &errs) {
-						isUnsupported := false
+					if err := c.NotifySourcesUpdated(d.DeviceID); err != nil {
+						log.Printf("[Amazon Bridge] Sync notification failed for speaker %s: %v", d.Name, err)
+						log.Printf("[Amazon Bridge] Falling back to legacy account creation for speaker %s", d.Name)
 
-						for _, e := range errs.Errors {
-							if e.Value == 1029 {
-								isUnsupported = true
-								break
-							}
+						legacyCreds := models.NewAmazonMusicCredentials(acc.UserID, string(credJSON))
+						if err := c.SetMusicServiceAccount(legacyCreds); err != nil {
+							log.Printf("[Amazon Bridge] Legacy fallback failed for speaker %s: %v", d.Name, err)
+						} else {
+							log.Printf("[Amazon Bridge] Legacy fallback successful for speaker %s", d.Name)
 						}
-
-						if isUnsupported {
-							log.Printf("[Amazon Bridge] Speaker %s doesn't support OAuth, falling back to Marge sync notification", d.Name)
-
-							if err := c.NotifySourcesUpdated(d.DeviceID); err != nil {
-								log.Printf("[Amazon Bridge] Sync notification failed for speaker %s: %v", d.Name, err)
-
-								log.Printf("[Amazon Bridge] Falling back to legacy account creation for speaker %s", d.Name)
-
-								legacyCreds := models.NewAmazonMusicCredentials(acc.UserID, string(credJSON))
-								if err := c.SetMusicServiceAccount(legacyCreds); err != nil {
-									log.Printf("[Amazon Bridge] Legacy fallback failed for speaker %s: %v", d.Name, err)
-								} else {
-									log.Printf("[Amazon Bridge] Legacy fallback successful for speaker %s", d.Name)
-								}
-							} else {
-								log.Printf("[Amazon Bridge] Sync notification successful for speaker %s", d.Name)
-							}
-
-							return
-						}
+					} else {
+						log.Printf("[Amazon Bridge] Sync notification successful for speaker %s", d.Name)
 					}
 				} else {
 					log.Printf("[Amazon Bridge] Successfully notified speaker %s", d.Name)

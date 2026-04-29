@@ -451,7 +451,7 @@ func TestMargeAccountSources(t *testing.T) {
 		"<createdOn>2024-01-01T00:00:00Z</createdOn>",
 		"<updatedOn>2024-01-01T00:00:00Z</updatedOn>",
 		"<credential type=\"token\">TOKEN1</credential>",
-		"<name>User1</name>",
+		"<name>Source1</name>",
 		"<sourcename></sourcename>",
 		"<sourceSettings/>",
 		"<username>User1</username>",

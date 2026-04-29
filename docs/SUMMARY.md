@@ -4,6 +4,8 @@
 
 ## User Guides
 * [Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md)
+* [Self-Hosting AfterTouch](guides/SELF-HOSTING.md)
+* [Connecting Music Services](guides/MUSIC-SERVICES.md)
 * [Migration & Safety Guide](guides/MIGRATION-SAFETY.md)
 * [CLI Reference](guides/CLI-REFERENCE.md)
 * [Getting Started](guides/GETTING-STARTED.md)

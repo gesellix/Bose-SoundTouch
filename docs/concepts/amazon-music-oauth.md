@@ -6,9 +6,23 @@ The implementation mirrors the [Spotify OAuth integration](spotify-oauth.md) clo
 
 ## Status
 
-**Implemented.** All eight steps from the plan below are complete. The integration is ready to test with a real Login with Amazon developer app — see [Trying It Out](#trying-it-out) below.
+**Infrastructure complete — streaming blocked by API access.**
 
-> **Note on Amazon Music API access:** Amazon Music's `music::` OAuth scopes are in closed beta. The OAuth infrastructure (account linking, token storage, token refresh) can be fully implemented and tested using a plain Login with Amazon (LWA) developer app. Actual music playback depends on the speaker using the token natively — the service only brokers tokens, it does not call the Amazon Music API directly.
+All eight implementation steps are done. The OAuth flow (account linking, token storage, token refresh) works end-to-end with a standard Login with Amazon app. Token exchange (`/oauth/device/.../token/cs1`) succeeds and the speaker receives a valid `Atza|` access token.
+
+However, real-world testing shows that the speaker then calls `https://music-api.amazon.com/` with that token and receives a `401 Unauthorized` (no redirect to a regional endpoint). This means the token does not carry the scopes required to access the Amazon Music streaming API.
+
+**Root cause:** `music-api.amazon.com` is a partner-gated API. Standard Login with Amazon apps only receive `profile` scope. Amazon Music streaming requires additional `music::*` scopes that are only granted to registered Amazon Music partners (such as Bose was). Without a partner agreement, end users cannot obtain these scopes through a self-hosted LWA app.
+
+**What still works:**
+- Account linking and token storage
+- Token refresh (the service correctly exchanges the refresh token for a fresh access token)
+- Marge source registration (the speaker sees Amazon Music as a configured source)
+
+**What does not work:**
+- Actual music playback — the speaker's `AmazonClient` cannot authenticate to `music-api.amazon.com` with a standard LWA token
+
+**Path forward:** If Amazon opens up `music::*` scopes to developer apps, or if a partner token is obtained through other means, the infrastructure is ready to use without further code changes. The `site_id` field (see below) is a secondary open question that may also affect regional routing once the scope issue is resolved.
 
 ---
 
@@ -309,7 +323,12 @@ The speaker derives the OAuth hostname by appending `oauth` to its configured st
 
 The `AmazonSecret` credential envelope contains a `site_id` field (e.g. `"1464855981"` seen in a real migrated device). Its origin is unconfirmed — it may be a static Bose partner ID or a per-user Amazon Music identifier. The service currently stores an empty string.
 
-**To investigate:** after linking an account and priming a speaker, watch whether the speaker accepts the credential and successfully plays Amazon Music. If it fails, capturing the speaker's token request and comparing the credential envelope with one from a pre-shutdown Bose cloud migration will reveal whether `site_id` is load-bearing.
+Real-world testing shows the device's `AmazonClient` calls `CheckBaseUrlRedirect` with empty `data` (the `site_id`) and then tries `https://music-api.amazon.com/` directly, receiving a 401 with no redirect to a regional endpoint (e.g. `music-api.amazon.de` for a German account). This suggests that:
+
+1. A correct `site_id` might cause the device to use the right regional endpoint instead of the US default.
+2. Even so, the token scope issue (see Status above) would still block playback — resolving `site_id` alone is not sufficient.
+
+`site_id` is likely secondary to the partner scope problem. It remains an open question for the post-scope-resolution phase.
 
 ---
 

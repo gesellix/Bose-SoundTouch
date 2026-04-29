@@ -672,13 +672,16 @@ func CreateAccountDevice(ds *datastore.DataStore, account, deviceID string) (mod
 }
 
 func resolveSourceName(s models.ConfiguredSource) string {
-	name := s.SourceKeyAccount
-	if name == "" {
-		if s.SourceName != "" {
-			name = s.SourceName
-		} else if s.DisplayName != "" {
-			name = s.DisplayName
-		}
+	// Prefer human-readable names; fall back to the account ID only when nothing better is set.
+	var name string
+
+	switch {
+	case s.SourceName != "":
+		name = s.SourceName
+	case s.DisplayName != "":
+		name = s.DisplayName
+	default:
+		name = s.SourceKeyAccount
 	}
 	// FALLBACKS for common sources
 	if name == "" {
