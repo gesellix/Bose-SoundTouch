@@ -275,8 +275,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "spotify-redirect-uri",
-				Usage:   "Spotify OAuth redirect URI",
-				Value:   "ueberboese-login://spotify",
+				Usage:   "Spotify OAuth redirect URI (defaults to <server-url>/mgmt/spotify/callback)",
 				EnvVars: []string{"SPOTIFY_REDIRECT_URI"},
 			},
 			&cli.StringFlag{
@@ -301,8 +300,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "amazon-redirect-uri",
-				Usage:   "Amazon LWA OAuth redirect URI",
-				Value:   "ueberboese-login://amazon",
+				Usage:   "Amazon LWA OAuth redirect URI (defaults to <server-url>/mgmt/amazon/callback)",
 				EnvVars: []string{"AMAZON_REDIRECT_URI"},
 			},
 			&cli.StringFlag{
@@ -402,6 +400,7 @@ func main() {
 			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints, persisted.SkipMirrorEndpoints, persisted.PreferredSource)
 			server.SetInternalPaths(persisted.InternalPaths)
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
+			server.SetAmazonConfig(config.amazonClientID, config.amazonClientSecret, config.amazonRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
 
 			initMusicServices(config, server)
@@ -738,7 +737,38 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	config.preferredSource = persisted.PreferredSource
 	config.internalPaths = persisted.InternalPaths
 
+	// CLI/env args take precedence; only apply persisted credentials when not set via CLI.
+	applyPersistedMusicServiceCredentials(config, persisted)
+
 	return persisted
+}
+
+// applyPersistedMusicServiceCredentials fills in music service credentials from persisted
+// settings when they have not been supplied via CLI flags or environment variables.
+func applyPersistedMusicServiceCredentials(config *serviceConfig, persisted datastore.Settings) {
+	if config.spotifyClientID == "" {
+		config.spotifyClientID = persisted.SpotifyClientID
+	}
+
+	if config.spotifyClientSecret == "" {
+		config.spotifyClientSecret = persisted.SpotifyClientSecret
+	}
+
+	if config.spotifyRedirectURI == "" {
+		config.spotifyRedirectURI = persisted.SpotifyRedirectURI
+	}
+
+	if config.amazonClientID == "" {
+		config.amazonClientID = persisted.AmazonClientID
+	}
+
+	if config.amazonClientSecret == "" {
+		config.amazonClientSecret = persisted.AmazonClientSecret
+	}
+
+	if config.amazonRedirectURI == "" {
+		config.amazonRedirectURI = persisted.AmazonRedirectURI
+	}
 }
 
 func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datastore.Settings {

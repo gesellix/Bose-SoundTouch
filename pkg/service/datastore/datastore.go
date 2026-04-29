@@ -1718,6 +1718,12 @@ type Settings struct {
 	PreferredSource     string         `json:"preferred_source,omitempty"`
 	InternalPaths       []string       `json:"internal_paths,omitempty"`
 	Shortcuts           map[string]int `json:"shortcuts,omitempty"`
+	SpotifyClientID     string         `json:"spotify_client_id,omitempty"`
+	SpotifyClientSecret string         `json:"spotify_client_secret,omitempty"`
+	SpotifyRedirectURI  string         `json:"spotify_redirect_uri,omitempty"`
+	AmazonClientID      string         `json:"amazon_client_id,omitempty"`
+	AmazonClientSecret  string         `json:"amazon_client_secret,omitempty"`
+	AmazonRedirectURI   string         `json:"amazon_redirect_uri,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.

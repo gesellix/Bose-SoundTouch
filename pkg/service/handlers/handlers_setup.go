@@ -161,9 +161,25 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	redact, logBody, record := s.proxyRedact, s.proxyLogBody, s.recordEnabled
 	shortcuts := s.shortcuts
 	spotifyConfigured := s.spotifyService != nil
+	spotifyClientID := s.spotifyClientID
+	spotifyClientSecret := s.spotifyClientSecret
+	spotifyRedirectURI := s.spotifyRedirectURI
+	amazonConfigured := s.amazonService != nil
+	amazonClientID := s.amazonClientID
+	amazonClientSecret := s.amazonClientSecret
+	amazonRedirectURI := s.amazonRedirectURI
 	s.mu.RUnlock()
 
 	dnsRunning, actualBind := s.GetDNSRunning()
+
+	// Mask secrets: return "***" if set so the UI can show "configured" without exposing the value.
+	if spotifyClientSecret != "" {
+		spotifyClientSecret = "***"
+	}
+
+	if amazonClientSecret != "" {
+		amazonClientSecret = "***"
+	}
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"server_url":            serverURL,
@@ -185,6 +201,13 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"record_interactions":   record,
 		"shortcuts":             shortcuts,
 		"spotify_configured":    spotifyConfigured,
+		"spotify_client_id":     spotifyClientID,
+		"spotify_client_secret": spotifyClientSecret,
+		"spotify_redirect_uri":  spotifyRedirectURI,
+		"amazon_configured":     amazonConfigured,
+		"amazon_client_id":      amazonClientID,
+		"amazon_client_secret":  amazonClientSecret,
+		"amazon_redirect_uri":   amazonRedirectURI,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -206,6 +229,12 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		PreferredSource     string         `json:"preferred_source"`
 		InternalPaths       []string       `json:"internal_paths"`
 		Shortcuts           map[string]int `json:"shortcuts"`
+		SpotifyClientID     string         `json:"spotify_client_id"`
+		SpotifyClientSecret string         `json:"spotify_client_secret"`
+		SpotifyRedirectURI  string         `json:"spotify_redirect_uri"`
+		AmazonClientID      string         `json:"amazon_client_id"`
+		AmazonClientSecret  string         `json:"amazon_client_secret"`
+		AmazonRedirectURI   string         `json:"amazon_redirect_uri"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -263,6 +292,12 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		s.sm.ServerURL = settings.ServerURL
 	}
 
+	// Update music service credentials (empty or "***" means "unchanged").
+	s.applyMusicServiceCredentials(
+		settings.SpotifyClientID, settings.SpotifyClientSecret, settings.SpotifyRedirectURI,
+		settings.AmazonClientID, settings.AmazonClientSecret, settings.AmazonRedirectURI,
+	)
+
 	// Persist to datastore
 	// Access fields directly since we already hold the lock
 	currentRedact := s.proxyRedact
@@ -288,15 +323,31 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		PreferredSource:     s.preferredSource,
 		InternalPaths:       s.internalPaths,
 		Shortcuts:           s.shortcuts,
+		SpotifyClientID:     s.spotifyClientID,
+		SpotifyClientSecret: s.spotifyClientSecret,
+		SpotifyRedirectURI:  s.spotifyRedirectURI,
+		AmazonClientID:      s.amazonClientID,
+		AmazonClientSecret:  s.amazonClientSecret,
+		AmazonRedirectURI:   s.amazonRedirectURI,
 	})
 
 	dnsEnabled := s.dnsEnabled
 	dnsUpstreamStr := strings.Join(s.dnsUpstream, ",")
 	dnsBindAddr := s.dnsBindAddr
+	reinitSpotify := s.spotifyClientID != ""
+	reinitAmazon := s.amazonClientID != ""
 
 	s.mu.Unlock()
 
 	s.SetDNSSettings(dnsEnabled, dnsUpstreamStr, dnsBindAddr)
+
+	if reinitSpotify {
+		s.ReinitSpotifyService()
+	}
+
+	if reinitAmazon {
+		s.ReinitAmazonService()
+	}
 
 	if err != nil {
 		http.Error(w, "Failed to save settings: "+err.Error(), http.StatusInternalServerError)

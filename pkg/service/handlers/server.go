@@ -57,6 +57,9 @@ type Server struct {
 	spotifyClientSecret string
 	spotifyRedirectURI  string
 	spotifyService      *spotify.Service
+	amazonClientID      string
+	amazonClientSecret  string
+	amazonRedirectURI   string
 	amazonService       *amazon.Service
 }
 
@@ -311,6 +314,100 @@ func (s *Server) SetSpotifyConfig(clientID, clientSecret, redirectURI string) {
 	s.spotifyClientID = clientID
 	s.spotifyClientSecret = clientSecret
 	s.spotifyRedirectURI = redirectURI
+}
+
+// SetAmazonConfig sets the Amazon LWA OAuth configuration.
+func (s *Server) SetAmazonConfig(clientID, clientSecret, redirectURI string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.amazonClientID = clientID
+	s.amazonClientSecret = clientSecret
+	s.amazonRedirectURI = redirectURI
+}
+
+// GetSpotifyConfig returns the current Spotify OAuth configuration.
+func (s *Server) GetSpotifyConfig() (clientID, clientSecret, redirectURI string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.spotifyClientID, s.spotifyClientSecret, s.spotifyRedirectURI
+}
+
+// GetAmazonConfig returns the current Amazon LWA OAuth configuration.
+func (s *Server) GetAmazonConfig() (clientID, clientSecret, redirectURI string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.amazonClientID, s.amazonClientSecret, s.amazonRedirectURI
+}
+
+// applyMusicServiceCredentials updates music service credential fields on the server.
+// Must be called with s.mu held. Empty string or "***" (the masked GET value) means "unchanged".
+func (s *Server) applyMusicServiceCredentials(spotifyID, spotifySecret, spotifyURI, amazonID, amazonSecret, amazonURI string) {
+	if spotifyID != "" {
+		s.spotifyClientID = spotifyID
+	}
+
+	if spotifySecret != "" && spotifySecret != "***" {
+		s.spotifyClientSecret = spotifySecret
+	}
+
+	if spotifyURI != "" {
+		s.spotifyRedirectURI = spotifyURI
+	}
+
+	if amazonID != "" {
+		s.amazonClientID = amazonID
+	}
+
+	if amazonSecret != "" && amazonSecret != "***" {
+		s.amazonClientSecret = amazonSecret
+	}
+
+	if amazonURI != "" {
+		s.amazonRedirectURI = amazonURI
+	}
+}
+
+// ReinitSpotifyService creates a new Spotify service from current config and replaces the running one.
+func (s *Server) ReinitSpotifyService() {
+	clientID, clientSecret, redirectURI := s.GetSpotifyConfig()
+	if clientID == "" {
+		return
+	}
+
+	if redirectURI == "" {
+		redirectURI = s.serverURL + "/mgmt/spotify/callback"
+	}
+
+	svc := spotify.NewSpotifyService(clientID, clientSecret, redirectURI, s.ds.DataDir)
+	if err := svc.Load(); err != nil {
+		log.Printf("[Spotify] Failed to load accounts during reinit: %v", err)
+	}
+
+	s.SetSpotifyService(svc)
+	log.Printf("[Spotify] Service reinitialized")
+}
+
+// ReinitAmazonService creates a new Amazon service from current config and replaces the running one.
+func (s *Server) ReinitAmazonService() {
+	clientID, clientSecret, redirectURI := s.GetAmazonConfig()
+	if clientID == "" {
+		return
+	}
+
+	if redirectURI == "" {
+		redirectURI = s.serverURL + "/mgmt/amazon/callback"
+	}
+
+	svc := amazon.NewAmazonService(clientID, clientSecret, redirectURI, s.ds.DataDir)
+	if err := svc.Load(); err != nil {
+		log.Printf("[Amazon] Failed to load accounts during reinit: %v", err)
+	}
+
+	s.SetAmazonService(svc)
+	log.Printf("[Amazon] Service reinitialized")
 }
 
 // SetMgmtConfig sets the management API authentication credentials.

@@ -165,12 +165,43 @@ async function fetchSettings() {
             document.getElementById("internal-paths").value = settings.internal_paths.join("\n");
         }
 
+        // Spotify credential fields
+        if (settings.spotify_client_id !== undefined) {
+            document.getElementById("spotify-client-id").value = settings.spotify_client_id || "";
+        }
+        // Secret is masked to "***" by the backend when set; leave the password input blank
+        // so the placeholder "(leave blank to keep existing)" is shown.
+        document.getElementById("spotify-client-secret").value = "";
+        if (settings.spotify_redirect_uri !== undefined) {
+            document.getElementById("spotify-redirect-uri").value = settings.spotify_redirect_uri || "";
+        }
         const spotifyStatus = document.getElementById("spotify-config-status");
         if (spotifyStatus) {
             if (settings.spotify_configured) {
-                spotifyStatus.innerHTML = '<span style="color: green;">✅ Configured</span> (Client ID present)';
+                spotifyStatus.innerHTML = '<span style="color: green;">✅ Active</span>';
+            } else if (settings.spotify_client_id) {
+                spotifyStatus.innerHTML = '<span style="color: orange;">⚠ Credentials saved — restart or re-save to activate</span>';
             } else {
-                spotifyStatus.innerHTML = '<span style="color: #666;">❌ Not Configured</span><br>' + '<span style="font-size: 0.85em; color: #888;">To enable Spotify, provide <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> to the server.</span>';
+                spotifyStatus.innerHTML = '<span style="color: #666;">❌ Not configured</span>';
+            }
+        }
+
+        // Amazon credential fields
+        if (settings.amazon_client_id !== undefined) {
+            document.getElementById("amazon-client-id").value = settings.amazon_client_id || "";
+        }
+        document.getElementById("amazon-client-secret").value = "";
+        if (settings.amazon_redirect_uri !== undefined) {
+            document.getElementById("amazon-redirect-uri").value = settings.amazon_redirect_uri || "";
+        }
+        const amazonStatus = document.getElementById("amazon-config-status");
+        if (amazonStatus) {
+            if (settings.amazon_configured) {
+                amazonStatus.innerHTML = '<span style="color: green;">✅ Active</span>';
+            } else if (settings.amazon_client_id) {
+                amazonStatus.innerHTML = '<span style="color: orange;">⚠ Credentials saved — restart or re-save to activate</span>';
+            } else {
+                amazonStatus.innerHTML = '<span style="color: #666;">❌ Not configured</span>';
             }
         }
 
@@ -233,6 +264,12 @@ async function updateSettings() {
             .value.split("\n")
             .map((s) => s.trim())
             .filter((s) => s !== ""),
+        spotify_client_id: document.getElementById("spotify-client-id").value,
+        spotify_client_secret: document.getElementById("spotify-client-secret").value,
+        spotify_redirect_uri: document.getElementById("spotify-redirect-uri").value,
+        amazon_client_id: document.getElementById("amazon-client-id").value,
+        amazon_client_secret: document.getElementById("amazon-client-secret").value,
+        amazon_redirect_uri: document.getElementById("amazon-redirect-uri").value,
     };
     const status = document.getElementById("settings-status");
     status.innerText = "Saving...";
@@ -502,8 +539,10 @@ async function fetchAccountDetails(accountId) {
     const metadataEl = document.getElementById("account-metadata");
     const devicesEl = document.getElementById("account-devices-list");
     const regStatus = document.getElementById("spotify-reg-status");
+    const amazonRegStatus = document.getElementById("amazon-reg-status");
 
     if (regStatus) regStatus.innerText = "";
+    if (amazonRegStatus) amazonRegStatus.innerText = "";
     if (metadataEl) metadataEl.innerHTML = "Loading...";
     if (devicesEl) devicesEl.innerHTML = "Loading devices...";
 
@@ -816,6 +855,47 @@ async function connectSpotifyToAccount() {
     } catch (error) {
         if (statusEl) statusEl.innerHTML = `<span style="color:red">Error: ${error.message}</span>`;
         console.error("Spotify link failed", error);
+    }
+}
+
+async function connectAmazonToAccount() {
+    const selector = document.getElementById("account-selector");
+    const accountId = selector ? selector.value : "default";
+    const statusEl = document.getElementById("amazon-reg-status");
+
+    if (statusEl) statusEl.innerHTML = "Initializing Amazon Music authorization...";
+
+    try {
+        const response = await fetch(`/mgmt/amazon/init?account=${encodeURIComponent(accountId)}`, {
+            method: "POST"
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || response.statusText);
+        }
+
+        const data = await response.json();
+        const redirectUrl = data.redirectUrl;
+
+        if (statusEl) {
+            statusEl.innerHTML = `Amazon Music authorization window opened. <br/>If it didn't open, <a href="${redirectUrl}" target="_blank">click here to authorize</a>.`;
+        }
+
+        window.open(redirectUrl, "AmazonAuth", "width=600,height=800");
+
+        let pollCount = 0;
+        const interval = setInterval(async () => {
+            pollCount++;
+            if (pollCount > 60) {
+                clearInterval(interval);
+                return;
+            }
+            await fetchAccountDetails(accountId);
+        }, 5000);
+
+    } catch (error) {
+        if (statusEl) statusEl.innerHTML = `<span style="color:red">Error: ${error.message}</span>`;
+        console.error("Amazon link failed", error);
     }
 }
 

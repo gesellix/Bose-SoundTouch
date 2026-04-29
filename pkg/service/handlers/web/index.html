@@ -264,11 +264,38 @@
         </div>
         <div style="margin-bottom: 20px">
             <strong>Spotify Integration:</strong>
-            <div
-                id="spotify-config-status"
-                style="margin-top: 5px; font-size: 0.9em"
-            >
-                Checking configuration...
+            <div style="margin-top: 8px; margin-left: 20px">
+                <div style="margin-bottom: 8px">
+                    <label for="spotify-client-id" style="display: inline-block; width: 130px">Client ID:</label>
+                    <input type="text" id="spotify-client-id" placeholder="32-char hex string" style="width: 280px"/>
+                </div>
+                <div style="margin-bottom: 8px">
+                    <label for="spotify-client-secret" style="display: inline-block; width: 130px">Client Secret:</label>
+                    <input type="password" id="spotify-client-secret" placeholder="(leave blank to keep existing)" style="width: 280px"/>
+                </div>
+                <div style="margin-bottom: 8px">
+                    <label for="spotify-redirect-uri" style="display: inline-block; width: 130px">Redirect URI:</label>
+                    <input type="text" id="spotify-redirect-uri" placeholder="<your-service-url>/mgmt/spotify/callback" style="width: 280px"/>
+                </div>
+                <div id="spotify-config-status" style="margin-top: 5px; font-size: 0.9em">Checking configuration...</div>
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
+            <strong>Amazon Music Integration:</strong>
+            <div style="margin-top: 8px; margin-left: 20px">
+                <div style="margin-bottom: 8px">
+                    <label for="amazon-client-id" style="display: inline-block; width: 130px">Client ID:</label>
+                    <input type="text" id="amazon-client-id" placeholder="amzn1.application-oa2-client..." style="width: 280px"/>
+                </div>
+                <div style="margin-bottom: 8px">
+                    <label for="amazon-client-secret" style="display: inline-block; width: 130px">Client Secret:</label>
+                    <input type="password" id="amazon-client-secret" placeholder="(leave blank to keep existing)" style="width: 280px"/>
+                </div>
+                <div style="margin-bottom: 8px">
+                    <label for="amazon-redirect-uri" style="display: inline-block; width: 130px">Redirect URI:</label>
+                    <input type="text" id="amazon-redirect-uri" placeholder="<your-service-url>/mgmt/amazon/callback" style="width: 280px"/>
+                </div>
+                <div id="amazon-config-status" style="margin-top: 5px; font-size: 0.9em">Checking configuration...</div>
             </div>
         </div>
         <div style="margin-bottom: 20px">
@@ -1483,6 +1510,21 @@
                 Connect Spotify to this Account
             </button>
             <div id="spotify-reg-status" style="margin-top: 10px; font-size: 0.9em;"></div>
+        </div>
+
+        <div id="amazon-registration-container" class="summary-box" style="margin-top: 20px;">
+            <h3>Amazon Music Integration</h3>
+            <p style="font-size: 0.9em; color: #555;">
+                Register a new Amazon Music source for this local account. This mimics the official SoundTouch app flow:
+            </p>
+            <ol style="font-size: 0.85em; color: #555; margin-bottom: 15px;">
+                <li>Exchange OAuth code for an Amazon LWA token.</li>
+                <li>Register the source in the local Marge cloud profile.</li>
+            </ol>
+            <button id="connect-amazon-account-btn" onclick="connectAmazonToAccount()" style="background: #ff9900; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                Connect Amazon Music to this Account
+            </button>
+            <div id="amazon-reg-status" style="margin-top: 10px; font-size: 0.9em;"></div>
         </div>
 
         <div id="account-devices-container">
