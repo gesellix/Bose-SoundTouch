@@ -1,9 +1,8 @@
-package spotify
+package amazon
 
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,10 +10,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/zeroconf"
 )
 
-// TestPushSpotifyCredentials_FullRoundTrip starts a mock "speaker" ZeroConf server,
-// has it generate its own DH key pair, and verifies that the client correctly
-// encrypts and delivers the Spotify credentials.
-func TestPushSpotifyCredentials_FullRoundTrip(t *testing.T) {
+func TestPushAmazonCredentials_FullRoundTrip(t *testing.T) {
 	speakerPrivate, speakerPublicBytes, err := zeroconf.GenerateDHKeyPair()
 	if err != nil {
 		t.Fatalf("speaker keygen: %v", err)
@@ -63,15 +59,36 @@ func TestPushSpotifyCredentials_FullRoundTrip(t *testing.T) {
 				return
 			}
 
-			creds, err := parseCredentialsBlob(plaintext)
-			if err != nil {
-				http.Error(w, "parse failed: "+err.Error(), http.StatusBadRequest)
-				return
+			// Minimal protobuf parse: field 1 = username, field 4 = authData, field 5 = authType
+			i := 0
+			for i < len(plaintext) {
+				tag := plaintext[i]
+				i++
+				fieldNum := tag >> 3
+				wireType := tag & 0x07
+				switch wireType {
+				case 0:
+					val, n := readVarint(plaintext[i:])
+					i += n
+					if fieldNum == 5 {
+						got.authType = int(val)
+					}
+				case 2:
+					length, n := readVarint(plaintext[i:])
+					i += n
+					value := plaintext[i : i+int(length)]
+					i += int(length)
+					switch fieldNum {
+					case 1:
+						got.username = string(value)
+					case 4:
+						got.authData = string(value)
+					}
+				default:
+					http.Error(w, "unexpected wire type", http.StatusBadRequest)
+					return
+				}
 			}
-
-			got.username = creds.username
-			got.authData = string(creds.authData)
-			got.authType = creds.authType
 			w.WriteHeader(http.StatusOK)
 
 		default:
@@ -80,11 +97,11 @@ func TestPushSpotifyCredentials_FullRoundTrip(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	const wantUsername = "spotifyuser@example.com"
-	const wantToken = "eyJhbGciOiJSUzI1NiJ9.access-token"
+	const wantUsername = "amazonuser@example.com"
+	const wantToken = "Atza|access-token"
 
-	if err := PushSpotifyCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
-		t.Fatalf("PushSpotifyCredentials: %v", err)
+	if err := PushAmazonCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+		t.Fatalf("PushAmazonCredentials: %v", err)
 	}
 
 	if got.username != wantUsername {
@@ -93,15 +110,12 @@ func TestPushSpotifyCredentials_FullRoundTrip(t *testing.T) {
 	if got.authData != wantToken {
 		t.Errorf("authData = %q, want %q", got.authData, wantToken)
 	}
-	if got.authType != 4 {
-		t.Errorf("authType = %d, want 4 (AUTHENTICATION_SPOTIFY_TOKEN)", got.authType)
+	if uint64(got.authType) != zeroconf.AuthTypeOAuthToken {
+		t.Errorf("authType = %d, want %d (AuthTypeOAuthToken)", got.authType, zeroconf.AuthTypeOAuthToken)
 	}
 }
 
-// TestPushSpotifyCredentials_FallbackOnGetInfoFailure verifies that when getInfo
-// returns a non-200 response (older firmware without DH support), PushSpotifyCredentials
-// falls back to the simplified tokenType=accesstoken POST.
-func TestPushSpotifyCredentials_FallbackOnGetInfoFailure(t *testing.T) {
+func TestPushAmazonCredentials_FallbackOnGetInfoFailure(t *testing.T) {
 	var receivedForm map[string]string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,11 +140,11 @@ func TestPushSpotifyCredentials_FallbackOnGetInfoFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	const wantUsername = "spotifyuser@example.com"
-	const wantToken = "raw-access-token"
+	const wantUsername = "amazonuser@example.com"
+	const wantToken = "Atza|raw-access-token"
 
-	if err := PushSpotifyCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
-		t.Fatalf("PushSpotifyCredentials: %v", err)
+	if err := PushAmazonCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+		t.Fatalf("PushAmazonCredentials: %v", err)
 	}
 
 	if receivedForm == nil {
@@ -150,47 +164,7 @@ func TestPushSpotifyCredentials_FallbackOnGetInfoFailure(t *testing.T) {
 	}
 }
 
-type parsedCredentials struct {
-	username string
-	authType int
-	authData []byte
-}
-
-// parseCredentialsBlob is the inverse of BuildCredentialsBlob, used in tests.
-func parseCredentialsBlob(data []byte) (*parsedCredentials, error) {
-	var r parsedCredentials
-	i := 0
-	for i < len(data) {
-		tag := data[i]
-		i++
-		fieldNum := tag >> 3
-		wireType := tag & 0x07
-		switch wireType {
-		case 0: // varint
-			val, n := readProtoVarint(data[i:])
-			i += n
-			if fieldNum == 5 {
-				r.authType = int(val)
-			}
-		case 2: // length-delimited
-			length, n := readProtoVarint(data[i:])
-			i += n
-			value := data[i : i+int(length)]
-			i += int(length)
-			switch fieldNum {
-			case 1:
-				r.username = string(value)
-			case 4:
-				r.authData = value
-			}
-		default:
-			return nil, fmt.Errorf("unsupported wire type %d at offset %d", wireType, i-1)
-		}
-	}
-	return &r, nil
-}
-
-func readProtoVarint(data []byte) (uint64, int) {
+func readVarint(data []byte) (uint64, int) {
 	var val uint64
 	for i, b := range data {
 		val |= uint64(b&0x7f) << (7 * uint(i))
