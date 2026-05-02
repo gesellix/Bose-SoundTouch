@@ -280,6 +280,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 				"music.api.bose.com",
 				"media.bose.io",
 				"downloads.bose.com",
+				"voice.api.bose.io",
 			}
 
 			var hostsLines []string
@@ -1065,6 +1066,7 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		"worldwide.bose.com",
 		"media.bose.io",
 		"downloads.bose.com",
+		"voice.api.bose.io",
 	}
 
 	hostsContent, err := client.Run("cat /etc/hosts")

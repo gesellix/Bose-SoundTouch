@@ -18,11 +18,11 @@ These hosts are now in the DNS redirect list and the service handles them native
 | media.bose.io       | `GET /bmx-icons/tunein/smallSvg.svg`                                 | `HandleBmxIcons`                | already in `static/media/bmx-icons/tunein/`                                                                  |
 | media.bose.io       | `GET /bmx-icons/tunein/top-menu/*.png`                               | `HandleBmxIcons`                | 6 PNGs embedded (bubble, location, microphone, news, note, podcasts); speaker.png was 403 from CDN           |
 
-## Remaining: external host requiring action
+## Stub implemented — requires AWS IoT integration to complete
 
-| host              | request                   | notes                                                                                                                                   |
-|-------------------|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
-| voice.api.bose.io | `POST /alexa/certificate` | Alexa IoT cert provisioning; CSR + auth token → AWS IoT cert + endpoint; not in DNS redirect list; Alexa setup will fail after shutdown |
+| host              | request                   | handler                  | notes                                                                                                                                              |
+|-------------------|---------------------------|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| voice.api.bose.io | `POST /alexa/certificate` | `HandleAlexaCertificate` | Returns 501; logs device MAC. Full impl needs AWS IoT: parse CSR + token, call RegisterThing/CreateKeysAndCertificate, return cert + iot_endpoint. |
 
 ## Third-party analytics (no action needed)
 

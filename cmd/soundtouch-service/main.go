@@ -851,6 +851,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Get("/bmx-icons/*", server.HandleBmxIcons())
 	r.Get("/ced/*", server.HandleCedStatic())
 	r.Get("/web/*", server.HandleWeb())
+	r.Post("/alexa/certificate", server.HandleAlexaCertificate)
 	r.Get("/docs/*", server.HandleDocs)
 
 	r.Route("/bmx", func(r chi.Router) {

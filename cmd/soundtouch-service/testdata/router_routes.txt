@@ -94,6 +94,7 @@ POST     /accounts/{account}/devices/{device}/presets/{presetNumber}  handlers.(
 POST     /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleMargeAddRecent-fm
 POST     /accounts/{account}/group                                    handlers.(*Server).HandleMargeAddGroup-fm
 POST     /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeModifyGroup-fm
+POST     /alexa/certificate                                           handlers.(*Server).HandleAlexaCertificate-fm
 POST     /bmx/core02/svc-bmx-adapter-orion/prod/orion/token           handlers.(*Server).HandleOrionToken-fm
 POST     /bmx/orion/v1/playback/station/{data}                        handlers.(*Server).HandleOrionPlayback-fm
 POST     /bmx/tunein/v1/favorite/{stationID}                          handlers.(*Server).HandleTuneInFavorite-fm
