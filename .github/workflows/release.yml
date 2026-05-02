@@ -171,6 +171,9 @@ jobs:
 
           # Build Web
           build_binary "soundtouch-web" "./cmd/soundtouch-web"
+
+          # Build Backup
+          build_binary "soundtouch-backup" "./cmd/soundtouch-backup"
         id: build
 
       - name: Generate individual checksums
@@ -178,6 +181,7 @@ jobs:
           CLI_NAME="${{ steps.build.outputs.soundtouch-cli }}"
           SVC_NAME="${{ steps.build.outputs.soundtouch-service }}"
           WEB_NAME="${{ steps.build.outputs.soundtouch-web }}"
+          BCK_NAME="${{ steps.build.outputs.soundtouch-backup }}"
 
           # Use atomic operations to avoid conflicts
           TEMP_DIR=$(mktemp -d)
@@ -194,6 +198,7 @@ jobs:
           generate_checksums "$CLI_NAME"
           generate_checksums "$SVC_NAME"
           generate_checksums "$WEB_NAME"
+          generate_checksums "$BCK_NAME"
 
           # Cleanup
           rm -rf "$TEMP_DIR"
@@ -207,6 +212,7 @@ jobs:
             build/soundtouch-cli-v*
             build/soundtouch-service-v*
             build/soundtouch-web-v*
+            build/soundtouch-backup-v*
           retention-days: 1
 
   checksums:
@@ -233,7 +239,7 @@ jobs:
           mkdir -p release-files
 
           # Move all files from subdirectories to the collection directory
-          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" -o -name "soundtouch-web-*" \) -exec mv {} release-files/ \;
+          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" -o -name "soundtouch-web-*" -o -name "soundtouch-backup-*" \) -exec mv {} release-files/ \;
 
           # Remove empty directories
           find . -type d -empty -delete
@@ -248,14 +254,14 @@ jobs:
           # Generate combined checksums (exclude individual .sha256/.sha512 files)
           if ls soundtouch-* 1> /dev/null 2>&1; then
             # Only checksum the actual binaries, not the .sha256/.sha512 files
-            ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
-            ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
+            ls soundtouch-cli-* soundtouch-service-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
+            ls soundtouch-cli-* soundtouch-service-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
 
             echo "📋 Generated combined checksums:"
             cat checksums.sha256
 
             # Verify all expected files are present (binaries only, not checksum files)
-            EXPECTED_COUNT=21  # 7 platforms * 3 binaries
+            EXPECTED_COUNT=28  # 7 platforms * 4 binaries
             ACTUAL_COUNT=$(ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | wc -l)
 
             if [[ $ACTUAL_COUNT -ne $EXPECTED_COUNT ]]; then
@@ -392,6 +398,12 @@ jobs:
           ./soundtouch-web
           \`\`\`
 
+          ### SoundTouch Backup
+          \`\`\`bash
+          # Back up cloud account and all paired speakers in one go
+          ./soundtouch-backup all
+          \`\`\`
+
           ## 🧪 Tested Hardware
 
           - Bose SoundTouch 10
@@ -410,7 +422,7 @@ jobs:
           - Windows (amd64)
           - FreeBSD (amd64)
 
-          `soundtouch-cli`, `soundtouch-service`, and `soundtouch-web` are included.
+          `soundtouch-cli`, `soundtouch-service`, `soundtouch-web`, and `soundtouch-backup` are included.
 
           ## 🔐 Checksums
 
@@ -466,6 +478,7 @@ jobs:
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
             release-assets/soundtouch-web-v*
+            release-assets/soundtouch-backup-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
           fail_on_unmatched_files: true
@@ -493,6 +506,7 @@ jobs:
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
             release-assets/soundtouch-web-v*
+            release-assets/soundtouch-backup-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
           fail_on_unmatched_files: true
@@ -572,7 +586,7 @@ jobs:
       - name: Notify success
         run: |
           echo "🎉 Release ${{ needs.validate.outputs.version }} completed successfully!"
-          echo "📦 Binaries built for 7 platforms (CLI, Service, and Web)"
+          echo "📦 Binaries built for 7 platforms (CLI, Service, Web, and Backup)"
           echo "🐳 Docker image published to ghcr.io"
           echo "🔐 Checksums generated and verified"
           echo "📋 Release notes automatically generated"
