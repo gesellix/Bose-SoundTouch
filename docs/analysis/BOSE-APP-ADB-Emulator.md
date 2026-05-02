@@ -2,12 +2,31 @@
 
 Intercept HTTPS/WebSocket traffic from the Bose SoundTouch Android app using an Android emulator, mitmproxy, and Frida. Tested on Apple Silicon (ARM64) Mac.
 
+## Automated Setup
+
+The steps in this document are scripted for reproducibility:
+
+```bash
+scripts/android/setup-mitm-avd.sh   # one-time: create AVD, install cert & APK, save snapshot
+scripts/android/start-mitm-session.sh  # per-session: restore snapshot, refresh proxy, start frida-server
+```
+
+Read on for the full manual walkthrough and the rationale behind each step.
+
+> **Note:** The manual steps below use `/tmp/` for intermediate files and reflect the original approach. The automated scripts supersede them — use the scripts for day-to-day use and refer here only to understand how things work.
+
+---
+
 ## Prerequisites
 
 - Android Studio installed (for SDK tools and emulator)
 - Docker installed
 - mitmproxy installed (`pip install mitmproxy` or via your preferred method)
 - The Bose SoundTouch APK (extracted from a real device, see below)
+
+> **BLE limitation**: Android emulators do not expose Bluetooth hardware. The Bose app's default setup path (BLE Wi-Fi provisioning) therefore cannot be used to configure a factory-reset speaker from the emulator. Use **AP mode** instead: provision the speaker's Wi-Fi credentials via the Mac command line first (see [DEVICE-INITIAL-SETUP.md § 6](../guides/DEVICE-INITIAL-SETUP.md)), then the app can discover the already-networked speaker via mDNS/SSDP without BLE.
+
+> **Emulator ↔ local network**: The emulator routes all traffic through the Mac's active network interface. Once the speaker is on the same LAN as the Mac, the emulator can reach it at its normal LAN IP (e.g. `192.168.1.50`) — no extra routing is needed. Use `adb shell ping 192.168.1.50` to confirm reachability.
 
 Add Android SDK tools to your PATH (add to `~/.zshrc`):
 
@@ -89,7 +108,8 @@ adb -s emulator-5554 install bose.apk
 
 ```bash
 # Start mitmproxy (generates CA cert on first run)
-mitmweb --port 8080 --mode regular -w bose_traffic.mitm
+# Use the native macOS app — Docker mitmproxy does not work (NAT blocks emulator traffic)
+mitmweb --listen-port 8080 --mode regular -w bose_traffic.mitm
 ```
 
 Extract the CA certificate (without private key):
@@ -214,15 +234,18 @@ grep -A3 "CERT_PEM" /tmp/config.js | head -5
 Make sure mitmweb is running, then:
 
 ```bash
-/tmp/frida-venv/bin/frida \
+scripts/android/frida-venv/bin/frida \
   -U \
   -f com.bose.soundtouch \
-  -l /tmp/config.js \
-  -l /tmp/android-system-certificate-injection.js \
-  -l /tmp/android-proxy-override.js \
-  -l /tmp/android-certificate-unpinning.js \
-  -l /tmp/android-certificate-unpinning-fallback.js
+  -l scripts/android/frida/config.js \
+  -l scripts/android/frida/native-connect-hook.js \
+  -l scripts/android/frida/android/android-system-certificate-injection.js \
+  -l scripts/android/frida/android/android-proxy-override.js \
+  -l scripts/android/frida/android/android-certificate-unpinning.js \
+  -l scripts/android/frida/android/android-certificate-unpinning-fallback.js
 ```
+
+> `native-connect-hook.js` is required — the Bose app uses native networking that bypasses Java proxy settings.
 
 Expected output in the Frida REPL:
 

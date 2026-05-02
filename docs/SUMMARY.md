@@ -12,6 +12,7 @@
 * [Getting Started](guides/GETTING-STARTED.md)
 * [SoundTouch Service](guides/SOUNDTOUCH-SERVICE.md)
 * [Initial Device Setup](guides/DEVICE-INITIAL-SETUP.md)
+* [Capture Device Pairing Traffic](guides/CAPTURE-DEVICE-PAIRING.md)
 * [Device Setup Flow](DEVICE-SETUP.md)
 * [MAC Address Mapping](guides/MAC-ADDRESS-MAPPING.md)
 * [HTTPS Setup](guides/HTTPS-SETUP.md)

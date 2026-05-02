@@ -31,7 +31,7 @@ The classic "failover" or "alternate" setup method.
   1. Connect a PC/Phone to the device's Wi-Fi.
   2. Open a browser to `http://192.168.1.1`.
   3. The device serves `setup.html`, which redirects to a setup wizard (`setup/index.html`).
-  4. Use the `gabbo_wifi` form to select a network and enter credentials.
+  4. Use the Wi-Fi setup form to select a network and enter credentials (calls `POST http://192.0.2.1:8090/addWirelessProfile` via the SoundTouch API — see §6.3).
 
 ---
 
@@ -69,12 +69,96 @@ While the `soundtouch-service` focuses on migrating existing devices, a truly "c
 
 ---
 
+---
+
+## 5. Factory Reset Button Sequences
+
+A factory reset wipes Wi-Fi credentials, account pairing, and all presets, returning the device to out-of-box state. The exact sequence varies by hardware generation.
+
+> Sequences verified against official Bose reset guides in `firmware/FirmwareUpdateGuide/`. Confirm the reset succeeded by watching the status LEDs and by verifying the Wi-Fi indicator glows solid amber (setup mode).
+
+| Model                    | Factory Restore Sequence                                            | Confirm                            |
+|--------------------------|---------------------------------------------------------------------|------------------------------------|
+| SoundTouch 10            | Power on; hold **Preset 1** + **Volume −** for 10 s                 | Wi-Fi indicator glows solid amber  |
+| SoundTouch 20            | Power on; hold **Preset 1** + **Volume −** for 10 s                 | Lights blink L→R, then solid amber |
+| SoundTouch 20 Series III | Hold **Preset 1** + **Preset 6** simultaneously for ~10 s           | White LED sweep                    |
+| SoundTouch 30 Series III | Hold **Preset 1** + **Preset 6** simultaneously for ~10 s           | White LED sweep                    |
+| SoundTouch 300           | Hold **Volume −** until light bar blinks rapidly (~15 s)            | Rapid blink → off → on             |
+| SoundTouch 10 (alt)      | Press and hold the back recessed **Reset** pinhole for 10 s         | Status LED restarts                |
+| SoundTouch 20 (soft)     | Hold **AUX** for 15 s until display goes blank (settings preserved) | Display blanks                     |
+
+After factory restore the speaker enters setup mode automatically; no power-cycle is needed.
+
+---
+
+## 6. AP Mode Wi-Fi Provisioning via Console
+
+When BLE is unavailable (e.g. when using an Android emulator), use AP mode to push Wi-Fi credentials from the Mac command line.
+
+### 6.1 Connect Mac to Speaker AP
+
+After factory reset the speaker broadcasts an SSID like `Bose SoundTouch XXXX`. Connect the Mac to it:
+
+```bash
+# List nearby SSIDs — use System Settings → Wi-Fi (the airport command was removed in macOS Sequoia+)
+# Connect (replace with actual SSID)
+networksetup -setairportnetwork en0 "Bose SoundTouch XXXX"
+```
+
+The speaker's web UI gateway is at `192.0.2.1` (verified: ST10 assigns `192.0.2.2` to the client via DHCP).
+
+```bash
+# Confirm reachability
+curl -sv http://192.0.2.1/ 2>&1 | head -40
+```
+
+### 6.2 Trigger Wi-Fi Site Survey (Optional)
+
+The setup web UI at `http://192.0.2.1/` uses the SoundTouch API on **port 8090** — the same API as normal device operation. Trigger a network scan first so the speaker finds your SSID:
+
+```bash
+curl -s -X POST http://192.0.2.1:8090/performWirelessSiteSurvey \
+  -H 'Content-Type: text/xml' \
+  --data-raw '<PerformWirelessSiteSurvey timeout="5"/>'
+```
+
+### 6.3 Push Home Wi-Fi Credentials
+
+```bash
+HOME_SSID="MyHomeNetwork"
+HOME_PASS="MyPassword"
+
+curl -s -X POST http://192.0.2.1:8090/addWirelessProfile \
+  -H 'Content-Type: text/xml' \
+  --data-raw "<AddWirelessProfile><profile ssid=\"${HOME_SSID}\" password=\"${HOME_PASS}\" securityType=\"wpa_or_wpa2\" /></AddWirelessProfile>"
+```
+
+Expected response: `<?xml version="1.0" encoding="UTF-8" ?><AddWirelessProfileResponse />`
+
+The speaker will disconnect from AP mode and join the home network within ~15–30 s.
+
+### 6.4 Reconnect Mac to Home Network
+
+```bash
+networksetup -setairportnetwork en0 "MyHomeNetwork" "MyPassword"
+```
+
+Wait ~15 s for the speaker to join the home network, then verify:
+
+```bash
+# Discover the speaker's new IP via mDNS
+dns-sd -B _soundtouch._tcp local &
+sleep 5 ; kill %1
+```
+
+---
+
 ## Comparison: Initial Setup vs. Migration
 
-| Feature | Initial Setup | Migration (soundtouch-service) |
-| :--- | :--- | :--- |
-| **Connectivity** | BLE, AP Mode, USB, WAC | Ethernet/Wi-Fi (existing) |
-| **Credentials** | Required (SSID/Pass) | Not required (uses existing) |
-| **Access** | Web UI / App protocol | SSH (root) |
-| **Primary File** | `setup/index.html` | `SoundTouchSdkPrivateCfg.xml` |
-| **Use Case** | Out-of-the-box / Reset | Redirecting active devices |
+| Feature          | Initial Setup          | Migration (soundtouch-service) |
+|:-----------------|:-----------------------|:-------------------------------|
+| **Connectivity** | BLE, AP Mode, USB, WAC | Ethernet/Wi-Fi (existing)      |
+| **Credentials**  | Required (SSID/Pass)   | Not required (uses existing)   |
+| **Access**       | Web UI / App protocol  | SSH (root)                     |
+| **Primary File** | `setup/index.html`     | `SoundTouchSdkPrivateCfg.xml`  |
+| **Use Case**     | Out-of-the-box / Reset | Redirecting active devices     |

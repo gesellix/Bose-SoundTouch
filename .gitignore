@@ -58,6 +58,14 @@ vendor/
 ehthumbs.db
 Thumbs.db
 
+# Android MITM setup — downloaded/generated artefacts, not committed
+scripts/android/bose.apk
+scripts/android/frida-server
+scripts/android/frida-server.xz
+scripts/android/frida/
+scripts/android/frida-venv/
+scripts/android/captures/
+
 # Temporary files
 *.tmp
 *.temp
