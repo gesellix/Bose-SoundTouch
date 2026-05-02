@@ -65,6 +65,7 @@ scripts/android/frida-server.xz
 scripts/android/frida/
 scripts/android/frida-venv/
 scripts/android/captures/
+scripts/android/mitm/
 
 # Temporary files
 *.tmp

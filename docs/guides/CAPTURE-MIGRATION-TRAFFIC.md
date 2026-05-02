@@ -217,6 +217,16 @@ mitmweb -r "${CAPTURE}"
 mitmdump -r "${CAPTURE}" \
   --flow-filter "~u ${MAC_IP}:8000" \
   2>/dev/null | grep -E "POST|GET"
+
+# Convert to .http files (IntelliJ-compatible, organized by path)
+NAME=$(basename "${CAPTURE}" .mitm)
+OUT="scripts/android/mitm/${NAME}"
+
+/Applications/mitmproxy.app/Contents/MacOS/mitmdump \
+  -n -r "${CAPTURE}" \
+  -s scripts/convert_mitm_script.py \
+  --set out_dir="${OUT}"
+# Output → scripts/android/mitm/<name>/mirror/
 ```
 
 ### 6.3 Identify Unimplemented Endpoints

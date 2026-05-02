@@ -309,7 +309,7 @@ All cloud requests (steps 1, 6) will appear in mitmweb at `http://127.0.0.1:8081
 ```bash
 # Stop mitmweb (Ctrl-C in its terminal) — file is already written continuously
 
-# Inspect offline
+# Inspect offline in the web UI
 mitmweb -r "$CAPTURE"
 
 # Filter to streaming.bose.com only
@@ -319,6 +319,23 @@ mitmdump -r "$CAPTURE" --flow-filter '~u streaming.bose.com' -w bose-cloud-only.
 mitmdump -r "$CAPTURE" --flow-filter '~u streaming.bose.com' 2>/dev/null \
   | grep -E "POST|GET" | head -30
 ```
+
+### Convert to .http files (IntelliJ-compatible)
+
+Use `scripts/convert_mitm_script.py` to extract each flow as a `.http` file, organized by path:
+
+```bash
+NAME=$(basename "$CAPTURE" .mitm)
+OUT="scripts/android/mitm/${NAME}"
+
+/Applications/mitmproxy.app/Contents/MacOS/mitmdump \
+  -n -r "$CAPTURE" \
+  -s scripts/convert_mitm_script.py \
+  --set out_dir="${OUT}"
+```
+
+Output lands in `scripts/android/mitm/<name>/mirror/` as numbered `.http` files
+plus `*-websocket/` subdirectories for WebSocket frames. The directory is gitignored.
 
 ---
 
