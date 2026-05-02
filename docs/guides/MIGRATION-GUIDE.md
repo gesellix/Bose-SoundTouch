@@ -60,9 +60,11 @@ See [Raspberry Pi Setup](RASPBERRY-PI.md) and the [SoundTouch Service Guide](SOU
 
 Open `http://<server>:8000` and go to the **Settings** tab.
 
-Set the **Server URL** to the address your speakers can reach — for example `http://soundtouch.fritz.box:8000` or `http://192.168.1.100:8000`. This must be the host's address on your local network, not `localhost`.
+![AfterTouch Settings tab](../images/ui-settings.png)
 
-If you plan to use DNS/DHCP redirect (which requires HTTPS), also set the **HTTPS Server URL** (e.g. `https://soundtouch.fritz.box:8443`).
+Set the **Target Domain** to the address your speakers can reach — for example `https://soundtouch.fritz.box` or `http://192.168.1.100:8000`. This must be the host's address on your local network, not `localhost`.
+
+If you plan to use DNS/DHCP redirect, enable the **DNS Discovery Server** and set the **DNS Bind Address** to `:53`. The upstream DNS should be your router's IP, not the service's own address.
 
 > **Tip**: If you change settings and they don't seem to take effect, check `data/settings.json` — settings saved in the UI take precedence over environment variables.
 
@@ -86,11 +88,15 @@ You only need to do this once per speaker. SSH can remain enabled for future mai
 
 ### Discover
 
-The service scans for SoundTouch devices automatically every few minutes. Check the **Devices** tab in the web UI. If your speaker doesn't appear, click **Discover Devices** to trigger an immediate scan, or add it manually by IP address.
+The service scans for SoundTouch devices automatically every few minutes. Check the **Devices** tab in the web UI. If your speaker doesn't appear, click **Scan Again** to trigger an immediate scan, or enter the IP address manually and click **Add Device**.
+
+![AfterTouch Devices tab showing discovered speakers](../images/ui-devices.png)
 
 ### Sync
 
-Once the speaker appears, click **Sync**. This connects to the speaker and pulls its current presets, recently played items, and configured sources into the local service's datastore. It also creates an off-device backup of the speaker's configuration.
+Once the speaker appears, click **Sync Data**. This connects to the speaker and pulls its current presets, recently played items, and configured sources into the local service's datastore. It also creates an off-device backup of the speaker's configuration.
+
+![Data Sync tab showing a successful sync](../images/ui-sync.png)
 
 If the Bose cloud is still running, Sync also fetches your account data from Bose's servers. This is your preservation step — do it before the cloud shuts down.
 
@@ -98,7 +104,11 @@ If the Bose cloud is still running, Sync also fetches your account data from Bos
 
 ## Step 5: Migrate
 
-The **Migration** tab in the web UI walks you through the redirect. Two methods are available:
+Click **Migrate** next to a device on the Devices tab to open the Migration tab. It shows SSH status, CA trust status, and connection test results before letting you apply the redirect.
+
+![Migration tab showing HTTPS and DNS connection tests](../images/ui-migration.png)
+
+Two redirect methods are available:
 
 ### XML redirect (recommended for first-time / testing)
 

@@ -25,13 +25,17 @@ Used by most modern SoundTouch devices (ST-10, ST-20/30 Series III, SoundTouch 3
 The classic "failover" or "alternate" setup method.
 
 - **Mechanism**: The device creates its own Wi-Fi network (SSID: `Bose SoundTouch ...` or `Bose Home Speaker ...`).
-- **IP Address**: Typically `192.168.1.1` or `10.0.0.1` (device-side).
+- **IP Address**: Typically `192.0.2.1` (device-side, verified on ST10).
 - **Web Interface**: The device hosts a web server on port 80.
 - **Process**:
   1. Connect a PC/Phone to the device's Wi-Fi.
-  2. Open a browser to `http://192.168.1.1`.
-  3. The device serves `setup.html`, which redirects to a setup wizard (`setup/index.html`).
-  4. Use the Wi-Fi setup form to select a network and enter credentials (calls `POST http://192.0.2.1:8090/addWirelessProfile` via the SoundTouch API — see §6.3).
+  2. Open a browser to `http://192.0.2.1`.
+  3. The device serves a Wi-Fi setup form — enter your home network SSID and password and click Submit.
+  4. The device disconnects from AP mode and joins your home network within ~15–30 seconds.
+
+![Speaker AP mode Wi-Fi setup page at 192.0.2.1](../images/speaker-ap-wifi-setup.png)
+
+For command-line provisioning (without a browser), see §6 below.
 
 ---
 
