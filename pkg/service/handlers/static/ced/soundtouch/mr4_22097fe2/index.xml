@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<INDEX REVISION="02.11.00">
+
+  <!-- SoundTouch 20 -->
+  <DEVICE ID="0x0923" PRODUCTNAME="SoundTouch 20">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/s/Update.stu">
+        <IMAGE SUBID="0" LENGTH="105879988" CRC="0x2d5a971e" FILENAME="Update_ti_27.0.6.46330.5043500.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch 30 -->
+  <DEVICE ID="0x0924" PRODUCTNAME="SoundTouch 30">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/s/Update.stu">
+        <IMAGE SUBID="0" LENGTH="105879988" CRC="0x2d5a971e" FILENAME="Update_ti_27.0.6.46330.5043500.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch Portable -->
+  <DEVICE ID="0x0925" PRODUCTNAME="SoundTouch Portable">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/s/Update.stu">
+        <IMAGE SUBID="0" LENGTH="105879988" CRC="0x2d5a971e" FILENAME="Update_ti_27.0.6.46330.5043500.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch App HTML5 -->
+  <DEVICE ID="0x0931" PRODUCTNAME="SoundTouch App HTML5">
+    <HARDWARE REVISION="00.01.00">
+        <RELEASE REVISION="27.0.13" HTTPHOST="downloads.bose.com" URLPATH="/ced/soundtouch/mr4_22097fe2/" DOCVERSION="MjAxOC0wMi0xNQ==">
+        <IMAGE SUBID="0" LENGTH="18377810" CRC="0xaa8209b0" FILENAME="Stockholm_27.0.13-4277-8963611.zip" />
+        <NOTES URL="https://downloads.bose.com/ced/soundtouch/mr4_22097fe2/relnotes/releasenotes_##LANG##.xml" />
+        <FEATURE NAME="TRIO" STATUS="OFF" />
+        <FEATURE NAME="ASTREAM" STATUS="OFF" />
+        <FEATURE NAME="RVT" STATUS="ON" />
+        <FEATURE NAME="AD" STATUS="OFF" />
+      </RELEASE>
+      <PROTOCOL REVISION="67">
+        <IMAGE PLATFORM="IOS" URL="https://itunes.apple.com/us/app/soundtouch-controller/id708379313" />
+        <IMAGE PLATFORM="ANDROID" URL="https://play.google.com/store/apps/details?id=com.bose.soundtouch" />
+        <IMAGE PLATFORM="KINDLE" URL="http://www.amazon.com/gp/mas/dl/android?asin=B00R4VJMMU"/>
+        <IMAGE PLATFORM="PC" URL="http://www.bose.com/soundtouch_app_update" />
+      </PROTOCOL>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Wave SoundTouch -->
+  <DEVICE ID="0x0932" PRODUCTNAME="Wave SoundTouch">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/n/Update.stu">
+        <IMAGE SUBID="0" LENGTH="112367416" CRC="0x49d88de4" FILENAME="Update_ti_27.0.6.46330.5043500.nelson.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- VideoWave (Developer Keys) -->
+  <DEVICE ID="0x0944" PRODUCTNAME="VideoWave">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2">
+        <IMAGE SUBID="0" LENGTH="215402464" CRC="0xf39b7005" FILENAME="Update_ti_27.0.6.46330.5043500.marconidev.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Lifestyle (Developer Keys) -->
+  <DEVICE ID="0x0945" PRODUCTNAME="Lifestyle">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2">
+        <IMAGE SUBID="0" LENGTH="215402464" CRC="0xf39b7005" FILENAME="Update_ti_27.0.6.46330.5043500.marconidev.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch Stereo JC -->
+  <DEVICE ID="0x0935" PRODUCTNAME="SoundTouch Stereo JC">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/l/Update.stu">
+        <IMAGE SUBID="0" LENGTH="110991796" CRC="0x01e35713" FILENAME="Update_ti_27.0.6.46330.5043500.lisa.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch SA-4 -->
+  <DEVICE ID="0x0936" PRODUCTNAME="SoundTouch SA-4">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/l/Update.stu">
+        <IMAGE SUBID="0" LENGTH="110991796" CRC="0x01e35713" FILENAME="Update_ti_27.0.6.46330.5043500.lisa.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Cinemate -->
+  <DEVICE ID="0x0938" PRODUCTNAME="Cinemate">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/t/Update.stu">
+        <IMAGE SUBID="0" LENGTH="114125624" CRC="0x562de6f1" FILENAME="Update_ti_27.0.6.46330.5043500.triode.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch 10 -->
+  <DEVICE ID="0x0939" PRODUCTNAME="SoundTouch 10">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/r/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="95906856" CRC="0xf18fe026" FILENAME="Update_ti_27.0.6.46330.5043500.rhino.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch SA-5 -->
+  <DEVICE ID="0x093A" PRODUCTNAME="SoundTouch SA-5">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/b/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="100957944" CRC="0x0b99190b" FILENAME="Update_ti_27.0.6.46330.5043500.burns.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch 20 -->
+  <DEVICE ID="0x093B" PRODUCTNAME="SoundTouch 20">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/s/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="99445800" CRC="0x536e6d6f" FILENAME="Update_ti_27.0.6.46330.5043500.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch 30 -->
+  <DEVICE ID="0x093C" PRODUCTNAME="SoundTouch 30">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/s/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="99445800" CRC="0x536e6d6f" FILENAME="Update_ti_27.0.6.46330.5043500.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Wave SoundTouch -->
+  <DEVICE ID="0x093D" PRODUCTNAME="Wave SoundTouch">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/n/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="100297132" CRC="0x2e2fd417" FILENAME="Update_ti_27.0.6.46330.5043500.nelson.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- VideoWave (Developer Keys) -->
+  <DEVICE ID="0x0946" PRODUCTNAME="VideoWave">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2">
+        <IMAGE SUBID="0" LENGTH="203977300" CRC="0x1858fa51" FILENAME="Update_ti_27.0.6.46330.5043500.marconidev.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Lifestyle (Developer Keys) -->
+  <DEVICE ID="0x0947" PRODUCTNAME="Lifestyle">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2">
+        <IMAGE SUBID="0" LENGTH="203977300" CRC="0x1858fa51" FILENAME="Update_ti_27.0.6.46330.5043500.marconidev.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch Stereo JC -->
+  <DEVICE ID="0x0940" PRODUCTNAME="SoundTouch Stereo JC">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/l/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="98921512" CRC="0x07521bda" FILENAME="Update_ti_27.0.6.46330.5043500.lisa.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch SA-4 -->
+  <DEVICE ID="0x0941" PRODUCTNAME="SoundTouch SA-4">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/l/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="98921512" CRC="0x07521bda" FILENAME="Update_ti_27.0.6.46330.5043500.lisa.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Cinemate -->
+  <DEVICE ID="0x0942" PRODUCTNAME="Cinemate">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/t/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="102700460" CRC="0xfbcab635" FILENAME="Update_ti_27.0.6.46330.5043500.triode.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- VideoWave (Production Keys) -->
+  <DEVICE ID="0x0933" PRODUCTNAME="VideoWave">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/m/Update.stu">
+        <IMAGE SUBID="0" LENGTH="215402464" CRC="0xd48b1181" FILENAME="Update_ti_27.0.6.46330.5043500.marconiprod.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Lifestyle (Production Keys) -->
+  <DEVICE ID="0x0934" PRODUCTNAME="Lifestyle">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/m/Update.stu">
+        <IMAGE SUBID="0" LENGTH="215402464" CRC="0xd48b1181" FILENAME="Update_ti_27.0.6.46330.5043500.marconiprod.scm.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- VideoWave (Production Keys) -->
+  <DEVICE ID="0x093E" PRODUCTNAME="VideoWave">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/m/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="203977300" CRC="0x3f489bd5" FILENAME="Update_ti_27.0.6.46330.5043500.marconiprod.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Lifestyle (Production Keys) -->
+  <DEVICE ID="0x093F" PRODUCTNAME="Lifestyle">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/m/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="203977300" CRC="0x3f489bd5" FILENAME="Update_ti_27.0.6.46330.5043500.marconiprod.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Lifestyle -->
+  <DEVICE ID="0x094B" PRODUCTNAME="Lifestyle">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.5043530" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/Update.avu">
+        <IMAGE SUBID="0" LENGTH="475186323" CRC="0x523be82b" FILENAME="Update_signed_27.0.6.5043530.avu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- Lifestyle -->
+  <DEVICE ID="0x0948" PRODUCTNAME="Lifestyle">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2">
+        <IMAGE SUBID="0" LENGTH="105878364" CRC="0xc0b3d401" FILENAME="Update_ti_27.0.6.46330.5043500.bardeen.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch 300 -->
+  <DEVICE ID="0x0949" PRODUCTNAME="SoundTouch 300">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/g/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="102384736" CRC="0xed21efd3" FILENAME="Update_ti_27.0.6.46330.5043500.ginger.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch Wireless Link adapter -->
+  <DEVICE ID="0x094A" PRODUCTNAME="SoundTouch Wireless Link adapter">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.6.46330.5043500" HTTPHOST="https://downloads.bose.com" URLPATH="ced/soundtouch/mr4_22097fe2" USBPATH="/ced/soundtouch/mr4_22097fe2/stu/s/sm2/Update.stu">
+        <IMAGE SUBID="0" LENGTH="99445800" CRC="0x536e6d6f" FILENAME="Update_ti_27.0.6.46330.5043500.sm2.stu" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch App for Android -->
+  <DEVICE ID="0x000A" PRODUCTNAME="SoundTouch App-A" SUPPORTEDOS="4.4.0">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.1" HTTPHOST="downloads.bose.com" URLPATH="/ced/soundtouch/mr4_22097fe2/">
+        <IMAGE SUBID="0" LENGTH="23351636" CRC="0x425b2109" FILENAME="SoundTouch-release_27.0.1-3345-bafe54d.apk" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch App for iOS -->
+  <DEVICE ID="0x000B" PRODUCTNAME="SoundTouch App-I" SUPPORTEDOS="8.0.0">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.1" HTTPHOST="downloads.bose.com" URLPATH="/ced/soundtouch/mr4_22097fe2/">
+        <IMAGE SUBID="0" LENGTH="47413805" CRC="0xe4bf4961" FILENAME="SoundTouch-27.0.1-3498-699a15c.ipa" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch App for Mac (pre OS X 10.9) -->
+  <DEVICE ID="0x000C" PRODUCTNAME="SoundTouch App-M" SUPPORTEDOS="mac_10_8">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.0" HTTPHOST="downloads.bose.com" URLPATH="/ced/soundtouch/mr4_22097fe2/">
+        <IMAGE SUBID="0" LENGTH="117483653" CRC="0xd6ca482b" FILENAME="SoundTouch-app-installer-27.0.0-3377-1037583.dmg" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch App for Mac (OS X 10.9 & later) -->
+  <DEVICE ID="0x000E" PRODUCTNAME="SoundTouch App-M" SUPPORTEDOS="mac_10_8">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.0" HTTPHOST="downloads.bose.com" URLPATH="/ced/soundtouch/mr4_22097fe2/">
+        <IMAGE SUBID="0" LENGTH="117483653" CRC="0xd6ca482b" FILENAME="SoundTouch-app-installer-27.0.0-3377-1037583.dmg" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+  <!-- SoundTouch App for PC -->
+  <DEVICE ID="0x000D" PRODUCTNAME="SoundTouch App-W" SUPPORTEDOS="windows_6_0">
+    <HARDWARE REVISION="00.01.00">
+      <RELEASE REVISION="27.0.0.3377" HTTPHOST="downloads.bose.com" URLPATH="/ced/soundtouch/mr4_22097fe2/">
+        <IMAGE SUBID="0" LENGTH="120307712" CRC="0x3e97da1f" FILENAME="SoundTouch-app-installer-27.0.0.3377.msi" />
+        </RELEASE>
+    </HARDWARE>
+  </DEVICE>
+
+</INDEX>

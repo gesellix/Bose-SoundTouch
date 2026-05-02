@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<releases>
+	<release revision="27.0.0">
+		<feature>Fixed bugs and did some general cleaning up under the hood</feature>
+	</release>
+	<release revision="26.0.0">
+		<feature>Fixed bugs and did some general cleaning up under the hood</feature>
+	</release>
+	<release revision="25.0.0">
+		<feature>Airplay2 support arrives for SoundTouch Wireless Link adapter!</feature>
+		<feature>Added improvements to the setup experience</feature>
+		<feature>General bug fixes and improvements</feature>
+	</release>
+	<release revision="24.0.0">
+		<feature>As usual, this release includes bug fixes and performance improvements</feature>
+	</release>
+	<release revision ="23.0.0">
+        	<feature platform="IOS">Added lots of under the hood changes to improve the app experience on iOS13</feature>
+        	<feature platform="ANDROID">Fixed an issue with Wi-Fi setup on certain Android devices</feature>
+        	<feature>Additional bug fixes and performance improvements</feature>
+    	</release>
+	<release revision ="22.0.0">
+		<feature>We've added RadioPlayer to our family of music services! Enjoy thousands of regional stations and on demand programs right at your fingertips. Available in select regions</feature>
+		<feature>You can now disable the automatic power save mode in the app for your SoundTouch 10, SoundTouch 20 and SoundTouch 30</feature>
+		<feature>Additional bug fixes &amp; enhancements</feature>
+	</release>
+	<release revision ="21.0.0">
+		<feature>Save more music — you can now save Favorites along with your 6 presets</feature>
+		<feature>We improved Spotify search so you can get grooving faster</feature>
+		<feature>It's now easier to access Recently Played</feature>
+		<feature>Little tweaks here and there to make the app better for you</feature>
+	</release>
+	<release revision="20.0.0">
+		<feature>Say hello to TuneIn (and goodbye to Internet Radio)</feature>
+        <feature>Easily browse through your favorite artists in Spotify</feature>
+        <feature>We made it easier to create an account and reset your password</feature>
+        <feature>General improvements made with our special app-tuning forks</feature>
+	</release>
+	<release revision="19.0.0">
+		<feature>Security related updates to improve application configuration and operation</feature>
+		<feature>Many other bug fixes and enhancements</feature>
+	</release>
+	<release revision="18.0.0">
+		<feature>By updating, you agree to our new Privacy Policy and Terms of Use available at https://worldwide.bose.com/privacypolicy and https://worldwide.bose.com/termsofuse</feature>
+		<feature>Security related updates to improve application configuration and operation</feature>
+		<feature>We tuned the app to include some major performance and stability improvements</feature>
+	</release>
+	<release revision="17.0.0">
+		<feature>Enhanced broadcasting performance of AUX/wired input to other SoundTouch speakers</feature>
+		<feature>Search enabled in Amazon Music</feature>
+		<feature>Many other bug fixes and enhancements</feature>
+	</release>	
+	<release revision="16.0.0">
+		<feature><![CDATA[By updating the app, you agree to our new Privacy Policy, available at <a href="https://www.soundtouch.com/privacy">SoundTouch.com/privacy</a>]]></feature>
+		<feature>Broadcasting of AUX/wired input to other SoundTouch speakers</feature>
+		<feature>Volume and grouping enhancements</feature>
+		<feature>New "Just for You" section</feature>
+		<feature>Many other bug fixes and enhancements</feature>
+	</release>
+	<release revision="15.0.0">
+		<feature>As usual, this release includes bug fixes and performance improvements</feature>
+	</release>
+	<release revision="14.0.0">
+		<feature>We made your SoundTouch® experience better, with a completely redesigned app that's easier to use and nicer to look at</feature>
+		<feature>Stereo pairing for SoundTouch® 10 speakers</feature>
+		<feature>QQ Music QPlay streaming support (China only)</feature>
+		<feature platform="IOS">Now you can control your speaker from your Apple Watch® – just open the Watch app and add SoundTouch®</feature>
+		<feature platform="IOS">There’s a new SoundTouch® widget available for iOS – add it in the Today View so you can control your speaker even while your device is locked</feature>
+		<feature>We made speaker selection and volume control more reliable</feature>
+		<feature>The app now shows Pandora’s new logo</feature>
+		<feature>Plus, we fixed some bugs and made things more stable</feature>
+	</release>
+	<release revision="13.0.0">
+		<feature>Updated music library experience with faster navigation, easier search, and more album art</feature>
+		<feature platform="ANDROID">Improved Android Wear support</feature>
+		<feature>Bug fixes</feature>
+	</release>
+	<release revision="12.0.0">
+		<feature>Added Amazon Prime Music (US Only)</feature>
+		<feature platform="ANDROID">Android Wear notifications support</feature>
+		<feature platform="ANDROID">Android lock-screen controls</feature>
+		<feature>SiriusXM&#174; Business Account support</feature>
+		<feature>Over 30 bug fixes</feature>
+	</release>
+	<release revision="7.0.0">
+		<feature>Support for additional music services (where available)</feature>
+		<feature>Search for a track, album, or artist in your stored music library</feature>
+		<feature>Adjust the bass performance of your SoundTouch&#174; system</feature>
+		<feature>Additional bug fixes and performance improvements</feature>
+	</release>
+	<release revision="6.0.0">
+		<feature>Enables wireless setup of SoundTouch&#174; products</feature>
+		<feature>Faster connection to speakers on your network</feature>
+	</release>
+	<release revision="4.0.0">
+		<feature>Enhanced detection of speakers on your network</feature>
+	</release>
+	<release revision="3.0.0">
+		<feature>Improved system discovery</feature>
+	</release>
+</releases>

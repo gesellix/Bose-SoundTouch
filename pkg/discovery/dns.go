@@ -171,6 +171,7 @@ func (d *DNSDiscovery) shouldIntercept(hostname string) bool {
 		"music.api.bose.com",
 		"bosecm.com",
 		"bose.io",
+		"downloads.bose.com",
 	}
 
 	for _, service := range interceptList {

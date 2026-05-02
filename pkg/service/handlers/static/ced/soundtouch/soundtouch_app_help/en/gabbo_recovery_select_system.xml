@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<page id="gabbo_recovery_select_system">
+<item>
+<topic>What is the name of my speaker?</topic>
+<answer>
+<![CDATA[<p>Check the carton or the owner's guide that shipped with your speaker. You may also find the name of the speaker on a label on the back or bottom of the speaker.</p>]]>
+</answer></item>
+<item>
+<topic>What is the "Bose" Wi-Fi<sup>&#174;</sup> network?</topic>
+<answer>
+<![CDATA[<p>Your speaker has its own built-in Wi-Fi network that you use to set up your speaker. You will temporarily connect to this network on the device you are using, set the speaker up on your network and then reconnect to your home Wi-Fi network.</p>]]>
+</answer>
+</item>
+</page>

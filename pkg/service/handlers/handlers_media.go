@@ -17,6 +17,9 @@ var webFS embed.FS
 //go:embed static/media/*
 var mediaFS embed.FS
 
+//go:embed static/ced
+var cedFS embed.FS
+
 //go:embed static/bmx_services.json
 var bmxServicesJSON []byte
 
@@ -57,5 +60,23 @@ func (s *Server) HandleMedia() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		http.StripPrefix("/media", http.FileServer(http.FS(subFS))).ServeHTTP(w, r)
+	}
+}
+
+// HandleBmxIcons returns a handler for serving BMX icon assets (media.bose.io /bmx-icons/*).
+func (s *Server) HandleBmxIcons() http.HandlerFunc {
+	subFS, _ := fs.Sub(mediaFS, "static/media")
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.FileServer(http.FS(subFS)).ServeHTTP(w, r)
+	}
+}
+
+// HandleCedStatic returns a handler for serving downloads.bose.com CED static files.
+func (s *Server) HandleCedStatic() http.HandlerFunc {
+	subFS, _ := fs.Sub(cedFS, "static/ced")
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.StripPrefix("/ced", http.FileServer(http.FS(subFS))).ServeHTTP(w, r)
 	}
 }

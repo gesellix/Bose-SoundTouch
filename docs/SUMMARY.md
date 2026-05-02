@@ -39,6 +39,7 @@
 * [System Endpoints](reference/SYSTEM-ENDPOINTS.md)
 * [Speaker Endpoint](reference/SPEAKER-ENDPOINT.md)
 * [WebSocket Events](reference/WEBSOCKET-EVENTS.md)
+* [Device Pairing Flow](reference/DEVICE-PAIRING-FLOW.md)
 * [Discovery](reference/DISCOVERY.md)
 * [Zone Management](reference/ZONE-MANAGEMENT.md)
 * [Preset Management](reference/PRESET-MANAGEMENT.md)

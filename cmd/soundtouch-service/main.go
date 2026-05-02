@@ -668,6 +668,7 @@ func getDomains(serverURL, httpsServerURL, hostname string) []string {
 		"bose.io":                 true,
 		"bose-prod.apigee.net":    true,
 		"bose-test.apigee.net":    true,
+		"downloads.bose.com":      true,
 		// Local service domains
 		setup.TestDomain: true,
 		hostname:         true,
@@ -847,6 +848,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	})
 
 	r.Get("/media/*", server.HandleMedia())
+	r.Get("/bmx-icons/*", server.HandleBmxIcons())
+	r.Get("/ced/*", server.HandleCedStatic())
 	r.Get("/web/*", server.HandleWeb())
 	r.Get("/docs/*", server.HandleDocs)
 
@@ -863,9 +866,12 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Get("/v1/navigate", server.HandleTuneInNavigate)
 			r.Get("/v1/navigate/*", server.HandleTuneInNavigate)
 			r.Get("/v1/search", server.HandleTuneInSearch)
+			r.Post("/v1/favorite/{stationID}", server.HandleTuneInFavorite)
+			r.Delete("/v1/favorite/{stationID}", server.HandleTuneInDeleteFavorite)
 		})
 
 		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
+		r.Post("/core02/svc-bmx-adapter-orion/prod/orion/token", server.HandleOrionToken)
 	})
 
 	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
@@ -932,6 +938,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Route("/music", func(r chi.Router) {
 			r.Route("/musicprovider/{providerID}", func(r chi.Router) {
 				r.Post("/is_eligible", server.HandleMusicProviderIsEligible)
+				r.Post("/trial/is_eligible", server.HandleMusicProviderIsEligible)
 			})
 		})
 

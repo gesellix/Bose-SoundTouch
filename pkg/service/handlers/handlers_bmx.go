@@ -4,12 +4,14 @@ package handlers
 import (
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -145,6 +147,29 @@ func (s *Server) HandleTuneInToken(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
+	}
+}
+
+// HandleOrionToken returns an anonymous Orion access token.
+// The token is a base64-encoded JSON serial, matching the pattern used by the real Bose BMX Orion service.
+func (s *Server) HandleOrionToken(w http.ResponseWriter, _ *http.Request) {
+	token := datastore.GenerateSerialSecret("orion")
+
+	resp := map[string]interface{}{
+		"_embedded": map[string]interface{}{
+			"bmx_account": map[string]string{
+				"displayName": "",
+				"username":    "",
+			},
+		},
+		"access_token":  token,
+		"refresh_token": token,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }
 
@@ -340,4 +365,28 @@ func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+// HandleTuneInFavorite handles POST /bmx/tunein/v1/favorite/{stationID}.
+func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
+	stationID := chi.URLParam(r, "stationID")
+	if err := s.ds.SaveTuneInFavorite(stationID); err != nil {
+		log.Printf("Failed to persist TuneIn favorite %s: %v", stationID, err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_, _ = w.Write([]byte("{}"))
+}
+
+// HandleTuneInDeleteFavorite handles DELETE /bmx/tunein/v1/favorite/{stationID}.
+func (s *Server) HandleTuneInDeleteFavorite(w http.ResponseWriter, r *http.Request) {
+	stationID := chi.URLParam(r, "stationID")
+	if err := s.ds.DeleteTuneInFavorite(stationID); err != nil {
+		log.Printf("Failed to delete TuneIn favorite %s: %v", stationID, err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_, _ = w.Write([]byte("{}"))
 }

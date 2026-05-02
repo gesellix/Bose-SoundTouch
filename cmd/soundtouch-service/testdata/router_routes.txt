@@ -1,6 +1,7 @@
 CONNECT  /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
 DELETE   /accounts/{account}/devices/{device}                         handlers.(*Server).HandleMargeRemoveDevice-fm
 DELETE   /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeDeleteGroup-fm
+DELETE   /bmx/tunein/v1/favorite/{stationID}                          handlers.(*Server).HandleTuneInDeleteFavorite-fm
 DELETE   /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
 DELETE   /setup/devices/{deviceId}                                    handlers.(*Server).HandleRemoveDevice-fm
 DELETE   /setup/dns-discoveries                                       handlers.(*Server).HandleClearDNSDiscoveries-fm
@@ -19,6 +20,7 @@ GET      /accounts/{account}/devices/{device}/presets                 handlers.(
 GET      /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleMargeRecents-fm
 GET      /accounts/{account}/full                                     handlers.(*Server).HandleMargeAccountFull-fm
 GET      /accounts/{account}/sources                                  handlers.(*Server).HandleMargeAccountSources-fm
+GET      /bmx-icons/*                                                 handlers.(*Server).HandleBmxIcons
 GET      /bmx/registry/v1/services                                    handlers.(*Server).HandleBMXRegistry-fm
 GET      /bmx/registry/v1/servicesAvailability                        handlers.(*Server).HandleBMXServicesAvailability-fm
 GET      /bmx/tunein/v1/navigate                                      handlers.(*Server).HandleTuneInNavigate-fm
@@ -27,6 +29,7 @@ GET      /bmx/tunein/v1/playback/episode/{podcastID}                  handlers.(
 GET      /bmx/tunein/v1/playback/episodes/{podcastID}                 handlers.(*Server).HandleTuneInPodcastInfo-fm
 GET      /bmx/tunein/v1/playback/station/{stationID}                  handlers.(*Server).HandleTuneInPlayback-fm
 GET      /bmx/tunein/v1/search                                        handlers.(*Server).HandleTuneInSearch-fm
+GET      /ced/*                                                       handlers.(*Server).HandleCedStatic
 GET      /custom/v1/playback/{encodedURL}                             handlers.(*Server).HandleCustomPlayback-fm
 GET      /customer/account/{account}                                  handlers.(*Server).HandleMargeAccountProfile-fm
 GET      /docs/*                                                      handlers.(*Server).HandleDocs-fm
@@ -91,7 +94,9 @@ POST     /accounts/{account}/devices/{device}/presets/{presetNumber}  handlers.(
 POST     /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleMargeAddRecent-fm
 POST     /accounts/{account}/group                                    handlers.(*Server).HandleMargeAddGroup-fm
 POST     /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeModifyGroup-fm
+POST     /bmx/core02/svc-bmx-adapter-orion/prod/orion/token           handlers.(*Server).HandleOrionToken-fm
 POST     /bmx/orion/v1/playback/station/{data}                        handlers.(*Server).HandleOrionPlayback-fm
+POST     /bmx/tunein/v1/favorite/{stationID}                          handlers.(*Server).HandleTuneInFavorite-fm
 POST     /bmx/tunein/v1/report                                        handlers.(*Server).HandleTuneInReport-fm
 POST     /bmx/tunein/v1/token                                         handlers.(*Server).HandleTuneInToken-fm
 POST     /customer/account/{account}                                  handlers.(*Server).HandleMargeUpdateAccountProfile-fm
@@ -136,6 +141,7 @@ POST     /streaming/account/{account}/group/{groupId}                 handlers.(
 POST     /streaming/account/{account}/source                          handlers.(*Server).HandleMargeAddSource-fm
 POST     /streaming/device_setting/account/{account}/device/{device}/device_settings handlers.(*Server).HandleMargeUpdateDeviceSettings-fm
 POST     /streaming/music/musicprovider/{providerID}/is_eligible      handlers.(*Server).HandleMusicProviderIsEligible-fm
+POST     /streaming/music/musicprovider/{providerID}/trial/is_eligible handlers.(*Server).HandleMusicProviderIsEligible-fm
 POST     /streaming/stats/error                                       handlers.(*Server).HandleErrorStats-fm
 POST     /streaming/stats/usage                                       handlers.(*Server).HandleUsageStats-fm
 POST     /streaming/support/customersupport                           handlers.(*Server).HandleMargeCustomerSupport-fm

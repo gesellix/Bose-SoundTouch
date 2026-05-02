@@ -2038,3 +2038,33 @@ func (ds *DataStore) DeleteGroup(account, groupID string) error {
 
 	return err
 }
+
+// SaveTuneInFavorite records a TuneIn station as favorited by creating a marker file.
+// File presence indicates the station is a favorite; no content is stored.
+func (ds *DataStore) SaveTuneInFavorite(stationID string) error {
+	if ds == nil || ds.DataDir == "" || stationID == "" {
+		return nil
+	}
+
+	dir := ds.safeJoin("tunein", "favorites")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(ds.safeJoin("tunein", "favorites", stationID), nil, 0644)
+}
+
+// DeleteTuneInFavorite removes a previously saved TuneIn favorite marker file.
+// Returns nil if the station was not favorited.
+func (ds *DataStore) DeleteTuneInFavorite(stationID string) error {
+	if ds == nil || ds.DataDir == "" || stationID == "" {
+		return nil
+	}
+
+	err := os.Remove(ds.safeJoin("tunein", "favorites", stationID))
+	if os.IsNotExist(err) {
+		return nil
+	}
+
+	return err
+}
