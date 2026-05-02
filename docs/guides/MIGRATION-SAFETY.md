@@ -1,4 +1,4 @@
-### Professional Migration & Safety Guide
+# Migration & Safety Guide
 
 Starting a migration on real hardware requires a "Safety First" approach. This guide outlines the safety features implemented in the `soundtouch-service` and provides a checklist for a successful migration.
 
@@ -14,8 +14,8 @@ The following features are built into the `soundtouch-service` to ensure stabili
 
 Before you proceed with the actual migration, follow these steps:
 
-1.  **Enable SSH Access (Prerequisite)**: This toolkit requires SSH access to your speakers, which is not enabled by default. 
-    - Create an empty file named `remote_services` on a USB stick.
+1.  **Enable SSH Access (Prerequisite)**: This toolkit requires SSH access to your speakers, which is not enabled by default.
+    - Create a file named `remote_services` on a FAT-formatted USB drive. The drive may need its bootable flag set — see [SoundCork issue #172](https://github.com/deborahgu/soundcork/issues/172) for details.
     - Insert the USB stick into the SoundTouch speaker's **SERVICE** port.
     - Reboot the speaker (unplug and replug).
     - The speaker will now allow SSH connections as `root` with no password.
@@ -27,10 +27,11 @@ Before you proceed with the actual migration, follow these steps:
 4.  **Validate SSH Access**: Confirm the device responds to SSH without a password. 
     - In the Web UI **Migration** tab, select your speaker and verify that the "SSH Connection" status shows ✅ Success.
     - This toolkit automatically handles the necessary SSH parameters (ciphers and key exchanges) required by older Bose firmware.
-5.  **Migration Methods**: 
-    - **XML Migration (Default)**: Less invasive, only changes the application config. Best for simple redirection.
-    - **Hosts Migration**: Modifies `/etc/hosts` on the device. Good for system-wide redirection of specific domains.
-    - **ResolvConf Migration**: Points the device to the AfterTouch DNS server. Best for discovering unknown Bose endpoints and dynamic interception. **Note**: This method requires the DNS Discovery Server to be running on port 53. The service includes a pre-flight check to ensure the server is properly bound before allowing this migration.
+5.  **Migration Methods**:
+    - **XML redirect (default)**: Uploads a config file to the speaker via the Web API. Less invasive — only changes the application-level service URLs. Best for testing or single-device migration.
+    - **DNS/DHCP redirect**: Configures the speaker to use a custom DNS server that resolves Bose hostnames to the local service. Best for all-device coverage; requires the AfterTouch DNS server running on port 53. The service includes a pre-flight check before applying this method.
+    
+    The web UI walks you through both methods. Both require the CA certificate to be trusted on the speaker for HTTPS to work — the web UI handles this as part of the migration flow.
 6.  **Monitor Logs**: Run the `soundtouch-service` with `DEBUG` or `INFO` logging to see the step-by-step progress of the migration.
 
 #### 🔄 Rollback Strategy

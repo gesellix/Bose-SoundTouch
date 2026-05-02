@@ -7,7 +7,7 @@ The `soundtouch-service` is a comprehensive local server that emulates Bose's cl
 The service provides:
 
 - **🏠 Local Service Emulation**: Complete BMX (Bose Media eXchange) and Marge service implementation
-- **🔧 Device Migration**: Seamlessly migrate devices from Bose cloud to local services via XML config, `/etc/hosts`, or `/etc/resolv.conf`
+- **🔧 Device Migration**: Migrate devices from Bose cloud to local services via XML redirect or DNS/DHCP redirect
 - **🔍 DNS Discovery & Interception**: Built-in DNS server to discover unknown Bose endpoints and selectively intercept cloud traffic
 - **📊 Traffic Proxying**: Inspect and log all device communications for debugging
 - **🌐 Web Management UI**: Browser-based interface for device management
@@ -169,7 +169,7 @@ The service supports multiple ways to configure its behavior. When multiple sour
 | `DISCOVERY_INTERVAL`               | `--discovery-interval`     | Device discovery interval                                                                               | `5m`                      |
 | `ENABLE_DNS_DISCOVERY`             | `--dns-discovery`          | Enable DNS discovery server                                                                             | `false`                   |
 | `DNS_UPSTREAM`                     | `--dns-upstream`           | Upstream DNS server for non-Bose queries                                                                | `8.8.8.8`                 |
-| `DNS_BIND_ADDR`                    | `--dns-bind`               | Bind address for the DNS discovery server (standard port `:53` is required for `resolv.conf` migration) | `:53`                     |
+| `DNS_BIND_ADDR`                    | `--dns-bind`               | Bind address for the DNS discovery server (standard port `:53` is required for DNS/DHCP migration)      | `:53`                     |
 | `MIRROR_ENABLED`                   |                            | Enable background mirroring of specific endpoints to Bose cloud                                         | `false`                   |
 | `MIRROR_ENDPOINTS`                 |                            | Comma-separated list of path patterns to mirror (e.g., `/streaming/account/*/device/*/recent`)          | `[]`                      |
 | `INTERNAL_PATHS`                   | `--internal-paths`         | Paths for internal requests to exclude from recording (e.g., `/setup/*`, `/web/*`)                      | `[]`                      |
@@ -247,7 +247,7 @@ curl "http://192.168.1.100:8090/presets"
 curl "http://localhost:8000/events/192.168.1.100"
 ```
 
-#### ResolvConf Migration (DHCP-Aware DNS Redirection)
+#### DNS/DHCP Migration (DHCP-Aware DNS Redirection)
 
 The most robust and flexible DNS-based migration method. It utilizes the device's persistent `/mnt/nv/rc.local` script to inject a priority DNS hook into the system's DHCP configuration.
 
@@ -665,7 +665,7 @@ find data/stats/ -name "*.json" -mtime +90 -delete
 - `GET /setup/discovery-status`: Check if a scan is currently in progress.
 - `POST /setup/sync/{deviceIP}`: Fetch presets, recents, and sources from a device.
 - `GET /setup/summary/{deviceIP}`: Get a detailed migration readiness summary.
-- `POST /setup/migrate/{deviceIP}`: Migrate a device using the specified method (XML/Hosts).
+- `POST /setup/migrate/{deviceIP}`: Migrate a device using the specified method (XML or DNS).
 - `GET /setup/ca.crt`: Download the Root CA certificate for manual installation.
 
 #### `GET /setup/interactions`

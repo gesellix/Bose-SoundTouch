@@ -1,81 +1,64 @@
-# HTTPS Setup & Custom CA Certificate
+# HTTPS & Custom CA Certificate
 
-To use the `/etc/hosts` redirection method safely, SoundTouch devices must communicate over HTTPS. This requires the device to trust the AfterTouch Root CA certificate used by the local service.
+SoundTouch speakers communicate with cloud services over HTTPS. For the local service to work over HTTPS, speakers must trust the AfterTouch Root CA. The service manages this automatically — it generates a CA on first start and the web UI guides you through installing it on each speaker as part of the migration flow.
 
-## 1. Automated Migration (Hosts Method)
+---
 
-The `soundtouch-service` can automatically configure a device to use the `/etc/hosts` method:
+## How TLS works in AfterTouch
 
-```bash
-curl -X POST "http://localhost:8000/setup/migrate/{deviceIP}?method=hosts"
+The service includes a built-in HTTPS listener (default port `8443`) that presents a certificate covering all Bose cloud hostnames. The certificate is signed by the AfterTouch Root CA, which is generated automatically on first start and stored in `data/certs/`.
+
+**Domain coverage** — the certificate covers:
+- Wildcard: `*.api.bose.io`, `*.api.bosecm.com`
+- Specific: `streaming.bose.com`, `bmx.bose.com`, `stats.bose.com`, `updates.bose.com`, `worldwide.bose.com`, `bose-prod.apigee.net`, `media.bose.io`, `downloads.bose.com`, `voice.api.bose.io`, and more
+
+> **Note**: The hostname you configure as `HTTPS_SERVER_URL` (e.g. `https://soundtouch.fritz.box:8443`) is also added as a Subject Alternative Name, ensuring valid TLS for direct browser or API access.
+
+---
+
+## CA trust installation (via web UI)
+
+The migration flow in the web UI includes a CA trust step that:
+1. Uploads the Root CA to the speaker via SSH
+2. Appends it to the speaker's shared trust store (`/etc/pki/tls/certs/ca-bundle.crt`)
+3. Verifies connectivity over HTTPS
+
+This is handled automatically — you don't need to manage CA files manually unless you're doing an advanced or manual setup.
+
+---
+
+## Downloading the CA certificate
+
+You can download the Root CA for manual installation on other devices (phones, PCs, additional speakers):
+
+```
+http://<server>:8000/setup/ca.crt
 ```
 
-This command will:
-1.  Connect to the device via SSH.
-2.  Update `/etc/hosts` to point Bose domains to the service IP.
-3.  Inject the auto-generated AfterTouch Root CA into the device's trust store (`/etc/pki/tls/certs/ca-bundle.crt`).
-4.  Reboot the device.
+---
 
-## 2. Managing the Root CA
+## Binding to port 443
 
-The AfterTouch service automatically generates a Root CA when it first starts.
+Speakers expect HTTPS on the default port 443. Since binding to port 443 requires elevated privileges, you have three options:
 
-- **CA Certificate**: `data/certs/ca.crt`
-- **CA Private Key**: `data/certs/ca.key`
+1. **Port forwarding (recommended)**: Run the service on port 8443 and forward port 443 to it using `iptables` or your firewall/router.
+2. **Capabilities**: Grant the binary permission to bind low ports: `sudo setcap 'cap_net_bind_service=+ep' ./soundtouch-service`
+3. **Reverse proxy**: Use Nginx or Caddy in front of the service (see below).
 
-### Downloading the CA Certificate
-You can download the CA certificate for manual installation on other devices (like your phone or PC) from:
-`http://<server-ip>:8000/setup/ca.crt`
+---
 
-### 3. Built-in HTTPS Support
+## Reverse proxy (optional)
 
-The `soundtouch-service` now includes a built-in HTTPS listener. This simplifies the `/etc/hosts` redirection method by automatically presenting the correct certificates for Bose domains.
-
-- **HTTPS Port**: Configurable via `HTTPS_PORT` environment variable (defaults to `8443`).
-- **HTTPS Server URL**: Configurable via `HTTPS_SERVER_URL` (e.g., `https://mysoundtouch.local:8443`). If not set, the service attempts to guess it using the system hostname.
-- **Domain Coverage**: Automatically presents a certificate with comprehensive coverage using wildcard certificates (`*.api.bose.io`, `*.api.bosecm.com`) plus specific domains (`streaming.bose.com`, `updates.bose.com`, `stats.bose.com`, `bmx.bose.com`, `worldwide.bose.com`, `bose-prod.apigee.net`, etc.).
-- **Wildcard Support**: Uses RFC-compliant wildcard certificates for automatic coverage of all API subdomains, including event analytics endpoints like `events.api.bosecm.com`, `eventsdev.api.bosecm.com`, and future API services.
-- **TLS Error Logging**: Comprehensive logging of TLS handshake attempts, certificate matching, and connection failures for debugging DNS redirection issues.
-- **Automatic Setup**: On first start, it generates a server certificate signed by your AfterTouch local Root CA.
-
-#### TLS Security & Debugging
-
-The built-in HTTPS listener is configured to use modern and secure TLS settings while maintaining compatibility with SoundTouch devices (which support up to TLS 1.2 with OpenSSL 1.0.2).
-
-- **Minimum TLS Version**: TLS 1.2
-- **Preferred Cipher Suites**:
-  - `ECDHE-RSA-AES128-GCM-SHA256`
-- **TLS Debugging**: Detailed logging of:
-  - Certificate requests by domain (`[TLS] Certificate request for ServerName: events.api.bosecm.com`)
-  - Wildcard certificate matching (`[TLS] ✅ Serving certificate for events.api.bosecm.com (matched *.api.bosecm.com)`)
-  - Handshake failures (`[TLS] ❌ Handshake failed from 192.168.1.50: tls: certificate not found`)
-  - Successful connections (`[TLS] ✅ Successful connection from 192.168.1.50`)
-  - `ECDHE-RSA-AES256-GCM-SHA384`
-  - `ECDHE-RSA-CHACHA20-POLY1305`
-  - `RSA-AES128-GCM-SHA256` (Legacy support)
-  - `RSA-AES256-GCM-SHA384` (Legacy support)
-
-#### Binding to Port 443
-SoundTouch devices expect HTTPS on the default port 443. Since binding to port 443 usually requires root privileges, you have two options:
-
-1.  **Port Forwarding (Recommended)**: Run the service on a high port (e.g., 8443) and use `iptables` or your firewall to forward traffic from 443 to 8443.
-2.  **Capabilities**: Grant the binary permission to bind to low ports: `sudo setcap 'cap_net_bind_service=+ep' ./soundtouch-service`.
-3.  **Reverse Proxy**: Use Nginx or Caddy as described below.
-
-### 4. Reverse Proxy (Optional)
-
-1.  **Generate a certificate** for the Bose domains signed by your Root CA.
-2.  **Configure Nginx** to use this certificate and proxy requests to `soundtouch-service`.
+If you prefer to use Nginx or another proxy for TLS termination:
 
 ```nginx
 server {
     listen 443 ssl;
     server_name streaming.bose.com bmx.bose.com stats.bose.com updates.bose.com;
 
-    ssl_certificate /path/to/generated-cert.crt;
-    ssl_certificate_key /path/to/generated-cert.key;
+    ssl_certificate /path/to/data/certs/server.crt;
+    ssl_certificate_key /path/to/data/certs/server.key;
 
-    # Secure TLS configuration (matches soundtouch-service defaults)
     ssl_protocols TLSv1.2;
     ssl_ciphers 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-CHACHA20-POLY1305:AES128-GCM-SHA256:AES256-GCM-SHA384';
 
@@ -87,23 +70,26 @@ server {
 }
 ```
 
-## 5. Manual CA Injection (Legacy/Manual)
+---
 
-If you prefer to inject the CA certificate manually:
+## Manual CA injection (advanced)
 
-1.  Copy `ca.crt` to the device:
-    ```bash
-    scp data/certs/ca.crt root@{deviceIP}:/tmp/
-    ```
-2.  Append it to the trust store on the device:
-    ```bash
-    ssh root@{deviceIP} "(rw || mount -o remount,rw /) && cat /tmp/ca.crt >> /etc/pki/tls/certs/ca-bundle.crt"
-    ```
+If you need to inject the CA manually (e.g. without the web UI migration flow):
 
-    ## 6. Verifying Connectivity
+```bash
+# Copy the CA to the speaker
+scp data/certs/ca.crt root@<SPEAKER-IP>:/tmp/
 
-    You can verify that your device can correctly reach the `soundtouch-service` over HTTPS using the management web UI.
+# Make the filesystem writable and append the CA to the trust store
+ssh root@<SPEAKER-IP> "(rw || mount -o remount,rw /) && cat /tmp/ca.crt >> /etc/pki/tls/certs/ca-bundle.crt"
+```
 
-    In the **Migration Summary** for a device, you will find an **HTTPS Connection Test** section:
-    - **Test with Explicit CA.crt**: Uploads a temporary copy of the Root CA to the device and uses `curl --cacert` to verify the connection. Use this to verify your HTTPS setup *before* modifying the device's shared trust store.
-    - **Test with Shared Trust Store**: Uses the device's default trust store. Use this to verify that your CA injection was successful and the device now natively trusts your local server.
+---
+
+## TLS compatibility
+
+SoundTouch speakers run OpenSSL 1.0.2, supporting up to TLS 1.2. The service is configured accordingly:
+
+- **Minimum TLS version**: TLS 1.2
+- **Preferred cipher suites**: `ECDHE-RSA-AES128-GCM-SHA256`, `ECDHE-RSA-AES256-GCM-SHA384`, `ECDHE-RSA-CHACHA20-POLY1305`
+- **Legacy support**: `RSA-AES128-GCM-SHA256`, `RSA-AES256-GCM-SHA384`
