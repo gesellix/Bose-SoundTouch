@@ -45,7 +45,7 @@ The web UI walks you through each method. DNS redirect requires HTTPS — the se
 
 Some setup steps require SSH access to the speaker. Enable it once per device: create a file named `remote_services` on a FAT-formatted USB drive (the drive may need its bootable flag set — see [SoundCork issue #172](https://github.com/deborahgu/soundcork/issues/172)), and insert it while the speaker is powered on. After reboot, root SSH is available with no password.
 
-See [Device Initial Setup](https://gesellix.github.io/Bose-SoundTouch/guides/DEVICE-INITIAL-SETUP.html) and [Migration Guide](https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-SAFETY.html) for step-by-step instructions.
+See [Device Initial Setup](https://gesellix.github.io/Bose-SoundTouch/guides/DEVICE-INITIAL-SETUP.html) and [Migration Guide](https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-GUIDE.html) for step-by-step instructions.
 
 ---
 
@@ -89,6 +89,7 @@ See the [API Reference](https://gesellix.github.io/Bose-SoundTouch/reference/API
 
 - [Getting Started](https://gesellix.github.io/Bose-SoundTouch/guides/GETTING-STARTED.html)
 - [Survival Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SURVIVAL-GUIDE.html)
+- [Migration Guide](https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-GUIDE.html)
 - [Device Initial Setup](https://gesellix.github.io/Bose-SoundTouch/guides/DEVICE-INITIAL-SETUP.html)
 - [Migration & Safety Guide](https://gesellix.github.io/Bose-SoundTouch/guides/MIGRATION-SAFETY.html)
 - [CLI Reference](https://gesellix.github.io/Bose-SoundTouch/guides/CLI-REFERENCE.html)

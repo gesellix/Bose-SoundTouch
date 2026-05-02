@@ -104,4 +104,4 @@ Power-cycle to ensure all changes take effect.
 
 Once migrated, your speaker uses the local service for music browsing, preset sync, and device registration. The web UI at `http://<server>:8000` is your management interface going forward. Back up the `data/` directory periodically in case you need to restore.
 
-For safety measures, rollback options, and technical details about the migration process, see the [Migration & Safety Guide](MIGRATION-SAFETY.md).
+For the complete step-by-step walkthrough with commands and troubleshooting, see the [Migration Guide](MIGRATION-GUIDE.md). For safety measures and rollback options, see the [Migration & Safety Guide](MIGRATION-SAFETY.md).

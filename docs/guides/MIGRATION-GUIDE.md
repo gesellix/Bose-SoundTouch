@@ -1,418 +1,163 @@
-# THIS IS A PLANNED TO BE THE MIGRATION GUIDE
+# Migration Guide: From Bose Cloud to AfterTouch
 
-> This migration guide is not finalized, yet.
-> We're using it as an orientation for the required implementation.
+This guide walks through the complete process of migrating your SoundTouch speakers from Bose's cloud services to **AfterTouch**, the local replacement provided by `soundtouch-service`. By the end, your speakers will work fully independently of Bose's servers.
+
+For a shorter overview, see the [Survival Guide](SURVIVAL-GUIDE.md). For safety considerations and rollback options, see the [Migration & Safety Guide](MIGRATION-SAFETY.md).
 
 ---
 
-# Complete Migration Guide - From Bose Cloud to Local SoundTouch Service
+## What you need
 
-## Overview
+- A machine that is **always on** (Raspberry Pi, NAS, home server, or similar) to run the service
+- A **USB drive** (FAT-formatted) to enable SSH on each speaker
+- Your speakers must be on the **same network** as the service host
+- About **15–30 minutes per speaker**
 
-This guide will walk you through migrating your Bose SoundTouch speakers from Bose's cloud services to AfterTouch, your own local SoundTouch service. By the end of this process, your speakers will be completely independent of Bose's servers while retaining all their functionality.
+---
 
-> **💡 Why Migrate?** Bose announced the shutdown of their SoundTouch cloud services in May 2026. This migration ensures your speakers continue working indefinitely with enhanced local control and monitoring.
+## Step 1: Install and start the service
 
-## What You'll Need
+Choose the option that fits your setup.
 
-### Hardware Requirements
-- **Raspberry Pi 4 or similar** (minimum: Raspberry Pi Zero 2W)
-- **MicroSD card** (16GB or larger)
-- **USB drive** (for device preparation)
-- **Network connection** for your Raspberry Pi
-
-### Before You Start
-- **List all your SoundTouch devices** and their current locations
-- **Note your current presets and favorites** (they will be preserved)
-- **Ensure devices are on the same network** as your future SoundTouch service
-- **Basic computer skills** (following instructions, using a web browser)
-
-### Time Estimate
-- **Setup**: 30-60 minutes for the service installation
-- **Per Device**: 10-15 minutes for each speaker migration
-- **Total**: 1-3 hours depending on number of devices
-
-## Step 1: Install SoundTouch Service
-
-### Option A: Raspberry Pi Installation (Recommended)
-
-#### 1.1 Prepare Your Raspberry Pi
-
-1. **Flash Raspberry Pi OS** to your SD card using Raspberry Pi Imager (see the raspberrypi.com documentation)
-2. **Enable SSH** during imaging or create an empty `ssh` file on the boot partition
-3. **Boot your Pi** and connect it to your network
-4. **Find your Pi's IP address** (check your router or use `ping raspberrypi.local`)
-
-#### 1.2 Install SoundTouch Service
-
-Connect to your Pi via SSH and run:
+### Binary (go install)
 
 ```bash
-# Download and install
-curl -sSL https://github.com/gesellix/Bose-SoundTouch/releases/latest/download/install.sh | bash
-
-# Start the service
-sudo systemctl enable soundtouch-service
-sudo systemctl start soundtouch-service
+go install github.com/gesellix/bose-soundtouch/cmd/soundtouch-service@latest
+soundtouch-service
 ```
 
-#### 1.3 Verify Installation
+The service starts on port 8000. Open `http://localhost:8000` in your browser.
 
-1. Open your web browser
-2. Go to `http://[PI_IP_ADDRESS]:8000` (replace with your Pi's IP)
-3. You should see the **SoundTouch Service Dashboard**
-
-![SoundTouch Service Dashboard](../images/dashboard-home.png)
-*Example: SoundTouch Service main dashboard*
-
-### Option B: Docker Installation
-
-If you prefer Docker, run:
+### Docker (Linux — with host networking for device discovery)
 
 ```bash
 docker run -d \
   --name soundtouch-service \
-  --restart unless-stopped \
-  -p 8000:8000 \
-  -p 8443:8443 \
-  -v soundtouch-data:/data \
-  gesellix/soundtouch-service:latest
+  --network host \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/gesellix/bose-soundtouch:latest
 ```
 
-## Step 2: Create Your Account
+### Docker (macOS / Windows — manual device IP required)
 
-### 2.1 Initial Setup
-
-1. **Open the dashboard** at `http://[SERVICE_IP]:8000`
-2. Click **"Create New Account"**
-3. **Fill in your details**:
-   - Account Name: `My Home Audio`
-   - Email: `your@email.com` (optional, for notifications)
-   - Migration Strategy: `Gradual` (recommended)
-
-![Account Creation](../images/account-creation.png)
-*Example: Account creation form*
-
-### 2.2 Account Configuration
-
-After creation, you'll see your **Account Dashboard**:
-- **Account ID**: Unique identifier (e.g., `acc_home_audio_001`)
-- **Status**: `Active - Ready for Migration`
-- **Device Count**: Initially 0
-- **Migration Status**: `Prepared`
-
-![Account Dashboard](../images/account-dashboard.png)
-*Example: Fresh account dashboard ready for device migration*
-
-### 2.3 Initial Settings
-
-Once your account is created, configure the global settings:
-1. **Settings**:
-   - Check **Target Domain**: Ensure it's reachable from the speaker (e.g., `soundtouch.fritz.box`).
-   - **DNS Discovery**: Enable DNS discovery on port `:53`. This is crucial for the DNS hook migration method.
-2. **Devices**:
-   - Go to the **"Device Discovery"** tab.
-   - Click **"Scan Network"** or manually add a speaker via IP address.
-   - Your devices should appear with **SSH Status**: `Enabled`.
-
-![Device Discovery](../images/device-discovery.png)
-*Example: Discovered devices with remote access enabled*
-
-## Step 3: Prepare Your Devices
-
-> **⚠️ Important**: This step temporarily enables SSH access on your speakers. SSH will be automatically disabled after migration unless you choose to keep it enabled.
-
-### 3.1 Enable Remote Services
-
-For each SoundTouch device:
-
-1. **Prepare a USB drive**:
-   - Format as FAT32
-   - Create an empty file named `remote_services` (no extension)
-   - ~~(Optional) Firmware update/reset.~~ The official Bose SoundTouch USB update website is not available anymore.
-
-2. **Insert USB drive** into your SoundTouch speaker
-3. **Power cycle** the device (unplug for 10 seconds, then reconnect)
-
-![USB Preparation](../images/usb-remote-services.png)
-*Example: USB drive setup for enabling remote services*
-
-## Step 4: Discover and Register Devices
-
-### 4.1 Automatic Discovery
-
-The service automatically scans for SoundTouch devices every 5 minutes. To trigger immediate discovery:
-
-1. **Dashboard** → **"Devices"** → **"Discover Devices"**
-2. **Wait 30-60 seconds** for scan completion
-3. **Review discovered devices** in the list
-
-### 4.2 Register Devices to Your Account
-
-For each discovered device:
-
-1. **Click device name** in the discovery list
-2. **Verify device information**:
-   - Name: `Living Room Speaker`
-   - Model: `SoundTouch 30`
-   - MAC Address: `A8:1B:6A:53:6A:98`
-   - IP Address: `192.168.1.100`
-   - Status: `Discovered - Ready for Registration`
-
-3. **Click "Register to Account"**
-4. **Choose registration type**:
-   - **Fresh Setup**: For new or factory-reset devices
-   - **Migrate from Bose**: For devices with existing Bose account (recommended)
-
-![Device Registration](../images/device-registration.png)
-*Example: Device registration dialog with migration options*
-
-### 4.3 Device Registration Results
-
-After registration, you'll see:
-- **Device Status**: `Registered - Active`
-- **Account Association**: Your account name
-- **Lifecycle State**: `Active`
-- **Data Sources**: `Mirror Primary` (initially uses Bose, falls back to local)
-
-## Step 5: Migrate Individual Devices
-
-### 5.1 Step 3: Data Sync
-
-1. **Dashboard** → **"Devices"** → Select your device
-2. Click **"Data Sync"**
-3. This fetches configuration (presets, recents, sources) from the speaker to the SoundTouch service.
-
-### 5.2 Step 4: Migration
-
-Once data is synced, proceed to the migration tab for the device:
-
-1. **Backup XML**: Create an off-device backup of the current configuration.
-2. **Enable Persistent Remote Service**: This ensures SSH remains available after reboots.
-   - *Note*: If you see `'rw: command not found'`, you can safely ignore it.
-3. **CA Certificate Configuration**:
-   - **Test with explicit CA**: Verify the speaker can communicate using the local CA.
-   - **Trust CA now**: Inject the local Root CA into the speaker's trust store.
-   - **Test with shared trust store**: Verify general HTTPS communication.
-4. **Migration Method**:
-   - Select **"Redirect via DNS hook"**.
-   - **Test DNS Redirection**: Ensure the speaker correctly resolves the service domain.
-5. **Confirm Migration**: Apply the final changes to the speaker.
-
-#### Example Migration Output:
-```text
-Successfully created off-device backup of current configuration.
-Pre-flight: Write access verified.
-Resolved soundtouch.fritz.box to 192.168.1.100
-Uploaded /mnt/nv/soundtouch-service/aftertouch.resolv.conf
-/mnt/nv/rc.local already contains Aftertouch hook logic
-(rw || mount -o remount,rw /): sh: rw: command not found
-
-cp /etc/udhcpc.d/50default /etc/udhcpc.d/50default.original:
-Applied patch to /etc/udhcpc.d/50default
-Verified patch on /etc/udhcpc.d/50default
-cp /opt/Bose/udhcpc.script /opt/Bose/udhcpc.script.original:
-Applied patch to /opt/Bose/udhcpc.script
-Verified patch on /opt/Bose/udhcpc.script
-CA certificate already trusted, skipping injection
+```bash
+docker run -d \
+  --name soundtouch-service \
+  -p 8000:8000 -p 8443:8443 \
+  -v $(pwd)/data:/app/data \
+  --env SERVER_URL=http://soundtouch.local:8000 \
+  --env HTTPS_SERVER_URL=https://soundtouch.local:8443 \
+  ghcr.io/gesellix/bose-soundtouch:latest
 ```
 
-## Step 7: Complete Account Migration
+On macOS/Windows, device discovery via mDNS won't work inside the container — you'll add devices by IP address in Step 4.
 
-### 7.1 Migrate All Devices
-
-Repeat the migration process for each of your SoundTouch devices. You can migrate multiple devices simultaneously, but we recommend doing 1-2 at a time to monitor progress.
-
-**Migration Dashboard** shows overall progress:
-- **Devices Migrated**: `2 of 4 completed`
-- **Currently Migrating**: `Living Room Speaker, Kitchen Speaker`
-- **Pending Migration**: `Bedroom Speaker, Office Speaker`
-- **Estimated Completion**: `3 days remaining`
-
-![Account Migration Status](../images/account-migration.png)
-*Example: Account-wide migration progress*
-
-### 7.2 Verify Complete Migration
-
-When all devices are migrated:
-
-1. **Account Status**: `Active - Fully Migrated`
-2. **Bose Dependency**: `None`
-3. **Local Control**: `100%`
-4. **Device Health**: All devices show `Healthy - Local Only`
-
-![Migration Complete](../images/migration-complete.png)
-*Example: Completed migration dashboard*
-
-## Step 8: Post-Migration Tasks
-
-1. **Remove USB stick** from the speaker.
-2. **Reboot** the device to apply all changes.
-
-### 8.1 Disable Remote Services (Optional)
-
-For enhanced security, you can disable SSH on migrated devices. However, keeping it enabled allows for easier future maintenance or reverts.
-
-### 8.2 Configure Backups
-
-Set up automatic backups of your device configurations:
-
-1. **Dashboard** → **"Settings"** → **"Backup"**
-2. **Enable Automatic Backups**: ✅
-3. **Backup Schedule**: `Daily at 2 AM`
-4. **Retention**: `Keep 30 days`
-5. **Export Location**: `/data/backups` or external storage
-
-![Backup Configuration](../images/backup-setup.png)
-*Example: Backup configuration settings*
-
-### 8.3 Set Up Monitoring Alerts (Optional)
-
-Configure notifications for important events:
-
-1. **Dashboard** → **"Settings"** → **"Notifications"**
-2. **Email Notifications**: Enter your email
-3. **Alert Types**:
-   - ✅ Device goes offline
-   - ✅ Migration failures
-   - ✅ Service errors
-   - ✅ Daily health summary
-
-## Troubleshooting Common Issues
-
-### Device Not Discovered
-
-**Problem**: Device doesn't appear in discovery scan
-
-**Solutions**:
-1. **Check network**: Ensure device and service are on same network
-2. **Verify USB setup**: Confirm `remote_services` file was processed
-3. **Power cycle**: Unplug device for 30 seconds, reconnect
-4. **Manual add**: Dashboard → "Devices" → "Add Manually" with IP address
-
-### Migration Stuck
-
-**Problem**: Device stuck in "Migrating" status
-
-**Solutions**:
-1. **Check device health**: Dashboard → Device → "Health Status"
-2. **Review logs**: Dashboard → Device → "View Logs"
-3. **Restart migration**: Device → "Migration" → "Restart Process"
-4. **Rollback**: Device → "Migration" → "Rollback to Bose"
-
-### Presets Not Working
-
-**Problem**: Saved presets don't work after migration
-
-**Solutions**:
-1. **Verify sources**: Check configured sources are still available
-2. **Re-authenticate**: Re-login to music services (Spotify, etc.)
-3. **Rebuild presets**: Dashboard → Device → "Presets" → "Rebuild from Backup"
-
-### Service Unreachable
-
-**Problem**: Cannot access SoundTouch Service dashboard
-
-**Solutions**:
-1. **Check service status**: `sudo systemctl status soundtouch-service`
-2. **Restart service**: `sudo systemctl restart soundtouch-service`
-3. **Check network**: Verify Pi is connected and accessible
-4. **Check ports**: Ensure ports 8000 and 8443 are not blocked
-
-## Advanced Features
-
-### Multi-Zone Management
-
-After migration, your multi-zone setups work seamlessly:
-
-1. **Dashboard** → **"Zones"**
-2. **Create Zone**: Select primary device and slaves
-3. **Zone Control**: Play, pause, volume control for entire zone
-4. **Individual Control**: Override individual speakers in zone
-
-### Custom Sources
-
-Add custom streaming sources:
-
-1. **Dashboard** → **"Sources"** → **"Add Custom"**
-2. **Configure**:
-   - Name: `Local Radio Station`
-   - Stream URL: `http://stream.example.com:8000`
-   - Image URL: `http://example.com/logo.png`
-3. **Assign to devices**: Select which devices can access this source
-
-### API Access
-
-For developers and advanced users:
-
-- **REST API**: `http://[SERVICE_IP]:8000/api/v1/`
-- **Documentation**: `http://[SERVICE_IP]:8000/docs`
-- **WebSocket Events**: Real-time device status updates
-- **Export Data**: JSON/XML export of all device configurations
-
-## Maintenance and Monitoring
-
-### Daily Monitoring
-
-Check your **Dashboard Summary**:
-- **All Devices Online**: ✅ Green indicators
-- **Response Times**: < 100ms average
-- **Error Rate**: < 1%
-- **Storage Usage**: Monitor disk space
-
-### Weekly Tasks
-
-1. **Review Health Reports**: Check weekly device health summaries
-2. **Update Service**: Check for SoundTouch service updates
-3. **Backup Verification**: Ensure backups are completing successfully
-4. **Log Review**: Check for any recurring issues or warnings
-
-### Monthly Tasks
-
-1. **Full System Backup**: Export complete account and device data
-2. **Performance Review**: Analyze response times and error patterns
-3. **Security Update**: Update Raspberry Pi OS and service
-4. **Capacity Planning**: Monitor storage and consider expansion
-
-## Getting Help
-
-### Documentation Resources
-
-- **Technical Reference**: `/docs/reference/` - Detailed API and configuration docs
-- **Troubleshooting Guide**: `/docs/guides/TROUBLESHOOTING.md` - Common issues and solutions
-- **Community Forum**: GitHub Discussions for community support
-
-### Diagnostic Information
-
-When seeking help, provide:
-
-1. **System Information**: Dashboard → "System" → "Download Diagnostic Report"
-2. **Device Logs**: Dashboard → Device → "Export Logs"
-3. **Migration History**: Dashboard → "Migration" → "Export Timeline"
-4. **Current Status**: Screenshot of main dashboard
-
-### Support Channels
-
-- **GitHub Issues**: Technical bugs and feature requests
-- **Community Discussions**: User questions and experiences
-- **Documentation Updates**: Corrections and improvements
+See [Raspberry Pi Setup](RASPBERRY-PI.md) and the [SoundTouch Service Guide](SOUNDTOUCH-SERVICE.md) for more deployment options.
 
 ---
 
-## Summary
+## Step 2: Configure the service URL
 
-Congratulations! 🎉 You've successfully migrated your SoundTouch speakers to local control. Your devices are now:
+Open `http://<server>:8000` and go to the **Settings** tab.
 
-- ✅ **Independent** of Bose cloud services
-- ✅ **Fully functional** with all original features preserved
-- ✅ **Enhanced** with better monitoring and control
-- ✅ **Future-proof** against service shutdowns
+Set the **Server URL** to the address your speakers can reach — for example `http://soundtouch.fritz.box:8000` or `http://192.168.1.100:8000`. This must be the host's address on your local network, not `localhost`.
 
-**What's Next?**
+If you plan to use DNS/DHCP redirect (which requires HTTPS), also set the **HTTPS Server URL** (e.g. `https://soundtouch.fritz.box:8443`).
 
-- **Enjoy your music** with enhanced local control
-- **Monitor your system** through the dashboard
-- **Share your experience** with the community
-- **Explore advanced features** as you become more comfortable
+> **Tip**: If you change settings and they don't seem to take effect, check `data/settings.json` — settings saved in the UI take precedence over environment variables.
 
-Your SoundTouch speakers will now continue working indefinitely, regardless of external service availability. Welcome to true audio independence! 🔊
+---
+
+## Step 3: Enable SSH on each speaker
+
+The migration writes updated configuration to the speaker's filesystem, which requires SSH access. Enable it once per device:
+
+1. Format a USB drive as FAT (FAT32). Some speakers require the **bootable flag** to be set on the partition — see [SoundCork issue #172](https://github.com/deborahgu/soundcork/issues/172) for details.
+2. Create an empty file named **`remote_services`** (no extension) in the root of the drive.
+3. Insert the drive into the speaker's USB port while it is powered on.
+4. Power-cycle the speaker (unplug the power cable, wait 10 seconds, reconnect).
+5. After boot, root SSH is available with no password: `ssh -oHostKeyAlgorithms=+ssh-rsa root@<SPEAKER-IP>`
+
+You only need to do this once per speaker. SSH can remain enabled for future maintenance or be disabled after migration — your choice.
+
+---
+
+## Step 4: Add and sync your speaker
+
+### Discover
+
+The service scans for SoundTouch devices automatically every few minutes. Check the **Devices** tab in the web UI. If your speaker doesn't appear, click **Discover Devices** to trigger an immediate scan, or add it manually by IP address.
+
+### Sync
+
+Once the speaker appears, click **Sync**. This connects to the speaker and pulls its current presets, recently played items, and configured sources into the local service's datastore. It also creates an off-device backup of the speaker's configuration.
+
+If the Bose cloud is still running, Sync also fetches your account data from Bose's servers. This is your preservation step — do it before the cloud shuts down.
+
+---
+
+## Step 5: Migrate
+
+The **Migration** tab in the web UI walks you through the redirect. Two methods are available:
+
+### XML redirect (recommended for first-time / testing)
+
+Uploads a configuration file to the speaker via the SoundTouch Web API. This changes the application-level service URLs without touching the speaker's network configuration. It's the least invasive option.
+
+The web UI guides you through:
+1. Previewing the config change (current vs. planned XML)
+2. Optionally installing the AfterTouch CA certificate on the speaker (requires SSH; needed for HTTPS)
+3. Applying the XML redirect
+4. Verifying the speaker can reach the local service
+
+### DNS/DHCP redirect (recommended for permanent / all-device setup)
+
+Configures the speaker to use a custom DNS server that resolves Bose cloud hostnames to the local service. This is the most robust method — it covers all Bose endpoints automatically and survives reboots.
+
+Requirements:
+- The AfterTouch DNS server must be running and bound to **port 53** on your network. Enable it in the **Settings** tab (`DNS Discovery` → enabled).
+- HTTPS is required. The web UI walks you through trusting the CA certificate on the speaker (via SSH).
+
+The web UI guides you through:
+1. Verifying the DNS server is running and reachable
+2. Installing the CA certificate on the speaker
+3. Configuring the speaker to use the AfterTouch DNS server
+4. Verifying DNS resolution and HTTPS connectivity
+
+---
+
+## Step 6: Reboot and verify
+
+After migration, **power-cycle the speaker** (unplug and replug). This applies all configuration changes.
+
+After reboot:
+- The speaker should appear as **migrated** in the Devices tab
+- Presets should load and play (served from the local service)
+- TuneIn browsing should work
+- Recently played items should appear
+
+If something doesn't work, check the **Interactions** tab in the web UI for failed requests, and the **Troubleshooting** section in the [SoundTouch Service Guide](SOUNDTOUCH-SERVICE.md).
+
+---
+
+## Repeat for each speaker
+
+Each speaker is migrated independently. You can run multiple migrations in parallel, but migrating one at a time makes it easier to diagnose issues.
+
+---
+
+## Rollback
+
+If you need to undo a migration:
+
+- **From the web UI**: Use the **Revert** action on the device — this restores the `.original` backup files created on the speaker during migration.
+- **Via SSH**: The original config is backed up on the speaker with a `.original` suffix. Restore it manually if the UI is unreachable.
+- **Factory reset**: As a last resort, perform a factory reset (see [Device Initial Setup](DEVICE-INITIAL-SETUP.md) for button sequences). This wipes all configuration and returns the speaker to out-of-box state.
+
+---
+
+## Post-migration
+
+Once all speakers are migrated, the `data/` directory is the source of truth for your presets, recents, and device state. Back it up periodically. The web UI at `http://<server>:8000` is your management interface from this point on.
+
+For the Bose cloud backup you created in Step 4, keep the `.tar.gz` archive in case you need to restore credentials or presets later.
