@@ -10,6 +10,7 @@ Welcome to the documentation for the Bose SoundTouch Toolkit. This comprehensive
 
 ### For Existing Users
 - **[Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md)** - Prepare for the May 2026 shutdown
+- **[Backup Tool](../cmd/soundtouch-backup/README.md)** - Back up your cloud account and speaker data before shutdown
 - **[SoundTouch Service Guide](guides/SOUNDTOUCH-SERVICE.md)** - Advanced service configuration
 
 ## 📋 Essential Documentation
@@ -40,6 +41,7 @@ The documentation is organized into three main categories:
 ### Advanced Features
 - [MAC Address Mapping](guides/MAC-ADDRESS-MAPPING.md) - Device identification
 - [CLI Reference](guides/CLI-REFERENCE.md) - Command-line tools
+- [Backup Tool](../cmd/soundtouch-backup/README.md) - Cloud account and speaker data backup
 - [IoT Implementation Guide](guides/IOT-IMPLEMENTATION-GUIDE.md) - IoT integrations
 - [MQTT Integration Design](guides/MQTT-INTEGRATION-DESIGN.md) - MQTT setup
 

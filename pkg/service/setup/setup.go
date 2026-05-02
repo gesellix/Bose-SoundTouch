@@ -19,7 +19,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
-	"github.com/gesellix/bose-soundtouch/pkg/service/ssh"
+	"github.com/gesellix/bose-soundtouch/pkg/ssh"
 )
 
 // MigrationMethod represents the method used to migrate a speaker.

@@ -14,6 +14,7 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/urfave/cli/v2 v2.27.7
 	golang.org/x/crypto v0.50.0
+	golang.org/x/term v0.42.0
 )
 
 require (

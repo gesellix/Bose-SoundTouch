@@ -24,6 +24,8 @@ SCANNER_NAME=mdns-scanner
 SCANNER_PATH=./cmd/$(SCANNER_NAME)
 FAVICON_GEN_NAME=favicon-gen
 FAVICON_GEN_PATH=./cmd/$(FAVICON_GEN_NAME)
+BACKUP_NAME=soundtouch-backup
+BACKUP_PATH=./cmd/$(BACKUP_NAME)
 BUILD_DIR=./build
 
 # Version info
@@ -31,7 +33,7 @@ BUILD_DIR=./build
 
 all: check build
 
-build: build-cli build-service build-web build-examples build-favicon-gen
+build: build-cli build-service build-web build-examples build-favicon-gen build-backup
 
 build-cli:
 	@echo "Building $(BINARY_NAME)..."
@@ -62,6 +64,11 @@ build-favicon-gen:
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) -o $(BUILD_DIR)/$(FAVICON_GEN_NAME) $(FAVICON_GEN_PATH)
 
+build-backup:
+	@echo "Building $(BACKUP_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME) $(BACKUP_PATH)
+
 build-all: build-linux build-darwin build-windows build-examples-all
 
 build-linux:
@@ -69,6 +76,7 @@ build-linux:
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(BINARY_PATH)
 	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-linux-amd64 $(SERVICE_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-linux-amd64 $(BACKUP_PATH)
 
 build-darwin:
 	@echo "Building for macOS..."
@@ -77,12 +85,15 @@ build-darwin:
 	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(BINARY_PATH)
 	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-amd64 $(SERVICE_PATH)
 	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-arm64 $(SERVICE_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-darwin-amd64 $(BACKUP_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-darwin-arm64 $(BACKUP_PATH)
 
 build-windows:
 	@echo "Building for Windows..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(BINARY_PATH)
 	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-windows-amd64.exe $(SERVICE_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-windows-amd64.exe $(BACKUP_PATH)
 
 build-examples-all:
 	@echo "Building examples for all platforms..."
@@ -262,6 +273,18 @@ dev-web-port: build-web
 	fi
 	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME) -port $(PORT)
 
+dev-backup: build-backup
+	@echo "Running backup tool..."
+	$(BUILD_DIR)/$(BACKUP_NAME) --help
+
+dev-backup-cloud: build-backup
+	@echo "Running cloud backup..."
+	$(BUILD_DIR)/$(BACKUP_NAME) cloud
+
+dev-backup-local: build-backup
+	@echo "Running local backup (auto-discover)..."
+	$(BUILD_DIR)/$(BACKUP_NAME) local --discover
+
 dev-web-host: build-web
 	@echo "Starting web UI with specific host..."
 	@if [ -z "$(HOST)" ]; then \
@@ -270,11 +293,12 @@ dev-web-host: build-web
 	fi
 	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME) -host $(HOST)
 
-install: build-cli build-service build-web
+install: build-cli build-service build-web build-backup
 	@echo "Installing binaries to $(GOPATH)/bin..."
 	cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(SERVICE_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(WEB_NAME) $(GOPATH)/bin/
+	cp $(BUILD_DIR)/$(BACKUP_NAME) $(GOPATH)/bin/
 
 clean:
 	@echo "Cleaning..."
@@ -310,6 +334,7 @@ help:
 	@echo "  build         - Build the CLI tool, service, and examples"
 	@echo "  build-cli     - Build only the CLI tool"
 	@echo "  build-service - Build only the service"
+	@echo "  build-backup  - Build only the backup tool"
 	@echo "  build-favicon-gen - Build the favicon generator"
 	@echo "  build-examples - Build only the example programs"
 	@echo "  build-all     - Build for all platforms"
@@ -334,6 +359,9 @@ help:
 	@echo "  dev-scan-all     - Scan all mDNS services on network"
 	@echo "  dev-scan-soundtouch - Scan specifically for SoundTouch mDNS services"
 	@echo "  dev-scan-http    - Scan for HTTP mDNS services"
+	@echo "  dev-backup       - Build and show backup tool help"
+	@echo "  dev-backup-cloud - Build and run cloud backup (prompts for credentials)"
+	@echo "  dev-backup-local - Build and run local backup (auto-discover speakers)"
 	@echo "  dev-web          - Build and run web UI (default port 8080)"
 	@echo "  dev-web-port     - Build and run web UI on custom port (PORT=8888)"
 	@echo "  dev-web-host     - Build and run web UI with specific device (HOST=ip)"

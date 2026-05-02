@@ -1,4 +1,4 @@
-// Package ssh provides simple SSH operations used during device setup and migration.
+// Package ssh provides simple SSH operations for SoundTouch speakers.
 package ssh
 
 import (
@@ -16,7 +16,7 @@ type Client struct {
 	User string
 }
 
-// NewClient creates a new SSH client for the given host.
+// NewClient creates a new SSH client for the given host. The default user is "root".
 func NewClient(host string) *Client {
 	return &Client{
 		Host: host,
@@ -24,12 +24,13 @@ func NewClient(host string) *Client {
 	}
 }
 
-// getConfig returns the SSH client configuration.
+// getConfig returns the SSH client configuration with the legacy cipher/kex suites
+// required by older SoundTouch device firmware.
 func (c *Client) getConfig() *ssh.ClientConfig {
 	return &ssh.ClientConfig{
 		User: c.User,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(""), // Default password for SoundTouch root is often empty or not used with these settings
+			ssh.Password(""),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
@@ -88,9 +89,46 @@ func (c *Client) Run(command string) (string, error) {
 	return string(output), err
 }
 
-// UploadContent uploads the given content to a file on the remote host.
-// It uses a simple approach: echoing the content into a file.
-// For larger files, a proper SCP or SFTP implementation would be better.
+// ReadFile downloads the content of a file on the remote host.
+// An empty file that causes cat to exit non-zero (a firmware quirk on some devices)
+// is returned as empty bytes rather than an error.
+func (c *Client) ReadFile(remotePath string) ([]byte, error) {
+	output, err := c.Run(fmt.Sprintf("cat %s", remotePath))
+	if err != nil && strings.TrimSpace(output) != "" {
+		return nil, err
+	}
+
+	return []byte(output), nil
+}
+
+// ReadDir downloads all regular files under remotePath, returning a map of
+// absolute remote path → file content. Missing or unreadable files are skipped.
+func (c *Client) ReadDir(remotePath string) (map[string][]byte, error) {
+	listing, err := c.Run(fmt.Sprintf("find %s -type f 2>/dev/null", remotePath))
+	if err != nil || strings.TrimSpace(listing) == "" {
+		return nil, fmt.Errorf("cannot list %s: %w", remotePath, err)
+	}
+
+	result := make(map[string][]byte)
+
+	for _, path := range strings.Split(strings.TrimSpace(listing), "\n") {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+
+		data, readErr := c.ReadFile(path)
+		if readErr != nil {
+			continue
+		}
+
+		result[path] = data
+	}
+
+	return result, nil
+}
+
+// UploadContent uploads the given content to a file on the remote host using stdin piping.
 func (c *Client) UploadContent(content []byte, remotePath string) error {
 	config := c.getConfig()
 
@@ -108,28 +146,20 @@ func (c *Client) UploadContent(content []byte, remotePath string) error {
 
 	defer func() { _ = session.Close() }()
 
-	// Use a pipe to write content to the remote command's stdin
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to get stdin pipe: %w", err)
 	}
 
-	// Capture stderr to get better error messages
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("failed to get stderr pipe: %w", err)
 	}
 
-	// Read content from stdin and write to the remote file
-	cmd := fmt.Sprintf("cat > %s", remotePath)
-
-	// Start the command
-	startErr := session.Start(cmd)
-	if startErr != nil {
+	if startErr := session.Start(fmt.Sprintf("cat > %s", remotePath)); startErr != nil {
 		return fmt.Errorf("failed to start upload command: %w", startErr)
 	}
 
-	// Write content and close stdin
 	_, err = stdin.Write(content)
 	_ = stdin.Close()
 
@@ -137,12 +167,10 @@ func (c *Client) UploadContent(content []byte, remotePath string) error {
 		return fmt.Errorf("failed to write content to stdin: %w", err)
 	}
 
-	// Read stderr in case of failure
 	stderrBuf := new(strings.Builder)
 
 	go func() { _, _ = io.Copy(stderrBuf, stderr) }()
 
-	// Wait for the command to finish
 	if err := session.Wait(); err != nil {
 		return fmt.Errorf("failed to finish upload: %w (stderr: %s)", err, stderrBuf.String())
 	}

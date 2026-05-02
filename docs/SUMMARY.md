@@ -8,6 +8,7 @@
 * [Connecting Music Services](guides/MUSIC-SERVICES.md)
 * [Migration & Safety Guide](guides/MIGRATION-SAFETY.md)
 * [CLI Reference](guides/CLI-REFERENCE.md)
+* [Backup Tool](../cmd/soundtouch-backup/README.md)
 * [Getting Started](guides/GETTING-STARTED.md)
 * [SoundTouch Service](guides/SOUNDTOUCH-SERVICE.md)
 * [Initial Device Setup](guides/DEVICE-INITIAL-SETUP.md)

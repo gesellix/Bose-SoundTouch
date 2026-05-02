@@ -12,6 +12,7 @@ dist/
 #example-upnp
 
 # Root-level binary executables (exclude built binaries in root)
+/soundtouch-backup
 /soundtouch-cli
 /soundtouch-service
 /soundtouch-web

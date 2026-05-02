@@ -44,29 +44,3 @@ func TestRun_DialFailure(t *testing.T) {
 		t.Errorf("Expected 'failed to dial' error, got: %v", err)
 	}
 }
-
-// Note: Testing Run and UploadContent with a real SSH server is complex in a unit test.
-// We've already verified the implementation manually and with setup tests.
-// Below is a skeleton of how one might mock it if needed, but for now we focus on the basic logic.
-
-/*
-// MockClient can be used to test components that depend on SSH without a real server.
-type MockClient struct {
-	RunFunc           func(command string) (string, error)
-	UploadContentFunc func(content []byte, remotePath string) error
-}
-
-func (m *MockClient) Run(command string) (string, error) {
-	if m.RunFunc != nil {
-		return m.RunFunc(command)
-	}
-	return "", nil
-}
-
-func (m *MockClient) UploadContent(content []byte, remotePath string) error {
-	if m.UploadContentFunc != nil {
-		return m.UploadContentFunc(content, remotePath)
-	}
-	return nil
-}
-*/
