@@ -28,8 +28,8 @@ BACKUP_NAME=soundtouch-backup
 BACKUP_PATH=./cmd/$(BACKUP_NAME)
 BUILD_DIR=./build
 
-# Version info
-# No ldflags needed - using debug.BuildInfo since Go 1.18
+# Build flags: strip debug info/DWARF for smaller binaries, remove local paths for reproducibility
+BUILDFLAGS=-trimpath -ldflags="-s -w"
 
 all: check build
 
@@ -38,78 +38,85 @@ build: build-cli build-service build-web build-examples build-favicon-gen build-
 build-cli:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) $(BINARY_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(BINARY_PATH)
 
 build-service:
 	@echo "Building $(SERVICE_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME) $(SERVICE_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME) $(SERVICE_PATH)
 
 build-web:
 	@echo "Building $(WEB_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(WEB_NAME) $(WEB_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(WEB_NAME) $(WEB_PATH)
 
 build-examples:
 	@echo "Building $(EXAMPLE_MDNS_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME) $(EXAMPLE_MDNS_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME) $(EXAMPLE_MDNS_PATH)
 	@echo "Building $(EXAMPLE_UPNP_NAME)..."
-	$(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME) $(EXAMPLE_UPNP_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME) $(EXAMPLE_UPNP_PATH)
 	@echo "Building $(SCANNER_NAME)..."
-	$(GOBUILD) -o $(BUILD_DIR)/$(SCANNER_NAME) $(SCANNER_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SCANNER_NAME) $(SCANNER_PATH)
 
 build-favicon-gen:
 	@echo "Building $(FAVICON_GEN_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(FAVICON_GEN_NAME) $(FAVICON_GEN_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(FAVICON_GEN_NAME) $(FAVICON_GEN_PATH)
 
 build-backup:
 	@echo "Building $(BACKUP_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME) $(BACKUP_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME) $(BACKUP_PATH)
 
-build-all: build-linux build-darwin build-windows build-examples-all
+build-all: build-linux build-linux-armv7 build-darwin build-windows build-examples-all
 
 build-linux:
 	@echo "Building for Linux..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(BINARY_PATH)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-linux-amd64 $(SERVICE_PATH)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-linux-amd64 $(BACKUP_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(BINARY_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME)-linux-amd64 $(SERVICE_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME)-linux-amd64 $(BACKUP_PATH)
+
+build-linux-armv7:
+	@echo "Building for Linux ARMv7 (CGO_ENABLED=0 for kernel 3.14+ compatibility)..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME)-linux-armv7 $(SERVICE_PATH)
+	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-armv7 $(BINARY_PATH)
+	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME)-linux-armv7 $(BACKUP_PATH)
 
 build-darwin:
 	@echo "Building for macOS..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(BINARY_PATH)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(BINARY_PATH)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-amd64 $(SERVICE_PATH)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-arm64 $(SERVICE_PATH)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-darwin-amd64 $(BACKUP_PATH)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-darwin-arm64 $(BACKUP_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(BINARY_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(BINARY_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-amd64 $(SERVICE_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME)-darwin-arm64 $(SERVICE_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME)-darwin-amd64 $(BACKUP_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME)-darwin-arm64 $(BACKUP_PATH)
 
 build-windows:
 	@echo "Building for Windows..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(BINARY_PATH)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SERVICE_NAME)-windows-amd64.exe $(SERVICE_PATH)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(BACKUP_NAME)-windows-amd64.exe $(BACKUP_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(BINARY_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME)-windows-amd64.exe $(SERVICE_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME)-windows-amd64.exe $(BACKUP_PATH)
 
 build-examples-all:
 	@echo "Building examples for all platforms..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-linux-amd64 $(EXAMPLE_MDNS_PATH)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-darwin-amd64 $(EXAMPLE_MDNS_PATH)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-darwin-arm64 $(EXAMPLE_MDNS_PATH)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-windows-amd64.exe $(EXAMPLE_MDNS_PATH)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-linux-amd64 $(EXAMPLE_UPNP_PATH)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-darwin-amd64 $(EXAMPLE_UPNP_PATH)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-darwin-arm64 $(EXAMPLE_UPNP_PATH)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-windows-amd64.exe $(EXAMPLE_UPNP_PATH)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SCANNER_NAME)-linux-amd64 $(SCANNER_PATH)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SCANNER_NAME)-darwin-amd64 $(SCANNER_PATH)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) -o $(BUILD_DIR)/$(SCANNER_NAME)-darwin-arm64 $(SCANNER_PATH)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -o $(BUILD_DIR)/$(SCANNER_NAME)-windows-amd64.exe $(SCANNER_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-linux-amd64 $(EXAMPLE_MDNS_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-darwin-amd64 $(EXAMPLE_MDNS_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-darwin-arm64 $(EXAMPLE_MDNS_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_MDNS_NAME)-windows-amd64.exe $(EXAMPLE_MDNS_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-linux-amd64 $(EXAMPLE_UPNP_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-darwin-amd64 $(EXAMPLE_UPNP_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-darwin-arm64 $(EXAMPLE_UPNP_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(EXAMPLE_UPNP_NAME)-windows-amd64.exe $(EXAMPLE_UPNP_PATH)
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SCANNER_NAME)-linux-amd64 $(SCANNER_PATH)
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SCANNER_NAME)-darwin-amd64 $(SCANNER_PATH)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SCANNER_NAME)-darwin-arm64 $(SCANNER_PATH)
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SCANNER_NAME)-windows-amd64.exe $(SCANNER_PATH)
 
 test:
 	@echo "Running tests..."
@@ -338,6 +345,7 @@ help:
 	@echo "  build-favicon-gen - Build the favicon generator"
 	@echo "  build-examples - Build only the example programs"
 	@echo "  build-all     - Build for all platforms"
+	@echo "  build-linux-armv7 - Build for Linux ARMv7 (kernel 3.14+ compatible, CGO_ENABLED=0)"
 	@echo "  test          - Run tests"
 	@echo "  test-coverage - Run tests with coverage report"
 	@echo "  check         - Run fmt, vet, and tests"
