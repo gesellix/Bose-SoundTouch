@@ -17,7 +17,8 @@ import (
 
 // CertificateManager handles CA and certificate generation.
 type CertificateManager struct {
-	CertsDir string
+	CertsDir   string
+	CommonName string // CN for generated server certs; defaults to "localhost" if empty
 }
 
 // NewCertificateManager creates a new CertificateManager.
@@ -255,11 +256,16 @@ func (cm *CertificateManager) GenerateCertificate(domains []string) ([]byte, []b
 		}
 	}
 
+	cn := cm.CommonName
+	if cn == "" {
+		cn = "localhost"
+	}
+
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{"AfterTouch"},
-			CommonName:   domains[0],
+			CommonName:   cn,
 		},
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,

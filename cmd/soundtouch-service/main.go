@@ -387,7 +387,7 @@ func main() {
 
 			config.domains = getDomains(config.serverURL, config.httpsServerURL, hostname)
 
-			cm := initCertificateManager(config.dataDir)
+			cm := initCertificateManager(config.dataDir, config.hostname)
 			sm := setup.NewManager(config.serverURL, ds, cm)
 			sm.MgmtUsername = config.mgmtUsername
 			sm.MgmtPassword = config.mgmtPassword
@@ -469,12 +469,14 @@ func main() {
 			// TLS cert generation can be slow on constrained hardware; run it in the
 			// background so the HTTP server is available immediately.
 			log.Printf("HTTPS setup running in background; %s will be available shortly", config.httpsServerURL)
+
 			go func() {
 				tlsConfig, err := cm.GetServerTLSConfig(config.domains)
 				if err != nil {
 					log.Printf("Warning: Failed to setup TLS: %v", err)
 					return
 				}
+
 				startHTTPSServer(config.httpsAddr, r, tlsConfig, config.httpsServerURL)
 			}()
 
@@ -510,6 +512,7 @@ type serviceConfig struct {
 	bindAddr            string
 	addr                string
 	dataDir             string
+	hostname            string
 	serverURL           string
 	httpsServerURL      string
 	httpsAddr           string
@@ -621,6 +624,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		bindAddr:            bindAddr,
 		addr:                addr,
 		dataDir:             dataDir,
+		hostname:            hostname,
 		serverURL:           serverURL,
 		httpsServerURL:      httpsServerURL,
 		httpsAddr:           httpsAddr,
@@ -812,8 +816,10 @@ func initDataStore(dataDir string) *datastore.DataStore {
 	return ds
 }
 
-func initCertificateManager(dataDir string) *certmanager.CertificateManager {
+func initCertificateManager(dataDir, hostname string) *certmanager.CertificateManager {
 	cm := certmanager.NewCertificateManager(filepath.Join(dataDir, "certs"))
+
+	cm.CommonName = hostname
 	if err := cm.EnsureCA(); err != nil {
 		log.Printf("Warning: Failed to ensure CA: %v", err)
 	}

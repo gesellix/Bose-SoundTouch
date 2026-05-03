@@ -16,6 +16,7 @@ func TestCertificateManager(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	cm := NewCertificateManager(filepath.Join(tempDir, "certs"))
+	cm.CommonName = "test.local"
 
 	// Test CA generation
 	if err := cm.EnsureCA(); err != nil {
@@ -67,8 +68,8 @@ func TestCertificateManager(t *testing.T) {
 		t.Fatalf("Failed to parse certificate: %v", err)
 	}
 
-	if cert.Subject.CommonName != domains[0] {
-		t.Errorf("Expected CommonName %s, got %s", domains[0], cert.Subject.CommonName)
+	if cert.Subject.CommonName != cm.CommonName {
+		t.Errorf("Expected CommonName %s, got %s", cm.CommonName, cert.Subject.CommonName)
 	}
 
 	// Check DNS names
