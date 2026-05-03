@@ -258,48 +258,8 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 
 	summary.PlannedConfig = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + string(xmlContent)
 
-	// 2b. Initial planned hosts config
-	parsedURL, err := url.Parse(targetURL)
-	if err == nil {
-		hostName := parsedURL.Hostname()
-		if hostName != "" && hostName != "localhost" {
-			client := m.NewSSH(deviceIP)
-
-			hostIP, resolveErr := m.resolveIP(hostName, client)
-			if resolveErr != nil {
-				summary.ResolveIPError = resolveErr.Error()
-			}
-
-			if hostIP == "" {
-				hostIP = hostName
-			}
-
-			// Predicted aftertouch.resolv.conf
-			summary.PlannedResolv = fmt.Sprintf("# Created by Aftertouch/SoundTouch-Service\n# Priority nameserver for Bose service redirection\nnameserver %s\n", hostIP)
-
-			domains := []string{
-				"streaming.bose.com",
-				"updates.bose.com",
-				"stats.bose.com",
-				"bmx.bose.com",
-				"content.api.bose.io",
-				"events.api.bosecm.com",
-				"bose-prod.apigee.net",
-				"worldwide.bose.com",
-				"music.api.bose.com",
-				"media.bose.io",
-				"downloads.bose.com",
-				"voice.api.bose.io",
-			}
-
-			var hostsLines []string
-			for _, domain := range domains {
-				hostsLines = append(hostsLines, fmt.Sprintf("%s\t%s", hostIP, domain))
-			}
-
-			summary.PlannedHosts = strings.Join(hostsLines, "\n")
-		}
-	}
+	// 2b. Planned network config (hosts entries, resolv.conf preview, resolve error)
+	m.populatePlannedNetworkConfig(summary, deviceIP, targetURL)
 
 	// 3. Check for remote services files
 	m.checkRemoteServices(summary, deviceIP)
@@ -316,18 +276,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	}
 
 	// 5. Provide HTTPS URL for testing
-	if parsedURL, err := url.Parse(targetURL); err == nil {
-		hostIP := parsedURL.Hostname()
-		if hostIP != "" {
-			// Find HTTPS port from environment or default
-			httpsPort := os.Getenv("HTTPS_PORT")
-			if httpsPort == "" {
-				httpsPort = "8443"
-			}
-
-			summary.ServerHTTPSURL = fmt.Sprintf("https://%s:%s/health", hostIP, httpsPort)
-		}
-	}
+	summary.ServerHTTPSURL = m.buildServerHTTPSURL(targetURL)
 
 	// 6. Check if migrated
 	m.checkIsMigrated(summary, deviceIP)
@@ -344,6 +293,67 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	}
 
 	return summary, nil
+}
+
+func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, deviceIP, targetURL string) {
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return
+	}
+
+	hostName := parsedURL.Hostname()
+	if hostName == "" || hostName == "localhost" {
+		return
+	}
+
+	client := m.NewSSH(deviceIP)
+
+	hostIP, resolveErr := m.resolveIP(hostName, client)
+	if resolveErr != nil {
+		summary.ResolveIPError = resolveErr.Error()
+	}
+
+	if hostIP == "" {
+		hostIP = hostName
+	}
+
+	summary.PlannedResolv = fmt.Sprintf("# Created by Aftertouch/SoundTouch-Service\n# Priority nameserver for Bose service redirection\nnameserver %s\n", hostIP)
+
+	domains := []string{
+		"streaming.bose.com",
+		"updates.bose.com",
+		"stats.bose.com",
+		"bmx.bose.com",
+		"content.api.bose.io",
+		"events.api.bosecm.com",
+		"bose-prod.apigee.net",
+		"worldwide.bose.com",
+		"music.api.bose.com",
+		"media.bose.io",
+		"downloads.bose.com",
+		"voice.api.bose.io",
+	}
+
+	hostsLines := make([]string, len(domains))
+	for i, domain := range domains {
+		hostsLines[i] = fmt.Sprintf("%s\t%s", hostIP, domain)
+	}
+
+	summary.PlannedHosts = strings.Join(hostsLines, "\n")
+}
+
+func (m *Manager) buildServerHTTPSURL(targetURL string) string {
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil || parsedURL.Hostname() == "" {
+		return ""
+	}
+
+	httpsPort := os.Getenv("HTTPS_PORT")
+	if httpsPort == "" {
+		httpsPort = "8443"
+	}
+
+	return fmt.Sprintf("https://%s:%s/health", parsedURL.Hostname(), httpsPort)
 }
 
 // checkIsMigrated determines if the device is already migrated to AfterTouch.
