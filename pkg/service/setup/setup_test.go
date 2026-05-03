@@ -258,9 +258,9 @@ func TestGetMigrationSummary_WithProxyOptions(t *testing.T) {
 	// If SSH fails, ParsedCurrentConfig will be nil.
 
 	options := map[string]string{
-		"marge":     "upstream",
+		"marge":     "proxied",
 		"stats":     "self",
-		"sw_update": "upstream",
+		"sw_update": "proxied",
 		"bmx":       "self",
 	}
 

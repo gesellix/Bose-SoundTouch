@@ -526,26 +526,35 @@ func (m *Manager) checkCurrentConfig(summary *MigrationSummary, deviceIP string)
 	return "", err
 }
 
-// applyProxyOptions modifies planned config based on proxy options
+// applyProxyOptions modifies planned config based on proxy options.
+// Each field accepts: "proxied" (route through proxyURL), "original" (keep current value), or unset (use targetURL via plannedCfg default).
 func (m *Manager) applyProxyOptions(plannedCfg *PrivateCfg, proxyURL string, options map[string]string, currentCfg *PrivateCfg) {
-	if proxyURL == "" || currentCfg == nil {
+	if currentCfg == nil {
 		return
 	}
 
-	if options["marge"] == "upstream" && currentCfg.MargeServerUrl != "" {
+	if options["marge"] == "proxied" && currentCfg.MargeServerUrl != "" {
 		plannedCfg.MargeServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.MargeServerUrl)
+	} else if options["marge"] == "original" && currentCfg.MargeServerUrl != "" {
+		plannedCfg.MargeServerUrl = currentCfg.MargeServerUrl
 	}
 
-	if options["stats"] == "upstream" && currentCfg.StatsServerUrl != "" {
+	if options["stats"] == "proxied" && currentCfg.StatsServerUrl != "" {
 		plannedCfg.StatsServerUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.StatsServerUrl)
+	} else if options["stats"] == "original" && currentCfg.StatsServerUrl != "" {
+		plannedCfg.StatsServerUrl = currentCfg.StatsServerUrl
 	}
 
-	if options["sw_update"] == "upstream" && currentCfg.SwUpdateUrl != "" {
+	if options["sw_update"] == "proxied" && currentCfg.SwUpdateUrl != "" {
 		plannedCfg.SwUpdateUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.SwUpdateUrl)
+	} else if options["sw_update"] == "original" && currentCfg.SwUpdateUrl != "" {
+		plannedCfg.SwUpdateUrl = currentCfg.SwUpdateUrl
 	}
 
-	if options["bmx"] == "upstream" && currentCfg.BmxRegistryUrl != "" {
+	if options["bmx"] == "proxied" && currentCfg.BmxRegistryUrl != "" {
 		plannedCfg.BmxRegistryUrl = fmt.Sprintf("%s/proxy/%s", proxyURL, currentCfg.BmxRegistryUrl)
+	} else if options["bmx"] == "original" && currentCfg.BmxRegistryUrl != "" {
+		plannedCfg.BmxRegistryUrl = currentCfg.BmxRegistryUrl
 	}
 }
 
@@ -721,7 +730,7 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 		BmxRegistryUrl:             fmt.Sprintf("%s/bmx/registry/v1/services", targetURL),
 	}
 
-	// If we have a proxyURL and can read current config, use it
+	// If we can read current config, apply per-field options
 	if curCfg, curCfgErr := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); curCfgErr == nil && curCfg != "" {
 		logs += "Read current configuration\n"
 
@@ -758,16 +767,18 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 		fmt.Printf("Backing up original config to %s.original\n", remotePath)
 		// Try to copy existing config to .original, ensuring filesystem is writable
 		if output, err := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath)); err != nil {
-			logs += fmt.Sprintf("Warning: failed to cp backup config: %v (output: %s)\n", err, output)
-			fmt.Printf("Warning: failed to cp backup config: %v (output: %s)\n", err, output)
+			logs += fmt.Sprintf("cp backup failed: %v (output: %s)\n", err, output)
+			fmt.Printf("cp backup failed: %v (output: %s)\n", err, output)
 			// Fallback to manual upload if cp failed (might not have cp?)
 			if config, err := client.Run(fmt.Sprintf("cat %s", remotePath)); err == nil && config != "" {
 				if err := client.UploadContent([]byte(config), remotePath+".original"); err != nil {
-					logs += "Warning: failed to upload backup config: " + err.Error() + "\n"
-					fmt.Printf("Warning: failed to upload backup config: %v\n", err)
-				} else {
-					logs += "Uploaded backup config via fallback\n"
+					logs += "failed to upload backup config: " + err.Error() + "\n"
+					return logs, fmt.Errorf("cannot create backup of %s before migration: %w", remotePath, err)
 				}
+
+				logs += "Uploaded backup config via fallback\n"
+			} else {
+				return logs, fmt.Errorf("cannot create backup of %s before migration: failed to read original config", remotePath)
 			}
 		} else {
 			logs += "Copied backup config to .original\n"
