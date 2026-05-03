@@ -28,7 +28,27 @@ soundtouch-service
 
 The service starts on port 8000. Open `http://localhost:8000` in your browser.
 
-### Docker (Linux — with host networking for device discovery)
+### Docker Compose (recommended for home servers and VMs)
+
+The repository ships a `docker-compose.yml` ready for this use case. Clone or download it, copy the example config, then edit `.env` before starting:
+
+```bash
+cp .env.example .env
+# Edit .env:
+#   SOUNDTOUCH_HOSTNAME=192.168.1.100   ← your server's address
+#   SOUNDTOUCH_VERSION=v0.70.0          ← pin to a release tag instead of 'latest'
+docker compose up -d
+```
+
+`SOUNDTOUCH_HOSTNAME` is the address your speakers will use to reach the service — use a hostname or IP reachable from the speaker, not `localhost`.
+
+On **Linux** (Debian, Proxmox VE, Raspberry Pi OS, etc.) you can enable host networking for automatic speaker discovery. Uncomment the `network_mode: host` line in `docker-compose.yml` and remove the `ports:` section (they conflict with host networking). Without host networking, add your speakers by IP address in Step 4 instead.
+
+For local overrides (e.g. switching to `build: .` during development), create a `docker-compose.override.yml` — Docker Compose picks it up automatically and it is not tracked in version control.
+
+> **Note on `docker-compose.ci.yml`**: this file contains mock services used only for automated integration tests. It is not needed for your own deployment.
+
+### Docker run (Linux — with host networking for device discovery)
 
 ```bash
 docker run -d \
@@ -38,7 +58,7 @@ docker run -d \
   ghcr.io/gesellix/bose-soundtouch:latest
 ```
 
-### Docker (macOS / Windows — manual device IP required)
+### Docker run (macOS / Windows — manual device IP required)
 
 ```bash
 docker run -d \
