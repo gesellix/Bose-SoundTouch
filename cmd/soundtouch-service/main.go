@@ -460,20 +460,23 @@ func main() {
 
 			initializeDefaultSources(ds)
 
-			tlsConfig, err := cm.GetServerTLSConfig(config.domains)
-			if err != nil {
-				log.Printf("Warning: Failed to setup TLS: %v", err)
-			}
-
 			startDeviceDiscovery(server)
 
 			r := setupRouter(server)
 
 			log.Printf("Go service starting on %s", config.serverURL)
 
-			if tlsConfig != nil {
+			// TLS cert generation can be slow on constrained hardware; run it in the
+			// background so the HTTP server is available immediately.
+			log.Printf("HTTPS setup running in background; %s will be available shortly", config.httpsServerURL)
+			go func() {
+				tlsConfig, err := cm.GetServerTLSConfig(config.domains)
+				if err != nil {
+					log.Printf("Warning: Failed to setup TLS: %v", err)
+					return
+				}
 				startHTTPSServer(config.httpsAddr, r, tlsConfig, config.httpsServerURL)
-			}
+			}()
 
 			return http.ListenAndServe(config.addr, r)
 		},
