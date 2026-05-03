@@ -1,6 +1,6 @@
 services:
   soundtouch-service:
-    image: ghcr.io/gesellix/bose-soundtouch:latest
+    image: ghcr.io/gesellix/bose-soundtouch:${SOUNDTOUCH_VERSION:-latest}
     # build: .
     container_name: soundtouch-service
     # Linux only, required for discovery. Swarm requires host network at the task level.
@@ -8,8 +8,6 @@ services:
     ports:
       - "8000:8000"
       - "8443:8443"
-    networks:
-      - soundtouch-test-net
     environment:
       - PORT=8000
       - HTTPS_PORT=8443
@@ -36,34 +34,6 @@ services:
         reservations:
           cpus: '0.25'
           memory: 128M
-
-  spotify-mock:
-    image: golang:1.26.2-alpine
-    container_name: spotify-mock
-    working_dir: /app
-    volumes:
-      - .:/app
-    command: go run ./cmd/mock-spotify/main.go -port 8080
-    ports:
-      - "8081:8080"
-    networks:
-      - soundtouch-test-net
-
-  amazon-mock:
-    image: golang:1.26.2-alpine
-    container_name: amazon-mock
-    working_dir: /app
-    volumes:
-      - .:/app
-    command: go run ./cmd/mock-amazon/main.go -port 8080
-    ports:
-      - "8082:8080"
-    networks:
-      - soundtouch-test-net
-
-networks:
-  soundtouch-test-net:
-    name: soundtouch-test-net
 
 volumes:
   soundtouch-data:

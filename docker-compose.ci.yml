@@ -3,6 +3,8 @@ services:
     build:
       context: .
       target: soundtouch-service
+    networks:
+      - soundtouch-test-net
     volumes:
       - ./tests/integration/testdata:/app/data
     environment:
@@ -14,3 +16,31 @@ services:
       - AMAZON_CLIENT_SECRET=mock-amazon-secret
       - AMAZON_TOKEN_URL=http://amazon-mock:8080/auth/o2/token
       - AMAZON_PROFILE_URL=http://amazon-mock:8080/user/profile
+
+  spotify-mock:
+    image: golang:1.26.2-alpine
+    container_name: spotify-mock
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: go run ./cmd/mock-spotify/main.go -port 8080
+    ports:
+      - "8081:8080"
+    networks:
+      - soundtouch-test-net
+
+  amazon-mock:
+    image: golang:1.26.2-alpine
+    container_name: amazon-mock
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: go run ./cmd/mock-amazon/main.go -port 8080
+    ports:
+      - "8082:8080"
+    networks:
+      - soundtouch-test-net
+
+networks:
+  soundtouch-test-net:
+    name: soundtouch-test-net
