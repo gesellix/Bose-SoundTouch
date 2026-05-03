@@ -137,7 +137,7 @@ func (cm *CertificateManager) GetServerTLSConfig(domains []string) (*tls.Config,
 
 // GenerateCA generates a new CA certificate and key.
 func (cm *CertificateManager) GenerateCA() error {
-	priv, err := rsa.GenerateKey(rand.Reader, 4096)
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
 	}
