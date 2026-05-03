@@ -112,7 +112,7 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             output_name="${output_name}.exe"
           fi
-          go build -o "$output_name" ./cmd/soundtouch-cli
+          go build -trimpath -ldflags="-s -w" -o "$output_name" ./cmd/soundtouch-cli
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -220,7 +220,7 @@ jobs:
 
       - name: Test CLI build and help
         run: |
-          go build -o soundtouch-cli ./cmd/soundtouch-cli
+          go build -trimpath -ldflags="-s -w" -o soundtouch-cli ./cmd/soundtouch-cli
           ./soundtouch-cli -help
 
       - name: Test library imports

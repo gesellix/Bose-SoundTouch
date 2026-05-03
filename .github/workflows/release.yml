@@ -151,6 +151,7 @@ jobs:
             rm -f "$OUTPUT_NAME" "$OUTPUT_NAME.sha256" "$OUTPUT_NAME.sha512"
 
             if ! go build \
+              -trimpath \
               -ldflags="-s -w" \
               -o "$OUTPUT_NAME" \
               "$CMD_PATH"; then
