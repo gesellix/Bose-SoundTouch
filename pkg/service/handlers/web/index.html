@@ -854,6 +854,19 @@
                             >Planned Config (AfterTouch)</span
                             >
                     <pre id="planned-config"></pre>
+                    <div
+                        id="resolve-ip-error"
+                        style="display: none; margin-top: 10px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #856404;"
+                    >
+                        ⚠️ <strong>Hostname resolution warning:</strong>
+                        <span id="resolve-ip-error-msg"></span>
+                        <br/>
+                        The planned IP shown above may be incorrect.
+                        Migration methods that write IPs to the device
+                        (hosts, resolv.conf) will refuse to proceed until
+                        the hostname can be resolved from the device itself.
+                        <a href="https://github.com/gesellix/bose-soundtouch/blob/main/docs/guides/TROUBLESHOOTING.md#hostname-resolution" target="_blank" style="color: #856404;">Learn more →</a>
+                    </div>
                 </div>
                 <div
                     id="planned-hosts-pane"

@@ -853,6 +853,85 @@ cat data/accounts/3230304/devices/*/DeviceInfo.xml | grep macAddress
 
 ---
 
+## 🌐 **Hostname Resolution** {#hostname-resolution}
+
+### Why the service resolves the hostname from the device
+
+When you migrate a speaker using the resolv.conf method, the service needs to write a raw IP address into the speaker's network configuration. That IP must be the address the *speaker itself* can reach — which is not necessarily the same address your computer resolves.
+
+In environments with NAT, split-horizon DNS, or Docker/container networking, `soundtouch.local` (or whatever you set as `SERVER_URL`) may resolve to a different IP depending on who is asking. The service therefore resolves the hostname by running `ping -c 1 <hostname>` over SSH on the speaker and extracting the IP from the output. This is the authoritative result: it is exactly what the speaker would use.
+
+If that SSH ping fails, migration is aborted. Writing an unresolvable or incorrectly resolved hostname into `aftertouch.resolv.conf` would silently break the speaker's DNS config and prevent it from reaching the service after reboot.
+
+**The XML migration method is different.** It writes the full URL (e.g. `http://soundtouch.local:8000`) into `SoundTouchSdkPrivateCfg.xml`. The speaker resolves the hostname at connect time, not at migration time. This means migration can proceed even if the hostname is not yet reachable — for example, when the service will be deployed under that hostname but is not running yet. A warning is still shown in the UI so you are aware, but the Confirm Migration button remains enabled.
+
+### ❌ "Cannot resolve target hostname for migration"
+
+**Symptoms** (migration log or web UI warning):
+```
+cannot resolve target hostname for migration: cannot resolve "soundtouch.local":
+SSH ping from device failed and service-side DNS lookup also failed
+```
+or:
+```
+resolved "soundtouch.local" to 192.168.1.100 from service, not from device —
+result may be wrong if NAT or split-DNS is in use
+```
+
+**What this means:**
+
+The service could not confirm the IP by running `ping` on the speaker via SSH. Either:
+- the `ping` binary is not available or not in `$PATH` on this firmware, or
+- the hostname is not resolvable from the speaker's network context.
+
+**Diagnosis — run manually over SSH:**
+
+```bash
+# SSH into the speaker
+ssh root@<speaker-ip>
+
+# Try to resolve the service hostname
+ping -c 1 soundtouch.local
+# or use the IP directly to verify connectivity
+ping -c 1 192.168.1.100
+
+# Check the speaker's current DNS config
+cat /etc/resolv.conf
+
+# Check if ping is available
+which ping
+busybox ping --help
+```
+
+**Solutions:**
+
+#### 1. Use an IP address as SERVER_URL
+
+The most reliable fix. If the hostname cannot be resolved from the device, use a raw IP instead. Resolution is skipped entirely when `SERVER_URL` contains an IP.
+
+```bash
+# In your .env
+SERVER_URL=http://192.168.1.100:8000
+HTTPS_SERVER_URL=https://192.168.1.100:8443
+```
+
+HTTPS works correctly with IP addresses — the service certificate includes the IP as a Subject Alternative Name (SAN).
+
+#### 2. Ensure the hostname resolves on the speaker's network segment
+
+If you use `soundtouch.local`, verify mDNS is working from another device on the same subnet:
+
+```bash
+avahi-resolve -n soundtouch.local    # Linux
+dns-sd -G v4 soundtouch.local        # macOS
+```
+
+#### 3. Use the XML migration method
+
+Select the XML method in the migration UI. It writes the full URL and the speaker resolves it at connect time, so hostname resolution is not required during migration. This also allows migrating to a hostname that is not yet live.
+
+---
+
 ## 🛟 **Getting More Help**
 
 ### Information to Gather

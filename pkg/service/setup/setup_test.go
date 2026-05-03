@@ -597,17 +597,22 @@ func TestTestHostsRedirection(t *testing.T) {
 func TestResolveIP(t *testing.T) {
 	m := &Manager{}
 
-	// Test with IP
-	if m.resolveIP("1.2.3.4", nil) != "1.2.3.4" {
-		t.Errorf("Expected 1.2.3.4, got %s", m.resolveIP("1.2.3.4", nil))
+	// IP passthrough: no resolution needed, no error
+	ip, err := m.resolveIP("1.2.3.4", nil)
+	if ip != "1.2.3.4" || err != nil {
+		t.Errorf("Expected 1.2.3.4/nil, got %s/%v", ip, err)
 	}
 
-	// Test with localhost
-	if m.resolveIP("localhost", nil) != "127.0.0.1" && m.resolveIP("localhost", nil) != "::1" {
-		t.Errorf("Expected localhost resolution, got %s", m.resolveIP("localhost", nil))
+	// localhost resolves from service DNS; error expected (no SSH client)
+	ip, err = m.resolveIP("localhost", nil)
+	if ip != "127.0.0.1" && ip != "::1" {
+		t.Errorf("Expected localhost resolution, got %s", ip)
+	}
+	if err == nil {
+		t.Errorf("Expected error for service-side fallback, got nil")
 	}
 
-	// Test with device resolution (mocked)
+	// Device SSH ping succeeds: IP returned, no error
 	mock := &mockSSH{
 		runFunc: func(command string) (string, error) {
 			if strings.Contains(command, "ping -c 1 myhost") {
@@ -616,13 +621,18 @@ func TestResolveIP(t *testing.T) {
 			return "", nil
 		},
 	}
-	if m.resolveIP("myhost", mock) != "10.0.0.5" {
-		t.Errorf("Expected 10.0.0.5 from device, got %s", m.resolveIP("myhost", mock))
+	ip, err = m.resolveIP("myhost", mock)
+	if ip != "10.0.0.5" || err != nil {
+		t.Errorf("Expected 10.0.0.5/nil from device, got %s/%v", ip, err)
 	}
 
-	// Test with non-existent host (should fallback to input)
-	if m.resolveIP("non-existent.host.fake", nil) != "non-existent.host.fake" {
-		t.Errorf("Expected fallback to input, got %s", m.resolveIP("non-existent.host.fake", nil))
+	// Non-existent host, no SSH client: both methods fail, error returned
+	ip, err = m.resolveIP("non-existent.host.fake", nil)
+	if ip != "" {
+		t.Errorf("Expected empty IP on failure, got %s", ip)
+	}
+	if err == nil {
+		t.Errorf("Expected error for unresolvable host, got nil")
 	}
 }
 

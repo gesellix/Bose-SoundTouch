@@ -72,6 +72,7 @@ type MigrationSummary struct {
 	CurrentResolvConf        string      `json:"current_resolv_conf,omitempty"`
 	PlannedResolv            string      `json:"planned_resolv,omitempty"`
 	IsMigrated               bool        `json:"is_migrated"`
+	ResolveIPError           string      `json:"resolve_ip_error,omitempty"`
 	MirrorEnabled            bool        `json:"mirror_enabled"`
 	MirrorEndpoints          []string    `json:"mirror_endpoints,omitempty"`
 	SkipMirrorEndpoints      []string    `json:"skip_mirror_endpoints,omitempty"`
@@ -263,7 +264,15 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		hostName := parsedURL.Hostname()
 		if hostName != "" && hostName != "localhost" {
 			client := m.NewSSH(deviceIP)
-			hostIP := m.resolveIP(hostName, client)
+
+			hostIP, resolveErr := m.resolveIP(hostName, client)
+			if resolveErr != nil {
+				summary.ResolveIPError = resolveErr.Error()
+			}
+
+			if hostIP == "" {
+				hostIP = hostName
+			}
 
 			// Predicted aftertouch.resolv.conf
 			summary.PlannedResolv = fmt.Sprintf("# Created by Aftertouch/SoundTouch-Service\n# Priority nameserver for Bose service redirection\nnameserver %s\n", hostIP)
@@ -418,7 +427,7 @@ func (m *Manager) isResolvConfMigrated(client SSHClient, summary *MigrationSumma
 		return true
 	}
 
-	resolvedIP := m.resolveIP(targetHost, client)
+	resolvedIP, _ := m.resolveIP(targetHost, client)
 	if resolvedIP != "" && strings.Contains(summary.CurrentResolvConf, resolvedIP) && summary.CACertTrusted {
 		return true
 	}
@@ -1062,7 +1071,11 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		return "", fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
 	}
 
-	hostIP := m.resolveIP(hostName, client)
+	hostIP, err := m.resolveIP(hostName, client)
+	if err != nil {
+		return logs, fmt.Errorf("cannot resolve target hostname for migration: %w", err)
+	}
+
 	logs += fmt.Sprintf("Resolved %s to %s\n", hostName, hostIP)
 
 	// 2. Prepare /etc/hosts entries
@@ -1218,7 +1231,11 @@ func (m *Manager) migrateViaResolvConf(deviceIP, targetURL string) (string, erro
 		return "", fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
 	}
 
-	hostIP := m.resolveIP(hostName, client)
+	hostIP, err := m.resolveIP(hostName, client)
+	if err != nil {
+		return logs, fmt.Errorf("cannot resolve target hostname for migration: %w", err)
+	}
+
 	logs += fmt.Sprintf("Resolved %s to %s\n", hostName, hostIP)
 
 	// 2. Prepare /mnt/nv/soundtouch-service/aftertouch.resolv.conf content
@@ -1888,7 +1905,12 @@ func (m *Manager) parseTargetURLAndResolveIP(targetURL string, client SSHClient)
 		return "", nil, fmt.Errorf("target URL must contain a valid IP or hostname (got %s)", hostName)
 	}
 
-	return m.resolveIP(hostName, client), parsedURL, nil
+	hostIP, err := m.resolveIP(hostName, client)
+	if err != nil {
+		return "", nil, fmt.Errorf("cannot resolve target hostname: %w", err)
+	}
+
+	return hostIP, parsedURL, nil
 }
 
 func (m *Manager) addTemporaryHostEntry(client SSHClient, deviceIP, testDomain, testEntry, rwCmd string) error {
@@ -2035,15 +2057,21 @@ func (m *Manager) TestConnection(deviceIP, targetURL string, useExplicitCA bool)
 
 // GetResolvedIP returns the resolved IP for a hostname, attempting to resolve it from any connected device first.
 func (m *Manager) GetResolvedIP(host string) string {
-	return m.resolveIP(host, nil)
+	ip, _ := m.resolveIP(host, nil)
+	return ip
 }
 
-func (m *Manager) resolveIP(host string, client SSHClient) string {
+// resolveIP resolves a hostname to an IP address.
+// It first tries to resolve from the device via SSH ping (authoritative for migration).
+// If that fails, it falls back to resolving from the service itself.
+// An error is returned whenever the SSH ping did not produce the IP, so callers that
+// write config to the device can abort rather than risk writing an unresolvable hostname.
+func (m *Manager) resolveIP(host string, client SSHClient) (string, error) {
 	if net.ParseIP(host) != nil {
-		return host
+		return host, nil
 	}
 
-	// 1. Try resolving FROM the device via SSH (best for containers/NAT)
+	// 1. Try resolving FROM the device via SSH (authoritative: gives the IP the device will actually use)
 	if client != nil {
 		// Use ping to resolve hostname on the device.
 		// Busybox ping output usually looks like: PING host (1.2.3.4): 56 data bytes
@@ -2057,26 +2085,33 @@ func (m *Manager) resolveIP(host string, client SSHClient) string {
 				ip := output[start+1 : end]
 				if net.ParseIP(ip) != nil {
 					fmt.Printf("Resolved %s to %s from device\n", host, ip)
-					return ip
+					return ip, nil
 				}
 			}
 		}
 	}
 
-	// 2. Fallback: resolve FROM the service itself
+	// 2. Fallback: resolve FROM the service itself (unreliable for migration — NAT/split-DNS may differ)
 	ips, err := net.LookupIP(host)
 	if err != nil || len(ips) == 0 {
-		return host // Fallback to host if resolution fails
+		return "", fmt.Errorf("cannot resolve %q: SSH ping from device failed and service-side DNS lookup also failed", host)
 	}
 
 	// Prefer IPv4
+	var resolved string
+
 	for _, ip := range ips {
 		if ip.To4() != nil {
-			return ip.String()
+			resolved = ip.String()
+			break
 		}
 	}
 
-	return ips[0].String()
+	if resolved == "" {
+		resolved = ips[0].String()
+	}
+
+	return resolved, fmt.Errorf("resolved %q to %s from service, not from device — result may be wrong if NAT or split-DNS is in use", host, resolved)
 }
 
 // SyncDeviceData fetches presets, recents and sources from the device and saves them to the datastore.

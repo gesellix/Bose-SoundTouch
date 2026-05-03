@@ -1816,6 +1816,14 @@ async function showSummary(deviceId) {
         document.getElementById("planned-hosts").innerText = summary.planned_hosts || "";
         document.getElementById("planned-resolv").innerText = summary.planned_resolv || "";
 
+        const resolveErrEl = document.getElementById("resolve-ip-error");
+        if (summary.resolve_ip_error) {
+            document.getElementById("resolve-ip-error-msg").innerText = summary.resolve_ip_error;
+            resolveErrEl.style.display = "block";
+        } else {
+            resolveErrEl.style.display = "none";
+        }
+
         const currentResolvElem = document.getElementById("current-resolv-content");
         if (currentResolvElem) {
             currentResolvElem.innerText = summary.current_resolv_conf || "Not available";
