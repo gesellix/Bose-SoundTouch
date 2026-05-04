@@ -37,6 +37,12 @@ const (
 // SoundTouchSdkPrivateCfgPath is the path to the speaker's private configuration file on device.
 const SoundTouchSdkPrivateCfgPath = "/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml"
 
+// SoundTouchSdkPrivateCfgOverridePath is the path to the speaker's override configuration file on device.
+// The firmware reads this file in preference to SoundTouchSdkPrivateCfgPath when it exists.
+// Writing here is safer than editing the original: a malformed override cannot cause a reboot loop
+// because the device falls back to the untouched original. (Credit: Ueberbose team via soundcork.)
+const SoundTouchSdkPrivateCfgOverridePath = "/mnt/nv/OverrideSdkPrivateCfg.xml"
+
 // PrivateCfg represents the SoundTouchSdkPrivateCfg XML structure.
 type PrivateCfg struct {
 	XMLName                    xml.Name `xml:"SoundTouchSdkPrivateCfg" json:"-"`
@@ -499,10 +505,22 @@ func (m *Manager) populateDeviceInfo(summary *MigrationSummary, deviceIP string)
 
 // checkCurrentConfig reads and validates the current speaker configuration
 func (m *Manager) checkCurrentConfig(summary *MigrationSummary, deviceIP string) (string, error) {
-	path := SoundTouchSdkPrivateCfgPath
 	client := m.NewSSH(deviceIP)
 
-	// Check if .original exists
+	// Check for override config (new-style XML migration) — the device prefers this over the original.
+	if overrideCfg, _ := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgOverridePath)); overrideCfg != "" {
+		summary.SSHSuccess = true
+		// The untouched factory config at the original path is the OriginalConfig.
+		if origCfg, _ := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); origCfg != "" {
+			summary.OriginalConfig = origCfg
+		}
+
+		return overrideCfg, nil
+	}
+
+	path := SoundTouchSdkPrivateCfgPath
+
+	// Check if .original exists (legacy migration: original file was edited directly)
 	if _, checkErr := client.Run(fmt.Sprintf("[ -f %s.original ]", path)); checkErr == nil {
 		if originalConfig, _ := client.Run(fmt.Sprintf("cat %s.original", path)); originalConfig != "" {
 			summary.OriginalConfig = originalConfig
@@ -727,7 +745,7 @@ func (m *Manager) checkDNSPreFlight() error {
 	return nil
 }
 
-func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options map[string]string, client SSHClient, rwCmd string) (string, error) {
+func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options map[string]string, client SSHClient, _ string) (string, error) {
 	var logs string
 
 	out, err := m.EnsureRemoteServices(deviceIP)
@@ -778,48 +796,17 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 	// Add XML header
 	xmlContent = append([]byte("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"), xmlContent...)
 
-	// 0. Backup original config if it doesn't exist
-	remotePath := SoundTouchSdkPrivateCfgPath
+	// Write to the override path; the original at SoundTouchSdkPrivateCfgPath is left untouched.
+	// /mnt/nv is always writable so no rw remount is needed here.
+	remotePath := SoundTouchSdkPrivateCfgOverridePath
 
-	if backupOut, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
-		logs += fmt.Sprintf("Backing up original config to %s.original (check: %s)\n", remotePath, backupOut)
-		fmt.Printf("Backing up original config to %s.original\n", remotePath)
-		// Try to copy existing config to .original, ensuring filesystem is writable
-		if output, err := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath)); err != nil {
-			logs += fmt.Sprintf("cp backup failed: %v (output: %s)\n", err, output)
-			fmt.Printf("cp backup failed: %v (output: %s)\n", err, output)
-			// Fallback to manual upload if cp failed (might not have cp?)
-			if config, err := client.Run(fmt.Sprintf("cat %s", remotePath)); err == nil && config != "" {
-				if err := client.UploadContent([]byte(config), remotePath+".original"); err != nil {
-					logs += "failed to upload backup config: " + err.Error() + "\n"
-					return logs, fmt.Errorf("cannot create backup of %s before migration: %w", remotePath, err)
-				}
-
-				logs += "Uploaded backup config via fallback\n"
-			} else {
-				return logs, fmt.Errorf("cannot create backup of %s before migration: failed to read original config", remotePath)
-			}
-		} else {
-			logs += "Copied backup config to .original\n"
-		}
-	} else {
-		logs += "Backup .original already exists\n"
-	}
-
-	// 1. Upload the configuration (rw is handled by calling it before if needed, but UploadContent uses cat > which needs rw)
-	// We'll wrap the upload in a way that EnsureRemoteServices and others might benefit,
-	// but UploadContent is a separate method. We should probably add rw to UploadContent or call it before.
-	// Actually, let's call rw before UploadContent here.
-	out, _ = client.Run(rwCmd)
-
-	logs += rwCmd + ": " + out + "\n"
 	if err := client.UploadContent(xmlContent, remotePath); err != nil {
 		return logs, fmt.Errorf("failed to upload config: %w", err)
 	}
 
 	logs += "Uploaded new configuration to " + remotePath + "\n"
 
-	// 2. Verify the configuration on device
+	// Verify the configuration on device
 	if verification, err := client.Run(fmt.Sprintf("cat %s", remotePath)); err == nil {
 		if !strings.Contains(verification, cfg.MargeServerUrl) {
 			return logs, fmt.Errorf("verification failed: uploaded config on %s does not contain expected margeServerUrl", deviceIP)
@@ -1508,18 +1495,36 @@ func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 func (m *Manager) revertXMLConfig(client SSHClient, rwCmd string) (string, error) {
 	var logs string
 
-	remotePath := SoundTouchSdkPrivateCfgPath
-	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err == nil {
-		logs += fmt.Sprintf("Reverting %s from backup\n", remotePath)
-		fmt.Printf("Reverting %s from backup\n", remotePath)
-		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, remotePath, remotePath))
+	reverted := false
 
-		logs += fmt.Sprintf("cp %s.original %s: %s\n", remotePath, remotePath, out)
+	// Remove override file if it exists (new-style XML migration).
+	if _, err := client.Run(fmt.Sprintf("[ -f %s ]", SoundTouchSdkPrivateCfgOverridePath)); err == nil {
+		logs += fmt.Sprintf("Removing override config %s\n", SoundTouchSdkPrivateCfgOverridePath)
+		out, err := client.Run(fmt.Sprintf("rm -f %s", SoundTouchSdkPrivateCfgOverridePath))
+
+		logs += fmt.Sprintf("rm %s: %s\n", SoundTouchSdkPrivateCfgOverridePath, out)
 		if err != nil {
-			return logs, fmt.Errorf("failed to revert %s: %w", remotePath, err)
+			return logs, fmt.Errorf("failed to remove override config: %w", err)
 		}
-	} else {
-		return logs, fmt.Errorf("backup %s.original not found, cannot revert", remotePath)
+
+		reverted = true
+	}
+
+	// Restore from .original backup if present (legacy migration: original file was edited directly).
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", SoundTouchSdkPrivateCfgPath)); err == nil {
+		logs += fmt.Sprintf("Reverting %s from legacy backup\n", SoundTouchSdkPrivateCfgPath)
+		out, err := client.Run(fmt.Sprintf("%s && cp %s.original %s", rwCmd, SoundTouchSdkPrivateCfgPath, SoundTouchSdkPrivateCfgPath))
+
+		logs += fmt.Sprintf("cp %s.original %s: %s\n", SoundTouchSdkPrivateCfgPath, SoundTouchSdkPrivateCfgPath, out)
+		if err != nil {
+			return logs, fmt.Errorf("failed to revert %s: %w", SoundTouchSdkPrivateCfgPath, err)
+		}
+
+		reverted = true
+	}
+
+	if !reverted {
+		return logs, fmt.Errorf("nothing to revert: no override config at %s or backup at %s.original", SoundTouchSdkPrivateCfgOverridePath, SoundTouchSdkPrivateCfgPath)
 	}
 
 	return logs, nil
