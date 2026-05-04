@@ -334,6 +334,20 @@
         </div>
 
         <div style="margin-bottom: 20px">
+            <strong>Root CA Certificate:</strong>
+            <div style="margin-top: 8px; font-size: 0.9em; color: #555; max-width: 600px">
+                Import this certificate into your OS or browser trust store to
+                trust HTTPS connections to this AfterTouch server from other
+                clients (e.g. curl, Python scripts, browsers).
+            </div>
+            <div style="margin-top: 8px">
+                <a href="/setup/ca.crt" download="soundtouch-ca.crt">
+                    <button type="button">Download CA Certificate</button>
+                </a>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px">
             <button onclick="updateSettings()">Save Settings</button>
             <span
                 id="settings-status"
@@ -531,6 +545,12 @@
                 >
                     Trust CA Now
                 </button>
+                <a
+                    href="/setup/ca.crt"
+                    download="soundtouch-ca.crt"
+                    style="margin-left: 10px; font-size: 0.85em"
+                    title="Download CA cert to import into other clients"
+                >Download CA cert</a>
             </p>
 
             <div
