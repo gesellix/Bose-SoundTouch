@@ -1,4 +1,4 @@
-.PHONY: all build build-cli test test-coverage check fmt vet lint clean dev help screenshots
+.PHONY: all build build-cli test test-coverage check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm
 
 # Go parameters
 GOCMD=go
@@ -30,6 +30,13 @@ BUILD_DIR=./build
 
 # Build flags: strip debug info/DWARF for smaller binaries, remove local paths for reproducibility
 BUILDFLAGS=-trimpath -ldflags="-s -w"
+
+# Stockholm frontend preparation (see Dockerfile.stockholm and docs/stockholm-port-guide.md)
+# STOCKHOLM_APP_REF can be overridden to pin a specific commit: make build-stockholm-image STOCKHOLM_APP_REF=<sha>
+STOCKHOLM_IMAGE   ?= soundcork-stockholm-app
+STOCKHOLM_APP_REF ?= main
+STOCKHOLM_ZIP_DIR ?= $(CURDIR)/stockholm_zip
+STOCKHOLM_DIR     ?= $(CURDIR)/stockholm
 
 all: check build
 
@@ -329,6 +336,34 @@ docker-build:
 	@echo "Building Docker image..."
 	docker build --target soundtouch-service -t soundtouch-service .
 
+# Stockholm frontend preparation.
+# Requires: Docker, internet access (clones github.com/krahl/soundcork-stockholm-app).
+# No pre-built image is published; the image must be built locally before running prepare-stockholm.
+build-stockholm-image:
+	@echo "Building Stockholm preparation image (clones upstream, installs prettier/patch)..."
+	docker build \
+		--build-arg STOCKHOLM_APP_REF=$(STOCKHOLM_APP_REF) \
+		-f Dockerfile.stockholm \
+		-t $(STOCKHOLM_IMAGE) \
+		.
+
+# Extracts and patches the Stockholm frontend using the upstream container image.
+# Requires: build-stockholm-image to have been run, and stockholm_zip/stockholm.zip to be present.
+# The resulting stockholm/ directory is used by the soundtouch-service at runtime.
+prepare-stockholm:
+	@mkdir -p "$(STOCKHOLM_DIR)"
+	@[ -f "$(STOCKHOLM_ZIP_DIR)/stockholm.zip" ] || { \
+		echo "Error: $(STOCKHOLM_ZIP_DIR)/stockholm.zip not found."; \
+		echo "Download the Stockholm zip and place it at stockholm_zip/stockholm.zip first."; \
+		exit 1; }
+	docker run --rm \
+		-v "$(STOCKHOLM_ZIP_DIR):/app/stockholm_zip:ro" \
+		-v "$(STOCKHOLM_DIR):/app/stockholm" \
+		--entrypoint bash \
+		$(STOCKHOLM_IMAGE) \
+		-c 'awk "/^exec java/{exit} {print}" /app/docker-entrypoint.sh | bash'
+	@echo "Stockholm frontend prepared at $(STOCKHOLM_DIR)"
+
 docker-run-host:
 	@echo "Running Docker container..."
 	@echo "Note: --network host is used for discovery (Linux only). For macOS/Windows use port mapping."
@@ -386,6 +421,9 @@ help:
 	@echo "  docker-build  - Build Docker image"
 	@echo "  docker-run-host  - Run container with host networking (Linux discovery)"
 	@echo "  docker-run-ports - Run container with port mapping (macOS/Windows/No discovery)"
+	@echo "  build-stockholm-image - Build Stockholm prep image (requires Docker + internet)"
+	@echo "  prepare-stockholm     - Extract and patch Stockholm frontend (requires build-stockholm-image"
+	@echo "                          and stockholm_zip/stockholm.zip; see docs/stockholm-port-guide.md)"
 	@echo "  help          - Show this help message"
 	@echo ""
 	@echo "Examples:"

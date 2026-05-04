@@ -1,0 +1,40 @@
+# Dockerfile.stockholm — builds the Stockholm frontend preparation image.
+#
+# This image clones krahl/soundcork-stockholm-app, installs the required tools
+# (prettier, patch, unzip, jq), and is used exclusively to run the entrypoint
+# preparation step that extracts and patches the Stockholm frontend.
+#
+# Java is NOT included — we stop before `exec java`.
+#
+# Usage (see Makefile targets build-stockholm-image / prepare-stockholm):
+#
+#   docker build --build-arg STOCKHOLM_APP_REF=main \
+#       -f Dockerfile.stockholm -t soundcork-stockholm-app .
+#
+#   docker run --rm \
+#       -v "$PWD/stockholm_zip:/app/stockholm_zip:ro" \
+#       -v "$PWD/stockholm:/app/stockholm" \
+#       --entrypoint bash soundcork-stockholm-app \
+#       -c 'awk "/^exec java/{exit} {print}" /app/docker-entrypoint.sh | bash'
+
+FROM debian:bookworm-slim
+
+ARG STOCKHOLM_APP_REF=main
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        jq \
+        unzip \
+        nodejs \
+        npm \
+        patch && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g prettier@3.8.3 && npm cache clean --force
+
+RUN git clone --depth 1 --branch "${STOCKHOLM_APP_REF}" \
+    https://github.com/krahl/soundcork-stockholm-app /app
+
+WORKDIR /app
