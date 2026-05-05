@@ -154,26 +154,30 @@ The service supports multiple ways to configure its behavior. When multiple sour
 
 ### Configuration Options
 
-| Variable                           | Flag                       | Description                                                                                             | Default                   |
-|------------------------------------|----------------------------|---------------------------------------------------------------------------------------------------------|---------------------------|
-| `PORT`                             | `--port`, `-p`             | HTTP port to bind the service to                                                                        | `8000`                    |
-| `BIND_ADDR`                        | `--bind`                   | Network interface to bind to                                                                            | all (ipv4 and ipv6)       |
-| `DATA_DIR`                         | `--data-dir`               | Directory for persistent data                                                                           | `./data`                  |
-| `SERVER_URL`                       | `--server-url`, `-s`       | External URL of this service                                                                            | `http://<hostname>:8000`  |
-| `HTTPS_PORT`                       | `--https-port`             | HTTPS port to bind the service to                                                                       | `8443`                    |
-| `HTTPS_SERVER_URL`                 | `--https-server-url`, `-S` | External HTTPS URL                                                                                      | `https://<hostname>:8443` |
-| `PYTHON_BACKEND_URL`, `TARGET_URL` | `--target-url`             | URL for Python-based service components (legacy)                                                        | `http://localhost:8001`   |
-| `REDACT_PROXY_LOGS`                | `--redact-logs`            | Redact sensitive data in proxy logs                                                                     | `true`                    |
-| `LOG_PROXY_BODY`                   | `--log-bodies`             | Log full request/response bodies                                                                        | `false`                   |
-| `RECORD_INTERACTIONS`              | `--record-interactions`    | Record HTTP interactions to disk                                                                        | `true`                    |
-| `DISCOVERY_INTERVAL`               | `--discovery-interval`     | Device discovery interval                                                                               | `5m`                      |
-| `ENABLE_DNS_DISCOVERY`             | `--dns-discovery`          | Enable DNS discovery server                                                                             | `false`                   |
-| `DNS_UPSTREAM`                     | `--dns-upstream`           | Upstream DNS server for non-Bose queries                                                                | `8.8.8.8`                 |
-| `DNS_BIND_ADDR`                    | `--dns-bind`               | Bind address for the DNS discovery server (standard port `:53` is required for DNS/DHCP migration)      | `:53`                     |
-| `MIRROR_ENABLED`                   |                            | Enable background mirroring of specific endpoints to Bose cloud                                         | `false`                   |
-| `MIRROR_ENDPOINTS`                 |                            | Comma-separated list of path patterns to mirror (e.g., `/streaming/account/*/device/*/recent`)          | `[]`                      |
-| `INTERNAL_PATHS`                   | `--internal-paths`         | Paths for internal requests to exclude from recording (e.g., `/setup/*`, `/web/*`)                      | `[]`                      |
-| `DISCOVERY_DISABLED`               |                            | Disable automated device discovery                                                                      | `false`                   |
+| Variable                           | Flag                       | Description                                                                                                                                                         | Default                   |
+|------------------------------------|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| `PORT`                             | `--port`, `-p`             | HTTP port to bind the service to                                                                                                                                    | `8000`                    |
+| `BIND_ADDR`                        | `--bind`                   | Network interface to bind to                                                                                                                                        | all (ipv4 and ipv6)       |
+| `DATA_DIR`                         | `--data-dir`               | Directory for persistent data                                                                                                                                       | `./data`                  |
+| `SERVER_URL`                       | `--server-url`, `-s`       | External URL of this service                                                                                                                                        | `http://<hostname>:8000`  |
+| `HTTPS_PORT`                       | `--https-port`             | HTTPS port to bind the service to                                                                                                                                   | `8443`                    |
+| `HTTPS_SERVER_URL`                 | `--https-server-url`, `-S` | External HTTPS URL                                                                                                                                                  | `https://<hostname>:8443` |
+| `PYTHON_BACKEND_URL`, `TARGET_URL` | `--target-url`             | URL for Python-based service components (legacy)                                                                                                                    | `http://localhost:8001`   |
+| `REDACT_PROXY_LOGS`                | `--redact-logs`            | Redact sensitive data in proxy logs                                                                                                                                 | `true`                    |
+| `LOG_PROXY_BODY`                   | `--log-bodies`             | Log full request/response bodies                                                                                                                                    | `false`                   |
+| `RECORD_INTERACTIONS`              | `--record-interactions`    | Record HTTP interactions to disk                                                                                                                                    | `true`                    |
+| `DISCOVERY_INTERVAL`               | `--discovery-interval`     | Device discovery interval                                                                                                                                           | `5m`                      |
+| `ENABLE_DNS_DISCOVERY`             | `--dns-discovery`          | Enable DNS discovery server                                                                                                                                         | `false`                   |
+| `DNS_UPSTREAM`                     | `--dns-upstream`           | Upstream DNS server for non-Bose queries                                                                                                                            | `8.8.8.8`                 |
+| `DNS_BIND_ADDR`                    | `--dns-bind`               | Bind address for the DNS discovery server (standard port `:53` is required for DNS/DHCP migration)                                                                  | `:53`                     |
+| `MIRROR_ENABLED`                   |                            | Enable background mirroring of specific endpoints to Bose cloud                                                                                                     | `false`                   |
+| `MIRROR_ENDPOINTS`                 |                            | Comma-separated list of path patterns to mirror (e.g., `/streaming/account/*/device/*/recent`)                                                                      | `[]`                      |
+| `INTERNAL_PATHS`                   | `--internal-paths`         | Paths for internal requests to exclude from recording (e.g., `/setup/*`, `/web/*`)                                                                                  | `[]`                      |
+| `DISCOVERY_DISABLED`               |                            | Disable automated device discovery                                                                                                                                  | `false`                   |
+| `STOCKHOLM_DIR`                    | `--stockholm-dir`          | Path to extracted Stockholm frontend directory — enables the Stockholm UI when set                                                                                  | *(disabled)*              |
+| `MARGE_URL`                        |                            | Streaming/marge base URL used when rewriting `stockholm/json/config.json`. Defaults to `SERVER_URL`. Set to `SERVER_URL/marge` only when using a soundcork backend. | *(same as `SERVER_URL`)*  |
+| `MARGE_AUTH_TOKEN`                 |                            | Pre-seeds the Stockholm `margeAuthToken` state (skips the login step for the first session)                                                                         | *(empty)*                 |
+| `MARGE_ACCOUNT_ID`                 |                            | Pre-seeds the Stockholm `margeAccountID` state (used to filter device-discovery results by account)                                                                 | *(empty)*                 |
 
 ### Configuration Examples
 
@@ -187,6 +191,53 @@ SERVER_URL=https://my-soundtouch.example.com soundtouch-service --port 443
 # Development mode with full logging
 LOG_PROXY_BODY=true REDACT_PROXY_LOGS=false soundtouch-service
 ```
+
+## Stockholm Frontend
+
+The Stockholm frontend is the patched Bose SoundTouch app UI served directly by the service. When enabled, opening `http://<server>:8000` in a browser shows the full app interface, which communicates with your speakers via the local service instead of Bose's cloud.
+
+### Getting the Stockholm files
+
+The Stockholm UI files are not bundled in this repository — you supply them from [krahl/soundcork-stockholm-app](https://github.com/krahl/soundcork-stockholm-app). See that project's README for how to obtain the `stockholm.zip`. Once you have it:
+
+```bash
+# 1. Place stockholm.zip in stockholm_zip/
+mkdir -p stockholm_zip
+cp /path/to/stockholm.zip stockholm_zip/
+
+# 2. Build the Docker image that applies the patches
+make build-stockholm-image
+
+# 3. Extract and patch the frontend into ./stockholm/
+make prepare-stockholm
+```
+
+The `./stockholm/` directory is now ready to use.
+
+### Enabling the Stockholm UI
+
+Pass the directory to the service at startup:
+
+```bash
+# Binary
+soundtouch-service --stockholm-dir ./stockholm
+
+# Environment variable
+STOCKHOLM_DIR=./stockholm soundtouch-service
+
+# Docker Compose — add to the environment section of docker-compose.yml
+# STOCKHOLM_DIR=/app/stockholm
+# and mount the stockholm/ directory into the container
+```
+
+### Stockholm environment variables
+
+| Variable           | Description                                                                                                                                                          |
+|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `STOCKHOLM_DIR`    | Path to the extracted Stockholm frontend (enables the UI)                                                                                                            |
+| `MARGE_URL`        | Override the streaming/marge URL written into `config.json`. Defaults to `SERVER_URL`. Only set this to `SERVER_URL/marge` when routing through a soundcork backend. |
+| `MARGE_AUTH_TOKEN` | Pre-seed the session auth token so the first app launch skips the login screen                                                                                       |
+| `MARGE_ACCOUNT_ID` | Pre-seed the account ID — device discovery will only show speakers on this account                                                                                   |
 
 ## Device Migration
 

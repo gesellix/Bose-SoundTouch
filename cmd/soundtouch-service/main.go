@@ -26,6 +26,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
+	"github.com/gesellix/bose-soundtouch/pkg/service/stockholm"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/urfave/cli/v2"
@@ -373,6 +374,17 @@ func main() {
 				Value:   "local",
 				EnvVars: []string{"PREFERRED_SOURCE"},
 			},
+			&cli.StringFlag{
+				Name:    "stockholm-dir",
+				Usage:   "Path to the extracted Stockholm frontend directory (enables Stockholm UI when set)",
+				EnvVars: []string{"STOCKHOLM_DIR"},
+			},
+			&cli.StringFlag{
+				Name:    "stockholm-base-path",
+				Usage:   "URL prefix under which the Stockholm UI is served (e.g. /stockholm). Empty serves at root.",
+				Value:   "/stockholm",
+				EnvVars: []string{"STOCKHOLM_BASE_PATH"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			config := loadConfig(c)
@@ -468,7 +480,20 @@ func main() {
 
 			startDeviceDiscovery(server)
 
-			r := setupRouter(server)
+			var stockholmHandler *stockholm.Handler
+
+			if config.stockholmDir != "" {
+				sh, shErr := stockholm.New(config.stockholmDir, config.dataDir, config.serverURL, config.stockholmBasePath)
+				if shErr != nil {
+					log.Printf("Warning: Failed to initialise Stockholm handler: %v", shErr)
+				} else {
+					stockholmHandler = sh
+
+					log.Printf("Stockholm frontend enabled from %s", config.stockholmDir)
+				}
+			}
+
+			r := setupRouter(server, stockholmHandler)
 
 			log.Printf("Go service starting on %s", config.serverURL)
 
@@ -552,6 +577,8 @@ type serviceConfig struct {
 	migrationEnabled    bool
 	migrationDryRun     bool
 	preferredSource     string
+	stockholmDir        string
+	stockholmBasePath   string
 }
 
 func loadConfig(c *cli.Context) serviceConfig {
@@ -628,6 +655,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 	migrationEnabled := c.Bool("migration-enabled")
 	migrationDryRun := c.Bool("migration-dry-run")
 	preferredSource := c.String("preferred-source")
+	stockholmDir := c.String("stockholm-dir")
+	stockholmBasePath := c.String("stockholm-base-path")
 
 	return serviceConfig{
 		port:                port,
@@ -666,6 +695,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 		migrationEnabled:    migrationEnabled,
 		migrationDryRun:     migrationDryRun,
 		preferredSource:     preferredSource,
+		stockholmDir:        stockholmDir,
+		stockholmBasePath:   stockholmBasePath,
 	}
 }
 
@@ -852,7 +883,7 @@ func startDeviceDiscovery(server *handlers.Server) {
 	}()
 }
 
-func setupRouter(server *handlers.Server) *chi.Mux {
+func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *chi.Mux {
 	r := chi.NewRouter()
 
 	// TrustedRealIP must run before any handler that reads r.RemoteAddr —
@@ -1140,7 +1171,18 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Delete("/dns-discoveries", server.HandleClearDNSDiscoveries)
 
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
+
+		// Serve Stockholm setup wizard pages for paths not matched by the management API.
+		// The Stockholm frontend has a setup/ directory that must be accessible at /setup/*.
+		if stockholmHandler != nil {
+			r.Get("/*", stockholmHandler.HandleStatic)
+			r.Get("/", stockholmHandler.HandleStatic)
+		}
 	})
+
+	if stockholmHandler != nil {
+		stockholmHandler.Mount(r)
+	}
 
 	r.NotFound(server.HandleNotFound)
 

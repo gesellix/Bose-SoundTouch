@@ -1,5 +1,8 @@
 .PHONY: all build build-cli test test-coverage check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm
 
+# Load .env if present (simple KEY=VALUE format, no shell quoting)
+-include .env
+
 # Go parameters
 GOCMD=go
 GOBUILD=$(GOCMD) build
@@ -33,10 +36,19 @@ BUILDFLAGS=-trimpath -ldflags="-s -w"
 
 # Stockholm frontend preparation (see Dockerfile.stockholm and docs/stockholm-port-guide.md)
 # STOCKHOLM_APP_REF can be overridden to pin a specific commit: make build-stockholm-image STOCKHOLM_APP_REF=<sha>
-STOCKHOLM_IMAGE   ?= soundcork-stockholm-app
-STOCKHOLM_APP_REF ?= main
-STOCKHOLM_ZIP_DIR ?= $(CURDIR)/stockholm_zip
-STOCKHOLM_DIR     ?= $(CURDIR)/stockholm
+STOCKHOLM_IMAGE    ?= soundcork-stockholm-app
+STOCKHOLM_APP_REF  ?= main
+STOCKHOLM_ZIP_DIR  ?= $(CURDIR)/stockholm_zip
+STOCKHOLM_DIR      ?= $(CURDIR)/stockholm
+# URLs baked into stockholm/json/config.json during prepare-stockholm.
+# The Go service rewrites these again at startup using SERVER_URL / MARGE_URL,
+# so these only matter for static-file-only deployments or when pre-baking is desired.
+# Default to localhost:8000 (matches the Go service default).
+BACKEND_URL        ?= http://localhost:8000
+# STREAMING_URL defaults to BACKEND_URL (no /marge suffix — set to $(BACKEND_URL)/marge for soundcork).
+STREAMING_URL      ?= $(BACKEND_URL)
+# AUTH_SERVICE_URL defaults to BACKEND_URL; override to point at a different auth endpoint.
+AUTH_SERVICE_URL   ?= $(BACKEND_URL)
 
 all: check build
 
@@ -357,11 +369,42 @@ prepare-stockholm:
 		echo "Download the Stockholm zip and place it at stockholm_zip/stockholm.zip first."; \
 		exit 1; }
 	docker run --rm \
+		-e BACKEND_URL=$(BACKEND_URL) \
+		-e STREAMING_URL=$(STREAMING_URL) \
+		-e AUTH_SERVICE_URL=$(AUTH_SERVICE_URL) \
 		-v "$(STOCKHOLM_ZIP_DIR):/app/stockholm_zip:ro" \
 		-v "$(STOCKHOLM_DIR):/app/stockholm" \
 		--entrypoint bash \
 		$(STOCKHOLM_IMAGE) \
 		-c 'awk "/^exec java/{exit} {print}" /app/docker-entrypoint.sh | bash'
+	@# Patch update-urls.sh: replace the hardcoded ${BACKEND_URL}/marge with
+	@# ${STREAMING_URL:-${BACKEND_URL}} so the streaming URL is configurable and
+	@# defaults to BACKEND_URL (no /marge suffix) rather than the soundcork convention.
+	@script="$(STOCKHOLM_DIR)/json/update-urls.sh"; \
+	 awk '{ gsub(/\$$\{BACKEND_URL\}\/marge/, "$${STREAMING_URL:-$${BACKEND_URL}}"); print }' \
+	     "$$script" > "$$script.tmp" && mv "$$script.tmp" "$$script"
+	@# Restore config.json from the backup that update-urls.sh created.
+	@# The Go service rewrites URLs at startup via RewriteConfigURLs, so we start
+	@# from the original Bose URLs rather than whatever update-urls.sh produced.
+	@[ ! -f "$(STOCKHOLM_DIR)/json/backup.json" ] || \
+		cp "$(STOCKHOLM_DIR)/json/backup.json" "$(STOCKHOLM_DIR)/json/config.json"
+	@# Patch browse.js: guard against empty browse-path array so that
+	@# funcObj.browse.getPath() returning undefined does not throw when the user
+	@# has not browsed yet (causes "Now playing error: topLevel" console spam and
+	@# aborts the now-playing update handler).
+	@sed -i.bak \
+		-e 's/: (l()\.topLevel/: ((l() || {}).topLevel/' \
+		-e 's/var a = l()\.topLevel,/var a = (l() || {}).topLevel,/' \
+		-e 's/E() === 0 || funcObj\.browse\.getPath()\.topLevel/E() === 0 || (funcObj.browse.getPath() || {}).topLevel/' \
+		"$(STOCKHOLM_DIR)/js/browse.js" && \
+		rm -f "$(STOCKHOLM_DIR)/js/browse.js.bak"
+	@# Patch bridge JS: replace hardcoded /api/* paths with __stockholmBase-prefixed
+	@# versions so the bridge works when Stockholm is mounted under a base path.
+	@# Also fix resolveWebviewUrl to include the base path when resolving relative URLs.
+	@python3 scripts/patch-stockholm-bridge.py \
+		"$(STOCKHOLM_DIR)/js/browser_native_bridge.js" \
+		"$(STOCKHOLM_DIR)/js/app_comm.js" \
+		"$(STOCKHOLM_DIR)/setup/js/app_comm.js"
 	@echo "Stockholm frontend prepared at $(STOCKHOLM_DIR)"
 
 docker-run-host:

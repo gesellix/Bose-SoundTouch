@@ -19,7 +19,7 @@ import (
 func TestPrintRoutes(t *testing.T) {
 	// Initialize a minimal server to get the router
 	server := handlers.NewServer(nil, nil, "http://localhost:8000", true, true, true)
-	r := setupRouter(server)
+	r := setupRouter(server, nil)
 
 	var routes []string
 	walkFunc := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
