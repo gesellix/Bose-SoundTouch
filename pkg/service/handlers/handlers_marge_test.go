@@ -309,7 +309,7 @@ func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
 		t.Fatalf("Failed to write first device DeviceInfo.xml: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(firstDir, "Sources.xml"), []byte(`<sources>
-		<source id="10006" type="Audio" createdOn="2026-01-01T00:00:00.000+00:00" updatedOn="2026-01-01T00:00:00.000+00:00" displayName="Amazon Music" secret="" secretType="token" sourceproviderid="20">
+		<source id="10006" type="AMAZON" createdOn="2026-01-01T00:00:00.000+00:00" updatedOn="2026-01-01T00:00:00.000+00:00" displayName="Amazon Music" secret="" secretType="token" sourceproviderid="20">
 			<sourceKey type="AMAZON" account=""/>
 		</source>
 	</sources>`), 0644); err != nil {

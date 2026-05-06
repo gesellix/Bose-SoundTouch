@@ -578,7 +578,7 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 	}
 
 	for _, acc := range accounts {
-		log.Printf("[Amazon Bridge] Registering Amazon user %s in Marge for account %s", acc.UserID, accountID)
+		log.Printf("[Amazon Bridge] Registering Amazon user %s in Marge for account %s", acc.Email, accountID)
 
 		// Build the AmazonSecret credential envelope expected by the speaker firmware.
 		credMap := map[string]interface{}{
@@ -594,7 +594,7 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 			continue
 		}
 
-		_, err = marge.AddSource(s.ds, accountID, acc.UserID, strconv.Itoa(constants.AmazonProviderID), string(credJSON), constants.CredentialTypeToken, acc.DisplayName)
+		_, err = marge.AddSource(s.ds, accountID, acc.Email, strconv.Itoa(constants.AmazonProviderID), string(credJSON), constants.CredentialTypeToken, acc.DisplayName)
 		if err != nil {
 			log.Printf("[Amazon Bridge] Failed to register source in Marge: %v", err)
 			continue
@@ -623,7 +623,7 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 				cfg.Host = d.IPAddress
 				cfg.Timeout = 5 * time.Second
 				c := client.NewClient(cfg)
-				creds := models.NewAmazonOAuthCredentials(acc.UserID, string(credJSON), acc.DisplayName)
+				creds := models.NewAmazonOAuthCredentials(acc.Email, string(credJSON), acc.DisplayName)
 
 				if err := c.SetMusicServiceOAuthAccount(creds); err != nil {
 					log.Printf("[Amazon Bridge] Failed to notify speaker %s via OAuth: %v", d.Name, err)
@@ -633,7 +633,7 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 						log.Printf("[Amazon Bridge] Sync notification failed for speaker %s: %v", d.Name, err)
 						log.Printf("[Amazon Bridge] Falling back to legacy account creation for speaker %s", d.Name)
 
-						legacyCreds := models.NewAmazonMusicCredentials(acc.UserID, string(credJSON))
+						legacyCreds := models.NewAmazonMusicCredentials(acc.Email, string(credJSON))
 						if err := c.SetMusicServiceAccount(legacyCreds); err != nil {
 							log.Printf("[Amazon Bridge] Legacy fallback failed for speaker %s: %v", d.Name, err)
 						} else {

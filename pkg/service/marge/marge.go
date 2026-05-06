@@ -106,7 +106,11 @@ func ensureTimestamps(s *models.ConfiguredSource) {
 
 func ensureSourceType(s *models.ConfiguredSource) {
 	if s.Type == "" || (s.SourceKey.Type != "" && s.SourceKey.Type != constants.ProviderAux && s.SourceKey.Type != constants.ProviderBluetooth) {
-		s.Type = "Audio"
+		if s.SourceKey.Type == constants.ProviderAmazon {
+			s.Type = constants.ProviderAmazon
+		} else {
+			s.Type = "Audio"
+		}
 	}
 }
 
