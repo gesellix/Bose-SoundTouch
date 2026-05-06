@@ -1535,6 +1535,52 @@ func TestCheckIsMigrated(t *testing.T) {
 	})
 }
 
+// TestCheckCurrentConfig_OverrideMissing reproduces issue #214: when the override
+// file does not exist, client.Run returns the cat stderr ("cat: can't open ...")
+// via CombinedOutput. The previous implementation treated that non-empty stderr
+// as a valid config and surfaced it to the UI. Existence must be tested first.
+func TestCheckCurrentConfig_OverrideMissing(t *testing.T) {
+	m := NewManager("http://aftertouch:8000", nil, nil)
+
+	originalCfg := "<SoundTouchSdkPrivateCfg><margeServerUrl>http://streaming.bose.com</margeServerUrl></SoundTouchSdkPrivateCfg>"
+
+	m.NewSSH = func(host string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if command == fmt.Sprintf("[ -f %s ]", SoundTouchSdkPrivateCfgOverridePath) {
+					return "", fmt.Errorf("exit status 1")
+				}
+				if command == fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgOverridePath) {
+					return fmt.Sprintf("cat: can't open '%s': No such file or directory\n", SoundTouchSdkPrivateCfgOverridePath),
+						fmt.Errorf("exit status 1")
+				}
+				if strings.HasPrefix(command, "[ -f ") && strings.Contains(command, ".original") {
+					return "", fmt.Errorf("exit status 1")
+				}
+				if command == fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath) {
+					return originalCfg, nil
+				}
+				return "", nil
+			},
+		}
+	}
+
+	summary := &MigrationSummary{}
+	cfg, err := m.checkCurrentConfig(summary, "127.0.0.1")
+	if err != nil {
+		t.Fatalf("checkCurrentConfig returned unexpected error: %v", err)
+	}
+	if cfg != originalCfg {
+		t.Errorf("Expected current config to be the original SoundTouchSdkPrivateCfg.xml, got %q", cfg)
+	}
+	if strings.Contains(cfg, "No such file or directory") {
+		t.Errorf("Current config must not contain cat stderr from missing override file: %q", cfg)
+	}
+	if !summary.SSHSuccess {
+		t.Errorf("Expected SSHSuccess to be true when original config is readable")
+	}
+}
+
 func TestMigrateSpeaker_ResolvBlocking(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "setup-test")
 	if err != nil {

@@ -508,14 +508,18 @@ func (m *Manager) checkCurrentConfig(summary *MigrationSummary, deviceIP string)
 	client := m.NewSSH(deviceIP)
 
 	// Check for override config (new-style XML migration) — the device prefers this over the original.
-	if overrideCfg, _ := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgOverridePath)); overrideCfg != "" {
-		summary.SSHSuccess = true
-		// The untouched factory config at the original path is the OriginalConfig.
-		if origCfg, _ := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); origCfg != "" {
-			summary.OriginalConfig = origCfg
-		}
+	// Test existence first: client.Run uses CombinedOutput, so a missing file's stderr would otherwise
+	// be returned as a non-empty config and surfaced to the UI.
+	if _, checkErr := client.Run(fmt.Sprintf("[ -f %s ]", SoundTouchSdkPrivateCfgOverridePath)); checkErr == nil {
+		if overrideCfg, _ := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgOverridePath)); overrideCfg != "" {
+			summary.SSHSuccess = true
+			// The untouched factory config at the original path is the OriginalConfig.
+			if origCfg, _ := client.Run(fmt.Sprintf("cat %s", SoundTouchSdkPrivateCfgPath)); origCfg != "" {
+				summary.OriginalConfig = origCfg
+			}
 
-		return overrideCfg, nil
+			return overrideCfg, nil
+		}
 	}
 
 	path := SoundTouchSdkPrivateCfgPath
