@@ -784,9 +784,11 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 	if backupOut, err := client.Run(fmt.Sprintf("[ -f %s.original ]", remotePath)); err != nil {
 		logs += fmt.Sprintf("Backing up original config to %s.original (check: %s)\n", remotePath, backupOut)
 		fmt.Printf("Backing up original config to %s.original\n", remotePath)
+
 		if output, err := client.Run(fmt.Sprintf("%s && cp %s %s.original", rwCmd, remotePath, remotePath)); err != nil {
 			logs += fmt.Sprintf("cp backup failed: %v (output: %s)\n", err, output)
 			fmt.Printf("cp backup failed: %v (output: %s)\n", err, output)
+
 			if config, err := client.Run(fmt.Sprintf("cat %s", remotePath)); err == nil && config != "" {
 				if err := client.UploadContent([]byte(config), remotePath+".original"); err != nil {
 					logs += "failed to upload backup config: " + err.Error() + "\n"
