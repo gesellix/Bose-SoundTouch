@@ -783,7 +783,11 @@ func (c *Client) SelectSource(source, sourceAccount string) error {
 	case "BLUETOOTH":
 		contentItem.ItemName = "Bluetooth"
 	case "AUX":
-		contentItem.ItemName = "AUX Input"
+		contentItem.ItemName = "AUX IN"
+		// The speaker rejects AUX with empty sourceAccount as INVALID_SOURCE.
+		if contentItem.SourceAccount == "" {
+			contentItem.SourceAccount = "AUX"
+		}
 	case "TUNEIN":
 		contentItem.ItemName = "TuneIn"
 	case "PANDORA":
@@ -818,7 +822,7 @@ func (c *Client) SelectBluetooth() error {
 	return c.SelectSource("BLUETOOTH", "")
 }
 
-// SelectAux is a convenience method to select AUX input
+// SelectAux is a convenience method to select AUX input.
 func (c *Client) SelectAux() error {
 	return c.SelectSource("AUX", "")
 }

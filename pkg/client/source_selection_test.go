@@ -38,7 +38,7 @@ func TestClient_SelectSource(t *testing.T) {
 		{
 			name:          "Valid AUX source",
 			source:        "AUX",
-			sourceAccount: "",
+			sourceAccount: "AUX",
 			wantError:     false,
 		},
 		{
@@ -305,7 +305,7 @@ func TestClient_ConvenienceSourceMethods(t *testing.T) {
 			method:          "aux",
 			sourceAccount:   "",
 			expectedSource:  "AUX",
-			expectedAccount: "",
+			expectedAccount: "AUX",
 		},
 		{
 			name:            "SelectTuneIn",
@@ -530,7 +530,7 @@ func getExpectedItemName(source string) string {
 	case "BLUETOOTH":
 		return "Bluetooth"
 	case "AUX":
-		return "AUX Input"
+		return "AUX IN"
 	case "TUNEIN":
 		return "TuneIn"
 	case "PANDORA":
