@@ -1254,6 +1254,17 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 	}
 
 	sources := make([]models.ConfiguredSource, len(sourcesWrap.Sources))
+	defaults := ds.getDefaultSources()
+
+	// Pre-claim IDs already explicitly set in the file so the canonical fill
+	// below doesn't reuse them when multiple entries share a SourceKey.Type.
+	claimedIDs := make(map[string]bool, len(sourcesWrap.Sources))
+	for i := range sourcesWrap.Sources {
+		if id := sourcesWrap.Sources[i].ID; id != "" {
+			claimedIDs[id] = true
+		}
+	}
+
 	for i := range sourcesWrap.Sources {
 		ps := &sourcesWrap.Sources[i]
 		s := &sources[i]
@@ -1293,17 +1304,60 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 			s.SourceKeyAccount = s.SourceKey.Account
 		}
 
-		// Ensure Type is populated from SourceKey if missing
-		if s.Type == "" && s.SourceKey.Type != "" {
-			s.Type = s.SourceKey.Type
-		}
+		applyCanonicalDefaults(s, defaults, claimedIDs)
 
+		// Last-resort ID for unknown providers.
 		if s.ID == "" {
 			s.ID = strconv.Itoa(2000001 + i)
 		}
 	}
 
 	return sources, nil
+}
+
+// applyCanonicalDefaults fills missing canonical ID/Type/SourceProviderID for
+// known providers and repairs Type that was previously synthesized from
+// SourceKey.Type (e.g. "AUX") rather than the canonical value (e.g. "Audio").
+// Without this, the on-device Sources.xml — which carries only displayName +
+// sourceKey — would round-trip as id="2000001+i" type="<sourceKey.Type>" and
+// be rejected by the speaker as INVALID_SOURCE after migration.
+//
+// claimedIDs tracks which canonical IDs are already in use so that multiple
+// entries with the same SourceKey.Type don't collide on the same ID.
+func applyCanonicalDefaults(s *models.ConfiguredSource, defaults []models.ConfiguredSource, claimedIDs map[string]bool) {
+	def := findCanonicalSource(defaults, s.SourceKey.Type)
+	if def == nil {
+		return
+	}
+
+	if s.ID == "" && !claimedIDs[def.ID] {
+		s.ID = def.ID
+		claimedIDs[def.ID] = true
+	}
+
+	if s.Type == "" || s.Type == s.SourceKey.Type {
+		s.Type = def.Type
+	}
+
+	if s.SourceProviderID == "" {
+		s.SourceProviderID = def.SourceProviderID
+	}
+}
+
+// findCanonicalSource returns the default source matching the given
+// SourceKey.Type, or nil if it's not one of our known providers.
+func findCanonicalSource(defaults []models.ConfiguredSource, sourceKeyType string) *models.ConfiguredSource {
+	if sourceKeyType == "" {
+		return nil
+	}
+
+	for i := range defaults {
+		if defaults[i].SourceKey.Type == sourceKeyType {
+			return &defaults[i]
+		}
+	}
+
+	return nil
 }
 
 // SaveConfiguredSources saves the configured sources list for the specified account and device.

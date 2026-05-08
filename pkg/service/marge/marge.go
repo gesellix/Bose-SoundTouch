@@ -105,7 +105,10 @@ func ensureTimestamps(s *models.ConfiguredSource) {
 }
 
 func ensureSourceType(s *models.ConfiguredSource) {
-	if s.Type == "" || (s.SourceKey.Type != "" && s.SourceKey.Type != constants.ProviderAux && s.SourceKey.Type != constants.ProviderBluetooth) {
+	// AUX must be normalized to Type="Audio" — the speaker rejects type="AUX"
+	// (which the datastore previously synthesized from SourceKey.Type).
+	// Bluetooth is left alone since its canonical Type isn't "Audio".
+	if s.Type == "" || (s.SourceKey.Type != "" && s.SourceKey.Type != constants.ProviderBluetooth) {
 		if s.SourceKey.Type == constants.ProviderAmazon {
 			s.Type = constants.ProviderAmazon
 		} else {
