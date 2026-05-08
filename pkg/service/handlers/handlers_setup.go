@@ -256,11 +256,15 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.serverURL = settings.ServerURL
 
+	s.discoveryEnabled = settings.DiscoveryEnabled
 	if settings.DiscoveryInterval != "" {
 		s.discoveryInterval = interval
 	}
 
-	s.discoveryEnabled = settings.DiscoveryEnabled
+	if s.discoveryInterval == 0 {
+		s.discoveryEnabled = false
+	}
+
 	s.dnsEnabled = settings.DNSEnabled
 
 	// Handle comma-separated upstream DNS servers

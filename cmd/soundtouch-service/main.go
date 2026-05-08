@@ -240,6 +240,12 @@ func main() {
 				Value:   true,
 				EnvVars: []string{"RECORD_INTERACTIONS"},
 			},
+			&cli.BoolFlag{
+				Name:    "discovery-enabled",
+				Usage:   "Enable periodic device discovery",
+				Value:   true,
+				EnvVars: []string{"DISCOVERY_ENABLED"},
+			},
 			&cli.StringFlag{
 				Name:    "discovery-interval",
 				Usage:   "Device discovery interval",
@@ -395,7 +401,7 @@ func main() {
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date, repoURL)
-			server.SetDiscoverySettings(config.discoveryInterval, persisted.DiscoveryEnabled)
+			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
 			server.SetMirrorSettings(persisted.MirrorEnabled, persisted.MirrorEndpoints, persisted.SkipMirrorEndpoints, persisted.PreferredSource)
 			server.SetInternalPaths(persisted.InternalPaths)
@@ -526,6 +532,7 @@ type serviceConfig struct {
 	mirrorEndpoints     []string
 	skipMirrorEndpoints []string
 	internalPaths       []string
+	discoveryEnabled    bool
 	discoveryInterval   time.Duration
 	domains             []string
 	spotifyClientID     string
@@ -590,6 +597,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 	dnsUpstream := c.String("dns-upstream")
 	dnsBind := c.String("dns-bind")
 
+	discoveryEnabled := c.Bool("discovery-enabled")
 	discoveryIntervalStr := c.String("discovery-interval")
 
 	discoveryInterval, err := time.ParseDuration(discoveryIntervalStr)
@@ -638,6 +646,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		mirrorEndpoints:     mirrorEndpoints,
 		skipMirrorEndpoints: skipMirrorEndpoints,
 		internalPaths:       internalPaths,
+		discoveryEnabled:    discoveryEnabled,
 		discoveryInterval:   discoveryInterval,
 		domains:             domains,
 		spotifyClientID:     spotifyClientID,
@@ -720,6 +729,7 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 		config.httpsServerURL = persisted.HTTPServerURL
 	}
 
+	config.discoveryEnabled = persisted.DiscoveryEnabled
 	if persisted.DiscoveryInterval != "" {
 		if d, durErr := time.ParseDuration(persisted.DiscoveryInterval); durErr == nil {
 			config.discoveryInterval = d
@@ -786,8 +796,8 @@ func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datast
 		RedactLogs:          config.redact,
 		LogBodies:           config.logBody,
 		RecordInteractions:  config.record,
+		DiscoveryEnabled:    config.discoveryEnabled,
 		DiscoveryInterval:   config.discoveryInterval.String(),
-		DiscoveryEnabled:    true,
 		DNSEnabled:          config.dnsEnabled,
 		DNSUpstream:         strings.Split(config.dnsUpstream, ","),
 		DNSBindAddr:         config.dnsBind,
