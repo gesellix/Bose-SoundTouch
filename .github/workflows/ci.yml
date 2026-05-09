@@ -86,13 +86,24 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
-        exclude:
-          # Windows ARM64 builds are experimental
-          - goos: windows
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
             goarch: arm64
+          - goos: linux
+            goarch: arm
+            goarm: 7
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: freebsd
+            goarch: amd64
 
     steps:
       - name: Checkout code
@@ -103,22 +114,48 @@ jobs:
         with:
           go-version-file: "go.mod"
 
-      - name: Build CLI
+      - name: Cache Go modules
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.mod') }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build binaries
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0
         run: |
-          output_name="soundtouch-cli-${{ matrix.goos }}-${{ matrix.goarch }}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            output_name="${output_name}.exe"
+          ARCH_SUFFIX="${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [[ -n "${{ matrix.goarm }}" ]]; then
+            ARCH_SUFFIX="${ARCH_SUFFIX}v${{ matrix.goarm }}"
           fi
-          go build -trimpath -ldflags="-s -w" -o "$output_name" ./cmd/soundtouch-cli
+
+          EXT=""
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            EXT=".exe"
+          fi
+
+          mkdir -p build
+
+          for binary in soundtouch-cli soundtouch-service soundtouch-web soundtouch-backup; do
+            OUTPUT="build/${binary}-${ARCH_SUFFIX}${EXT}"
+            echo "Building $OUTPUT"
+            go build -trimpath -ldflags="-s -w" -o "$OUTPUT" "./cmd/$binary"
+          done
+
+          ls -la build/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: soundtouch-cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: soundtouch-cli-*
+          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm }}
+          path: build/
 
   security:
     name: Basic Security Check
@@ -271,8 +308,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Determine push eligibility
+        id: push-check
+        run: |
+          # Push on main, and on same-repo PRs (forks can't push to GHCR via GITHUB_TOKEN).
+          SHOULD_PUSH="false"
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            SHOULD_PUSH="true"
+          elif [[ "${{ github.event_name }}" == "pull_request" && \
+                  "${{ github.event.pull_request.head.repo.full_name }}" == "${{ github.repository }}" ]]; then
+            SHOULD_PUSH="true"
+          fi
+          echo "should-push=$SHOULD_PUSH" >> "$GITHUB_OUTPUT"
+          echo "Will push: $SHOULD_PUSH"
+
       - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: steps.push-check.outputs.should-push == 'true'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -286,7 +337,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=pr
+            type=ref,event=pr,prefix=preview-pr-
+            type=sha,prefix=preview-sha-,format=short,enable=${{ github.event_name == 'pull_request' }}
+            type=ref,event=branch,prefix=preview-branch-,enable=${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
 
       - name: Build and push soundtouch-service Docker image
         uses: docker/build-push-action@v7
@@ -294,7 +347,7 @@ jobs:
           context: .
           target: soundtouch-service
           platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          push: ${{ steps.push-check.outputs.should-push == 'true' }}
           tags: ${{ steps.meta-service.outputs.tags }}
           labels: ${{ steps.meta-service.outputs.labels }}
           cache-from: type=gha
@@ -307,7 +360,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}-web
           tags: |
             type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=pr
+            type=ref,event=pr,prefix=preview-pr-
+            type=sha,prefix=preview-sha-,format=short,enable=${{ github.event_name == 'pull_request' }}
+            type=ref,event=branch,prefix=preview-branch-,enable=${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
 
       - name: Build and push soundtouch-web Docker image
         uses: docker/build-push-action@v7
@@ -315,11 +370,48 @@ jobs:
           context: .
           target: soundtouch-web
           platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          push: ${{ steps.push-check.outputs.should-push == 'true' }}
           tags: ${{ steps.meta-web.outputs.tags }}
           labels: ${{ steps.meta-web.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Summarize published images
+        if: steps.push-check.outputs.should-push == 'true'
+        env:
+          SERVICE_TAGS: ${{ steps.meta-service.outputs.tags }}
+          WEB_TAGS: ${{ steps.meta-web.outputs.tags }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          {
+            echo "## 🐳 Published Docker Images"
+            echo ""
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              echo "**Preview** images for PR #${PR_NUMBER}. These are not release builds."
+            elif [[ "$REF_NAME" == "main" ]]; then
+              echo "**Edge** images from \`main\`."
+            else
+              echo "**Preview** images from branch \`${REF_NAME}\`. These are not release builds."
+            fi
+            echo ""
+            echo "### soundtouch-service"
+            echo ""
+            echo '```bash'
+            while IFS= read -r tag; do
+              [[ -n "$tag" ]] && echo "docker pull $tag"
+            done <<< "$SERVICE_TAGS"
+            echo '```'
+            echo ""
+            echo "### soundtouch-web"
+            echo ""
+            echo '```bash'
+            while IFS= read -r tag; do
+              [[ -n "$tag" ]] && echo "docker pull $tag"
+            done <<< "$WEB_TAGS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   notify:
     name: Notify Status
