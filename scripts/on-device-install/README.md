@@ -2,7 +2,6 @@
 
 Allows to run AfterTouch on SoundTouch devices directly, eliminating the need to run and maintain a separate server on the local network.
 
-
 ## Disclaimer
 
 ### Invasiveness
