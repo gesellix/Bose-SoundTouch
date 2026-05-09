@@ -10,7 +10,7 @@ AfterTouch usually normally migrates the SoundTouch devices very noninvasive, by
 
 ### AfterTouch Availability
 
-Some devices will expose the AfterTouch port, some won't. We currently suspect that the newer generation devices (those with Bluetooth) will expose the port, while the older ones won't. We're still investigating how to expose AfterTouch on all devices. 
+Some devices will expose the AfterTouch port, some won't. We currently (May 2026) suspect that the newer generation devices (those with Bluetooth) will expose the port, while the older ones won't. We're still investigating how to expose AfterTouch on all devices. 
 
 If your device doesn't expose the port, you can still use the on-device installer, but you'll need to run AfterTouch on each one of your speakers individually and may only access AfterTouch via ssh port forwarding. This will also make OAuth authentication a little more tricky, but should also work via SSH port forwarding.
 
