@@ -6,12 +6,13 @@ GH_REPO=${GH_REPO:-gesellix/Bose-SoundTouch}
 BINARY_URL=${BINARY_URL:-https://github.com/$GH_REPO/releases/download/v$VERSION/soundtouch-service-v$VERSION-linux-armv7}
 INIT_SCRIPT_URL=${INIT_SCRIPT_URL:-https://raw.githubusercontent.com/$GH_REPO/v$VERSION/scripts/on-device-install/aftertouch}
 
-echo "Installing Aftertouch $VERSION for ARMv7..."
+echo "Installing Aftertouch $VERSION ..."
 mkdir -p /opt/aftertouch
 cd /opt/aftertouch
 curl \
   -sSL \
   -O \
+  --fal \
   "$BINARY_URL"
 
 mv soundtouch-service-v$VERSION-linux-armv7 aftertouch-service
@@ -22,6 +23,7 @@ cd /etc/init.d
 curl \
   -sSL \
   -O \
+  --fail \
   "$INIT_SCRIPT_URL"
 
 chmod +x aftertouch
