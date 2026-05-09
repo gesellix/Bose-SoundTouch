@@ -12,7 +12,7 @@ cd /opt/aftertouch
 curl \
   -sSL \
   -O \
-  --fal \
+  --fail \
   "$BINARY_URL"
 
 mv soundtouch-service-v$VERSION-linux-armv7 aftertouch-service
