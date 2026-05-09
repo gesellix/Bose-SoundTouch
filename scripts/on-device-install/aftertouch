@@ -1,0 +1,105 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          soundtouch-service
+# Required-Start:    $network $local_fs
+# Required-Stop:     $network $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Run AfterTouch on this device
+# Description:       Start/stop AfterTouch soundtouch-service
+### END INIT INFO
+
+
+NAME="aftertouch-service"
+DESC="Bose AfterTouch service"
+DAEMON="/opt/aftertouch/aftertouch-service"
+PIDFILE="/var/run/$NAME.pid"
+DATADIR="/opt/aftertouch/data"
+SCRIPTNAME="/etc/init.d/$NAME"
+USER="root"
+
+
+# Export PATH
+export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+
+
+# Sanity check executable
+test -x "$DAEMON" || {
+  echo "ERROR: Cannot execute $DAEMON (check path and permissions)." >&2
+  exit 1
+}
+
+
+case "$1" in
+  start)
+    echo "Starting $DESC..."
+
+    mount -o remount,rw / >/dev/null 2>&1 || {
+      echo "ERROR: remount failed." >&2
+      exit 1
+    }
+
+    mkdir -p "$DATADIR"
+
+    start-stop-daemon --start \
+        --quiet \
+        --pidfile "$PIDFILE" \
+        --background \
+        --make-pidfile \
+        --chuid "$USER" \
+        --startas "/bin/sh" \
+        -- -c "\"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false"
+
+    tries=0
+    max_tries=60
+    while [ $tries -lt $max_tries ]; do
+        if curl -fsS http://localhost:8000 >/dev/null 2>&1; then
+          exit 0
+        fi
+        sleep 2
+        tries=$((tries + 1))
+    done
+
+    exit 1
+    ;;
+
+  stop)
+    echo "Stopping $DESC..."
+    if [ -f "$PIDFILE" ]; then
+      start-stop-daemon --stop \
+        --quiet \
+        --oknodo \
+        --pidfile "$PIDFILE"
+      rm -f "$PIDFILE"
+    else
+      echo "No $NAME running (no PID file)." >&2
+    fi
+    ;;
+
+  restart|force-reload)
+    "$0" stop
+    sleep 2
+    "$0" start
+    ;;
+
+  status)
+    if [ -f "$PIDFILE" ]; then
+      PID=$(cat "$PIDFILE")
+      if kill -0 "$PID" 2>/dev/null; then
+        echo "$NAME is running."
+      else
+        echo "$NAME is not running (PID file exists but process is dead)."
+      fi
+    else
+      echo "$NAME is not running."
+    fi
+    ;;
+
+  *)
+    echo "Usage: $SCRIPTNAME {start|stop|restart|force-reload|status}"
+    exit 1
+    ;;
+esac
+
+
+exit 0
