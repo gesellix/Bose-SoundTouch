@@ -40,7 +40,7 @@ To update AfterTouch, simply run the installation command again. The installer w
 
 ## Uninstallation
 
-To uninstall AfterTouch, run the following command on the speaker.
+Before uninstall, you might want to revert the migration, especially the changes to the server URLs (even though having configured an unresponsive local server probably is about as bad as having configured unresponsive Bose servers). To uninstall AfterTouch, run the following command on the speaker.
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/uninstall.sh | sh
