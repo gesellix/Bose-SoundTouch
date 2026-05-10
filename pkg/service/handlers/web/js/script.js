@@ -2871,6 +2871,197 @@ function transportChip(name, ok) {
     return wrap;
 }
 
+// --- Pre-flight panel: rendering helpers ----------------------------
+
+function showPreflightPanel() {
+    const panel = document.getElementById("apply-preflight-panel");
+    if (!panel) return;
+    panel.style.display = "block";
+    panel.scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+
+function hidePreflightPanel() {
+    const panel = document.getElementById("apply-preflight-panel");
+    if (panel) panel.style.display = "none";
+}
+
+function clearPreflightPanel() {
+    const list = document.getElementById("apply-preflight-list");
+    if (list) list.replaceChildren();
+    const summary = document.getElementById("apply-preflight-summary");
+    if (summary) {
+        summary.replaceChildren();
+        summary.style.color = "";
+    }
+    const actions = document.getElementById("apply-preflight-actions");
+    if (actions) actions.replaceChildren();
+}
+
+// addPreflightItem appends a row to the panel's check list and returns
+// the <li> for later status updates.
+function addPreflightItem(name) {
+    const list = document.getElementById("apply-preflight-list");
+    if (!list) return null;
+    const li = document.createElement("li");
+    li.style.padding = "2px 0";
+    li.dataset.name = name;
+    li.innerText = `🕐 ${name} — pending`;
+    li.style.color = "#666";
+    list.appendChild(li);
+    return li;
+}
+
+function setPreflightItemStatus(li, status, message) {
+    if (!li) return;
+    let icon, color, suffix;
+    if (status === "running") { icon = "⟳"; color = "#1976d2"; suffix = " — running…"; }
+    else if (status === "ok")  { icon = "✅"; color = "green";   suffix = " — passed"; }
+    else if (status === "skip") { icon = "—"; color = "#666";    suffix = message ? ` — ${message}` : " — skipped"; }
+    else                       { icon = "❌"; color = "red";     suffix = message ? ` — ${message}` : " — failed"; }
+    li.innerText = `${icon} ${li.dataset.name}${suffix}`;
+    li.style.color = color;
+}
+
+// --- Pre-flight panel: individual checks ----------------------------
+
+// Each check returns {status, message?} where status ∈ {"ok","fail","skip"}.
+
+async function checkConnectionFromDevice(deviceId, testUrl) {
+    try {
+        // use_explicit_ca=true uploads the CA temporarily so the test
+        // exercises the trust path even before CA install completes —
+        // forward-looking when CA install is part of the plan, and
+        // equivalent to use_explicit_ca=false when CA is already
+        // installed.
+        const q = `?target_url=${encodeURIComponent(testUrl)}&use_explicit_ca=true`;
+        const resp = await fetch(`/setup/test-connection/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
+        const result = await resp.json();
+        if (result.ok) return {status: "ok"};
+        return {status: "fail", message: (result.message || "connection failed").split("\n")[0]};
+    } catch (e) {
+        return {status: "fail", message: String(e)};
+    }
+}
+
+async function checkDNSRedirectionFromDevice(deviceId, targetUrl) {
+    try {
+        const q = `?target_url=${encodeURIComponent(targetUrl)}`;
+        const resp = await fetch(`/setup/test-dns/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
+        const result = await resp.json();
+        if (result.ok) return {status: "ok"};
+        return {status: "fail", message: (result.message || "DNS test failed").split("\n")[0]};
+    } catch (e) {
+        return {status: "fail", message: String(e)};
+    }
+}
+
+// --- Pre-flight panel: orchestrator ---------------------------------
+
+// runApplyPreflight runs the checks visible in the pre-flight panel.
+// First check (backend summary re-fetch) drives availability of the
+// later device-side tests via the returned summary. Returns
+// {results, summary}.
+async function runApplyPreflight(deviceId, methods, opts, targetUrl) {
+    clearPreflightPanel();
+    showPreflightPanel();
+
+    const results = [];
+
+    // Step 1: backend summary re-check (authoritative state).
+    const summaryItem = addPreflightItem("Backend summary re-check");
+    setPreflightItemStatus(summaryItem, "running");
+
+    const r = await runPreflightCheck(deviceId, methods, opts, targetUrl);
+    if (!r.ok) {
+        setPreflightItemStatus(summaryItem, "fail", r.issues.join("; "));
+        results.push({name: "Backend summary re-check", status: "fail", message: r.issues.join("; ")});
+        return {results, summary: r.summary};
+    }
+    setPreflightItemStatus(summaryItem, "ok");
+    results.push({name: "Backend summary re-check", status: "ok"});
+    const summary = r.summary;
+
+    // Step 2: HTTPS connection test from the device. SSH-only — for
+    // SSH-less migrations this becomes the future telnet round-trip
+    // probe (see TELNET-MIGRATION-METHOD.md).
+    if (summary.ssh_success && summary.server_https_url) {
+        const item = addPreflightItem("HTTPS connection from device");
+        setPreflightItemStatus(item, "running");
+        const cr = await checkConnectionFromDevice(deviceId, summary.server_https_url);
+        setPreflightItemStatus(item, cr.status, cr.message);
+        results.push({name: "HTTPS connection from device", ...cr});
+    } else if (!summary.ssh_success) {
+        // Surface the deliberate skip rather than silently dropping
+        // the check — that's what the user means by "feedback always
+        // visible."
+        const item = addPreflightItem("HTTPS connection from device");
+        setPreflightItemStatus(item, "skip", "SSH unreachable; telnet round-trip probe not yet implemented");
+        results.push({name: "HTTPS connection from device", status: "skip"});
+    }
+
+    // Step 3: DNS redirection test (only for resolv plans).
+    if (methods.includes("resolv") && summary.ssh_success) {
+        const item = addPreflightItem("DNS redirection from device");
+        setPreflightItemStatus(item, "running");
+        const cr = await checkDNSRedirectionFromDevice(deviceId, targetUrl);
+        setPreflightItemStatus(item, cr.status, cr.message);
+        results.push({name: "DNS redirection from device", ...cr});
+    }
+
+    return {results, summary};
+}
+
+// awaitPreflightDecision renders the summary line and buttons, then
+// resolves with the user's choice ("proceed" or "cancel"). Auto-
+// proceeds without buttons when every check passed — the user still
+// sees the green panel briefly via the caller's animation budget.
+function awaitPreflightDecision(results) {
+    const failed = results.filter(r => r.status === "fail").length;
+    const skipped = results.filter(r => r.status === "skip").length;
+    const passed = results.filter(r => r.status === "ok").length;
+
+    const summary = document.getElementById("apply-preflight-summary");
+    const actions = document.getElementById("apply-preflight-actions");
+    if (!summary || !actions) return Promise.resolve("proceed");
+
+    summary.replaceChildren();
+
+    if (failed === 0) {
+        summary.innerText = `✅ ${passed} of ${results.length} checks passed` +
+            (skipped > 0 ? ` (${skipped} skipped)` : "");
+        summary.style.color = "green";
+        actions.replaceChildren();
+        // Auto-proceed: caller adds a brief delay so the user sees the
+        // green frame before Apply kicks off.
+        return Promise.resolve("proceed");
+    }
+
+    summary.innerText = `❌ ${failed} of ${results.length} checks failed`;
+    summary.style.color = "red";
+
+    return new Promise(resolve => {
+        actions.replaceChildren();
+        const proceed = document.createElement("button");
+        proceed.type = "button";
+        proceed.innerText = "Proceed Anyway";
+        proceed.style.cssText = "background: #ff9800; color: white; border: none; padding: 8px 14px";
+        proceed.onclick = () => resolve("proceed");
+
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.innerText = "Cancel";
+        cancel.style.cssText = "margin-left: 10px; padding: 8px 14px";
+        cancel.onclick = () => resolve("cancel");
+
+        actions.appendChild(proceed);
+        actions.appendChild(cancel);
+    });
+}
+
+function preflightSleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // runPreflightCheck does an authoritative round-trip to the backend
 // just before Apply, catching issues the optimistic client-side
 // preview can't see: hostname resolution from the device's
@@ -2932,18 +3123,6 @@ async function runPreflightCheck(deviceId, methods, opts, targetUrl) {
     return {ok: issues.length === 0, issues, summary};
 }
 
-// confirmPreflightIssues shows the issues to the user via confirm() so
-// they can override on a known-false-positive (e.g. a stale DNS that
-// they know will resolve at apply time). Returns true if the user
-// chose to proceed, false to abort.
-function confirmPreflightIssues(issues) {
-    const message =
-        "Pre-flight check found issues:\n\n" +
-        issues.map(s => "  • " + s).join("\n") +
-        "\n\nProceed anyway?";
-    return confirm(message);
-}
-
 // applySuggestedPlan triggers the recipe computeSuggestedPlan picked.
 // Passes the chosen method directly to migrate() — the legacy
 // migration-method dropdown is gone.
@@ -2964,20 +3143,28 @@ async function applySuggestedPlan() {
         status.style.color = "#555";
     }
 
-    // Authoritative re-check just before we touch the speaker — fresh
-    // backend summary tells us whether the device's transports and
-    // hostname resolution still look the way the cached state
-    // suggested. The user can override on a known-false-positive.
+    // Visible pre-flight panel — backend summary re-fetch, plus the
+    // applicable device-side checks (HTTPS connection, DNS redirection)
+    // run automatically so the user gets feedback without having to
+    // click the manual Test buttons.
     const targetUrl = document.getElementById("plan-target-url").value;
     const opts = readPlanURLOptions();
-    const preflight = await runPreflightCheck(deviceId, [method], opts, targetUrl);
-    if (!preflight.ok && !confirmPreflightIssues(preflight.issues)) {
+    const {results} = await runApplyPreflight(deviceId, [method], opts, targetUrl);
+    const decision = await awaitPreflightDecision(results);
+    if (decision !== "proceed") {
+        hidePreflightPanel();
         if (status) {
             status.innerText = "Aborted — pre-flight issues unresolved";
             status.style.color = "#c62828";
         }
         return;
     }
+
+    // Brief glance at the green panel so the success state registers
+    // before it disappears.
+    const failed = results.filter(r => r.status === "fail").length;
+    if (failed === 0) await preflightSleep(700);
+    hidePreflightPanel();
 
     if (status) {
         status.innerText = "Applying " + method + "…";
@@ -3430,19 +3617,26 @@ async function applyCustomPlan() {
     const applyBtn = document.getElementById("customize-apply-btn");
     if (applyBtn) applyBtn.disabled = true;
 
-    // Single authoritative pre-flight before the multi-step run. Each
-    // step's preconditions are checked against the same fresh backend
+    // Visible pre-flight panel — same set of checks as the Suggested
+    // path (backend summary + device-side connection / DNS tests),
+    // gated on the methods this multi-step plan actually queues. Each
+    // step's preconditions are validated against this single fresh
     // summary; we don't re-fetch between steps because each step
-    // touches independent state.
+    // touches independent device state.
     setStatus("Pre-flight check…", "#555");
     const targetUrl = document.getElementById("plan-target-url").value;
     const opts = readPlanURLOptions();
-    const preflight = await runPreflightCheck(deviceId, methods, opts, targetUrl);
-    if (!preflight.ok && !confirmPreflightIssues(preflight.issues)) {
+    const {results} = await runApplyPreflight(deviceId, methods, opts, targetUrl);
+    const decision = await awaitPreflightDecision(results);
+    if (decision !== "proceed") {
+        hidePreflightPanel();
         setStatus("Aborted — pre-flight issues unresolved", "#c62828");
         if (applyBtn) applyBtn.disabled = false;
         return;
     }
+    const failed = results.filter(r => r.status === "fail").length;
+    if (failed === 0) await preflightSleep(700);
+    hidePreflightPanel();
 
     try {
         for (const step of steps) {

@@ -590,6 +590,22 @@
                 </div>
             </div>
 
+            <!-- Pre-flight panel: appears when the user clicks Apply,
+                 runs the configured checks live, then auto-proceeds on
+                 success or surfaces failures with override buttons. -->
+            <div
+                id="apply-preflight-panel"
+                style="display: none; margin: 12px 0; padding: 12px; border: 1px solid #2196f3; background: #e3f2fd; border-radius: 4px"
+            >
+                <h4 style="margin: 0 0 8px 0">Pre-flight checks</h4>
+                <ul
+                    id="apply-preflight-list"
+                    style="list-style: none; padding-left: 0; margin: 0; font-family: monospace; font-size: 0.9em"
+                ></ul>
+                <div id="apply-preflight-summary" style="margin-top: 8px; font-weight: bold"></div>
+                <div id="apply-preflight-actions" style="margin-top: 10px"></div>
+            </div>
+
             <div
                 id="preflight-warnings"
                 style="display: none; margin: 10px 0; padding: 8px 12px; background-color: #fff8e1; border-left: 4px solid #ffb300; font-size: 0.9em"
