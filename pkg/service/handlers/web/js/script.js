@@ -364,7 +364,7 @@ async function fetchDevices() {
             fetchSpotifyStatus();
         }
     } catch (error) {
-        document.getElementById("device-list").innerHTML = "Error loading devices: " + error;
+        document.getElementById("device-list").textContent = "Error loading devices: " + error;
     }
 }
 
@@ -484,7 +484,7 @@ async function startSync() {
             status.style.backgroundColor = "#dfd";
             status.textContent = "✅ Sync completed successfully for " + display + "!";
             results.style.display = "block";
-            log.innerHTML = "Data fetched and saved to local datastore for " + display + ".\nPresets: OK\nRecents: OK\nSources: OK";
+            log.textContent = "Data fetched and saved to local datastore for " + display + ".\nPresets: OK\nRecents: OK\nSources: OK";
         } else {
             const err = await response.text();
             throw new Error(err);
@@ -1709,7 +1709,7 @@ async function showSummary(deviceId) {
     statusDiv.style.backgroundColor = "#ffffcc";
 
     const display = getDeviceDisplayName(deviceId);
-    statusDiv.innerHTML = "Fetching summary for " + display + "...";
+    statusDiv.textContent = "Fetching summary for " + display + "...";
 
     const outputBox = document.getElementById("command-output-box");
     if (outputBox) outputBox.style.display = "none";
@@ -1872,7 +1872,7 @@ async function showSummary(deviceId) {
         document.getElementById("migration-summary").scrollIntoView();
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error fetching summary for " + display + ": " + error;
+        statusDiv.textContent = "Error fetching summary for " + display + ": " + error;
     }
 }
 
@@ -1910,7 +1910,7 @@ async function revert(deviceId, ip) {
     const statusDiv = document.getElementById("status");
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
-    statusDiv.innerHTML = "Reverting " + display + " to defaults...";
+    statusDiv.textContent = "Reverting " + display + " to defaults...";
 
     try {
         const response = await fetch("/setup/revert/" + encodeURIComponent(deviceId), {method: "POST"},);
@@ -1918,14 +1918,14 @@ async function revert(deviceId, ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = "#ccffcc";
-            statusDiv.innerHTML = "Successfully started revert for " + display + ".";
+            statusDiv.textContent = "Successfully started revert for " + display + ".";
         } else {
             statusDiv.style.backgroundColor = "#ffcccc";
-            statusDiv.innerHTML = "Revert failed for " + display + ": " + (result.message || "Unknown error");
+            statusDiv.textContent = "Revert failed for " + display + ": " + (result.message || "Unknown error");
         }
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error reverting " + display + ": " + error;
+        statusDiv.textContent = "Error reverting " + display + ": " + error;
     }
 }
 
@@ -1958,14 +1958,14 @@ async function reboot(deviceId, ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = "#ccffcc";
-            statusDiv.innerHTML = "Successfully started reboot for " + display + ".";
+            statusDiv.textContent = "Successfully started reboot for " + display + ".";
         } else {
             statusDiv.style.backgroundColor = "#ffcccc";
-            statusDiv.innerHTML = "Reboot failed for " + display + ": " + (result.message || "Unknown error");
+            statusDiv.textContent = "Reboot failed for " + display + ": " + (result.message || "Unknown error");
         }
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error rebooting " + display + ": " + error;
+        statusDiv.textContent = "Error rebooting " + display + ": " + error;
     }
 }
 
@@ -2110,7 +2110,7 @@ async function migrate(deviceId, ip) {
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
     const display = getDeviceDisplayName(deviceId);
-    statusDiv.innerHTML = "Migrating " + display + " using " + method + "...";
+    statusDiv.textContent = "Migrating " + display + " using " + method + "...";
 
     let query = "?method=" + encodeURIComponent(method) + "&target_url=" + encodeURIComponent(targetUrl);
     for (let k in opts) {
@@ -2123,7 +2123,14 @@ async function migrate(deviceId, ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = "#ccffcc";
-            statusDiv.innerHTML = "Successfully started migration for " + display + ". <strong>Please reboot the device to activate the changes.</strong>";
+            // replaceChildren keeps the user-controlled `display` outside any
+            // HTML-parsing context, while preserving the intentional <strong>.
+            statusDiv.replaceChildren(
+                document.createTextNode("Successfully started migration for " + display + ". "),
+                Object.assign(document.createElement("strong"), {
+                    textContent: "Please reboot the device to activate the changes.",
+                }),
+            );
 
             // Make reboot button available and prominent
             const rebootBtn = document.getElementById("reboot-speaker-btn");
@@ -2142,11 +2149,11 @@ async function migrate(deviceId, ip) {
             summaryDiv.style.display = "block";
         } else {
             statusDiv.style.backgroundColor = "#ffcccc";
-            statusDiv.innerHTML = "Migration failed for " + display + ": " + (result.message || "Unknown error");
+            statusDiv.textContent = "Migration failed for " + display + ": " + (result.message || "Unknown error");
         }
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error migrating " + display + ": " + error;
+        statusDiv.textContent = "Error migrating " + display + ": " + error;
     }
 }
 
@@ -2159,7 +2166,7 @@ async function trustCA(deviceId, ip) {
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
     const display = getDeviceDisplayName(deviceId);
-    statusDiv.innerHTML = "Injecting Root CA into shared trust store on " + display + "...";
+    statusDiv.textContent = "Injecting Root CA into shared trust store on " + display + "...";
 
     try {
         const response = await fetch("/setup/trust-ca/" + encodeURIComponent(deviceId), {method: "POST"},);
@@ -2167,15 +2174,15 @@ async function trustCA(deviceId, ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = "#ccffcc";
-            statusDiv.innerHTML = "Successfully injected Root CA on " + display + ".";
+            statusDiv.textContent = "Successfully injected Root CA on " + display + ".";
             showSummary(deviceId); // Refresh to update status
         } else {
             statusDiv.style.backgroundColor = "#ffcccc";
-            statusDiv.innerHTML = "Failed to trust CA on " + display + ": " + (result.message || "Unknown error");
+            statusDiv.textContent = "Failed to trust CA on " + display + ": " + (result.message || "Unknown error");
         }
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error trusting CA on " + display + ": " + error;
+        statusDiv.textContent = "Error trusting CA on " + display + ": " + error;
     }
 }
 
@@ -2191,7 +2198,7 @@ async function ensureRemoteServices(deviceId, ip) {
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
     const display = getDeviceDisplayName(deviceId);
-    statusDiv.innerHTML = "Ensuring remote services for " + display + "...";
+    statusDiv.textContent = "Ensuring remote services for " + display + "...";
 
     try {
         const response = await fetch("/setup/ensure-remote-services/" + encodeURIComponent(deviceId), {method: "POST"},);
@@ -2199,14 +2206,14 @@ async function ensureRemoteServices(deviceId, ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = "#ccffcc";
-            statusDiv.innerHTML = "Successfully ensured remote services for " + display + ".";
+            statusDiv.textContent = "Successfully ensured remote services for " + display + ".";
         } else {
             statusDiv.style.backgroundColor = "#ffcccc";
-            statusDiv.innerHTML = "Failed to ensure remote services for " + display + ": " + (result.message || "Unknown error");
+            statusDiv.textContent = "Failed to ensure remote services for " + display + ": " + (result.message || "Unknown error");
         }
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error ensuring remote services for " + display + ": " + error;
+        statusDiv.textContent = "Error ensuring remote services for " + display + ": " + error;
     }
 }
 
@@ -2225,7 +2232,7 @@ async function removeRemoteServices(deviceId, ip) {
     const statusDiv = document.getElementById("status");
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
-    statusDiv.innerHTML = "Removing remote services for " + display + "...";
+    statusDiv.textContent = "Removing remote services for " + display + "...";
 
     try {
         const response = await fetch("/setup/remove-remote-services/" + encodeURIComponent(deviceId), {method: "POST"},);
@@ -2233,14 +2240,14 @@ async function removeRemoteServices(deviceId, ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = "#ccffcc";
-            statusDiv.innerHTML = "Successfully removed remote services from " + display + ".";
+            statusDiv.textContent = "Successfully removed remote services from " + display + ".";
         } else {
             statusDiv.style.backgroundColor = "#ffcccc";
-            statusDiv.innerHTML = "Failed to remove remote services for " + display + ": " + (result.message || "Unknown error");
+            statusDiv.textContent = "Failed to remove remote services for " + display + ": " + (result.message || "Unknown error");
         }
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error removing remote services for " + display + ": " + error;
+        statusDiv.textContent = "Error removing remote services for " + display + ": " + error;
     }
 }
 
@@ -2253,7 +2260,7 @@ async function backupConfig(deviceId, ip) {
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
     const display = getDeviceDisplayName(deviceId);
-    statusDiv.innerHTML = "Creating backup for " + display + "...";
+    statusDiv.textContent = "Creating backup for " + display + "...";
 
     try {
         const response = await fetch("/setup/backup/" + encodeURIComponent(deviceId), {method: "POST"},);
@@ -2261,15 +2268,15 @@ async function backupConfig(deviceId, ip) {
         showCommandOutput(result);
         if (result.ok) {
             statusDiv.style.backgroundColor = "#ccffcc";
-            statusDiv.innerHTML = "Successfully created backup for " + display + ".";
+            statusDiv.textContent = "Successfully created backup for " + display + ".";
             showSummary(deviceId); // Refresh
         } else {
             statusDiv.style.backgroundColor = "#ffcccc";
-            statusDiv.innerHTML = "Backup failed for " + display + ": " + (result.message || "Unknown error");
+            statusDiv.textContent = "Backup failed for " + display + ": " + (result.message || "Unknown error");
         }
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
-        statusDiv.innerHTML = "Error creating backup for " + display + ": " + error;
+        statusDiv.textContent = "Error creating backup for " + display + ": " + error;
     }
 }
 
