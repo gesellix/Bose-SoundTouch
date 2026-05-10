@@ -37,6 +37,58 @@ func TestParseGetpdoConfig_TolerantToNoise(t *testing.T) {
 	}
 }
 
+// TestParseGetpdoConfig_ProtobufTextRealDevice pins the parser to the
+// live response captured from a SoundTouch 20 (FW 27.0.6.46330.5043500)
+// against http://mac.fritz.box:8000/setup/summary. This is the format
+// the parser actually has to handle in production — the prior
+// key=value-only implementation returned an empty map for this input,
+// which surfaced as empty "Current on Device" cells in the migration
+// UI.
+func TestParseGetpdoConfig_ProtobufTextRealDevice(t *testing.T) {
+	in := `margeServerUrl {
+  text: "https://streaming.bose.com"
+}
+statsServerUrl {
+  text: "https://events.api.bosecm.com"
+}
+swUpdateUrl {
+  text: "https://worldwide.bose.com/updates/soundtouch"
+}
+isZeroconfEnabled {
+  text: true
+}
+usePandoraProductionServer {
+  text: true
+}
+saveMargeCustomerReport {
+  text: false
+}
+bmxRegistryUrl {
+  text: "https://content.api.bose.io/bmx/registry/v1/services"
+}
+
+->OK
+->`
+
+	got := parseGetpdoConfig(in)
+
+	want := map[string]string{
+		"margeServerUrl":             "https://streaming.bose.com",
+		"statsServerUrl":             "https://events.api.bosecm.com",
+		"swUpdateUrl":                "https://worldwide.bose.com/updates/soundtouch",
+		"bmxRegistryUrl":             "https://content.api.bose.io/bmx/registry/v1/services",
+		"isZeroconfEnabled":          "true",
+		"usePandoraProductionServer": "true",
+		"saveMargeCustomerReport":    "false",
+	}
+
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
 func TestCrossCheckPreflights_AgreementProducesNoWarnings(t *testing.T) {
 	m := &Manager{ServerURL: "http://example:8000"}
 

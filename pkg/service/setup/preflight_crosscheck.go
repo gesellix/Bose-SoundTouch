@@ -52,12 +52,27 @@ func (m *Manager) crossCheckPreflights(summary *MigrationSummary) {
 	}
 }
 
-// parseGetpdoConfig extracts key=value pairs from `getpdo CurrentSystemConfiguration`
-// output. The format observed in the wild is one pair per line; any line
-// that does not match key=value is silently skipped, so the parser is
-// tolerant to banner text or trailing prompt characters.
+// parseGetpdoConfig extracts field values from a `getpdo
+// CurrentSystemConfiguration` reply. Two formats are accepted:
+//
+//  1. Protobuf-text-like nested blocks (the format observed on FW
+//     27.0.6 ST 10/20/300 in the wild):
+//
+//     margeServerUrl {
+//     text: "https://streaming.bose.com"
+//     }
+//
+//  2. Flat key=value lines (kept as a tolerance path for firmware
+//     variants that report differently or for hand-crafted test
+//     fixtures).
+//
+// Any line that doesn't match either shape is silently ignored, so the
+// parser tolerates banner text, prompt characters (`->`, `->OK`),
+// blank lines, and unrelated fields.
 func parseGetpdoConfig(text string) map[string]string {
 	out := map[string]string{}
+
+	var currentKey string
 
 	for _, raw := range strings.Split(text, "\n") {
 		line := strings.TrimSpace(raw)
@@ -65,18 +80,64 @@ func parseGetpdoConfig(text string) map[string]string {
 			continue
 		}
 
-		i := strings.IndexByte(line, '=')
-		if i <= 0 {
+		// Block open: "<key> {".
+		if strings.HasSuffix(line, "{") {
+			head := strings.TrimSpace(strings.TrimSuffix(line, "{"))
+			if head != "" && isIdentifier(head) {
+				currentKey = head
+			}
+
 			continue
 		}
 
-		key := strings.TrimSpace(line[:i])
-		val := strings.TrimSpace(line[i+1:])
+		// Block close.
+		if line == "}" {
+			currentKey = ""
+			continue
+		}
 
-		if key != "" {
-			out[key] = val
+		// "text: ..." inside a block is the field value.
+		if currentKey != "" && strings.HasPrefix(line, "text:") {
+			val := strings.TrimSpace(strings.TrimPrefix(line, "text:"))
+			val = strings.Trim(val, `"`)
+			out[currentKey] = val
+
+			continue
+		}
+
+		// Flat key=value, only if the key is a bare identifier (so we
+		// don't misread protobuf "text: value" as a key=value pair via
+		// some other separator).
+		if i := strings.IndexByte(line, '='); i > 0 {
+			key := strings.TrimSpace(line[:i])
+			if key != "" && isIdentifier(key) {
+				out[key] = strings.TrimSpace(line[i+1:])
+			}
 		}
 	}
 
 	return out
+}
+
+// isIdentifier reports whether s looks like a configuration field name —
+// alphanumeric or underscore only. Used to keep parseGetpdoConfig from
+// promoting random "x: y" or "x = y" lines (with spaces, punctuation,
+// arrows) into the result map.
+func isIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '_':
+		default:
+			return false
+		}
+	}
+
+	return true
 }

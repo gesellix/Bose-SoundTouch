@@ -2486,22 +2486,55 @@ function renderTelnetPreflight(summary) {
     }
 }
 
-// parseTelnetVerifiedConfig extracts key=value pairs from the device's
+// parseTelnetVerifiedConfig extracts field values from the device's
 // `getpdo CurrentSystemConfiguration` reply. Mirrors
-// setup.parseGetpdoConfig (Go) — see that function's docstring for the
-// tolerance contract.
+// setup.parseGetpdoConfig (Go); supports both the protobuf-text-like
+// nested-block format observed on FW 27.0.6 (`key { text: "value" }`)
+// and the flat key=value format kept as a tolerance path. Banner text,
+// prompt characters (`->`, `->OK`), and unrelated lines are silently
+// ignored.
 function parseTelnetVerifiedConfig(text) {
     const out = {};
     if (!text) return out;
+
+    const isIdentifier = (s) => !!s && /^[A-Za-z0-9_]+$/.test(s);
+
+    let currentKey = "";
     for (const raw of text.split("\n")) {
         const line = raw.trim();
         if (!line) continue;
-        const i = line.indexOf("=");
-        if (i <= 0) continue;
-        const key = line.slice(0, i).trim();
-        const val = line.slice(i + 1).trim();
-        if (key) out[key] = val;
+
+        // Block open: "<key> {".
+        if (line.endsWith("{")) {
+            const head = line.slice(0, -1).trim();
+            if (isIdentifier(head)) currentKey = head;
+            continue;
+        }
+
+        // Block close.
+        if (line === "}") {
+            currentKey = "";
+            continue;
+        }
+
+        // "text: ..." inside a block is the field value.
+        if (currentKey && line.startsWith("text:")) {
+            let val = line.slice("text:".length).trim();
+            if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+            out[currentKey] = val;
+            continue;
+        }
+
+        // Flat key=value (tolerance path).
+        const eq = line.indexOf("=");
+        if (eq > 0) {
+            const key = line.slice(0, eq).trim();
+            if (isIdentifier(key)) {
+                out[key] = line.slice(eq + 1).trim();
+            }
+        }
     }
+
     return out;
 }
 
