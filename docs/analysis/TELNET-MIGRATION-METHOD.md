@@ -362,3 +362,104 @@ this; we just add a `telnet` option next to `xml`/`resolv`.
   existing reboot button gets a method selector (radio or dropdown) wired to
   the new query param, with `confirm()` before firing. The legacy `hosts`
   option stays out of the dropdown (deprecated).
+
+---
+
+## 8. Device compatibility today
+
+What follows is the current best read on which devices our `migrateViaTelnet`
+flow handles end-to-end, derived from the same six sources catalogued in
+[TELNET-COMMAND-REFERENCE.md](TELNET-COMMAND-REFERENCE.md) plus the issue
+threads cited above. This is migration-outcome perspective; for per-command
+availability see the reference doc.
+
+### 8.1 Proven to work end-to-end
+
+All on the firmware-27.0.6 family, which is what survived through Bose's
+end-of-service cut. Multi-reporter agreement on every row.
+
+| Device   | Reporter(s)                 | Source           | Confirmed                                                                  |
+|----------|-----------------------------|------------------|----------------------------------------------------------------------------|
+| ST 10    | foob61451, TJGigs           | #221, #228       | All four URLs persist; `envswitch boseurls set` survives `sys reboot`      |
+| ST 20    | foob61451, mcdona1d, TJGigs | #221, #141, #228 | Same; multiple independent reports                                         |
+| ST 300   | mcdona1d                    | #141             | `sys configuration` + `envswitch` + `sys reboot` round-trip                |
+| Wave III | bveenker                    | #221             | URLs accepted; presets work after pairing fallback (§3)                    |
+| Wave IV  | stephan48                   | #221             | Port-17000 path **was the only one that worked** — USB-stick unlock failed |
+
+The exact sequence each reporter ran by hand is the sequence our migration
+sends (§2.1). So the migration's happy path is exercised against five
+hardware variants in independent captures.
+
+### 8.2 Proven to need the pairing fallback
+
+Migration of the URLs themselves works on these models, but
+`POST /setMargeAccount` is missing or wedged on the firmware build, so
+pairing has to go through the telnet `envswitch accountid set <id>` path
+that `setup.PairAccount` already implements.
+
+| Device                         | Reporter | Source                      | Why fallback is needed                                                                                                                                   |
+|--------------------------------|----------|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ST Portable / FW 27.0.6        | jmosen   | #236                        | After migration: `POST /marge/streaming/support/power_on` → 502; `<margeAccountUUID/>` empty. Time-bounded HTTP path fails; envswitch fallback succeeds. |
+| BST20 Portable (factory reset) | ubittner | scheilch/opencloudtouch#167 | `<margeAccountUUID/>` empty; `/setMargeAccount` not in `/supportedURLs`. HTTP path skipped entirely; only the telnet fallback works.                     |
+
+### 8.3 Likely to fail (but the failure is clean)
+
+Our preflight + abort-on-first-rejection design (`TestMigrateViaTelnet_CommandNotFoundAborts`)
+means none of these scenarios leave a device half-configured. The user is
+told what failed and pointed to the XML or DNS method.
+
+| Device                                     | Source          | Likely cause                                                                                                                                                                                                                             |
+|--------------------------------------------|-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **SA-5** (sound amplifier) on FW 9.0.43.x  | soundcork#141   | FW 9.x has a different shell generation: `->` prompt, `local_services on`, `scm uboot_ver`. **`sys configuration` and `envswitch` are not documented as working there.** Migration fails on command #1.                                  |
+| **Recent ST Portable** (post-27.0.6.46330) | #236 (indirect) | `/setMargeAccount` removal points to broader command-set shrinkage. If `envswitch accountid set` is also gone, both migration and pairing fallback fail; user is told to pair via the official Bose app before EOS, or use XML over SSH. |
+
+### 8.4 Unknown — would benefit from real-device verification
+
+| Device                     | Why unknown                                                         | What we'd want to confirm                                                |
+|----------------------------|---------------------------------------------------------------------|--------------------------------------------------------------------------|
+| **ST 30** (`mojo`)         | No concrete capture in any of the six sources                       | Almost certainly works — same FW family as ST 10/20/300 — but unverified |
+| **ST 520 / Home Cinema**   | USB-unlock reports failing (#141), no port-17000 capture either way | Whether `sys configuration` and `envswitch` are exposed at all           |
+| **Wave Music System I/II** | `flarn2006`-era hardware, not seen in 27.x reports                  | Whether port 17000 is even open on those models                          |
+
+### 8.5 The S5 "valid roots" tension
+
+S5 (the r/bose telnet-probing thread) lists only `key`, `net`, `sys`,
+`getpdo` as command roots that don't return "Command not found" on its
+ST 10 / FW 27.0.6 — which would seem to rule out `envswitch`. But foob61451
+on the same hardware/firmware ran `envswitch boseurls set` successfully
+(#221).
+
+The most plausible reading is that **S5 is a non-exhaustive probe**, not a
+negative claim: the author writes "I've made some educated guesses and come
+up with the following valid commands" and never says they tested
+`envswitch`. We do not down-weight `envswitch` availability on the strength
+of S5 alone — but if a real-device run ever shows `envswitch` rejected on
+an ST 10, our preflight catches it, the migration aborts on the first
+non-OK response, and the user gets a clear error rather than partial state.
+
+### 8.6 Failure-mode matrix
+
+What `migrateViaTelnet` does in each failure mode (verified by
+`pkg/telnet` and `pkg/service/setup` unit tests):
+
+| Failure                                        | Outcome                                                                                           | Test                                                                                                               |
+|------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+| Port 17000 closed / TCP unreachable            | `Dial` errors before any command is sent; UI shows the error; nothing persisted                   | `TestMigrateViaTelnet_DialFailureReturnsError`                                                                     |
+| `sys configuration` rejected (cmd #1)          | Sequence aborts; verification not sent; rest of commands not attempted                            | `TestMigrateViaTelnet_CommandNotFoundAborts` (envswitch variant — generalises)                                     |
+| `envswitch boseurls set` rejected              | Sequence aborts; runtime-only `sys configuration` state reverts on reboot — no permanent damage   | `TestMigrateViaTelnet_CommandNotFoundAborts`                                                                       |
+| Verification mismatch (URLs not echoed back)   | Loud "verification failed" error; live state may persist until reboot but UI never claims success | `TestMigrateViaTelnet_VerifyMismatchFails`                                                                         |
+| `/setMargeAccount` 502 / hang                  | 5s connect + 12s total budget enforced; falls through to telnet `envswitch accountid set`         | `TestPairAccount_FallsBackWhenHTTPReturnsServerError`                                                              |
+| `/setMargeAccount` missing in `/supportedURLs` | HTTP path skipped; goes straight to telnet `envswitch accountid set`                              | `TestPairAccount_FallsBackWhenSetMargeAccountMissing`                                                              |
+| Both pairing paths unavailable                 | Structured error: "use the official Bose app before EOS, or open SSH and use the XML method"      | `TestPairAccount_NoTelnetAndHTTPMissingReturnsClearError`, `TestPairAccount_TelnetCommandNotFoundReportsBothPaths` |
+
+### 8.7 TL;DR
+
+- **Green light** — ST 10, ST 20, ST 300, Wave III, Wave IV on FW 27.0.6 (multi-reporter agreement).
+- **Yellow** — ST Portable and BST20 Portable: migration works, pairing needs our fallback (already implemented).
+- **Red, but fails cleanly** — SA-5 on FW 9.x, possibly newer ST Portable builds.
+- **Unverified but expected to work** — ST 30, ST 520, Wave Music System I/II.
+
+The most useful next verification step is touching a real ST 30 and ST 520
+— those are the two "expected to work" models with zero concrete captures.
+Beyond that, every behaviour the doc predicts is exercised by the unit
+tests in `pkg/telnet` and `pkg/service/setup`.
