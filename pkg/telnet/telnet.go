@@ -18,14 +18,22 @@ import (
 )
 
 // Default values for a fresh Client.
+//
+// The dial and read budgets were originally tighter (2s / 5s); both were
+// relaxed after observing transient i/o-timeout failures on healthy
+// speakers that reliably resolved on a second attempt. The diagnostic
+// shell on FW 27.0.6 occasionally takes >2s to accept a fresh TCP
+// connection — likely while the device is servicing other work — so a
+// short dial budget produces flaky preflight results without indicating
+// a real reachability problem.
 const (
 	DefaultPort         = 17000
-	DefaultDialTimeout  = 2 * time.Second
-	DefaultReadTimeout  = 5 * time.Second
-	DefaultWriteTimeout = 2 * time.Second
+	DefaultDialTimeout  = 4 * time.Second
+	DefaultReadTimeout  = 7 * time.Second
+	DefaultWriteTimeout = 3 * time.Second
 	// idleWindow is how long we wait for further bytes after the first
 	// byte of a response before treating the response as complete.
-	idleWindow = 400 * time.Millisecond
+	idleWindow = 600 * time.Millisecond
 )
 
 // Client is a connected (or about-to-be-connected) session to a SoundTouch

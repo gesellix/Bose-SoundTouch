@@ -2670,6 +2670,16 @@ async function applySuggestedPlan() {
     if (status) status.innerText = "";
 }
 
+// looksTransient classifies a probe-error message as likely-flaky-but-
+// retriable. Conservative substring match — only marks errors that
+// pattern-match a TCP/I/O timeout, which is the exact failure shape
+// observed on healthy FW 27.0.6 devices that recover on retry.
+function looksTransient(msg) {
+    if (!msg) return false;
+    const m = msg.toLowerCase();
+    return m.includes("timeout") || m.includes("timed out") || m.includes("connection reset");
+}
+
 // renderMigrationState fills the three-axis state card at the top of
 // the migration summary: transports, migration-state axes (URL config,
 // DNS interception, CA/TLS), and preconditions (remote_services,
@@ -2686,7 +2696,23 @@ function renderMigrationState(summary) {
     const errorEl = document.getElementById("state-telnet-error");
     if (errorEl) {
         if (summary.telnet_probe_error && !summary.telnet_reachable) {
-            errorEl.innerText = "Probe error: " + summary.telnet_probe_error;
+            errorEl.replaceChildren();
+            const line = document.createElement("div");
+            line.innerText = "Probe error: " + summary.telnet_probe_error;
+            errorEl.appendChild(line);
+
+            // The diagnostic shell on FW 27.0.6 occasionally drops the
+            // first connection attempt under load. When the error wraps
+            // an i/o timeout, the next probe almost always succeeds —
+            // so nudge the user toward the ↻ refresh button rather than
+            // letting them assume telnet is permanently unreachable.
+            if (looksTransient(summary.telnet_probe_error)) {
+                const hint = document.createElement("div");
+                hint.style.cssText = "margin-top: 4px; font-size: 0.85em; color: #5d4037";
+                hint.innerText = "💡 Telnet probes are occasionally flaky on this firmware. Click the ↻ refresh button next to the device dropdown to retry.";
+                errorEl.appendChild(hint);
+            }
+
             errorEl.style.display = "block";
         } else {
             errorEl.style.display = "none";
