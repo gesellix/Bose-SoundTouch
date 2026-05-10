@@ -66,7 +66,7 @@ func TestMigrateViaTelnet_HappyPath(t *testing.T) {
 	}
 	m := newFakeTelnetManager(f)
 
-	logs, err := m.migrateViaTelnet("192.0.2.1", target)
+	logs, err := m.migrateViaTelnet("192.0.2.1", target, defaultTelnetURLs(target))
 	if err != nil {
 		t.Fatalf("migrateViaTelnet: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestMigrateViaTelnet_DialFailureReturnsError(t *testing.T) {
 	f := &fakeTelnet{dialErr: errors.New("connection refused")}
 	m := newFakeTelnetManager(f)
 
-	_, err := m.migrateViaTelnet("192.0.2.1", "http://example:8000")
+	_, err := m.migrateViaTelnet("192.0.2.1", "http://example:8000", defaultTelnetURLs("http://example:8000"))
 	if err == nil {
 		t.Fatal("expected dial error, got nil")
 	}
@@ -126,7 +126,7 @@ func TestMigrateViaTelnet_CommandNotFoundAborts(t *testing.T) {
 	f := &fakeTelnet{responses: resp}
 	m := newFakeTelnetManager(f)
 
-	_, err := m.migrateViaTelnet("192.0.2.1", target)
+	_, err := m.migrateViaTelnet("192.0.2.1", target, defaultTelnetURLs(target))
 	if err == nil {
 		t.Fatal("expected error when envswitch is rejected, got nil")
 	}
@@ -153,7 +153,7 @@ func TestMigrateViaTelnet_VerifyMismatchFails(t *testing.T) {
 	f := &fakeTelnet{responses: resp}
 	m := newFakeTelnetManager(f)
 
-	_, err := m.migrateViaTelnet("192.0.2.1", target)
+	_, err := m.migrateViaTelnet("192.0.2.1", target, defaultTelnetURLs(target))
 	if err == nil {
 		t.Fatal("expected verification mismatch error, got nil")
 	}
@@ -173,7 +173,7 @@ func TestMigrateViaTelnet_TransportErrorAborts(t *testing.T) {
 	}
 	m := newFakeTelnetManager(f)
 
-	_, err := m.migrateViaTelnet("192.0.2.1", target)
+	_, err := m.migrateViaTelnet("192.0.2.1", target, defaultTelnetURLs(target))
 	if err == nil {
 		t.Fatal("expected transport error, got nil")
 	}
@@ -186,7 +186,7 @@ func TestMigrateViaTelnet_TransportErrorAborts(t *testing.T) {
 func TestMigrateViaTelnet_MissingNewTelnetIsClearError(t *testing.T) {
 	m := &Manager{ServerURL: "http://example:8000"} // NewTelnet deliberately nil
 
-	_, err := m.migrateViaTelnet("192.0.2.1", "http://example:8000")
+	_, err := m.migrateViaTelnet("192.0.2.1", "http://example:8000", defaultTelnetURLs("http://example:8000"))
 	if err == nil {
 		t.Fatal("expected error when NewTelnet is nil")
 	}

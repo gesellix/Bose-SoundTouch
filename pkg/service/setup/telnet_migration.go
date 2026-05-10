@@ -6,20 +6,77 @@ import (
 	"strings"
 )
 
-// telnetURLConfigCommands returns the canonical sequence of telnet commands
-// that point a SoundTouch device at the given local-service base URL.
+// telnetURLs holds the four URLs the migration writes via telnet. Most
+// users keep all four pointing at the same service base; per-field
+// overrides exist mainly so soundcork users can append /marge to the
+// marge URL.
+type telnetURLs struct {
+	Marge       string
+	Stats       string
+	SwUpdate    string
+	BmxRegistry string
+}
+
+// defaultTelnetURLs returns the canonical URL set derived from the
+// soundtouch-service base targetURL.
+func defaultTelnetURLs(targetURL string) telnetURLs {
+	return telnetURLs{
+		Marge:       targetURL,
+		Stats:       targetURL,
+		SwUpdate:    targetURL + "/updates/soundtouch",
+		BmxRegistry: targetURL + "/bmx/registry/v1/services",
+	}
+}
+
+// telnetURLsFromOptions resolves the four URLs from targetURL plus
+// per-field overrides supplied via the migration options map. Recognised
+// keys are marge_url, stats_url, sw_update_url, bmx_url; missing or empty
+// entries fall back to the canonical default.
 //
-// Order matters: `sys configuration …` writes the runtime URL, while
-// `envswitch boseurls set …` writes a parallel persistence layer that
-// otherwise wins on the next reboot. See docs/analysis/TELNET-MIGRATION-METHOD.md
-// §2.1 for the discussion this is derived from.
-func telnetURLConfigCommands(targetURL string) []string {
+// We deliberately do not expose a "proxied"/"original" semantic here
+// (unlike the XML method's applyProxyOptions): per the discussion that
+// motivated this iteration, the goal is to keep the user model simple —
+// one base URL plus optional path suffixes — and let the service layer
+// hold any non-trivial logic.
+func telnetURLsFromOptions(targetURL string, options map[string]string) telnetURLs {
+	u := defaultTelnetURLs(targetURL)
+
+	if v := options["marge_url"]; v != "" {
+		u.Marge = v
+	}
+
+	if v := options["stats_url"]; v != "" {
+		u.Stats = v
+	}
+
+	if v := options["sw_update_url"]; v != "" {
+		u.SwUpdate = v
+	}
+
+	if v := options["bmx_url"]; v != "" {
+		u.BmxRegistry = v
+	}
+
+	return u
+}
+
+// Commands returns the canonical sequence of telnet commands. Order
+// matters: `sys configuration …` writes the runtime layer; the closing
+// `envswitch boseurls set …` writes the parallel persistence layer that
+// otherwise wins on the next reboot.
+//
+// Envswitch derivation rule: arg1 mirrors u.Marge verbatim, arg2 mirrors
+// u.SwUpdate verbatim. Soundcork users who set Marge to "<base>/marge"
+// therefore get "envswitch boseurls set <base>/marge <base>/updates/soundtouch"
+// without any extra plumbing — the parallel layer stays consistent with
+// the runtime layer.
+func (u telnetURLs) Commands() []string {
 	return []string{
-		"sys configuration bmxRegistryUrl " + targetURL + "/bmx/registry/v1/services",
-		"sys configuration statsServerUrl " + targetURL,
-		"sys configuration margeServerUrl " + targetURL,
-		"sys configuration swUpdateUrl " + targetURL + "/updates/soundtouch",
-		"envswitch boseurls set " + targetURL + " " + targetURL + "/updates/soundtouch",
+		"sys configuration bmxRegistryUrl " + u.BmxRegistry,
+		"sys configuration statsServerUrl " + u.Stats,
+		"sys configuration margeServerUrl " + u.Marge,
+		"sys configuration swUpdateUrl " + u.SwUpdate,
+		"envswitch boseurls set " + u.Marge + " " + u.SwUpdate,
 	}
 }
 
@@ -31,7 +88,12 @@ func telnetURLConfigCommands(targetURL string) []string {
 // The sequence aborts on the first non-OK response so we never half-write the
 // configuration; the caller can retry safely after fixing the underlying
 // issue (closed port, hardened firmware, etc.).
-func (m *Manager) migrateViaTelnet(deviceIP, targetURL string) (string, error) {
+//
+// targetURL is kept as a separate verification anchor: most users have
+// every URL share that base, so substring-matching it against the
+// device's `getpdo` reply is the simplest "did the writes stick?" check
+// that still works for the soundcork "/marge on one field" case.
+func (m *Manager) migrateViaTelnet(deviceIP, targetURL string, urls telnetURLs) (string, error) {
 	if m.NewTelnet == nil {
 		return "", errors.New("telnet migration not configured: Manager.NewTelnet is nil")
 	}
@@ -50,7 +112,7 @@ func (m *Manager) migrateViaTelnet(deviceIP, targetURL string) (string, error) {
 		fmt.Fprintf(&logs, "Telnet banner: %q\n", strings.TrimSpace(banner))
 	}
 
-	for _, cmd := range telnetURLConfigCommands(targetURL) {
+	for _, cmd := range urls.Commands() {
 		resp, err := t.SendCommand(cmd)
 		if err != nil {
 			return logs.String(), fmt.Errorf("telnet command %q failed: %w", cmd, err)

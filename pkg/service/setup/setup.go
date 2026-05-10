@@ -751,7 +751,8 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 	// rw pre-flight, both of which would fail on devices that haven't been
 	// rooted via remote_services.
 	if method == MigrationMethodTelnet {
-		return m.migrateViaTelnet(deviceIP, targetURL)
+		urls := telnetURLsFromOptions(targetURL, options)
+		return m.migrateViaTelnet(deviceIP, targetURL, urls)
 	}
 
 	var logs string
