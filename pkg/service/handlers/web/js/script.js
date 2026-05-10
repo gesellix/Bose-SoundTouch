@@ -1887,7 +1887,12 @@ async function showSummary(deviceId) {
 }
 
 function refreshSummary() {
-    const deviceId = document.getElementById("summary-device-id").value;
+    // Prefer the device id of the most recently shown summary; fall back
+    // to the dropdown so the refresh button works even before the user
+    // has loaded a summary once.
+    const deviceId =
+        document.getElementById("summary-device-id").value ||
+        document.getElementById("migration-device-list").value;
     if (deviceId) {
         showSummary(deviceId);
     }
