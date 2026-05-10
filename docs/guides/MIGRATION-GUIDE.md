@@ -90,9 +90,13 @@ If you plan to use DNS/DHCP redirect, enable the **DNS Discovery Server** and se
 
 ---
 
-## Step 3: Enable SSH on each speaker
+## Step 3: Enable shell access on each speaker
 
-The migration writes updated configuration to the speaker's filesystem, which requires SSH access. Enable it once per device:
+The wizard supports **two transports** for talking to the speaker. Pick whichever your device exposes:
+
+### SSH (recommended — required for XML migration, DNS interception, and CA install)
+
+The XML migration writes updated configuration to the speaker's filesystem, which requires SSH access. Enable it once per device:
 
 1. Format a USB drive as FAT (FAT32). Some speakers require the **bootable flag** to be set on the partition — see [SoundCork issue #172](https://github.com/deborahgu/soundcork/issues/172) for details.
 2. Create an empty file named **`remote_services`** (no extension) in the root of the drive.
@@ -101,6 +105,12 @@ The migration writes updated configuration to the speaker's filesystem, which re
 5. After boot, root SSH is available with no password: `ssh -oHostKeyAlgorithms=+ssh-rsa root@<SPEAKER-IP>`
 
 You only need to do this once per speaker. SSH can remain enabled for future maintenance or be disabled after migration — your choice.
+
+### Telnet:17000 (fallback when SSH isn't possible)
+
+If the USB-stick unlock doesn't work on your speaker (some firmware revisions refuse it — notably SA-5, ST520, and recent ST Portables), the wizard falls back to the speaker's **built-in diagnostic shell on TCP port 17000**. No setup required — most SoundTouch firmware exposes it automatically. The wizard detects which transports are available and picks the right one; you don't have to choose manually.
+
+Telnet-only migrations are limited to HTTP (no CA install possible without SSH). The wizard surfaces this clearly when it applies.
 
 ---
 
@@ -124,44 +134,63 @@ If the Bose cloud is still running, Sync also fetches your account data from Bos
 
 ## Step 5: Migrate
 
-Click **Migrate** next to a device on the Devices tab to open the Migration tab. It shows SSH status, CA trust status, and connection test results before letting you apply the redirect.
+Click **Migrate** next to a device on the Devices tab to open the Migration tab. The tab opens with a **Migration Summary** that shows where your speaker currently stands, then offers a one-click suggested plan and a fully customizable form underneath.
 
-![Migration tab showing HTTPS and DNS connection tests](../images/ui-migration.png)
+![Migration tab showing the state card and Plan card](../images/ui-migration.png)
 
-Two redirect methods are available:
+### What you see at the top — the state card
 
-### XML redirect (recommended for first-time / testing)
+Three rows tell you the speaker's current state at a glance:
 
-Uploads a configuration file to the speaker via the SoundTouch Web API. This changes the application-level service URLs without touching the speaker's network configuration. It's the least invasive option.
+- **Transports** — whether SSH and Telnet:17000 are reachable. The wizard's choices are driven by these.
+- **Migration State** — three orthogonal axes:
+  - *URL Configuration* — original Bose URLs or AfterTouch URLs (with a special "intercepted via DNS" verdict when the resolv.conf hook is doing the redirect).
+  - *DNS Interception* — none, or `/etc/resolv.conf` hook active.
+  - *CA / TLS* — local root CA installed on the device, with `Trust CA Now` and `Download CA cert` actions inline.
+- **Preconditions** — `remote_services` persistence, account pairing state, and XML config backup presence.
 
-The web UI guides you through:
-1. Previewing the config change (current vs. planned XML)
-2. Optionally installing the AfterTouch CA certificate on the speaker (requires SSH; needed for HTTPS)
-3. Applying the XML redirect
-4. Verifying the speaker can reach the local service
+### The Plan card — the happy path
 
-### DNS/DHCP redirect (recommended for permanent / all-device setup)
+Below the state card is the **Plan** card. For most users this is the only thing you'll touch:
 
-Configures the speaker to use a custom DNS server that resolves Bose cloud hostnames to the local service. This is the most robust method — it covers all Bose endpoints automatically and survives reboots.
+1. **Target service URL** — pre-filled from your Settings. Edit inline and click *Save as default* to update Settings without bouncing tabs.
+2. **Capabilities** — what transports the speaker exposes and what AfterTouch can offer given those.
+3. **Service URLs** — four URL inputs (margeServerUrl, statsServerUrl, swUpdateUrl, bmxRegistryUrl) pre-filled with canonical defaults. Most users leave them as-is; soundcork users tick the *Soundcork mode* checkbox to append `/marge` to `margeServerUrl`. URL validation runs on every keystroke.
+4. **Account pairing** — pre-filled with the speaker's current account ID. Leave it to keep the existing pairing, change it to re-pair, or click *Generate* to assign a new 7-digit ID on a factory-reset device.
+5. **Suggested plan** — one big green button: *Apply Suggested Plan*. The wizard picks the most conservative recipe for your speaker (XML over SSH with HTTP when SSH works; telnet URL flip with HTTP when only telnet works) and runs it.
 
-Requirements:
-- The AfterTouch DNS server must be running and bound to **port 53** on your network. Enable it in the **Settings** tab (`DNS Discovery` → enabled).
-- HTTPS is required. The web UI walks you through trusting the CA certificate on the speaker (via SSH).
+### What happens when you click Apply
 
-The web UI guides you through:
-1. Verifying the DNS server is running and reachable
-2. Installing the CA certificate on the speaker
-3. Configuring the speaker to use the AfterTouch DNS server
-4. Verifying DNS resolution and HTTPS connectivity
+The wizard switches to a visible **Pre-flight checks** panel and runs every applicable verification before touching the speaker:
+
+- **Backend summary re-check** — confirms transports, hostname resolution, and that the URLs you plan to write match what the backend would produce.
+- **HTTPS connection from device** (SSH-capable speakers) — uploads a temporary CA and runs `curl` from the speaker to your service.
+- **Telnet round-trip probe** (SSH-less speakers) — temporarily points the speaker's swUpdateUrl at our service via telnet, triggers `:8090/swUpdateCheck`, and watches the inbound land.
+- **DNS redirection from device** — when DNS interception is part of the plan.
+
+On all-green, the wizard auto-proceeds. On any failure, it pauses with *Proceed Anyway* / *Cancel* buttons so you can override on a known-false-positive (slow DNS, etc.) or fix the underlying issue and retry.
+
+### Customize this migration — for mix-and-match
+
+Expand the `▸ Customize this migration` section to pick any combination of three independent axes:
+
+- **URL flip transport** — XML over SSH / Telnet (Port 17000) / Skip
+- **DNS interception** — None / `/etc/resolv.conf` hook
+- **Local CA install** — checkbox (SSH-only)
+
+Each option carries a per-axis availability hint (e.g. *(SSH unreachable)*, *(already trusted)*) so you see why an option is disabled before you pick. *Apply Custom Plan* runs the chosen combination as a sequence; the same pre-flight panel gates the execution.
+
+> **Note**: DNS interception bundles the CA install on the backend, so a standalone CA-install step is skipped automatically when DNS is part of the plan. The wizard handles this for you.
 
 ---
 
 ## Step 6: Reboot and verify
 
-After migration, **power-cycle the speaker** (unplug and replug). This applies all configuration changes.
+After a successful Apply the wizard auto-expands the Customize section and highlights the **Reboot Speaker** button. Click it (or power-cycle the speaker manually) to apply all configuration changes. The reboot transport is picked automatically from your URL flip choice — telnet reboot for SSH-less speakers, SSH reboot otherwise.
 
 After reboot:
 - The speaker should appear as **migrated** in the Devices tab
+- The state card on the Migration tab should now show ✅ for URL Configuration (or "intercepted via DNS" if you used the resolv.conf hook)
 - Presets should load and play (served from the local service)
 - TuneIn browsing should work
 - Recently played items should appear
@@ -180,8 +209,9 @@ Each speaker is migrated independently. You can run multiple migrations in paral
 
 If you need to undo a migration:
 
-- **From the web UI**: Use the **Revert** action on the device — this restores the `.original` backup files created on the speaker during migration.
-- **Via SSH**: The original config is backed up on the speaker with a `.original` suffix. Restore it manually if the UI is unreachable.
+- **From the web UI**: Use the **Revert to Defaults** action on the device — this restores the `.original` backup files created on the speaker during the XML migration.
+- **Telnet-only migrations**: the wizard writes only the runtime configuration layer via telnet; the speaker's persistent "envswitch" layer keeps the original Bose URLs. **A single reboot reverts a telnet-only migration automatically.** To make a telnet migration permanent, the wizard also writes `envswitch boseurls set …` as part of the URL flip step — only the *probe* step (used by the pre-flight check) leaves the persisted URLs untouched.
+- **Via SSH**: The original XML config is backed up on the speaker with a `.original` suffix. Restore it manually if the UI is unreachable.
 - **Factory reset**: As a last resort, perform a factory reset (see [Device Initial Setup](DEVICE-INITIAL-SETUP.md) for button sequences). This wipes all configuration and returns the speaker to out-of-box state.
 
 ---
