@@ -411,13 +411,7 @@ func (s *Server) HandleGetMigrationSummary(w http.ResponseWriter, r *http.Reques
 	targetURL := r.URL.Query().Get("target_url")
 	proxyURL := r.URL.Query().Get("proxy_url")
 
-	options := make(map[string]string)
-
-	for k, v := range r.URL.Query() {
-		if len(v) > 0 && (k == "marge" || k == "stats" || k == "sw_update" || k == "bmx") {
-			options[k] = v[0]
-		}
-	}
+	options := parseMigrationOptions(r.URL.Query())
 
 	summary, err := s.sm.GetMigrationSummary(deviceIP, targetURL, proxyURL, options)
 	if err != nil {
@@ -465,13 +459,7 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 	proxyURL := r.URL.Query().Get("proxy_url")
 	method := setup.MigrationMethod(r.URL.Query().Get("method"))
 
-	options := make(map[string]string)
-
-	for k, v := range r.URL.Query() {
-		if len(v) > 0 && (k == "marge" || k == "stats" || k == "sw_update" || k == "bmx") {
-			options[k] = v[0]
-		}
-	}
+	options := parseMigrationOptions(r.URL.Query())
 
 	output, err := s.sm.MigrateSpeaker(deviceIP, targetURL, proxyURL, options, method)
 	if err != nil {
