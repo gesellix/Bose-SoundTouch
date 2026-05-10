@@ -1697,12 +1697,10 @@ async function showSummary(deviceId) {
     }
     const targetUrl = document.getElementById("target-domain").value;
 
-    const opts = {
-        marge: document.getElementById("opt-marge").value,
-        stats: document.getElementById("opt-stats").value,
-        sw_update: document.getElementById("opt-sw_update").value,
-        bmx: document.getElementById("opt-bmx").value,
-    };
+    // Per-field URL overrides (Plan card). The summary endpoint uses
+    // these to render the planned-config diff so the user sees the
+    // exact XML that the migration will write.
+    const opts = readPlanURLOptions();
 
     const statusDiv = document.getElementById("status");
     statusDiv.style.display = "block";
@@ -1761,9 +1759,7 @@ async function showSummary(deviceId) {
         renderMigrationState(summary);
         renderPlan(summary);
         renderPlanCurrentURLs(summary);
-        renderTelnetPreflight(summary);
         renderPreflightWarnings(summary);
-        fillTelnetURLInputs(defaultTelnetURLs(targetUrl));
 
         // Mirror the global target URL into the Plan card's input.
         // Reset the "saved" feedback to the persisted value so a
@@ -1790,16 +1786,6 @@ async function showSummary(deviceId) {
         migrationStatus.innerText = summary.is_migrated ? "✅ Migrated to AfterTouch" : "❌ Not Migrated";
         migrationStatus.style.color = summary.is_migrated ? "green" : "red";
         migrationStatus.style.fontWeight = "bold";
-
-        if (summary.parsed_current_config) {
-            document.getElementById("service-options").style.display = "block";
-            document.getElementById("orig-marge").innerText = summary.parsed_current_config.margeServerUrl;
-            document.getElementById("orig-stats").innerText = summary.parsed_current_config.statsServerUrl;
-            document.getElementById("orig-sw_update").innerText = summary.parsed_current_config.swUpdateUrl;
-            document.getElementById("orig-bmx").innerText = summary.parsed_current_config.bmxRegistryUrl;
-        } else {
-            document.getElementById("service-options").style.display = "none";
-        }
 
         // Trust CA Now button now lives inside the state card's CA / TLS
         // cell. Show only when SSH is reachable AND the CA isn't already
@@ -2127,27 +2113,11 @@ async function migrate(deviceId, ip) {
         return;
     }
 
-    const opts = {};
-
-    // Legacy XML mode dropdowns (self/proxied/original) — only read if
-    // the elements still exist. They're being removed in the next
-    // iteration; until then a literal *_url override from the Plan
-    // card wins anyway via assignment order below + the backend's
-    // applyURLOverrides taking precedence over applyProxyOptions.
-    const optMarge = document.getElementById("opt-marge");
-    const optStats = document.getElementById("opt-stats");
-    const optSwUpdate = document.getElementById("opt-sw_update");
-    const optBmx = document.getElementById("opt-bmx");
-    if (optMarge) opts.marge = optMarge.value;
-    if (optStats) opts.stats = optStats.value;
-    if (optSwUpdate) opts.sw_update = optSwUpdate.value;
-    if (optBmx) opts.bmx = optBmx.value;
-
-    // Per-field URL overrides from the Plan card apply to any method
-    // (XML or Telnet). Telnet pane's URL Targets table is now
-    // redundant for the Plan-driven flow but is kept under Customize
-    // for the next iteration's cleanup.
-    Object.assign(opts, readPlanURLOptions());
+    // Per-field URL overrides from the Plan card. The backend's
+    // applyURLOverrides honors these for both XML and Telnet
+    // migrations. Empty inputs are omitted so the canonical-default
+    // fallback runs server-side.
+    const opts = readPlanURLOptions();
 
     const summaryDiv = document.getElementById("migration-summary");
     summaryDiv.style.display = "none";
@@ -2414,63 +2384,6 @@ async function testDNSRedirection(deviceId) {
         testResultDiv.style.backgroundColor = "#ffcccc";
         testResultDiv.innerText = "❌ Error triggering test: " + error;
     }
-}
-
-// defaultTelnetURLs returns the canonical four URLs derived from a
-// service base URL. Mirrors setup.defaultTelnetURLs (Go) — keep them in
-// sync if either side changes.
-function defaultTelnetURLs(targetUrl) {
-    const base = (targetUrl || "").replace(/\/+$/, "");
-    return {
-        marge: base,
-        stats: base,
-        sw_update: base + "/updates/soundtouch",
-        bmx: base + "/bmx/registry/v1/services",
-    };
-}
-
-// fillTelnetURLInputs writes the given URL set into the four input
-// fields, but only when the field is empty (so a user's edit is never
-// clobbered by a refresh).
-function fillTelnetURLInputs(urls, {force = false} = {}) {
-    const fields = [
-        ["telnet-marge-url", urls.marge],
-        ["telnet-stats-url", urls.stats],
-        ["telnet-sw_update-url", urls.sw_update],
-        ["telnet-bmx-url", urls.bmx],
-    ];
-    for (const [id, value] of fields) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        if (force || !el.value) el.value = value;
-    }
-}
-
-// resetTelnetURLsToDefaults wipes any user edits and reapplies the
-// canonical defaults. Wired to the "Reset to defaults" button in the
-// telnet pane.
-function resetTelnetURLsToDefaults() {
-    const targetUrl = document.getElementById("target-domain").value;
-    fillTelnetURLInputs(defaultTelnetURLs(targetUrl), {force: true});
-}
-
-// readTelnetURLOptions returns the four per-field URL overrides as the
-// query-parameter map the handler expects (marge_url / stats_url /
-// sw_update_url / bmx_url). Empty fields are omitted so the service
-// layer's "fall back to canonical default" path is exercised.
-function readTelnetURLOptions() {
-    const out = {};
-    const pairs = [
-        ["marge_url", "telnet-marge-url"],
-        ["stats_url", "telnet-stats-url"],
-        ["sw_update_url", "telnet-sw_update-url"],
-        ["bmx_url", "telnet-bmx-url"],
-    ];
-    for (const [optKey, elemId] of pairs) {
-        const el = document.getElementById(elemId);
-        if (el && el.value) out[optKey] = el.value;
-    }
-    return out;
 }
 
 // onPlanTargetURLChange mirrors the migration tab's plan-target-url
@@ -3085,52 +2998,6 @@ function remoteServicesVerdict(summary) {
     return {icon: "✅", text: "Persistent", note: ""};
 }
 
-// renderTelnetPreflight surfaces TelnetReachable / TelnetBanner /
-// TelnetProbeError on the migration summary, and populates the "Current
-// on Device" column from TelnetVerifiedConfig when the device answered.
-function renderTelnetPreflight(summary) {
-    const statusEl = document.getElementById("telnet-status");
-    if (statusEl) {
-        if (summary.telnet_reachable) {
-            statusEl.innerText = "✅ Reachable";
-            statusEl.style.color = "green";
-        } else if (summary.telnet_probe_error) {
-            statusEl.innerText = "❌ Unreachable";
-            statusEl.style.color = "red";
-        } else {
-            statusEl.innerText = "❓ Unknown";
-            statusEl.style.color = "gray";
-        }
-    }
-
-    const bannerEl = document.getElementById("telnet-banner");
-    if (bannerEl) {
-        bannerEl.innerText = summary.telnet_banner ? `(${summary.telnet_banner})` : "";
-    }
-
-    const errorEl = document.getElementById("telnet-probe-error");
-    if (errorEl) {
-        if (summary.telnet_probe_error && !summary.telnet_reachable) {
-            errorEl.innerText = "Probe error: " + summary.telnet_probe_error;
-            errorEl.style.display = "block";
-        } else {
-            errorEl.style.display = "none";
-        }
-    }
-
-    const live = parseTelnetVerifiedConfig(summary.telnet_verified_config || "");
-    const cells = [
-        ["telnet-current-marge", live.margeServerUrl],
-        ["telnet-current-stats", live.statsServerUrl],
-        ["telnet-current-sw_update", live.swUpdateUrl],
-        ["telnet-current-bmx", live.bmxRegistryUrl],
-    ];
-    for (const [id, value] of cells) {
-        const el = document.getElementById(id);
-        if (el) el.innerText = value || "—";
-    }
-}
-
 // parseTelnetVerifiedConfig extracts field values from the device's
 // `getpdo CurrentSystemConfiguration` reply. Mirrors
 // setup.parseGetpdoConfig (Go); supports both the protobuf-text-like
@@ -3213,7 +3080,6 @@ async function toggleMigrationMethod() {
     const plannedHostsPane = document.getElementById("planned-hosts-pane");
     const plannedResolvPane = document.getElementById("planned-resolv-pane");
     const currentResolvPane = document.getElementById("current-resolv-pane");
-    const serviceOptions = document.getElementById("service-options");
     const hostsTestPane = document.getElementById("hosts-redirection-test");
     const dnsTestPane = document.getElementById("dns-redirection-test");
     const telnetPane = document.getElementById("telnet-method-pane");
@@ -3228,7 +3094,6 @@ async function toggleMigrationMethod() {
         plannedHostsPane.style.display = "none";
         plannedResolvPane.style.display = "none";
         currentResolvPane.style.display = "none";
-        serviceOptions.style.display = "none";
         hostsTestPane.style.display = "none";
         dnsTestPane.style.display = "none";
         if (dnsWarning) dnsWarning.style.display = "none";
@@ -3238,7 +3103,6 @@ async function toggleMigrationMethod() {
         plannedHostsPane.style.display = "block";
         plannedResolvPane.style.display = "none";
         currentResolvPane.style.display = "none";
-        serviceOptions.style.display = "none";
         hostsTestPane.style.display = "block";
         dnsTestPane.style.display = "none";
         if (dnsWarning) dnsWarning.style.display = "none";
@@ -3248,7 +3112,6 @@ async function toggleMigrationMethod() {
         plannedHostsPane.style.display = "none";
         plannedResolvPane.style.display = "block";
         currentResolvPane.style.display = "none";
-        serviceOptions.style.display = "none";
         hostsTestPane.style.display = "none";
         dnsTestPane.style.display = "block";
 
@@ -3298,11 +3161,6 @@ async function toggleMigrationMethod() {
         currentResolvPane.style.display = "none";
         hostsTestPane.style.display = "none";
         dnsTestPane.style.display = "none";
-        // Only show service options if we have a parsed config
-        const currentConfig = document.getElementById("current-config").innerText;
-        if (currentConfig && !currentConfig.startsWith("Error") && currentConfig !== "loading...") {
-            serviceOptions.style.display = "block";
-        }
     }
 }
 
