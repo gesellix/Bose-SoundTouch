@@ -62,6 +62,13 @@ func (s *Server) ServeProxy(target *url.URL) http.HandlerFunc {
 			r.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 		}
 
+		// AllowInsecureUpstreamTLS is opt-in via settings.json — defaults to
+		// false so the upstream certificate chain is verified normally. The
+		// opt-in exists for deployments stuck behind a broken Bose-cloud
+		// chain post end-of-service.
+		settings, _ := s.ds.GetSettings()
+		insecure := settings.AllowInsecureUpstreamTLS
+
 		rp := &httputil.ReverseProxy{
 			Rewrite: func(pr *httputil.ProxyRequest) {
 				pr.SetURL(target)
@@ -77,7 +84,7 @@ func (s *Server) ServeProxy(target *url.URL) http.HandlerFunc {
 				lp.LogRequest(pr.Out)
 			},
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
 			},
 		}
 

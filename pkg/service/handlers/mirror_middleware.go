@@ -271,6 +271,12 @@ func (s *Server) performMirror(r *http.Request) *mirrorResponseRecorder {
 		return nil
 	}
 
+	// AllowInsecureUpstreamTLS is opt-in via settings.json — defaults to
+	// false so verification stays on. The opt-in exists for deployments
+	// stuck behind a broken Bose-cloud certificate chain post EOS.
+	settings, _ := s.ds.GetSettings()
+	insecure := settings.AllowInsecureUpstreamTLS
+
 	// Create a proxy that doesn't write to the original ResponseWriter
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -279,7 +285,7 @@ func (s *Server) performMirror(r *http.Request) *mirrorResponseRecorder {
 			pr.Out.Header.Set("X-Mirror-Request", "true")
 		},
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
 		},
 	}
 

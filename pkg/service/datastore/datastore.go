@@ -1800,6 +1800,12 @@ type Settings struct {
 	AmazonClientID      string         `json:"amazon_client_id,omitempty"`
 	AmazonClientSecret  string         `json:"amazon_client_secret,omitempty"`
 	AmazonRedirectURI   string         `json:"amazon_redirect_uri,omitempty"`
+
+	// AllowInsecureUpstreamTLS, when true, disables TLS certificate verification
+	// for the upstream Bose-cloud proxy and mirror traffic. The default (false)
+	// keeps verification on; opt in only when the upstream certificate chain is
+	// broken (post end-of-service) and a temporary unblock is required.
+	AllowInsecureUpstreamTLS bool `json:"allow_insecure_upstream_tls,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.
