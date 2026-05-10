@@ -20,7 +20,7 @@ import (
 // TuneIn endpoint templates used to resolve station and stream URLs.
 const (
 	TuneInDescribe     = "https://opml.radiotime.com/describe.ashx?id=%s"
-	TuneInStream       = "http://opml.radiotime.com/Tune.ashx?id=%s&formats=mp3,aac,ogg"
+	TuneInStream       = "http://opml.radiotime.com/Tune.ashx?id=%s&formats=mp3,aac,ogg,hls"
 	TuneInNavigateAshx = "http://opml.radiotime.com/?render=json"
 	TuneInSearchAPI    = "https://api.radiotime.com/profiles?fulltextsearch=true&version=1.3&query="
 )
