@@ -12,6 +12,7 @@ echo "Installing Aftertouch $VERSION ..."
 mkdir -p /opt/aftertouch
 curl \
   -sSL \
+  -v \
   -o /media/aftertouch/binary \
   --fail \
   "$BINARY_URL"
@@ -22,6 +23,7 @@ chmod +x /opt/aftertouch/aftertouch-service
 echo "Creating init script..."
 curl \
   -sSL \
+  -v \
   -o /media/aftertouch/init-script \
   --fail \
   "$INIT_SCRIPT_URL"
