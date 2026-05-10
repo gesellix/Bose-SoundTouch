@@ -169,14 +169,26 @@ func DecryptBlob(encKey, macKey, blob []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// validateZcBaseURL parses zcBaseURL and ensures it points at a non-routable
-// host on the LAN. Speakers live on the local network; rejecting global-IP
-// hosts prevents the upstream caller from being tricked into making outbound
-// requests to arbitrary hosts (server-side request forgery). Also constrains
-// the scheme to http/https.
+// validateZcBaseURL parses zcBaseURL and ensures the URL points at a
+// non-routable host on the LAN. Speakers live on the local network; rejecting
+// non-local hosts prevents the upstream caller from being tricked into
+// making outbound requests to arbitrary hosts (server-side request forgery).
 //
-// Returns the parsed URL with any embedded ?query stripped, ready for callers
-// to attach their own ?action= query string.
+// The validator is strict on purpose:
+//   - the scheme must be http or https,
+//   - the host must be a *literal IP* (no DNS / mDNS hostnames — see note
+//     below) that is loopback, RFC1918 private, or IPv4/IPv6 link-local,
+//   - the returned URL is rebuilt from validated components so the
+//     subsequent String() call no longer carries the original tainted host
+//     value, which CodeQL recognises as taint sanitisation.
+//
+// Note on hostnames: SoundTouch speakers announce themselves with
+// IP-based zeroconf URLs in the captures we have. If a future deployment
+// needs mDNS support, the right place to add it is in the caller — resolve
+// the hostname to an IP and pass the IP-form URL in here. Doing the lookup
+// inside the validator would re-introduce the very SSRF surface CodeQL is
+// flagging, because malicious DNS could point a *.local name at a
+// public host between the lookup and the request.
 func validateZcBaseURL(zcBaseURL string) (*url.URL, error) {
 	u, err := url.Parse(zcBaseURL)
 	if err != nil {
@@ -192,23 +204,28 @@ func validateZcBaseURL(zcBaseURL string) (*url.URL, error) {
 		return nil, fmt.Errorf("missing host")
 	}
 
-	// Allow literal IPs that are loopback / private / link-local. Hostnames
-	// (mDNS .local, etc.) are accepted as the speaker may not be addressed
-	// by IP — DNS resolution of those is a separate trust boundary, but
-	// they don't open the SSRF surface CodeQL is concerned about because
-	// a malicious *.local name still has to win mDNS resolution on the
-	// local segment.
-	if ip := net.ParseIP(host); ip != nil {
-		if !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() {
-			return nil, fmt.Errorf("host %q is not on a local network", host)
-		}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return nil, fmt.Errorf("host %q must be a literal IP (DNS/mDNS hostnames are not supported on this path; resolve to a private IP before calling)", host)
 	}
 
-	// Strip any pre-existing query so callers can append cleanly.
-	u.RawQuery = ""
-	u.Fragment = ""
+	if !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() {
+		return nil, fmt.Errorf("host %q is not on a local network", host)
+	}
 
-	return u, nil
+	// Build a fresh URL from validated components only — the IP literal,
+	// the original port, the original path. Pre-existing ?query and
+	// #fragment are stripped so callers can attach their own cleanly.
+	hostPort := ip.String()
+	if port := u.Port(); port != "" {
+		hostPort = net.JoinHostPort(ip.String(), port)
+	}
+
+	return &url.URL{
+		Scheme: u.Scheme,
+		Host:   hostPort,
+		Path:   u.Path,
+	}, nil
 }
 
 // withAction returns the validated base URL with ?action=<action> appended.

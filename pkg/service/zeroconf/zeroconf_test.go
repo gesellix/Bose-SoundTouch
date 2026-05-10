@@ -312,3 +312,54 @@ func readProtoVarint(data []byte) (uint64, int) {
 	}
 	return 0, len(data)
 }
+
+func TestValidateZcBaseURL(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    string
+		wantOK   bool
+		wantHost string // expected u.Host on success
+		wantPath string
+	}{
+		{"loopback", "http://127.0.0.1:8200/zc", true, "127.0.0.1:8200", "/zc"},
+		{"loopback no port", "http://127.0.0.1/zc", true, "127.0.0.1", "/zc"},
+		{"private 192", "http://192.168.1.10:8200/zc", true, "192.168.1.10:8200", "/zc"},
+		{"private 10", "http://10.0.0.5/zc", true, "10.0.0.5", "/zc"},
+		{"private 172", "http://172.16.0.1/zc", true, "172.16.0.1", "/zc"},
+		{"link-local v4", "http://169.254.10.20/zc", true, "169.254.10.20", "/zc"},
+		{"ipv6 loopback", "http://[::1]:8200/zc", true, "[::1]:8200", "/zc"},
+		{"ipv6 link-local", "http://[fe80::1]:8200/zc", true, "[fe80::1]:8200", "/zc"},
+		{"strips query", "http://192.168.1.10:8200/zc?foo=bar", true, "192.168.1.10:8200", "/zc"},
+
+		{"public IP rejected", "http://1.1.1.1/zc", false, "", ""},
+		{"public ipv6 rejected", "http://[2001:db8::1]/zc", false, "", ""},
+		{"hostname rejected", "http://myspeaker.local/zc", false, "", ""},
+		{"plain hostname rejected", "http://speaker/zc", false, "", ""},
+		{"ftp scheme rejected", "ftp://192.168.1.10/zc", false, "", ""},
+		{"file scheme rejected", "file:///etc/passwd", false, "", ""},
+		{"empty host rejected", "http:///zc", false, "", ""},
+		{"unparseable rejected", "::not a url::", false, "", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := validateZcBaseURL(tc.input)
+			if tc.wantOK {
+				if err != nil {
+					t.Fatalf("validateZcBaseURL(%q) returned error %v, want success", tc.input, err)
+				}
+				if got.Host != tc.wantHost {
+					t.Errorf("Host = %q, want %q", got.Host, tc.wantHost)
+				}
+				if got.Path != tc.wantPath {
+					t.Errorf("Path = %q, want %q", got.Path, tc.wantPath)
+				}
+				if got.RawQuery != "" {
+					t.Errorf("RawQuery = %q, want empty (validator should strip query)", got.RawQuery)
+				}
+			} else if err == nil {
+				t.Errorf("validateZcBaseURL(%q) succeeded, want error", tc.input)
+			}
+		})
+	}
+}
