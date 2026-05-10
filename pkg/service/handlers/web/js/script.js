@@ -1761,6 +1761,10 @@ async function showSummary(deviceId) {
         document.getElementById("ssh-status").innerText = summary.ssh_success ? "✅ Success" : "❌ Failed";
         document.getElementById("ssh-status").style.color = summary.ssh_success ? "green" : "red";
 
+        renderTelnetPreflight(summary);
+        renderPreflightWarnings(summary);
+        fillTelnetURLInputs(defaultTelnetURLs(targetUrl));
+
         const migrationStatus = document.getElementById("migration-status");
         migrationStatus.innerText = summary.is_migrated ? "✅ Migrated to AfterTouch" : "❌ Not Migrated";
         migrationStatus.style.color = summary.is_migrated ? "green" : "red";
@@ -1842,9 +1846,15 @@ async function showSummary(deviceId) {
 
         toggleMigrationMethod();
 
+        // Migration and reboot are gated on having *some* transport
+        // reachable. Telnet is enough for the telnet method (no SSH
+        // required); the server returns a clear error if the user picks a
+        // method whose transport isn't actually available.
+        const anyTransport = summary.ssh_success || summary.telnet_reachable;
+
         const migrateBtn = document.getElementById("confirm-migrate-btn");
         migrateBtn.onclick = () => migrate(deviceId, ip);
-        migrateBtn.disabled = !summary.ssh_success;
+        migrateBtn.disabled = !anyTransport;
 
         const revertBtn = document.getElementById("revert-migrate-btn");
         revertBtn.onclick = () => revert(deviceId, ip);
@@ -1853,7 +1863,7 @@ async function showSummary(deviceId) {
 
         const rebootBtn = document.getElementById("reboot-speaker-btn");
         rebootBtn.onclick = () => reboot(deviceId, ip);
-        rebootBtn.disabled = !summary.ssh_success;
+        rebootBtn.disabled = !anyTransport;
         rebootBtn.style.border = "none"; // Reset border if it was set during migration
 
         const remoteBtn = document.getElementById("ensure-remote-btn");
@@ -2102,6 +2112,10 @@ async function migrate(deviceId, ip) {
         sw_update: document.getElementById("opt-sw_update").value,
         bmx: document.getElementById("opt-bmx").value,
     };
+
+    if (method === "telnet") {
+        Object.assign(opts, readTelnetURLOptions());
+    }
 
     const summaryDiv = document.getElementById("migration-summary");
     summaryDiv.style.display = "none";
@@ -2367,6 +2381,151 @@ async function testDNSRedirection(deviceId) {
 function toggleOriginalConfig() {
     const pane = document.getElementById("original-config-pane");
     pane.style.display = pane.style.display === "none" ? "block" : "none";
+}
+
+// defaultTelnetURLs returns the canonical four URLs derived from a
+// service base URL. Mirrors setup.defaultTelnetURLs (Go) — keep them in
+// sync if either side changes.
+function defaultTelnetURLs(targetUrl) {
+    const base = (targetUrl || "").replace(/\/+$/, "");
+    return {
+        marge: base,
+        stats: base,
+        sw_update: base + "/updates/soundtouch",
+        bmx: base + "/bmx/registry/v1/services",
+    };
+}
+
+// fillTelnetURLInputs writes the given URL set into the four input
+// fields, but only when the field is empty (so a user's edit is never
+// clobbered by a refresh).
+function fillTelnetURLInputs(urls, {force = false} = {}) {
+    const fields = [
+        ["telnet-marge-url", urls.marge],
+        ["telnet-stats-url", urls.stats],
+        ["telnet-sw_update-url", urls.sw_update],
+        ["telnet-bmx-url", urls.bmx],
+    ];
+    for (const [id, value] of fields) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (force || !el.value) el.value = value;
+    }
+}
+
+// resetTelnetURLsToDefaults wipes any user edits and reapplies the
+// canonical defaults. Wired to the "Reset to defaults" button in the
+// telnet pane.
+function resetTelnetURLsToDefaults() {
+    const targetUrl = document.getElementById("target-domain").value;
+    fillTelnetURLInputs(defaultTelnetURLs(targetUrl), {force: true});
+}
+
+// readTelnetURLOptions returns the four per-field URL overrides as the
+// query-parameter map the handler expects (marge_url / stats_url /
+// sw_update_url / bmx_url). Empty fields are omitted so the service
+// layer's "fall back to canonical default" path is exercised.
+function readTelnetURLOptions() {
+    const out = {};
+    const pairs = [
+        ["marge_url", "telnet-marge-url"],
+        ["stats_url", "telnet-stats-url"],
+        ["sw_update_url", "telnet-sw_update-url"],
+        ["bmx_url", "telnet-bmx-url"],
+    ];
+    for (const [optKey, elemId] of pairs) {
+        const el = document.getElementById(elemId);
+        if (el && el.value) out[optKey] = el.value;
+    }
+    return out;
+}
+
+// renderTelnetPreflight surfaces TelnetReachable / TelnetBanner /
+// TelnetProbeError on the migration summary, and populates the "Current
+// on Device" column from TelnetVerifiedConfig when the device answered.
+function renderTelnetPreflight(summary) {
+    const statusEl = document.getElementById("telnet-status");
+    if (statusEl) {
+        if (summary.telnet_reachable) {
+            statusEl.innerText = "✅ Reachable";
+            statusEl.style.color = "green";
+        } else if (summary.telnet_probe_error) {
+            statusEl.innerText = "❌ Unreachable";
+            statusEl.style.color = "red";
+        } else {
+            statusEl.innerText = "❓ Unknown";
+            statusEl.style.color = "gray";
+        }
+    }
+
+    const bannerEl = document.getElementById("telnet-banner");
+    if (bannerEl) {
+        bannerEl.innerText = summary.telnet_banner ? `(${summary.telnet_banner})` : "";
+    }
+
+    const errorEl = document.getElementById("telnet-probe-error");
+    if (errorEl) {
+        if (summary.telnet_probe_error && !summary.telnet_reachable) {
+            errorEl.innerText = "Probe error: " + summary.telnet_probe_error;
+            errorEl.style.display = "block";
+        } else {
+            errorEl.style.display = "none";
+        }
+    }
+
+    const live = parseTelnetVerifiedConfig(summary.telnet_verified_config || "");
+    const cells = [
+        ["telnet-current-marge", live.margeServerUrl],
+        ["telnet-current-stats", live.statsServerUrl],
+        ["telnet-current-sw_update", live.swUpdateUrl],
+        ["telnet-current-bmx", live.bmxRegistryUrl],
+    ];
+    for (const [id, value] of cells) {
+        const el = document.getElementById(id);
+        if (el) el.innerText = value || "—";
+    }
+}
+
+// parseTelnetVerifiedConfig extracts key=value pairs from the device's
+// `getpdo CurrentSystemConfiguration` reply. Mirrors
+// setup.parseGetpdoConfig (Go) — see that function's docstring for the
+// tolerance contract.
+function parseTelnetVerifiedConfig(text) {
+    const out = {};
+    if (!text) return out;
+    for (const raw of text.split("\n")) {
+        const line = raw.trim();
+        if (!line) continue;
+        const i = line.indexOf("=");
+        if (i <= 0) continue;
+        const key = line.slice(0, i).trim();
+        const val = line.slice(i + 1).trim();
+        if (key) out[key] = val;
+    }
+    return out;
+}
+
+// renderPreflightWarnings shows summary.warnings as a yellow banner
+// above the migration controls. An empty/missing list hides the banner.
+function renderPreflightWarnings(summary) {
+    const banner = document.getElementById("preflight-warnings");
+    const list = document.getElementById("preflight-warnings-list");
+    if (!banner || !list) return;
+
+    list.replaceChildren();
+
+    const warnings = summary.warnings || [];
+    if (warnings.length === 0) {
+        banner.style.display = "none";
+        return;
+    }
+
+    for (const w of warnings) {
+        const li = document.createElement("li");
+        li.innerText = w;
+        list.appendChild(li);
+    }
+    banner.style.display = "block";
 }
 
 async function toggleMigrationMethod() {
