@@ -18,11 +18,18 @@ import (
 // so the live-info call works; the SSH and telnet clients ignore the addr
 // and return whatever the fakes are scripted to return.
 func telnetSummaryEnv(t *testing.T, ssh *mockSSH, ft *fakeTelnet) (*Manager, string, func()) {
+	return telnetSummaryEnvWithInfo(t, ssh, ft, `<info deviceID="123"><name>Test</name></info>`)
+}
+
+// telnetSummaryEnvWithInfo is telnetSummaryEnv with a caller-supplied
+// :8090/info XML body, so individual tests can exercise device-info
+// fields that affect summary state (e.g. margeAccountUUID for IsPaired).
+func telnetSummaryEnvWithInfo(t *testing.T, ssh *mockSSH, ft *fakeTelnet, infoXML string) (*Manager, string, func()) {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
-		_, _ = fmt.Fprint(w, `<info deviceID="123"><name>Test</name></info>`)
+		_, _ = fmt.Fprint(w, infoXML)
 	}))
 
 	m := NewManager("http://example:8000", nil, nil)
@@ -93,6 +100,46 @@ func TestGetMigrationSummary_TelnetFailsSSHFails(t *testing.T) {
 	if !strings.Contains(summary.TelnetProbeError, "connection refused") {
 		t.Errorf("TelnetProbeError = %q, want connection refused", summary.TelnetProbeError)
 	}
+}
+
+func TestGetMigrationSummary_IsPairedFromLiveInfo(t *testing.T) {
+	ft := &fakeTelnet{dialErr: errors.New("not the focus of this test")}
+
+	t.Run("with margeAccountUUID", func(t *testing.T) {
+		m, host, cleanup := telnetSummaryEnvWithInfo(t, nil, ft,
+			`<info deviceID="123"><name>Test</name><margeAccountUUID>3230304</margeAccountUUID></info>`,
+		)
+		defer cleanup()
+
+		summary, err := m.GetMigrationSummary(host, "", "", nil)
+		if err != nil {
+			t.Fatalf("GetMigrationSummary: %v", err)
+		}
+
+		if !summary.IsPaired {
+			t.Errorf("IsPaired = false, want true (margeAccountUUID present in :8090/info)")
+		}
+
+		if summary.AccountID != "3230304" {
+			t.Errorf("AccountID = %q, want 3230304 (live info should populate)", summary.AccountID)
+		}
+	})
+
+	t.Run("without margeAccountUUID", func(t *testing.T) {
+		m, host, cleanup := telnetSummaryEnvWithInfo(t, nil, ft,
+			`<info deviceID="123"><name>Test</name><margeAccountUUID></margeAccountUUID></info>`,
+		)
+		defer cleanup()
+
+		summary, err := m.GetMigrationSummary(host, "", "", nil)
+		if err != nil {
+			t.Fatalf("GetMigrationSummary: %v", err)
+		}
+
+		if summary.IsPaired {
+			t.Errorf("IsPaired = true, want false (factory-reset device with empty margeAccountUUID)")
+		}
+	})
 }
 
 func TestGetMigrationSummary_TelnetSucceedsSSHSucceeds(t *testing.T) {

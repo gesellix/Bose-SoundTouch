@@ -77,11 +77,24 @@ type MigrationSummary struct {
 	CurrentResolvConf        string      `json:"current_resolv_conf,omitempty"`
 	PlannedResolv            string      `json:"planned_resolv,omitempty"`
 	IsMigrated               bool        `json:"is_migrated"`
-	ResolveIPError           string      `json:"resolve_ip_error,omitempty"`
-	MirrorEnabled            bool        `json:"mirror_enabled"`
-	MirrorEndpoints          []string    `json:"mirror_endpoints,omitempty"`
-	SkipMirrorEndpoints      []string    `json:"skip_mirror_endpoints,omitempty"`
-	PreferredSource          string      `json:"preferred_source,omitempty"`
+	// Per-axis migration signals — IsMigrated is the OR of these. The UI
+	// displays them individually so users can see partial states (e.g.
+	// URLs flipped via telnet but the on-disk XML hasn't caught up, or
+	// DNS interception in place but no CA installed).
+	XMLMigrated    bool `json:"xml_migrated"`
+	HostsMigrated  bool `json:"hosts_migrated"`
+	ResolvMigrated bool `json:"resolv_migrated"`
+	TelnetMigrated bool `json:"telnet_migrated"`
+	// IsPaired reports whether the device's live :8090/info advertises a
+	// non-empty margeAccountUUID. Surfaced separately so the wizard can
+	// flag pairing as a precondition independently of the URL flip.
+	IsPaired bool `json:"is_paired"`
+
+	ResolveIPError      string   `json:"resolve_ip_error,omitempty"`
+	MirrorEnabled       bool     `json:"mirror_enabled"`
+	MirrorEndpoints     []string `json:"mirror_endpoints,omitempty"`
+	SkipMirrorEndpoints []string `json:"skip_mirror_endpoints,omitempty"`
+	PreferredSource     string   `json:"preferred_source,omitempty"`
 
 	// Telnet (port 17000) preflight state — populated when the user is about to
 	// or has just used MigrationMethodTelnet.
@@ -417,28 +430,35 @@ func (m *Manager) buildServerHTTPSURL(targetURL string) string {
 	return fmt.Sprintf("https://%s:%s/health", parsedURL.Hostname(), httpsPort)
 }
 
-// checkIsMigrated determines if the device is already migrated to AfterTouch.
+// checkIsMigrated determines if the device is already migrated to
+// AfterTouch and which mechanism is in place.
 //
-// The telnet-based check runs first and unconditionally, because it is the
-// only migration-state signal available on devices that do not expose SSH
-// (USB-unlock-refusing firmware on SA-5, ST520, recent ST Portable). The
-// SSH-based checks still run when SSH is reachable to cover the
-// /etc/hosts and /etc/resolv.conf migration variants, neither of which
-// shows up in `getpdo CurrentSystemConfiguration`.
+// Each axis is recorded as a separate boolean so the UI can show
+// partial-state cells (e.g. URLs flipped via telnet but the on-disk XML
+// hasn't been re-rendered, or DNS interception present but no CA
+// installed). IsMigrated is the OR — if any mechanism reports the
+// device pointing at our service, the device is "migrated."
+//
+// The telnet-based check runs unconditionally because it is the only
+// migration-state signal available on devices that do not expose SSH
+// (USB-unlock-refusing firmware on SA-5, ST520, recent ST Portable).
+// The SSH-based checks need a working shell and cover the /etc/hosts
+// and /etc/resolv.conf interception variants, neither of which shows
+// up in `getpdo CurrentSystemConfiguration`.
 func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
-	if m.isTelnetMigrated(summary) {
-		summary.IsMigrated = true
+	summary.TelnetMigrated = m.isTelnetMigrated(summary)
+
+	if summary.SSHSuccess {
+		client := m.NewSSH(deviceIP)
+		summary.XMLMigrated = m.isXMLMigrated(summary)
+		summary.HostsMigrated = m.isHostsMigrated(client, summary)
+		summary.ResolvMigrated = m.isResolvConfMigrated(client, summary)
 	}
 
-	if !summary.SSHSuccess {
-		return
-	}
-
-	client := m.NewSSH(deviceIP)
-
-	if m.isXMLMigrated(summary) || m.isHostsMigrated(client, summary) || m.isResolvConfMigrated(client, summary) {
-		summary.IsMigrated = true
-	}
+	summary.IsMigrated = summary.TelnetMigrated ||
+		summary.XMLMigrated ||
+		summary.HostsMigrated ||
+		summary.ResolvMigrated
 }
 
 // isTelnetMigrated reports whether the live device config (read via the
@@ -589,6 +609,12 @@ func (m *Manager) populateDeviceInfo(summary *MigrationSummary, deviceIP string)
 			summary.AccountID = infoXML.MargeAccountUUID
 		}
 	}
+
+	// Pairing state is derived from the live :8090/info value above
+	// (which clobbers the stale datastore copy if both are present).
+	// An empty AccountID at this point means a fresh / factory-reset
+	// device that needs pairing before presets and streaming work.
+	summary.IsPaired = summary.AccountID != ""
 }
 
 // checkCurrentConfig reads and validates the current speaker configuration
