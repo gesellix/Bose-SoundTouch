@@ -883,6 +883,13 @@
                         <ul id="plan-suggestion-steps" style="margin: 4px 0 8px 1.2em; padding: 0; font-size: 0.9em"></ul>
                         <button
                             type="button"
+                            id="plan-preflight-btn"
+                            onclick="preflightSuggestedPlan()"
+                            title="Run the same pre-flight checks Apply runs, without proceeding to migrate"
+                            style="font-size: 0.95em; margin-right: 6px"
+                        >Pre-flight</button>
+                        <button
+                            type="button"
                             id="plan-apply-btn"
                             onclick="applySuggestedPlan()"
                             style="font-size: 0.95em"
@@ -957,6 +964,13 @@
                 ></div>
 
                 <div style="margin-top: 12px">
+                    <button
+                        type="button"
+                        id="customize-preflight-btn"
+                        onclick="preflightCustomPlan()"
+                        title="Run the same pre-flight checks Apply runs, without proceeding to migrate"
+                        style="padding: 8px 14px; font-size: 0.95em; margin-right: 6px"
+                    >Pre-flight</button>
                     <button
                         type="button"
                         id="customize-apply-btn"

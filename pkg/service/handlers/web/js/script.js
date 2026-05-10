@@ -2616,12 +2616,14 @@ function validatePlanURLs() {
 
     // Apply Suggested Plan is gated on URL validity (in addition to its
     // existing data-method check). The dataset.method field is set by
-    // renderPlan based on what computeSuggestedPlan returned.
+    // renderPlan based on what computeSuggestedPlan returned. The
+    // Pre-flight sibling shares the same gate so the two buttons
+    // enable/disable in lockstep.
     const applyBtn = document.getElementById("plan-apply-btn");
-    if (applyBtn) {
-        const noPlan = !applyBtn.dataset.method;
-        applyBtn.disabled = noPlan || errors.length > 0;
-    }
+    const preflightBtn = document.getElementById("plan-preflight-btn");
+    const noPlan = !applyBtn || !applyBtn.dataset.method;
+    if (applyBtn) applyBtn.disabled = noPlan || errors.length > 0;
+    if (preflightBtn) preflightBtn.disabled = noPlan || errors.length > 0;
 
     // Refresh the client-side XML preview so the Customize panel's
     // Planned Config pane tracks every keystroke without a backend
@@ -3232,6 +3234,100 @@ async function runPreflightCheck(deviceId, methods, opts, targetUrl) {
     return {ok: issues.length === 0, issues, summary};
 }
 
+// previewPreflight runs the same check sequence as the Apply paths
+// but stops at the results — no migrate / trust-ca / pair-account
+// call happens. The panel stays open with a Close button so the
+// user can inspect the outcome ("test first, decide later").
+//
+// Called by preflightSuggestedPlan and preflightCustomPlan, which
+// share UI plumbing with their Apply counterparts.
+async function previewPreflight(deviceId, methods, opts, targetUrl) {
+    const {results} = await runApplyPreflight(deviceId, methods, opts, targetUrl);
+    renderPreflightPreviewSummary(results);
+}
+
+// renderPreflightPreviewSummary mirrors awaitPreflightDecision's
+// rendering shape (summary line + actions row) but with a single
+// Close button instead of Proceed Anyway / Cancel — there's nothing
+// to proceed to in preview mode.
+function renderPreflightPreviewSummary(results) {
+    const failed  = results.filter(r => r.status === "fail").length;
+    const passed  = results.filter(r => r.status === "ok").length;
+    const skipped = results.filter(r => r.status === "skip").length;
+
+    const summary = document.getElementById("apply-preflight-summary");
+    const actions = document.getElementById("apply-preflight-actions");
+    if (!summary || !actions) return;
+
+    if (failed === 0) {
+        summary.innerText = `✅ Pre-flight passed — ${passed} of ${results.length} checks`
+            + (skipped > 0 ? ` (${skipped} skipped)` : "");
+        summary.style.color = "green";
+    } else {
+        summary.innerText = `❌ Pre-flight: ${failed} of ${results.length} checks failed`;
+        summary.style.color = "red";
+    }
+
+    actions.replaceChildren();
+    const close = document.createElement("button");
+    close.type = "button";
+    close.innerText = "Close";
+    close.style.cssText = "padding: 8px 14px";
+    close.onclick = () => hidePreflightPanel();
+    actions.appendChild(close);
+}
+
+// preflightSuggestedPlan runs the Suggested Plan's checks without
+// applying. Reads the chosen method off plan-apply-btn.dataset.method
+// (set by renderPlan from computeSuggestedPlan), same source the
+// real Apply uses, so what's tested matches what would be applied.
+async function preflightSuggestedPlan() {
+    const applyBtn = document.getElementById("plan-apply-btn");
+    const method = applyBtn && applyBtn.dataset.method;
+    if (!method) return;
+
+    const deviceId = document.getElementById("summary-device-id").value;
+    if (!deviceId) return;
+
+    if (!validatePlanURLs()) return;
+
+    const targetUrl = document.getElementById("plan-target-url").value;
+    const opts = readPlanURLOptions();
+    await previewPreflight(deviceId, [method], opts, targetUrl);
+}
+
+// preflightCustomPlan walks the same radio choices applyCustomPlan
+// reads and queues the same methods array, then runs the checks
+// against it. Kept structurally close to applyCustomPlan so the two
+// stay in sync as new axes are added.
+async function preflightCustomPlan() {
+    const form = document.getElementById("customize-form");
+    const deviceId = form && form.dataset.deviceId;
+    if (!deviceId) return;
+
+    if (!validatePlanURLs()) return;
+
+    const flip = (document.querySelector('input[name="customize-url-flip"]:checked') || {}).value || "none";
+    const dns  = (document.querySelector('input[name="customize-dns"]:checked')      || {}).value || "none";
+    const caInstall = !!(document.getElementById("customize-ca-install") || {}).checked;
+    const pair = readPlanPairTarget();
+
+    const methods = [];
+    if (flip === "xml" || flip === "telnet") methods.push(flip);
+    if (dns === "resolv") methods.push("resolv");
+    if (caInstall && dns !== "resolv") methods.push("trust-ca");
+    if (pair && pair.valid) methods.push("pair-account");
+
+    if (methods.length === 0) {
+        // Pre-flight with nothing queued is still useful — it shows
+        // transport reachability. Run the summary check at least.
+    }
+
+    const targetUrl = document.getElementById("plan-target-url").value;
+    const opts = readPlanURLOptions();
+    await previewPreflight(deviceId, methods, opts, targetUrl);
+}
+
 // applySuggestedPlan triggers the recipe computeSuggestedPlan picked.
 // Passes the chosen method directly to migrate() — the legacy
 // migration-method dropdown is gone.
@@ -3699,6 +3795,8 @@ function onCustomizeChange() {
         }
     }
     if (applyBtn) applyBtn.disabled = errors.length > 0;
+    const preflightCustomBtn = document.getElementById("customize-preflight-btn");
+    if (preflightCustomBtn) preflightCustomBtn.disabled = errors.length > 0;
 }
 
 // applyCustomPlan runs the chosen sequence of backend operations:
