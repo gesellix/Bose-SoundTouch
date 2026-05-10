@@ -2958,6 +2958,35 @@ function setPreflightItemStatus(li, status, message) {
 
 // Each check returns {status, message?} where status ∈ {"ok","fail","skip"}.
 
+// preflightConnectionTestURL picks the URL the pre-flight HTTPS test
+// should exercise from the device. Default behaviour used to always
+// test summary.server_https_url (the HTTPS health endpoint), which
+// was a useful baseline but didn't reflect HTTP-target migrations
+// at all. Now:
+//
+//   - For DNS interception (resolv): the device hits https://*.bose.com
+//     after migration, which DNS redirects to our service over HTTPS.
+//     server_https_url is the meaningful test target.
+//   - For URL-flip migrations (xml / telnet): test the user's actual
+//     targetUrl, since that's the URL the migration will write into
+//     the speaker. /health is appended if targetUrl has no path so
+//     we hit a small known endpoint regardless of scheme.
+//
+// Falls back to server_https_url when targetUrl can't be parsed, so a
+// legacy call site without a target still works.
+function preflightConnectionTestURL(summary, methods, targetUrl) {
+    if (methods.includes("resolv") && summary.server_https_url) {
+        return summary.server_https_url;
+    }
+    if (targetUrl) {
+        try {
+            const u = new URL(targetUrl);
+            return `${u.protocol}//${u.host}/health`;
+        } catch (e) { /* fall through */ }
+    }
+    return summary.server_https_url || null;
+}
+
 async function checkConnectionFromDevice(deviceId, testUrl) {
     try {
         // use_explicit_ca=true uploads the CA temporarily so the test
@@ -3038,17 +3067,21 @@ async function runApplyPreflight(deviceId, methods, opts, targetUrl) {
     const summary = r.summary;
 
     // Step 2: reachability from the device. SSH-capable speakers get
-    // the existing curl-from-device HTTPS test; SSH-less speakers
-    // fall through to the telnet round-trip probe that temporarily
-    // flips swUpdateUrl and observes the resulting outbound. If
-    // neither transport is reachable, the check is surfaced as a
-    // skip rather than silently dropped.
-    if (summary.ssh_success && summary.server_https_url) {
-        const item = addPreflightItem("HTTPS connection from device");
+    // the curl-from-device test against the URL the migration will
+    // actually write (HTTP or HTTPS, derived from the plan); SSH-less
+    // speakers fall through to the telnet round-trip probe that
+    // temporarily flips swUpdateUrl and observes the resulting
+    // outbound. If neither transport is reachable, the check is
+    // surfaced as a skip rather than silently dropped.
+    const connectionTestURL = preflightConnectionTestURL(summary, methods, targetUrl);
+    if (summary.ssh_success && connectionTestURL) {
+        const scheme = connectionTestURL.startsWith("https:") ? "HTTPS" : "HTTP";
+        const label = `${scheme} connection from device`;
+        const item = addPreflightItem(label);
         setPreflightItemStatus(item, "running");
-        const cr = await checkConnectionFromDevice(deviceId, summary.server_https_url);
+        const cr = await checkConnectionFromDevice(deviceId, connectionTestURL);
         setPreflightItemStatus(item, cr.status, cr.message);
-        results.push({name: "HTTPS connection from device", ...cr});
+        results.push({name: label, ...cr});
     } else if (summary.telnet_reachable) {
         const item = addPreflightItem("Telnet round-trip probe (swUpdateUrl)");
         setPreflightItemStatus(item, "running");
