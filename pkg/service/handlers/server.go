@@ -61,6 +61,7 @@ type Server struct {
 	amazonClientSecret  string
 	amazonRedirectURI   string
 	amazonService       *amazon.Service
+	probes              *probeRegistry
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -95,6 +96,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 		recordEnabled:     recordEnabled,
 		discoveryInterval: 5 * time.Minute,
 		discoveryEnabled:  true,
+		probes:            newProbeRegistry(),
 	}
 
 	return s

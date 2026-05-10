@@ -871,6 +871,12 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 
 	r.Get("/", server.HandleRoot)
 	r.Get("/health", server.HandleHealth)
+	// Telnet round-trip probe inbound. The orchestrator temporarily
+	// sets the speaker's swUpdateUrl to /probe/{token}; the speaker
+	// then fans out a request that we observe here. Catch-all suffix
+	// because firmware may append path components (e.g. /index.xml).
+	r.Get("/probe/{token}", server.HandleProbeInbound)
+	r.Get("/probe/{token}/*", server.HandleProbeInbound)
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/media/favicon-braille.svg"
 		server.HandleMedia()(w, r)
@@ -1090,6 +1096,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Post("/test-connection/{deviceId}", server.HandleTestConnection)
 		r.Post("/test-hosts/{deviceId}", server.HandleTestHostsRedirection)
 		r.Post("/test-dns/{deviceId}", server.HandleTestDNSRedirection)
+		r.Post("/telnet-probe/{deviceId}", server.HandleTelnetProbe)
 		r.Get("/ca.crt", server.HandleGetCACert)
 		r.Get("/proxy-settings", server.HandleGetProxySettings)
 		r.Post("/proxy-settings", server.HandleUpdateProxySettings)
