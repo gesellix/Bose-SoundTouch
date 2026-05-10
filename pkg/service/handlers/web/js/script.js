@@ -3016,6 +3016,30 @@ async function checkDNSRedirectionFromDevice(deviceId, targetUrl) {
     }
 }
 
+// checkTelnetRoundTrip is the SSH-less alternative to the curl-from-
+// device HTTPS test: temporarily flips the speaker's swUpdateUrl via
+// telnet, triggers :8090/swUpdateCheck, and reports whether the
+// device's outbound landed on our /probe/{token} catch-all. See
+// pkg/service/setup/telnet_probe.go for the orchestration details.
+async function checkTelnetRoundTrip(deviceId, targetUrl) {
+    try {
+        const q = `?target_url=${encodeURIComponent(targetUrl)}`;
+        const resp = await fetch(`/setup/telnet-probe/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
+        const result = await resp.json();
+        if (result.ok) {
+            const ms = result.result && result.result.elapsed_ms;
+            return {status: "ok", message: ms ? `reached in ${ms}ms` : undefined};
+        }
+        if (result.error) return {status: "fail", message: result.error.split("\n")[0]};
+        if (result.result && result.result.reached === false) {
+            return {status: "fail", message: "probe inbound not observed before timeout"};
+        }
+        return {status: "fail", message: "probe failed"};
+    } catch (e) {
+        return {status: "fail", message: String(e)};
+    }
+}
+
 // --- Pre-flight panel: orchestrator ---------------------------------
 
 // runApplyPreflight runs the checks visible in the pre-flight panel.
@@ -3042,22 +3066,28 @@ async function runApplyPreflight(deviceId, methods, opts, targetUrl) {
     results.push({name: "Backend summary re-check", status: "ok"});
     const summary = r.summary;
 
-    // Step 2: HTTPS connection test from the device. SSH-only — for
-    // SSH-less migrations this becomes the future telnet round-trip
-    // probe (see TELNET-MIGRATION-METHOD.md).
+    // Step 2: reachability from the device. SSH-capable speakers get
+    // the existing curl-from-device HTTPS test; SSH-less speakers
+    // fall through to the telnet round-trip probe that temporarily
+    // flips swUpdateUrl and observes the resulting outbound. If
+    // neither transport is reachable, the check is surfaced as a
+    // skip rather than silently dropped.
     if (summary.ssh_success && summary.server_https_url) {
         const item = addPreflightItem("HTTPS connection from device");
         setPreflightItemStatus(item, "running");
         const cr = await checkConnectionFromDevice(deviceId, summary.server_https_url);
         setPreflightItemStatus(item, cr.status, cr.message);
         results.push({name: "HTTPS connection from device", ...cr});
-    } else if (!summary.ssh_success) {
-        // Surface the deliberate skip rather than silently dropping
-        // the check — that's what the user means by "feedback always
-        // visible."
-        const item = addPreflightItem("HTTPS connection from device");
-        setPreflightItemStatus(item, "skip", "SSH unreachable; telnet round-trip probe not yet implemented");
-        results.push({name: "HTTPS connection from device", status: "skip"});
+    } else if (summary.telnet_reachable) {
+        const item = addPreflightItem("Telnet round-trip probe (swUpdateUrl)");
+        setPreflightItemStatus(item, "running");
+        const cr = await checkTelnetRoundTrip(deviceId, targetUrl);
+        setPreflightItemStatus(item, cr.status, cr.message);
+        results.push({name: "Telnet round-trip probe", ...cr});
+    } else {
+        const item = addPreflightItem("Reachability from device");
+        setPreflightItemStatus(item, "skip", "neither SSH nor Telnet:17000 is reachable");
+        results.push({name: "Reachability from device", status: "skip"});
     }
 
     // Step 3: DNS redirection test (only for resolv plans).
