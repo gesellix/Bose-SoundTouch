@@ -115,10 +115,10 @@ func TestMigrateViaTelnet_SoundcorkMargeSuffixPropagatesToEnvswitch(t *testing.T
 
 	// Build a happy-path responder that matches the *new* command set.
 	resp := map[string]string{
-		"sys configuration bmxRegistryUrl " + urls.BmxRegistry: "OK\n",
-		"sys configuration statsServerUrl " + urls.Stats:      "OK\n",
-		"sys configuration margeServerUrl " + urls.Marge:      "OK\n",
-		"sys configuration swUpdateUrl " + urls.SwUpdate:      "OK\n",
+		"sys configuration bmxRegistryUrl " + urls.BmxRegistry:       "OK\n",
+		"sys configuration statsServerUrl " + urls.Stats:             "OK\n",
+		"sys configuration margeServerUrl " + urls.Marge:             "OK\n",
+		"sys configuration swUpdateUrl " + urls.SwUpdate:             "OK\n",
 		"envswitch boseurls set " + urls.Marge + " " + urls.SwUpdate: "OK\n",
 		"getpdo CurrentSystemConfiguration":                          "margeServerUrl=" + urls.Marge + "\n",
 	}

@@ -87,8 +87,8 @@ func (m *Manager) RunTelnetRoundTripProbe(deviceIP, targetURL string, registrar 
 	var logs strings.Builder
 
 	t := m.NewTelnet(deviceIP)
-	if err := t.Dial(); err != nil {
-		return nil, fmt.Errorf("telnet dial %s:17000 failed: %w", deviceIP, err)
+	if dialErr := t.Dial(); dialErr != nil {
+		return nil, fmt.Errorf("telnet dial %s:17000 failed: %w", deviceIP, dialErr)
 	}
 
 	defer func() { _ = t.Close() }()
@@ -147,10 +147,12 @@ func (m *Manager) RunTelnetRoundTripProbe(deviceIP, targetURL string, registrar 
 		restoreCmd := "sys configuration swUpdateUrl " + originalURL
 		if rresp, rerr := t.SendCommand(restoreCmd); rerr == nil && !isCommandNotFound(rresp) {
 			result.Restored = true
+
 			fmt.Fprintf(&logs, "→ %s (restored)\n%s\n", restoreCmd, strings.TrimRight(rresp, "\r\n"))
 		} else if rerr != nil {
 			fmt.Fprintf(&logs, "Restore failed: %v (envswitch persistence will heal on next reboot)\n", rerr)
 		}
+
 		result.Logs = logs.String()
 	}()
 
@@ -158,6 +160,7 @@ func (m *Manager) RunTelnetRoundTripProbe(deviceIP, targetURL string, registrar 
 	// HTTP call is fire-and-forget — we don't need its response, only
 	// that the device fans out to the probe URL we just set.
 	swCheckURL := fmt.Sprintf("http://%s:8090/swUpdateCheck", deviceIP)
+
 	go func() {
 		if m.HTTPGet == nil {
 			return
@@ -177,9 +180,11 @@ func (m *Manager) RunTelnetRoundTripProbe(deviceIP, targetURL string, registrar 
 	select {
 	case <-probeCh:
 		result.Reached = true
+
 		fmt.Fprintf(&logs, "Probe inbound observed after %v\n", time.Since(start))
 	case <-time.After(timeout):
 		result.Reached = false
+
 		fmt.Fprintf(&logs, "Probe timed out after %v\n", timeout)
 	}
 

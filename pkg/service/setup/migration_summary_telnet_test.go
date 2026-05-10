@@ -18,6 +18,7 @@ import (
 // so the live-info call works; the SSH and telnet clients ignore the addr
 // and return whatever the fakes are scripted to return.
 func telnetSummaryEnv(t *testing.T, ssh *mockSSH, ft *fakeTelnet) (*Manager, string, func()) {
+	t.Helper()
 	return telnetSummaryEnvWithInfo(t, ssh, ft, `<info deviceID="123"><name>Test</name></info>`)
 }
 

@@ -274,6 +274,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	go func() {
 		var local MigrationSummary
 		m.telnetPreflight(&local, deviceIP)
+
 		telnetCh <- local
 	}()
 
