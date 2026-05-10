@@ -12,11 +12,21 @@ import (
 	"strings"
 )
 
-var sensitiveHeaders = []string{
+// alwaysSensitiveHeaders are stripped from log output unconditionally — they
+// carry credentials whose plaintext value should never appear in a log line
+// regardless of how the LoggingProxy was constructed.
+var alwaysSensitiveHeaders = []string{
 	"Authorization",
+	"Proxy-Authorization",
 	"Cookie",
+	"Set-Cookie",
+	"X-Api-Key",
 	"X-Bose-Token",
 }
+
+// sensitiveHeaders is kept for backwards compatibility with callers that
+// reference it by name; it now mirrors alwaysSensitiveHeaders.
+var sensitiveHeaders = alwaysSensitiveHeaders
 
 // LoggingProxy wraps a ReverseProxy to provide instrumentation.
 type LoggingProxy struct {
@@ -102,7 +112,10 @@ func formatHeaders(h http.Header, redact bool) string {
 	// stored in the map, which might not be canonical if set directly.
 	for k, vv := range h {
 		val := strings.Join(vv, ", ")
-		if redact && isSensitive(k) {
+		// Always redact credentials (Authorization, Cookie, …) regardless of
+		// the LoggingProxy.Redact toggle — the toggle controls *additional*
+		// redaction, never the safety floor.
+		if isAlwaysSensitive(k) || (redact && isSensitive(k)) {
 			val = "[REDACTED]"
 		}
 
@@ -110,6 +123,18 @@ func formatHeaders(h http.Header, redact bool) string {
 	}
 
 	return strings.TrimSuffix(sb.String(), "\n")
+}
+
+// isAlwaysSensitive returns true for credential-bearing headers that must
+// never appear unredacted in logs regardless of caller configuration.
+func isAlwaysSensitive(header string) bool {
+	for _, h := range alwaysSensitiveHeaders {
+		if strings.EqualFold(h, header) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isSensitive(header string) bool {
