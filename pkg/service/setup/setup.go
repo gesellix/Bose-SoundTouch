@@ -93,6 +93,12 @@ type MigrationSummary struct {
 	// KnownAccountIDs are accountIDs already present in the local datastore;
 	// the UI offers them as choices when pairing a fresh device.
 	KnownAccountIDs []string `json:"known_account_ids,omitempty"`
+
+	// Warnings holds non-fatal advisories emitted during summary
+	// construction — currently the cross-check between SSH-XML and
+	// telnet-getpdo readings of the device's URL configuration. The UI
+	// should display them as informational hints, not errors.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // SSHClient defines the interface for SSH operations.
@@ -342,6 +348,10 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	summary.TelnetBanner = telnetResult.TelnetBanner
 	summary.TelnetVerifiedConfig = telnetResult.TelnetVerifiedConfig
 	summary.TelnetProbeError = telnetResult.TelnetProbeError
+
+	// 9. Cross-check SSH-XML and telnet-getpdo readings; surface any
+	// divergence as a non-fatal warning.
+	m.crossCheckPreflights(summary)
 
 	return summary, nil
 }
