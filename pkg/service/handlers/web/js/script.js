@@ -2586,13 +2586,25 @@ function formatURLPair(xmlVal, telVal) {
     return `xml: ${xmlVal}  •  live: ${telVal}`;
 }
 
+// urlConfigVerdict reports the URL-flip axis in the context of DNS
+// interception, because "URLs still point at Bose" is only a problem
+// if nothing else is redirecting them. When the DNS hook (or, less
+// preferably, /etc/hosts) is intercepting the Bose hostnames, leaving
+// the on-device URL config untouched is the *expected* migrated state
+// for that method — flagging it red would be misleading.
 function urlConfigVerdict(summary) {
     const xml = !!summary.xml_migrated;
     const tel = !!summary.telnet_migrated;
-    if (!xml && !tel) return {icon: "❌", text: "Original (Bose cloud)", note: ""};
-    if (xml && tel) return {icon: "✅", text: "Migrated to AfterTouch", note: "(XML + telnet runtime in sync)"};
-    if (xml) return {icon: "✅", text: "Migrated to AfterTouch", note: "(XML only — telnet runtime may still hold the old URLs)"};
-    return {icon: "✅", text: "Migrated to AfterTouch", note: "(telnet runtime — reboot to persist into the on-disk XML)"};
+    const dns = !!summary.resolv_migrated || !!summary.hosts_migrated;
+
+    if (xml && tel) return {icon: "✅", text: "AfterTouch URLs", note: "(XML + telnet runtime in sync)"};
+    if (xml) return {icon: "✅", text: "AfterTouch URLs", note: "(XML only — telnet runtime may still hold the old URLs)"};
+    if (tel) return {icon: "✅", text: "AfterTouch URLs", note: "(telnet runtime — reboot to persist into the on-disk XML)"};
+
+    // Neither URL-flip mechanism is active. Whether that's OK depends
+    // on whether DNS interception is doing the redirect.
+    if (dns) return {icon: "✅", text: "Original (Bose cloud)", note: "— intercepted via DNS, device reaches AfterTouch"};
+    return {icon: "❌", text: "Original (Bose cloud)", note: "— not intercepted, device will reach the real Bose cloud"};
 }
 
 function dnsInterceptionVerdict(summary) {
