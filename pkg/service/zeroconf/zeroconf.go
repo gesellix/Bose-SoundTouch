@@ -192,25 +192,32 @@ func DecryptBlob(encKey, macKey, blob []byte) ([]byte, error) {
 func validateZcBaseURL(zcBaseURL string) (*url.URL, error) {
 	u, err := url.Parse(zcBaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("parse: %w", err)
+		return nil, fmt.Errorf("zeroconf URL %q: parse: %w", zcBaseURL, err)
 	}
 
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("scheme %q not allowed (expected http or https)", u.Scheme)
+		return nil, fmt.Errorf("zeroconf URL %q: scheme %q not allowed — must be http or https", zcBaseURL, u.Scheme)
 	}
 
 	host := u.Hostname()
 	if host == "" {
-		return nil, fmt.Errorf("missing host")
+		return nil, fmt.Errorf("zeroconf URL %q: missing host", zcBaseURL)
 	}
 
 	ip := net.ParseIP(host)
 	if ip == nil {
-		return nil, fmt.Errorf("host %q must be a literal IP (DNS/mDNS hostnames are not supported on this path; resolve to a private IP before calling)", host)
+		return nil, fmt.Errorf(
+			"zeroconf URL %q: host %q must be a literal IP — resolve the hostname to a private-network IP first "+
+				"(e.g. `getent hosts %s` or `dig +short %s`) and retry with the resolved address",
+			zcBaseURL, host, host, host)
 	}
 
 	if !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() {
-		return nil, fmt.Errorf("host %q is not on a local network", host)
+		return nil, fmt.Errorf(
+			"zeroconf URL %q: host %q is not on a local network — only loopback (127.0.0.0/8, ::1), "+
+				"RFC1918 private (10/8, 172.16/12, 192.168/16) and link-local (169.254/16, fe80::/10) "+
+				"addresses are accepted",
+			zcBaseURL, host)
 	}
 
 	// Build a fresh URL from validated components only — the IP literal,

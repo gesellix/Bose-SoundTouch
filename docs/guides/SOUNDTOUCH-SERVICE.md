@@ -836,6 +836,7 @@ fi
 - **SSH Access**: Migration requires SSH access to devices. Ensure your network security policies allow this.
 - **Proxy Logging**: Disable `REDACT_PROXY_LOGS` only in development environments.
 - **Data Protection**: The data directory contains device configurations and usage patterns. Secure appropriately.
+- **Spotify / Amazon Music credential push (zeroconf)**: outbound credential-push requests are restricted to literal IP hosts on local-network ranges (loopback, RFC1918 private, IPv4/IPv6 link-local). Hostname-style URLs (DNS, mDNS `*.local`) are rejected at runtime; if you have a hostname, resolve it first (`getent hosts <name>` or `dig +short <name>`) and pass the resolved IP. This guards against a malicious LAN-resident speaker pointing the credential push at a non-speaker host (server-side request forgery).
 
 ## Performance Tuning
 
