@@ -244,6 +244,20 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		SSHSuccess: false,
 	}
 
+	// Run the telnet preflight in parallel with the SSH-based probes below.
+	// Both transports are queried independently: SSH gives access to
+	// /etc/hosts, /etc/resolv.conf and the on-device XML config; telnet's
+	// `getpdo CurrentSystemConfiguration` reports the live URL set without
+	// needing root. They are complementary, so we wait for both and merge
+	// the results — total wall time = max(ssh, telnet).
+	telnetCh := make(chan MigrationSummary, 1)
+
+	go func() {
+		var local MigrationSummary
+		m.telnetPreflight(&local, deviceIP)
+		telnetCh <- local
+	}()
+
 	// Populate device info from datastore and live info
 	m.populateDeviceInfo(summary, deviceIP)
 
@@ -321,6 +335,13 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 			summary.PreferredSource = settings.PreferredSource
 		}
 	}
+
+	// 8. Merge telnet preflight results (started in parallel at the top).
+	telnetResult := <-telnetCh
+	summary.TelnetReachable = telnetResult.TelnetReachable
+	summary.TelnetBanner = telnetResult.TelnetBanner
+	summary.TelnetVerifiedConfig = telnetResult.TelnetVerifiedConfig
+	summary.TelnetProbeError = telnetResult.TelnetProbeError
 
 	return summary, nil
 }
