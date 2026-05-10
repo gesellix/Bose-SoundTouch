@@ -890,6 +890,28 @@
                     ></div>
                 </div>
 
+                <div style="margin-bottom: 14px">
+                    <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Account pairing</h4>
+                    <p id="plan-pair-current" style="margin: 0 0 6px 0; font-size: 0.85em; color: #555">—</p>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+                        <label for="plan-pair-id">Account ID:</label>
+                        <input
+                            type="text"
+                            id="plan-pair-id"
+                            maxlength="7"
+                            pattern="[0-9]{7}"
+                            placeholder="1234567"
+                            style="font-family: monospace; width: 8em"
+                            oninput="onPlanPairIDChange()"
+                        />
+                        <button type="button" onclick="generatePlanAccountID()" style="font-size: 0.85em">Generate</button>
+                        <select id="plan-pair-existing" onchange="onPlanPairPick()" style="font-size: 0.85em">
+                            <option value="">— pick from datastore —</option>
+                        </select>
+                    </div>
+                    <div id="plan-pair-status" style="margin-top: 4px; font-size: 0.85em; color: #666"></div>
+                </div>
+
                 <div>
                     <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Suggested plan</h4>
                     <div
@@ -1007,60 +1029,6 @@
                     streaming work.
                 </p>
 
-            </div>
-
-            <div
-                id="pair-account-pane"
-                style="display: none; margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; background-color: #fff8e1;"
-            >
-                <h4 style="margin-top: 0">Pair Account</h4>
-                <p
-                    id="pair-account-current"
-                    style="margin: 5px 0; display: none"
-                ></p>
-                <div id="pair-account-fresh" style="display: none">
-                    <p style="margin: 5px 0">
-                        This speaker has no margeAccountUUID set
-                        (factory-reset or never paired). Choose an account
-                        ID to attach it to:
-                    </p>
-                    <div style="margin: 8px 0">
-                        <label for="pair-account-existing"
-                            >Existing account:</label
-                        >
-                        <select id="pair-account-existing">
-                            <option value="">-- pick from datastore --</option>
-                        </select>
-                    </div>
-                    <div style="margin: 8px 0">
-                        <label for="pair-account-input">7-digit ID:</label>
-                        <input
-                            type="text"
-                            id="pair-account-input"
-                            maxlength="7"
-                            pattern="[0-9]{7}"
-                            placeholder="1234567"
-                            style="font-family: monospace; width: 8em"
-                        />
-                        <button
-                            type="button"
-                            onclick="generateAccountID()"
-                        >
-                            Generate
-                        </button>
-                    </div>
-                </div>
-                <button
-                    id="pair-account-btn"
-                    type="button"
-                    style="margin-top: 8px"
-                >
-                    Pair Account
-                </button>
-                <div
-                    id="pair-account-status"
-                    style="margin-top: 8px; font-size: 0.9em"
-                ></div>
             </div>
 
             <!-- XML diff pair: Current Config | Planned Config. Shown

@@ -1772,6 +1772,7 @@ async function showSummary(deviceId) {
         renderMigrationState(summary);
         renderPlan(summary);
         renderPlanCurrentURLs(summary);
+        renderPlanPairing(summary, deviceId);
         renderPreflightWarnings(summary);
 
         // Mirror the global target URL into the Plan card's input.
@@ -1991,122 +1992,177 @@ async function reboot(deviceId, ip) {
     }
 }
 
-// loadAccountIDSuggestions queries the server for the device's current
-// margeAccountUUID and the list of known accounts in the datastore, and
-// renders the pair-account pane accordingly.
-async function loadAccountIDSuggestions(deviceId) {
-    const pane = document.getElementById("pair-account-pane");
-    if (!pane) return;
+// --- Plan card: account pairing ----------------------------------------
 
-    const currentP = document.getElementById("pair-account-current");
-    const freshDiv = document.getElementById("pair-account-fresh");
-    const existingSelect = document.getElementById("pair-account-existing");
-    const input = document.getElementById("pair-account-input");
-    const btn = document.getElementById("pair-account-btn");
-    const statusDiv = document.getElementById("pair-account-status");
+// renderPlanPairing populates the Account pairing section of the Plan
+// card from the live summary (margeAccountUUID is in summary.account_id
+// after populateDeviceInfo) and loads known IDs from the datastore.
+async function renderPlanPairing(summary, deviceId) {
+    const currentP = document.getElementById("plan-pair-current");
+    const input = document.getElementById("plan-pair-id");
+    const status = document.getElementById("plan-pair-status");
 
-    pane.style.display = "block";
-    statusDiv.innerText = "Loading...";
+    if (currentP) {
+        if (summary.is_paired && summary.account_id) {
+            currentP.replaceChildren(
+                document.createTextNode("Current: ✅ Paired (account "),
+                Object.assign(document.createElement("strong"), {textContent: summary.account_id}),
+                document.createTextNode(") — leave as-is to keep, or change the ID to re-pair"),
+            );
+        } else {
+            currentP.replaceChildren(
+                document.createTextNode("Current: ❌ Not paired (factory-reset or never paired) — set an ID to pair as part of Apply"),
+            );
+        }
+    }
+
+    if (input) {
+        input.value = summary.account_id || "";
+        input.dataset.currentId = summary.account_id || "";
+        input.style.borderColor = "";
+    }
+    if (status) {
+        status.innerText = "";
+        status.style.color = "#666";
+    }
+
+    await loadPlanAccountSuggestions(deviceId);
+
+    // Run the change handler once so the status hint reflects the
+    // pre-filled value (matches current → "no pairing needed").
+    onPlanPairIDChange();
+}
+
+// loadPlanAccountSuggestions populates the datastore-pick dropdown
+// from /setup/account-id-suggestions. Quietly degrades on failure —
+// the input + Generate button still work standalone.
+async function loadPlanAccountSuggestions(deviceId) {
+    const select = document.getElementById("plan-pair-existing");
+    if (!select) return;
+
+    select.replaceChildren();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.innerText = "— pick from datastore —";
+    select.appendChild(placeholder);
 
     try {
-        const response = await fetch(
-            "/setup/account-id-suggestions/" + encodeURIComponent(deviceId),
-        );
-        const data = await response.json();
-
-        // Reset
-        existingSelect.innerHTML = "<option value=\"\">-- pick from datastore --</option>";
-        (data.known || []).forEach((/** @type {string} */ id) => {
+        const resp = await fetch("/setup/account-id-suggestions/" + encodeURIComponent(deviceId));
+        if (!resp.ok) return;
+        const data = await resp.json();
+        for (const id of data.known || []) {
             const opt = document.createElement("option");
             opt.value = String(id);
             opt.textContent = String(id);
-            existingSelect.appendChild(opt);
-        });
-
-        if (data.current) {
-            currentP.style.display = "block";
-            // Build the paragraph with createElement so the user-controlled
-            // account ID never becomes HTML.
-            currentP.replaceChildren(
-                document.createTextNode("Speaker is already paired with account "),
-                Object.assign(document.createElement("strong"), {textContent: data.current}),
-                document.createTextNode(". You can keep it (recommended) or re-pair to a different ID."),
-            );
-            input.value = data.current;
-            freshDiv.style.display = "block";
-        } else {
-            currentP.style.display = "none";
-            freshDiv.style.display = "block";
-            input.value = "";
+            select.appendChild(opt);
         }
+    } catch (e) { /* best-effort */ }
+}
 
-        btn.onclick = () => pairAccount(deviceId);
-        statusDiv.innerText = "";
-    } catch (error) {
-        statusDiv.innerText = "Failed to load suggestions: " + error;
+// onPlanPairPick mirrors the dropdown choice into the input and
+// triggers validation.
+function onPlanPairPick() {
+    const select = document.getElementById("plan-pair-existing");
+    const input = document.getElementById("plan-pair-id");
+    if (select && select.value && input) {
+        input.value = select.value;
+        onPlanPairIDChange();
     }
 }
 
-// generateAccountID picks a random 7-digit ID and writes it into the input,
-// avoiding any existing IDs already shown in the dropdown so we don't
-// accidentally collide with a known datastore entry.
-function generateAccountID() {
-    const select = document.getElementById("pair-account-existing");
-    const input = document.getElementById("pair-account-input");
+// generatePlanAccountID picks a random 7-digit ID, avoiding values
+// already shown in the dropdown so we don't accidentally collide with
+// known datastore entries on this machine.
+function generatePlanAccountID() {
+    const input = document.getElementById("plan-pair-id");
     if (!input) return;
-
+    const select = document.getElementById("plan-pair-existing");
     const known = new Set();
     if (select) {
-        Array.from(select.options).forEach((o) => {
-            if (o.value) known.add(o.value);
-        });
+        for (const o of select.options) if (o.value) known.add(o.value);
     }
-
-    // 7-digit number from 1_000_000 to 9_999_999.
     for (let i = 0; i < 32; i++) {
         const n = Math.floor(Math.random() * 9_000_000) + 1_000_000;
         const s = String(n);
         if (!known.has(s)) {
             input.value = s;
+            onPlanPairIDChange();
             return;
         }
     }
     input.value = "";
+    onPlanPairIDChange();
 }
 
-async function pairAccount(deviceId) {
-    if (!deviceId) {
-        alert("Please select a device.");
-        return;
-    }
-    const select = document.getElementById("pair-account-existing");
-    const input = document.getElementById("pair-account-input");
-    const statusDiv = document.getElementById("pair-account-status");
+// onPlanPairIDChange validates the input and surfaces the implicit
+// intent: empty/matches-current → no pairing step queued; differs
+// → pairing step queued at Apply time.
+function onPlanPairIDChange() {
+    const input = document.getElementById("plan-pair-id");
+    const status = document.getElementById("plan-pair-status");
+    if (!input || !status) return;
 
-    let accountID = (input && input.value || "").trim();
-    if (!accountID && select && select.value) accountID = select.value;
+    const v = (input.value || "").trim();
+    const currentId = input.dataset.currentId || "";
 
-    if (!/^[0-9]{7}$/.test(accountID)) {
-        statusDiv.innerText = "Account ID must be exactly 7 digits.";
-        return;
-    }
-
-    statusDiv.innerText = "Pairing...";
-
-    try {
-        const url = "/setup/pair-account/" + encodeURIComponent(deviceId)
-            + "?account_id=" + encodeURIComponent(accountID);
-        const response = await fetch(url, {method: "POST"});
-        const result = await response.json();
-        showCommandOutput({ok: result.ok, output: result.output, message: result.error});
-        if (result.ok) {
-            statusDiv.innerText = "Paired via " + (result.result && result.result.method || "?")
-                + ". Reboot the speaker to apply.";
+    if (!v) {
+        if (currentId) {
+            status.innerText = "→ no pairing step (current ID retained)";
+            status.style.color = "#666";
         } else {
-            statusDiv.innerText = "Pair failed: " + (result.error || "unknown error");
+            status.innerText = "→ no pairing step (device stays unpaired — pair via the official Bose app later if needed)";
+            status.style.color = "#bf6900";
         }
-    } catch (error) {
-        statusDiv.innerText = "Error pairing: " + error;
+        input.style.borderColor = "";
+        return;
+    }
+
+    if (!/^\d{7}$/.test(v)) {
+        status.innerText = "❌ Account ID must be exactly 7 digits";
+        status.style.color = "#c62828";
+        input.style.borderColor = "#c62828";
+        return;
+    }
+
+    if (v === currentId) {
+        status.innerText = "→ matches current ID — no pairing step needed";
+        status.style.color = "#666";
+        input.style.borderColor = "";
+        return;
+    }
+
+    if (currentId) {
+        status.innerText = `→ will re-pair from ${currentId} to ${v}`;
+    } else {
+        status.innerText = `→ will pair with ${v}`;
+    }
+    status.style.color = "#1976d2";
+    input.style.borderColor = "";
+}
+
+// readPlanPairTarget returns null when no pairing step should run, or
+// the {accountId, valid} for Apply orchestration. Empty input or input
+// matching current = null (no step). Invalid input also returns null
+// but with valid=false so callers can refuse to continue.
+function readPlanPairTarget() {
+    const input = document.getElementById("plan-pair-id");
+    if (!input) return null;
+    const v = (input.value || "").trim();
+    if (!v) return null;
+    if (!/^\d{7}$/.test(v)) return {accountId: v, valid: false};
+    const currentId = input.dataset.currentId || "";
+    if (v === currentId) return null;
+    return {accountId: v, valid: true};
+}
+
+// pairAccount POSTs to /setup/pair-account and throws on failure so
+// the Apply orchestrator's first-failure-aborts logic kicks in.
+async function pairAccount(deviceId, accountId) {
+    const url = `/setup/pair-account/${encodeURIComponent(deviceId)}?account_id=${encodeURIComponent(accountId)}`;
+    const resp = await fetch(url, {method: "POST"});
+    const result = await resp.json();
+    if (!resp.ok || !result.ok) {
+        throw new Error(result.error || result.message || `pair-account returned ${resp.status}`);
     }
 }
 
@@ -2184,13 +2240,6 @@ async function migrate(deviceId, ip, method) {
             // reboot affordance is reachable from the Plan flow too.
             const customize = rebootBtn.closest("details");
             if (customize) customize.open = true;
-
-            // For the telnet path, surface the account-id picker. Pairing is
-            // only needed when the device's margeAccountUUID is empty, but
-            // we always show the panel so the user can re-pair if they want.
-            if (method === "telnet") {
-                loadAccountIDSuggestions(deviceId);
-            }
 
             // Re-show summary but with prominence on reboot
             summaryDiv.style.display = "block";
@@ -2659,6 +2708,18 @@ function resetPlanCardForDeviceSwitch() {
 
     const customizeStatus = document.getElementById("customize-apply-status");
     if (customizeStatus) customizeStatus.innerText = "";
+
+    // Pairing input — clear so the renderPlanPairing call later in
+    // showSummary populates it from the new device's account_id
+    // rather than the previous device's pre-typed value.
+    const pairInput = document.getElementById("plan-pair-id");
+    if (pairInput) {
+        pairInput.value = "";
+        pairInput.style.borderColor = "";
+        delete pairInput.dataset.currentId;
+    }
+    const pairStatus = document.getElementById("plan-pair-status");
+    if (pairStatus) pairStatus.innerText = "";
 }
 
 // toggleSoundcorkMode reapplies defaults so the /marge suffix appears
@@ -3143,6 +3204,17 @@ async function applySuggestedPlan() {
         status.style.color = "#555";
     }
 
+    // Pair-target intent from the Plan card. null = no pairing step;
+    // {valid:false} = invalid input that blocks Apply.
+    const pair = readPlanPairTarget();
+    if (pair && !pair.valid) {
+        if (status) {
+            status.innerText = "Aborted — invalid account ID";
+            status.style.color = "#c62828";
+        }
+        return;
+    }
+
     // Visible pre-flight panel — backend summary re-fetch, plus the
     // applicable device-side checks (HTTPS connection, DNS redirection)
     // run automatically so the user gets feedback without having to
@@ -3174,6 +3246,25 @@ async function applySuggestedPlan() {
     // ip is unused by migrate() — the backend resolves the IP from
     // device id. The empty string keeps the existing call shape.
     await migrate(deviceId, "", method);
+
+    // Pairing runs after the URL flip so the user sees migration
+    // succeed before pairing — pair-account is independent of the
+    // migration target so order is purely UX.
+    if (pair && pair.valid) {
+        if (status) {
+            status.innerText = "Pairing account " + pair.accountId + "…";
+            status.style.color = "#555";
+        }
+        try {
+            await pairAccount(deviceId, pair.accountId);
+        } catch (e) {
+            if (status) {
+                status.innerText = "❌ Pair failed: " + e.message;
+                status.style.color = "#c62828";
+            }
+            return;
+        }
+    }
 
     if (status) status.innerText = "";
 }
@@ -3594,6 +3685,14 @@ async function applyCustomPlan() {
         status.style.color = color || "#555";
     };
 
+    // Pair-target intent from the Plan card. null = no pairing step;
+    // {valid:false} = invalid input that blocks Apply.
+    const pair = readPlanPairTarget();
+    if (pair && !pair.valid) {
+        setStatus("Aborted — invalid account ID", "#c62828");
+        return;
+    }
+
     const steps = [];
     const methods = [];
     if (flip === "xml" || flip === "telnet") {
@@ -3608,9 +3707,13 @@ async function applyCustomPlan() {
         steps.push({label: "Install local CA", run: () => trustCA(deviceId, ip)});
         methods.push("trust-ca");
     }
+    if (pair && pair.valid) {
+        steps.push({label: `Pair account ${pair.accountId}`, run: () => pairAccount(deviceId, pair.accountId)});
+        methods.push("pair-account");
+    }
 
     if (steps.length === 0) {
-        setStatus("Pick at least one axis above.", "#c62828");
+        setStatus("Pick at least one axis above (or change the pairing ID).", "#c62828");
         return;
     }
 
