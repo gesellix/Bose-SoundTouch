@@ -787,6 +787,93 @@
                     </div>
                 </div>
 
+                <div style="margin-bottom: 14px">
+                    <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Service URLs</h4>
+                    <p style="margin: 0 0 8px 0; font-size: 0.85em; color: #555">
+                        Pre-filled from the target URL above. Edit any field for advanced setups (e.g. soundcork users
+                        append <code>/marge</code> to <code>margeServerUrl</code>). These overrides apply to both XML
+                        and Telnet migrations.
+                    </p>
+                    <table style="width: 100%; border-collapse: collapse">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding: 4px 6px; font-size: 0.85em">Field</th>
+                                <th style="text-align: left; padding: 4px 6px; font-size: 0.85em">Current on Device</th>
+                                <th style="text-align: left; padding: 4px 6px; font-size: 0.85em">Target URL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 4px 6px; font-family: monospace; font-size: 0.85em">margeServerUrl</td>
+                                <td id="plan-current-marge" style="padding: 4px 6px; font-family: monospace; font-size: 0.8em; color: #555">—</td>
+                                <td style="padding: 4px 6px">
+                                    <input
+                                        type="text"
+                                        id="plan-marge-url"
+                                        oninput="validatePlanURLs()"
+                                        style="width: 100%; font-family: monospace; font-size: 0.85em; box-sizing: border-box"
+                                    />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 4px 6px; font-family: monospace; font-size: 0.85em">statsServerUrl</td>
+                                <td id="plan-current-stats" style="padding: 4px 6px; font-family: monospace; font-size: 0.8em; color: #555">—</td>
+                                <td style="padding: 4px 6px">
+                                    <input
+                                        type="text"
+                                        id="plan-stats-url"
+                                        oninput="validatePlanURLs()"
+                                        style="width: 100%; font-family: monospace; font-size: 0.85em; box-sizing: border-box"
+                                    />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 4px 6px; font-family: monospace; font-size: 0.85em">swUpdateUrl</td>
+                                <td id="plan-current-sw_update" style="padding: 4px 6px; font-family: monospace; font-size: 0.8em; color: #555">—</td>
+                                <td style="padding: 4px 6px">
+                                    <input
+                                        type="text"
+                                        id="plan-sw_update-url"
+                                        oninput="validatePlanURLs()"
+                                        style="width: 100%; font-family: monospace; font-size: 0.85em; box-sizing: border-box"
+                                    />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 4px 6px; font-family: monospace; font-size: 0.85em">bmxRegistryUrl</td>
+                                <td id="plan-current-bmx" style="padding: 4px 6px; font-family: monospace; font-size: 0.8em; color: #555">—</td>
+                                <td style="padding: 4px 6px">
+                                    <input
+                                        type="text"
+                                        id="plan-bmx-url"
+                                        oninput="validatePlanURLs()"
+                                        style="width: 100%; font-family: monospace; font-size: 0.85em; box-sizing: border-box"
+                                    />
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 6px; font-size: 0.85em">
+                        <label>
+                            <input
+                                type="checkbox"
+                                id="plan-soundcork-mode"
+                                onchange="toggleSoundcorkMode()"
+                            />
+                            Soundcork mode (append <code>/marge</code> to <code>margeServerUrl</code>)
+                        </label>
+                        <button
+                            type="button"
+                            onclick="resetPlanURLsToDefaults()"
+                            style="margin-left: 16px; font-size: 0.85em"
+                        >Reset to defaults</button>
+                    </div>
+                    <div
+                        id="plan-url-validation"
+                        style="display: none; margin-top: 8px; padding: 6px 10px; background: #ffebee; border-left: 3px solid #c62828; font-size: 0.85em; color: #c62828"
+                    ></div>
+                </div>
+
                 <div>
                     <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Suggested plan</h4>
                     <div

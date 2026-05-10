@@ -1760,6 +1760,7 @@ async function showSummary(deviceId) {
 
         renderMigrationState(summary);
         renderPlan(summary);
+        renderPlanCurrentURLs(summary);
         renderTelnetPreflight(summary);
         renderPreflightWarnings(summary);
         fillTelnetURLInputs(defaultTelnetURLs(targetUrl));
@@ -1775,6 +1776,15 @@ async function showSummary(deviceId) {
             planSaved.dataset.savedValue = targetUrl || "";
             planSaved.innerText = "";
         }
+
+        // Pre-fill the Plan card per-field URL inputs with the canonical
+        // defaults from target URL. fillPlanURLInputs preserves any
+        // existing user edits across summary refreshes — the user has
+        // to click "Reset to defaults" to clobber them, which matches
+        // the Telnet pane's existing semantics.
+        const soundcork = document.getElementById("plan-soundcork-mode") &&
+            document.getElementById("plan-soundcork-mode").checked;
+        fillPlanURLInputs(defaultServiceURLs(targetUrl, {soundcorkMode: soundcork}));
 
         const migrationStatus = document.getElementById("migration-status");
         migrationStatus.innerText = summary.is_migrated ? "✅ Migrated to AfterTouch" : "❌ Not Migrated";
@@ -2105,16 +2115,39 @@ async function migrate(deviceId, ip) {
     const targetUrl = document.getElementById("target-domain").value;
     const method = document.getElementById("migration-method").value;
 
-    const opts = {
-        marge: document.getElementById("opt-marge").value,
-        stats: document.getElementById("opt-stats").value,
-        sw_update: document.getElementById("opt-sw_update").value,
-        bmx: document.getElementById("opt-bmx").value,
-    };
-
-    if (method === "telnet") {
-        Object.assign(opts, readTelnetURLOptions());
+    // Refuse to migrate when the Plan card's per-field URLs don't pass
+    // basic validation — typoed URLs would silently brick the speaker
+    // until reverted, and the validator highlights exactly which field
+    // is broken.
+    if (!validatePlanURLs()) {
+        const statusDiv = document.getElementById("status");
+        statusDiv.style.display = "block";
+        statusDiv.style.backgroundColor = "#ffcccc";
+        statusDiv.textContent = "Cannot migrate: one or more service URLs are invalid (see the validation errors above).";
+        return;
     }
+
+    const opts = {};
+
+    // Legacy XML mode dropdowns (self/proxied/original) — only read if
+    // the elements still exist. They're being removed in the next
+    // iteration; until then a literal *_url override from the Plan
+    // card wins anyway via assignment order below + the backend's
+    // applyURLOverrides taking precedence over applyProxyOptions.
+    const optMarge = document.getElementById("opt-marge");
+    const optStats = document.getElementById("opt-stats");
+    const optSwUpdate = document.getElementById("opt-sw_update");
+    const optBmx = document.getElementById("opt-bmx");
+    if (optMarge) opts.marge = optMarge.value;
+    if (optStats) opts.stats = optStats.value;
+    if (optSwUpdate) opts.sw_update = optSwUpdate.value;
+    if (optBmx) opts.bmx = optBmx.value;
+
+    // Per-field URL overrides from the Plan card apply to any method
+    // (XML or Telnet). Telnet pane's URL Targets table is now
+    // redundant for the Plan-driven flow but is kept under Customize
+    // for the next iteration's cleanup.
+    Object.assign(opts, readPlanURLOptions());
 
     const summaryDiv = document.getElementById("migration-summary");
     summaryDiv.style.display = "none";
@@ -2499,6 +2532,160 @@ async function saveTargetURLAsDefault() {
     }
 }
 
+// defaultServiceURLs returns the canonical four URLs derived from a
+// service base, with an optional Soundcork-mode adjustment that
+// appends /marge to margeServerUrl. Mirrors setup.defaultTelnetURLs
+// (Go) for the soundtouch-service case; the soundcorkMode option is
+// the UI-side equivalent of the documented soundcork recipe — see
+// docs/analysis/TELNET-MIGRATION-METHOD.md §2.1.
+function defaultServiceURLs(targetUrl, options = {}) {
+    const base = (targetUrl || "").replace(/\/+$/, "");
+    return {
+        marge: options.soundcorkMode ? base + "/marge" : base,
+        stats: base,
+        sw_update: base + "/updates/soundtouch",
+        bmx: base + "/bmx/registry/v1/services",
+    };
+}
+
+// fillPlanURLInputs writes the four URLs into the Plan card inputs.
+// force=true overwrites existing values (used by Reset and the
+// Soundcork toggle); force=false only fills empties (used on summary
+// render so manual edits survive a refresh).
+function fillPlanURLInputs(urls, {force = false} = {}) {
+    const fields = [
+        ["plan-marge-url", urls.marge],
+        ["plan-stats-url", urls.stats],
+        ["plan-sw_update-url", urls.sw_update],
+        ["plan-bmx-url", urls.bmx],
+    ];
+    for (const [id, value] of fields) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (force || !el.value) el.value = value;
+    }
+    validatePlanURLs();
+}
+
+// readPlanURLOptions returns the four inputs as the option keys the
+// backend expects (marge_url / stats_url / sw_update_url / bmx_url).
+// Empty inputs are omitted so the service-side canonical-default
+// fallback runs.
+function readPlanURLOptions() {
+    const out = {};
+    const pairs = [
+        ["marge_url", "plan-marge-url"],
+        ["stats_url", "plan-stats-url"],
+        ["sw_update_url", "plan-sw_update-url"],
+        ["bmx_url", "plan-bmx-url"],
+    ];
+    for (const [optKey, elemId] of pairs) {
+        const el = document.getElementById(elemId);
+        if (el && el.value) out[optKey] = el.value.trim();
+    }
+    return out;
+}
+
+// validateURL classifies a string as an OK service URL.
+// Empty value is valid (means "use the canonical default"). Otherwise
+// the URL must parse, the scheme must be http or https, the hostname
+// must be non-empty, and we reject "localhost" because the speaker
+// can't reach this machine via that name.
+function validateURL(value) {
+    const v = (value || "").trim();
+    if (!v) return {ok: true, error: ""};
+
+    let u;
+    try {
+        u = new URL(v);
+    } catch (e) {
+        return {ok: false, error: "not a valid URL"};
+    }
+
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+        return {ok: false, error: "scheme must be http or https"};
+    }
+
+    if (!u.hostname) return {ok: false, error: "hostname is empty"};
+
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") {
+        return {ok: false, error: "use the LAN IP/hostname, not localhost — the speaker can't reach this machine via that name"};
+    }
+
+    return {ok: true, error: ""};
+}
+
+// validatePlanURLs validates each of the four Plan-card inputs. Returns
+// true when all are valid. Surfaces inline errors in the validation
+// box, colours invalid input borders red, and disables the Apply
+// Suggested Plan button when anything is invalid.
+function validatePlanURLs() {
+    const fields = [
+        ["margeServerUrl", "plan-marge-url"],
+        ["statsServerUrl", "plan-stats-url"],
+        ["swUpdateUrl", "plan-sw_update-url"],
+        ["bmxRegistryUrl", "plan-bmx-url"],
+    ];
+
+    const errors = [];
+
+    for (const [name, elemId] of fields) {
+        const el = document.getElementById(elemId);
+        if (!el) continue;
+        const v = validateURL(el.value);
+        el.style.borderColor = v.ok ? "" : "#c62828";
+        if (!v.ok) errors.push(`${name}: ${v.error}`);
+    }
+
+    const errorBox = document.getElementById("plan-url-validation");
+    if (errorBox) {
+        if (errors.length === 0) {
+            errorBox.style.display = "none";
+            errorBox.replaceChildren();
+        } else {
+            errorBox.replaceChildren();
+            const ul = document.createElement("ul");
+            ul.style.cssText = "margin: 0; padding-left: 1.2em";
+            for (const e of errors) {
+                const li = document.createElement("li");
+                li.innerText = e;
+                ul.appendChild(li);
+            }
+            errorBox.appendChild(ul);
+            errorBox.style.display = "block";
+        }
+    }
+
+    // Apply Suggested Plan is gated on URL validity (in addition to its
+    // existing data-method check). The dataset.method field is set by
+    // renderPlan based on what computeSuggestedPlan returned.
+    const applyBtn = document.getElementById("plan-apply-btn");
+    if (applyBtn) {
+        const noPlan = !applyBtn.dataset.method;
+        applyBtn.disabled = noPlan || errors.length > 0;
+    }
+
+    return errors.length === 0;
+}
+
+// resetPlanURLsToDefaults wipes manual edits and reapplies the
+// canonical defaults derived from the current target URL, honoring
+// the Soundcork-mode checkbox.
+function resetPlanURLsToDefaults() {
+    const targetUrl = document.getElementById("plan-target-url").value;
+    const soundcork = document.getElementById("plan-soundcork-mode") &&
+        document.getElementById("plan-soundcork-mode").checked;
+    fillPlanURLInputs(defaultServiceURLs(targetUrl, {soundcorkMode: soundcork}), {force: true});
+}
+
+// toggleSoundcorkMode reapplies defaults so the /marge suffix appears
+// or disappears on margeServerUrl. Manual edits are intentionally
+// reset — the checkbox is a deliberate "give me the canonical
+// soundcork shape" affordance, not a soft hint.
+function toggleSoundcorkMode() {
+    resetPlanURLsToDefaults();
+}
+
 // computeSuggestedPlan picks the most conservative migration recipe
 // for the device based on which transports are reachable. The chosen
 // default is XML over SSH with HTTP — fewest moving parts, no DNS or
@@ -2543,6 +2730,24 @@ function computeSuggestedPlan(summary) {
         summary: "❌ No supported transport reachable",
         note: "Neither SSH nor Telnet:17000 answers. Use the official Bose app to pair before EOS, or unlock remote_services via USB stick to enable SSH.",
     };
+}
+
+// renderPlanCurrentURLs populates the "Current on Device" cells in the
+// Service URLs table from whichever transport answered (telnet
+// getpdo, falling back to the SSH-read XML config).
+function renderPlanCurrentURLs(summary) {
+    const live = parseTelnetVerifiedConfig(summary.telnet_verified_config || "");
+    const xml = summary.parsed_current_config || {};
+    const cells = [
+        ["plan-current-marge",     live.margeServerUrl     || xml.margeServerUrl],
+        ["plan-current-stats",     live.statsServerUrl     || xml.statsServerUrl],
+        ["plan-current-sw_update", live.swUpdateUrl        || xml.swUpdateUrl],
+        ["plan-current-bmx",       live.bmxRegistryUrl     || xml.bmxRegistryUrl],
+    ];
+    for (const [id, value] of cells) {
+        const el = document.getElementById(id);
+        if (el) el.innerText = value || "—";
+    }
 }
 
 // renderPlan populates the Plan card: capabilities header + suggested
