@@ -335,6 +335,10 @@ this; we just add a `telnet` option next to `xml`/`resolv`.
 
 ---
 
+> **See §9 for the as-shipped state.** Section 7 below records the
+> original forecast; the wizard grew larger during implementation and
+> §9 documents what actually landed.
+
 ## 7. Summary of what changes when this lands
 
 - **New reusable package `pkg/telnet`** — sibling of `pkg/ssh`, line-oriented
@@ -463,3 +467,162 @@ The most useful next verification step is touching a real ST 30 and ST 520
 — those are the two "expected to work" models with zero concrete captures.
 Beyond that, every behaviour the doc predicts is exercised by the unit
 tests in `pkg/telnet` and `pkg/service/setup`.
+
+---
+
+## 9. What actually shipped (post-implementation addendum)
+
+§7 forecast the surface area roughly; the wizard ended up larger. This
+section is the present-day map of the migration tab and the supporting
+backend pieces — kept appended rather than rewritten in place so the
+feasibility analysis above stays a faithful design record.
+
+### 9.1 Three-axis state model
+
+`MigrationSummary` now exposes the four mechanism-specific booleans
+that `checkIsMigrated` writes individually:
+
+- `XMLMigrated` — parsed SoundTouchSdkPrivateCfg.xml's URLs point at us.
+- `HostsMigrated` — `/etc/hosts` carries Bose-domain redirects (the
+  deprecated method, kept detectable for legacy speakers).
+- `ResolvMigrated` — the `/etc/resolv.conf` priority-nameserver hook
+  is in place (with CA trusted).
+- `TelnetMigrated` — `getpdo CurrentSystemConfiguration` reports the
+  service hostname.
+
+`IsMigrated` is the OR. Plus `IsPaired` from the live
+`:8090/info.margeAccountUUID` value.
+
+The frontend opens with a state card that surfaces three orthogonal
+axes derived from these flags:
+
+| Axis              | Verdict semantics                                                                |
+|-------------------|----------------------------------------------------------------------------------|
+| URL Configuration | URL flip active → ✅; original Bose URLs + DNS hook active → ✅ (intercepted); original + no DNS → ❌ (not intercepted). |
+| DNS Interception  | None / resolv.conf hook / /etc/hosts (with deprecated badge).                    |
+| CA / TLS          | Local root CA installed yes/no.                                                  |
+
+Plus a Preconditions row: `remote_services` persistence, account
+pairing state, XML config backup presence. Action affordances
+(`Trust CA Now`, `Download CA cert`) live inline next to their verdicts.
+
+### 9.2 Plan card with per-field URL editor
+
+Replaces the XML method's `self/proxied/original` dropdowns and the
+duplicate URL inputs that used to live inside the telnet method pane:
+
+- Target service URL input with `Save as default` (POSTs to
+  `/setup/settings`, preserving the `***` secret-unchanged convention).
+- Capabilities header: detected transports (SSH / Telnet:17000) and
+  the recipes AfterTouch can offer given those transports.
+- Service URLs table: four free-form URL inputs (Marge / Stats /
+  SwUpdate / BmxRegistry) with on-keystroke validation
+  (`validatePlanURLs`), a Soundcork-mode checkbox that flips `/marge`
+  on `margeServerUrl`, and a `Reset to defaults` button.
+- Account pairing section: ID input + Generate + datastore picker;
+  the implicit intent (`readPlanPairTarget`) queues a pair step at
+  Apply when the input differs from the current `account_id`.
+- Suggested plan box: one-click conservative default — XML + HTTP
+  when SSH works, Telnet + HTTP otherwise; "Already migrated" info
+  state when `IsMigrated` is already true.
+
+The per-field URLs feed both XML and Telnet migrations via the
+`marge_url` / `stats_url` / `sw_update_url` / `bmx_url` option family
+(see §9.6). Live preview rewrites `#planned-config` purely client-side
+on every keystroke — optimistic; the backend's perspective gates the
+write via §9.4's pre-flight.
+
+### 9.3 Customize three-axis form
+
+The `<details>` "Customize this migration" section replaces the old
+migration-method dropdown with three independent radio groups:
+
+1. **URL flip transport**: XML / Telnet:17000 / Skip.
+2. **DNS interception**: None / `/etc/resolv.conf` hook.
+3. **Local CA install**: checkbox.
+
+Each option carries a per-axis availability hint
+(`(SSH unreachable)`, `(already trusted)`, etc.) so users see *why*
+an option is disabled. `applyCustomPlan` orchestrates the chosen
+combination as a sequence of existing backend calls
+(`/setup/migrate?method=…` for each flip/resolv step plus
+`/setup/trust-ca` for standalone CA install, and the queued pair
+step from §9.2). Resolv already bundles a CA install, so a redundant
+standalone CA step is skipped. First failure aborts the rest.
+
+### 9.4 Pre-flight panel
+
+Both Apply paths run a visible pre-flight panel before any backend
+operation touches the speaker. Each check renders inline with the
+🕐 / ⟳ / ✅ / ❌ / — idiom. On all-green the panel holds for ~700ms so
+the success state registers, then auto-proceeds. On any failure the
+panel surfaces `Proceed Anyway` / `Cancel` buttons; default is to
+abort.
+
+Checks:
+
+| Check                         | When                                          | Backend route                  |
+|-------------------------------|-----------------------------------------------|--------------------------------|
+| Backend summary re-check      | always                                        | `GET /setup/summary`           |
+| HTTPS connection from device  | `ssh_success && server_https_url`             | `POST /setup/test-connection`  |
+| Telnet round-trip probe       | `!ssh_success && telnet_reachable` (see §9.5) | `POST /setup/telnet-probe`     |
+| DNS redirection from device   | `methods.includes("resolv") && ssh_success`   | `POST /setup/test-dns`         |
+
+The HTTPS check uses `use_explicit_ca=true` so it exercises the trust
+path even when CA install is part of the plan (i.e. forward-looking).
+The reachability skip row is explicit ("neither SSH nor Telnet:17000
+is reachable") rather than silently dropped, per the user's
+"feedback always visible" requirement.
+
+### 9.5 Telnet round-trip probe — the SSH-less reachability check
+
+The reachability gap §7 left open for USB-unlock-refusing speakers is
+closed by `Manager.RunTelnetRoundTripProbe`
+(`pkg/service/setup/telnet_probe.go`). Sequence:
+
+1. Telnet `getpdo CurrentSystemConfiguration` to capture the
+   speaker's current `swUpdateUrl`.
+2. Generate a random 24-hex-char token; register a one-shot signal
+   channel under it on the new `probeRegistry` (sibling field on
+   `handlers.Server`).
+3. Telnet `sys configuration swUpdateUrl <targetURL>/probe/<token>`
+   — **runtime layer only, deliberately not `envswitch boseurls set
+   …`**. The persistence layer keeps the original URL, so a reboot
+   heals the device naturally if our restore step fails.
+4. `HTTP GET <deviceIP>:8090/swUpdateCheck` — the cleanest
+   `:8090` endpoint that triggers exactly one outbound to the
+   configured `swUpdateUrl`. Read-only on the cloud side
+   (doesn't initiate an update); independent of `margeAccountUUID`
+   so it works on factory-reset speakers.
+5. Wait on the registered channel up to `telnetProbeTimeout` (6s).
+6. Telnet `sys configuration swUpdateUrl <originalURL>` — deferred
+   restore so it runs even on the failure path.
+
+The new `/probe/{token}[/*]` catch-all on the root router signals the
+matching channel when the speaker's outbound lands. The response is
+a minimal `<swUpdateIndex/>` so the speaker's `swUpdateCheck`
+doesn't choke on a missing structure. The `/*` sub-path is
+registered because some firmware appends a path component to the
+configured `swUpdateUrl`.
+
+### 9.6 Backend additions worth knowing
+
+| Addition                                                              | Where                                                | Why                                                                                                       |
+|-----------------------------------------------------------------------|------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `applyURLOverrides(cfg, options)`                                     | `pkg/service/setup/setup.go`                         | Per-field literal `marge_url` / `stats_url` / `sw_update_url` / `bmx_url` overrides win over `applyProxyOptions`. Honored by both `GetMigrationSummary` and `migrateViaXML`. |
+| `telnetURLsFromOptions(targetURL, options)`                           | `pkg/service/setup/telnet_migration.go`              | Same option family as above, plus envswitch arg derivation rule (arg1 = final Marge verbatim; the soundcork-suffix case drops out).                                         |
+| Per-axis booleans + `IsPaired` + `Warnings`                           | `MigrationSummary`                                   | Surfaces partial-state cells and SSH-XML ⇄ telnet-getpdo cross-check disagreements.                                                                                         |
+| `parseGetpdoConfig`                                                   | `pkg/service/setup/preflight_crosscheck.go`          | Parses the Protobuf-text-like nested-block reply (`key { text: "..." }`) FW 27.0.6 actually sends, plus the legacy `key=value` shape as a tolerance path.                   |
+| `probeRegistry` + `RunTelnetRoundTripProbe` + `/setup/telnet-probe`   | `pkg/service/handlers` / `pkg/service/setup`         | §9.5.                                                                                                                                                                       |
+| `migrationOptionKeys` allow-list                                      | `pkg/service/handlers/migration_options.go`          | Unknown query keys never reach the manager. Both XML mode keys and `*_url` keys are recognised.                                                                             |
+| Telnet client default timeouts: dial 4s, read 7s, write 3s, idle 600ms | `pkg/telnet/telnet.go`                              | Bumped from the original 2s/5s/2s/400ms after observing transient i/o-timeout flakes on healthy speakers that recovered on retry.                                            |
+
+### 9.7 Future probe candidates
+
+- `:8090/pushCustomerSupportInfoToMarge` — flagged as a potential
+  "ask the device about itself" probe that could feed a richer
+  device-info pane (firmware build dates, hardware revisions). Not
+  implemented.
+- Running the round-trip probe on SSH-capable speakers too (as
+  additional validation alongside the curl-from-device HTTPS test),
+  not just as the SSH-less fallback it is today.
