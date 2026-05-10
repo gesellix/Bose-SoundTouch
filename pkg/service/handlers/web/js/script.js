@@ -3076,6 +3076,12 @@ async function toggleMigrationMethod() {
             console.error("Failed to check DNS settings", e);
         }
     } else {
+        // XML branch (the default fallthrough). The DNS-port warning is
+        // owned by the resolv branch, but the previous code path forgot
+        // to reset it here — switching from resolv back to xml left a
+        // stale "DNS Discovery is DISABLED" warning attached to the XML
+        // method, where it's irrelevant.
+        if (dnsWarning) dnsWarning.style.display = "none";
         xmlDiffPane.style.display = "block";
         plannedXmlPane.style.display = "block";
         plannedHostsPane.style.display = "none";
