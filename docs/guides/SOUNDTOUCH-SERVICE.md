@@ -225,12 +225,20 @@ curl http://localhost:8000/setup/devices
 #### Advanced Migration Options
 
 ```bash
-# Migration with proxy fallback for original services
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?proxy_url=http://localhost:8000&marge=original&stats=original"
-
 # Migration with custom target URL
 curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?target_url=https://my-server.com:8000"
+
+# Per-field literal URL overrides (preferred — used by the web wizard)
+curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=xml&target_url=http://server:8000&marge_url=http://server:8000/marge"
+
+# SSH-less migration over the device's port-17000 diagnostic shell
+curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=telnet&target_url=http://server:8000"
+
+# Legacy proxy-fallback for selected fields (kept for API back-compat)
+curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?proxy_url=http://localhost:8000&marge=original&stats=original"
 ```
+
+See the full parameter reference at `POST /setup/migrate/{deviceIP}` below for `method`, `target_url`, `*_url`, and the legacy mode selectors.
 
 ### Post-Migration Verification
 
@@ -393,12 +401,73 @@ Analyzes device configuration and provides migration preview.
 Migrates device to use local services.
 
 **Query Parameters:**
-- `target_url`: Custom service URL (optional)
-- `proxy_url`: Proxy URL for fallback (optional)
-- `marge`: Set to "original" to proxy Marge requests (optional)
-- `stats`: Set to "original" to proxy stats requests (optional)
-- `sw_update`: Set to "original" to proxy update requests (optional)
-- `bmx`: Set to "original" to proxy BMX requests (optional)
+
+| Parameter    | Values                                                    | Notes                                                                                                                                                                                                                                                    |
+|--------------|-----------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `method`     | `xml` (default), `telnet`, `resolv`, `hosts` (deprecated) | Picks the redirect mechanism. `xml` writes `SoundTouchSdkPrivateCfg.xml` via SSH; `telnet` flips the four URLs via the device's port-17000 diagnostic shell; `resolv` installs the `/etc/resolv.conf` priority-nameserver hook and the local CA via SSH. |
+| `target_url` | Any URL, e.g. `http://soundtouch.local:8000`              | Service base URL the per-field defaults derive from. Falls back to the service's configured `ServerURL` when omitted.                                                                                                                                    |
+| `proxy_url`  | Any URL                                                   | Proxy base used when the legacy `marge=proxied` / `stats=proxied` / `sw_update=proxied` / `bmx=proxied` modes are set. Defaults to `target_url`.                                                                                                         |
+
+**Per-field implementation mode** (XML method's legacy semantics — kept for API back-compat, UI no longer sets them):
+
+| Parameter   | Values                                  | Effect on the matching `*ServerUrl` / `*RegistryUrl` field                                                                                        |
+|-------------|-----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| `marge`     | `self` (default), `proxied`, `original` | `self`: write `target_url` (canonical). `proxied`: write `<proxy_url>/proxy/<original-marge-url>`. `original`: keep the speaker's existing value. |
+| `stats`     | same                                    | same                                                                                                                                              |
+| `sw_update` | same                                    | same                                                                                                                                              |
+| `bmx`       | same                                    | same                                                                                                                                              |
+
+**Per-field literal URL overrides** (preferred — used by the wizard's Plan card; honored for both `xml` and `telnet` methods):
+
+| Parameter       | Effect                                                                                                                                                                |
+|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `marge_url`     | Writes the exact URL to `<margeServerUrl>` regardless of `target_url` derivation or `marge` mode. Empty / missing → fall back to canonical default from `target_url`. |
+| `stats_url`     | Same shape for `<statsServerUrl>`.                                                                                                                                    |
+| `sw_update_url` | Same for `<swUpdateUrl>`.                                                                                                                                             |
+| `bmx_url`       | Same for `<bmxRegistryUrl>`.                                                                                                                                          |
+
+**Precedence**: `*_url` overrides win over the `marge / stats / sw_update / bmx` mode selectors. The setup package applies `applyProxyOptions` first, then `applyURLOverrides` clobbers any field where a literal `*_url` was supplied. So if you send both `marge=proxied&marge_url=http://x:8000/marge`, the literal `http://x:8000/marge` is written.
+
+**Soundcork redirect**: append `/marge` to `marge_url`. The telnet method derives `envswitch boseurls set <margeServerUrl> <swUpdateUrl>` from the final URLs verbatim, so the suffix propagates to the parallel persistence layer automatically — no separate flag needed.
+
+**Examples**:
+
+```bash
+# Canonical XML migration over SSH to the default service URL
+curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=xml"
+
+# Telnet migration with the soundcork redirect (only marge gets the /marge suffix)
+curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=telnet&target_url=http://soundcork.local:8000&marge_url=http://soundcork.local:8000/marge"
+
+# DNS interception (writes /etc/resolv.conf hook + installs CA) — *_url overrides are ignored
+curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=resolv&target_url=https://my-server.com:8443"
+```
+
+#### `POST /setup/telnet-probe/{deviceIP}`
+SSH-less reachability check. Temporarily flips the speaker's `swUpdateUrl` via the port-17000 diagnostic shell, triggers `:8090/swUpdateCheck` on the device, and observes whether the resulting outbound lands on this service's `/probe/{token}` handler within 6 s. Always attempts to restore the original `swUpdateUrl` even on failure.
+
+**Query Parameters:**
+- `target_url` (optional): defaults to the service's configured `ServerURL`. The probe URL written to the device is `<target_url>/probe/<token>`.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "result": {
+    "reached": true,
+    "restored": true,
+    "original_url": "https://worldwide.bose.com/updates/soundtouch",
+    "probe_url": "http://soundtouch.local:8000/probe/abc123…",
+    "elapsed_ms": 412,
+    "logs": "…"
+  }
+}
+```
+
+`reached=true` means the device's outbound landed on our `/probe/{token}` route within the timeout. `restored=true` means the runtime `swUpdateUrl` was reverted to its captured original (the envswitch persistence layer is left untouched throughout, so a reboot heals the device naturally if our restore step fails).
+
+#### `GET /probe/{token}[/*]`
+Catch-all endpoint that signals the matching pre-flight probe channel. Used internally by `/setup/telnet-probe/{deviceIP}`; not intended to be called directly by API consumers. Returns a minimal `<swUpdateIndex/>` XML so the device's `swUpdateCheck` doesn't choke on a missing structure.
 
 ### BMX Services (Bose Media eXchange)
 
