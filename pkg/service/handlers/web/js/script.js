@@ -3066,14 +3066,24 @@ async function runApplyPreflight(deviceId, methods, opts, targetUrl) {
     results.push({name: "Backend summary re-check", status: "ok"});
     const summary = r.summary;
 
-    // Step 2: reachability from the device. SSH-capable speakers get
-    // the curl-from-device test against the URL the migration will
-    // actually write (HTTP or HTTPS, derived from the plan); SSH-less
-    // speakers fall through to the telnet round-trip probe that
-    // temporarily flips swUpdateUrl and observes the resulting
-    // outbound. If neither transport is reachable, the check is
-    // surfaced as a skip rather than silently dropped.
+    // Step 2: reachability from the device. Each transport gets its
+    // own check — they exercise different network paths:
+    //
+    //   - SSH (curl from device) verifies inbound TCP from the
+    //     speaker to our HTTP/HTTPS port using the speaker's normal
+    //     userspace stack.
+    //   - Telnet round-trip exercises the outbound from the
+    //     speaker's `swUpdateUrl` fan-out, which uses a different
+    //     code path in the firmware. A speaker that passes the SSH
+    //     curl test but fails the round-trip probe (or vice versa)
+    //     reveals a real connectivity asymmetry worth surfacing.
+    //
+    // Both checks run when both transports are reachable. If neither
+    // is reachable, the row is surfaced as a deliberate skip rather
+    // than silently dropped.
     const connectionTestURL = preflightConnectionTestURL(summary, methods, targetUrl);
+    const ranAnyReachability = (summary.ssh_success && !!connectionTestURL) || summary.telnet_reachable;
+
     if (summary.ssh_success && connectionTestURL) {
         const scheme = connectionTestURL.startsWith("https:") ? "HTTPS" : "HTTP";
         const label = `${scheme} connection from device`;
@@ -3082,13 +3092,17 @@ async function runApplyPreflight(deviceId, methods, opts, targetUrl) {
         const cr = await checkConnectionFromDevice(deviceId, connectionTestURL);
         setPreflightItemStatus(item, cr.status, cr.message);
         results.push({name: label, ...cr});
-    } else if (summary.telnet_reachable) {
+    }
+
+    if (summary.telnet_reachable) {
         const item = addPreflightItem("Telnet round-trip probe (swUpdateUrl)");
         setPreflightItemStatus(item, "running");
         const cr = await checkTelnetRoundTrip(deviceId, targetUrl);
         setPreflightItemStatus(item, cr.status, cr.message);
         results.push({name: "Telnet round-trip probe", ...cr});
-    } else {
+    }
+
+    if (!ranAnyReachability) {
         const item = addPreflightItem("Reachability from device");
         setPreflightItemStatus(item, "skip", "neither SSH nor Telnet:17000 is reachable");
         results.push({name: "Reachability from device", status: "skip"});
