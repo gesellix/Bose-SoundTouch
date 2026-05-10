@@ -16,6 +16,7 @@ import (
 	"io"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -168,11 +169,68 @@ func DecryptBlob(encKey, macKey, blob []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+// validateZcBaseURL parses zcBaseURL and ensures it points at a non-routable
+// host on the LAN. Speakers live on the local network; rejecting global-IP
+// hosts prevents the upstream caller from being tricked into making outbound
+// requests to arbitrary hosts (server-side request forgery). Also constrains
+// the scheme to http/https.
+//
+// Returns the parsed URL with any embedded ?query stripped, ready for callers
+// to attach their own ?action= query string.
+func validateZcBaseURL(zcBaseURL string) (*url.URL, error) {
+	u, err := url.Parse(zcBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("scheme %q not allowed (expected http or https)", u.Scheme)
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("missing host")
+	}
+
+	// Allow literal IPs that are loopback / private / link-local. Hostnames
+	// (mDNS .local, etc.) are accepted as the speaker may not be addressed
+	// by IP — DNS resolution of those is a separate trust boundary, but
+	// they don't open the SSRF surface CodeQL is concerned about because
+	// a malicious *.local name still has to win mDNS resolution on the
+	// local segment.
+	if ip := net.ParseIP(host); ip != nil {
+		if !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() {
+			return nil, fmt.Errorf("host %q is not on a local network", host)
+		}
+	}
+
+	// Strip any pre-existing query so callers can append cleanly.
+	u.RawQuery = ""
+	u.Fragment = ""
+
+	return u, nil
+}
+
+// withAction returns the validated base URL with ?action=<action> appended.
+func withAction(base *url.URL, action string) string {
+	u := *base
+	q := u.Query()
+	q.Set("action", action)
+	u.RawQuery = q.Encode()
+
+	return u.String()
+}
+
 // GetInfo fetches the speaker's DH public key via GET ?action=getInfo.
 func GetInfo(zcBaseURL string) ([]byte, error) {
+	base, err := validateZcBaseURL(zcBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("getInfo: %w", err)
+	}
+
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	resp, err := client.Get(zcBaseURL + "?action=getInfo")
+	resp, err := client.Get(withAction(base, "getInfo"))
 	if err != nil {
 		return nil, fmt.Errorf("getInfo: %w", err)
 	}
@@ -209,6 +267,11 @@ func GetInfo(zcBaseURL string) ([]byte, error) {
 // it falls back to the simplified tokenType=accesstoken approach.
 // zcBaseURL is the base URL of the ZeroConf endpoint, e.g. "http://192.168.1.10:8200/zc".
 func PushCredentials(zcBaseURL, username, accessToken string) error {
+	base, err := validateZcBaseURL(zcBaseURL)
+	if err != nil {
+		return fmt.Errorf("pushCredentials: %w", err)
+	}
+
 	speakerPublicKey, err := GetInfo(zcBaseURL)
 	if err != nil {
 		log.Printf("[ZeroConf] getInfo failed (%v), falling back to simplified token push", err)
@@ -237,7 +300,7 @@ func PushCredentials(zcBaseURL, username, accessToken string) error {
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	resp, err := client.PostForm(zcBaseURL+"?action=addUser", data)
+	resp, err := client.PostForm(withAction(base, "addUser"), data)
 	if err != nil {
 		return fmt.Errorf("pushCredentials: addUser: %w", err)
 	}
@@ -255,6 +318,11 @@ func PushCredentials(zcBaseURL, username, accessToken string) error {
 // pushSimplifiedToken is the fallback for firmware that does not support DH
 // key exchange. It sends the raw OAuth access token directly as the blob.
 func pushSimplifiedToken(zcBaseURL, username, accessToken string) error {
+	base, err := validateZcBaseURL(zcBaseURL)
+	if err != nil {
+		return fmt.Errorf("pushSimplifiedToken: %w", err)
+	}
+
 	data := url.Values{}
 	data.Set("userName", username)
 	data.Set("blob", accessToken)
@@ -263,7 +331,7 @@ func pushSimplifiedToken(zcBaseURL, username, accessToken string) error {
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	resp, err := client.PostForm(zcBaseURL+"?action=addUser", data)
+	resp, err := client.PostForm(withAction(base, "addUser"), data)
 	if err != nil {
 		return fmt.Errorf("pushSimplifiedToken: %w", err)
 	}
