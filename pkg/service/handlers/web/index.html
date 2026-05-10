@@ -897,42 +897,75 @@
                 <summary style="cursor: pointer; font-weight: bold">Customize this migration</summary>
 
             <div
-                style="
-                            margin: 15px 0;
-                            padding: 10px;
-                            border: 1px solid #ddd;
-                            background-color: #f9f9f9;
-                        "
+                id="customize-form"
+                style="margin: 15px 0; padding: 12px; border: 1px solid #ddd; background-color: #f9f9f9; border-radius: 4px"
             >
-                <label for="migration-method"
-                ><strong>Migration Method:</strong></label
-                >
-                <select
-                    id="migration-method"
-                    onchange="toggleMigrationMethod()"
-                >
-                    <option value="xml">
-                        XML Configuration (Recommended - redirects
-                        specific services)
-                    </option>
-                    <option value="telnet">
-                        Telnet (Port 17000) - no SSH required
-                    </option>
-                    <option value="resolv">
-                        /etc/resolv.conf (DHCP-Aware - Redirect via DNS
-                        Hook)
-                    </option>
-                </select>
+                <p style="margin: 0 0 12px 0; font-size: 0.9em; color: #555">
+                    Pick any combination of the three axes — the wizard runs
+                    the matching backend operations in order. Disabled options
+                    require a transport this speaker doesn't expose.
+                </p>
+
+                <fieldset style="margin: 0 0 10px 0; padding: 8px 12px; border: 1px solid #ddd">
+                    <legend style="padding: 0 6px; font-weight: bold">URL flip transport</legend>
+                    <label style="display: block; margin: 2px 0">
+                        <input type="radio" name="customize-url-flip" value="xml" checked
+                               onchange="onCustomizeChange()"/>
+                        XML over SSH
+                        <span class="customize-hint" data-axis="xml" style="margin-left: 6px; font-size: 0.85em; color: #c62828"></span>
+                    </label>
+                    <label style="display: block; margin: 2px 0">
+                        <input type="radio" name="customize-url-flip" value="telnet"
+                               onchange="onCustomizeChange()"/>
+                        Telnet (Port 17000)
+                        <span class="customize-hint" data-axis="telnet" style="margin-left: 6px; font-size: 0.85em; color: #c62828"></span>
+                    </label>
+                    <label style="display: block; margin: 2px 0">
+                        <input type="radio" name="customize-url-flip" value="none"
+                               onchange="onCustomizeChange()"/>
+                        Skip — leave URLs at the Bose cloud (DNS interception will redirect them instead)
+                    </label>
+                </fieldset>
+
+                <fieldset style="margin: 0 0 10px 0; padding: 8px 12px; border: 1px solid #ddd">
+                    <legend style="padding: 0 6px; font-weight: bold">DNS interception</legend>
+                    <label style="display: block; margin: 2px 0">
+                        <input type="radio" name="customize-dns" value="none" checked
+                               onchange="onCustomizeChange()"/>
+                        None
+                    </label>
+                    <label style="display: block; margin: 2px 0">
+                        <input type="radio" name="customize-dns" value="resolv"
+                               onchange="onCustomizeChange()"/>
+                        <code>/etc/resolv.conf</code> hook (also installs the local CA — needed when URLs stay at <code>https://*.bose.com</code>)
+                        <span class="customize-hint" data-axis="resolv" style="margin-left: 6px; font-size: 0.85em; color: #c62828"></span>
+                    </label>
+                </fieldset>
+
+                <fieldset style="margin: 0 0 10px 0; padding: 8px 12px; border: 1px solid #ddd">
+                    <legend style="padding: 0 6px; font-weight: bold">Local CA install</legend>
+                    <label style="display: block; margin: 2px 0">
+                        <input type="checkbox" id="customize-ca-install"
+                               onchange="onCustomizeChange()"/>
+                        Install local root CA on the device via SSH (only needed when targeting <code>https://</code>)
+                        <span class="customize-hint" data-axis="ca" style="margin-left: 6px; font-size: 0.85em; color: #c62828"></span>
+                    </label>
+                </fieldset>
+
                 <div
-                    id="dns-port-warning"
-                    style="
-                                margin-top: 5px;
-                                color: #d32f2f;
-                                font-weight: bold;
-                                font-size: 0.9em;
-                                display: none;
-                            "
+                    id="customize-validation"
+                    style="display: none; margin: 8px 0; padding: 6px 10px; background: #ffebee; border-left: 3px solid #c62828; font-size: 0.85em; color: #c62828"
                 ></div>
+
+                <div style="margin-top: 12px">
+                    <button
+                        type="button"
+                        id="customize-apply-btn"
+                        onclick="applyCustomPlan()"
+                        style="background-color: #4caf50; color: white; border: none; padding: 8px 14px; font-size: 0.95em"
+                    >Apply Custom Plan</button>
+                    <span id="customize-apply-status" style="margin-left: 10px; font-size: 0.9em"></span>
+                </div>
             </div>
 
             <div
@@ -1098,17 +1131,6 @@
                 </div>
             </div>
             <div style="margin-top: 15px">
-                <button
-                    id="confirm-migrate-btn"
-                    style="
-                                background-color: #4caf50;
-                                color: white;
-                                border: none;
-                                padding: 10px 20px;
-                            "
-                >
-                    Confirm Migration
-                </button>
                 <button
                     id="revert-migrate-btn"
                     style="

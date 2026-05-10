@@ -1838,7 +1838,7 @@ async function showSummary(deviceId) {
         document.getElementById("test-hosts-btn").onclick = () => testHostsRedirection(deviceId);
         document.getElementById("test-dns-btn").onclick = () => testDNSRedirection(deviceId);
 
-        toggleMigrationMethod();
+        renderCustomizeForm(summary);
 
         // Migration and reboot are gated on having *some* transport
         // reachable. Telnet is enough for the telnet method (no SSH
@@ -1846,9 +1846,13 @@ async function showSummary(deviceId) {
         // method whose transport isn't actually available.
         const anyTransport = summary.ssh_success || summary.telnet_reachable;
 
-        const migrateBtn = document.getElementById("confirm-migrate-btn");
-        migrateBtn.onclick = () => migrate(deviceId, ip);
-        migrateBtn.disabled = !anyTransport;
+        // Stash device id/ip on the customize form so applyCustomPlan
+        // can find them without globals.
+        const customizeForm = document.getElementById("customize-form");
+        if (customizeForm) {
+            customizeForm.dataset.deviceId = deviceId;
+            customizeForm.dataset.deviceIp = ip || "";
+        }
 
         const revertBtn = document.getElementById("revert-migrate-btn");
         revertBtn.onclick = () => revert(deviceId, ip);
@@ -1944,10 +1948,11 @@ async function reboot(deviceId, ip) {
         return;
     }
 
-    // Pick the reboot transport from the migration method dropdown — telnet
-    // migration likely means SSH isn't available on the device.
-    const migrationMethod = (document.getElementById("migration-method") || {}).value || "";
-    const rebootMethod = migrationMethod === "telnet" ? "telnet" : "ssh";
+    // Pick the reboot transport from the Customize form's URL flip
+    // selection — telnet there strongly implies the user is going
+    // SSH-less, so reboot via telnet too. Fall back to ssh otherwise.
+    const flip = (document.querySelector('input[name="customize-url-flip"]:checked') || {}).value || "";
+    const rebootMethod = flip === "telnet" ? "telnet" : "ssh";
 
     const statusDiv = document.getElementById("status");
     statusDiv.style.display = "block";
@@ -2093,13 +2098,21 @@ async function pairAccount(deviceId) {
     }
 }
 
-async function migrate(deviceId, ip) {
+// migrate runs a single migrate call against the backend. method is
+// passed explicitly by the caller (suggested-plan or custom-plan
+// orchestrator); the legacy migration-method dropdown is gone.
+async function migrate(deviceId, ip, method) {
     if (!deviceId) {
         alert("Please select a device.");
         return;
     }
+
+    if (!method) {
+        alert("Migration method is required");
+        return;
+    }
+
     const targetUrl = document.getElementById("target-domain").value;
-    const method = document.getElementById("migration-method").value;
 
     // Refuse to migrate when the Plan card's per-field URLs don't pass
     // basic validation — typoed URLs would silently brick the speaker
@@ -2753,11 +2766,8 @@ function transportChip(name, ok) {
 }
 
 // applySuggestedPlan triggers the recipe computeSuggestedPlan picked.
-// For now it programmatically points the legacy Migration Method
-// dropdown at the chosen method and reuses the existing migrate()
-// entry point — that keeps the option-plumbing path identical
-// (target_url, marge_url, etc.) until the Customize panel is fully
-// replaced.
+// Passes the chosen method directly to migrate() — the legacy
+// migration-method dropdown is gone.
 async function applySuggestedPlan() {
     const btn = document.getElementById("plan-apply-btn");
     const status = document.getElementById("plan-apply-status");
@@ -2770,20 +2780,14 @@ async function applySuggestedPlan() {
         return;
     }
 
-    const dropdown = document.getElementById("migration-method");
-    if (dropdown) dropdown.value = method;
-
     if (status) {
         status.innerText = "Applying " + method + "…";
         status.style.color = "#555";
     }
 
-    // Resolve the IP from the visible summary state so migrate() can
-    // hand it to the backend route. The hidden summary-device-id
-    // field stores the device id; the IP shows up in the device
-    // display string, but migrate() ultimately sends just the device
-    // id and the backend resolves to IP — so an empty ip arg is fine.
-    await migrate(deviceId, "");
+    // ip is unused by migrate() — the backend resolves the IP from
+    // device id. The empty string keeps the existing call shape.
+    await migrate(deviceId, "", method);
 
     if (status) status.innerText = "";
 }
@@ -3073,94 +3077,169 @@ function renderPreflightWarnings(summary) {
     banner.style.display = "block";
 }
 
-async function toggleMigrationMethod() {
-    const method = document.getElementById("migration-method").value;
-    const xmlDiffPane = document.getElementById("xml-diff-pane");
-    const plannedXmlPane = document.getElementById("planned-xml-pane");
-    const plannedHostsPane = document.getElementById("planned-hosts-pane");
-    const plannedResolvPane = document.getElementById("planned-resolv-pane");
-    const currentResolvPane = document.getElementById("current-resolv-pane");
-    const hostsTestPane = document.getElementById("hosts-redirection-test");
-    const dnsTestPane = document.getElementById("dns-redirection-test");
-    const telnetPane = document.getElementById("telnet-method-pane");
+// renderCustomizeForm sets the per-axis radio availability and pane
+// visibility based on the summary's transport reachability and the
+// current radio choices. Disabled options get a small "(why)" hint
+// next to them.
+function renderCustomizeForm(summary) {
+    const xmlRadio = document.querySelector('input[name="customize-url-flip"][value="xml"]');
+    const telnetRadio = document.querySelector('input[name="customize-url-flip"][value="telnet"]');
+    const dnsRadio = document.querySelector('input[name="customize-dns"][value="resolv"]');
+    const caCheckbox = document.getElementById("customize-ca-install");
 
-    const dnsWarning = document.getElementById("dns-port-warning");
+    const setHint = (axis, text) => {
+        const el = document.querySelector(`.customize-hint[data-axis="${axis}"]`);
+        if (el) el.innerText = text;
+    };
 
-    if (telnetPane) telnetPane.style.display = method === "telnet" ? "block" : "none";
-
-    if (method === "telnet") {
-        xmlDiffPane.style.display = "none";
-        plannedXmlPane.style.display = "none";
-        plannedHostsPane.style.display = "none";
-        plannedResolvPane.style.display = "none";
-        currentResolvPane.style.display = "none";
-        hostsTestPane.style.display = "none";
-        dnsTestPane.style.display = "none";
-        if (dnsWarning) dnsWarning.style.display = "none";
-    } else if (method === "hosts") {
-        xmlDiffPane.style.display = "none";
-        plannedXmlPane.style.display = "none";
-        plannedHostsPane.style.display = "block";
-        plannedResolvPane.style.display = "none";
-        currentResolvPane.style.display = "none";
-        hostsTestPane.style.display = "block";
-        dnsTestPane.style.display = "none";
-        if (dnsWarning) dnsWarning.style.display = "none";
-    } else if (method === "resolv") {
-        xmlDiffPane.style.display = "none";
-        plannedXmlPane.style.display = "none";
-        plannedHostsPane.style.display = "none";
-        plannedResolvPane.style.display = "block";
-        currentResolvPane.style.display = "none";
-        hostsTestPane.style.display = "none";
-        dnsTestPane.style.display = "block";
-
-        const resolvNote = document.getElementById("resolv-note");
-        if (resolvNote) {
-            resolvNote.innerHTML = "<strong>Note:</strong> This method injects a persistent DNS priority hook into the DHCP logic (<code>/etc/udhcpc.d/50default</code>). It preserves your router's search domain and secondary DNS servers. It also injects the Local Root CA.";
+    // XML over SSH requires SSH.
+    if (xmlRadio) {
+        const ok = !!summary.ssh_success;
+        xmlRadio.disabled = !ok;
+        setHint("xml", ok ? "" : "(SSH unreachable)");
+        if (!ok && xmlRadio.checked) {
+            // Pick the next-best fallback so the form is in a valid
+            // state on first render.
+            if (telnetRadio && summary.telnet_reachable) telnetRadio.checked = true;
+            else document.querySelector('input[name="customize-url-flip"][value="none"]').checked = true;
         }
+    }
 
-        // Check DNS settings
-        try {
-            const response = await fetch("/setup/settings");
-            const settings = await response.json();
-            const dnsBind = settings.dns_bind_addr || "";
-            const isPort53 = dnsBind.endsWith(":53") || dnsBind === "53";
-            const isEnabled = settings.dns_enabled;
-            const isRunning = settings.dns_running;
-            const actualBind = settings.dns_actual_bind;
+    // Telnet requires the diagnostic shell on port 17000.
+    if (telnetRadio) {
+        const ok = !!summary.telnet_reachable;
+        telnetRadio.disabled = !ok;
+        setHint("telnet", ok ? "" : "(Telnet:17000 unreachable)");
+    }
 
-            if (dnsWarning) {
-                if (!isEnabled) {
-                    dnsWarning.innerText = "⚠️ DNS Discovery is DISABLED in Settings. Migration will fail.";
-                    dnsWarning.style.display = "block";
-                } else if (!isPort53) {
-                    dnsWarning.innerText = `⚠️ DNS Discovery is bound to ${dnsBind}, but port 53 is required for migration.`;
-                    dnsWarning.style.display = "block";
-                } else if (!isRunning) {
-                    dnsWarning.innerText = `⚠️ DNS Discovery server is NOT RUNNING on ${dnsBind} (check for port conflicts/permissions). Migration will fail.`;
-                    dnsWarning.style.display = "block";
-                } else {
-                    dnsWarning.style.display = "none";
-                }
-            }
-        } catch (e) {
-            console.error("Failed to check DNS settings", e);
+    // Resolv DNS hook requires SSH (writes to /etc/resolv.conf etc).
+    if (dnsRadio) {
+        const ok = !!summary.ssh_success;
+        dnsRadio.disabled = !ok;
+        setHint("resolv", ok ? "" : "(SSH unreachable)");
+        if (!ok && dnsRadio.checked) {
+            document.querySelector('input[name="customize-dns"][value="none"]').checked = true;
         }
-    } else {
-        // XML branch (the default fallthrough). The DNS-port warning is
-        // owned by the resolv branch, but the previous code path forgot
-        // to reset it here — switching from resolv back to xml left a
-        // stale "DNS Discovery is DISABLED" warning attached to the XML
-        // method, where it's irrelevant.
-        if (dnsWarning) dnsWarning.style.display = "none";
-        xmlDiffPane.style.display = "block";
-        plannedXmlPane.style.display = "block";
-        plannedHostsPane.style.display = "none";
-        plannedResolvPane.style.display = "none";
-        currentResolvPane.style.display = "none";
-        hostsTestPane.style.display = "none";
-        dnsTestPane.style.display = "none";
+    }
+
+    // CA install: SSH-only, and skipped silently if already trusted.
+    if (caCheckbox) {
+        const sshOk = !!summary.ssh_success;
+        caCheckbox.disabled = !sshOk;
+        if (!sshOk) caCheckbox.checked = false;
+        if (!sshOk) setHint("ca", "(SSH unreachable)");
+        else if (summary.ca_cert_trusted) setHint("ca", "(already trusted)");
+        else setHint("ca", "");
+    }
+
+    onCustomizeChange();
+}
+
+// onCustomizeChange runs whenever any axis radio/checkbox changes.
+// Validates the combination, updates pane visibility for legacy diff
+// and resolv panes, and toggles the Apply Custom Plan button.
+function onCustomizeChange() {
+    const flip = (document.querySelector('input[name="customize-url-flip"]:checked') || {}).value || "none";
+    const dns = (document.querySelector('input[name="customize-dns"]:checked') || {}).value || "none";
+    const caInstall = !!(document.getElementById("customize-ca-install") || {}).checked;
+
+    // Visibility of the legacy preview/test panes inside Customize.
+    const show = (id, on) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = on ? "block" : "none";
+    };
+    show("xml-diff-pane",     flip === "xml");
+    show("planned-xml-pane",  flip === "xml");
+    show("telnet-method-pane", flip === "telnet");
+    show("planned-resolv-pane", dns === "resolv");
+    show("planned-hosts-pane", false);
+    show("current-resolv-pane", dns === "resolv");
+    show("hosts-redirection-test", false);
+    show("dns-redirection-test", dns === "resolv");
+
+    // Validate the combination and toggle the Apply button.
+    const errors = [];
+    if (flip === "none" && dns === "none" && !caInstall) {
+        errors.push("Pick at least one axis — URL flip, DNS interception, or CA install.");
+    }
+
+    const errorEl = document.getElementById("customize-validation");
+    const applyBtn = document.getElementById("customize-apply-btn");
+    if (errorEl) {
+        if (errors.length === 0) {
+            errorEl.style.display = "none";
+            errorEl.innerText = "";
+        } else {
+            errorEl.innerText = errors[0];
+            errorEl.style.display = "block";
+        }
+    }
+    if (applyBtn) applyBtn.disabled = errors.length > 0;
+}
+
+// applyCustomPlan runs the chosen sequence of backend operations:
+// optional URL flip (xml or telnet), optional DNS hook (resolv —
+// already includes a CA install, so the explicit CA step is skipped
+// in that case), and an optional standalone CA install. Each step
+// runs sequentially; the first failure aborts the rest.
+async function applyCustomPlan() {
+    const form = document.getElementById("customize-form");
+    const deviceId = form && form.dataset.deviceId;
+    const ip = form && form.dataset.deviceIp;
+    if (!deviceId) {
+        alert("No device selected");
+        return;
+    }
+
+    if (!validatePlanURLs()) {
+        // The Plan card already surfaced the per-field errors; just
+        // refuse to run.
+        return;
+    }
+
+    const flip = (document.querySelector('input[name="customize-url-flip"]:checked') || {}).value || "none";
+    const dns = (document.querySelector('input[name="customize-dns"]:checked') || {}).value || "none";
+    const caInstall = !!(document.getElementById("customize-ca-install") || {}).checked;
+
+    const status = document.getElementById("customize-apply-status");
+    const setStatus = (msg, color) => {
+        if (!status) return;
+        status.innerText = msg;
+        status.style.color = color || "#555";
+    };
+
+    const steps = [];
+    if (flip === "xml" || flip === "telnet") {
+        steps.push({label: `URL flip via ${flip}`, run: () => migrate(deviceId, ip, flip)});
+    }
+    if (dns === "resolv") {
+        steps.push({label: "DNS interception (resolv.conf hook + CA install)", run: () => migrate(deviceId, ip, "resolv")});
+    }
+    if (caInstall && dns !== "resolv") {
+        // resolv already trusts the CA; only do an explicit trust-ca
+        // when the user picked it standalone.
+        steps.push({label: "Install local CA", run: () => trustCA(deviceId, ip)});
+    }
+
+    if (steps.length === 0) {
+        setStatus("Pick at least one axis above.", "#c62828");
+        return;
+    }
+
+    const applyBtn = document.getElementById("customize-apply-btn");
+    if (applyBtn) applyBtn.disabled = true;
+
+    try {
+        for (const step of steps) {
+            setStatus(`Running: ${step.label}…`, "#555");
+            await step.run();
+        }
+        setStatus("✅ Custom plan applied. Reboot to activate.", "green");
+        if (typeof refreshSummary === "function") refreshSummary();
+    } catch (e) {
+        setStatus(`❌ Failed: ${e}`, "#c62828");
+    } finally {
+        if (applyBtn) applyBtn.disabled = false;
     }
 }
 
