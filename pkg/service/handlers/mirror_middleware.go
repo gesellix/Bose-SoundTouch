@@ -456,12 +456,13 @@ func (s *Server) saveParityMismatch(req *http.Request, local, upstream *mirrorRe
 	}
 
 	dir := filepath.Join(s.ds.DataDir, "parity_mismatches")
-	_ = os.MkdirAll(dir, 0755)
+	_ = s.ds.MkdirAllUnderBase(dir, 0755)
 
 	// Build a single filename component from req.URL.Path. After replacing
 	// the obvious separators, gate on filepath.IsLocal so a malicious path
 	// containing ".." or platform-specific separators we missed cannot
-	// escape `dir`. CodeQL recognises IsLocal as a path-traversal sanitiser.
+	// escape `dir`. The write itself goes through DataStore's *os.Root so
+	// the runtime enforces containment regardless of what's in pathSegment.
 	pathSegment := strings.ReplaceAll(req.URL.Path, "/", "_")
 	pathSegment = strings.ReplaceAll(pathSegment, "\\", "_")
 
@@ -470,7 +471,7 @@ func (s *Server) saveParityMismatch(req *http.Request, local, upstream *mirrorRe
 	}
 
 	filename := fmt.Sprintf("%d_%s.json", time.Now().Unix(), pathSegment)
-	_ = os.WriteFile(filepath.Join(dir, filename), data, 0644)
+	_ = s.ds.WriteFileUnderBase(filepath.Join(dir, filename), data, 0644)
 }
 
 type mirrorResponseRecorder struct {

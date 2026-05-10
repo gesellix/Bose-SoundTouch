@@ -69,6 +69,15 @@ type DataStore struct {
 	// baseDir is the absolute, normalized base directory used for path safety checks.
 	baseDir string
 
+	// rootMu guards lazy initialisation of root.
+	rootMu sync.Mutex
+	// root is an os.Root anchored at baseDir. All filesystem operations within
+	// the datastore go through it, so ".." or absolute paths in
+	// caller-supplied components cannot escape the root — the Go runtime
+	// enforces containment regardless of what safeJoin's output looks like.
+	// Lazily opened so NewDataStore stays a pure constructor.
+	root *os.Root
+
 	eventMutex     sync.RWMutex
 	deviceEvents   map[string][]models.DeviceEvent
 	idMutex        sync.RWMutex
@@ -172,6 +181,277 @@ func (ds *DataStore) SafeJoin(elem ...string) string {
 	return ds.safeJoin(elem...)
 }
 
+// getRoot returns the lazily-opened *os.Root anchored at baseDir. The root is
+// created on first call after MkdirAll-ing baseDir; subsequent calls return
+// the cached handle. Filesystem operations performed via the returned root
+// cannot escape baseDir even if the relative path passed to them is malicious.
+func (ds *DataStore) getRoot() (*os.Root, error) {
+	ds.rootMu.Lock()
+	defer ds.rootMu.Unlock()
+
+	if ds.root != nil {
+		return ds.root, nil
+	}
+
+	if ds.baseDir == "" {
+		return nil, fmt.Errorf("datastore: baseDir not configured")
+	}
+
+	if err := os.MkdirAll(ds.baseDir, 0755); err != nil {
+		return nil, fmt.Errorf("datastore: ensure baseDir %s: %w", ds.baseDir, err)
+	}
+
+	r, err := os.OpenRoot(ds.baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("datastore: open root at %s: %w", ds.baseDir, err)
+	}
+
+	ds.root = r
+
+	return r, nil
+}
+
+// Close releases any open filesystem handles held by the datastore. Safe to
+// call on a never-used DataStore.
+func (ds *DataStore) Close() error {
+	ds.rootMu.Lock()
+	defer ds.rootMu.Unlock()
+
+	if ds.root == nil {
+		return nil
+	}
+
+	err := ds.root.Close()
+	ds.root = nil
+
+	return err
+}
+
+// rootRel converts a path produced by safeJoin (or by filepath.Join over
+// ds.DataDir) into the form expected by *os.Root methods — relative to
+// baseDir, no leading separator. Tolerates both absolute paths and paths
+// whose root is the relative ds.DataDir.
+//
+// Returns "." for baseDir itself.
+func (ds *DataStore) rootRel(absPath string) (string, error) {
+	// If the input is relative, absolutise so the comparison with baseDir
+	// works regardless of how DataDir was originally configured.
+	if !filepath.IsAbs(absPath) {
+		a, err := filepath.Abs(absPath)
+		if err != nil {
+			return "", fmt.Errorf("datastore: absolutise %s: %w", absPath, err)
+		}
+
+		absPath = a
+	}
+
+	if absPath == ds.baseDir {
+		return ".", nil
+	}
+
+	rel, err := filepath.Rel(ds.baseDir, absPath)
+	if err != nil {
+		return "", fmt.Errorf("datastore: %s is outside baseDir: %w", absPath, err)
+	}
+
+	if rel == "." || rel == "" {
+		return ".", nil
+	}
+
+	if strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("datastore: %s is outside baseDir", absPath)
+	}
+
+	return rel, nil
+}
+
+// rootStat is the os.Stat equivalent for a path under baseDir.
+func (ds *DataStore) rootStat(absPath string) (os.FileInfo, error) {
+	r, err := ds.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Stat(rel)
+}
+
+// rootReadFile is the os.ReadFile equivalent.
+func (ds *DataStore) rootReadFile(absPath string) ([]byte, error) {
+	r, err := ds.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.ReadFile(rel)
+}
+
+// rootWriteFile is the os.WriteFile equivalent.
+func (ds *DataStore) rootWriteFile(absPath string, data []byte, perm os.FileMode) error {
+	r, err := ds.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	return r.WriteFile(rel, data, perm)
+}
+
+// rootMkdirAll is the os.MkdirAll equivalent.
+func (ds *DataStore) rootMkdirAll(absPath string, perm os.FileMode) error {
+	r, err := ds.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	if rel == "." {
+		return nil
+	}
+
+	return r.MkdirAll(rel, perm)
+}
+
+// rootRemove is the os.Remove equivalent.
+func (ds *DataStore) rootRemove(absPath string) error {
+	r, err := ds.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	return r.Remove(rel)
+}
+
+// rootRemoveAll is the os.RemoveAll equivalent.
+func (ds *DataStore) rootRemoveAll(absPath string) error {
+	r, err := ds.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	return r.RemoveAll(rel)
+}
+
+// rootRename is the os.Rename equivalent. Both paths must be under baseDir.
+func (ds *DataStore) rootRename(oldAbs, newAbs string) error {
+	r, err := ds.getRoot()
+	if err != nil {
+		return err
+	}
+
+	oldRel, err := ds.rootRel(oldAbs)
+	if err != nil {
+		return err
+	}
+
+	newRel, err := ds.rootRel(newAbs)
+	if err != nil {
+		return err
+	}
+
+	return r.Rename(oldRel, newRel)
+}
+
+// rootReadDir lists the entries in absPath. Equivalent to os.ReadDir,
+// including the same alphabetical-by-name sort order — *os.File.ReadDir(-1)
+// returns entries in directory order, but callers (and existing tests)
+// depend on the sorted contract that os.ReadDir documents.
+func (ds *DataStore) rootReadDir(absPath string) ([]os.DirEntry, error) {
+	r, err := ds.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := r.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = f.Close() }()
+
+	entries, err := f.ReadDir(-1)
+	if err != nil {
+		return entries, err
+	}
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+
+	return entries, nil
+}
+
+// rootExists is true when absPath exists under baseDir.
+func (ds *DataStore) rootExists(absPath string) bool {
+	_, err := ds.rootStat(absPath)
+	return err == nil
+}
+
+// ReadDirUnderBase lists the entries in absPath, which must resolve to a
+// directory under the datastore baseDir. Cross-package callers (marge,
+// handlers, …) use this instead of os.ReadDir so that the underlying
+// *os.Root sanitises the path against traversal.
+func (ds *DataStore) ReadDirUnderBase(absPath string) ([]os.DirEntry, error) {
+	return ds.rootReadDir(absPath)
+}
+
+// MkdirAllUnderBase creates a directory tree under baseDir.
+func (ds *DataStore) MkdirAllUnderBase(absPath string, perm os.FileMode) error {
+	return ds.rootMkdirAll(absPath, perm)
+}
+
+// WriteFileUnderBase atomically writes data to absPath, which must be under
+// baseDir.
+func (ds *DataStore) WriteFileUnderBase(absPath string, data []byte, perm os.FileMode) error {
+	return ds.rootWriteFile(absPath, data, perm)
+}
+
+// rootOpen is the os.Open equivalent for a path under baseDir. The caller
+// owns the returned *os.File and must Close it.
+func (ds *DataStore) rootOpen(absPath string) (*os.File, error) {
+	r, err := ds.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Open(rel)
+}
+
 // ListAccounts returns a list of all account IDs (directories in the data root).
 func (ds *DataStore) ListAccounts() ([]string, error) {
 	ds.fileMutex.RLock()
@@ -179,11 +459,11 @@ func (ds *DataStore) ListAccounts() ([]string, error) {
 
 	// Account data is stored in 'accounts' subdirectory within the data root.
 	accountsDir := filepath.Join(ds.baseDir, "accounts")
-	if !exists(accountsDir) {
+	if !ds.rootExists(accountsDir) {
 		return []string{"default"}, nil
 	}
 
-	entries, err := os.ReadDir(accountsDir)
+	entries, err := ds.rootReadDir(accountsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +501,7 @@ func (ds *DataStore) AccountDeviceDir(account, device string) string {
 	// First, check if the device directory exists directly with the given deviceID
 	// This prioritizes MAC-based deviceIDs over legacy mappings
 	directPath := ds.safeJoin("accounts", account, constants.DevicesDir, device)
-	if _, err := os.Stat(directPath); err == nil {
+	if _, err := ds.rootStat(directPath); err == nil {
 		// Directory exists, use the direct deviceID (preferred for MAC-based IDs)
 		return directPath
 	}
@@ -241,7 +521,7 @@ func (ds *DataStore) AccountDeviceDir(account, device string) string {
 	if ok {
 		// Use the mapped device only if it exists and the direct path doesn't
 		mappedPath := ds.safeJoin("accounts", account, constants.DevicesDir, mappedDevice)
-		if _, err := os.Stat(mappedPath); err == nil {
+		if _, err := ds.rootStat(mappedPath); err == nil {
 			return mappedPath
 		}
 	}
@@ -263,7 +543,7 @@ func (ds *DataStore) getDeviceInfoNoLock(account, device string) (*models.Servic
 	path := ds.AccountDeviceDir(account, device)
 	deviceInfoPath := filepath.Join(path, constants.DeviceInfoFile)
 
-	data, err := os.ReadFile(deviceInfoPath)
+	data, err := ds.rootReadFile(deviceInfoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +835,7 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 
-	data, err := os.ReadFile(path)
+	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []models.ServicePreset{}, nil
@@ -619,7 +899,7 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 	defer ds.fileMutex.Unlock()
 
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := ds.rootMkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 
@@ -683,11 +963,11 @@ func (ds *DataStore) atomicWriteFile(filename string, data []byte) error {
 	perm := os.FileMode(0644)
 
 	tempFile := filename + ".tmp"
-	if err := os.WriteFile(tempFile, data, perm); err != nil {
+	if err := ds.rootWriteFile(tempFile, data, perm); err != nil {
 		return err
 	}
 
-	return os.Rename(tempFile, filename)
+	return ds.rootRename(tempFile, filename)
 }
 
 // GetRecents returns the list of recently played items for the specified account and device.
@@ -697,7 +977,7 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
 
-	data, err := os.ReadFile(path)
+	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []models.ServiceRecent{}, nil
@@ -792,7 +1072,7 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 	defer ds.fileMutex.Unlock()
 
 	dir := ds.AccountDeviceDir(account, device)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
@@ -891,7 +1171,7 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 	ds.mergeWithExistingDeviceInfo(account, device, info)
 
 	dir := ds.AccountDeviceDir(account, device)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
@@ -1053,7 +1333,7 @@ func (ds *DataStore) SaveAccountInfo(accountID string, info *models.ServiceAccou
 	}
 
 	dir := ds.AccountDir(accountID)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
@@ -1075,11 +1355,11 @@ func (ds *DataStore) GetAccountInfo(accountID string) (*models.ServiceAccountInf
 
 	// Try account root (canonical location)
 	path := filepath.Join(ds.AccountDir(accountID), "account.json")
-	if !exists(path) {
+	if !ds.rootExists(path) {
 		return &models.ServiceAccountInfo{AccountID: accountID, IsPlaceholder: true}, nil
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := ds.rootReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -1099,7 +1379,7 @@ func (ds *DataStore) RemoveDevice(account, device string) error {
 
 	dir := ds.AccountDeviceDir(account, device)
 
-	return os.RemoveAll(dir)
+	return ds.rootRemoveAll(dir)
 }
 
 // RemoveDeviceDir is an alias for RemoveDevice for backwards compatibility.
@@ -1130,7 +1410,7 @@ func (ds *DataStore) collectDeducedIDs(account, device string) map[string]string
 
 	// Check recents and presets to find source IDs for provider IDs 2, 9, 11, 25
 	for _, filename := range []string{constants.RecentsFile, constants.PresetsFile} {
-		fileContent, err := os.ReadFile(filepath.Join(ds.AccountDeviceDir(account, device), filename))
+		fileContent, err := ds.rootReadFile(filepath.Join(ds.AccountDeviceDir(account, device), filename))
 		if err != nil {
 			continue
 		}
@@ -1236,7 +1516,7 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 
-	data, err := os.ReadFile(path)
+	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			sources := ds.getDefaultSources()
@@ -1388,7 +1668,7 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 	defer ds.fileMutex.Unlock()
 
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := ds.rootMkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 
@@ -1683,7 +1963,7 @@ func (ds *DataStore) Initialize() error {
 func (ds *DataStore) GetETagForPresets(account, device string) int64 {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 
-	info, err := os.Stat(path)
+	info, err := ds.rootStat(path)
 	if err != nil {
 		return 0
 	}
@@ -1694,7 +1974,7 @@ func (ds *DataStore) GetETagForPresets(account, device string) int64 {
 // HasConfiguredSources reports whether a Sources.xml file exists for the given account and device.
 func (ds *DataStore) HasConfiguredSources(account, device string) bool {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
-	_, err := os.Stat(path)
+	_, err := ds.rootStat(path)
 
 	return err == nil
 }
@@ -1703,7 +1983,7 @@ func (ds *DataStore) HasConfiguredSources(account, device string) bool {
 func (ds *DataStore) GetETagForSources(account, device string) int64 {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 
-	info, err := os.Stat(path)
+	info, err := ds.rootStat(path)
 	if err != nil {
 		return 0
 	}
@@ -1715,7 +1995,7 @@ func (ds *DataStore) GetETagForSources(account, device string) int64 {
 func (ds *DataStore) GetETagForRecents(account, device string) int64 {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
 
-	info, err := os.Stat(path)
+	info, err := ds.rootStat(path)
 	if err != nil {
 		return 0
 	}
@@ -1739,7 +2019,7 @@ func (ds *DataStore) GetETagForAccount(account, device string) string {
 	if device != "" {
 		deviceDir := ds.AccountDeviceDir(account, device)
 		for _, name := range []string{constants.PresetsFile, constants.SourcesFile, constants.RecentsFile} {
-			f, err := os.Open(filepath.Join(deviceDir, name))
+			f, err := ds.rootOpen(filepath.Join(deviceDir, name))
 			if err != nil {
 				continue
 			}
@@ -1756,13 +2036,13 @@ func (ds *DataStore) GetETagForAccount(account, device string) string {
 	// Ignore error: missing directory is treated as no devices, producing a
 	// stable non-empty hash rather than "" which would false-match an absent
 	// If-None-Match header and return 304 on the first request.
-	entries, _ := os.ReadDir(devicesDir)
+	entries, _ := ds.rootReadDir(devicesDir)
 
 	for _, entry := range entries {
 		if entry.IsDir() {
 			deviceDir := ds.AccountDeviceDir(account, entry.Name())
 			for _, name := range []string{constants.PresetsFile, constants.SourcesFile, constants.RecentsFile} {
-				f, err := os.Open(filepath.Join(deviceDir, name))
+				f, err := ds.rootOpen(filepath.Join(deviceDir, name))
 				if err != nil {
 					continue
 				}
@@ -1831,11 +2111,11 @@ func (ds *DataStore) GetSettings() (Settings, error) {
 	}
 
 	path := filepath.Join(ds.DataDir, "settings.json")
-	if !exists(path) {
+	if !ds.rootExists(path) {
 		return Settings{}, nil
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := ds.rootReadFile(path)
 	if err != nil {
 		return Settings{}, err
 	}
@@ -1854,7 +2134,7 @@ func (ds *DataStore) SaveSettings(settings Settings) error {
 		return nil
 	}
 
-	if err := os.MkdirAll(ds.DataDir, 0755); err != nil {
+	if err := ds.rootMkdirAll(ds.DataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
@@ -1871,7 +2151,7 @@ func (ds *DataStore) SaveSettings(settings Settings) error {
 // SaveUsageStats saves usage statistics to the datastore.
 func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "usage")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
@@ -1889,7 +2169,7 @@ func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 // SaveErrorStats saves error statistics to the datastore.
 func (ds *DataStore) SaveErrorStats(stats models.ErrorStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "error")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
@@ -1955,7 +2235,7 @@ func (ds *DataStore) SaveDNSDiscoveries(discoveries []DNSDiscoveryEntry) error {
 	}
 
 	dir := filepath.Join(ds.DataDir, "dns")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create dns directory: %w", err)
 	}
 
@@ -1981,11 +2261,11 @@ func (ds *DataStore) LoadDNSDiscoveries() ([]DNSDiscoveryEntry, error) {
 	}
 
 	path := filepath.Join(ds.DataDir, "dns", "discoveries.json")
-	if !exists(path) {
+	if !ds.rootExists(path) {
 		return []DNSDiscoveryEntry{}, nil
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := ds.rootReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -2005,11 +2285,11 @@ func (ds *DataStore) ClearDNSDiscoveries() error {
 	}
 
 	path := filepath.Join(ds.DataDir, "dns", "discoveries.json")
-	if !exists(path) {
+	if !ds.rootExists(path) {
 		return nil
 	}
 
-	return os.Remove(path)
+	return ds.rootRemove(path)
 }
 
 // groupFilePath returns the on-disk path for a group file.
@@ -2021,7 +2301,7 @@ func (ds *DataStore) groupFilePath(account, groupID string) string {
 func (ds *DataStore) generateGroupID(account string) string {
 	for {
 		id := fmt.Sprintf("%07d", rand.Int63n(10_000_000)) //nolint:gosec
-		if !exists(ds.groupFilePath(account, id)) {
+		if !ds.rootExists(ds.groupFilePath(account, id)) {
 			return id
 		}
 	}
@@ -2034,7 +2314,7 @@ func (ds *DataStore) GetGroupForDevice(account, deviceID string) (*models.Group,
 
 	dir := ds.AccountDevicesDir(account)
 
-	entries, err := os.ReadDir(dir)
+	entries, err := ds.rootReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, ErrGroupNotFound
@@ -2048,7 +2328,7 @@ func (ds *DataStore) GetGroupForDevice(account, deviceID string) (*models.Group,
 			continue
 		}
 
-		data, readErr := os.ReadFile(filepath.Join(dir, e.Name()))
+		data, readErr := ds.rootReadFile(filepath.Join(dir, e.Name()))
 		if readErr != nil {
 			continue
 		}
@@ -2074,7 +2354,7 @@ func (ds *DataStore) AddGroup(account string, group *models.Group) (string, erro
 	defer ds.fileMutex.Unlock()
 
 	dir := ds.AccountDevicesDir(account)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
 
@@ -2096,7 +2376,7 @@ func (ds *DataStore) ModifyGroup(account, groupID, newName string) (*models.Grou
 
 	path := ds.groupFilePath(account, groupID)
 
-	data, err := os.ReadFile(path)
+	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("group %s not found", groupID)
@@ -2129,7 +2409,7 @@ func (ds *DataStore) DeleteGroup(account, groupID string) error {
 	ds.fileMutex.Lock()
 	defer ds.fileMutex.Unlock()
 
-	err := os.Remove(ds.groupFilePath(account, groupID))
+	err := ds.rootRemove(ds.groupFilePath(account, groupID))
 	if os.IsNotExist(err) {
 		return fmt.Errorf("group %s not found", groupID)
 	}
@@ -2145,11 +2425,11 @@ func (ds *DataStore) SaveTuneInFavorite(stationID string) error {
 	}
 
 	dir := ds.safeJoin("tunein", "favorites")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(ds.safeJoin("tunein", "favorites", stationID), nil, 0644)
+	return ds.rootWriteFile(ds.safeJoin("tunein", "favorites", stationID), nil, 0644)
 }
 
 // DeleteTuneInFavorite removes a previously saved TuneIn favorite marker file.
@@ -2159,7 +2439,7 @@ func (ds *DataStore) DeleteTuneInFavorite(stationID string) error {
 		return nil
 	}
 
-	err := os.Remove(ds.safeJoin("tunein", "favorites", stationID))
+	err := ds.rootRemove(ds.safeJoin("tunein", "favorites", stationID))
 	if os.IsNotExist(err) {
 		return nil
 	}

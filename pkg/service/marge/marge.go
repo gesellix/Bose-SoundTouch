@@ -297,7 +297,7 @@ func mapPresetToParityXML(p models.ServicePreset, sources []models.ConfiguredSou
 func AccountPresetsToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	accountDir := ds.AccountDevicesDir(account)
 
-	entries, err := os.ReadDir(accountDir)
+	entries, err := ds.ReadDirUnderBase(accountDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []byte(constants.XMLHeader + "\n<presets/>"), nil
@@ -1039,7 +1039,7 @@ func mergeDefaultSources(stored, defaults []models.ConfiguredSource) []models.Co
 func AccountSourcesToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	devicesDir := ds.AccountDevicesDir(account)
 
-	entries, err := os.ReadDir(devicesDir)
+	entries, err := ds.ReadDirUnderBase(devicesDir)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -1065,7 +1065,7 @@ func AccountSourcesToXML(ds *datastore.DataStore, account string) ([]byte, error
 func AccountDevicesToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	devicesDir := ds.AccountDevicesDir(account)
 
-	entries, err := os.ReadDir(devicesDir)
+	entries, err := ds.ReadDirUnderBase(devicesDir)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -1121,7 +1121,7 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 	fillDefaultProviderSettings(account, &resp)
 	fillAccountInfo(ds, account, &resp)
 
-	entries, err := os.ReadDir(devicesDir)
+	entries, err := ds.ReadDirUnderBase(devicesDir)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -1867,7 +1867,7 @@ func AddSource(ds *datastore.DataStore, account, username, providerID, secret, s
 
 	// List accounts directly from the account directory to be sure we find them.
 	devicesDir := ds.AccountDevicesDir(account)
-	entries, _ := os.ReadDir(devicesDir)
+	entries, _ := ds.ReadDirUnderBase(devicesDir)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {

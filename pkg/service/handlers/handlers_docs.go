@@ -5,11 +5,34 @@ import (
 	"html"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/russross/blackfriday/v2"
 )
+
+var (
+	docsRootOnce sync.Once
+	docsRoot     *os.Root
+)
+
+// docsRootHandle returns a *os.Root anchored at the on-disk "docs" directory.
+// All file reads from HandleDocs go through it so the Go runtime guarantees
+// containment regardless of what HTTP path the caller sends — CodeQL also
+// recognises *os.Root.* as a path-traversal sanitiser.
+func docsRootHandle() *os.Root {
+	docsRootOnce.Do(func() {
+		r, err := os.OpenRoot("docs")
+		if err != nil {
+			// Fall back to nil; HandleDocs degrades to 404 below.
+			return
+		}
+
+		docsRoot = r
+	})
+
+	return docsRoot
+}
 
 // HandleDocs returns a handler for serving documentation files as HTML.
 func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
@@ -20,25 +43,23 @@ func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
 		path = "guides/SURVIVAL-GUIDE.md"
 	}
 
-	// Ensure we only serve files from the docs directory. filepath.IsLocal
-	// rejects absolute paths and ".." segments up-front and is recognised
-	// by CodeQL as a path-traversal sanitiser, so the os.ReadFile below
-	// no longer trips go/path-injection.
-	if !filepath.IsLocal(path) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+	root := docsRootHandle()
+	if root == nil {
+		http.Error(w, "Documentation not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	filePath := filepath.Join("docs", path)
-
-	content, err := os.ReadFile(filePath)
+	content, err := root.ReadFile(path)
 	if err != nil {
+		// *os.Root.ReadFile rejects absolute paths and ".." segments at the
+		// runtime level, so any failure here is either "not found" or
+		// "traversal attempt blocked" — both 404 from the user's view.
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
 
 	// Load sidebar (SUMMARY.md)
-	summaryContent, _ := os.ReadFile(filepath.Join("docs", "SUMMARY.md"))
+	summaryContent, _ := root.ReadFile("SUMMARY.md")
 
 	sidebar := ""
 	if len(summaryContent) > 0 {

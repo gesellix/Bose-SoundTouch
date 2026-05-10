@@ -29,6 +29,13 @@ type Recorder struct {
 	variables  map[string]string
 	mu         sync.Mutex
 	queue      chan recordingTask
+
+	// rootMu guards lazy initialisation of root.
+	rootMu sync.Mutex
+	// root is an os.Root anchored at BaseDir; all filesystem operations
+	// that take a caller-derivable path go through it so the Go runtime
+	// guarantees containment regardless of what the path string contains.
+	root *os.Root
 }
 
 type recordingTask struct {
@@ -90,6 +97,191 @@ func (r *Recorder) Close() {
 		close(r.queue)
 		// We might want to wait here, but for now just closing is a start
 	}
+
+	r.rootMu.Lock()
+	defer r.rootMu.Unlock()
+
+	if r.root != nil {
+		_ = r.root.Close()
+		r.root = nil
+	}
+}
+
+// getRoot lazily opens the *os.Root anchored at r.BaseDir. The directory is
+// MkdirAll-created on first call.
+func (r *Recorder) getRoot() (*os.Root, error) {
+	r.rootMu.Lock()
+	defer r.rootMu.Unlock()
+
+	if r.root != nil {
+		return r.root, nil
+	}
+
+	if r.BaseDir == "" {
+		return nil, fmt.Errorf("recorder: BaseDir not configured")
+	}
+
+	if err := os.MkdirAll(r.BaseDir, 0755); err != nil {
+		return nil, fmt.Errorf("recorder: ensure BaseDir %s: %w", r.BaseDir, err)
+	}
+
+	root, err := os.OpenRoot(r.BaseDir)
+	if err != nil {
+		return nil, fmt.Errorf("recorder: open root at %s: %w", r.BaseDir, err)
+	}
+
+	r.root = root
+
+	return root, nil
+}
+
+// rootRel converts an absolute path under r.BaseDir to its root-relative form.
+func (r *Recorder) rootRel(absPath string) (string, error) {
+	if !filepath.IsAbs(absPath) {
+		a, err := filepath.Abs(absPath)
+		if err != nil {
+			return "", err
+		}
+
+		absPath = a
+	}
+
+	if absPath == r.BaseDir {
+		return ".", nil
+	}
+
+	rel, err := filepath.Rel(r.BaseDir, absPath)
+	if err != nil {
+		return "", fmt.Errorf("recorder: %s outside BaseDir: %w", absPath, err)
+	}
+
+	if rel == "." || rel == "" {
+		return ".", nil
+	}
+
+	if strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("recorder: %s outside BaseDir", absPath)
+	}
+
+	return rel, nil
+}
+
+func (r *Recorder) rootMkdirAll(absPath string, perm os.FileMode) error {
+	root, err := r.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := r.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	if rel == "." {
+		return nil
+	}
+
+	return root.MkdirAll(rel, perm)
+}
+
+func (r *Recorder) rootWriteFile(absPath string, data []byte, perm os.FileMode) error {
+	root, err := r.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := r.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	return root.WriteFile(rel, data, perm)
+}
+
+func (r *Recorder) rootReadFile(absPath string) ([]byte, error) {
+	root, err := r.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := r.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return root.ReadFile(rel)
+}
+
+func (r *Recorder) rootStat(absPath string) (os.FileInfo, error) {
+	root, err := r.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := r.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return root.Stat(rel)
+}
+
+func (r *Recorder) rootRemoveAll(absPath string) error {
+	root, err := r.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := r.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	return root.RemoveAll(rel)
+}
+
+func (r *Recorder) rootReadDir(absPath string) ([]os.DirEntry, error) {
+	root, err := r.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := r.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	d, err := root.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = d.Close() }()
+
+	// *os.File.ReadDir(-1) returns directory order; os.ReadDir sorts by
+	// name. Match the sorted contract so callers don't see a surprise.
+	entries, err := d.ReadDir(-1)
+	if err != nil {
+		return entries, err
+	}
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+
+	return entries, nil
+}
+
+func (r *Recorder) rootOpen(absPath string) (*os.File, error) {
+	root, err := r.getRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	rel, err := r.rootRel(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return root.Open(rel)
 }
 
 // Record logs an interaction to the configured category.
@@ -105,7 +297,7 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 		return err
 	}
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := r.rootMkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
@@ -207,7 +399,7 @@ func (r *Recorder) save(task recordingTask) {
 		r.writeResponseWithEnrichment(&buf, task.res, enriched)
 	}
 
-	if err := os.WriteFile(task.path, buf.Bytes(), 0644); err != nil {
+	if err := r.rootWriteFile(task.path, buf.Bytes(), 0644); err != nil {
 		log.Printf("failed to write recording to %s: %v", task.path, err)
 	}
 
@@ -426,7 +618,7 @@ func (r *Recorder) updateEnvFile(newVars map[string]string) error {
 		return err
 	}
 
-	return os.WriteFile(envFile, data, 0644)
+	return r.rootWriteFile(envFile, data, 0644)
 }
 
 // GetInteractionStats returns statistics about recorded interactions.
@@ -437,7 +629,7 @@ func (r *Recorder) GetInteractionStats() (*InteractionStats, error) {
 	}
 
 	interactionsDir := filepath.Join(r.BaseDir, "interactions")
-	if _, err := os.Stat(interactionsDir); os.IsNotExist(err) {
+	if _, err := r.rootStat(interactionsDir); os.IsNotExist(err) {
 		return stats, nil
 	}
 
@@ -476,7 +668,7 @@ func (r *Recorder) ListInteractions(sessionFilter, categoryFilter, sinceFilter s
 	interactions := make([]Interaction, 0)
 	interactionsDir := filepath.Join(r.BaseDir, "interactions")
 
-	if _, err := os.Stat(interactionsDir); os.IsNotExist(err) {
+	if _, err := r.rootStat(interactionsDir); os.IsNotExist(err) {
 		return interactions, nil
 	}
 
@@ -598,7 +790,7 @@ func (r *Recorder) parseInteractionFile(rel, path string, parts []string) (Inter
 
 // extractSCMUDCFromFile parses SCMUDC enrichment data from a .http file
 func (r *Recorder) extractSCMUDCFromFile(path string) *EnrichedSCMUDCEvent {
-	content, err := os.ReadFile(path)
+	content, err := r.rootReadFile(path)
 	if err != nil {
 		return nil
 	}
@@ -734,7 +926,7 @@ func (r *Recorder) getFullTimestamp(sessionID, filename string) string {
 }
 
 func (r *Recorder) peekStatus(path string) int {
-	content, err := os.ReadFile(path)
+	content, err := r.rootReadFile(path)
 	if err != nil {
 		return 0
 	}
@@ -769,14 +961,14 @@ func (r *Recorder) DeleteSession(sessionID string) error {
 		return err
 	}
 
-	return os.RemoveAll(sessionDir)
+	return r.rootRemoveAll(sessionDir)
 }
 
 // CleanupSessions deletes all but the most recent keepCount sessions.
 func (r *Recorder) CleanupSessions(keepCount int) error {
 	interactionsDir := filepath.Join(r.BaseDir, "interactions")
 
-	entries, err := os.ReadDir(interactionsDir)
+	entries, err := r.rootReadDir(interactionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -805,7 +997,7 @@ func (r *Recorder) CleanupSessions(keepCount int) error {
 
 	for i := keepCount; i < len(sessions); i++ {
 		sessionDir := filepath.Join(interactionsDir, sessions[i].Name())
-		if err := os.RemoveAll(sessionDir); err != nil {
+		if err := r.rootRemoveAll(sessionDir); err != nil {
 			return fmt.Errorf("failed to delete session %s: %w", sessions[i].Name(), err)
 		}
 	}
@@ -820,7 +1012,7 @@ func (r *Recorder) GetInteractionContent(relPath string) ([]byte, error) {
 		return nil, err
 	}
 
-	return os.ReadFile(fullPath)
+	return r.rootReadFile(fullPath)
 }
 
 // ArchiveSession creates a .tar.gz archive of the specified session and writes it to w.
@@ -830,7 +1022,7 @@ func (r *Recorder) ArchiveSession(sessionID string, w io.Writer) (err error) {
 		return err
 	}
 
-	info, statErr := os.Stat(sessionDir)
+	info, statErr := r.rootStat(sessionDir)
 	if statErr != nil {
 		return statErr
 	}
@@ -880,11 +1072,12 @@ func (r *Recorder) ArchiveSession(sessionID string, w io.Writer) (err error) {
 			return nil
 		}
 
-		f, oErr := os.Open(path)
+		f, oErr := r.rootOpen(path)
 		if oErr != nil {
 			return oErr
 		}
-		defer f.Close()
+
+		defer func() { _ = f.Close() }()
 
 		_, cErr := io.Copy(tw, f)
 
