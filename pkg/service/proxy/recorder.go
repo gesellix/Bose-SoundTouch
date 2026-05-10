@@ -99,7 +99,11 @@ func (r *Recorder) Record(category string, req *http.Request, res *http.Response
 	}
 
 	sanitizedSegments, replacements := r.getSanitizedSegments(req.URL.Path)
-	dir := r.getRecordingDir(category, sanitizedSegments)
+
+	dir, err := r.getRecordingDir(category, sanitizedSegments)
+	if err != nil {
+		return err
+	}
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
@@ -237,13 +241,40 @@ func (r *Recorder) getSanitizedSegments(path string) ([]string, map[string]strin
 	return sanitizedSegments, replacements
 }
 
-func (r *Recorder) getRecordingDir(category string, sanitizedSegments []string) string {
+// safeJoin joins r.BaseDir with elem and refuses to construct paths that
+// would escape BaseDir. Each element must satisfy filepath.IsLocal — i.e.
+// it must not be absolute, must not contain ".." segments, and (on Windows)
+// must not name a reserved device. CodeQL recognises filepath.IsLocal as
+// a path-traversal sanitiser, so taint analysis at call sites that hand the
+// result to os.* terminates here.
+func (r *Recorder) safeJoin(elem ...string) (string, error) {
+	if r.BaseDir == "" {
+		return "", fmt.Errorf("recorder: BaseDir not configured")
+	}
+
+	for _, e := range elem {
+		if e == "" {
+			// filepath.Join silently skips empty components, but
+			// filepath.IsLocal returns false for "" — treat empties as
+			// no-ops to preserve the existing call shapes.
+			continue
+		}
+
+		if !filepath.IsLocal(e) {
+			return "", fmt.Errorf("recorder: path component %q escapes BaseDir", e)
+		}
+	}
+
+	return filepath.Join(append([]string{r.BaseDir}, elem...)...), nil
+}
+
+func (r *Recorder) getRecordingDir(category string, sanitizedSegments []string) (string, error) {
 	subDir := "root"
 	if len(sanitizedSegments) > 0 {
 		subDir = filepath.Join(sanitizedSegments...)
 	}
 
-	return filepath.Join(r.BaseDir, "interactions", r.SessionID, category, subDir)
+	return r.safeJoin("interactions", r.SessionID, category, subDir)
 }
 
 func (r *Recorder) getRecordingPath(dir, method string) string {
@@ -733,7 +764,10 @@ func (r *Recorder) DeleteSession(sessionID string) error {
 		return fmt.Errorf("session ID is required")
 	}
 
-	sessionDir := filepath.Join(r.BaseDir, "interactions", sessionID)
+	sessionDir, err := r.safeJoin("interactions", sessionID)
+	if err != nil {
+		return err
+	}
 
 	return os.RemoveAll(sessionDir)
 }
@@ -781,13 +815,20 @@ func (r *Recorder) CleanupSessions(keepCount int) error {
 
 // GetInteractionContent returns the raw content of a recorded interaction.
 func (r *Recorder) GetInteractionContent(relPath string) ([]byte, error) {
-	fullPath := filepath.Join(r.BaseDir, "interactions", relPath)
+	fullPath, err := r.safeJoin("interactions", relPath)
+	if err != nil {
+		return nil, err
+	}
+
 	return os.ReadFile(fullPath)
 }
 
 // ArchiveSession creates a .tar.gz archive of the specified session and writes it to w.
 func (r *Recorder) ArchiveSession(sessionID string, w io.Writer) (err error) {
-	sessionDir := filepath.Join(r.BaseDir, "interactions", sessionID)
+	sessionDir, err := r.safeJoin("interactions", sessionID)
+	if err != nil {
+		return err
+	}
 
 	info, statErr := os.Stat(sessionDir)
 	if statErr != nil {

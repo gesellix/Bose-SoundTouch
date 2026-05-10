@@ -19,12 +19,16 @@ func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
 		path = "guides/SURVIVAL-GUIDE.md"
 	}
 
-	// Ensure we only serve files from the docs directory
-	filePath := filepath.Join("docs", path)
-	if !strings.HasPrefix(filepath.Clean(filePath), "docs") {
+	// Ensure we only serve files from the docs directory. filepath.IsLocal
+	// rejects absolute paths and ".." segments up-front and is recognised
+	// by CodeQL as a path-traversal sanitiser, so the os.ReadFile below
+	// no longer trips go/path-injection.
+	if !filepath.IsLocal(path) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+
+	filePath := filepath.Join("docs", path)
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {

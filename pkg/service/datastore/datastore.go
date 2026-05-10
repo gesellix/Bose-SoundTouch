@@ -113,10 +113,31 @@ func NewDataStore(dataDir string) *DataStore {
 }
 
 // safeJoin joins the given path elements to the datastore baseDir and ensures
-// that the resulting absolute path stays within baseDir. If the check fails,
-// baseDir is returned to prevent directory traversal.
+// that the resulting absolute path stays within baseDir. If any element would
+// escape baseDir (absolute path, "..", or — on Windows — a drive/colon), the
+// function falls back to baseDir to prevent directory traversal.
+//
+// The validation up-front uses filepath.IsLocal, which CodeQL recognises as a
+// path-traversal sanitiser, so taint analysis at call sites that subsequently
+// hand the result to os.ReadFile / os.Open / os.Remove etc. propagates safely.
+// The post-join prefix check below stays as belt-and-suspenders for any
+// unusual platform behaviour IsLocal does not cover.
 func (ds *DataStore) safeJoin(elem ...string) string {
-	// Join the base directory with the provided elements.
+	for _, e := range elem {
+		if e == "" {
+			// filepath.Join silently skips empty elements, but IsLocal
+			// returns false for "" — treat empties as a no-op.
+			continue
+		}
+
+		if !filepath.IsLocal(e) {
+			// Element is absolute, contains ".." or a reserved Windows
+			// component. Refuse to join.
+			return ds.baseDir
+		}
+	}
+
+	// Join the base directory with the (now sanitised) elements.
 	path := filepath.Join(append([]string{ds.baseDir}, elem...)...)
 
 	absPath, err := filepath.Abs(path)
@@ -131,7 +152,8 @@ func (ds *DataStore) safeJoin(elem ...string) string {
 		return absPath
 	}
 
-	// Ensure the resolved path is within the base directory.
+	// Belt-and-suspenders: ensure the resolved path is within the base
+	// directory even if filepath.IsLocal somehow misjudged a component.
 	baseWithSep := base
 	if !strings.HasSuffix(baseWithSep, string(os.PathSeparator)) {
 		baseWithSep += string(os.PathSeparator)
