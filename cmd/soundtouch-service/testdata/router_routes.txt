@@ -47,6 +47,8 @@ GET      /mgmt/spotify/accounts                                       handlers.(
 GET      /mgmt/spotify/callback                                       handlers.(*Server).HandleMgmtSpotifyCallback-fm
 GET      /mgmt/spotify/token                                          handlers.(*Server).HandleMgmtSpotifyToken-fm
 GET      /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
+GET      /probe/{token}                                               handlers.(*Server).HandleProbeInbound-fm
+GET      /probe/{token}/*                                             handlers.(*Server).HandleProbeInbound-fm
 GET      /proxy/*                                                     handlers.(*Server).HandleProxyRequest-fm
 GET      /setup/account-id-suggestions/{deviceId}                     handlers.(*Server).HandleAccountIDSuggestions-fm
 GET      /setup/ca.crt                                                handlers.(*Server).HandleGetCACert-fm
@@ -129,6 +131,7 @@ POST     /setup/remove-remote-services/{deviceId}                     handlers.(
 POST     /setup/revert/{deviceId}                                     handlers.(*Server).HandleRevertMigration-fm
 POST     /setup/settings                                              handlers.(*Server).HandleUpdateSettings-fm
 POST     /setup/sync/{deviceId}                                       handlers.(*Server).HandleInitialSync-fm
+POST     /setup/telnet-probe/{deviceId}                               handlers.(*Server).HandleTelnetProbe-fm
 POST     /setup/test-connection/{deviceId}                            handlers.(*Server).HandleTestConnection-fm
 POST     /setup/test-dns/{deviceId}                                   handlers.(*Server).HandleTestDNSRedirection-fm
 POST     /setup/test-hosts/{deviceId}                                 handlers.(*Server).HandleTestHostsRedirection-fm
