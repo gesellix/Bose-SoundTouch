@@ -36,15 +36,25 @@ type LoggingProxy struct {
 	RecordEnabled bool
 	MaxBodySize   int64
 	Recorder      *Recorder
+
+	// UnsafeLogCredentialHeaders disables the otherwise-unconditional
+	// redaction of credential-bearing headers (Authorization, Cookie, …) in
+	// LogRequest / LogResponse output. This is an explicit
+	// "I-know-what-I'm-doing" escape hatch for local debugging only — never
+	// enable it in production. Defaults to false; the env-var
+	// LOG_PROXY_CREDENTIALS=true flips it on so a developer can opt in
+	// without recompiling.
+	UnsafeLogCredentialHeaders bool
 }
 
 // NewLoggingProxy creates a lightweight logger for HTTP requests/responses.
 func NewLoggingProxy(_ string, redact bool) *LoggingProxy {
 	// targetURL logic should be handled by the caller or we can parse it here
 	return &LoggingProxy{
-		Redact:      redact,
-		LogBody:     os.Getenv("LOG_PROXY_BODY") == "true",
-		MaxBodySize: 1024 * 10, // 10KB default limit for logging
+		Redact:                     redact,
+		LogBody:                    os.Getenv("LOG_PROXY_BODY") == "true",
+		UnsafeLogCredentialHeaders: os.Getenv("LOG_PROXY_CREDENTIALS") == "true",
+		MaxBodySize:                1024 * 10, // 10KB default limit for logging
 	}
 }
 
@@ -55,7 +65,7 @@ func (lp *LoggingProxy) SetRecorder(r *Recorder) {
 
 // LogRequest prints an abbreviated request with optional header/body redaction.
 func (lp *LoggingProxy) LogRequest(r *http.Request) {
-	headers := formatHeaders(r.Header, lp.Redact)
+	headers := formatHeaders(r.Header, lp.Redact, lp.UnsafeLogCredentialHeaders)
 
 	bodyStr := "[HIDDEN]"
 
@@ -79,7 +89,7 @@ func (lp *LoggingProxy) LogRequest(r *http.Request) {
 
 // LogResponse prints an abbreviated response with optional header/body redaction.
 func (lp *LoggingProxy) LogResponse(r *http.Response) {
-	headers := formatHeaders(r.Header, lp.Redact)
+	headers := formatHeaders(r.Header, lp.Redact, lp.UnsafeLogCredentialHeaders)
 
 	bodyStr := "[HIDDEN]"
 
@@ -105,17 +115,23 @@ func (lp *LoggingProxy) LogResponse(r *http.Response) {
 	}
 }
 
-func formatHeaders(h http.Header, redact bool) string {
+func formatHeaders(h http.Header, redact, unsafeLogCredentials bool) string {
 	var sb strings.Builder
 	// In Go, http.Header is a map[string][]string.
 	// Iterating over the map directly allows us to see the actual keys
 	// stored in the map, which might not be canonical if set directly.
 	for k, vv := range h {
 		val := strings.Join(vv, ", ")
-		// Always redact credentials (Authorization, Cookie, …) regardless of
-		// the LoggingProxy.Redact toggle — the toggle controls *additional*
-		// redaction, never the safety floor.
-		if isAlwaysSensitive(k) || (redact && isSensitive(k)) {
+		// Credentials (Authorization, Cookie, …) are redacted by default.
+		// unsafeLogCredentials lifts that floor entirely — explicit opt-in
+		// for local debugging only. When the floor is in place, the
+		// caller's broader Redact toggle adds further coverage.
+		switch {
+		case unsafeLogCredentials:
+			// No redaction.
+		case isAlwaysSensitive(k):
+			val = "[REDACTED]"
+		case redact && isSensitive(k):
 			val = "[REDACTED]"
 		}
 
