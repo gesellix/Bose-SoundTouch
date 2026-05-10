@@ -1762,9 +1762,22 @@ async function showSummary(deviceId) {
         document.getElementById("ssh-status").style.color = summary.ssh_success ? "green" : "red";
 
         renderMigrationState(summary);
+        renderPlan(summary);
         renderTelnetPreflight(summary);
         renderPreflightWarnings(summary);
         fillTelnetURLInputs(defaultTelnetURLs(targetUrl));
+
+        // Mirror the global target URL into the Plan card's input.
+        // Reset the "saved" feedback to the persisted value so a
+        // subsequent edit can flag it as unsaved without confusing
+        // the user.
+        const planInput = document.getElementById("plan-target-url");
+        if (planInput) planInput.value = targetUrl || "";
+        const planSaved = document.getElementById("plan-target-saved");
+        if (planSaved) {
+            planSaved.dataset.savedValue = targetUrl || "";
+            planSaved.innerText = "";
+        }
 
         const migrationStatus = document.getElementById("migration-status");
         migrationStatus.innerText = summary.is_migrated ? "✅ Migrated to AfterTouch" : "❌ Not Migrated";
@@ -2158,6 +2171,12 @@ async function migrate(deviceId, ip) {
             rebootBtn.disabled = false;
             rebootBtn.style.border = "2px solid #000";
 
+            // The Reboot button now lives inside the "Customize this
+            // migration" <details>; expand it so the post-migration
+            // reboot affordance is reachable from the Plan flow too.
+            const customize = rebootBtn.closest("details");
+            if (customize) customize.open = true;
+
             // For the telnet path, surface the account-id picker. Pairing is
             // only needed when the device's margeAccountUUID is empty, but
             // we always show the panel so the user can re-pair if they want.
@@ -2444,6 +2463,236 @@ function readTelnetURLOptions() {
         if (el && el.value) out[optKey] = el.value;
     }
     return out;
+}
+
+// onPlanTargetURLChange mirrors the migration tab's plan-target-url
+// input back into the canonical #target-domain input on the Settings
+// tab. Keeps the rest of the migration flow (which still reads
+// #target-domain) working transparently.
+function onPlanTargetURLChange() {
+    const v = document.getElementById("plan-target-url").value;
+    const canonical = document.getElementById("target-domain");
+    if (canonical) canonical.value = v;
+    // Hide stale "saved" feedback now that the value diverged from the
+    // last persisted state.
+    const saved = document.getElementById("plan-target-saved");
+    if (saved && saved.dataset.savedValue && saved.dataset.savedValue !== v) {
+        saved.innerText = "✏️ unsaved change — click \"Save as default\" to persist";
+        saved.style.color = "#bf6900";
+    }
+}
+
+// saveTargetURLAsDefault posts the current plan-target-url value to
+// /setup/settings as the global default. Other settings on that
+// endpoint are read first and re-posted unchanged ("***" secrets and
+// other fields are preserved verbatim — the backend treats "***" as
+// "unchanged").
+async function saveTargetURLAsDefault() {
+    const newURL = document.getElementById("plan-target-url").value.trim();
+    if (!newURL) {
+        alert("Target URL is empty");
+        return;
+    }
+
+    const btn = document.getElementById("plan-save-default-btn");
+    const saved = document.getElementById("plan-target-saved");
+    btn.disabled = true;
+
+    try {
+        const cur = await (await fetch("/setup/settings")).json();
+        cur.server_url = newURL;
+
+        const resp = await fetch("/setup/settings", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(cur),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+
+        if (saved) {
+            saved.innerText = "✅ Saved. Restart the service to apply changes that need a fresh certificate set.";
+            saved.style.color = "green";
+            saved.dataset.savedValue = newURL;
+        }
+    } catch (e) {
+        if (saved) {
+            saved.innerText = "❌ Failed to save: " + e.message;
+            saved.style.color = "red";
+        }
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// computeSuggestedPlan picks the most conservative migration recipe
+// for the device based on which transports are reachable. The chosen
+// default is XML over SSH with HTTP — fewest moving parts, no DNS or
+// CA install required. Telnet is the fallback when SSH is unavailable.
+function computeSuggestedPlan(summary) {
+    if (summary.is_migrated) {
+        return {
+            available: false,
+            summary: "✅ Already migrated to AfterTouch",
+            note: "Use Customize below to make further changes, or click Reboot if needed.",
+        };
+    }
+
+    if (summary.ssh_success) {
+        return {
+            available: true,
+            method: "xml",
+            summary: "XML migration over SSH (HTTP)",
+            steps: [
+                "Backup existing /opt/Bose/etc/SoundTouchSdkPrivateCfg.xml",
+                "Write new XML pointing at AfterTouch (HTTP, no CA install)",
+                "Reboot the device to load the new configuration",
+            ],
+        };
+    }
+
+    if (summary.telnet_reachable) {
+        return {
+            available: true,
+            method: "telnet",
+            summary: "Telnet (Port 17000) URL flip (HTTP)",
+            steps: [
+                "Connect to the diagnostic shell on TCP/17000",
+                "Write the four URLs via `sys configuration` + `envswitch boseurls set`",
+                "Reboot the device via telnet to persist the change",
+            ],
+        };
+    }
+
+    return {
+        available: false,
+        summary: "❌ No supported transport reachable",
+        note: "Neither SSH nor Telnet:17000 answers. Use the official Bose app to pair before EOS, or unlock remote_services via USB stick to enable SSH.",
+    };
+}
+
+// renderPlan populates the Plan card: capabilities header + suggested
+// plan box. Reads only fields the backend already exposes; the
+// suggested-plan logic lives in computeSuggestedPlan.
+function renderPlan(summary) {
+    // Capabilities — list which transports are available on the device
+    // and which migration recipes AfterTouch can offer given those
+    // transports.
+    const detectedEl = document.getElementById("plan-detected");
+    if (detectedEl) {
+        detectedEl.replaceChildren();
+        detectedEl.appendChild(transportChip("SSH", summary.ssh_success));
+        detectedEl.appendChild(document.createTextNode("   "));
+        detectedEl.appendChild(transportChip("Telnet:17000", summary.telnet_reachable));
+    }
+
+    const possibleEl = document.getElementById("plan-possible");
+    if (possibleEl) {
+        const offers = [];
+        if (summary.ssh_success) {
+            offers.push("XML migration", "DNS interception (resolv.conf hook)", "CA install");
+        }
+        if (summary.telnet_reachable) {
+            offers.push("Telnet URL flip");
+        }
+        possibleEl.innerText = offers.length ? offers.join(" · ") : "(no path — see suggested plan below)";
+    }
+
+    // Suggested plan
+    const plan = computeSuggestedPlan(summary);
+    const summaryEl = document.getElementById("plan-suggestion-summary");
+    const stepsEl = document.getElementById("plan-suggestion-steps");
+    const applyBtn = document.getElementById("plan-apply-btn");
+    const statusEl = document.getElementById("plan-apply-status");
+    const box = document.getElementById("plan-suggestion");
+
+    if (summaryEl) summaryEl.innerText = plan.summary;
+
+    if (stepsEl) {
+        stepsEl.replaceChildren();
+        if (plan.steps) {
+            for (const s of plan.steps) {
+                const li = document.createElement("li");
+                li.innerText = s;
+                stepsEl.appendChild(li);
+            }
+        }
+        if (plan.note) {
+            const li = document.createElement("li");
+            li.style.cssText = "list-style: none; margin-left: -1em; color: #555";
+            li.innerText = plan.note;
+            stepsEl.appendChild(li);
+        }
+    }
+
+    if (applyBtn) {
+        applyBtn.disabled = !plan.available;
+        applyBtn.dataset.method = plan.method || "";
+    }
+
+    if (statusEl) statusEl.innerText = "";
+
+    // Tint the box neutrally for non-actionable suggestions so the
+    // green "ready to apply" framing is reserved for the case where
+    // we actually have a plan to apply.
+    if (box) {
+        if (plan.available) {
+            box.style.background = "#f1f8e9";
+            box.style.borderColor = "#c8e6c9";
+        } else {
+            box.style.background = "#f5f5f5";
+            box.style.borderColor = "#ddd";
+        }
+    }
+}
+
+// transportChip returns "<name>: ✅ available" or "<name>: ❌ unreachable"
+// as a coloured DOM fragment, for the Capabilities row.
+function transportChip(name, ok) {
+    const wrap = document.createElement("span");
+    const label = document.createElement("strong");
+    label.textContent = name + ": ";
+    wrap.appendChild(label);
+    const status = document.createElement("span");
+    status.innerText = ok ? "✅" : "❌";
+    status.style.color = ok ? "green" : "red";
+    wrap.appendChild(status);
+    return wrap;
+}
+
+// applySuggestedPlan triggers the recipe computeSuggestedPlan picked.
+// For now it programmatically points the legacy Migration Method
+// dropdown at the chosen method and reuses the existing migrate()
+// entry point — that keeps the option-plumbing path identical
+// (target_url, marge_url, etc.) until the Customize panel is fully
+// replaced.
+async function applySuggestedPlan() {
+    const btn = document.getElementById("plan-apply-btn");
+    const status = document.getElementById("plan-apply-status");
+    const method = btn && btn.dataset.method;
+    if (!method) return;
+
+    const deviceId = document.getElementById("summary-device-id").value;
+    if (!deviceId) {
+        if (status) status.innerText = "❌ no device selected";
+        return;
+    }
+
+    const dropdown = document.getElementById("migration-method");
+    if (dropdown) dropdown.value = method;
+
+    if (status) {
+        status.innerText = "Applying " + method + "…";
+        status.style.color = "#555";
+    }
+
+    // Resolve the IP from the visible summary state so migrate() can
+    // hand it to the backend route. The hidden summary-device-id
+    // field stores the device id; the IP shows up in the device
+    // display string, but migrate() ultimately sends just the device
+    // id and the backend resolves to IP — so an empty ip arg is fine.
+    await migrate(deviceId, "");
+
+    if (status) status.innerText = "";
 }
 
 // renderMigrationState fills the three-axis state card at the top of

@@ -790,6 +790,62 @@
             </div>
 
             <div
+                id="migration-plan-card"
+                style="margin: 16px 0; padding: 12px; border: 1px solid #ddd; background: #fafafa; border-radius: 4px"
+            >
+                <h3 style="margin-top: 0">Plan</h3>
+
+                <div style="margin-bottom: 14px">
+                    <label for="plan-target-url" style="font-weight: bold">Target service URL:</label>
+                    <div style="margin-top: 4px">
+                        <input
+                            type="text"
+                            id="plan-target-url"
+                            oninput="onPlanTargetURLChange()"
+                            style="width: 320px; font-family: monospace"
+                            placeholder="http://192.168.x.x:8000"
+                        />
+                        <button
+                            type="button"
+                            id="plan-save-default-btn"
+                            onclick="saveTargetURLAsDefault()"
+                            style="margin-left: 6px"
+                        >Save as default</button>
+                    </div>
+                    <div id="plan-target-saved" style="font-size: 0.85em; color: #666; margin-top: 4px"></div>
+                </div>
+
+                <div style="margin-bottom: 14px">
+                    <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Capabilities</h4>
+                    <div style="font-size: 0.9em; line-height: 1.7">
+                        <div>This speaker exposes: <span id="plan-detected"></span></div>
+                        <div>AfterTouch can offer: <span id="plan-possible"></span></div>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Suggested plan</h4>
+                    <div
+                        id="plan-suggestion"
+                        style="border: 1px solid #c8e6c9; background: #f1f8e9; padding: 10px 12px; border-radius: 3px"
+                    >
+                        <div id="plan-suggestion-summary" style="font-weight: bold; margin-bottom: 4px"></div>
+                        <ul id="plan-suggestion-steps" style="margin: 4px 0 8px 1.2em; padding: 0; font-size: 0.9em"></ul>
+                        <button
+                            type="button"
+                            id="plan-apply-btn"
+                            onclick="applySuggestedPlan()"
+                            style="font-size: 0.95em"
+                        >Apply Suggested Plan</button>
+                        <span id="plan-apply-status" style="margin-left: 10px; font-size: 0.85em"></span>
+                    </div>
+                </div>
+            </div>
+
+            <details style="margin: 16px 0">
+                <summary style="cursor: pointer; font-weight: bold">Customize this migration</summary>
+
+            <div
                 style="
                             margin: 15px 0;
                             padding: 10px;
@@ -1240,6 +1296,7 @@
                     Cancel
                 </button>
             </div>
+            </details>
         </div>
     </div>
 
