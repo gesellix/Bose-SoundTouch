@@ -946,7 +946,7 @@ func TestReboot(t *testing.T) {
 		}
 	}
 
-	_, err := m.Reboot("192.168.1.10")
+	_, err := m.Reboot("192.168.1.10", "")
 	if err != nil {
 		t.Fatalf("Reboot failed: %v", err)
 	}

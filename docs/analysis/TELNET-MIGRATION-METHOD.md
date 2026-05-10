@@ -60,8 +60,12 @@ sys configuration margeServerUrl http://<service-host>:8000
 sys configuration swUpdateUrl    http://<service-host>:8000/updates/soundtouch
 envswitch boseurls set http://<service-host>:8000 http://<service-host>:8000/updates/soundtouch
 getpdo CurrentSystemConfiguration
-sys reboot
 ```
+
+`sys reboot` is **not** part of this sequence. The migration flow only writes
+configuration — the reboot is user-initiated via the existing reboot button in
+the web UI, mirroring what XML/DNS migration already does. See §6.2 for how
+that button gains a `?method=ssh|telnet` selector.
 
 Three important details from the discussion:
 
@@ -152,7 +156,8 @@ Per the user's brief, the migration logic must:
 2. **Time-bound** the POST aggressively (e.g. ≤5s connect + ≤10s read) and treat
    anything over the budget as a failure rather than waiting indefinitely.
 3. On either failure mode, **fall back** to the telnet equivalent
-   (`envswitch accountid set <id>` + `sys reboot`).
+   `envswitch accountid set <id>` over the same `pkg/telnet` connection used
+   for the URL flip. Reboot stays a user-initiated action (§6.2).
 4. If telnet:17000 is **also** unreachable, surface a clear "your firmware does
    not support unattended pairing — please pair manually via the official Bose
    app *before* it goes EOS, or open SSH and use the XML method" error rather
@@ -248,8 +253,8 @@ Each migration is a single goroutine driving one device. The client must:
 
 - enforce per-command response deadlines so a wedged device cannot stall the
   migration UI (mirrors the `/setMargeAccount` requirement);
-- never send `sys reboot` until **all** preceding `OK` acks have arrived (so
-  partial config doesn't get persisted);
+- abort the rest of the sequence on the first non-`OK` response so we don't
+  half-write configuration;
 - always close the socket on error.
 
 ### 5.5 Testing strategy
@@ -259,7 +264,7 @@ in the test, scripting it to consume our commands and emit canned `OK`/error
 responses. That gives us deterministic coverage for:
 
 - happy path (all four URLs accepted),
-- single-command failure → no `sys reboot` sent,
+- single-command failure → sequence aborts, no further commands sent,
 - "command not found" on `envswitch …` → fallback path exercised,
 - TCP closed mid-stream → migration aborts cleanly,
 - read deadline triggers when the device hangs (the broken-state simulation).
@@ -308,11 +313,13 @@ this; we just add a `telnet` option next to `xml`/`resolv`.
    Otherwise the UI offers (a) pick from `DataStore.ListAccounts()`,
    (b) manual entry validated as 7 numeric digits, (c) a "Generate" button
    that randomizes a 7-digit number and re-rolls on collision.
-2. **Reboot policy.** Migration is automatic, but the UI shows a **modal
-   confirmation** before the final `sys reboot` is sent ("Speaker will reboot
-   now to apply changes — continue?"). This matches the XML path, which
-   already reboots automatically, while preventing surprise reboots from a
-   stray click on a half-filled form.
+2. **Reboot policy.** Migration writes configuration only — it does **not**
+   issue `sys reboot` itself. Reboot stays user-initiated via the existing
+   reboot button in the web UI, the same way XML/DNS migration already works.
+   That button's endpoint (`POST /setup/reboot/{deviceId}`,
+   `Manager.Reboot(deviceIP)`) gains an optional `?method=ssh|telnet` query
+   parameter; default stays `ssh` so existing behavior is preserved. The
+   button itself uses a plain `confirm()` dialog before firing.
 3. **CA / HTTPS story.** Telnet has no way to install a custom CA. Documented
    as an explicit limitation: telnet method = HTTP-only redirect to our
    service. Users who need end-to-end TLS must use the XML or DNS method.
@@ -323,21 +330,28 @@ this; we just add a `telnet` option next to `xml`/`resolv`.
 
 ## 7. Summary of what changes when this lands
 
-- **New reusable package `pkg/telnet`** — line-oriented TCP client with
-  `Dial`, `SendCommand`, `Probe`, `Close`, all deadline-driven. No external
-  dependencies, usable from CLI, service, and tests.
+- **New reusable package `pkg/telnet`** — sibling of `pkg/ssh`, line-oriented
+  TCP client with `Dial`, `SendCommand`, `Probe`, `Close`, all deadline-driven.
+  No external dependencies, usable from CLI, service, and tests.
 - **New `MigrationMethodTelnet = "telnet"`** constant in `pkg/service/setup/setup.go`
   plus a `migrateViaTelnet` branch in `Manager.MigrateSpeaker`.
 - **New `pkg/service/setup/telnet_migration.go`** orchestrating the URL
-  configuration sequence (§2.1) on top of `pkg/telnet`.
+  configuration sequence (§2.1) on top of `pkg/telnet`. Configuration only —
+  no `sys reboot` here.
 - **New `pkg/service/setup/marge_pairing.go`** with `PairAccount(deviceIP, id)`:
   probes `/supportedURLs`, time-bounded `POST /setMargeAccount`, falls back to
   telnet `envswitch accountid set <id>` on missing/wedged endpoint.
+- **`Manager.Reboot` and `HandleRebootDevice` gain a method selector** —
+  signature changes to `Reboot(deviceIP string, method RebootMethod) (string, error)`
+  with `RebootMethodSSH` (default, today's behavior) and `RebootMethodTelnet`
+  (sends `sys reboot` over a fresh `pkg/telnet` connection). Handler reads
+  `?method=ssh|telnet` from the query string.
 - **`MigrationSummary` gains** `TelnetReachable`, `TelnetBanner`,
   `TelnetCommandsAccepted`, `SetMargeAccountSupported`, `CurrentAccountID`,
   `KnownAccountIDs` so the UI can show preflight outcomes and offer reuse.
 - **UI** — `web/index.html` dropdown gets a `telnet` option (greyed out when
   preflight fails) and a new pane for picking/entering/randomizing a 7-digit
-  account ID when `:8090/info` reports an empty `margeAccountUUID`. A modal
-  confirmation gates the final `sys reboot`. The legacy `hosts` option stays
-  out of the dropdown (deprecated).
+  account ID when `:8090/info` reports an empty `margeAccountUUID`. The
+  existing reboot button gets a method selector (radio or dropdown) wired to
+  the new query param, with `confirm()` before firing. The legacy `hosts`
+  option stays out of the dropdown (deprecated).

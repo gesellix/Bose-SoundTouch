@@ -3,6 +3,7 @@ package setup
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +21,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/ssh"
+	"github.com/gesellix/bose-soundtouch/pkg/telnet"
 )
 
 // MigrationMethod represents the method used to migrate a speaker.
@@ -32,6 +34,9 @@ const (
 	MigrationMethodHosts MigrationMethod = "hosts"
 	// MigrationMethodResolvConf redirects services by injecting a priority DNS hook into the DHCP logic and updating the CA trust store.
 	MigrationMethodResolvConf MigrationMethod = "resolv"
+	// MigrationMethodTelnet redirects services by driving the device's diagnostic
+	// shell on TCP port 17000. Requires no SSH access on the device.
+	MigrationMethodTelnet MigrationMethod = "telnet"
 )
 
 // SoundTouchSdkPrivateCfgPath is the path to the speaker's private configuration file on device.
@@ -77,6 +82,17 @@ type MigrationSummary struct {
 	MirrorEndpoints          []string    `json:"mirror_endpoints,omitempty"`
 	SkipMirrorEndpoints      []string    `json:"skip_mirror_endpoints,omitempty"`
 	PreferredSource          string      `json:"preferred_source,omitempty"`
+
+	// Telnet (port 17000) preflight state — populated when the user is about to
+	// or has just used MigrationMethodTelnet.
+	TelnetReachable      bool   `json:"telnet_reachable"`
+	TelnetBanner         string `json:"telnet_banner,omitempty"`
+	TelnetVerifiedConfig string `json:"telnet_verified_config,omitempty"`
+	TelnetProbeError     string `json:"telnet_probe_error,omitempty"`
+
+	// KnownAccountIDs are accountIDs already present in the local datastore;
+	// the UI offers them as choices when pairing a fresh device.
+	KnownAccountIDs []string `json:"known_account_ids,omitempty"`
 }
 
 // SSHClient defines the interface for SSH operations.
@@ -85,12 +101,23 @@ type SSHClient interface {
 	UploadContent(content []byte, remotePath string) error
 }
 
+// TelnetClient defines the interface for the device's port-17000 diagnostic
+// shell. The concrete implementation lives in github.com/gesellix/bose-soundtouch/pkg/telnet;
+// the interface exists so tests can substitute a mock.
+type TelnetClient interface {
+	Dial() error
+	Probe() (string, error)
+	SendCommand(cmd string) (string, error)
+	Close() error
+}
+
 // Manager handles the migration of speakers to the service.
 type Manager struct {
 	ServerURL string
 	DataStore *datastore.DataStore
 	Crypto    *certmanager.CertificateManager
 	NewSSH    func(host string) SSHClient
+	NewTelnet func(host string) TelnetClient
 
 	// GetDNSRunning is an optional callback to check the actual state of the DNS server.
 	GetDNSRunning func() (bool, string)
@@ -111,6 +138,9 @@ func NewManager(serverURL string, ds *datastore.DataStore, cm *certmanager.Certi
 		Crypto:    cm,
 		NewSSH: func(host string) SSHClient {
 			return ssh.NewClient(host)
+		},
+		NewTelnet: func(host string) TelnetClient {
+			return telnet.NewClient(host)
 		},
 		HTTPGet:      http.Get,
 		MgmtUsername: "admin",
@@ -651,6 +681,13 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 
 	if method == "" {
 		method = MigrationMethodXML
+	}
+
+	// Telnet is SSH-free by design — skip the SSH-based off-device backup and
+	// rw pre-flight, both of which would fail on devices that haven't been
+	// rooted via remote_services.
+	if method == MigrationMethodTelnet {
+		return m.migrateViaTelnet(deviceIP, targetURL)
 	}
 
 	var logs string
@@ -1778,12 +1815,40 @@ func (m *Manager) RemoveRemoteServices(deviceIP string) (string, error) {
 	return logs, nil
 }
 
-// Reboot reboots the speaker at the given IP.
-func (m *Manager) Reboot(deviceIP string) (string, error) {
+// RebootMethod selects the transport used to reboot a speaker.
+type RebootMethod string
+
+const (
+	// RebootMethodSSH reboots via SSH `reboot` (the original behavior). Requires
+	// a rooted device (remote_services unlocked).
+	RebootMethodSSH RebootMethod = "ssh"
+	// RebootMethodTelnet reboots via the device's port-17000 diagnostic shell
+	// using `sys reboot`. Requires no SSH access.
+	RebootMethodTelnet RebootMethod = "telnet"
+)
+
+// Reboot reboots the speaker at the given IP using the requested transport.
+// An empty method defaults to RebootMethodSSH, preserving prior behavior.
+func (m *Manager) Reboot(deviceIP string, method RebootMethod) (string, error) {
+	if method == "" {
+		method = RebootMethodSSH
+	}
+
+	switch method {
+	case RebootMethodSSH:
+		return m.rebootViaSSH(deviceIP)
+	case RebootMethodTelnet:
+		return m.rebootViaTelnet(deviceIP)
+	default:
+		return "", fmt.Errorf("unsupported reboot method: %s", method)
+	}
+}
+
+func (m *Manager) rebootViaSSH(deviceIP string) (string, error) {
 	client := m.NewSSH(deviceIP)
 	rwCmd := "(rw || mount -o remount,rw /)"
 
-	fmt.Printf("Rebooting speaker at %s\n", deviceIP)
+	fmt.Printf("Rebooting speaker at %s via SSH\n", deviceIP)
 
 	out, err := client.Run(fmt.Sprintf("%s && reboot", rwCmd))
 	if err != nil {
@@ -1791,6 +1856,54 @@ func (m *Manager) Reboot(deviceIP string) (string, error) {
 	}
 
 	return out, nil
+}
+
+func (m *Manager) rebootViaTelnet(deviceIP string) (string, error) {
+	if m.NewTelnet == nil {
+		return "", errors.New("telnet reboot not configured: Manager.NewTelnet is nil")
+	}
+
+	fmt.Printf("Rebooting speaker at %s via telnet\n", deviceIP)
+
+	t := m.NewTelnet(deviceIP)
+	if err := t.Dial(); err != nil {
+		return "", fmt.Errorf("telnet dial %s:17000 failed: %w", deviceIP, err)
+	}
+
+	defer func() { _ = t.Close() }()
+
+	// We deliberately don't wait for a response — the device closes the socket
+	// as part of rebooting, and SendCommand would surface that as an error
+	// even though the reboot itself succeeded. Treat any short read or close
+	// as "command was accepted".
+	resp, err := t.SendCommand("sys reboot")
+	if err != nil {
+		// A read error after the write is the expected case (socket dies on
+		// reboot). Only surface real transport failures; treat the rest as
+		// success and let the caller verify by polling :8090/info.
+		if isLikelyRebootCloseError(err) {
+			return resp + "\n[connection closed by reboot]", nil
+		}
+
+		return resp, fmt.Errorf("failed to send sys reboot: %w", err)
+	}
+
+	return resp, nil
+}
+
+// isLikelyRebootCloseError returns true if err looks like the socket closed
+// because the device started rebooting, rather than a real connectivity
+// problem. We are intentionally generous here: the user already opted into
+// rebooting, so a closed socket is expected.
+func isLikelyRebootCloseError(err error) bool {
+	msg := err.Error()
+	for _, marker := range []string{"EOF", "closed", "connection reset", "broken pipe", "timed out"} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // TestDomain is the fake domain used for preliminary redirection tests.

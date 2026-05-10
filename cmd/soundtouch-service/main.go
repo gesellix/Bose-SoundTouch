@@ -1070,6 +1070,8 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Post("/migrate/{deviceId}", server.HandleMigrateDevice)
 		r.Post("/revert/{deviceId}", server.HandleRevertMigration)
 		r.Post("/reboot/{deviceId}", server.HandleRebootDevice)
+		r.Get("/account-id-suggestions/{deviceId}", server.HandleAccountIDSuggestions)
+		r.Post("/pair-account/{deviceId}", server.HandlePairAccount)
 		r.Post("/trust-ca/{deviceId}", server.HandleTrustCACert)
 		r.Post("/ensure-remote-services/{deviceId}", server.HandleEnsureRemoteServices)
 		r.Post("/remove-remote-services/{deviceId}", server.HandleRemoveRemoteServices)

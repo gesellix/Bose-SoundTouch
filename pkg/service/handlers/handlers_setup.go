@@ -1066,7 +1066,9 @@ func (s *Server) HandleRebootDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := s.sm.Reboot(deviceIP)
+	method := setup.RebootMethod(r.URL.Query().Get("method"))
+
+	output, err := s.sm.Reboot(deviceIP, method)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)

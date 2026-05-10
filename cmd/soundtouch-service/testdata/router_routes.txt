@@ -48,6 +48,7 @@ GET      /mgmt/spotify/callback                                       handlers.(
 GET      /mgmt/spotify/token                                          handlers.(*Server).HandleMgmtSpotifyToken-fm
 GET      /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
 GET      /proxy/*                                                     handlers.(*Server).HandleProxyRequest-fm
+GET      /setup/account-id-suggestions/{deviceId}                     handlers.(*Server).HandleAccountIDSuggestions-fm
 GET      /setup/ca.crt                                                handlers.(*Server).HandleGetCACert-fm
 GET      /setup/devices                                               handlers.(*Server).HandleListDiscoveredDevices-fm
 GET      /setup/devices/{deviceId}/events                             handlers.(*Server).HandleGetDeviceEvents-fm
@@ -121,6 +122,7 @@ POST     /setup/devices                                               handlers.(
 POST     /setup/discover                                              handlers.(*Server).HandleTriggerDiscovery-fm
 POST     /setup/ensure-remote-services/{deviceId}                     handlers.(*Server).HandleEnsureRemoteServices-fm
 POST     /setup/migrate/{deviceId}                                    handlers.(*Server).HandleMigrateDevice-fm
+POST     /setup/pair-account/{deviceId}                               handlers.(*Server).HandlePairAccount-fm
 POST     /setup/proxy-settings                                        handlers.(*Server).HandleUpdateProxySettings-fm
 POST     /setup/reboot/{deviceId}                                     handlers.(*Server).HandleRebootDevice-fm
 POST     /setup/remove-remote-services/{deviceId}                     handlers.(*Server).HandleRemoveRemoteServices-fm
