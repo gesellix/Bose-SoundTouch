@@ -7,6 +7,7 @@ BINARY_URL=${BINARY_URL:-https://github.com/$GH_REPO/releases/download/v$VERSION
 INIT_SCRIPT_URL=${INIT_SCRIPT_URL:-https://raw.githubusercontent.com/$GH_REPO/v$VERSION/scripts/on-device-install/aftertouch}
 
 rm -rf /tmp/aftertouch || true
+mkdir -p /tmp/aftertouch
 
 echo "Installing Aftertouch $VERSION ..."
 mkdir -p /opt/aftertouch
