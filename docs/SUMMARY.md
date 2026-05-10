@@ -61,6 +61,7 @@
 * [Upstream URLs](analysis/UPSTREAM-URLS.md)
 * [Anonymization Summary](analysis/ANONYMIZATION-SUMMARY.md)
 * [Device Redirect Methods](analysis/DEVICE-REDIRECT-METHODS.md)
+* [Telnet (Port 17000) Migration Method](analysis/TELNET-MIGRATION-METHOD.md)
 * [Wiki API Comparison](analysis/WIKI-COMPARISON.md)
 * [IoT Config Summary](analysis/IOT-CONFIG-SUMMARY.md)
 * [IoT Configuration Analysis](analysis/IOT-CONFIGURATION-ANALYSIS.md)

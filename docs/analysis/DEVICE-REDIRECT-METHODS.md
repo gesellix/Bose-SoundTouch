@@ -2,6 +2,8 @@
 
 To enable offline operation or use custom services like **SoundCork** or **ÜberBöse API**, SoundTouch devices must be redirected from Bose's official cloud endpoints to a local or custom server. This document outlines the three known methods to achieve this, gathered from community reverse-engineering efforts in the **SoundCork** and **ÜberBöse API** projects.
 
+> A fourth, **SSH-free** path — driving the device's diagnostic shell on TCP port 17000 — is being added as a peer to the XML and DNS methods. See **[TELNET-MIGRATION-METHOD.md](TELNET-MIGRATION-METHOD.md)** for the use cases, community findings, and feasibility analysis. The `/etc/hosts` method documented below is now deprecated and will not be exposed in the web UI.
+
 ## Overview of Redirection Targets
 
 SoundTouch devices primarily communicate with the following domains:
@@ -32,19 +34,25 @@ The most robust and granular method involves modifying the device's private conf
 Requires SSH access to the device.
 ```xml
 <SoundTouchSdkPrivateCfg>
-  <margeServerUrl>http://192.168.1.10:8000/marge</margeServerUrl>
+  <margeServerUrl>http://192.168.1.10:8000</margeServerUrl>
   <statsServerUrl>http://192.168.1.10:8000</statsServerUrl>
   <swUpdateUrl>http://192.168.1.10:8000/updates/soundtouch</swUpdateUrl>
   <bmxRegistryUrl>http://192.168.1.10:8000/bmx/registry/v1/services</bmxRegistryUrl>
 </SoundTouchSdkPrivateCfg>
 ```
 
+> **Note on `margeServerUrl`** — `soundtouch-service` mounts the marge endpoints
+> at the **root** of port 8000, so the URL has no `/marge` suffix.
+> [`deborahgu/soundcork`](https://github.com/deborahgu/soundcork) routes marge
+> under a `/marge` sub-path, so users redirecting to soundcork must append it
+> (`http://192.168.1.10:8000/marge`).
+
 ### Pros & Cons
-| Pros | Cons |
-| :--- | :--- |
-| **Granular Control**: Redirect specific services while leaving others (e.g., updates) intact. | **Requires SSH**: Must have root/SSH access to the device. |
-| **Persistent**: Survives software updates (usually). | **Syntax Sensitive**: Errors in XML can cause boot issues or service failures. |
-| **Native**: Uses the device's built-in configuration mechanism. | |
+| Pros                                                                                          | Cons                                                                           |
+|:----------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------|
+| **Granular Control**: Redirect specific services while leaving others (e.g., updates) intact. | **Requires SSH**: Must have root/SSH access to the device.                     |
+| **Persistent**: Survives software updates (usually).                                          | **Syntax Sensitive**: Errors in XML can cause boot issues or service failures. |
+| **Native**: Uses the device's built-in configuration mechanism.                               |                                                                                |
 
 ---
 
@@ -66,11 +74,11 @@ Requires SSH access. Add entries for the target domains:
 ```
 
 ### Pros & Cons
-| Pros | Cons |
-| :--- | :--- |
-| **Simple**: Easy to understand and implement. | **Requires SSH**: Must have root access. |
+| Pros                                                                                  | Cons                                                                                                                                                                |
+|:--------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Simple**: Easy to understand and implement.                                         | **Requires SSH**: Must have root access.                                                                                                                            |
 | **Universal**: Affects all processes on the device attempting to reach those domains. | **HTTPS Issues**: Redirecting HTTPS domains to a local IP will cause SSL certificate errors unless the device is patched to skip verification or trust a custom CA. |
-| | **Brittle**: Some firmware versions may overwrite `/etc/hosts` on reboot. |
+|                                                                                       | **Brittle**: Some firmware versions may overwrite `/etc/hosts` on reboot.                                                                                           |
 
 ---
 
@@ -104,12 +112,12 @@ sed "s#\^https:....bose.\+apigee..net..#http[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 4. Restore execution permissions and reboot.
 
 ### Pros & Cons
-| Pros | Cons |
-| :--- | :--- |
-| **Bypass Config**: Works even if the firmware ignores XML settings. | **High Risk**: Modifying binaries can lead to permanent bricks or boot loops. |
+| Pros                                                                                | Cons                                                                                  |
+|:------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------|
+| **Bypass Config**: Works even if the firmware ignores XML settings.                 | **High Risk**: Modifying binaries can lead to permanent bricks or boot loops.         |
 | **Hardcoded Redirects**: Can catch URLs that aren't exposed in configuration files. | **Length Constraint**: Custom URLs must fit within the space of the original strings. |
-| | **Firmware Specific**: Patches must be reapplied after every software update. |
-| | **Complexity**: Requires understanding of binary structures and potential checksums. |
+|                                                                                     | **Firmware Specific**: Patches must be reapplied after every software update.         |
+|                                                                                     | **Complexity**: Requires understanding of binary structures and potential checksums.  |
 
 ---
 
@@ -117,11 +125,11 @@ sed "s#\^https:....bose.\+apigee..net..#http[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 ### Summary Table
 
-| Method | Primary Use Case | Ease | Safety | Persistence | Granularity |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **XML Config** | Logical service redirection | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **`/etc/hosts`** | Quick global DNS override | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
-| **Binary Patch** | Bypassing hardcoded checks | ⭐ | ⭐ | ⭐ | ⭐⭐⭐ |
+| Method           | Primary Use Case            | Ease  | Safety | Persistence | Granularity |
+|:-----------------|:----------------------------|:-----:|:------:|:-----------:|:-----------:|
+| **XML Config**   | Logical service redirection | ⭐⭐⭐⭐  |  ⭐⭐⭐⭐  |    ⭐⭐⭐⭐     |    ⭐⭐⭐⭐⭐    |
+| **`/etc/hosts`** | Quick global DNS override   | ⭐⭐⭐⭐⭐ |  ⭐⭐⭐   |     ⭐⭐      |     ⭐⭐      |
+| **Binary Patch** | Bypassing hardcoded checks  |   ⭐   |   ⭐    |      ⭐      |     ⭐⭐⭐     |
 
 ---
 
@@ -176,9 +184,10 @@ As suggested by community members, you can configure the device to trust your ow
     - **Method B (Symlinks)**: Add the certificate to `/etc/ssl/certs/` and create a hash symlink using `c_rehash` (if available) or manual mapping.
 
 **Pros & Cons**:
-| Pros | Cons |
-| :--- | :--- |
-| **Secure**: Maintains end-to-end encryption. | **Requires SSH**: Must have root access to modify the trust store. |
+
+| Pros                                                   | Cons                                                                   |
+|:-------------------------------------------------------|:-----------------------------------------------------------------------|
+| **Secure**: Maintains end-to-end encryption.           | **Requires SSH**: Must have root access to modify the trust store.     |
 | **Clean**: No binary patching required for SSL bypass. | **Update Risk**: Firmware updates might overwrite the `ca-bundle.crt`. |
 
 ### Option 2: SSL Verification Bypass
