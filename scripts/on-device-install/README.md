@@ -14,6 +14,12 @@ Some devices will expose the AfterTouch port, some won't. We currently (May 2026
 
 If your device doesn't expose the port, you can still use the on-device installer, but you'll need to run AfterTouch on each one of your speakers individually and may only access AfterTouch via ssh port forwarding. This will also make OAuth authentication a little more tricky, but should also work via SSH port forwarding.
 
+### Space Limitation
+
+The storage space on the SoundTouch devices is very limited. At the moment only one AfterTouch installation barely fits on them with enough room for the data it needs to maintain. When installing, make sure that you have removed any binaries and folders of previous installation attempts.
+
+The space limitation also means we are currently unsure on how to update the system, because two binaries are already too large. We are currently working on this - both by checking how we can make the binaries smaller, but also on how we can extend the storage space (e.g. by running AfterTouch from a USB drive).
+
 ## Installation
 
 Enable SSH on your SoundTouch device using the usual "Stick with remote_services" method. Connect with the following command.
