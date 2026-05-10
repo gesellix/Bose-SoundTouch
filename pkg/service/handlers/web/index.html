@@ -968,15 +968,6 @@
                 </div>
             </div>
 
-            <div
-                id="current-resolv-pane"
-                style="display: none; margin-bottom: 20px"
-            >
-                        <span class="config-header"
-                        >Current /etc/resolv.conf</span
-                        >
-                <pre id="current-resolv-content"></pre>
-            </div>
 
             <div
                 id="telnet-method-pane"
@@ -1056,7 +1047,9 @@
                 ></div>
             </div>
 
-            <div class="diff-container">
+            <!-- XML diff pair: Current Config | Planned Config. Shown
+                 when URL flip = xml in the Customize form. -->
+            <div class="diff-container" id="xml-diff-row" style="display: none">
                 <div id="xml-diff-pane" class="diff-pane">
                             <span class="config-header"
                             >Current Config (on Speaker)</span
@@ -1082,33 +1075,18 @@
                         <a href="https://github.com/gesellix/bose-soundtouch/blob/main/docs/guides/TROUBLESHOOTING.md#hostname-resolution" target="_blank" style="color: #856404;">Learn more →</a>
                     </div>
                 </div>
-                <div
-                    id="planned-hosts-pane"
-                    class="diff-pane"
-                    style="display: none"
-                >
+            </div>
+
+            <!-- Resolv diff pair: Current /etc/resolv.conf | Planned hook.
+                 Shown when DNS = resolv in the Customize form. -->
+            <div class="diff-container" id="resolv-diff-row" style="display: none; margin-top: 12px">
+                <div id="current-resolv-pane" class="diff-pane">
                             <span class="config-header"
-                            >Planned /etc/hosts Entries</span
+                            >Current /etc/resolv.conf</span
                             >
-                    <pre id="planned-hosts"></pre>
-                    <div
-                        style="
-                                    margin-top: 10px;
-                                    font-size: 0.9em;
-                                    color: #666;
-                                "
-                    >
-                        <strong>Note:</strong> This method also injects
-                        the AfterTouch Local Root CA into
-                        <code>/etc/pki/tls/certs/ca-bundle.crt</code> to
-                        enable secure HTTPS communication.
-                    </div>
+                    <pre id="current-resolv-content"></pre>
                 </div>
-                <div
-                    id="planned-resolv-pane"
-                    class="diff-pane"
-                    style="display: none"
-                >
+                <div id="planned-resolv-pane" class="diff-pane">
                             <span class="config-header"
                             >Planned /etc/resolv.conf Hook</span
                             >

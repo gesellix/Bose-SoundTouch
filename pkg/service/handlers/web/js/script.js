@@ -1811,7 +1811,6 @@ async function showSummary(deviceId) {
         currentConfigElem.style.color = summary.ssh_success ? "black" : "red";
 
         document.getElementById("planned-config").innerText = summary.planned_config;
-        document.getElementById("planned-hosts").innerText = summary.planned_hosts || "";
         document.getElementById("planned-resolv").innerText = summary.planned_resolv || "";
 
         const resolveErrEl = document.getElementById("resolve-ip-error");
@@ -3143,19 +3142,19 @@ function onCustomizeChange() {
     const dns = (document.querySelector('input[name="customize-dns"]:checked') || {}).value || "none";
     const caInstall = !!(document.getElementById("customize-ca-install") || {}).checked;
 
-    // Visibility of the legacy preview/test panes inside Customize.
+    // Visibility of the diff pairs and per-method panes. Each diff
+    // pair is its own .diff-container row so the Current/Planned
+    // columns line up side-by-side per axis instead of mixing into
+    // a single 3+ column layout.
     const show = (id, on) => {
         const el = document.getElementById(id);
-        if (el) el.style.display = on ? "block" : "none";
+        if (el) el.style.display = on ? "" : "none";
     };
-    show("xml-diff-pane",     flip === "xml");
-    show("planned-xml-pane",  flip === "xml");
+    show("xml-diff-row",     flip === "xml");
+    show("resolv-diff-row",  dns === "resolv");
     show("telnet-method-pane", flip === "telnet");
-    show("planned-resolv-pane", dns === "resolv");
-    show("planned-hosts-pane", false);
-    show("current-resolv-pane", dns === "resolv");
-    show("hosts-redirection-test", false);
     show("dns-redirection-test", dns === "resolv");
+    show("hosts-redirection-test", false);
 
     // Validate the combination and toggle the Apply button.
     const errors = [];
