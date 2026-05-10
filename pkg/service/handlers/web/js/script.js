@@ -1730,8 +1730,21 @@ async function showSummary(deviceId) {
         const ip = summary.ip_address || deviceId;
         const finalDisplay = summary.device_name ? `${summary.device_name} (${ip})` : ip;
         document.getElementById("summary-device-display").innerText = finalDisplay;
+
+        // Detect a device switch BEFORE we clobber the hidden id input.
+        // When the user moves between speakers in the dropdown, any
+        // per-device form state (plan-card URL edits, the soundcork
+        // checkbox, the "saved" hint) belongs to the previous device
+        // and would otherwise leak into the new device's preview.
+        const prevDeviceId = document.getElementById("summary-device-id").value;
+        const deviceChanged = prevDeviceId && prevDeviceId !== deviceId;
+
         // Keep deviceId hidden for subsequent calls
         document.getElementById("summary-device-id").value = deviceId;
+
+        if (deviceChanged) {
+            resetPlanCardForDeviceSwitch();
+        }
 
         // Update table row if it exists
         const rowId = "device-row-" + deviceId;
@@ -2590,6 +2603,11 @@ function validatePlanURLs() {
         applyBtn.disabled = noPlan || errors.length > 0;
     }
 
+    // Refresh the client-side XML preview so the Customize panel's
+    // Planned Config pane tracks every keystroke without a backend
+    // round-trip.
+    renderPlannedXMLPreview();
+
     return errors.length === 0;
 }
 
@@ -2601,6 +2619,46 @@ function resetPlanURLsToDefaults() {
     const soundcork = document.getElementById("plan-soundcork-mode") &&
         document.getElementById("plan-soundcork-mode").checked;
     fillPlanURLInputs(defaultServiceURLs(targetUrl, {soundcorkMode: soundcork}), {force: true});
+}
+
+// resetPlanCardForDeviceSwitch clears every per-device form state on
+// the Plan card so the previously-edited values don't leak into the
+// new device's preview. Called from showSummary the moment the user
+// picks a different speaker in the dropdown.
+//
+// Doesn't refill defaults itself — that happens further down in
+// showSummary via fillPlanURLInputs(defaults), which writes only into
+// empty inputs.
+function resetPlanCardForDeviceSwitch() {
+    const inputs = ["plan-marge-url", "plan-stats-url", "plan-sw_update-url", "plan-bmx-url"];
+    for (const id of inputs) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.value = "";
+            el.style.borderColor = "";
+        }
+    }
+
+    const soundcork = document.getElementById("plan-soundcork-mode");
+    if (soundcork) soundcork.checked = false;
+
+    const saved = document.getElementById("plan-target-saved");
+    if (saved) {
+        saved.innerText = "";
+        delete saved.dataset.savedValue;
+    }
+
+    const validationBox = document.getElementById("plan-url-validation");
+    if (validationBox) {
+        validationBox.style.display = "none";
+        validationBox.replaceChildren();
+    }
+
+    const applyStatus = document.getElementById("plan-apply-status");
+    if (applyStatus) applyStatus.innerText = "";
+
+    const customizeStatus = document.getElementById("customize-apply-status");
+    if (customizeStatus) customizeStatus.innerText = "";
 }
 
 // toggleSoundcorkMode reapplies defaults so the /marge suffix appears
@@ -2655,6 +2713,55 @@ function computeSuggestedPlan(summary) {
         summary: "❌ No supported transport reachable",
         note: "Neither SSH nor Telnet:17000 answers. Use the official Bose app to pair before EOS, or unlock remote_services via USB stick to enable SSH.",
     };
+}
+
+// renderPlannedXMLPreview rewrites the #planned-config <pre> from the
+// current Plan card inputs so the preview tracks the user's edits live
+// — without a backend round-trip. The output mirrors what
+// migrateViaXML actually writes: target-derived defaults, with each
+// per-field override (marge_url / stats_url / sw_update_url /
+// bmx_url) substituted in. The three boolean fields are constants
+// matching the Go-side PrivateCfg{} the migration constructs.
+//
+// Pure client-side once GetMigrationSummary has populated everything,
+// so the preview updates on every keystroke and stays in sync with
+// validatePlanURLs's input border / Apply-button state.
+function renderPlannedXMLPreview() {
+    const targetUrl = (document.getElementById("plan-target-url") || {}).value || "";
+    const overrides = readPlanURLOptions();
+    const defaults = defaultServiceURLs(targetUrl);
+
+    const marge    = overrides.marge_url     || defaults.marge;
+    const stats    = overrides.stats_url     || defaults.stats;
+    const swUpdate = overrides.sw_update_url || defaults.sw_update;
+    const bmx      = overrides.bmx_url       || defaults.bmx;
+
+    const xml = [
+        '<?xml version="1.0" encoding="utf-8"?>',
+        '<SoundTouchSdkPrivateCfg>',
+        `  <margeServerUrl>${escapeForXMLText(marge)}</margeServerUrl>`,
+        `  <statsServerUrl>${escapeForXMLText(stats)}</statsServerUrl>`,
+        `  <swUpdateUrl>${escapeForXMLText(swUpdate)}</swUpdateUrl>`,
+        '  <usePandoraProductionServer>true</usePandoraProductionServer>',
+        '  <isZeroconfEnabled>true</isZeroconfEnabled>',
+        '  <saveMargeCustomerReport>false</saveMargeCustomerReport>',
+        `  <bmxRegistryUrl>${escapeForXMLText(bmx)}</bmxRegistryUrl>`,
+        '</SoundTouchSdkPrivateCfg>',
+    ].join("\n");
+
+    const el = document.getElementById("planned-config");
+    if (el) el.innerText = xml;
+}
+
+// escapeForXMLText escapes the characters that have special meaning
+// inside XML text content. URLs typically only need & escaping, but
+// covering < and > too keeps the preview honest if the user pastes
+// something exotic.
+function escapeForXMLText(s) {
+    return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
 }
 
 // renderPlanCurrentURLs populates the "Current on Device" cells in the
