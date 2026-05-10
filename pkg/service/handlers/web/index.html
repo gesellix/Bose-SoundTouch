@@ -727,9 +727,8 @@
                         XML Configuration (Recommended - redirects
                         specific services)
                     </option>
-                    <option value="hosts">
-                        /etc/hosts + Root CA (Advanced - global
-                        redirection)
+                    <option value="telnet">
+                        Telnet (Port 17000) - no SSH required
                     </option>
                     <option value="resolv">
                         /etc/resolv.conf (DHCP-Aware - Redirect via DNS
@@ -756,6 +755,82 @@
                         >Current /etc/resolv.conf</span
                         >
                 <pre id="current-resolv-content"></pre>
+            </div>
+
+            <div
+                id="telnet-method-pane"
+                style="display: none; margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; background-color: #f0f7ff;"
+            >
+                <h4 style="margin-top: 0">Telnet Migration (Port 17000)</h4>
+                <p style="margin: 5px 0">
+                    Drives the speaker's diagnostic shell over TCP/17000.
+                    Requires no SSH access. Works on most ST 10/20/300 and
+                    Wave III/IV firmware (27.0.6.x).
+                </p>
+                <p style="margin: 5px 0; font-size: 0.9em; color: #555">
+                    Limitation: HTTP-only redirection — telnet has no way to
+                    install a custom CA. If you need end-to-end TLS, use the
+                    XML or DNS method instead.
+                </p>
+                <p style="margin: 5px 0; font-size: 0.9em; color: #555">
+                    After clicking <em>Migrate</em>, you may also need to
+                    pair the device with an account ID before presets and
+                    streaming work — see the panel below.
+                </p>
+            </div>
+
+            <div
+                id="pair-account-pane"
+                style="display: none; margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; background-color: #fff8e1;"
+            >
+                <h4 style="margin-top: 0">Pair Account</h4>
+                <p
+                    id="pair-account-current"
+                    style="margin: 5px 0; display: none"
+                ></p>
+                <div id="pair-account-fresh" style="display: none">
+                    <p style="margin: 5px 0">
+                        This speaker has no margeAccountUUID set
+                        (factory-reset or never paired). Choose an account
+                        ID to attach it to:
+                    </p>
+                    <div style="margin: 8px 0">
+                        <label for="pair-account-existing"
+                            >Existing account:</label
+                        >
+                        <select id="pair-account-existing">
+                            <option value="">-- pick from datastore --</option>
+                        </select>
+                    </div>
+                    <div style="margin: 8px 0">
+                        <label for="pair-account-input">7-digit ID:</label>
+                        <input
+                            type="text"
+                            id="pair-account-input"
+                            maxlength="7"
+                            pattern="[0-9]{7}"
+                            placeholder="1234567"
+                            style="font-family: monospace; width: 8em"
+                        />
+                        <button
+                            type="button"
+                            onclick="generateAccountID()"
+                        >
+                            Generate
+                        </button>
+                    </div>
+                </div>
+                <button
+                    id="pair-account-btn"
+                    type="button"
+                    style="margin-top: 8px"
+                >
+                    Pair Account
+                </button>
+                <div
+                    id="pair-account-status"
+                    style="margin-top: 8px; font-size: 0.9em"
+                ></div>
             </div>
 
             <div

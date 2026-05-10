@@ -1939,13 +1939,20 @@ async function reboot(deviceId, ip) {
         return;
     }
 
+    // Pick the reboot transport from the migration method dropdown — telnet
+    // migration likely means SSH isn't available on the device.
+    const migrationMethod = (document.getElementById("migration-method") || {}).value || "";
+    const rebootMethod = migrationMethod === "telnet" ? "telnet" : "ssh";
+
     const statusDiv = document.getElementById("status");
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
-    statusDiv.innerHTML = "Rebooting " + display + "...";
+    statusDiv.innerHTML = "Rebooting " + display + " via " + rebootMethod + "...";
 
     try {
-        const response = await fetch("/setup/reboot/" + encodeURIComponent(deviceId), {method: "POST"},);
+        const url = "/setup/reboot/" + encodeURIComponent(deviceId)
+            + "?method=" + encodeURIComponent(rebootMethod);
+        const response = await fetch(url, {method: "POST"},);
         const result = await response.json();
         showCommandOutput(result);
         if (result.ok) {
@@ -1958,6 +1965,122 @@ async function reboot(deviceId, ip) {
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
         statusDiv.innerHTML = "Error rebooting " + display + ": " + error;
+    }
+}
+
+// loadAccountIDSuggestions queries the server for the device's current
+// margeAccountUUID and the list of known accounts in the datastore, and
+// renders the pair-account pane accordingly.
+async function loadAccountIDSuggestions(deviceId) {
+    const pane = document.getElementById("pair-account-pane");
+    if (!pane) return;
+
+    const currentP = document.getElementById("pair-account-current");
+    const freshDiv = document.getElementById("pair-account-fresh");
+    const existingSelect = document.getElementById("pair-account-existing");
+    const input = document.getElementById("pair-account-input");
+    const btn = document.getElementById("pair-account-btn");
+    const statusDiv = document.getElementById("pair-account-status");
+
+    pane.style.display = "block";
+    statusDiv.innerText = "Loading...";
+
+    try {
+        const response = await fetch(
+            "/setup/account-id-suggestions/" + encodeURIComponent(deviceId),
+        );
+        const data = await response.json();
+
+        // Reset
+        existingSelect.innerHTML = "<option value=\"\">-- pick from datastore --</option>";
+        (data.known || []).forEach((id) => {
+            const opt = document.createElement("option");
+            opt.value = id;
+            opt.textContent = id;
+            existingSelect.appendChild(opt);
+        });
+
+        if (data.current) {
+            currentP.style.display = "block";
+            currentP.innerHTML =
+                "Speaker is already paired with account "
+                + "<strong>" + data.current + "</strong>"
+                + ". You can keep it (recommended) or re-pair to a different ID.";
+            input.value = data.current;
+            freshDiv.style.display = "block";
+        } else {
+            currentP.style.display = "none";
+            freshDiv.style.display = "block";
+            input.value = "";
+        }
+
+        btn.onclick = () => pairAccount(deviceId);
+        statusDiv.innerText = "";
+    } catch (error) {
+        statusDiv.innerText = "Failed to load suggestions: " + error;
+    }
+}
+
+// generateAccountID picks a random 7-digit ID and writes it into the input,
+// avoiding any existing IDs already shown in the dropdown so we don't
+// accidentally collide with a known datastore entry.
+function generateAccountID() {
+    const select = document.getElementById("pair-account-existing");
+    const input = document.getElementById("pair-account-input");
+    if (!input) return;
+
+    const known = new Set();
+    if (select) {
+        Array.from(select.options).forEach((o) => {
+            if (o.value) known.add(o.value);
+        });
+    }
+
+    // 7-digit number from 1_000_000 to 9_999_999.
+    for (let i = 0; i < 32; i++) {
+        const n = Math.floor(Math.random() * 9_000_000) + 1_000_000;
+        const s = String(n);
+        if (!known.has(s)) {
+            input.value = s;
+            return;
+        }
+    }
+    input.value = "";
+}
+
+async function pairAccount(deviceId) {
+    if (!deviceId) {
+        alert("Please select a device.");
+        return;
+    }
+    const select = document.getElementById("pair-account-existing");
+    const input = document.getElementById("pair-account-input");
+    const statusDiv = document.getElementById("pair-account-status");
+
+    let accountID = (input && input.value || "").trim();
+    if (!accountID && select && select.value) accountID = select.value;
+
+    if (!/^[0-9]{7}$/.test(accountID)) {
+        statusDiv.innerText = "Account ID must be exactly 7 digits.";
+        return;
+    }
+
+    statusDiv.innerText = "Pairing...";
+
+    try {
+        const url = "/setup/pair-account/" + encodeURIComponent(deviceId)
+            + "?account_id=" + encodeURIComponent(accountID);
+        const response = await fetch(url, {method: "POST"});
+        const result = await response.json();
+        showCommandOutput({ok: result.ok, output: result.output, message: result.error});
+        if (result.ok) {
+            statusDiv.innerText = "Paired via " + (result.result && result.result.method || "?")
+                + ". Reboot the speaker to apply.";
+        } else {
+            statusDiv.innerText = "Pair failed: " + (result.error || "unknown error");
+        }
+    } catch (error) {
+        statusDiv.innerText = "Error pairing: " + error;
     }
 }
 
@@ -2003,6 +2126,13 @@ async function migrate(deviceId, ip) {
             rebootBtn.style.display = "inline-block";
             rebootBtn.disabled = false;
             rebootBtn.style.border = "2px solid #000";
+
+            // For the telnet path, surface the account-id picker. Pairing is
+            // only needed when the device's margeAccountUUID is empty, but
+            // we always show the panel so the user can re-pair if they want.
+            if (method === "telnet") {
+                loadAccountIDSuggestions(deviceId);
+            }
 
             // Re-show summary but with prominence on reboot
             summaryDiv.style.display = "block";
@@ -2238,10 +2368,23 @@ async function toggleMigrationMethod() {
     const serviceOptions = document.getElementById("service-options");
     const hostsTestPane = document.getElementById("hosts-redirection-test");
     const dnsTestPane = document.getElementById("dns-redirection-test");
+    const telnetPane = document.getElementById("telnet-method-pane");
 
     const dnsWarning = document.getElementById("dns-port-warning");
 
-    if (method === "hosts") {
+    if (telnetPane) telnetPane.style.display = method === "telnet" ? "block" : "none";
+
+    if (method === "telnet") {
+        xmlDiffPane.style.display = "none";
+        plannedXmlPane.style.display = "none";
+        plannedHostsPane.style.display = "none";
+        plannedResolvPane.style.display = "none";
+        currentResolvPane.style.display = "none";
+        serviceOptions.style.display = "none";
+        hostsTestPane.style.display = "none";
+        dnsTestPane.style.display = "none";
+        if (dnsWarning) dnsWarning.style.display = "none";
+    } else if (method === "hosts") {
         xmlDiffPane.style.display = "none";
         plannedXmlPane.style.display = "none";
         plannedHostsPane.style.display = "block";
