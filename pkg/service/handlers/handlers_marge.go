@@ -289,13 +289,32 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if deviceIP != "" {
-		go s.PrimeDeviceWithSpotify(deviceIP)
-	} else {
-		// Fallback to remote address if IP is missing from XML
-		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-			go s.PrimeDeviceWithSpotify(host)
-		}
+	// Prefer the TCP source address over the body's self-reported IP for
+	// any outbound credential push. The body field is attacker-controllable
+	// (a malicious LAN-resident speaker can set it to any value), while
+	// r.RemoteAddr is the actual peer — and if the service runs behind a
+	// trusted reverse proxy, the TrustedRealIP middleware has already
+	// rewritten it from X-Real-IP / X-Forwarded-For. We log when the two
+	// disagree so the discrepancy is investigable but never trust the body.
+	remoteHost := ""
+	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		remoteHost = h
+	}
+
+	if deviceIP != "" && remoteHost != "" && deviceIP != remoteHost {
+		log.Printf("[Marge] power_on body IP %q differs from TCP source %q for device %s — using TCP source for credential push",
+			deviceIP, remoteHost, deviceID)
+	}
+
+	target := remoteHost
+	if target == "" {
+		// RemoteAddr was unparseable (shouldn't happen under net/http) —
+		// fall back to the body so we don't silently skip the push.
+		target = deviceIP
+	}
+
+	if target != "" {
+		go s.PrimeDeviceWithSpotify(target)
 	}
 
 	w.WriteHeader(http.StatusOK)

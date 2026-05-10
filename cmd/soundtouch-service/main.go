@@ -852,6 +852,16 @@ func startDeviceDiscovery(server *handlers.Server) {
 
 func setupRouter(server *handlers.Server) *chi.Mux {
 	r := chi.NewRouter()
+
+	// TrustedRealIP must run before any handler that reads r.RemoteAddr —
+	// SnapshotMiddleware captures the request, and several handlers
+	// (HandleMargePowerOn, etc.) inspect the source IP. The middleware is
+	// gated on Settings.TrustForwardedHeaders; when off (the safe default),
+	// it returns nil and we skip Use'ing it entirely.
+	if mw := server.TrustedRealIPMiddleware(); mw != nil {
+		r.Use(mw)
+	}
+
 	r.Use(server.SnapshotMiddleware)
 	r.Use(server.OriginMiddleware)
 	r.Use(middleware.Recoverer)

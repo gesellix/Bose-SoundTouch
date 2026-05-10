@@ -70,6 +70,21 @@ server {
 }
 ```
 
+> **Tell the service to honour `X-Real-IP`/`X-Forwarded-For`.** When deploying
+> behind a reverse proxy on the same host as above, set
+> `"trust_forwarded_headers": true` in `data/settings.json`. With that flag
+> on, the service rewrites `r.RemoteAddr` from the proxy-supplied headers,
+> so handlers that act on the source IP (e.g. the Spotify priming triggered
+> by `/marge/streaming/support/power_on`) see the speaker's real address
+> instead of the proxy's loopback peer.
+>
+> By default only `127.0.0.0/8` and `::1/128` are trusted to set those
+> headers. If your reverse proxy lives on a different host, list its CIDR(s)
+> in `"trusted_proxy_cidrs"` (e.g. `["10.0.0.0/8"]`). Do **not** enable
+> `trust_forwarded_headers` on a flat LAN deployment without a proxy: a
+> malicious speaker on the LAN can send the headers itself and spoof its
+> source IP.
+
 ---
 
 ## Manual CA injection (advanced)

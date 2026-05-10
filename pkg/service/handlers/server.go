@@ -100,6 +100,35 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 	return s
 }
 
+// TrustedRealIPMiddleware returns a chi middleware that rewrites
+// r.RemoteAddr from X-Real-IP / X-Forwarded-For / True-Client-IP, but only
+// when the immediate TCP peer is in the configured trusted-proxy list.
+// Returns nil when Settings.TrustForwardedHeaders is false (the safe
+// default), so the caller can skip wiring the middleware entirely.
+//
+// The trusted-peer gate prevents the typical X-Forwarded-* spoofing surface:
+// on a flat LAN where a malicious speaker could send the headers itself, we
+// won't honour them; behind a documented reverse proxy on loopback we will.
+func (s *Server) TrustedRealIPMiddleware() func(http.Handler) http.Handler {
+	settings, err := s.ds.GetSettings()
+	if err != nil {
+		log.Printf("[RealIP] failed to load settings: %v — skipping forwarded-header trust", err)
+		return nil
+	}
+
+	if !settings.TrustForwardedHeaders {
+		return nil
+	}
+
+	cidrs, err := ParseTrustedProxyCIDRs(settings.TrustedProxyCIDRs)
+	if err != nil {
+		log.Printf("[RealIP] invalid trusted_proxy_cidrs: %v — skipping forwarded-header trust", err)
+		return nil
+	}
+
+	return TrustedRealIP(cidrs)
+}
+
 // SetVersionInfo sets the version information for the server.
 func (s *Server) SetVersionInfo(version, commit, date, repoURL string) {
 	s.mu.Lock()
