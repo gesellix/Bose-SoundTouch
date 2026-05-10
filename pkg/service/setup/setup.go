@@ -408,7 +408,18 @@ func (m *Manager) buildServerHTTPSURL(targetURL string) string {
 }
 
 // checkIsMigrated determines if the device is already migrated to AfterTouch.
+//
+// The telnet-based check runs first and unconditionally, because it is the
+// only migration-state signal available on devices that do not expose SSH
+// (USB-unlock-refusing firmware on SA-5, ST520, recent ST Portable). The
+// SSH-based checks still run when SSH is reachable to cover the
+// /etc/hosts and /etc/resolv.conf migration variants, neither of which
+// shows up in `getpdo CurrentSystemConfiguration`.
 func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
+	if m.isTelnetMigrated(summary) {
+		summary.IsMigrated = true
+	}
+
 	if !summary.SSHSuccess {
 		return
 	}
@@ -418,6 +429,28 @@ func (m *Manager) checkIsMigrated(summary *MigrationSummary, deviceIP string) {
 	if m.isXMLMigrated(summary) || m.isHostsMigrated(client, summary) || m.isResolvConfMigrated(client, summary) {
 		summary.IsMigrated = true
 	}
+}
+
+// isTelnetMigrated reports whether the live device config (read via the
+// telnet preflight's `getpdo CurrentSystemConfiguration`) already points
+// at our service. Mirrors isXMLMigrated's substring-match semantics — any
+// occurrence of our hostname in the response is enough.
+func (m *Manager) isTelnetMigrated(summary *MigrationSummary) bool {
+	if summary.TelnetVerifiedConfig == "" {
+		return false
+	}
+
+	parsedTarget, err := url.Parse(m.ServerURL)
+	if err != nil {
+		return false
+	}
+
+	targetHost := parsedTarget.Hostname()
+	if targetHost == "" {
+		return false
+	}
+
+	return strings.Contains(summary.TelnetVerifiedConfig, targetHost)
 }
 
 // isXMLMigrated checks whether current XML config already points to our server.
