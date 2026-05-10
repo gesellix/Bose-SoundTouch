@@ -510,8 +510,71 @@
                 Migration Summary for
                 <span id="summary-device-display"></span>
             </h3>
-            <p>Migration Status: <span id="migration-status"></span></p>
             <input type="hidden" id="summary-device-id"/>
+            <p>Migration Status: <span id="migration-status"></span></p>
+
+            <div
+                id="migration-state-card"
+                style="margin: 10px 0 16px 0; padding: 12px; border: 1px solid #ddd; background: #fafafa; border-radius: 4px"
+            >
+                <div style="margin-bottom: 12px">
+                    <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Transports</h4>
+                    <div style="display: flex; gap: 24px; flex-wrap: wrap; padding-left: 4px">
+                        <div>
+                            <strong>SSH:</strong> <span id="state-ssh"></span>
+                        </div>
+                        <div>
+                            <strong>Telnet (Port 17000):</strong> <span id="state-telnet"></span>
+                            <span id="state-telnet-banner" style="font-size: 0.85em; color: #666; margin-left: 4px"></span>
+                        </div>
+                    </div>
+                    <div
+                        id="state-telnet-error"
+                        style="display: none; margin-top: 6px; padding: 4px 8px; background: #fff3e0; border-left: 3px solid #ef6c00; font-size: 0.85em; color: #5d4037"
+                    ></div>
+                </div>
+
+                <div style="margin-bottom: 12px">
+                    <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Migration State</h4>
+                    <table style="width: 100%; border-collapse: collapse">
+                        <tbody>
+                            <tr style="border-top: 1px solid #eee">
+                                <td style="padding: 6px 8px; width: 170px; vertical-align: top; color: #555">URL Configuration</td>
+                                <td id="state-url" style="padding: 6px 8px; vertical-align: top"></td>
+                            </tr>
+                            <tr style="border-top: 1px solid #eee">
+                                <td style="padding: 6px 8px; width: 170px; vertical-align: top; color: #555">DNS Interception</td>
+                                <td id="state-dns" style="padding: 6px 8px; vertical-align: top"></td>
+                            </tr>
+                            <tr style="border-top: 1px solid #eee">
+                                <td style="padding: 6px 8px; width: 170px; vertical-align: top; color: #555">CA / TLS</td>
+                                <td id="state-ca" style="padding: 6px 8px; vertical-align: top"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Preconditions</h4>
+                    <table style="width: 100%; border-collapse: collapse">
+                        <tbody>
+                            <tr style="border-top: 1px solid #eee">
+                                <td style="padding: 4px 8px; width: 170px; color: #555">remote_services</td>
+                                <td id="state-remote-services-cell" style="padding: 4px 8px"></td>
+                            </tr>
+                            <tr style="border-top: 1px solid #eee">
+                                <td style="padding: 4px 8px; color: #555">Account paired</td>
+                                <td id="state-paired" style="padding: 4px 8px"></td>
+                            </tr>
+                            <tr style="border-top: 1px solid #eee">
+                                <td style="padding: 4px 8px; color: #555">XML config backup</td>
+                                <td id="state-backup" style="padding: 4px 8px"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <p>SSH Connection: <span id="ssh-status"></span></p>
             <p>Telnet (Port 17000): <span id="telnet-status"></span>
                 <span id="telnet-banner" style="font-size: 0.85em; color: #666; margin-left: 6px"></span>

@@ -1761,6 +1761,7 @@ async function showSummary(deviceId) {
         document.getElementById("ssh-status").innerText = summary.ssh_success ? "✅ Success" : "❌ Failed";
         document.getElementById("ssh-status").style.color = summary.ssh_success ? "green" : "red";
 
+        renderMigrationState(summary);
         renderTelnetPreflight(summary);
         renderPreflightWarnings(summary);
         fillTelnetURLInputs(defaultTelnetURLs(targetUrl));
@@ -2443,6 +2444,175 @@ function readTelnetURLOptions() {
         if (el && el.value) out[optKey] = el.value;
     }
     return out;
+}
+
+// renderMigrationState fills the three-axis state card at the top of
+// the migration summary: transports, migration-state axes (URL config,
+// DNS interception, CA/TLS), and preconditions (remote_services,
+// pairing, backup). Reads only fields the backend already exposes —
+// is_migrated remains the OR of the per-axis booleans.
+function renderMigrationState(summary) {
+    // --- Transports ---
+    setStateChip("state-ssh", summary.ssh_success, "Reachable", "Unreachable");
+    setStateChip("state-telnet", summary.telnet_reachable, "Reachable", "Unreachable");
+
+    const bannerEl = document.getElementById("state-telnet-banner");
+    if (bannerEl) bannerEl.innerText = summary.telnet_banner ? `(${summary.telnet_banner})` : "";
+
+    const errorEl = document.getElementById("state-telnet-error");
+    if (errorEl) {
+        if (summary.telnet_probe_error && !summary.telnet_reachable) {
+            errorEl.innerText = "Probe error: " + summary.telnet_probe_error;
+            errorEl.style.display = "block";
+        } else {
+            errorEl.style.display = "none";
+        }
+    }
+
+    // --- URL Configuration axis ---
+    const urlCell = document.getElementById("state-url");
+    if (urlCell) {
+        urlCell.replaceChildren();
+        const verdict = urlConfigVerdict(summary);
+        urlCell.appendChild(stateLine(verdict.icon, verdict.text, verdict.note));
+
+        const live = parseTelnetVerifiedConfig(summary.telnet_verified_config || "");
+        const xml = summary.parsed_current_config || {};
+        const fields = [
+            ["margeServerUrl", "marge"],
+            ["statsServerUrl", "stats"],
+            ["swUpdateUrl", "sw_update"],
+            ["bmxRegistryUrl", "bmx"],
+        ];
+        const detail = document.createElement("div");
+        detail.style.cssText = "margin-top: 4px; font-family: monospace; font-size: 0.85em; color: #555";
+        for (const [key] of fields) {
+            const xmlVal = xml[key] || "";
+            const telVal = live[key] || "";
+            const row = document.createElement("div");
+            row.style.cssText = "padding: 1px 0";
+            const label = document.createElement("strong");
+            label.style.cssText = "color: #333";
+            label.textContent = key + ": ";
+            row.appendChild(label);
+            row.appendChild(document.createTextNode(formatURLPair(xmlVal, telVal)));
+            detail.appendChild(row);
+        }
+        urlCell.appendChild(detail);
+    }
+
+    // --- DNS Interception axis ---
+    const dnsCell = document.getElementById("state-dns");
+    if (dnsCell) {
+        dnsCell.replaceChildren();
+        const v = dnsInterceptionVerdict(summary);
+        dnsCell.appendChild(stateLine(v.icon, v.text, v.note));
+    }
+
+    // --- CA / TLS axis ---
+    const caCell = document.getElementById("state-ca");
+    if (caCell) {
+        caCell.replaceChildren();
+        const v = caVerdict(summary);
+        caCell.appendChild(stateLine(v.icon, v.text, v.note));
+    }
+
+    // --- Preconditions ---
+    const remoteCell = document.getElementById("state-remote-services-cell");
+    if (remoteCell) {
+        remoteCell.replaceChildren();
+        const v = remoteServicesVerdict(summary);
+        remoteCell.appendChild(stateLine(v.icon, v.text, v.note));
+    }
+
+    const pairedCell = document.getElementById("state-paired");
+    if (pairedCell) {
+        pairedCell.replaceChildren();
+        if (summary.is_paired) {
+            pairedCell.appendChild(stateLine("✅", "Paired", `(account ${summary.account_id || "?"})`));
+        } else {
+            pairedCell.appendChild(stateLine("❌", "Not paired", "(/setMargeAccount or telnet envswitch needed)"));
+        }
+    }
+
+    const backupCell = document.getElementById("state-backup");
+    if (backupCell) {
+        backupCell.replaceChildren();
+        if (summary.original_config) {
+            backupCell.appendChild(stateLine("✅", "Found .original", ""));
+        } else {
+            backupCell.appendChild(stateLine("❌", "Not found", "(only relevant for the XML migration method)"));
+        }
+    }
+}
+
+// setStateChip writes a green ✅ / red ❌ chip into the element.
+function setStateChip(elemId, ok, okText, badText) {
+    const el = document.getElementById(elemId);
+    if (!el) return;
+    if (ok) {
+        el.innerText = "✅ " + okText;
+        el.style.color = "green";
+    } else {
+        el.innerText = "❌ " + badText;
+        el.style.color = "red";
+    }
+}
+
+// stateLine returns a DOM fragment "<icon> <bold text> <muted note>".
+function stateLine(icon, text, note) {
+    const wrap = document.createElement("span");
+    wrap.appendChild(document.createTextNode(icon + " "));
+    const strong = document.createElement("strong");
+    strong.textContent = text;
+    wrap.appendChild(strong);
+    if (note) {
+        const muted = document.createElement("span");
+        muted.style.cssText = "color: #666; margin-left: 6px; font-size: 0.9em";
+        muted.textContent = note;
+        wrap.appendChild(muted);
+    }
+    return wrap;
+}
+
+// formatURLPair renders the on-disk vs live values for one URL field
+// in a compact way: agreement → single value; disagreement → both,
+// labelled.
+function formatURLPair(xmlVal, telVal) {
+    if (!xmlVal && !telVal) return "—";
+    if (!xmlVal) return `live: ${telVal}`;
+    if (!telVal) return `xml: ${xmlVal}`;
+    if (xmlVal === telVal) return xmlVal;
+    return `xml: ${xmlVal}  •  live: ${telVal}`;
+}
+
+function urlConfigVerdict(summary) {
+    const xml = !!summary.xml_migrated;
+    const tel = !!summary.telnet_migrated;
+    if (!xml && !tel) return {icon: "❌", text: "Original (Bose cloud)", note: ""};
+    if (xml && tel) return {icon: "✅", text: "Migrated to AfterTouch", note: "(XML + telnet runtime in sync)"};
+    if (xml) return {icon: "✅", text: "Migrated to AfterTouch", note: "(XML only — telnet runtime may still hold the old URLs)"};
+    return {icon: "✅", text: "Migrated to AfterTouch", note: "(telnet runtime — reboot to persist into the on-disk XML)"};
+}
+
+function dnsInterceptionVerdict(summary) {
+    const hosts = !!summary.hosts_migrated;
+    const resolv = !!summary.resolv_migrated;
+    if (!hosts && !resolv) return {icon: "—", text: "None", note: ""};
+    if (resolv) return {icon: "✅", text: "/etc/resolv.conf hook active", note: hosts ? "(also: /etc/hosts entries)" : ""};
+    return {icon: "⚠️", text: "/etc/hosts redirects", note: "(deprecated method)"};
+}
+
+function caVerdict(summary) {
+    if (summary.ca_cert_trusted) return {icon: "✅", text: "Local root CA installed", note: ""};
+    return {icon: "❌", text: "Not installed", note: "(HTTPS to local service will fail TLS validation until injected via SSH)"};
+}
+
+function remoteServicesVerdict(summary) {
+    if (!summary.ssh_success) return {icon: "❓", text: "Unknown", note: "(SSH not reachable)"};
+    if (!summary.remote_services_enabled) return {icon: "❌", text: "Not enabled", note: "(SSH/telnet shells will not survive a reboot until USB-stick unlock is reapplied)"};
+    if (!summary.remote_services_persistent) return {icon: "⚠️", text: "Enabled but not persistent", note: "(will be lost on reboot)"};
+    return {icon: "✅", text: "Persistent", note: ""};
 }
 
 // renderTelnetPreflight surfaces TelnetReachable / TelnetBanner /
