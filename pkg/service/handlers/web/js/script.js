@@ -1947,7 +1947,8 @@ async function reboot(deviceId, ip) {
     const statusDiv = document.getElementById("status");
     statusDiv.style.display = "block";
     statusDiv.style.backgroundColor = "#ffffcc";
-    statusDiv.innerHTML = "Rebooting " + display + " via " + rebootMethod + "...";
+    // textContent avoids reinterpreting the (user-controlled) device name as HTML.
+    statusDiv.textContent = "Rebooting " + display + " via " + rebootMethod + "...";
 
     try {
         const url = "/setup/reboot/" + encodeURIComponent(deviceId)
@@ -1993,19 +1994,22 @@ async function loadAccountIDSuggestions(deviceId) {
 
         // Reset
         existingSelect.innerHTML = "<option value=\"\">-- pick from datastore --</option>";
-        (data.known || []).forEach((id) => {
+        (data.known || []).forEach((/** @type {string} */ id) => {
             const opt = document.createElement("option");
-            opt.value = id;
-            opt.textContent = id;
+            opt.value = String(id);
+            opt.textContent = String(id);
             existingSelect.appendChild(opt);
         });
 
         if (data.current) {
             currentP.style.display = "block";
-            currentP.innerHTML =
-                "Speaker is already paired with account "
-                + "<strong>" + data.current + "</strong>"
-                + ". You can keep it (recommended) or re-pair to a different ID.";
+            // Build the paragraph with createElement so the user-controlled
+            // account ID never becomes HTML.
+            currentP.replaceChildren(
+                document.createTextNode("Speaker is already paired with account "),
+                Object.assign(document.createElement("strong"), {textContent: data.current}),
+                document.createTextNode(". You can keep it (recommended) or re-pair to a different ID."),
+            );
             input.value = data.current;
             freshDiv.style.display = "block";
         } else {
