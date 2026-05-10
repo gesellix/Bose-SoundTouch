@@ -48,7 +48,7 @@ case "$1" in
         --make-pidfile \
         --chuid "$USER" \
         --startas "/bin/sh" \
-        -- -c "\"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false"
+        -- -c "\"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false --discovery-interval=60m"
 
     tries=0
     max_tries=60
