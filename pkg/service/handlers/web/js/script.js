@@ -1848,7 +1848,6 @@ async function showSummary(deviceId) {
 
         document.getElementById("test-connection-explicit-btn").onclick = () => testConnection(deviceId, true);
         document.getElementById("test-connection-trusted-btn").onclick = () => testConnection(deviceId, false);
-        document.getElementById("test-hosts-btn").onclick = () => testHostsRedirection(deviceId);
         document.getElementById("test-dns-btn").onclick = () => testDNSRedirection(deviceId);
 
         renderCustomizeForm(summary);
@@ -2397,34 +2396,6 @@ async function testConnection(deviceId, useExplicitCA) {
         } else {
             testResultDiv.style.backgroundColor = "#ffcccc";
             testResultDiv.innerText = "❌ Connection failed: " + result.message + "\n\nOutput:\n" + result.output;
-        }
-    } catch (error) {
-        testResultDiv.style.backgroundColor = "#ffcccc";
-        testResultDiv.innerText = "❌ Error triggering test: " + error;
-    }
-}
-
-async function testHostsRedirection(deviceId) {
-    const targetUrl = document.getElementById("target-domain").value;
-    const testResultDiv = document.getElementById("hosts-test-result");
-    const display = getDeviceDisplayName(deviceId);
-
-    testResultDiv.style.display = "block";
-    testResultDiv.style.backgroundColor = "#f0f0f0";
-    testResultDiv.style.color = "black";
-    testResultDiv.innerText = "Running hosts redirection test from " + display + "...\n(This may take a few seconds)";
-
-    try {
-        const query = `?target_url=${encodeURIComponent(targetUrl)}`;
-        const response = await fetch(`/setup/test-hosts/${encodeURIComponent(deviceId)}${query}`, {method: "POST"},);
-        const result = await response.json();
-
-        if (result.ok) {
-            testResultDiv.style.backgroundColor = "#ccffcc";
-            testResultDiv.innerText = "✅ " + result.message + "\n\nOutput:\n" + result.output;
-        } else {
-            testResultDiv.style.backgroundColor = "#ffcccc";
-            testResultDiv.innerText = "❌ Test failed: " + result.message + "\n\nOutput:\n" + result.output;
         }
     } catch (error) {
         testResultDiv.style.backgroundColor = "#ffcccc";
@@ -3662,7 +3633,6 @@ function onCustomizeChange() {
     show("resolv-diff-row",  dns === "resolv");
     show("telnet-method-pane", flip === "telnet");
     show("dns-redirection-test", dns === "resolv");
-    show("hosts-redirection-test", false);
 
     // Validate the combination and toggle the Apply button.
     const errors = [];
