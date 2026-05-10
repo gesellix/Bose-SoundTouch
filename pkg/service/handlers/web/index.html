@@ -53,33 +53,35 @@
 
         <h3>Migration Process at a Glance</h3>
         <div class="info-box prerequisite-box">
-            <strong>🔌 Prerequisite: Enable SSH</strong><br/>
-            Migration requires SSH access. To enable it:
-            <ol style="margin-top: 5px; margin-bottom: 5px">
-                <li>
-                    Create an empty file named
-                    <code>remote_services</code> on a USB stick.
-                </li>
-                <li>
-                    Insert it into the speaker's
-                    <strong>SERVICE</strong> port and reboot the
-                    speaker.
-                </li>
-            </ol>
-            <strong>Verify connection:</strong>
+            <strong>🔌 Speaker shell access</strong><br/>
+            The wizard talks to the speaker over one of two transports.
+            The <strong>Migration</strong> tab probes both automatically
+            and uses whichever your device exposes — you don't have to
+            choose manually.
             <ul style="margin-top: 5px; margin-bottom: 0; padding-left: 20px;">
                 <li>
-                    Use the <strong>Migration</strong> tab to select
-                    your device and verify that
-                    <em>SSH Connection</em> shows ✅ Success.
-                </li>
-                <li>
-                    Or manually:
+                    <strong>SSH</strong> (richest option — required for
+                    the XML migration, the <code>/etc/resolv.conf</code>
+                    DNS hook, and installing the local CA). Enable it by
+                    creating an empty <code>remote_services</code> file
+                    on a USB stick, inserting it into the speaker's
+                    <strong>SERVICE</strong> port, and rebooting. Verify
+                    on the Migration tab — <em>SSH</em> in the state
+                    card's <em>Transports</em> row should show ✅
+                    Reachable. Manual check:
                     <code
                     >ssh -oHostKeyAlgorithms=+ssh-rsa
                         root@&lt;SPEAKER-IP&gt;</code
                     >
                     (no password).
+                </li>
+                <li>
+                    <strong>Telnet (Port 17000)</strong> — the SSH-less
+                    fallback. Most SoundTouch firmware exposes a
+                    diagnostic shell on TCP/17000 automatically, no
+                    USB-stick setup required. Limited to HTTP migrations
+                    (no CA install possible without SSH). The state card
+                    surfaces this in the same <em>Transports</em> row.
                 </li>
             </ul>
         </div>
@@ -90,7 +92,9 @@
                 Domain" and "Proxy Domain" use an IP address or domain
                 name that is
                 <strong>accessible from your speakers</strong> (usually
-                the IP of this server on your local network).
+                the IP of this server on your local network). You can
+                also edit the Target URL directly from the Migration tab
+                with a <em>Save as default</em> button.
             </li>
             <li>
                 <strong>Discovery:</strong> Go to the
@@ -107,10 +111,15 @@
             </li>
             <li>
                 <strong>Migration:</strong> In the
-                <strong>Migration</strong> tab, redirect your speaker to
-                this local service. We recommend the
-                <strong>XML Configuration</strong> method as it is
-                surgical and easily reversible.
+                <strong>Migration</strong> tab the wizard offers a
+                one-click <strong>Apply Suggested Plan</strong> that
+                picks the right recipe for your speaker (XML over SSH
+                when SSH is available, telnet URL flip otherwise). For
+                mix-and-match across the three independent axes — URL
+                flip transport, DNS interception, CA install — expand
+                <em>Customize this migration</em>. A visible pre-flight
+                check runs before any backend operation touches the
+                speaker.
             </li>
             <li>
                 <strong>Verification:</strong> After migration and
