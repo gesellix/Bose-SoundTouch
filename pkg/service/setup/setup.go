@@ -312,6 +312,12 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 			}
 		}
 	}
+
+	// Per-field literal URL overrides win over both the canonical
+	// derivation and any self/proxied/original mode applied above —
+	// the user picked a URL, so the planned preview reflects exactly
+	// what the XML migration will write.
+	applyURLOverrides(&plannedCfg, options)
 	// Note: CurrentConfig is set by checkCurrentConfig in all cases (success or failure)
 
 	xmlContent, err := xml.MarshalIndent(plannedCfg, "", "  ")
@@ -697,6 +703,38 @@ func (m *Manager) applyProxyOptions(plannedCfg *PrivateCfg, proxyURL string, opt
 	}
 }
 
+// applyURLOverrides applies per-field literal URL overrides from the
+// migration options map (marge_url / stats_url / sw_update_url /
+// bmx_url) on top of an already-populated PrivateCfg. Empty or missing
+// entries leave the field unchanged.
+//
+// These overrides win over the legacy "self/proxied/original" semantic
+// applied by applyProxyOptions: if the user picked a literal URL, the
+// migration honors it verbatim. The XML and Telnet write paths and
+// the GetMigrationSummary read path all call this so the planned
+// preview matches what migration actually writes.
+func applyURLOverrides(cfg *PrivateCfg, options map[string]string) {
+	if cfg == nil || options == nil {
+		return
+	}
+
+	if v := options["marge_url"]; v != "" {
+		cfg.MargeServerUrl = v
+	}
+
+	if v := options["stats_url"]; v != "" {
+		cfg.StatsServerUrl = v
+	}
+
+	if v := options["sw_update_url"]; v != "" {
+		cfg.SwUpdateUrl = v
+	}
+
+	if v := options["bmx_url"]; v != "" {
+		cfg.BmxRegistryUrl = v
+	}
+}
+
 // checkRemoteServices checks for remote services files on the device
 func (m *Manager) checkRemoteServices(summary *MigrationSummary, deviceIP string) {
 	client := m.NewSSH(deviceIP)
@@ -897,6 +935,10 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 			}
 		}
 	}
+
+	// Per-field literal URL overrides take precedence over the
+	// proxy/original modes applied above — see applyURLOverrides.
+	applyURLOverrides(&cfg, options)
 
 	xmlContent, err := xml.MarshalIndent(cfg, "", "  ")
 	if err != nil {
