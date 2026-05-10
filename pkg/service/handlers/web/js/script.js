@@ -1758,9 +1758,6 @@ async function showSummary(deviceId) {
             if (accountIdEl && summary.account_id) accountIdEl.innerText = summary.account_id;
         }
 
-        document.getElementById("ssh-status").innerText = summary.ssh_success ? "✅ Success" : "❌ Failed";
-        document.getElementById("ssh-status").style.color = summary.ssh_success ? "green" : "red";
-
         renderMigrationState(summary);
         renderPlan(summary);
         renderTelnetPreflight(summary);
@@ -1784,11 +1781,6 @@ async function showSummary(deviceId) {
         migrationStatus.style.color = summary.is_migrated ? "green" : "red";
         migrationStatus.style.fontWeight = "bold";
 
-        document.getElementById("original-config-status").style.display = summary.original_config ? "block" : "none";
-        document.getElementById("no-original-config-status").style.display = summary.original_config ? "none" : "block";
-        document.getElementById("original-config-content").innerText = summary.original_config || "";
-        document.getElementById("original-config-pane").style.display = "none";
-
         if (summary.parsed_current_config) {
             document.getElementById("service-options").style.display = "block";
             document.getElementById("orig-marge").innerText = summary.parsed_current_config.margeServerUrl;
@@ -1799,31 +1791,23 @@ async function showSummary(deviceId) {
             document.getElementById("service-options").style.display = "none";
         }
 
-        const remoteStatus = document.getElementById("remote-services-status");
-        const remoteFound = document.getElementById("remote-services-found");
-        if (summary.ssh_success) {
-            if (summary.remote_services_enabled) {
-                remoteStatus.innerText = summary.remote_services_persistent ? "✅ Yes" : "⚠️ Yes (non-persistent)";
-                remoteStatus.style.color = summary.remote_services_persistent ? "green" : "orange";
-            } else {
-                remoteStatus.innerText = "❌ No";
-                remoteStatus.style.color = "red";
-            }
-            remoteFound.innerText = summary.remote_services_found && summary.remote_services_found.length > 0 ? "(" + summary.remote_services_found.join(", ") + ")" : "";
+        // Trust CA Now button now lives inside the state card's CA / TLS
+        // cell. Show only when SSH is reachable AND the CA isn't already
+        // trusted on the device.
+        const trustBtn = document.getElementById("trust-ca-btn");
+        if (trustBtn) {
+            const canTrust = summary.ssh_success && !summary.ca_cert_trusted;
+            trustBtn.style.display = canTrust ? "inline-block" : "none";
+            trustBtn.onclick = () => trustCA(deviceId, ip);
+        }
 
-            const caTrustStatus = document.getElementById("ca-trust-status");
-            caTrustStatus.innerText = summary.ca_cert_trusted ? "✅ Yes" : "❌ No";
-            caTrustStatus.style.color = summary.ca_cert_trusted ? "green" : "red";
-            document.getElementById("trust-ca-btn").style.display = summary.ca_cert_trusted ? "none" : "inline-block";
-            document.getElementById("trust-ca-btn").onclick = () => trustCA(deviceId, ip);
-        } else {
-            remoteStatus.innerText = "❓ Unknown";
-            remoteStatus.style.color = "gray";
-            remoteFound.innerText = "";
-
-            const caTrustStatus = document.getElementById("ca-trust-status");
-            caTrustStatus.innerText = "❓ Unknown";
-            caTrustStatus.style.color = "gray";
+        // The HTTPS Connection Test runs `curl` on the device via SSH —
+        // upload-temp-CA + run-curl — so the panel is irrelevant when
+        // SSH isn't reachable. The implicit telnet-poke + observation
+        // alternative is on the roadmap but not implemented yet.
+        const connectionTestPane = document.getElementById("connection-test");
+        if (connectionTestPane) {
+            connectionTestPane.style.display = summary.ssh_success ? "block" : "none";
         }
 
         const currentConfigElem = document.getElementById("current-config");
@@ -1887,10 +1871,6 @@ async function showSummary(deviceId) {
         const removeRemoteBtn = document.getElementById("remove-remote-btn");
         removeRemoteBtn.onclick = () => removeRemoteServices(deviceId, ip);
         removeRemoteBtn.disabled = !summary.ssh_success || !summary.remote_services_enabled;
-
-        const backupBtn = document.getElementById("backup-config-btn");
-        backupBtn.onclick = () => backupConfig(deviceId, ip);
-        backupBtn.disabled = !summary.ssh_success || !!summary.original_config;
 
         document.getElementById("migration-summary").style.display = "block";
         document.getElementById("migration-summary").scrollIntoView();
@@ -2403,11 +2383,6 @@ async function testDNSRedirection(deviceId) {
     }
 }
 
-function toggleOriginalConfig() {
-    const pane = document.getElementById("original-config-pane");
-    pane.style.display = pane.style.display === "none" ? "block" : "none";
-}
-
 // defaultTelnetURLs returns the canonical four URLs derived from a
 // service base URL. Mirrors setup.defaultTelnetURLs (Go) — keep them in
 // sync if either side changes.
@@ -2759,11 +2734,14 @@ function renderMigrationState(summary) {
     }
 
     // --- CA / TLS axis ---
-    const caCell = document.getElementById("state-ca");
-    if (caCell) {
-        caCell.replaceChildren();
+    // The cell hosts both the verdict text and two action affordances
+    // (Trust CA Now button + Download CA cert link). We only rewrite
+    // the verdict span so the buttons stay put across re-renders.
+    const caLine = document.getElementById("state-ca-line");
+    if (caLine) {
+        caLine.replaceChildren();
         const v = caVerdict(summary);
-        caCell.appendChild(stateLine(v.icon, v.text, v.note));
+        caLine.appendChild(stateLine(v.icon, v.text, v.note));
     }
 
     // --- Preconditions ---

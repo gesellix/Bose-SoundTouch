@@ -548,7 +548,22 @@
                             </tr>
                             <tr style="border-top: 1px solid #eee">
                                 <td style="padding: 6px 8px; width: 170px; vertical-align: top; color: #555">CA / TLS</td>
-                                <td id="state-ca" style="padding: 6px 8px; vertical-align: top"></td>
+                                <td id="state-ca" style="padding: 6px 8px; vertical-align: top">
+                                    <span id="state-ca-line"></span>
+                                    <span style="margin-left: 12px; white-space: nowrap">
+                                        <button
+                                            id="trust-ca-btn"
+                                            type="button"
+                                            style="display: none; background-color: #607d8b; color: white; border: none; padding: 2px 8px; font-size: 0.85em"
+                                        >Trust CA Now</button>
+                                        <a
+                                            href="/setup/ca.crt"
+                                            download="soundtouch-ca.crt"
+                                            style="margin-left: 6px; font-size: 0.85em"
+                                            title="Download CA cert to import into other clients"
+                                        >Download CA cert</a>
+                                    </span>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -575,10 +590,6 @@
                 </div>
             </div>
 
-            <p>SSH Connection: <span id="ssh-status"></span></p>
-            <p>Telnet (Port 17000): <span id="telnet-status"></span>
-                <span id="telnet-banner" style="font-size: 0.85em; color: #666; margin-left: 6px"></span>
-            </p>
             <div
                 id="preflight-warnings"
                 style="display: none; margin: 10px 0; padding: 8px 12px; background-color: #fff8e1; border-left: 4px solid #ffb300; font-size: 0.9em"
@@ -586,53 +597,6 @@
                 <strong>Cross-check warnings:</strong>
                 <ul id="preflight-warnings-list" style="margin: 4px 0 0 1em; padding: 0"></ul>
             </div>
-            <p id="original-config-status" style="display: none">
-                Backup: ✅ Found .original config at
-                <code
-                >/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original</code
-                >
-                <button onclick="toggleOriginalConfig()">
-                    Show Original Config
-                </button>
-            </p>
-            <p id="no-original-config-status" style="display: none">
-                Backup: ❌ Not found
-                <button id="backup-config-btn">
-                    Backup Config Now
-                </button>
-            </p>
-            <p>
-                Remote Services Enabled:
-                <span id="remote-services-status"></span>
-                <span
-                    id="remote-services-found"
-                    style="font-size: 0.8em; color: #666"
-                ></span>
-            </p>
-            <p>
-                AfterTouch Local Root CA Trusted:
-                <span id="ca-trust-status"></span>
-                <button
-                    id="trust-ca-btn"
-                    style="
-                                display: none;
-                                background-color: #607d8b;
-                                color: white;
-                                border: none;
-                                padding: 2px 8px;
-                                font-size: 0.8em;
-                                margin-left: 10px;
-                            "
-                >
-                    Trust CA Now
-                </button>
-                <a
-                    href="/setup/ca.crt"
-                    download="soundtouch-ca.crt"
-                    style="margin-left: 10px; font-size: 0.85em"
-                    title="Download CA cert to import into other clients"
-                >Download CA cert</a>
-            </p>
 
             <div
                 id="connection-test"
@@ -1048,16 +1012,6 @@
                     id="pair-account-status"
                     style="margin-top: 8px; font-size: 0.9em"
                 ></div>
-            </div>
-
-            <div
-                id="original-config-pane"
-                style="display: none; margin-bottom: 20px"
-            >
-                        <span class="config-header"
-                        >Original Config (Backup)</span
-                        >
-                <pre id="original-config-content"></pre>
             </div>
 
             <div
