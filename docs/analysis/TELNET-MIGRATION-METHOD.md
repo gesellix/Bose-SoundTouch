@@ -49,6 +49,13 @@ dance** that newer firmware refuses.
 
 ## 2. The Telnet:17000 command set we rely on
 
+> For a broader catalogue of every telnet command the community has documented
+> across firmware eras (the `key`, `network`, `sys`, `envswitch`, `getpdo`,
+> `scm`, `ws`, `swupdate`, and shell-unlock families), see
+> **[TELNET-COMMAND-REFERENCE.md](TELNET-COMMAND-REFERENCE.md)**. This
+> section only lists the subset our migration actually drives.
+
+
 ### 2.1 URL configuration (the migration payload)
 
 The sequence we send for `soundtouch-service` (community-validated in #221, #141):
