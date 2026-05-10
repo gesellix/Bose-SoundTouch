@@ -2871,6 +2871,79 @@ function transportChip(name, ok) {
     return wrap;
 }
 
+// runPreflightCheck does an authoritative round-trip to the backend
+// just before Apply, catching issues the optimistic client-side
+// preview can't see: hostname resolution from the device's
+// perspective, transport reachability re-verified after any prior
+// step, and a sanity check that the backend's planned config
+// reflects the per-field URL overrides we're about to send.
+//
+// Returns {ok: bool, issues: string[], summary}. The caller decides
+// whether to proceed (typically with a confirm() dialog listing the
+// issues so the user can override on a known-false-positive).
+async function runPreflightCheck(deviceId, methods, opts, targetUrl) {
+    let q = "?target_url=" + encodeURIComponent(targetUrl);
+    for (const k in opts) q += "&" + k + "=" + encodeURIComponent(opts[k]);
+
+    let summary;
+    try {
+        const resp = await fetch("/setup/summary/" + encodeURIComponent(deviceId) + q);
+        if (!resp.ok) {
+            return {ok: false, issues: [`Failed to refresh summary: ${await resp.text()}`]};
+        }
+        summary = await resp.json();
+    } catch (e) {
+        return {ok: false, issues: [`Failed to refresh summary: ${e}`]};
+    }
+
+    const issues = [];
+
+    if (summary.resolve_ip_error) {
+        issues.push("Hostname resolution from the device failed: " + summary.resolve_ip_error);
+    }
+
+    const wantsSSH = methods.some(m => m === "xml" || m === "resolv" || m === "trust-ca");
+    const wantsTelnet = methods.includes("telnet");
+
+    if (wantsSSH && !summary.ssh_success) {
+        issues.push("SSH is no longer reachable — required for: " +
+            methods.filter(m => m === "xml" || m === "resolv" || m === "trust-ca").join(", "));
+    }
+
+    if (wantsTelnet && !summary.telnet_reachable) {
+        issues.push("Telnet:17000 is no longer reachable — required for the telnet URL flip.");
+    }
+
+    // Sanity-check that the backend's planned config reflects the
+    // overrides we're about to write. Only meaningful for URL-flip
+    // methods (xml/telnet). Looser substring match: each of the four
+    // override URLs we sent must appear in the rendered planned XML.
+    if (methods.some(m => m === "xml" || m === "telnet")) {
+        const planned = summary.planned_config || "";
+        const expected = ["marge_url", "stats_url", "sw_update_url", "bmx_url"]
+            .map(k => opts[k])
+            .filter(u => !!u);
+        const missing = expected.filter(u => !planned.includes(u));
+        if (missing.length > 0) {
+            issues.push("Backend's planned config doesn't reflect these overrides: " + missing.join(", "));
+        }
+    }
+
+    return {ok: issues.length === 0, issues, summary};
+}
+
+// confirmPreflightIssues shows the issues to the user via confirm() so
+// they can override on a known-false-positive (e.g. a stale DNS that
+// they know will resolve at apply time). Returns true if the user
+// chose to proceed, false to abort.
+function confirmPreflightIssues(issues) {
+    const message =
+        "Pre-flight check found issues:\n\n" +
+        issues.map(s => "  • " + s).join("\n") +
+        "\n\nProceed anyway?";
+    return confirm(message);
+}
+
 // applySuggestedPlan triggers the recipe computeSuggestedPlan picked.
 // Passes the chosen method directly to migrate() — the legacy
 // migration-method dropdown is gone.
@@ -2883,6 +2956,26 @@ async function applySuggestedPlan() {
     const deviceId = document.getElementById("summary-device-id").value;
     if (!deviceId) {
         if (status) status.innerText = "❌ no device selected";
+        return;
+    }
+
+    if (status) {
+        status.innerText = "Pre-flight check…";
+        status.style.color = "#555";
+    }
+
+    // Authoritative re-check just before we touch the speaker — fresh
+    // backend summary tells us whether the device's transports and
+    // hostname resolution still look the way the cached state
+    // suggested. The user can override on a known-false-positive.
+    const targetUrl = document.getElementById("plan-target-url").value;
+    const opts = readPlanURLOptions();
+    const preflight = await runPreflightCheck(deviceId, [method], opts, targetUrl);
+    if (!preflight.ok && !confirmPreflightIssues(preflight.issues)) {
+        if (status) {
+            status.innerText = "Aborted — pre-flight issues unresolved";
+            status.style.color = "#c62828";
+        }
         return;
     }
 
@@ -3315,16 +3408,18 @@ async function applyCustomPlan() {
     };
 
     const steps = [];
+    const methods = [];
     if (flip === "xml" || flip === "telnet") {
         steps.push({label: `URL flip via ${flip}`, run: () => migrate(deviceId, ip, flip)});
+        methods.push(flip);
     }
     if (dns === "resolv") {
         steps.push({label: "DNS interception (resolv.conf hook + CA install)", run: () => migrate(deviceId, ip, "resolv")});
+        methods.push("resolv");
     }
     if (caInstall && dns !== "resolv") {
-        // resolv already trusts the CA; only do an explicit trust-ca
-        // when the user picked it standalone.
         steps.push({label: "Install local CA", run: () => trustCA(deviceId, ip)});
+        methods.push("trust-ca");
     }
 
     if (steps.length === 0) {
@@ -3334,6 +3429,20 @@ async function applyCustomPlan() {
 
     const applyBtn = document.getElementById("customize-apply-btn");
     if (applyBtn) applyBtn.disabled = true;
+
+    // Single authoritative pre-flight before the multi-step run. Each
+    // step's preconditions are checked against the same fresh backend
+    // summary; we don't re-fetch between steps because each step
+    // touches independent state.
+    setStatus("Pre-flight check…", "#555");
+    const targetUrl = document.getElementById("plan-target-url").value;
+    const opts = readPlanURLOptions();
+    const preflight = await runPreflightCheck(deviceId, methods, opts, targetUrl);
+    if (!preflight.ok && !confirmPreflightIssues(preflight.issues)) {
+        setStatus("Aborted — pre-flight issues unresolved", "#c62828");
+        if (applyBtn) applyBtn.disabled = false;
+        return;
+    }
 
     try {
         for (const step of steps) {
