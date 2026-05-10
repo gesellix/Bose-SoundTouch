@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,7 +57,12 @@ func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
 	// Render markdown to HTML
 	output := blackfriday.Run(content)
 
-	// Wrap in a documentation template with sidebar
+	// Wrap in a documentation template with sidebar. The user-supplied path
+	// is escaped before interpolation; the sidebar and rendered markdown
+	// output are server-controlled (loaded from local files) and may
+	// legitimately contain HTML.
+	titleSafe := html.EscapeString(path)
+
 	w.Header().Set("Content-Type", "text/html")
 	_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
@@ -95,7 +101,7 @@ func (s *Server) HandleDocs(w http.ResponseWriter, r *http.Request) {
         </div>
    	</div>
 </body>
-</html>`, path, sidebar, output)
+</html>`, titleSafe, sidebar, output)
 }
 
 // fixSidebarLinks ensures that relative links in the SUMMARY.md (sidebar)

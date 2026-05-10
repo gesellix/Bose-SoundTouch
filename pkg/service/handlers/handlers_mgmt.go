@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -144,7 +145,9 @@ func (s *Server) HandleMgmtSpotifyCallback(w http.ResponseWriter, r *http.Reques
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`<html><body><h1>Spotify Authorization Failed</h1><p>Error: ` + errMsg + `</p></body></html>`))
+		// html.EscapeString neutralises any HTML metacharacters in the
+		// caller-supplied error string before it lands in the response.
+		_, _ = w.Write([]byte(`<html><body><h1>Spotify Authorization Failed</h1><p>Error: ` + html.EscapeString(errMsg) + `</p></body></html>`))
 
 		return
 	}
@@ -487,7 +490,9 @@ func (s *Server) HandleMgmtAmazonCallback(w http.ResponseWriter, r *http.Request
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`<html><body><h1>Amazon Authorization Failed</h1><p>Error: ` + errMsg + `</p></body></html>`))
+		// html.EscapeString neutralises any HTML metacharacters in the
+		// caller-supplied error string before it lands in the response.
+		_, _ = w.Write([]byte(`<html><body><h1>Amazon Authorization Failed</h1><p>Error: ` + html.EscapeString(errMsg) + `</p></body></html>`))
 
 		return
 	}
