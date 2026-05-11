@@ -625,4 +625,99 @@ configured `swUpdateUrl`.
   implemented.
 - Running the round-trip probe on SSH-capable speakers too (as
   additional validation alongside the curl-from-device HTTPS test),
-  not just as the SSH-less fallback it is today.
+  not just as the SSH-less fallback it is today. **Subsumed by §9.8
+  — the round-trip probe is being removed; the passive observer is
+  transport-agnostic and replaces it for migrated speakers.**
+
+### 9.8 The swUpdate daemon-cache finding and removal of §9.5
+
+The §9.5 round-trip probe was retired after empirical testing on a
+fully-migrated speaker (FW 27.0.6) revealed that the `swUpdate`
+daemon **caches its target URL at boot and ignores live config
+writes**. The diagnostic sequence:
+
+1. Manual telnet flip of both layers — `sys configuration swUpdateUrl
+   <probe-url>` (runtime) **and** `envswitch boseurls set <marge>
+   <probe-url>` (persistence). `getpdo CurrentSystemConfiguration`
+   confirmed both writes stuck.
+2. HTTP GET `:8090/swUpdateCheck` to trigger fan-out.
+3. Service access log showed the device outbound landed on
+   `/updates/soundtouch` (the **previous** `swUpdateUrl` value, current
+   at the last daemon boot) and `/streaming/software/update/account/<id>`
+   (a separate Bose URL the daemon hits, routed to this service by DNS
+   interception). The probe URL was never dialed.
+
+This falsifies the original NEXT.md hypothesis that the persistence
+layer would override the runtime layer for the daemon's fan-out, and
+points instead at daemon-level URL caching. Two consequences:
+
+- **The §9.5 probe cannot work on migrated speakers without a
+  reboot.** The cached URL is set when the daemon starts; flipping
+  config after that point has no effect on what the daemon dials.
+- **The §9.5 probe likely cannot work on unmigrated speakers
+  either**, for the same reason — the daemon caches whatever URL it
+  read at startup, which on an unmigrated speaker is the Bose cloud
+  URL. We have no service running with the probe URL registered on
+  unmigrated speakers, so the original "it worked in testing" claim
+  has no empirical basis; it likely failed silently because nothing
+  was watching.
+
+The honest replacement is a **passive observer** (see
+`pkg/service/setup/peer_probe.go`):
+
+1. Register the device IP with an in-process observer
+   (`handlers.peerObserver`, wired via `PeerObserverMiddleware`).
+2. Nudge `:8090/swUpdateCheck` to make the daemon fan out *something*
+   sooner than its ~5min timer.
+3. Wait up to 30s for any inbound from that IP. On a migrated
+   speaker, DNS interception means the daemon's outbounds (update
+   fan-out, marge polls, BMX registry calls) all funnel through this
+   service regardless of which URL the daemon resolved internally —
+   so reachability reduces to *"did the device dial us at all."*
+
+Endpoint: `POST /setup/peer-probe/{deviceId}`. No device-state
+mutation; safe to re-run. Returns `{ok, result: {reached,
+observed_path, elapsed_ms}, error}` with the same UI keying as the
+old probe (`result.reached`).
+
+#### 9.8.1 The pre-flight panel branch
+
+The web UI's pre-flight orchestrator (`runApplyPreflight` in
+`script.js`) branches on `summary.is_migrated`:
+
+| Migration state                   | Reachability row                                                                                                             |
+|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| Migrated (`is_migrated=true`)     | "Reachability check (passive observer)" — calls `POST /setup/peer-probe/{deviceId}`.                                         |
+| Not migrated (incl. partial)      | Skip row "Round-trip validation runs after Apply + reboot" with the rationale "daemon caches swUpdateUrl at boot".           |
+
+Per-axis booleans (`xml_migrated`, `hosts_migrated`, `resolv_migrated`,
+`telnet_migrated`) remain visible in the State card, so the user can
+see which parts of the migration are already in place even when the
+overall flag is false. The skip row does not attempt the active probe
+on unmigrated speakers — the canonical telnet flow is:
+
+```
+Apply telnet config → user-initiated reboot → re-run pre-flight on
+the now-migrated speaker → passive observer confirms fan-out.
+```
+
+#### 9.8.2 Removal trail
+
+Removed (or scheduled for removal in a follow-up commit) at the time
+of §9.8 landing:
+
+- `pkg/service/setup/telnet_probe.go` — `RunTelnetRoundTripProbe`,
+  `ProbeRegistrar`, `TelnetProbeResult`, `generateProbeToken`.
+- `pkg/service/handlers/handlers_telnet_probe.go` — `HandleTelnetProbe`,
+  `HandleProbeInbound`, `telnetProbeTimeout`, `telnetProbeResponse`.
+- `pkg/service/handlers/probe_registry.go` — `probeRegistry` + tests.
+- `Server.probes` field.
+- Routes `/probe/{token}`, `/probe/{token}/*`, `/setup/telnet-probe/{deviceId}`.
+- The `target_url` query-param plumbing on the deprecated endpoint.
+- `script.js` — `checkTelnetRoundTrip` (orchestrator call site removed
+  in the commit that added the branch; function itself removed later).
+
+`isCommandNotFound` and `parseGetpdoConfig` stay — they are also used
+by the migration writer (`telnet_migration.go`), preflight reader
+(`telnet_preflight.go`), pairing path (`marge_pairing.go`), and
+cross-check (`preflight_crosscheck.go`).

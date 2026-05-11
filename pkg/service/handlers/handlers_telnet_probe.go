@@ -8,12 +8,21 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// DEPRECATED: handlers_telnet_probe.go (HandleTelnetProbe,
+// HandleProbeInbound, telnetProbeTimeout, telnetProbeResponse) is
+// scheduled for removal. The swUpdate daemon caches its target URL
+// at boot; the active flip in RunTelnetRoundTripProbe never reaches
+// the running daemon. See docs/analysis/TELNET-MIGRATION-METHOD.md
+// §9.8. Replaced by HandlePeerProbe (handlers_peer_probe.go).
+
 // telnetProbeTimeout caps how long the orchestrator waits for the
 // device's outbound swUpdateCheck fan-out to land on /probe/{token}.
 // 6s lines up with the existing telnet preflight budgets and is well
 // above the median observed round-trip (<1s on FW 27.0.6).
 const telnetProbeTimeout = 6 * time.Second
 
+// DEPRECATED: see the file-level note above.
+//
 // HandleProbeInbound is the catch-all for /probe/{token}/* — the path
 // the round-trip orchestrator sets as the speaker's swUpdateUrl. Any
 // hit signals the registered channel; the response body is a minimal
@@ -36,6 +45,8 @@ type telnetProbeResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// DEPRECATED: see the file-level note above.
+//
 // HandleTelnetProbe runs the SSH-less round-trip reachability check.
 // Generates a token, temporarily points the speaker's swUpdateUrl at
 // /probe/{token} via telnet, triggers :8090/swUpdateCheck, and reports

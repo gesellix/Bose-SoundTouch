@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+// DEPRECATED: ProbeRegistrar, TelnetProbeResult, generateProbeToken,
+// and RunTelnetRoundTripProbe are scheduled for removal. The swUpdate
+// daemon caches its target URL at boot and ignores live `sys
+// configuration` writes, so the temporary flip never reaches the
+// running daemon. See docs/analysis/TELNET-MIGRATION-METHOD.md §9.8.
+// Replaced by Manager.RunPeerReachabilityProbe in peer_probe.go for
+// the migrated case; pre-migration validation relies on the other
+// pre-flight rows plus the Apply + reboot cycle.
+
 // ProbeRegistrar is the rendezvous between the round-trip probe
 // orchestrator (which registers a token and waits) and an HTTP layer
 // (which signals the channel when the device's outbound lands on the
@@ -48,6 +57,8 @@ func generateProbeToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// DEPRECATED: see the package-level note above.
+//
 // RunTelnetRoundTripProbe is the SSH-less reachability check that
 // fills the gap the curl-from-device HTTPS test leaves on USB-
 // unlock-refusing speakers. The sequence:

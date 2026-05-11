@@ -872,6 +872,11 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 
 	r.Get("/", server.HandleRoot)
 	r.Get("/health", server.HandleHealth)
+	// DEPRECATED: /probe/{token}[/*] backs the deprecated round-trip
+	// probe (RunTelnetRoundTripProbe). Removed in a follow-up commit
+	// alongside the rest of the active-probe code path; see
+	// docs/analysis/TELNET-MIGRATION-METHOD.md §9.8.
+	//
 	// Telnet round-trip probe inbound. The orchestrator temporarily
 	// sets the speaker's swUpdateUrl to /probe/{token}; the speaker
 	// then fans out a request that we observe here. Catch-all suffix
@@ -1103,6 +1108,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 		r.Post("/test-connection/{deviceId}", server.HandleTestConnection)
 		r.Post("/test-hosts/{deviceId}", server.HandleTestHostsRedirection)
 		r.Post("/test-dns/{deviceId}", server.HandleTestDNSRedirection)
+		// DEPRECATED: see §9.8; removed in the follow-up commit.
 		r.Post("/telnet-probe/{deviceId}", server.HandleTelnetProbe)
 		r.Get("/ca.crt", server.HandleGetCACert)
 		r.Get("/proxy-settings", server.HandleGetProxySettings)

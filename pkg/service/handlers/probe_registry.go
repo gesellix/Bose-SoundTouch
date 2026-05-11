@@ -2,6 +2,13 @@ package handlers
 
 import "sync"
 
+// DEPRECATED: probeRegistry is scheduled for removal. The active
+// round-trip probe it backs cannot work without a reboot (the swUpdate
+// daemon caches its URL at boot). See
+// docs/analysis/TELNET-MIGRATION-METHOD.md §9.8. Replaced by
+// peerObserver (peer_observer.go) which keys on device IP and supports
+// passive post-migration reachability checks.
+
 // probeRegistry is the rendezvous between the telnet round-trip probe
 // orchestrator (which registers a one-shot token and waits for an
 // inbound) and the /probe/{token}/* HTTP handler (which closes the
