@@ -3018,11 +3018,49 @@ async function checkDNSRedirectionFromDevice(deviceId, targetUrl) {
     }
 }
 
+// checkPeerReachability is the post-migration passive observation
+// check: register interest in the device IP, nudge :8090/swUpdateCheck,
+// and report whether any inbound from that IP landed on this service
+// within the timeout. Used in place of the active swUpdateUrl round-
+// trip on already-migrated speakers, where the swUpdate daemon caches
+// its URL at boot and the active flip can't reach it without a reboot.
+// See pkg/service/setup/peer_probe.go for orchestration details.
+async function checkPeerReachability(deviceId) {
+    try {
+        const resp = await fetch(`/setup/peer-probe/${encodeURIComponent(deviceId)}`, {method: "POST"});
+        const result = await resp.json();
+        if (result.ok) {
+            const ms = result.result && result.result.elapsed_ms;
+            const path = result.result && result.result.observed_path;
+            let msg = "";
+            if (ms !== undefined && ms !== null) msg = `${ms}ms`;
+            if (path) msg = msg ? `${msg} (${path})` : path;
+            return {status: "ok", message: msg || undefined};
+        }
+        if (result.error) return {status: "fail", message: result.error.split("\n")[0]};
+        if (result.result && result.result.reached === false) {
+            return {status: "fail", message: "no inbound from device before timeout"};
+        }
+        return {status: "fail", message: "probe failed"};
+    } catch (e) {
+        return {status: "fail", message: String(e)};
+    }
+}
+
 // checkTelnetRoundTrip is the SSH-less alternative to the curl-from-
 // device HTTPS test: temporarily flips the speaker's swUpdateUrl via
 // telnet, triggers :8090/swUpdateCheck, and reports whether the
 // device's outbound landed on our /probe/{token} catch-all. See
 // pkg/service/setup/telnet_probe.go for the orchestration details.
+//
+// DEPRECATED: scheduled for removal. The swUpdate daemon caches its
+// URL at startup and ignores live `sys configuration` writes, so the
+// flip never reaches the running daemon. On a migrated speaker, the
+// passive observer (checkPeerReachability) is the honest test; on an
+// unmigrated speaker, no round-trip via swUpdateUrl is possible
+// without a reboot — Apply + reboot is the only path. The orchestrator
+// no longer calls this function; it is retained only until the
+// deletion commit lands.
 async function checkTelnetRoundTrip(deviceId, targetUrl) {
     try {
         const q = `?target_url=${encodeURIComponent(targetUrl)}`;
@@ -3068,21 +3106,23 @@ async function runApplyPreflight(deviceId, methods, opts, targetUrl) {
     results.push({name: "Backend summary re-check", status: "ok"});
     const summary = r.summary;
 
-    // Step 2: reachability from the device. Each transport gets its
-    // own check — they exercise different network paths:
+    // Step 2: reachability from the device. Two evidence sources:
     //
     //   - SSH (curl from device) verifies inbound TCP from the
     //     speaker to our HTTP/HTTPS port using the speaker's normal
-    //     userspace stack.
-    //   - Telnet round-trip exercises the outbound from the
-    //     speaker's `swUpdateUrl` fan-out, which uses a different
-    //     code path in the firmware. A speaker that passes the SSH
-    //     curl test but fails the round-trip probe (or vice versa)
-    //     reveals a real connectivity asymmetry worth surfacing.
+    //     userspace stack. Works pre- or post-migration as long as
+    //     SSH is unlocked.
+    //   - Passive observer (post-migration only) verifies the
+    //     swUpdate daemon is actually dialing this service. Replaces
+    //     the deprecated active swUpdateUrl round-trip, which the
+    //     daemon ignores because it caches its URL at boot.
     //
-    // Both checks run when both transports are reachable. If neither
-    // is reachable, the row is surfaced as a deliberate skip rather
-    // than silently dropped.
+    // On an unmigrated/partially-migrated telnet-only speaker, no
+    // no-reboot validation of the daemon's outbound is possible — we
+    // surface a skip row explaining "Apply + reboot is required to
+    // validate the fan-out". Per-axis migration state is still visible
+    // in the State card above, so the user can see which parts are
+    // already in place.
     const connectionTestURL = preflightConnectionTestURL(summary, methods, targetUrl);
     const ranAnyReachability = (summary.ssh_success && !!connectionTestURL) || summary.telnet_reachable;
 
@@ -3097,11 +3137,19 @@ async function runApplyPreflight(deviceId, methods, opts, targetUrl) {
     }
 
     if (summary.telnet_reachable) {
-        const item = addPreflightItem("Telnet round-trip probe (swUpdateUrl)");
-        setPreflightItemStatus(item, "running");
-        const cr = await checkTelnetRoundTrip(deviceId, targetUrl);
-        setPreflightItemStatus(item, cr.status, cr.message);
-        results.push({name: "Telnet round-trip probe", ...cr});
+        if (summary.is_migrated) {
+            const label = "Reachability check (passive observer)";
+            const item = addPreflightItem(label);
+            setPreflightItemStatus(item, "running");
+            const cr = await checkPeerReachability(deviceId);
+            setPreflightItemStatus(item, cr.status, cr.message);
+            results.push({name: label, ...cr});
+        } else {
+            const label = "Round-trip validation runs after Apply + reboot";
+            const item = addPreflightItem(label);
+            setPreflightItemStatus(item, "skip", "daemon caches swUpdateUrl at boot; reboot required to validate fan-out");
+            results.push({name: label, status: "skip", message: "runs after Apply + reboot"});
+        }
     }
 
     if (!ranAnyReachability) {
