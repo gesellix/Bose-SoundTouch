@@ -16,6 +16,7 @@ func TestWebSocketEventType_String(t *testing.T) {
 		{"ConnectionState", EventTypeConnectionState, "Connection State Updated"},
 		{"PresetUpdated", EventTypePresetUpdated, "Preset Updated"},
 		{"ZoneUpdated", EventTypeZoneUpdated, "Zone Updated"},
+		{"GroupUpdated", EventTypeGroupUpdated, "Stereo Pair Updated"},
 		{"BassUpdated", EventTypeBassUpdated, "Bass Updated"},
 		{"ClockTimeUpdated", EventTypeClockTimeUpdated, "Clock Time Updated"},
 		{"ClockDisplayUpdated", EventTypeClockDisplayUpdated, "Clock Display Updated"},
@@ -185,6 +186,89 @@ func TestParseWebSocketEvent(t *testing.T) {
 		_, err := ParseWebSocketEvent([]byte(xmlData))
 		if err == nil {
 			t.Error("Expected error for invalid XML, got nil")
+		}
+	})
+
+	t.Run("ValidGroupUpdatedEvent", func(t *testing.T) {
+		// The device fans this out to both ROLE devices when a stereo
+		// pair is created via POST /addGroup.
+		xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
+<updates deviceID="9070658C9D4A">
+	<groupUpdated deviceID="9070658C9D4A">
+		<group id="1234567">
+			<name>Living Room Pair</name>
+			<masterDeviceId>9070658C9D4A</masterDeviceId>
+			<roles>
+				<groupRole>
+					<deviceId>9070658C9D4A</deviceId>
+					<role>LEFT</role>
+					<ipAddress>192.168.1.131</ipAddress>
+				</groupRole>
+				<groupRole>
+					<deviceId>F45EAB3115DA</deviceId>
+					<role>RIGHT</role>
+					<ipAddress>192.168.1.134</ipAddress>
+				</groupRole>
+			</roles>
+			<status>GROUP_OK</status>
+		</group>
+	</groupUpdated>
+</updates>`
+
+		event, err := ParseWebSocketEvent([]byte(xmlData))
+		if err != nil {
+			t.Fatalf("ParseWebSocketEvent: %v", err)
+		}
+
+		if !event.HasEventType(EventTypeGroupUpdated) {
+			t.Fatal("HasEventType(EventTypeGroupUpdated) = false, want true")
+		}
+
+		if event.GroupUpdated == nil {
+			t.Fatal("GroupUpdated is nil")
+		}
+
+		g := event.GroupUpdated.Group
+
+		if g.ID != "1234567" {
+			t.Errorf("group ID = %q, want 1234567", g.ID)
+		}
+
+		if g.MasterDeviceID != "9070658C9D4A" {
+			t.Errorf("MasterDeviceID = %q", g.MasterDeviceID)
+		}
+
+		if len(g.Roles.Roles) != 2 || g.Roles.Roles[0].Role != "LEFT" || g.Roles.Roles[1].Role != "RIGHT" {
+			t.Errorf("roles not parsed as LEFT/RIGHT: %+v", g.Roles.Roles)
+		}
+
+		if g.Status != "GROUP_OK" {
+			t.Errorf("status = %q, want GROUP_OK", g.Status)
+		}
+	})
+
+	t.Run("GroupUpdatedTeardown", func(t *testing.T) {
+		// On /removeGroup, the device emits a groupUpdated with an empty
+		// <group/> body. Parsing must surface that as IsEmpty=true so the
+		// UI can render "pair dissolved" cleanly.
+		xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
+<updates deviceID="9070658C9D4A">
+	<groupUpdated deviceID="9070658C9D4A">
+		<group/>
+	</groupUpdated>
+</updates>`
+
+		event, err := ParseWebSocketEvent([]byte(xmlData))
+		if err != nil {
+			t.Fatalf("ParseWebSocketEvent: %v", err)
+		}
+
+		if event.GroupUpdated == nil {
+			t.Fatal("GroupUpdated is nil")
+		}
+
+		if !event.GroupUpdated.Group.IsEmpty() {
+			t.Errorf("Group.IsEmpty() = false on teardown; got %+v", event.GroupUpdated.Group)
 		}
 	})
 }

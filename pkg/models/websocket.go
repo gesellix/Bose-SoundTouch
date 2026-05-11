@@ -21,6 +21,10 @@ const (
 	EventTypePresetUpdated WebSocketEventType = "presetsUpdated"
 	// EventTypeZoneUpdated indicates a zone configuration change
 	EventTypeZoneUpdated WebSocketEventType = "zoneUpdated"
+	// EventTypeGroupUpdated is emitted to both ROLE devices when an ST-10
+	// stereo pair is created, renamed, or removed via /addGroup,
+	// /updateGroup, or /removeGroup.
+	EventTypeGroupUpdated WebSocketEventType = "groupUpdated"
 	// EventTypeBassUpdated indicates a bass level change
 	EventTypeBassUpdated WebSocketEventType = "bassUpdated"
 	// EventTypeClockTimeUpdated indicates a clock time change
@@ -56,6 +60,8 @@ func (e WebSocketEventType) String() string {
 		return "Preset Updated"
 	case EventTypeZoneUpdated:
 		return "Zone Updated"
+	case EventTypeGroupUpdated:
+		return "Stereo Pair Updated"
 	case EventTypeBassUpdated:
 		return "Bass Updated"
 	case EventTypeClockTimeUpdated:
@@ -88,6 +94,7 @@ type WebSocketEvent struct {
 	ConnectionStateUpdated *ConnectionStateUpdatedEvent `xml:"connectionStateUpdated,omitempty"`
 	PresetUpdated          *PresetUpdatedEvent          `xml:"presetsUpdated,omitempty"`
 	ZoneUpdated            *ZoneUpdatedEvent            `xml:"zoneUpdated,omitempty"`
+	GroupUpdated           *GroupUpdatedEvent           `xml:"groupUpdated,omitempty"`
 	BassUpdated            *BassUpdatedEvent            `xml:"bassUpdated,omitempty"`
 	ClockTimeUpdated       *ClockTimeUpdatedEvent       `xml:"clockTimeUpdated,omitempty"`
 	ClockDisplayUpdated    *ClockDisplayUpdatedEvent    `xml:"clockDisplayUpdated,omitempty"`
@@ -120,6 +127,10 @@ func (e *WebSocketEvent) GetEvents() []interface{} {
 
 	if e.ZoneUpdated != nil {
 		events = append(events, e.ZoneUpdated)
+	}
+
+	if e.GroupUpdated != nil {
+		events = append(events, e.GroupUpdated)
 	}
 
 	if e.BassUpdated != nil {
@@ -213,6 +224,16 @@ type ZoneUpdatedEvent struct {
 	XMLName  xml.Name `xml:"zoneUpdated"`
 	DeviceID string   `xml:"deviceID,attr"`
 	Zone     Zone     `xml:"zone"`
+}
+
+// GroupUpdatedEvent represents an ST-10 stereo-pair update notification.
+// The device fans this event out to both LEFT and RIGHT speakers whenever
+// the pair is created, renamed, or removed. Group will be the zero value
+// for a teardown notification — see (*Group).IsEmpty.
+type GroupUpdatedEvent struct {
+	XMLName  xml.Name `xml:"groupUpdated"`
+	DeviceID string   `xml:"deviceID,attr"`
+	Group    Group    `xml:"group"`
 }
 
 // Zone represents multiroom zone information
@@ -373,6 +394,7 @@ type WebSocketEventHandlers struct {
 	OnConnectionState     TypedEventHandler[*ConnectionStateUpdatedEvent]
 	OnPresetUpdated       TypedEventHandler[*PresetUpdatedEvent]
 	OnZoneUpdated         TypedEventHandler[*ZoneUpdatedEvent]
+	OnGroupUpdated        TypedEventHandler[*GroupUpdatedEvent]
 	OnBassUpdated         TypedEventHandler[*BassUpdatedEvent]
 	OnClockTimeUpdated    TypedEventHandler[*ClockTimeUpdatedEvent]
 	OnClockDisplayUpdated TypedEventHandler[*ClockDisplayUpdatedEvent]
@@ -382,7 +404,18 @@ type WebSocketEventHandlers struct {
 	OnLanguageUpdated     TypedEventHandler[*LanguageUpdatedEvent]
 	OnUnknownEvent        EventHandler
 	OnSpecialMessage      SpecialMessageHandler
+	// OnRawMessage fires for every received frame before any parsing
+	// happens. Use it for debug/observability tooling that wants to see
+	// exactly what the device sent on the wire — the typed handlers
+	// above still run afterwards, independently. parseErr is the result
+	// of the XML parse: nil for messages that decoded cleanly, non-nil
+	// for malformed payloads. The slice is owned by the caller; copy
+	// before retaining.
+	OnRawMessage RawMessageHandler
 }
+
+// RawMessageHandler defines the signature for raw-frame handlers.
+type RawMessageHandler func(data []byte, parseErr error)
 
 // ParseWebSocketEvent attempts to parse a WebSocket message into a specific event type
 func ParseWebSocketEvent(data []byte) (*WebSocketEvent, error) {
@@ -411,6 +444,8 @@ func (e *WebSocketEvent) getFieldByEventType(eventType WebSocketEventType) inter
 		field = e.PresetUpdated
 	case EventTypeZoneUpdated:
 		field = e.ZoneUpdated
+	case EventTypeGroupUpdated:
+		field = e.GroupUpdated
 	case EventTypeBassUpdated:
 		field = e.BassUpdated
 	case EventTypeClockTimeUpdated:
@@ -462,6 +497,8 @@ func isNil(i interface{}) bool {
 		return v == nil
 	case *ZoneUpdatedEvent:
 		return v == nil
+	case *GroupUpdatedEvent:
+		return v == nil
 	case *BassUpdatedEvent:
 		return v == nil
 	case *ClockTimeUpdatedEvent:
@@ -508,6 +545,8 @@ func (e *WebSocketEvent) HasEventType(eventType WebSocketEventType) bool {
 		return e.PresetUpdated != nil
 	case EventTypeZoneUpdated:
 		return e.ZoneUpdated != nil
+	case EventTypeGroupUpdated:
+		return e.GroupUpdated != nil
 	case EventTypeBassUpdated:
 		return e.BassUpdated != nil
 	case EventTypeClockTimeUpdated:
@@ -549,6 +588,10 @@ func (e *WebSocketEvent) GetEventTypes() []WebSocketEventType {
 
 	if e.ZoneUpdated != nil {
 		types = append(types, EventTypeZoneUpdated)
+	}
+
+	if e.GroupUpdated != nil {
+		types = append(types, EventTypeGroupUpdated)
 	}
 
 	if e.BassUpdated != nil {

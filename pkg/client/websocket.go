@@ -140,6 +140,17 @@ func (ws *WebSocketClient) OnZoneUpdated(handler models.TypedEventHandler[*model
 	ws.handlers.OnZoneUpdated = handler
 }
 
+// OnGroupUpdated sets a handler for ST-10 stereo-pair update events.
+// The device fans these out to both LEFT and RIGHT speakers whenever the
+// pair is created, renamed, or removed, so callers will see one event per
+// affected device.
+func (ws *WebSocketClient) OnGroupUpdated(handler models.TypedEventHandler[*models.GroupUpdatedEvent]) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	ws.handlers.OnGroupUpdated = handler
+}
+
 // OnBassUpdated sets a handler for bass update events
 func (ws *WebSocketClient) OnBassUpdated(handler models.TypedEventHandler[*models.BassUpdatedEvent]) {
 	ws.mu.Lock()
@@ -154,6 +165,18 @@ func (ws *WebSocketClient) OnUnknownEvent(handler models.EventHandler) {
 	defer ws.mu.Unlock()
 
 	ws.handlers.OnUnknownEvent = handler
+}
+
+// OnRawMessage sets a handler that fires for every incoming frame with
+// the raw bytes and the result of attempting to XML-parse them. The
+// typed handlers (OnNowPlaying, OnGroupUpdated, ...) still run
+// afterwards on successful parses, so OnRawMessage is purely additive —
+// intended for debug/observability tooling.
+func (ws *WebSocketClient) OnRawMessage(handler models.RawMessageHandler) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	ws.handlers.OnRawMessage = handler
 }
 
 // OnSpecialMessage sets a handler for special (non-updates) messages
@@ -379,26 +402,45 @@ func (ws *WebSocketClient) attemptReconnect(config *WebSocketConfig) {
 
 // handleMessage processes incoming WebSocket messages
 func (ws *WebSocketClient) handleMessage(data []byte) {
-	// Check if this is a SoundTouchSdkInfo or other non-updates message
+	// Special (non-updates) messages take their own decode path and
+	// surface raw payloads to the OnRawMessage hook from there, so
+	// observers see exactly one notification per frame.
 	if !ws.isUpdatesMessage(data) {
 		ws.handleSpecialMessage(data)
 		return
 	}
 
-	// Parse the WebSocket event
-	event, err := models.ParseWebSocketEvent(data)
-	if err != nil {
-		ws.logger.Printf("Failed to parse WebSocket message: %v", err)
+	event, parseErr := models.ParseWebSocketEvent(data)
+
+	ws.fireRawMessage(data, parseErr)
+
+	if parseErr != nil {
+		ws.logger.Printf("Failed to parse WebSocket message: %v", parseErr)
 		return
 	}
 
-	// Process each event type in the message
 	ws.handleEvent(event)
+}
+
+// fireRawMessage invokes the OnRawMessage hook if one is registered.
+// Kept separate so the read path doesn't have to repeat the locking
+// dance for every frame.
+func (ws *WebSocketClient) fireRawMessage(data []byte, parseErr error) {
+	ws.mu.RLock()
+	handler := ws.handlers.OnRawMessage
+	ws.mu.RUnlock()
+
+	if handler != nil {
+		handler(data, parseErr)
+	}
 }
 
 // handleSpecialMessage processes special (non-updates) WebSocket messages
 func (ws *WebSocketClient) handleSpecialMessage(data []byte) {
 	specialMessage, err := models.ParseSpecialMessage(data)
+
+	ws.fireRawMessage(data, err)
+
 	if err != nil {
 		ws.logger.Printf("Unknown special message type: %v", err)
 		ws.logger.Printf("Raw message: %s", string(data))
@@ -464,6 +506,13 @@ func (ws *WebSocketClient) dispatchTypedEventContinued(handlers *models.WebSocke
 	case models.EventTypeZoneUpdated:
 		if handlers.OnZoneUpdated != nil && event.ZoneUpdated != nil {
 			handlers.OnZoneUpdated(event.ZoneUpdated)
+		}
+
+		return true
+
+	case models.EventTypeGroupUpdated:
+		if handlers.OnGroupUpdated != nil && event.GroupUpdated != nil {
+			handlers.OnGroupUpdated(event.GroupUpdated)
 		}
 
 		return true

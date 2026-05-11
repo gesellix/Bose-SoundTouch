@@ -1,0 +1,218 @@
+package main
+
+import (
+	"fmt"
+	"net"
+
+	"github.com/gesellix/bose-soundtouch/pkg/client"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/speaker"
+	"github.com/urfave/cli/v2"
+)
+
+// getGroupStatus retrieves and prints the device's current stereo-pair state.
+func getGroupStatus(c *cli.Context) error {
+	clientConfig := GetClientConfig(c)
+	PrintDeviceHeader("Getting group information", clientConfig.Host, clientConfig.Port)
+
+	client, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to create client: %v", err))
+		return err
+	}
+
+	group, err := client.GetGroup()
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to get group: %v", err))
+		return err
+	}
+
+	if group.IsEmpty() {
+		fmt.Println("Device is not in a stereo pair")
+		return nil
+	}
+
+	printGroup(group)
+
+	return nil
+}
+
+// createGroup forms a stereo pair on the LEFT speaker, which becomes the master.
+func createGroup(c *cli.Context) error {
+	leftIP := c.String("left")
+	rightIP := c.String("right")
+	name := c.String("name")
+
+	if net.ParseIP(leftIP) == nil {
+		PrintError(fmt.Sprintf("Invalid left IP address: %s", leftIP))
+		return fmt.Errorf("invalid left IP: %s", leftIP)
+	}
+
+	if net.ParseIP(rightIP) == nil {
+		PrintError(fmt.Sprintf("Invalid right IP address: %s", rightIP))
+		return fmt.Errorf("invalid right IP: %s", rightIP)
+	}
+
+	PrintDeviceHeader(fmt.Sprintf("Creating stereo pair: LEFT=%s RIGHT=%s", leftIP, rightIP), leftIP, speaker.HTTPPort)
+
+	leftInfo, err := fetchDeviceInfo(c, leftIP)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to read LEFT device info: %v", err))
+		return err
+	}
+
+	rightInfo, err := fetchDeviceInfo(c, rightIP)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to read RIGHT device info: %v", err))
+		return err
+	}
+
+	if name == "" {
+		name = fmt.Sprintf("%s + %s", leftInfo.Name, rightInfo.Name)
+	}
+
+	req := &models.Group{
+		Name:           name,
+		MasterDeviceID: leftInfo.DeviceID,
+		Roles: models.GroupRoles{
+			Roles: []models.GroupRole{
+				{DeviceID: leftInfo.DeviceID, Role: "LEFT", IPAddress: leftIP},
+				{DeviceID: rightInfo.DeviceID, Role: "RIGHT", IPAddress: rightIP},
+			},
+		},
+	}
+
+	leftClient, err := clientForHost(c, leftIP)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to create client for LEFT: %v", err))
+		return err
+	}
+
+	result, err := leftClient.AddGroup(req)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to create group: %v", err))
+		return err
+	}
+
+	PrintSuccess(fmt.Sprintf("Stereo pair created (id=%s)", result.ID))
+	printGroup(result)
+
+	return nil
+}
+
+// renameGroup updates the name of the existing stereo pair. The device
+// requires the full structure on every update, so we fetch the current
+// state first.
+func renameGroup(c *cli.Context) error {
+	clientConfig := GetClientConfig(c)
+	newName := c.String("name")
+
+	if newName == "" {
+		PrintError("--name is required")
+		return fmt.Errorf("name is required")
+	}
+
+	PrintDeviceHeader(fmt.Sprintf("Renaming stereo pair to %q", newName), clientConfig.Host, clientConfig.Port)
+
+	stClient, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to create client: %v", err))
+		return err
+	}
+
+	current, err := stClient.GetGroup()
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to read current group: %v", err))
+		return err
+	}
+
+	if current.IsEmpty() {
+		PrintError("Device is not in a stereo pair — nothing to rename")
+		return fmt.Errorf("no group configured")
+	}
+
+	// Status is read-only on the device side; don't echo it back.
+	current.Status = ""
+	current.Name = newName
+
+	result, err := stClient.UpdateGroup(current)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to rename group: %v", err))
+		return err
+	}
+
+	PrintSuccess(fmt.Sprintf("Stereo pair renamed to %q", result.Name))
+	printGroup(result)
+
+	return nil
+}
+
+// removeGroup tears down the device's stereo pair.
+func removeGroup(c *cli.Context) error {
+	clientConfig := GetClientConfig(c)
+	PrintDeviceHeader("Removing stereo pair", clientConfig.Host, clientConfig.Port)
+
+	stClient, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to create client: %v", err))
+		return err
+	}
+
+	if err := stClient.RemoveGroup(); err != nil {
+		PrintError(fmt.Sprintf("Failed to remove group: %v", err))
+		return err
+	}
+
+	PrintSuccess("Stereo pair removed")
+
+	return nil
+}
+
+// fetchDeviceInfo builds a one-off client for the given IP and reads /info.
+// Reused for both halves of a `create` invocation so the caller doesn't have
+// to babysit two host/port pairs.
+func fetchDeviceInfo(c *cli.Context, host string) (*models.DeviceInfo, error) {
+	stClient, err := clientForHost(c, host)
+	if err != nil {
+		return nil, err
+	}
+
+	return stClient.GetDeviceInfo()
+}
+
+// clientForHost mirrors CreateSoundTouchClient but overrides the host so we
+// can talk to a speaker other than the one named in --host.
+func clientForHost(c *cli.Context, host string) (*client.Client, error) {
+	cfg, err := loadConfig(c.Duration("timeout"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	return client.NewClient(&client.Config{
+		Host:      host,
+		Port:      speaker.HTTPPort,
+		Timeout:   cfg.HTTPTimeout,
+		UserAgent: cfg.UserAgent,
+	}), nil
+}
+
+func printGroup(g *models.Group) {
+	fmt.Println("Stereo Pair Configuration:")
+	fmt.Printf("  ID:        %s\n", g.ID)
+	fmt.Printf("  Name:      %s\n", g.Name)
+	fmt.Printf("  Master:    %s\n", g.MasterDeviceID)
+
+	if g.Status != "" {
+		fmt.Printf("  Status:    %s\n", g.Status)
+	}
+
+	for _, r := range g.Roles.Roles {
+		fmt.Printf("  %-5s     %s", r.Role, r.DeviceID)
+
+		if r.IPAddress != "" {
+			fmt.Printf(" (IP: %s)", r.IPAddress)
+		}
+
+		fmt.Println()
+	}
+}

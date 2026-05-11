@@ -23,6 +23,12 @@ func eventSubscribe(c *cli.Context) error {
 	filterStr := c.String("filter")
 	filters := parseEventFilters(filterStr)
 
+	debugMode, err := parseDebugMode(c.String("debug"))
+	if err != nil {
+		PrintError(err.Error())
+		return err
+	}
+
 	// Parse duration
 	duration := c.Duration("duration")
 	verbose := c.Bool("verbose")
@@ -59,6 +65,10 @@ func eventSubscribe(c *cli.Context) error {
 
 	// Set up event handlers
 	setupEventHandlers(wsClient, filters, verbose)
+
+	if debugMode != debugOff {
+		installDebugHook(wsClient, debugMode)
+	}
 
 	// Connect to WebSocket
 	fmt.Println("🔌 Connecting to WebSocket...")
@@ -127,11 +137,78 @@ func eventSubscribe(c *cli.Context) error {
 	return nil
 }
 
+// debugMode controls when the WebSocket subscribe loop prints raw frames
+// to stderr. "off" disables debug output entirely (the production default
+// when --debug is unset).
+type debugMode int
+
+const (
+	debugOff debugMode = iota
+	debugAll
+	debugUnknown
+	debugErrors
+)
+
+func parseDebugMode(s string) (debugMode, error) {
+	switch strings.TrimSpace(s) {
+	case "":
+		return debugOff, nil
+	case "all":
+		return debugAll, nil
+	case "unknown":
+		return debugUnknown, nil
+	case "errors":
+		return debugErrors, nil
+	default:
+		return debugOff, fmt.Errorf("invalid --debug value %q (want one of: all, unknown, errors)", s)
+	}
+}
+
+// installDebugHook wires an OnRawMessage handler that prints the raw
+// frame to stderr based on the chosen mode. Stays out of stdout so
+// debug output can be filtered/grep'd independently of normal events.
+func installDebugHook(ws *client.WebSocketClient, mode debugMode) {
+	ws.OnRawMessage(func(data []byte, parseErr error) {
+		switch mode {
+		case debugAll:
+			printRawFrame(data, parseErr, "all")
+		case debugErrors:
+			if parseErr != nil {
+				printRawFrame(data, parseErr, "errors")
+			}
+		case debugUnknown:
+			// "Unknown" = parsed successfully but no known event types
+			// matched. Parse errors also qualify, since they're frames
+			// the client couldn't interpret either.
+			if parseErr != nil {
+				printRawFrame(data, parseErr, "unknown:parse-error")
+				return
+			}
+
+			ev, err := models.ParseWebSocketEvent(data)
+			if err != nil || len(ev.GetEventTypes()) == 0 {
+				printRawFrame(data, err, "unknown")
+			}
+		case debugOff:
+			// nothing
+		}
+	})
+}
+
+func printRawFrame(data []byte, parseErr error, tag string) {
+	prefix := "[ws-debug:" + tag + "]"
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "%s parse-error: %v\n", prefix, parseErr)
+	}
+
+	fmt.Fprintf(os.Stderr, "%s %s\n", prefix, string(data))
+}
+
 // parseEventFilters validates and parses the filter string
 func parseEventFilters(eventFilter string) map[string]bool {
 	validFilters := map[string]bool{
 		"nowPlaying": true, "volume": true, "connection": true,
-		"preset": true, "zone": true, "bass": true,
+		"preset": true, "zone": true, "group": true, "bass": true,
 		"sdkInfo": true, "userActivity": true,
 	}
 
@@ -214,6 +291,13 @@ func setupEventHandlers(wsClient *client.WebSocketClient, filters map[string]boo
 	if filters == nil || filters["zone"] {
 		wsClient.OnZoneUpdated(func(event *models.ZoneUpdatedEvent) {
 			handleZoneEvent(event)
+		})
+	}
+
+	// Stereo-pair (group) events — ST-10 only
+	if filters == nil || filters["group"] {
+		wsClient.OnGroupUpdated(func(event *models.GroupUpdatedEvent) {
+			handleGroupEvent(event)
 		})
 	}
 
@@ -355,6 +439,34 @@ func handleZoneEvent(event *models.ZoneUpdatedEvent) {
 		}
 	} else {
 		fmt.Println("  👤 Single device (no zone)")
+	}
+}
+
+func handleGroupEvent(event *models.GroupUpdatedEvent) {
+	group := &event.Group
+	fmt.Printf("\n🎧 Stereo-Pair Update [%s]:\n", event.DeviceID)
+
+	if group.IsEmpty() {
+		fmt.Println("  ⛓️‍💥 Pair dissolved (no group configured)")
+		return
+	}
+
+	fmt.Printf("  🆔 ID:     %s\n", group.ID)
+	fmt.Printf("  📛 Name:   %s\n", group.Name)
+	fmt.Printf("  👑 Master: %s\n", group.MasterDeviceID)
+
+	if group.Status != "" {
+		fmt.Printf("  ✅ Status: %s\n", group.Status)
+	}
+
+	for _, r := range group.Roles.Roles {
+		fmt.Printf("  %-5s     %s", r.Role, r.DeviceID)
+
+		if r.IPAddress != "" {
+			fmt.Printf(" (IP: %s)", r.IPAddress)
+		}
+
+		fmt.Println()
 	}
 }
 

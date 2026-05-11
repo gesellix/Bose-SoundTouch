@@ -1478,6 +1478,64 @@ func main() {
 					},
 				},
 			},
+			// Stereo-pair (group) commands — ST-10 only
+			{
+				Name:    "group",
+				Aliases: []string{"g"},
+				Usage:   "ST-10 stereo-pair management (left/right channel pairing)",
+				Subcommands: []*cli.Command{
+					{
+						Name:   "status",
+						Usage:  "Show the device's current stereo-pair configuration",
+						Action: getGroupStatus,
+						Before: RequireHost,
+					},
+					{
+						Name:   "create",
+						Usage:  "Form a stereo pair (LEFT speaker becomes master)",
+						Action: createGroup,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "left",
+								Aliases:  []string{"l"},
+								Usage:    "IP address of the LEFT speaker (will be master)",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:     "right",
+								Aliases:  []string{"r"},
+								Usage:    "IP address of the RIGHT speaker",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:    "name",
+								Aliases: []string{"n"},
+								Usage:   "Pair name (defaults to \"<left> + <right>\")",
+							},
+						},
+					},
+					{
+						Name:   "rename",
+						Usage:  "Rename the existing stereo pair on the device",
+						Action: renameGroup,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "name",
+								Aliases:  []string{"n"},
+								Usage:    "New pair name",
+								Required: true,
+							},
+						},
+						Before: RequireHost,
+					},
+					{
+						Name:   "remove",
+						Usage:  "Dissolve the device's stereo pair",
+						Action: removeGroup,
+						Before: RequireHost,
+					},
+				},
+			},
 			// Advanced Audio commands
 			{
 				Name:    "audio",
@@ -2093,7 +2151,7 @@ func main() {
 							&cli.StringFlag{
 								Name:    "filter",
 								Aliases: []string{"f"},
-								Usage:   "Filter events by type (comma-separated): nowPlaying,volume,connection,preset,zone,bass,sdkInfo,userActivity",
+								Usage:   "Filter events by type (comma-separated): nowPlaying,volume,connection,preset,zone,group,bass,sdkInfo,userActivity",
 							},
 							&cli.DurationFlag{
 								Name:    "duration",
@@ -2104,6 +2162,10 @@ func main() {
 							&cli.BoolFlag{
 								Name:  "no-reconnect",
 								Usage: "Disable automatic reconnection on connection loss",
+							},
+							&cli.StringFlag{
+								Name:  "debug",
+								Usage: "Print raw WebSocket frames to stderr — one of: all, unknown, errors",
 							},
 							&cli.BoolFlag{
 								Name:    "verbose",

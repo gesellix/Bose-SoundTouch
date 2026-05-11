@@ -153,10 +153,8 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/speaker"
 )
-
-// defaultSoundTouchPort is the standard port for SoundTouch devices
-const defaultSoundTouchPort = 8090
 
 // Client represents a SoundTouch API client
 type Client struct {
@@ -204,7 +202,7 @@ func NewClient(config *Config) *Client {
 		// Fallback for invalid URLs
 		port := config.Port
 		if port == 0 {
-			port = 8090
+			port = speaker.HTTPPort
 		}
 
 		return &Client{
@@ -223,7 +221,7 @@ func NewClient(config *Config) *Client {
 		// No port in the host string, use the one from config or default
 		port := config.Port
 		if port == 0 {
-			port = 8090
+			port = speaker.HTTPPort
 		}
 
 		u.Host = net.JoinHostPort(u.Host, fmt.Sprintf("%d", port))
@@ -231,7 +229,7 @@ func NewClient(config *Config) *Client {
 		// Empty port, use config or default
 		port := config.Port
 		if port == 0 {
-			port = 8090
+			port = speaker.HTTPPort
 		}
 
 		u.Host = net.JoinHostPort(u.Hostname(), fmt.Sprintf("%d", port))
@@ -1378,6 +1376,58 @@ func (c *Client) GetZoneMembers() ([]string, error) {
 	}
 
 	return zone.GetAllDeviceIDs(), nil
+}
+
+// GetGroup retrieves the current stereo-pair configuration from the device.
+// An empty <group/> response is reported as a zero-value Group; callers can
+// distinguish with (*Group).IsEmpty().
+//
+// ST-10 is the only product that supports stereo pairs; on other devices
+// the call is harmless but will always return an empty group. The endpoint
+// is named /getGroup on the device (mirroring /getZone), even though some
+// third-party wikis document it as plain /group.
+func (c *Client) GetGroup() (*models.Group, error) {
+	var g models.Group
+
+	err := c.get("/getGroup", &g)
+
+	return &g, err
+}
+
+// AddGroup creates a new stereo pair on the device addressed by this client,
+// which becomes the master. The supplied group must contain both LEFT and
+// RIGHT roles; the device assigns the group ID and echoes the full state
+// in the response.
+func (c *Client) AddGroup(group *models.Group) (*models.Group, error) {
+	var result models.Group
+	if err := c.postWithResponse("/addGroup", group, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// UpdateGroup renames or otherwise updates an existing stereo pair. The
+// device requires the full group structure on every update, not just the
+// changed fields.
+func (c *Client) UpdateGroup(group *models.Group) (*models.Group, error) {
+	var result models.Group
+	if err := c.postWithResponse("/updateGroup", group, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// RemoveGroup tears down the device's stereo pair. The device returns an
+// empty <group/> on success — surfaced here as a non-error nil.
+//
+// Note: the wiki specifies GET (not DELETE) for this endpoint, so we honour
+// that despite the state-mutating semantics.
+func (c *Client) RemoveGroup() error {
+	var g models.Group
+
+	return c.get("/removeGroup", &g)
 }
 
 // SetName sets the device name
