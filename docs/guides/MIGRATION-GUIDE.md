@@ -165,7 +165,8 @@ The wizard switches to a visible **Pre-flight checks** panel and runs every appl
 
 - **Backend summary re-check** — confirms transports, hostname resolution, and that the URLs you plan to write match what the backend would produce.
 - **HTTPS connection from device** (SSH-capable speakers) — uploads a temporary CA and runs `curl` from the speaker to your service.
-- **Telnet round-trip probe** (SSH-less speakers) — temporarily points the speaker's swUpdateUrl at our service via telnet, triggers `:8090/swUpdateCheck`, and watches the inbound land.
+- **Reachability check (passive observer)** (already-migrated speakers) — nudges `:8090/swUpdateCheck` on the device and watches for *any* request from the speaker to land on the service. Used when the speaker is already migrated and the service is the natural target of its outbounds.
+- **"Round-trip validation runs after Apply + reboot"** (not-yet-migrated speakers) — surfaced as a skip row with a rationale. The speaker's swUpdate daemon caches its URL at boot, so there is no useful no-reboot round-trip check pre-migration; the canonical telnet flow is Apply → reboot → re-run pre-flight on the migrated speaker.
 - **DNS redirection from device** — when DNS interception is part of the plan.
 
 On all-green, the wizard auto-proceeds. On any failure, it pauses with *Proceed Anyway* / *Cancel* buttons so you can override on a known-false-positive (slow DNS, etc.) or fix the underlying issue and retry.
@@ -210,7 +211,7 @@ Each speaker is migrated independently. You can run multiple migrations in paral
 If you need to undo a migration:
 
 - **From the web UI**: Use the **Revert to Defaults** action on the device — this restores the `.original` backup files created on the speaker during the XML migration.
-- **Telnet-only migrations**: the wizard writes only the runtime configuration layer via telnet; the speaker's persistent "envswitch" layer keeps the original Bose URLs. **A single reboot reverts a telnet-only migration automatically.** To make a telnet migration permanent, the wizard also writes `envswitch boseurls set …` as part of the URL flip step — only the *probe* step (used by the pre-flight check) leaves the persisted URLs untouched.
+- **Telnet-only migrations**: the wizard writes both the runtime configuration layer (`sys configuration …`) and the persistent layer (`envswitch boseurls set …`) so the migration survives reboot. If you want to revert quickly, the cleanest path is to re-run the wizard with the original Bose URLs in the URL editor.
 - **Via SSH**: The original XML config is backed up on the speaker with a `.original` suffix. Restore it manually if the UI is unreachable.
 - **Factory reset**: As a last resort, perform a factory reset (see [Device Initial Setup](DEVICE-INITIAL-SETUP.md) for button sequences). This wipes all configuration and returns the speaker to out-of-box state.
 

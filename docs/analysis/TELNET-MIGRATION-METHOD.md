@@ -561,12 +561,13 @@ abort.
 
 Checks:
 
-| Check                         | When                                          | Backend route                  |
-|-------------------------------|-----------------------------------------------|--------------------------------|
-| Backend summary re-check      | always                                        | `GET /setup/summary`           |
-| HTTPS connection from device  | `ssh_success && server_https_url`             | `POST /setup/test-connection`  |
-| Telnet round-trip probe       | `!ssh_success && telnet_reachable` (see §9.5) | `POST /setup/telnet-probe`     |
-| DNS redirection from device   | `methods.includes("resolv") && ssh_success`   | `POST /setup/test-dns`         |
+| Check                                 | When                                                       | Backend route                  |
+|---------------------------------------|------------------------------------------------------------|--------------------------------|
+| Backend summary re-check              | always                                                     | `GET /setup/summary`           |
+| HTTPS connection from device          | `ssh_success && server_https_url`                          | `POST /setup/test-connection`  |
+| Reachability check (passive observer) | `telnet_reachable && is_migrated` (see §9.8)               | `POST /setup/peer-probe`       |
+| Round-trip skip explainer             | `telnet_reachable && !is_migrated` — runs after reboot     | _none_ (UI-side skip row)      |
+| DNS redirection from device           | `methods.includes("resolv") && ssh_success`                | `POST /setup/test-dns`         |
 
 The HTTPS check uses `use_explicit_ca=true` so it exercises the trust
 path even when CA install is part of the plan (i.e. forward-looking).
@@ -575,6 +576,12 @@ is reachable") rather than silently dropped, per the user's
 "feedback always visible" requirement.
 
 ### 9.5 Telnet round-trip probe — the SSH-less reachability check
+
+> **REMOVED — see §9.8.** Empirical testing showed the swUpdate
+> daemon caches its target URL at boot and ignores live config
+> writes, so the active flip described below could never reach the
+> running daemon. The section is retained as a historical record of
+> what was tried; the running code uses the passive observer in §9.8.
 
 The reachability gap §7 left open for USB-unlock-refusing speakers is
 closed by `Manager.RunTelnetRoundTripProbe`
@@ -613,7 +620,7 @@ configured `swUpdateUrl`.
 | `telnetURLsFromOptions(targetURL, options)`                            | `pkg/service/setup/telnet_migration.go`      | Same option family as above, plus envswitch arg derivation rule (arg1 = final Marge verbatim; the soundcork-suffix case drops out).                                          |
 | Per-axis booleans + `IsPaired` + `Warnings`                            | `MigrationSummary`                           | Surfaces partial-state cells and SSH-XML ⇄ telnet-getpdo cross-check disagreements.                                                                                          |
 | `parseGetpdoConfig`                                                    | `pkg/service/setup/preflight_crosscheck.go`  | Parses the Protobuf-text-like nested-block reply (`key { text: "..." }`) FW 27.0.6 actually sends, plus the legacy `key=value` shape as a tolerance path.                    |
-| `probeRegistry` + `RunTelnetRoundTripProbe` + `/setup/telnet-probe`    | `pkg/service/handlers` / `pkg/service/setup` | §9.5.                                                                                                                                                                        |
+| `peerObserver` + `RunPeerReachabilityProbe` + `/setup/peer-probe`      | `pkg/service/handlers` / `pkg/service/setup` | §9.8. Replaces the removed `probeRegistry` + `RunTelnetRoundTripProbe` + `/setup/telnet-probe` from §9.5.                                                                     |
 | `migrationOptionKeys` allow-list                                       | `pkg/service/handlers/migration_options.go`  | Unknown query keys never reach the manager. Both XML mode keys and `*_url` keys are recognised.                                                                              |
 | Telnet client default timeouts: dial 4s, read 7s, write 3s, idle 600ms | `pkg/telnet/telnet.go`                       | Bumped from the original 2s/5s/2s/400ms after observing transient i/o-timeout flakes on healthy speakers that recovered on retry.                                            |
 
