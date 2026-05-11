@@ -878,6 +878,12 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	// because firmware may append path components (e.g. /index.xml).
 	r.Get("/probe/{token}", server.HandleProbeInbound)
 	r.Get("/probe/{token}/*", server.HandleProbeInbound)
+	// Passive peer-reachability probe. Registers a device IP with the
+	// in-process observer, nudges :8090/swUpdateCheck, and waits for
+	// any inbound from that IP. Used post-migration where the daemon
+	// caches its swUpdateUrl at boot and the active round-trip can't
+	// reach it without a reboot.
+	r.Post("/setup/peer-probe/{deviceId}", server.HandlePeerProbe)
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/media/favicon-braille.svg"
 		server.HandleMedia()(w, r)

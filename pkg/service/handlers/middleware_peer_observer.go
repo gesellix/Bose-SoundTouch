@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 )
 
 // PeerObserverMiddleware records every incoming request's source IP and
@@ -21,7 +23,7 @@ func (s *Server) PeerObserverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err == nil && host != "" {
-			s.peerObserver.Signal(host, PeerHit{Path: r.URL.Path, At: time.Now()})
+			s.peerObserver.Signal(host, setup.PeerHit{Path: r.URL.Path, At: time.Now()})
 		}
 
 		next.ServeHTTP(w, r)
