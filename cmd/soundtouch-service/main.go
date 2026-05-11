@@ -865,6 +865,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Use(server.SnapshotMiddleware)
 	r.Use(server.OriginMiddleware)
 	r.Use(middleware.Recoverer)
+	r.Use(server.PeerObserverMiddleware)
 	r.Use(server.ShortcutMiddleware)
 	r.Use(server.MirrorMiddleware)
 	r.Use(server.RecordMiddleware)
