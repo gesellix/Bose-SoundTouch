@@ -759,7 +759,35 @@ func mapToFullResponseSource(s models.ConfiguredSource) models.FullResponseSourc
 		fullSource.Username = s.SourceKeyAccount
 	}
 
+	// SourceProviderID is a required protobuf field inside recents/preset
+	// source blocks. A persisted source that lost its SourceKey.Type (e.g.
+	// poisoned by an older "INVALID" classification) lands here with an
+	// empty value, so fall back to the canonical default whose ID matches.
+	if fullSource.SourceProviderID == "" && s.ID != "" {
+		if def := canonicalProviderIDByID(s.ID); def != "" {
+			fullSource.SourceProviderID = def
+		}
+	}
+
 	return fullSource
+}
+
+// canonicalProviderIDByID returns the canonical SourceProviderID for one of
+// the well-known built-in source IDs (10001..10005), or "" if the ID isn't
+// recognised.
+func canonicalProviderIDByID(id string) string {
+	switch id {
+	case "10002":
+		return strconv.Itoa(constants.InternetRadioProviderID)
+	case "10003":
+		return strconv.Itoa(constants.LocalInternetRadioProviderID)
+	case "10004":
+		return strconv.Itoa(constants.TuneinProviderID)
+	case "10005":
+		return strconv.Itoa(constants.RadioBrowserProviderID)
+	}
+
+	return ""
 }
 
 func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.ConfiguredSource) []models.FullResponsePreset {
@@ -1135,10 +1163,13 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Parity: use self-closing tags for empty components and sourceSettings
+	// Parity: use self-closing tags for empty components and sourceSettings.
+	// NOTE: do NOT strip empty <sourceproviderid> elements here — the speaker
+	// decodes /full into a protobuf message where recents>recent>source>
+	// sourceproviderid is a *required* field, so removing even an empty element
+	// trips "missing required field" and aborts the whole account sync.
 	data = bytes.ReplaceAll(data, []byte("<components></components>"), []byte("<components/>"))
 	data = bytes.ReplaceAll(data, []byte("<sourceSettings></sourceSettings>"), []byte("<sourceSettings/>"))
-	data = bytes.ReplaceAll(data, []byte("<sourceproviderid></sourceproviderid>"), []byte(""))
 
 	return append([]byte(constants.XMLHeader), data...), nil
 }
@@ -1482,16 +1513,18 @@ func classifyLearnedSource(src *models.ConfiguredSource, sourceID, location, sou
 	switch {
 	case sourceProviderID == strconv.Itoa(constants.TuneinProviderID) || sourceID == constants.ProviderTunein || strings.Contains(location, "/v1/playback/station/"):
 		classifyAsTuneIn(src)
-	case sourceID == constants.ProviderLocalInternetRadio:
+	case sourceProviderID == strconv.Itoa(constants.LocalInternetRadioProviderID) || sourceID == constants.ProviderLocalInternetRadio || strings.Contains(location, "/custom/v1/playback/"):
 		classifyAsLocalInternetRadio(src)
 	case strings.Contains(location, "spotify") || strings.Contains(location, "c3BvdGlme") || sourceID == constants.ProviderSpotify:
 		classifyAsSpotify(src)
 	case strings.Contains(location, "amazon") || sourceID == constants.ProviderAmazon || sourceProviderID == strconv.Itoa(constants.AmazonProviderID):
 		classifyAsAmazon(src)
-	default:
-		src.SourceKey.Type = "INVALID"
-		src.SourceKeyType = "INVALID"
 	}
+	// If we can't classify, leave SourceKey.Type empty so the canonical-by-ID
+	// fallback in mapToFullResponseSource and the read-side applyCanonicalDefaults
+	// still have a chance to repair it. Writing a literal "INVALID" used to lock
+	// the source out of every repair path, producing a <source> block with no
+	// <sourceproviderid> and breaking the speaker's protobuf required-field check.
 }
 
 func classifyAsTuneIn(src *models.ConfiguredSource) {
