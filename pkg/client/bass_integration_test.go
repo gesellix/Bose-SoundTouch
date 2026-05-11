@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/speaker"
 )
 
 // Integration tests for bass control functionality
@@ -426,7 +427,7 @@ func BenchmarkClient_Bass_Integration(b *testing.B) {
 // This is a simple version for test use
 func parseBassHostPort(hostPort string) (string, int) {
 	if !containsSubstring(hostPort, ":") {
-		return hostPort, defaultSoundTouchPort
+		return hostPort, speaker.HTTPPort
 	}
 
 	// Simple parsing - in real use, we'd use net.SplitHostPort
@@ -448,7 +449,7 @@ func parseBassHostPort(hostPort string) (string, int) {
 
 	if len(parts) == 2 {
 		// Try to parse port
-		port := defaultSoundTouchPort
+		port := speaker.HTTPPort
 		portStr := parts[1]
 		portInt := 0
 
@@ -468,5 +469,5 @@ func parseBassHostPort(hostPort string) (string, int) {
 		return parts[0], port
 	}
 
-	return hostPort, defaultSoundTouchPort
+	return hostPort, speaker.HTTPPort
 }

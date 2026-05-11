@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/speaker"
 )
 
 // Integration tests for source selection functionality
@@ -386,7 +388,7 @@ func BenchmarkClient_SelectSource_Integration(b *testing.B) {
 // This is a simple version for test use
 func parseHostPort(hostPort string) (string, int) {
 	if !containsSubstring(hostPort, ":") {
-		return hostPort, defaultSoundTouchPort
+		return hostPort, speaker.HTTPPort
 	}
 
 	// Simple parsing - in real use, we'd use net.SplitHostPort
@@ -408,7 +410,7 @@ func parseHostPort(hostPort string) (string, int) {
 
 	if len(parts) == 2 {
 		// Try to parse port
-		port := defaultSoundTouchPort
+		port := speaker.HTTPPort
 		portStr := parts[1]
 		portInt := 0
 
@@ -428,5 +430,5 @@ func parseHostPort(hostPort string) (string, int) {
 		return parts[0], port
 	}
 
-	return hostPort, defaultSoundTouchPort
+	return hostPort, speaker.HTTPPort
 }
