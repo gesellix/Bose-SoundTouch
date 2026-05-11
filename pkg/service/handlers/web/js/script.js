@@ -3047,39 +3047,6 @@ async function checkPeerReachability(deviceId) {
     }
 }
 
-// checkTelnetRoundTrip is the SSH-less alternative to the curl-from-
-// device HTTPS test: temporarily flips the speaker's swUpdateUrl via
-// telnet, triggers :8090/swUpdateCheck, and reports whether the
-// device's outbound landed on our /probe/{token} catch-all. See
-// pkg/service/setup/telnet_probe.go for the orchestration details.
-//
-// DEPRECATED: scheduled for removal. The swUpdate daemon caches its
-// URL at startup and ignores live `sys configuration` writes, so the
-// flip never reaches the running daemon. On a migrated speaker, the
-// passive observer (checkPeerReachability) is the honest test; on an
-// unmigrated speaker, no round-trip via swUpdateUrl is possible
-// without a reboot — Apply + reboot is the only path. The orchestrator
-// no longer calls this function; it is retained only until the
-// deletion commit lands.
-async function checkTelnetRoundTrip(deviceId, targetUrl) {
-    try {
-        const q = `?target_url=${encodeURIComponent(targetUrl)}`;
-        const resp = await fetch(`/setup/telnet-probe/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
-        const result = await resp.json();
-        if (result.ok) {
-            const ms = result.result && result.result.elapsed_ms;
-            return {status: "ok", message: ms ? `reached in ${ms}ms` : undefined};
-        }
-        if (result.error) return {status: "fail", message: result.error.split("\n")[0]};
-        if (result.result && result.result.reached === false) {
-            return {status: "fail", message: "probe inbound not observed before timeout"};
-        }
-        return {status: "fail", message: "probe failed"};
-    } catch (e) {
-        return {status: "fail", message: String(e)};
-    }
-}
-
 // --- Pre-flight panel: orchestrator ---------------------------------
 
 // runApplyPreflight runs the checks visible in the pre-flight panel.

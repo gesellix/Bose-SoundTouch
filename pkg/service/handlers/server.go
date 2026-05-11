@@ -61,12 +61,7 @@ type Server struct {
 	amazonClientSecret  string
 	amazonRedirectURI   string
 	amazonService       *amazon.Service
-	// DEPRECATED: probes (probeRegistry) is removed in a follow-up
-	// commit alongside the round-trip probe handlers; see
-	// docs/analysis/TELNET-MIGRATION-METHOD.md §9.8. peerObserver is
-	// the replacement substrate.
-	probes       *probeRegistry
-	peerObserver *peerObserver
+	peerObserver        *peerObserver
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -101,7 +96,6 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, pro
 		recordEnabled:     recordEnabled,
 		discoveryInterval: 5 * time.Minute,
 		discoveryEnabled:  true,
-		probes:            newProbeRegistry(),
 		peerObserver:      newPeerObserver(),
 	}
 
