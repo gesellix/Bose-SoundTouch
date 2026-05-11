@@ -16,12 +16,14 @@ dist/
 /soundtouch-cli
 /soundtouch-service
 /soundtouch-web
+/dummy-speaker
 /example-mdns
 /example-upnp
 /example-unified
 /mdns-scanner
 /websocket-demo
 /main
+/screenshots
 
 # Environment configuration
 .env

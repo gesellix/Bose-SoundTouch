@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<presets>
+    <preset id="1" createdOn="1700000000" updatedOn="1700000000">
+        <ContentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s24939" sourceAccount="" isPresetable="true">
+            <itemName>Demo Radio</itemName>
+            <containerArt>https://example.invalid/preset1.jpg</containerArt>
+        </ContentItem>
+    </preset>
+    <preset id="2" createdOn="1700000000" updatedOn="1700000000">
+        <ContentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s00000" sourceAccount="" isPresetable="true">
+            <itemName>Demo News</itemName>
+            <containerArt>https://example.invalid/preset2.jpg</containerArt>
+        </ContentItem>
+    </preset>
+</presets>

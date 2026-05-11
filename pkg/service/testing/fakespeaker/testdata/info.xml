@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<info deviceID="DEADBEEFCAFE">
+    <name>Demo SoundTouch</name>
+    <type>SoundTouch 10</type>
+    <margeAccountUUID>0000000</margeAccountUUID>
+    <components>
+        <component>
+            <componentCategory>SCM</componentCategory>
+            <softwareVersion>27.0.6.46330.5043500 epdbuild.trunk.demo.2026-01-01T00:00:00</softwareVersion>
+            <serialNumber>SN0000000000000000DEMO</serialNumber>
+        </component>
+        <component>
+            <componentCategory>PackagedProduct</componentCategory>
+            <softwareVersion>27.0.6.46330.5043500 epdbuild.trunk.demo.2026-01-01T00:00:00</softwareVersion>
+            <serialNumber>000000P00000000DEMO</serialNumber>
+        </component>
+    </components>
+    <margeURL>https://streaming.bose.com</margeURL>
+    <networkInfo type="SCM">
+        <macAddress>02:00:00:00:00:01</macAddress>
+        <ipAddress>127.0.0.1</ipAddress>
+    </networkInfo>
+    <networkInfo type="SMSC">
+        <macAddress>02:00:00:00:00:01</macAddress>
+        <ipAddress>127.0.0.1</ipAddress>
+    </networkInfo>
+    <moduleType>sm2</moduleType>
+    <variant>rhino</variant>
+    <variantMode>normal</variantMode>
+    <countryCode>GB</countryCode>
+    <regionCode>GB</regionCode>
+</info>

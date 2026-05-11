@@ -1,0 +1,34 @@
+{
+  "shots": [
+    {
+      "name": "ui-settings",
+      "path": "/",
+      "click_selector": "button[onclick*=\"tab-settings\"]",
+      "wait_selector": "#tab-settings.active",
+      "settle_ms": 300
+    },
+    {
+      "name": "ui-devices",
+      "path": "/",
+      "click_selector": "button[onclick*=\"tab-devices\"]",
+      "wait_selector": "#tab-devices.active",
+      "settle_ms": 500
+    },
+    {
+      "name": "ui-sync",
+      "path": "/",
+      "click_selector": "button[onclick*=\"tab-sync\"]",
+      "wait_selector": "#tab-sync.active",
+      "settle_ms": 300
+    },
+    {
+      "name": "ui-migration",
+      "path": "/",
+      "click_selector": "button[onclick*=\"tab-migration\"]",
+      "wait_selector": "#tab-migration.active",
+      "evaluate": "prepareMigration('DEADBEEFCAFE')",
+      "wait_after_eval": "#migration-summary",
+      "settle_ms": 4000
+    }
+  ]
+}

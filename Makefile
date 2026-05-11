@@ -1,4 +1,4 @@
-.PHONY: all build build-cli test test-coverage check fmt vet lint clean dev help
+.PHONY: all build build-cli test test-coverage check fmt vet lint clean dev help screenshots
 
 # Go parameters
 GOCMD=go
@@ -336,6 +336,10 @@ docker-run-ports:
 	@echo "Running Docker container with port mapping (discovery will be manual)..."
 	docker run --rm -it -p 8000:8000 -v $$(pwd)/data:/app/data soundtouch-service
 
+screenshots:
+	@echo "Capturing documentation screenshots..."
+	@bash scripts/screenshots/run.sh
+
 help:
 	@echo "Available targets:"
 	@echo "  build         - Build the CLI tool, service, and examples"
@@ -356,6 +360,7 @@ help:
 	@echo "  dev           - Build and show CLI help"
 	@echo "  dev-service   - Build and run service locally"
 	@echo "  dev-service-proxy - Build and run service with proxy (PROXY_URL=url required)"
+	@echo "  screenshots   - Capture documentation screenshots (headless Chrome via chromedp)"
 	@echo "  dev-discover  - Build and run device discovery"
 	@echo "  dev-info      - Build and get device info (HOST=ip required)"
 	@echo "  dev-mdns      - Build and run mDNS discovery example"
