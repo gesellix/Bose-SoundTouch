@@ -141,7 +141,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: moderate
           allow-ghsas: GHSA-xxxx-xxxx-xxxx  # Add specific allowlisted advisories if needed
