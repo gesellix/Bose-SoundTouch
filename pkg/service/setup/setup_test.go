@@ -1,11 +1,13 @@
 package setup
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -18,11 +20,76 @@ type mockSSH struct {
 	uploadContentFunc func(content []byte, remotePath string) error
 }
 
+// probeScriptHeader is the first line of the batched probe script
+// emitted by buildSpeakerProbeScript. We use it as a sentinel so that
+// per-command test mocks (which only know `cat` / `[ -f ]` / etc.) can
+// still satisfy GetMigrationSummary after the SSH probes were batched
+// into a single Run() call — the mock synthesizes the framed probe
+// response by invoking its existing runFunc for each path the script
+// would have probed.
+const probeScriptHeader = "echo '@SSH_OK@'"
+
 func (m *mockSSH) Run(command string) (string, error) {
+	if strings.HasPrefix(command, probeScriptHeader) {
+		return m.synthesizeProbeResponse(command)
+	}
+
 	if m.runFunc != nil {
 		return m.runFunc(command)
 	}
+
 	return "", nil
+}
+
+// synthesizeProbeResponse parses the batched probe script for the file
+// and existence paths it references, calls the test's runFunc to find
+// out what each one "contains," and emits the framed response format
+// that parseSpeakerProbe expects. Lets existing per-command test mocks
+// drive the batched probe without any test-side changes.
+//
+// If runFunc errors on a simple reachability probe (`ls /`), we treat
+// the SSH connection as down and return the same error — matching the
+// behaviour tests expect when they wire a runFunc that errors on every
+// command.
+func (m *mockSSH) synthesizeProbeResponse(script string) (string, error) {
+	if m.runFunc == nil {
+		return "@SSH_OK@\n", nil
+	}
+
+	// SSH-reachability probe: if a simple read fails, the connection
+	// itself is "down" in mock-land and the real batched script would
+	// also have produced an error from ssh.Dial.
+	if _, err := m.runFunc("ls /"); err != nil {
+		return "", err
+	}
+
+	var out strings.Builder
+
+	out.WriteString("@SSH_OK@\n")
+
+	fileRE := regexp.MustCompile(`\[ -f '([^']+)' \]`)
+	for _, match := range fileRE.FindAllStringSubmatch(script, -1) {
+		path := match[1]
+
+		content, err := m.runFunc("cat " + path)
+		if err != nil || content == "" {
+			continue
+		}
+
+		out.WriteString("@FILE@" + path + "@\n")
+		out.WriteString(base64.StdEncoding.EncodeToString([]byte(content)))
+		out.WriteString("\n@END@\n")
+	}
+
+	existsRE := regexp.MustCompile(`\[ -e '([^']+)' \]`)
+	for _, match := range existsRE.FindAllStringSubmatch(script, -1) {
+		path := match[1]
+		if _, err := m.runFunc("[ -e " + path + " ]"); err == nil {
+			out.WriteString("@EXISTS@" + path + "@\n")
+		}
+	}
+
+	return out.String(), nil
 }
 
 func (m *mockSSH) UploadContent(content []byte, remotePath string) error {

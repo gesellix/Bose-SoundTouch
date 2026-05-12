@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 
@@ -138,6 +139,11 @@ type Manager struct {
 	NewSSH    func(host string) SSHClient
 	NewTelnet func(host string) TelnetClient
 
+	// NewSetupSession opens the WebSocket setup state-machine session used
+	// by ExecuteInitPlan. Tests inject an in-memory fake; the production
+	// default is DialSetupSession.
+	NewSetupSession func(deviceIP, deviceID string, stepTimeout time.Duration) (SetupStateMachine, error)
+
 	// GetDNSRunning is an optional callback to check the actual state of the DNS server.
 	GetDNSRunning func() (bool, string)
 
@@ -160,6 +166,9 @@ func NewManager(serverURL string, ds *datastore.DataStore, cm *certmanager.Certi
 		},
 		NewTelnet: func(host string) TelnetClient {
 			return telnet.NewClient(host)
+		},
+		NewSetupSession: func(deviceIP, deviceID string, stepTimeout time.Duration) (SetupStateMachine, error) {
+			return DialSetupSession(deviceIP, deviceID, SetupSessionConfig{StepTimeout: stepTimeout})
 		},
 		HTTPGet:      http.Get,
 		MgmtUsername: "admin",
@@ -292,34 +301,19 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 		BmxRegistryUrl:             fmt.Sprintf("%s/bmx/registry/v1/services", targetURL),
 	}
 
-	// 2. Check SSH and read current config
-	currentConfig, err := m.checkCurrentConfig(summary, deviceIP)
-	if err == nil && currentConfig != "" {
-		summary.CurrentConfig = currentConfig
-		fmt.Printf("Current config from %s (length: %d):\n%q\n", deviceIP, len(currentConfig), currentConfig)
+	// 2. One batched SSH round-trip collects every file/existence probe
+	// we need. Without this, the legacy per-helper path issued ~8 fresh
+	// SSH dials in sequence — each pkg/ssh.Run() opens a brand-new
+	// TCP+SSH handshake on legacy crypto, ~500 ms–1 s each.
+	probe := m.probeSpeakerSSH(deviceIP)
 
-		// Parse current config
-		var currentCfg PrivateCfg
-		if xml.Unmarshal([]byte(currentConfig), &currentCfg) == nil {
-			summary.ParsedCurrentConfig = &currentCfg
-
-			if proxyURL == "" {
-				proxyURL = targetURL
-			}
-
-			// Apply options if provided
-			if options != nil {
-				m.applyProxyOptions(&plannedCfg, proxyURL, options, &currentCfg)
-			}
-		}
-	}
+	m.applyProbeToSummary(summary, probe, &plannedCfg, proxyURL, targetURL, options)
 
 	// Per-field literal URL overrides win over both the canonical
 	// derivation and any self/proxied/original mode applied above —
 	// the user picked a URL, so the planned preview reflects exactly
 	// what the XML migration will write.
 	applyURLOverrides(&plannedCfg, options)
-	// Note: CurrentConfig is set by checkCurrentConfig in all cases (success or failure)
 
 	xmlContent, err := xml.MarshalIndent(plannedCfg, "", "  ")
 	if err != nil {
@@ -331,25 +325,12 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	// 2b. Planned network config (hosts entries, resolv.conf preview, resolve error)
 	m.populatePlannedNetworkConfig(summary, deviceIP, targetURL)
 
-	// 3. Check for remote services files
-	m.checkRemoteServices(summary, deviceIP)
-
-	// 4. Check if CA certificate is trusted
-	m.checkCACertTrusted(summary, deviceIP)
-
-	// 4b. Check current /etc/resolv.conf
-	if summary.SSHSuccess {
-		client := m.NewSSH(deviceIP)
-		if resolvConf, err := client.Run("cat /etc/resolv.conf"); err == nil {
-			summary.CurrentResolvConf = resolvConf
-		}
-	}
-
-	// 5. Provide HTTPS URL for testing
+	// 3. Provide HTTPS URL for testing (consumed by the migration UI)
 	summary.ServerHTTPSURL = m.buildServerHTTPSURL(targetURL)
 
-	// 6. Check if migrated
-	m.checkIsMigrated(summary, deviceIP)
+	// 4. Check if migrated (telnet axis uses the parallel preflight;
+	// XML/hosts/resolv axes use the probe data already gathered above).
+	m.checkIsMigratedFromProbe(summary, probe)
 
 	// 7. Mirroring settings
 	if m.DataStore != nil {
@@ -387,9 +368,13 @@ func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, device
 		return
 	}
 
-	client := m.NewSSH(deviceIP)
-
-	hostIP, resolveErr := m.resolveIP(hostName, client)
+	// Resolve locally only. The "from-device" lookup that resolveIP can
+	// do via SSH (`ping -c 1 host`) costs another fresh SSH handshake
+	// plus the ping's own runtime — easily 2–5 s on firmware-27 devices
+	// — and the result feeds only the PlannedResolv/PlannedHosts preview.
+	// For the actual apply paths (migrateViaHosts/migrateViaResolv) the
+	// device-side resolution is still used; this is only the preview.
+	hostIP, resolveErr := m.resolveIP(hostName, nil)
 	if resolveErr != nil {
 		summary.ResolveIPError = resolveErr.Error()
 	}
@@ -423,13 +408,36 @@ func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, device
 	summary.PlannedHosts = strings.Join(hostsLines, "\n")
 }
 
+// buildServerHTTPSURL composes the AfterTouch /health probe URL.
+//
+// Port resolution order (first non-empty wins):
+//  1. The port from targetURL when it is already an https:// URL — the
+//     caller supplied an HTTPS endpoint, so it owns the port choice.
+//  2. The implicit https:// default 443 when targetURL is https:// with
+//     no explicit port.
+//  3. The HTTPS_PORT env var — back-compat for deployments where
+//     targetURL is http://…:8000 and HTTPS_PORT names the separate TLS
+//     listener.
+//  4. The legacy default 8443.
 func (m *Manager) buildServerHTTPSURL(targetURL string) string {
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil || parsedURL.Hostname() == "" {
 		return ""
 	}
 
-	httpsPort := os.Getenv("HTTPS_PORT")
+	var httpsPort string
+
+	if parsedURL.Scheme == "https" {
+		httpsPort = parsedURL.Port()
+		if httpsPort == "" {
+			httpsPort = "443"
+		}
+	}
+
+	if httpsPort == "" {
+		httpsPort = os.Getenv("HTTPS_PORT")
+	}
+
 	if httpsPort == "" {
 		httpsPort = "8443"
 	}
@@ -757,19 +765,26 @@ func (m *Manager) checkRemoteServices(summary *MigrationSummary, deviceIP string
 	}
 }
 
-// checkCACertTrusted checks if the local CA certificate is already in the device's trust store.
+// checkCACertTrusted checks if the local CA certificate is already in
+// the device's trust store. The CALabel grep works regardless of whether
+// Manager.Crypto is configured — only the secondary "match cert payload"
+// fallback needs it. CLI callers without Crypto can therefore still
+// detect a previously-trusted CA.
 func (m *Manager) checkCACertTrusted(summary *MigrationSummary, deviceIP string) {
-	if m.Crypto == nil {
-		return
-	}
-
 	client := m.NewSSH(deviceIP)
 	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
 
-	// First, check for the label
+	// Primary check: our injected label.
 	output, err := client.Run(fmt.Sprintf("grep -F %q %s", CALabel, bundlePath))
 	if err == nil && strings.Contains(output, CALabel) {
 		summary.CACertTrusted = true
+		return
+	}
+
+	// Secondary check (only when Manager.Crypto is configured): match
+	// the actual cert payload — covers older injections that lack the
+	// label.
+	if m.Crypto == nil {
 		return
 	}
 
@@ -864,6 +879,14 @@ func (m *Manager) MigrateSpeaker(deviceIP, targetURL, proxyURL string, options m
 }
 
 func (m *Manager) checkDNSPreFlight() error {
+	// CLI / remote callers construct a Manager without a DataStore — they
+	// can't introspect AfterTouch's settings from here. Skip the local
+	// check in that case; the caller is responsible for verifying the
+	// remote service's DNS state (the CLI hits GET /setup/settings).
+	if m.DataStore == nil {
+		return nil
+	}
+
 	// Pre-flight check: DNS server must be enabled and bound to port 53
 	settings, err := m.DataStore.GetSettings()
 	if err != nil {
@@ -1156,17 +1179,37 @@ func (m *Manager) EnsureRemoteServices(deviceIP string) (string, error) {
 	return logs, fmt.Errorf("failed to enable remote services in any of the locations: %v", locations)
 }
 
-// TrustCACert injects the local CA certificate into the device's shared trust store.
+// TrustCACert injects the local CA certificate into the device's shared
+// trust store. The cert is read from disk via Manager.Crypto — used by
+// the in-process migration flow where the CLI and the certmanager share
+// a filesystem. Remote/CLI callers without Crypto should fetch the cert
+// over HTTP and use TrustCACertFromBytes instead.
 func (m *Manager) TrustCACert(deviceIP string) (string, error) {
-	client := m.NewSSH(deviceIP)
-	rwCmd := "(rw || mount -o remount,rw /)"
-
-	var logs string
+	if m.Crypto == nil {
+		return "", errors.New("TrustCACert: Manager.Crypto is nil — remote callers should fetch the CA via /setup/ca.crt and call TrustCACertFromBytes (e.g. `soundtouch-cli setup install-ca`)")
+	}
 
 	caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
 	if err != nil {
 		return "", fmt.Errorf("failed to read CA certificate: %w", err)
 	}
+
+	return m.TrustCACertFromBytes(deviceIP, caCertPEM)
+}
+
+// TrustCACertFromBytes injects the supplied PEM-encoded CA bundle into
+// the speaker's shared trust store. Identical to TrustCACert except the
+// cert bytes come from the caller — used by the remote CLI which fetches
+// /setup/ca.crt over HTTP and never touches Manager.Crypto.
+func (m *Manager) TrustCACertFromBytes(deviceIP string, caCertPEM []byte) (string, error) {
+	if !strings.Contains(string(caCertPEM), "BEGIN CERTIFICATE") {
+		return "", fmt.Errorf("CA payload does not contain a PEM certificate")
+	}
+
+	client := m.NewSSH(deviceIP)
+	rwCmd := "(rw || mount -o remount,rw /)"
+
+	var logs string
 
 	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
 	out, _ := client.Run(rwCmd)
@@ -1187,12 +1230,8 @@ func (m *Manager) TrustCACert(deviceIP string) (string, error) {
 	}
 
 	if strings.Contains(bundleContent, CALabel) {
-		// Label found, let's replace the whole block between labels if we used them,
-		// or just remove the lines containing the label and re-append.
-		// For simplicity, let's remove everything between CALabel tags if we had them,
-		// but since we only had one line before, let's just remove lines containing CALabel
-		// and the cert data if possible.
-		// A better way is to rebuild the bundle without our CA.
+		// Rebuild the bundle without our previously-injected CA so the
+		// fresh one replaces the old.
 		lines := strings.Split(bundleContent, "\n")
 
 		var newLines []string
@@ -1218,7 +1257,6 @@ func (m *Manager) TrustCACert(deviceIP string) (string, error) {
 		bundleContent += "\n"
 	}
 
-	// Append with labels
 	labeledCert := fmt.Sprintf("\n%s\n%s%s\n", CALabel, string(caCertPEM), CALabel)
 	newBundleContent := bundleContent + labeledCert
 

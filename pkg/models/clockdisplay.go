@@ -2,20 +2,142 @@ package models
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 )
 
-// ClockDisplay represents the device's clock display settings
+// ClockDisplay represents the device's clock display settings.
+//
+// Wire format (confirmed against ST10/ST20 firmware 27.0.6 — flat
+// attributes on the outer <clockDisplay> are rejected with
+// "Error parsing request"):
+//
+//	<clockDisplay deviceID="…">
+//	  <clockConfig timezoneInfo="Europe/Berlin"
+//	               userEnable="true"
+//	               timeFormat="TIME_FORMAT_24HOUR_ID"
+//	               userOffsetMinute="0"
+//	               brightnessLevel="70"
+//	               userUtcTime="0"/>
+//	</clockDisplay>
+//
+// The struct keeps its historical flat-field public API so the CLI and
+// other callers don't have to be rewritten; custom MarshalXML /
+// UnmarshalXML methods bridge to the nested format on the wire.
 type ClockDisplay struct {
-	XMLName    xml.Name `xml:"clockDisplay"`
-	DeviceID   string   `xml:"deviceID,attr,omitempty"`
-	Enabled    bool     `xml:"enabled,attr,omitempty"`
-	Format     string   `xml:"format,attr,omitempty"`
-	Brightness int      `xml:"brightness,attr,omitempty"`
-	AutoDim    bool     `xml:"autoDim,attr,omitempty"`
-	TimeZone   string   `xml:"timeZone,attr,omitempty"`
-	Value      string   `xml:",chardata"`
+	XMLName    xml.Name `xml:"-"`
+	DeviceID   string
+	Enabled    bool
+	Format     string // public-facing values: "12", "24", "auto"
+	Brightness int
+	AutoDim    bool // not on the device's wire format; preserved for API compat
+	TimeZone   string
+	Value      string // kept for API compat — older fixtures stored chardata here
+}
+
+// Wire constants for clockConfig/@timeFormat.
+const (
+	wireTimeFormat12Hour = "TIME_FORMAT_12HOUR_ID"
+	wireTimeFormat24Hour = "TIME_FORMAT_24HOUR_ID"
+	wireTimeFormatAuto   = "TIME_FORMAT_AUTO_ID"
+)
+
+func mapToWireFormat(f string) string {
+	switch strings.ToLower(f) {
+	case "12":
+		return wireTimeFormat12Hour
+	case "24":
+		return wireTimeFormat24Hour
+	case "auto":
+		return wireTimeFormatAuto
+	default:
+		return ""
+	}
+}
+
+func mapFromWireFormat(wire string) string {
+	switch wire {
+	case wireTimeFormat12Hour:
+		return "12"
+	case wireTimeFormat24Hour:
+		return "24"
+	case wireTimeFormatAuto:
+		return "auto"
+	default:
+		return ""
+	}
+}
+
+// UnmarshalXML decodes the nested <clockDisplay><clockConfig …/></clockDisplay>
+// into ClockDisplay's flat fields. Tolerates the older flat shape too —
+// either because it appears in legacy captures or for forward-compat with
+// firmwares that may revert.
+func (c *ClockDisplay) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "deviceID":
+			c.DeviceID = attr.Value
+		case "enabled":
+			c.Enabled = attr.Value == "true"
+		case "format":
+			c.Format = attr.Value
+		case "brightness":
+			c.Brightness, _ = strconv.Atoi(attr.Value)
+		case "autoDim":
+			c.AutoDim = attr.Value == "true"
+		case "timeZone":
+			c.TimeZone = attr.Value
+		}
+	}
+
+	for {
+		tok, err := d.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Local == "clockConfig" {
+				for _, attr := range t.Attr {
+					switch attr.Name.Local {
+					case "timezoneInfo":
+						c.TimeZone = attr.Value
+					case "userEnable":
+						c.Enabled = attr.Value == "true"
+					case "timeFormat":
+						if mapped := mapFromWireFormat(attr.Value); mapped != "" {
+							c.Format = mapped
+						}
+					case "brightnessLevel":
+						c.Brightness, _ = strconv.Atoi(attr.Value)
+					}
+				}
+			}
+
+			if err := d.Skip(); err != nil {
+				return err
+			}
+
+		case xml.CharData:
+			text := strings.TrimSpace(string(t))
+			if text != "" {
+				c.Value = text
+			}
+
+		case xml.EndElement:
+			return nil
+		}
+	}
+
+	return nil
 }
 
 // ClockFormat represents supported clock display formats
@@ -108,14 +230,16 @@ func (c *ClockDisplay) IsEmpty() bool {
 	return !c.Enabled && c.Format == "" && c.Brightness == 0 && c.TimeZone == ""
 }
 
-// ClockDisplayRequest represents a request to configure clock display settings
+// ClockDisplayRequest represents a request to configure clock display
+// settings. Fields use the same public names as the response struct;
+// MarshalXML produces the nested wire format the device requires.
 type ClockDisplayRequest struct {
-	XMLName    xml.Name `xml:"clockDisplay"`
-	Enabled    *bool    `xml:"enabled,attr,omitempty"`
-	Format     string   `xml:"format,attr,omitempty"`
-	Brightness *int     `xml:"brightness,attr,omitempty"`
-	AutoDim    *bool    `xml:"autoDim,attr,omitempty"`
-	TimeZone   string   `xml:"timeZone,attr,omitempty"`
+	XMLName    xml.Name `xml:"-"`
+	Enabled    *bool
+	Format     string
+	Brightness *int
+	AutoDim    *bool
+	TimeZone   string
 }
 
 // NewClockDisplayRequest creates a new clock display configuration request
@@ -183,4 +307,63 @@ func (r *ClockDisplayRequest) Validate() error {
 // HasChanges returns true if the request has any configuration changes
 func (r *ClockDisplayRequest) HasChanges() bool {
 	return r.Enabled != nil || r.Format != "" || r.Brightness != nil || r.AutoDim != nil || r.TimeZone != ""
+}
+
+// MarshalXML emits the nested <clockDisplay><clockConfig …/></clockDisplay>
+// envelope the device accepts. Empty fields are omitted so partial updates
+// (e.g. "set only the timezone") don't accidentally clear other settings.
+//
+// AutoDim has no counterpart in the captured wire format; we still accept
+// it in the public API for backward-compat but it is not emitted.
+func (r ClockDisplayRequest) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
+	display := xml.StartElement{Name: xml.Name{Local: "clockDisplay"}}
+	if err := e.EncodeToken(display); err != nil {
+		return err
+	}
+
+	cfg := xml.StartElement{Name: xml.Name{Local: "clockConfig"}}
+
+	if r.TimeZone != "" {
+		cfg.Attr = append(cfg.Attr, xml.Attr{
+			Name:  xml.Name{Local: "timezoneInfo"},
+			Value: r.TimeZone,
+		})
+	}
+
+	if r.Enabled != nil {
+		cfg.Attr = append(cfg.Attr, xml.Attr{
+			Name:  xml.Name{Local: "userEnable"},
+			Value: strconv.FormatBool(*r.Enabled),
+		})
+	}
+
+	if r.Format != "" {
+		if wire := mapToWireFormat(r.Format); wire != "" {
+			cfg.Attr = append(cfg.Attr, xml.Attr{
+				Name:  xml.Name{Local: "timeFormat"},
+				Value: wire,
+			})
+		}
+	}
+
+	if r.Brightness != nil {
+		cfg.Attr = append(cfg.Attr, xml.Attr{
+			Name:  xml.Name{Local: "brightnessLevel"},
+			Value: strconv.Itoa(*r.Brightness),
+		})
+	}
+
+	if err := e.EncodeToken(cfg); err != nil {
+		return err
+	}
+
+	if err := e.EncodeToken(xml.EndElement{Name: cfg.Name}); err != nil {
+		return err
+	}
+
+	if err := e.EncodeToken(xml.EndElement{Name: display.Name}); err != nil {
+		return err
+	}
+
+	return e.Flush()
 }

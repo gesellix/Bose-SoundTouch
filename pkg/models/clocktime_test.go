@@ -284,16 +284,8 @@ func TestNewClockTimeRequest(t *testing.T) {
 
 	request := NewClockTimeRequest(testTime)
 
-	if request.UTC != testTime.Unix() {
-		t.Errorf("Expected UTC %d, got %d", testTime.Unix(), request.UTC)
-	}
-
-	if request.Value != "2021-01-01 12:00:00" {
-		t.Errorf("Expected Value %q, got %q", "2021-01-01 12:00:00", request.Value)
-	}
-
-	if request.Zone != "UTC" {
-		t.Errorf("Expected Zone %q, got %q", "UTC", request.Zone)
+	if request.UTCTime != testTime.Unix() {
+		t.Errorf("Expected UTCTime %d, got %d", testTime.Unix(), request.UTCTime)
 	}
 }
 
@@ -302,13 +294,8 @@ func TestNewClockTimeRequestUTC(t *testing.T) {
 
 	request := NewClockTimeRequestUTC(utcTimestamp)
 
-	if request.UTC != utcTimestamp {
-		t.Errorf("Expected UTC %d, got %d", utcTimestamp, request.UTC)
-	}
-
-	expectedValue := time.Unix(utcTimestamp, 0).UTC().Format("2006-01-02 15:04:05")
-	if request.Value != expectedValue {
-		t.Errorf("Expected Value %q, got %q", expectedValue, request.Value)
+	if request.UTCTime != utcTimestamp {
+		t.Errorf("Expected UTCTime %d, got %d", utcTimestamp, request.UTCTime)
 	}
 }
 
@@ -319,25 +306,8 @@ func TestClockTimeRequest_Validate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Valid UTC request",
-			request: ClockTimeRequest{
-				UTC: 1609459200,
-			},
-			wantErr: false,
-		},
-		{
-			name: "Valid value request",
-			request: ClockTimeRequest{
-				Value: "2021-01-01 12:00:00",
-			},
-			wantErr: false,
-		},
-		{
-			name: "Valid request with both",
-			request: ClockTimeRequest{
-				UTC:   1609459200,
-				Value: "2021-01-01 12:00:00",
-			},
+			name:    "Valid UTC request",
+			request: ClockTimeRequest{UTCTime: 1609459200},
 			wantErr: false,
 		},
 		{
@@ -346,17 +316,13 @@ func TestClockTimeRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "UTC too old",
-			request: ClockTimeRequest{
-				UTC: 946684799, // Before year 2000
-			},
+			name:    "UTC too old",
+			request: ClockTimeRequest{UTCTime: 946684799}, // Before year 2000
 			wantErr: true,
 		},
 		{
-			name: "UTC too far in future",
-			request: ClockTimeRequest{
-				UTC: 4102444801, // After year 2100
-			},
+			name:    "UTC too far in future",
+			request: ClockTimeRequest{UTCTime: 4102444801}, // After year 2100
 			wantErr: true,
 		},
 	}
@@ -377,18 +343,16 @@ func TestClockTimeRequest_Validate(t *testing.T) {
 }
 
 func TestClockTimeRequest_MarshalXML(t *testing.T) {
-	request := ClockTimeRequest{
-		Zone:  "UTC",
-		UTC:   1609459200,
-		Value: "2021-01-01 00:00:00",
-	}
+	request := ClockTimeRequest{UTCTime: 1609459200}
 
 	data, err := xml.Marshal(request)
 	if err != nil {
 		t.Fatalf("Failed to marshal XML: %v", err)
 	}
 
-	expected := `<clockTime zone="UTC" utc="1609459200">2021-01-01 00:00:00</clockTime>`
+	// Must match the device's GET /clockTime response attribute name
+	// — firmware 27 rejects `utc=` (no Time suffix) with "Error parsing request".
+	expected := `<clockTime utcTime="1609459200"></clockTime>`
 	if string(data) != expected {
 		t.Errorf("Expected XML %q, got %q", expected, string(data))
 	}

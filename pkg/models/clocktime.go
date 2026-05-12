@@ -182,44 +182,44 @@ func (c *ClockTime) SetUTC(utc int64) {
 	}
 }
 
-// ClockTimeRequest represents a request to set the device time
+// ClockTimeRequest represents a request to set the device time.
+//
+// The POST body mirrors the device's GET /clockTime response shape —
+// firmware 27 expects `utcTime` as the attribute name, not `utc`, and
+// rejects any chardata or zone attribute with "Error parsing request"
+// (confirmed against ST10/ST20/ST30 in live testing 2026-05-12).
+//
+// We deliberately do NOT send TimeFormat / Brightness in the request:
+// those belong to /clockDisplay and including them here either gets
+// ignored or rejected depending on firmware revision.
 type ClockTimeRequest struct {
 	XMLName xml.Name `xml:"clockTime"`
-	Zone    string   `xml:"zone,attr,omitempty"`
-	UTC     int64    `xml:"utc,attr,omitempty"`
-	Value   string   `xml:",chardata"`
+	UTCTime int64    `xml:"utcTime,attr"`
 }
 
-// NewClockTimeRequest creates a new clock time request from a time.Time
+// NewClockTimeRequest creates a new clock time request from a time.Time.
+// The input may be in any zone — we always send Unix-seconds, which the
+// device interprets as UTC and renders according to its own clockDisplay
+// configuration.
 func NewClockTimeRequest(t time.Time) *ClockTimeRequest {
-	return &ClockTimeRequest{
-		Zone:  t.Location().String(),
-		UTC:   t.Unix(),
-		Value: t.UTC().Format("2006-01-02 15:04:05"),
-	}
+	return &ClockTimeRequest{UTCTime: t.Unix()}
 }
 
-// NewClockTimeRequestUTC creates a new clock time request from UTC timestamp
+// NewClockTimeRequestUTC creates a new clock time request from a Unix
+// timestamp in seconds.
 func NewClockTimeRequestUTC(utc int64) *ClockTimeRequest {
-	t := time.Unix(utc, 0).UTC()
-
-	return &ClockTimeRequest{
-		UTC:   utc,
-		Value: t.Format("2006-01-02 15:04:05"),
-	}
+	return &ClockTimeRequest{UTCTime: utc}
 }
 
-// Validate checks if the clock time request is valid
+// Validate checks if the clock time request is valid.
 func (r *ClockTimeRequest) Validate() error {
-	if r.UTC <= 0 && r.Value == "" {
-		return fmt.Errorf("either UTC timestamp or time value must be provided")
+	if r.UTCTime <= 0 {
+		return fmt.Errorf("UTC timestamp must be provided")
 	}
 
-	if r.UTC > 0 {
-		// Validate UTC timestamp is reasonable (after year 2000, before year 2100)
-		if r.UTC < 946684800 || r.UTC > 4102444800 {
-			return fmt.Errorf("UTC timestamp %d is outside reasonable range", r.UTC)
-		}
+	// Plausibility window: after year 2000, before year 2100.
+	if r.UTCTime < 946684800 || r.UTCTime > 4102444800 {
+		return fmt.Errorf("UTC timestamp %d is outside reasonable range", r.UTCTime)
 	}
 
 	return nil

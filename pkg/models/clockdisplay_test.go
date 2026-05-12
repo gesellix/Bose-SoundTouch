@@ -641,7 +641,7 @@ func TestClockDisplayRequest_MarshalXML(t *testing.T) {
 		Enabled:    &[]bool{true}[0],
 		Format:     "24",
 		Brightness: &[]int{75}[0],
-		AutoDim:    &[]bool{false}[0],
+		AutoDim:    &[]bool{false}[0], // not on the wire format — must be silently dropped
 		TimeZone:   "America/New_York",
 	}
 
@@ -650,8 +650,57 @@ func TestClockDisplayRequest_MarshalXML(t *testing.T) {
 		t.Fatalf("Failed to marshal XML: %v", err)
 	}
 
-	expected := `<clockDisplay enabled="true" format="24" brightness="75" autoDim="false" timeZone="America/New_York"></clockDisplay>`
+	// Must match the device's captured POST shape — firmware 27 rejects
+	// the legacy flat <clockDisplay enabled="…" format="…" .../> with
+	// "Error parsing request".
+	expected := `<clockDisplay><clockConfig timezoneInfo="America/New_York" userEnable="true" timeFormat="TIME_FORMAT_24HOUR_ID" brightnessLevel="75"></clockConfig></clockDisplay>`
 	if string(data) != expected {
 		t.Errorf("Expected XML %q, got %q", expected, string(data))
+	}
+}
+
+func TestClockDisplayRequest_MarshalXML_TimezoneOnly(t *testing.T) {
+	// Partial update: only set the timezone. Unset fields must be
+	// omitted so we don't clobber the device's other settings.
+	request := ClockDisplayRequest{TimeZone: "Europe/Berlin"}
+
+	data, err := xml.Marshal(request)
+	if err != nil {
+		t.Fatalf("Failed to marshal XML: %v", err)
+	}
+
+	expected := `<clockDisplay><clockConfig timezoneInfo="Europe/Berlin"></clockConfig></clockDisplay>`
+	if string(data) != expected {
+		t.Errorf("Expected XML %q, got %q", expected, string(data))
+	}
+}
+
+func TestClockDisplay_UnmarshalXML_NestedClockConfig(t *testing.T) {
+	// The real wire format — what firmware-27 devices emit and accept.
+	xmlData := `<clockDisplay deviceID="A81B6A536A98"><clockConfig timezoneInfo="Europe/Berlin" userEnable="true" timeFormat="TIME_FORMAT_24HOUR_ID" userOffsetMinute="0" brightnessLevel="70" userUtcTime="0"/></clockDisplay>`
+
+	var got ClockDisplay
+	if err := xml.Unmarshal([]byte(xmlData), &got); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if got.DeviceID != "A81B6A536A98" {
+		t.Errorf("DeviceID = %q, want A81B6A536A98", got.DeviceID)
+	}
+
+	if got.TimeZone != "Europe/Berlin" {
+		t.Errorf("TimeZone = %q, want Europe/Berlin", got.TimeZone)
+	}
+
+	if !got.Enabled {
+		t.Error("Enabled = false, want true (from userEnable=true)")
+	}
+
+	if got.Format != "24" {
+		t.Errorf("Format = %q, want 24 (from timeFormat=TIME_FORMAT_24HOUR_ID)", got.Format)
+	}
+
+	if got.Brightness != 70 {
+		t.Errorf("Brightness = %d, want 70 (from brightnessLevel)", got.Brightness)
 	}
 }

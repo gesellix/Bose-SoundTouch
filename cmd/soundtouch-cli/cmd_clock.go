@@ -157,6 +157,33 @@ func setClockTimeNow(c *cli.Context) error {
 	return nil
 }
 
+// setClockDisplayTimezone POSTs only the timezoneInfo attribute,
+// leaving format/brightness untouched. Useful after a clock now to
+// make the speaker's logs and front-panel display tick in local time
+// instead of UTC.
+func setClockDisplayTimezone(c *cli.Context) error {
+	clientConfig := GetClientConfig(c)
+	tz := c.String("tz")
+
+	PrintDeviceHeader(fmt.Sprintf("Setting clock timezone to %s", tz), clientConfig.Host, clientConfig.Port)
+
+	client, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to create client: %v", err))
+		return err
+	}
+
+	request := models.NewClockDisplayRequest().SetTimeZone(tz)
+	if err := client.SetClockDisplay(request); err != nil {
+		PrintError(fmt.Sprintf("Failed to set timezone: %v", err))
+		return err
+	}
+
+	PrintSuccess(fmt.Sprintf("Timezone set to %s", tz))
+
+	return nil
+}
+
 // getClockDisplay retrieves the current clock display settings
 func getClockDisplay(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)

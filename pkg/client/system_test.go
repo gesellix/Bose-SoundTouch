@@ -95,9 +95,7 @@ func TestClient_SetClockTime(t *testing.T) {
 		{
 			name: "Successful clock time set",
 			request: &models.ClockTimeRequest{
-				UTC:   1609459200,
-				Value: "2021-01-01 00:00:00",
-				Zone:  "UTC",
+				UTCTime: 1609459200,
 			},
 			statusCode:  http.StatusOK,
 			expectError: false,
@@ -112,8 +110,7 @@ func TestClient_SetClockTime(t *testing.T) {
 		{
 			name: "Server error",
 			request: &models.ClockTimeRequest{
-				UTC:   1609459200,
-				Value: "2021-01-01 00:00:00",
+				UTCTime: 1609459200,
 			},
 			statusCode:  http.StatusInternalServerError,
 			expectError: true,

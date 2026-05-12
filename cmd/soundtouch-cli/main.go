@@ -1312,6 +1312,19 @@ func main() {
 								},
 								Before: RequireHost,
 							},
+							{
+								Name:   "timezone",
+								Usage:  "Set display timezone (IANA zone, e.g. Europe/Berlin)",
+								Action: setClockDisplayTimezone,
+								Flags: []cli.Flag{
+									&cli.StringFlag{
+										Name:     "tz",
+										Usage:    "IANA timezone identifier (e.g. Europe/Berlin, America/New_York)",
+										Required: true,
+									},
+								},
+								Before: RequireHost,
+							},
 						},
 					},
 				},
@@ -2178,6 +2191,10 @@ func main() {
 			},
 		},
 	}
+
+	// Speaker provisioning (factory-reset, Wi-Fi, URL rewrite, pairing).
+	// Defined in cmd_setup.go to keep the top-level command list readable.
+	app.Commands = append(app.Commands, setupCommand())
 
 	// Sort commands alphabetically (including subcommands and flags recursively)
 	sortCommands(app.Commands)
