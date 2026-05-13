@@ -39,10 +39,16 @@ func main() {
 				Usage:   "Address (host or IP) for the HTTP listener; leave empty to listen on all interfaces",
 				EnvVars: []string{"BIND_ADDR"},
 			},
+			&cli.StringFlag{
+				Name:    "interface",
+				Usage:   "Network interface name (e.g. eth0) for mDNS and UPnP discovery; leave empty to auto-pick",
+				EnvVars: []string{"DISCOVERY_INTERFACE"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			port := c.String("port")
 			bindAddr := c.String("bind")
+			ifaceName := c.String("interface")
 
 			addr := ":" + port
 			if bindAddr != "" {
@@ -62,6 +68,10 @@ func main() {
 
 			cfg.DiscoveryTimeout = 10 * time.Second
 			cfg.CacheEnabled = true
+
+			if ifaceName != "" {
+				cfg.DiscoveryInterface = ifaceName
+			}
 
 			discoveryService := discovery.NewUnifiedDiscoveryService(cfg)
 

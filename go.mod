@@ -15,21 +15,21 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/urfave/cli/v2 v2.27.7
 	golang.org/x/crypto v0.51.0
+	golang.org/x/net v0.54.0
 	golang.org/x/term v0.43.0
 )
 
 require (
-	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc // indirect
+	github.com/chromedp/cdproto v0.0.0-20260427013145-5737772c319b // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260505212615-e40f80bf6836 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20250705151800-55b8f293f342 // indirect
 	golang.org/x/image v0.40.0 // indirect
 	golang.org/x/mod v0.36.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/text v0.37.0 // indirect

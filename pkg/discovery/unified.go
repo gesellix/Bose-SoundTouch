@@ -142,7 +142,7 @@ func NewUnifiedDiscoveryService(cfg *config.Config) *UnifiedDiscoveryService {
 
 	return &UnifiedDiscoveryService{
 		ssdpService: NewServiceWithConfig(cfg),
-		mdnsService: NewMDNSDiscoveryService(timeout),
+		mdnsService: NewMDNSDiscoveryServiceWithInterface(timeout, cfg.DiscoveryInterface),
 		config:      cfg,
 		cache:       make(map[string]*models.DiscoveredDevice),
 		cacheTTL:    cacheTTL,

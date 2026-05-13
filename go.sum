@@ -1,5 +1,5 @@
-github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc h1:wkN/LMi5vc60pBRWx6qpbk/aEvq3/ZVNpnMvsw8PVVU=
-github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc/go.mod h1:cbyjALe67vDvlvdiG9369P8w5U2w6IshwtyD2f2Tvag=
+github.com/chromedp/cdproto v0.0.0-20260427013145-5737772c319b h1:fpvdcCAe2z3H8OvVY00iKOp3Wapbs/Gy375Fn6l/XM4=
+github.com/chromedp/cdproto v0.0.0-20260427013145-5737772c319b/go.mod h1:cbyjALe67vDvlvdiG9369P8w5U2w6IshwtyD2f2Tvag=
 github.com/chromedp/chromedp v0.15.1 h1:EJWiPm7BNqDqjYy6U0lTSL5wNH+iNt9GjC3a4gfjNyQ=
 github.com/chromedp/chromedp v0.15.1/go.mod h1:CdTHtUqD/dqaFw/cvFWtTydoEQS44wLBuwbMR9EkOY4=
 github.com/chromedp/sysutil v1.1.0 h1:PUFNv5EcprjqXZD9nJb9b/c9ibAbxiYo4exNWZyipwM=
@@ -11,8 +11,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/go-chi/chi/v5 v5.2.5 h1:Eg4myHZBjyvJmAFjFvWgrqDTXFyOzjj7YIm3L3mu6Ug=
 github.com/go-chi/chi/v5 v5.2.5/go.mod h1:X7Gx4mteadT3eDOMTsXzmI4/rwUpOwBHLpAfupzFJP0=
-github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 h1:vymEbVwYFP/L05h5TKQxvkXoKxNvTpjxYKdF1Nlwuao=
-github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433/go.mod h1:tphK2c80bpPhMOI4v6bIc2xWywPfbqi1Z06+RcrMkDg=
+github.com/go-json-experiment/json v0.0.0-20260505212615-e40f80bf6836 h1:5KGUhXZFTN1PrCY4zUZLe1J8n7uBNmPDbCLCn78EbPQ=
+github.com/go-json-experiment/json v0.0.0-20260505212615-e40f80bf6836/go.mod h1:tphK2c80bpPhMOI4v6bIc2xWywPfbqi1Z06+RcrMkDg=
 github.com/gobwas/httphead v0.1.0 h1:exrUm0f4YX0L7EBwZHuCF4GDp8aJfVeBrlLQrs6NqWU=
 github.com/gobwas/httphead v0.1.0/go.mod h1:O/RXo79gxV8G+RqlR/otEwx4Q36zl9rqC5u12GKvMCM=
 github.com/gobwas/pool v0.2.1 h1:xfeeEhW7pwmX8nuLVlqbzVc7udMDrwetjEv+TZIz1og=

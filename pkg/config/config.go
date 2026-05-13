@@ -19,6 +19,10 @@ type Config struct {
 	DiscoveryTimeout time.Duration `env:"DISCOVERY_TIMEOUT" default:"5s"`
 	UPnPEnabled      bool          `env:"UPNP_ENABLED" default:"true"`
 	MDNSEnabled      bool          `env:"MDNS_ENABLED" default:"true"`
+	// DiscoveryInterface restricts mDNS and UPnP/SSDP discovery to a single
+	// network interface (e.g. "eth0"). Empty means "auto-pick the first
+	// suitable interface", which is the historical behaviour.
+	DiscoveryInterface string `env:"DISCOVERY_INTERFACE" default:""`
 
 	// Preferred devices from .env file
 	PreferredDevices []DeviceConfig `env:"PREFERRED_DEVICES"`
@@ -79,6 +83,10 @@ func LoadFromEnv() (*Config, error) {
 
 	if mdns := os.Getenv("MDNS_ENABLED"); mdns != "" {
 		config.MDNSEnabled = mdns == "true" || mdns == "1"
+	}
+
+	if iface := os.Getenv("DISCOVERY_INTERFACE"); iface != "" {
+		config.DiscoveryInterface = iface
 	}
 
 	if timeout := os.Getenv("HTTP_TIMEOUT"); timeout != "" {
