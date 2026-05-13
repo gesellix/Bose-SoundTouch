@@ -14,17 +14,26 @@ import (
 
 // MDNSDiscoveryService handles mDNS/Bonjour discovery of SoundTouch devices
 type MDNSDiscoveryService struct {
-	timeout time.Duration
+	timeout   time.Duration
+	ifaceName string
 }
 
 // NewMDNSDiscoveryService creates a new mDNS discovery service
 func NewMDNSDiscoveryService(timeout time.Duration) *MDNSDiscoveryService {
+	return NewMDNSDiscoveryServiceWithInterface(timeout, "")
+}
+
+// NewMDNSDiscoveryServiceWithInterface creates a new mDNS discovery service
+// pinned to the given network interface (e.g. "eth0"). An empty ifaceName
+// falls back to the historical auto-pick behaviour.
+func NewMDNSDiscoveryServiceWithInterface(timeout time.Duration, ifaceName string) *MDNSDiscoveryService {
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
 
 	return &MDNSDiscoveryService{
-		timeout: timeout,
+		timeout:   timeout,
+		ifaceName: ifaceName,
 	}
 }
 
@@ -218,8 +227,27 @@ func (m *MDNSDiscoveryService) serviceEntryToDevice(entry *mdns.ServiceEntry) *m
 	return device
 }
 
-// getIPv4Interface returns the first suitable IPv4 network interface
+// getIPv4Interface returns the network interface to use for mDNS queries.
+// If an explicit name was configured, it is resolved and validated; otherwise
+// the first suitable, up, non-loopback IPv4 interface is returned.
 func (m *MDNSDiscoveryService) getIPv4Interface() *net.Interface {
+	if m.ifaceName != "" {
+		iface, err := net.InterfaceByName(m.ifaceName)
+		if err != nil {
+			log.Printf("mDNS: Configured interface %q not found: %v", m.ifaceName, err)
+			return nil
+		}
+
+		if !interfaceHasIPv4(iface) {
+			log.Printf("mDNS: Configured interface %q has no usable IPv4 address", m.ifaceName)
+			return nil
+		}
+
+		log.Printf("mDNS: Using configured IPv4 interface: %s", iface.Name)
+
+		return iface
+	}
+
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		log.Printf("mDNS: Failed to get network interfaces: %v", err)
@@ -234,30 +262,42 @@ func (m *MDNSDiscoveryService) getIPv4Interface() *net.Interface {
 			continue
 		}
 
-		// Check if this interface has IPv4 addresses
-		addrs, err := iface.Addrs()
-		if err != nil {
+		if !interfaceHasIPv4(&iface) {
 			continue
 		}
 
-		hasIPv4 := false
+		log.Printf("mDNS: Using IPv4 interface: %s", iface.Name)
 
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok {
-				if ipNet.IP.To4() != nil && !ipNet.IP.IsLoopback() {
-					hasIPv4 = true
-					break
-				}
-			}
-		}
-
-		if hasIPv4 {
-			log.Printf("mDNS: Using IPv4 interface: %s", iface.Name)
-			return &iface
-		}
+		return &iface
 	}
 
 	log.Printf("mDNS: No suitable IPv4 interface found")
 
 	return nil
+}
+
+// interfaceHasIPv4 reports whether iface has at least one non-loopback IPv4
+// address assigned and is administratively up.
+func interfaceHasIPv4(iface *net.Interface) bool {
+	if iface.Flags&net.FlagUp == 0 {
+		return false
+	}
+
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return false
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+
+		if ipNet.IP.To4() != nil && !ipNet.IP.IsLoopback() {
+			return true
+		}
+	}
+
+	return false
 }

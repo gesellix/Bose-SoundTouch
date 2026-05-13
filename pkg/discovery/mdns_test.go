@@ -92,6 +92,34 @@ func TestMDNSDiscoveryTimeout(t *testing.T) {
 	_ = err
 }
 
+func TestMDNSGetIPv4InterfaceUnknownName(t *testing.T) {
+	service := NewMDNSDiscoveryServiceWithInterface(5*time.Second, "definitely-not-a-real-iface-xyz")
+	if iface := service.getIPv4Interface(); iface != nil {
+		t.Errorf("Expected nil for unknown interface name, got %q", iface.Name)
+	}
+}
+
+func TestMDNSGetIPv4InterfaceExplicitMatchesAutoPick(t *testing.T) {
+	auto := NewMDNSDiscoveryService(5 * time.Second).getIPv4Interface()
+	if auto == nil {
+		t.Skip("No suitable IPv4 interface available on this host")
+	}
+
+	explicit := NewMDNSDiscoveryServiceWithInterface(5*time.Second, auto.Name).getIPv4Interface()
+	if explicit == nil {
+		t.Fatalf("Expected explicit lookup of %q to succeed", auto.Name)
+	}
+
+	if explicit.Name != auto.Name {
+		t.Errorf("Expected explicit interface %q, got %q", auto.Name, explicit.Name)
+	}
+
+	// Sanity: the resolved interface really has an IPv4 we could bind to.
+	if !interfaceHasIPv4(explicit) {
+		t.Errorf("Resolved interface %q has no IPv4 address", explicit.Name)
+	}
+}
+
 func TestMDNSDiscoveryWithCancelledContext(t *testing.T) {
 	service := NewMDNSDiscoveryService(5 * time.Second)
 

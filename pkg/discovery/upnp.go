@@ -16,6 +16,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/config"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"golang.org/x/net/ipv4"
 )
 
 // Service handles UPnP SSDP discovery of SoundTouch devices
@@ -26,6 +27,7 @@ type Service struct {
 	mutex      sync.RWMutex
 	config     *config.Config
 	httpClient *http.Client
+	ifaceName  string
 }
 
 // NewService creates a new UPnP discovery service
@@ -63,6 +65,7 @@ func NewServiceWithConfig(cfg *config.Config) *Service {
 		mutex:      sync.RWMutex{},
 		config:     cfg,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
+		ifaceName:  cfg.DiscoveryInterface,
 	}
 }
 
@@ -189,15 +192,16 @@ func (d *Service) PerformDiscovery(ctx context.Context) ([]*models.DiscoveredDev
 }
 
 func (d *Service) setupUDPListener() (*net.UDPConn, error) {
-	listenAddr, err := net.ResolveUDPAddr("udp4", ":0")
+	listenIP, iface, err := d.resolveListenInterface()
 	if err != nil {
-		log.Printf("UPnP: Failed to resolve listen address: %v", err)
-		return nil, fmt.Errorf("failed to resolve listen address: %w", err)
+		return nil, err
 	}
+
+	listenAddr := &net.UDPAddr{IP: listenIP, Port: 0}
 
 	listener, err := net.ListenUDP("udp4", listenAddr)
 	if err != nil {
-		log.Printf("UPnP: Failed to create UDP listener: %v", err)
+		log.Printf("UPnP: Failed to create UDP listener on %s: %v", listenAddr, err)
 		return nil, fmt.Errorf("failed to create UDP listener: %w", err)
 	}
 
@@ -212,9 +216,60 @@ func (d *Service) setupUDPListener() (*net.UDPConn, error) {
 		return nil, fmt.Errorf("failed to cast local address to UDPAddr: %v", addr)
 	}
 
+	// Pin the outgoing multicast packets to the configured interface so the
+	// M-SEARCH leaves through the right NIC on multi-homed hosts.
+	if iface != nil {
+		if err := ipv4.NewPacketConn(listener).SetMulticastInterface(iface); err != nil {
+			log.Printf("UPnP: Failed to set multicast interface to %q: %v", iface.Name, err)
+			// Continue regardless — the kernel will fall back to its own routing decision.
+		}
+	}
+
 	log.Printf("UPnP: Created UDP listener on %s", localAddr.String())
 
 	return listener, nil
+}
+
+// resolveListenInterface returns the source IP to bind the UDP listener to and
+// the interface to use for outgoing multicast. When no interface is configured,
+// the IP is nil (wildcard) and the iface is nil, preserving the historical
+// behaviour where the kernel picks a route.
+func (d *Service) resolveListenInterface() (net.IP, *net.Interface, error) {
+	if d.ifaceName == "" {
+		return nil, nil, nil
+	}
+
+	iface, err := net.InterfaceByName(d.ifaceName)
+	if err != nil {
+		log.Printf("UPnP: Configured interface %q not found: %v", d.ifaceName, err)
+		return nil, nil, fmt.Errorf("configured interface %q not found: %w", d.ifaceName, err)
+	}
+
+	addrs, err := iface.Addrs()
+	if err != nil {
+		log.Printf("UPnP: Failed to read addresses for interface %q: %v", d.ifaceName, err)
+		return nil, nil, fmt.Errorf("read addresses for interface %q: %w", d.ifaceName, err)
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+
+		ipv4Addr := ipNet.IP.To4()
+		if ipv4Addr == nil || ipNet.IP.IsLoopback() {
+			continue
+		}
+
+		log.Printf("UPnP: Binding UDP listener to interface %q (%s)", iface.Name, ipv4Addr)
+
+		return ipv4Addr, iface, nil
+	}
+
+	log.Printf("UPnP: Configured interface %q has no usable IPv4 address", d.ifaceName)
+
+	return nil, nil, fmt.Errorf("interface %q has no usable IPv4 address", d.ifaceName)
 }
 
 func (d *Service) sendMSearch(listener *net.UDPConn, multicastAddr *net.UDPAddr) error {
