@@ -15,7 +15,7 @@ import (
 )
 
 // fakeSpeaker is a minimal WebSocket endpoint that records frames sent by
-// SetupSession and responds with canned replies. Each test wires its own
+// Session and responds with canned replies. Each test wires its own
 // reply policy by setting reply.
 type fakeSpeaker struct {
 	server *httptest.Server
@@ -74,7 +74,7 @@ func newFakeSpeaker(t *testing.T) *fakeSpeaker {
 }
 
 // ackFor builds a minimal echo reply that carries the same requestID as
-// the incoming frame, so the SetupSession's correlation logic accepts it.
+// the incoming frame, so the Session's correlation logic accepts it.
 func ackFor(frame string) string {
 	id := extractAttr(frame, `requestID="`, `"`)
 	return fmt.Sprintf(`<msg><header url="setup"><response requestID="%s"/></header><body><status>ok</status></body></msg>`, id)
@@ -106,10 +106,10 @@ func (f *fakeSpeaker) recordedFrames() []string {
 	return out
 }
 
-// dialFakeSession opens a SetupSession against the fake speaker. We turn
+// dialFakeSession opens a Session against the fake speaker. We turn
 // the httptest server URL inside-out (http → ws, keep host:port) so the
 // dialer reaches our handler.
-func dialFakeSession(t *testing.T, f *fakeSpeaker, deviceID string) *SetupSession {
+func dialFakeSession(t *testing.T, f *fakeSpeaker, deviceID string) *Session {
 	t.Helper()
 
 	u, err := url.Parse(f.server.URL)
@@ -117,13 +117,13 @@ func dialFakeSession(t *testing.T, f *fakeSpeaker, deviceID string) *SetupSessio
 		t.Fatalf("parse server URL: %v", err)
 	}
 
-	s, err := DialSetupSession(u.Host, deviceID, SetupSessionConfig{
+	s, err := DialSession(u.Host, deviceID, SessionConfig{
 		StepTimeout: 2 * time.Second,
 		DialTimeout: 2 * time.Second,
 		WSScheme:    "ws",
 	})
 	if err != nil {
-		t.Fatalf("DialSetupSession: %v", err)
+		t.Fatalf("DialSession: %v", err)
 	}
 
 	t.Cleanup(func() { _ = s.Close() })
@@ -131,7 +131,7 @@ func dialFakeSession(t *testing.T, f *fakeSpeaker, deviceID string) *SetupSessio
 	return s
 }
 
-func TestSetupSession_SendsCanonicalEnvelopes(t *testing.T) {
+func TestSession_SendsCanonicalEnvelopes(t *testing.T) {
 	f := newFakeSpeaker(t)
 	s := dialFakeSession(t, f, "AABBCCDDEEFF")
 
@@ -189,7 +189,7 @@ func TestSetupSession_SendsCanonicalEnvelopes(t *testing.T) {
 	mustContain(t, frames[8], `url="pushCustomerSupportInfoToMarge"`, `method="GET"`)
 }
 
-func TestSetupSession_RequestIDsAreUniquePerStep(t *testing.T) {
+func TestSession_RequestIDsAreUniquePerStep(t *testing.T) {
 	f := newFakeSpeaker(t)
 	s := dialFakeSession(t, f, "X")
 	ctx := context.Background()
@@ -215,7 +215,7 @@ func TestSetupSession_RequestIDsAreUniquePerStep(t *testing.T) {
 	}
 }
 
-func TestSetupSession_IgnoresUpdatesFramesBeforeAck(t *testing.T) {
+func TestSession_IgnoresUpdatesFramesBeforeAck(t *testing.T) {
 	f := newFakeSpeaker(t)
 	f.reply = func(frame string) []string {
 		id := extractAttr(frame, `requestID="`, `"`)
@@ -234,7 +234,7 @@ func TestSetupSession_IgnoresUpdatesFramesBeforeAck(t *testing.T) {
 	}
 }
 
-func TestSetupSession_SurfacesDeviceErrors(t *testing.T) {
+func TestSession_SurfacesDeviceErrors(t *testing.T) {
 	f := newFakeSpeaker(t)
 	f.reply = func(frame string) []string {
 		return []string{
@@ -254,14 +254,14 @@ func TestSetupSession_SurfacesDeviceErrors(t *testing.T) {
 	}
 }
 
-func TestSetupSession_RejectsEmptyDeviceID(t *testing.T) {
-	_, err := DialSetupSession("127.0.0.1:8080", "", SetupSessionConfig{})
+func TestSession_RejectsEmptyDeviceID(t *testing.T) {
+	_, err := DialSession("127.0.0.1:8080", "", SessionConfig{})
 	if err == nil {
 		t.Fatal("expected error for empty deviceID")
 	}
 }
 
-func TestSetupSession_RejectsEmptyAccountID(t *testing.T) {
+func TestSession_RejectsEmptyAccountID(t *testing.T) {
 	f := newFakeSpeaker(t)
 	s := dialFakeSession(t, f, "X")
 
@@ -271,7 +271,7 @@ func TestSetupSession_RejectsEmptyAccountID(t *testing.T) {
 	}
 }
 
-func TestSetupSession_EmptyNameIsNoOp(t *testing.T) {
+func TestSession_EmptyNameIsNoOp(t *testing.T) {
 	f := newFakeSpeaker(t)
 	s := dialFakeSession(t, f, "X")
 
@@ -284,7 +284,7 @@ func TestSetupSession_EmptyNameIsNoOp(t *testing.T) {
 	}
 }
 
-func TestSetupSession_XMLAttributeEscape(t *testing.T) {
+func TestSession_XMLAttributeEscape(t *testing.T) {
 	// Device names with special characters must not break the envelope.
 	f := newFakeSpeaker(t)
 	s := dialFakeSession(t, f, `quoted"<id>`)

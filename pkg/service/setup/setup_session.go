@@ -23,10 +23,10 @@ const (
 	LanguageEnglish = 2
 )
 
-// SetupStateMachine is the surface the InitPlan orchestrator drives. The
-// concrete WebSocket-backed implementation is *SetupSession; tests inject
-// an in-memory fake via Manager.NewSetupSession.
-type SetupStateMachine interface {
+// StateMachine is the surface the InitPlan orchestrator drives. The
+// concrete WebSocket-backed implementation is *Session; tests inject
+// an in-memory fake via Manager.NewSession.
+type StateMachine interface {
 	Start(ctx context.Context) error
 	IdentifyEnter(ctx context.Context, timeoutMs int) error
 	SetLanguage(ctx context.Context, code int) error
@@ -39,9 +39,9 @@ type SetupStateMachine interface {
 	Close() error
 }
 
-// SetupSessionConfig configures DialSetupSession. Zero values pick safe
+// SessionConfig configures DialSession. Zero values pick safe
 // defaults; in production callers normally pass an empty struct.
-type SetupSessionConfig struct {
+type SessionConfig struct {
 	// StepTimeout caps the per-message wait for an ack frame. Default 8 s.
 	StepTimeout time.Duration
 	// DialTimeout caps the WebSocket handshake. Default 10 s.
@@ -54,25 +54,25 @@ type SetupSessionConfig struct {
 	WSPort int
 }
 
-// SetupSession is a synchronous request/response WebSocket session driving
+// Session is a synchronous request/response WebSocket session driving
 // the speaker's setup state machine. It is deliberately separate from
 // pkg/client.WebSocketClient (which is event-oriented, auto-reconnecting,
 // and stateful) — setup is a short, linear sequence and benefits from a
 // purpose-built transport.
-type SetupSession struct {
+type Session struct {
 	deviceID    string
 	conn        *websocket.Conn
 	reqID       atomic.Int64
 	stepTimeout time.Duration
 }
 
-// DialSetupSession opens a WebSocket to the speaker at deviceIP and
+// DialSession opens a WebSocket to the speaker at deviceIP and
 // returns a session ready to drive the SETUP state machine. deviceID is
 // required because every <msg> envelope embeds it in the header; obtain
 // it from /info before calling.
-func DialSetupSession(deviceIP, deviceID string, cfg SetupSessionConfig) (*SetupSession, error) {
+func DialSession(deviceIP, deviceID string, cfg SessionConfig) (*Session, error) {
 	if deviceID == "" {
-		return nil, errors.New("DialSetupSession: deviceID is required for message routing")
+		return nil, errors.New("DialSession: deviceID is required for message routing")
 	}
 
 	scheme := cfg.WSScheme
@@ -117,11 +117,11 @@ func DialSetupSession(deviceIP, deviceID string, cfg SetupSessionConfig) (*Setup
 		step = defaultSetupStepTimeout
 	}
 
-	return &SetupSession{deviceID: deviceID, conn: conn, stepTimeout: step}, nil
+	return &Session{deviceID: deviceID, conn: conn, stepTimeout: step}, nil
 }
 
 // Close sends a normal-closure frame and closes the underlying socket.
-func (s *SetupSession) Close() error {
+func (s *Session) Close() error {
 	if s.conn == nil {
 		return nil
 	}
@@ -144,7 +144,7 @@ func (s *SetupSession) Close() error {
 // Pushed <updates> and <SoundTouchSdkInfo> frames are ignored. The ack
 // payload is consumed for error detection (<error …/>) only and never
 // returned — every caller discards it.
-func (s *SetupSession) sendStep(ctx context.Context, route, method, body string) error {
+func (s *Session) sendStep(ctx context.Context, route, method, body string) error {
 	if s.conn == nil {
 		return errors.New("setup session: connection closed")
 	}
@@ -199,13 +199,13 @@ func (s *SetupSession) sendStep(ctx context.Context, route, method, body string)
 }
 
 // Start sends SETUP_START.
-func (s *SetupSession) Start(ctx context.Context) error {
+func (s *Session) Start(ctx context.Context) error {
 	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_START"/>`)
 }
 
 // IdentifyEnter sends SETUP_IDENTIFY_DEVICE_ENTER. timeoutMs defaults to
 // the value observed in captures (300 000 ms).
-func (s *SetupSession) IdentifyEnter(ctx context.Context, timeoutMs int) error {
+func (s *Session) IdentifyEnter(ctx context.Context, timeoutMs int) error {
 	if timeoutMs <= 0 {
 		timeoutMs = 300000
 	}
@@ -216,23 +216,23 @@ func (s *SetupSession) IdentifyEnter(ctx context.Context, timeoutMs int) error {
 }
 
 // SetLanguage POSTs sysLanguage. Code 2 = English.
-func (s *SetupSession) SetLanguage(ctx context.Context, code int) error {
+func (s *Session) SetLanguage(ctx context.Context, code int) error {
 	body := fmt.Sprintf(`<sysLanguage>%d</sysLanguage>`, code)
 	return s.sendStep(ctx, "language", "POST", body)
 }
 
 // Enter sends SETUP_ENTER.
-func (s *SetupSession) Enter(ctx context.Context) error {
+func (s *Session) Enter(ctx context.Context) error {
 	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_ENTER"/>`)
 }
 
 // IdentifyLeave sends SETUP_IDENTIFY_DEVICE_LEAVE.
-func (s *SetupSession) IdentifyLeave(ctx context.Context) error {
+func (s *Session) IdentifyLeave(ctx context.Context) error {
 	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_IDENTIFY_DEVICE_LEAVE"/>`)
 }
 
 // SetName POSTs a device-name change. An empty name is a no-op.
-func (s *SetupSession) SetName(ctx context.Context, name string) error {
+func (s *Session) SetName(ctx context.Context, name string) error {
 	if name == "" {
 		return nil
 	}
@@ -246,7 +246,7 @@ func (s *SetupSession) SetName(ctx context.Context, name string) error {
 // authToken defaults to "Bearer aftertouch" when empty — our local
 // service does not validate it, but a non-empty value matches the
 // official app's shape.
-func (s *SetupSession) SetMargeAccount(ctx context.Context, accountID, authToken string) error {
+func (s *Session) SetMargeAccount(ctx context.Context, accountID, authToken string) error {
 	if accountID == "" {
 		return errors.New("SetMargeAccount: accountID is required")
 	}
@@ -264,13 +264,13 @@ func (s *SetupSession) SetMargeAccount(ctx context.Context, accountID, authToken
 }
 
 // Leave sends SETUP_LEAVE.
-func (s *SetupSession) Leave(ctx context.Context) error {
+func (s *Session) Leave(ctx context.Context) error {
 	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_LEAVE"/>`)
 }
 
 // PushCustomerSupportInfo triggers the post-setup telemetry sync. Harmless
 // on our local service.
-func (s *SetupSession) PushCustomerSupportInfo(ctx context.Context) error {
+func (s *Session) PushCustomerSupportInfo(ctx context.Context) error {
 	return s.sendStep(ctx, "pushCustomerSupportInfoToMarge", "GET", "")
 }
 

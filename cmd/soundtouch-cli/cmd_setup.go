@@ -129,7 +129,9 @@ func renderInspectReport(r *setup.InspectReport) {
 	} else if r.Network != nil {
 		fmt.Println("Network")
 
-		for _, iface := range r.Network.Interfaces.Interfaces {
+		for i := range r.Network.Interfaces.Interfaces {
+			iface := &r.Network.Interfaces.Interfaces[i]
+
 			fmt.Printf("  %s\n", iface.Type)
 			fmt.Printf("    state          : %s\n", iface.State)
 
@@ -1034,9 +1036,9 @@ func renderPlanState(deviceIP string, inspect *setup.InspectReport, summary *set
 	currentSSID := ""
 
 	if inspect.Network != nil {
-		for _, iface := range inspect.Network.Interfaces.Interfaces {
-			if iface.SSID != "" {
-				currentSSID = iface.SSID
+		for i := range inspect.Network.Interfaces.Interfaces {
+			if ssid := inspect.Network.Interfaces.Interfaces[i].SSID; ssid != "" {
+				currentSSID = ssid
 				break
 			}
 		}
@@ -1259,9 +1261,9 @@ func inspectedSSID(r *setup.InspectReport) string {
 		return ""
 	}
 
-	for _, iface := range r.Network.Interfaces.Interfaces {
-		if iface.SSID != "" {
-			return iface.SSID
+	for i := range r.Network.Interfaces.Interfaces {
+		if ssid := r.Network.Interfaces.Interfaces[i].SSID; ssid != "" {
+			return ssid
 		}
 	}
 
@@ -1359,7 +1361,7 @@ func runPairBare(c *cli.Context, deviceIP, accountID string) error {
 	fmt.Printf("pre  /info deviceID=%s margeAccountUUID=%q margeURL=%q\n",
 		info.DeviceID, info.MargeAccountUUID, info.MargeURL)
 
-	session, err := setup.DialSetupSession(deviceIP, info.DeviceID, setup.SetupSessionConfig{
+	session, err := setup.DialSession(deviceIP, info.DeviceID, setup.SessionConfig{
 		StepTimeout: c.Duration("step-timeout"),
 	})
 	if err != nil {

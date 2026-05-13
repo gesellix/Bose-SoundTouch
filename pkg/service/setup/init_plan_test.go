@@ -11,15 +11,15 @@ import (
 	"time"
 )
 
-// fakeSetupSession is a SetupStateMachine that records the order of
+// fakeSession is a StateMachine that records the order of
 // invocations and lets each test inject per-step errors.
-type fakeSetupSession struct {
+type fakeSession struct {
 	calls  []string
 	errors map[string]error
 	closed bool
 }
 
-func (f *fakeSetupSession) record(name string) error {
+func (f *fakeSession) record(name string) error {
 	if e, ok := f.errors[name]; ok && e != nil {
 		return e
 	}
@@ -29,34 +29,34 @@ func (f *fakeSetupSession) record(name string) error {
 	return nil
 }
 
-func (f *fakeSetupSession) Start(_ context.Context) error { return f.record("Start") }
-func (f *fakeSetupSession) Enter(_ context.Context) error { return f.record("Enter") }
-func (f *fakeSetupSession) Leave(_ context.Context) error { return f.record("Leave") }
-func (f *fakeSetupSession) IdentifyLeave(_ context.Context) error {
+func (f *fakeSession) Start(_ context.Context) error { return f.record("Start") }
+func (f *fakeSession) Enter(_ context.Context) error { return f.record("Enter") }
+func (f *fakeSession) Leave(_ context.Context) error { return f.record("Leave") }
+func (f *fakeSession) IdentifyLeave(_ context.Context) error {
 	return f.record("IdentifyLeave")
 }
 
-func (f *fakeSetupSession) IdentifyEnter(_ context.Context, timeoutMs int) error {
+func (f *fakeSession) IdentifyEnter(_ context.Context, timeoutMs int) error {
 	return f.record(fmt.Sprintf("IdentifyEnter(%d)", timeoutMs))
 }
 
-func (f *fakeSetupSession) SetLanguage(_ context.Context, code int) error {
+func (f *fakeSession) SetLanguage(_ context.Context, code int) error {
 	return f.record(fmt.Sprintf("SetLanguage(%d)", code))
 }
 
-func (f *fakeSetupSession) SetName(_ context.Context, name string) error {
+func (f *fakeSession) SetName(_ context.Context, name string) error {
 	return f.record("SetName(" + name + ")")
 }
 
-func (f *fakeSetupSession) SetMargeAccount(_ context.Context, accountID, token string) error {
+func (f *fakeSession) SetMargeAccount(_ context.Context, accountID, token string) error {
 	return f.record(fmt.Sprintf("SetMargeAccount(%s,%s)", accountID, token))
 }
 
-func (f *fakeSetupSession) PushCustomerSupportInfo(_ context.Context) error {
+func (f *fakeSession) PushCustomerSupportInfo(_ context.Context) error {
 	return f.record("PushCustomerSupportInfo")
 }
 
-func (f *fakeSetupSession) Close() error {
+func (f *fakeSession) Close() error {
 	f.closed = true
 	return nil
 }
@@ -90,13 +90,13 @@ func (f *fakeInfoResponder) get(_ string) (*http.Response, error) {
 	}, nil
 }
 
-func newTestManagerWithFakes(t *testing.T, info *fakeInfoResponder, sess *fakeSetupSession) *Manager {
+func newTestManagerWithFakes(t *testing.T, info *fakeInfoResponder, sess *fakeSession) *Manager {
 	t.Helper()
 
 	m := &Manager{
 		ServerURL: "http://aftertouch.local:8000",
 		HTTPGet:   info.get,
-		NewSetupSession: func(_, _ string, _ time.Duration) (SetupStateMachine, error) {
+		NewSession: func(_, _ string, _ time.Duration) (StateMachine, error) {
 			return sess, nil
 		},
 	}
@@ -110,7 +110,7 @@ func TestExecuteInitPlan_FactoryReset_GeneratesAccountAndRunsAllSteps(t *testing
 		paired:         "",
 		postInitPaired: "", // filled below after we know which ID was generated
 	}
-	sess := &fakeSetupSession{}
+	sess := &fakeSession{}
 	m := newTestManagerWithFakes(t, info, sess)
 
 	// Intercept the generated account ID so we can prime the post-init
@@ -176,7 +176,7 @@ func TestExecuteInitPlan_ReusesExistingAccountUUID(t *testing.T) {
 		paired:         "9876543",
 		postInitPaired: "9876543",
 	}
-	sess := &fakeSetupSession{}
+	sess := &fakeSession{}
 	m := newTestManagerWithFakes(t, info, sess)
 
 	plan := InitPlan{
@@ -202,7 +202,7 @@ func TestExecuteInitPlan_GeneratesAccountWhenDeviceUUIDInvalid(t *testing.T) {
 		paired:         "not-7-digits",
 		postInitPaired: "", // we'll learn the generated ID from the result
 	}
-	sess := &fakeSetupSession{}
+	sess := &fakeSession{}
 	m := newTestManagerWithFakes(t, info, sess)
 
 	// Pre-generate so the post-init /info knows what to return.
@@ -231,7 +231,7 @@ func TestExecuteInitPlan_GeneratesAccountWhenDeviceUUIDInvalid(t *testing.T) {
 
 func TestExecuteInitPlan_RejectsInvalidSuppliedAccountID(t *testing.T) {
 	info := &fakeInfoResponder{deviceID: "X", paired: ""}
-	sess := &fakeSetupSession{}
+	sess := &fakeSession{}
 	m := newTestManagerWithFakes(t, info, sess)
 
 	plan := InitPlan{
@@ -256,7 +256,7 @@ func TestExecuteInitPlan_RejectsInvalidSuppliedAccountID(t *testing.T) {
 
 func TestExecuteInitPlan_StopsAtFirstFailedStep(t *testing.T) {
 	info := &fakeInfoResponder{deviceID: "X", paired: "", postInitPaired: "1234567"}
-	sess := &fakeSetupSession{
+	sess := &fakeSession{
 		errors: map[string]error{
 			"Enter": errors.New("device dropped the SETUP_ENTER frame"),
 		},
@@ -294,7 +294,7 @@ func TestExecuteInitPlan_StopsAtFirstFailedStep(t *testing.T) {
 
 func TestExecuteInitPlan_EmptyDeviceNameSkipsNameStep(t *testing.T) {
 	info := &fakeInfoResponder{deviceID: "X", paired: "", postInitPaired: "1234567"}
-	sess := &fakeSetupSession{}
+	sess := &fakeSession{}
 	m := newTestManagerWithFakes(t, info, sess)
 
 	plan := InitPlan{
@@ -341,7 +341,7 @@ func TestExecuteInitPlan_FailsOnPostInitVerifyMismatch(t *testing.T) {
 		paired:         "",
 		postInitPaired: "9999999", // not equal to plan.AccountID
 	}
-	sess := &fakeSetupSession{}
+	sess := &fakeSession{}
 	m := newTestManagerWithFakes(t, info, sess)
 
 	plan := InitPlan{

@@ -173,14 +173,14 @@ func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress P
 
 	emit(StepDialWebSocket, "dial websocket", StatusRunning, nil)
 
-	if m.NewSetupSession == nil {
-		nilErr := errors.New("Manager.NewSetupSession is nil — call NewManager or set it explicitly")
+	if m.NewSession == nil {
+		nilErr := errors.New("Manager.NewSession is nil — call NewManager or set it explicitly")
 		emit(StepDialWebSocket, "dial websocket", StatusFailed, nilErr)
 
 		return plan, nilErr
 	}
 
-	session, err := m.NewSetupSession(plan.DeviceIP, info.DeviceID, plan.StepTimeout)
+	session, err := m.NewSession(plan.DeviceIP, info.DeviceID, plan.StepTimeout)
 	if err != nil {
 		emit(StepDialWebSocket, "dial websocket", StatusFailed, err)
 		return plan, fmt.Errorf("dial websocket: %w", err)

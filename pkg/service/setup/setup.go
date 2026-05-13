@@ -139,10 +139,10 @@ type Manager struct {
 	NewSSH    func(host string) SSHClient
 	NewTelnet func(host string) TelnetClient
 
-	// NewSetupSession opens the WebSocket setup state-machine session used
+	// NewSession opens the WebSocket setup state-machine session used
 	// by ExecuteInitPlan. Tests inject an in-memory fake; the production
-	// default is DialSetupSession.
-	NewSetupSession func(deviceIP, deviceID string, stepTimeout time.Duration) (SetupStateMachine, error)
+	// default is DialSession.
+	NewSession func(deviceIP, deviceID string, stepTimeout time.Duration) (StateMachine, error)
 
 	// GetDNSRunning is an optional callback to check the actual state of the DNS server.
 	GetDNSRunning func() (bool, string)
@@ -167,8 +167,8 @@ func NewManager(serverURL string, ds *datastore.DataStore, cm *certmanager.Certi
 		NewTelnet: func(host string) TelnetClient {
 			return telnet.NewClient(host)
 		},
-		NewSetupSession: func(deviceIP, deviceID string, stepTimeout time.Duration) (SetupStateMachine, error) {
-			return DialSetupSession(deviceIP, deviceID, SetupSessionConfig{StepTimeout: stepTimeout})
+		NewSession: func(deviceIP, deviceID string, stepTimeout time.Duration) (StateMachine, error) {
+			return DialSession(deviceIP, deviceID, SessionConfig{StepTimeout: stepTimeout})
 		},
 		HTTPGet:      http.Get,
 		MgmtUsername: "admin",
