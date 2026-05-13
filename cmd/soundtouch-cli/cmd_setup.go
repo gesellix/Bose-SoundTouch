@@ -669,7 +669,9 @@ func promptBasicAuth() (string, string, error) {
 
 	fmt.Fprint(os.Stderr, "Password: ")
 
-	pass, err := term.ReadPassword(syscall.Stdin)
+	// syscall.Stdin is int on Unix but syscall.Handle on Windows; the cast is
+	// required for the Windows cross-compile.
+	pass, err := term.ReadPassword(int(syscall.Stdin)) //nolint:unconvert
 
 	fmt.Fprintln(os.Stderr)
 
