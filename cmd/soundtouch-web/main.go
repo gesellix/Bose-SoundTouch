@@ -36,7 +36,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "bind",
-				Usage:   "Network interface to bind to",
+				Usage:   "Address (host or IP) for the HTTP listener; leave empty to listen on all interfaces",
 				EnvVars: []string{"BIND_ADDR"},
 			},
 		},
