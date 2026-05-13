@@ -6,6 +6,7 @@ import (
 	"embed"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -47,7 +48,7 @@ func main() {
 		},
 		Action: func(c *cli.Context) error {
 			port := c.String("port")
-			bindAddr := c.String("bind")
+			bindAddr := resolveBindAddr(c.String("bind"))
 			ifaceName := c.String("interface")
 
 			addr := ":" + port
@@ -99,6 +100,35 @@ func main() {
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func resolveBindAddr(bindAddr string) string {
+	iface, err := net.InterfaceByName(bindAddr)
+	if err != nil {
+		return bindAddr
+	}
+
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return bindAddr
+	}
+
+	for _, addr := range addrs {
+		var ip net.IP
+
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+
+		if ipv4 := ip.To4(); ipv4 != nil {
+			return ipv4.String()
+		}
+	}
+
+	return bindAddr
 }
 
 func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
