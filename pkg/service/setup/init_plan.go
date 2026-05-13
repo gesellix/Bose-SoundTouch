@@ -95,24 +95,9 @@ type ProgressFunc func(StepEvent)
 // The returned InitPlan reflects any defaulting that happened (generated
 // account ID, defaulted language, etc.) so callers can persist it.
 func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress ProgressFunc) (InitPlan, error) {
-	if plan.DeviceIP == "" {
-		return plan, errors.New("InitPlan.DeviceIP is required")
-	}
-
-	if plan.ServiceURL == "" {
-		plan.ServiceURL = m.ServerURL
-	}
-
-	if plan.ServiceURL == "" {
-		return plan, errors.New("InitPlan.ServiceURL is required (and Manager.ServerURL is empty)")
-	}
-
-	if plan.Language == 0 {
-		plan.Language = LanguageEnglish
-	}
-
-	if plan.AuthToken == "" {
-		plan.AuthToken = "Bearer aftertouch"
+	plan, err := applyInitPlanDefaults(plan, m.ServerURL)
+	if err != nil {
+		return plan, err
 	}
 
 	emit := func(kind StepKind, name string, status StepStatus, err error) {
@@ -131,44 +116,13 @@ func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress P
 
 	emit(StepReadDeviceInfo, "read /info", StatusOK, nil)
 
-	if plan.SkipURLRewrite {
-		emit(StepURLRewrite, "telnet URL rewrite", StatusSkipped, nil)
-	} else {
-		emit(StepURLRewrite, "telnet URL rewrite", StatusRunning, nil)
-
-		urls := defaultTelnetURLs(plan.ServiceURL)
-		if _, rwErr := m.migrateViaTelnet(plan.DeviceIP, plan.ServiceURL, urls); rwErr != nil {
-			emit(StepURLRewrite, "telnet URL rewrite", StatusFailed, rwErr)
-			return plan, fmt.Errorf("URL rewrite: %w", rwErr)
-		}
-
-		emit(StepURLRewrite, "telnet URL rewrite", StatusOK, nil)
+	if rewriteErr := m.runURLRewrite(plan, emit); rewriteErr != nil {
+		return plan, rewriteErr
 	}
 
-	if plan.AccountID == "" {
-		if info.MargeAccountUUID != "" && IsValidAccountID(info.MargeAccountUUID) {
-			plan.AccountID = info.MargeAccountUUID
-			emit(StepGenerateAccountID, "reuse existing margeAccountUUID="+plan.AccountID, StatusOK, nil)
-		} else {
-			emit(StepGenerateAccountID, "generate account ID", StatusRunning, nil)
-
-			known := listKnownAccountIDs(m)
-
-			id, genErr := GenerateAccountID(known)
-			if genErr != nil {
-				emit(StepGenerateAccountID, "generate account ID", StatusFailed, genErr)
-				return plan, fmt.Errorf("generate account ID: %w", genErr)
-			}
-
-			plan.AccountID = id
-
-			emit(StepGenerateAccountID, "generate account ID="+id, StatusOK, nil)
-		}
-	} else if !IsValidAccountID(plan.AccountID) {
-		invalidErr := fmt.Errorf("invalid AccountID %q: must be exactly 7 digits", plan.AccountID)
-		emit(StepGenerateAccountID, "validate account ID", StatusFailed, invalidErr)
-
-		return plan, invalidErr
+	plan, err = m.resolveAccountID(plan, info, emit)
+	if err != nil {
+		return plan, err
 	}
 
 	emit(StepDialWebSocket, "dial websocket", StatusRunning, nil)
@@ -237,24 +191,118 @@ func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress P
 		emit(st.kind, st.name, StatusOK, nil)
 	}
 
+	if err := m.verifyPairing(plan, emit); err != nil {
+		return plan, err
+	}
+
+	return plan, nil
+}
+
+// applyInitPlanDefaults validates required fields and fills in defaults
+// from Manager.ServerURL / sysLanguage 2 / "Bearer aftertouch".
+func applyInitPlanDefaults(plan InitPlan, serverURL string) (InitPlan, error) {
+	if plan.DeviceIP == "" {
+		return plan, errors.New("InitPlan.DeviceIP is required")
+	}
+
+	if plan.ServiceURL == "" {
+		plan.ServiceURL = serverURL
+	}
+
+	if plan.ServiceURL == "" {
+		return plan, errors.New("InitPlan.ServiceURL is required (and Manager.ServerURL is empty)")
+	}
+
+	if plan.Language == 0 {
+		plan.Language = LanguageEnglish
+	}
+
+	if plan.AuthToken == "" {
+		plan.AuthToken = "Bearer aftertouch"
+	}
+
+	return plan, nil
+}
+
+// runURLRewrite applies the telnet envswitch URL rewrite step unless the
+// caller asked to skip it.
+func (m *Manager) runURLRewrite(plan InitPlan, emit func(StepKind, string, StepStatus, error)) error {
+	if plan.SkipURLRewrite {
+		emit(StepURLRewrite, "telnet URL rewrite", StatusSkipped, nil)
+		return nil
+	}
+
+	emit(StepURLRewrite, "telnet URL rewrite", StatusRunning, nil)
+
+	urls := defaultTelnetURLs(plan.ServiceURL)
+	if _, rwErr := m.migrateViaTelnet(plan.DeviceIP, plan.ServiceURL, urls); rwErr != nil {
+		emit(StepURLRewrite, "telnet URL rewrite", StatusFailed, rwErr)
+		return fmt.Errorf("URL rewrite: %w", rwErr)
+	}
+
+	emit(StepURLRewrite, "telnet URL rewrite", StatusOK, nil)
+
+	return nil
+}
+
+// resolveAccountID populates plan.AccountID — reusing the device's
+// existing margeAccountUUID, generating a fresh non-colliding 7-digit
+// ID, or validating a user-supplied value.
+func (m *Manager) resolveAccountID(plan InitPlan, info *DeviceInfoXML, emit func(StepKind, string, StepStatus, error)) (InitPlan, error) {
+	if plan.AccountID != "" {
+		if !IsValidAccountID(plan.AccountID) {
+			invalidErr := fmt.Errorf("invalid AccountID %q: must be exactly 7 digits", plan.AccountID)
+			emit(StepGenerateAccountID, "validate account ID", StatusFailed, invalidErr)
+
+			return plan, invalidErr
+		}
+
+		return plan, nil
+	}
+
+	if info.MargeAccountUUID != "" && IsValidAccountID(info.MargeAccountUUID) {
+		plan.AccountID = info.MargeAccountUUID
+		emit(StepGenerateAccountID, "reuse existing margeAccountUUID="+plan.AccountID, StatusOK, nil)
+
+		return plan, nil
+	}
+
+	emit(StepGenerateAccountID, "generate account ID", StatusRunning, nil)
+
+	id, genErr := GenerateAccountID(listKnownAccountIDs(m))
+	if genErr != nil {
+		emit(StepGenerateAccountID, "generate account ID", StatusFailed, genErr)
+		return plan, fmt.Errorf("generate account ID: %w", genErr)
+	}
+
+	plan.AccountID = id
+
+	emit(StepGenerateAccountID, "generate account ID="+id, StatusOK, nil)
+
+	return plan, nil
+}
+
+// verifyPairing re-reads /info after the state machine finished and
+// confirms the device's margeAccountUUID matches what we asked for.
+func (m *Manager) verifyPairing(plan InitPlan, emit func(StepKind, string, StepStatus, error)) error {
 	emit(StepVerify, "verify /info margeAccountUUID", StatusRunning, nil)
 
 	verify, err := m.GetLiveDeviceInfo(plan.DeviceIP)
 	if err != nil {
 		emit(StepVerify, "verify /info", StatusFailed, err)
-		return plan, fmt.Errorf("verify /info: %w", err)
+		return fmt.Errorf("verify /info: %w", err)
 	}
 
 	if verify.MargeAccountUUID != plan.AccountID {
-		err := fmt.Errorf("post-init /info shows margeAccountUUID=%q, want %q", verify.MargeAccountUUID, plan.AccountID)
-		emit(StepVerify, "verify /info", StatusFailed, err)
+		mismatchErr := fmt.Errorf("post-init /info shows margeAccountUUID=%q, want %q", verify.MargeAccountUUID, plan.AccountID)
+		emit(StepVerify, "verify /info", StatusFailed, mismatchErr)
 
-		return plan, err
+		return mismatchErr
 	}
 
 	emit(StepVerify, "verify /info margeAccountUUID="+plan.AccountID, StatusOK, nil)
 
-	return plan, nil
+	return nil
 }
 
 // listKnownAccountIDs collects account IDs already known to the local

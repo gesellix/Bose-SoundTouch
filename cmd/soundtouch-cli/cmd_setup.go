@@ -86,115 +86,156 @@ func renderInspectReport(r *setup.InspectReport) {
 	fmt.Printf("Speaker @ %s\n", r.DeviceIP)
 	fmt.Println(strings.Repeat("─", 40))
 
+	renderInspectIdentityAndPairing(r)
+	renderInspectNetwork(r)
+	renderInspectSources(r)
+	renderInspectPresets(r)
+	renderInspectRuntimeURLs(r)
+}
+
+func renderInspectIdentityAndPairing(r *setup.InspectReport) {
 	if r.InfoErr != nil {
 		PrintError(fmt.Sprintf("/info: %v", r.InfoErr))
-	} else if r.Info != nil {
-		i := r.Info
-
-		fmt.Println("Identity")
-		fmt.Printf("  deviceID         : %s\n", i.DeviceID)
-
-		if suffix := deviceIDSuffix(i.DeviceID); suffix != "" {
-			fmt.Printf("  → use as --match suffix for wait-online: %s\n", suffix)
-		}
-
-		fmt.Printf("  name             : %s\n", i.Name)
-		fmt.Printf("  type             : %s\n", i.Type)
-
-		for _, comp := range i.Components {
-			if comp.SoftwareVersion != "" {
-				fmt.Printf("  softwareVersion  : %s (component %s)\n", comp.SoftwareVersion, comp.Category)
-			}
-
-			if comp.SerialNumber != "" {
-				fmt.Printf("  serialNumber     : %s (component %s)\n", comp.SerialNumber, comp.Category)
-			}
-		}
-
-		fmt.Println()
-		fmt.Println("Pairing")
-
-		if i.MargeAccountUUID == "" {
-			PrintWarning("margeAccountUUID is empty — device is unpaired (factory-reset state)")
-		} else {
-			fmt.Printf("  margeAccountUUID : %s\n", i.MargeAccountUUID)
-		}
-
-		fmt.Printf("  margeURL         : %s\n", i.MargeURL)
-		fmt.Println()
+		return
 	}
 
+	if r.Info == nil {
+		return
+	}
+
+	i := r.Info
+
+	fmt.Println("Identity")
+	fmt.Printf("  deviceID         : %s\n", i.DeviceID)
+
+	if suffix := deviceIDSuffix(i.DeviceID); suffix != "" {
+		fmt.Printf("  → use as --match suffix for wait-online: %s\n", suffix)
+	}
+
+	fmt.Printf("  name             : %s\n", i.Name)
+	fmt.Printf("  type             : %s\n", i.Type)
+
+	for _, comp := range i.Components {
+		if comp.SoftwareVersion != "" {
+			fmt.Printf("  softwareVersion  : %s (component %s)\n", comp.SoftwareVersion, comp.Category)
+		}
+
+		if comp.SerialNumber != "" {
+			fmt.Printf("  serialNumber     : %s (component %s)\n", comp.SerialNumber, comp.Category)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("Pairing")
+
+	if i.MargeAccountUUID == "" {
+		PrintWarning("margeAccountUUID is empty — device is unpaired (factory-reset state)")
+	} else {
+		fmt.Printf("  margeAccountUUID : %s\n", i.MargeAccountUUID)
+	}
+
+	fmt.Printf("  margeURL         : %s\n", i.MargeURL)
+	fmt.Println()
+}
+
+func renderInspectNetwork(r *setup.InspectReport) {
 	if r.NetworkErr != nil {
 		PrintError(fmt.Sprintf("/networkInfo: %v", r.NetworkErr))
-	} else if r.Network != nil {
-		fmt.Println("Network")
-
-		for i := range r.Network.Interfaces.Interfaces {
-			iface := &r.Network.Interfaces.Interfaces[i]
-
-			fmt.Printf("  %s\n", iface.Type)
-			fmt.Printf("    state          : %s\n", iface.State)
-
-			if iface.IPAddress != "" {
-				fmt.Printf("    ipAddress      : %s\n", iface.IPAddress)
-			}
-
-			if iface.MacAddress != "" {
-				fmt.Printf("    macAddress     : %s\n", iface.MacAddress)
-			}
-
-			if iface.SSID != "" {
-				fmt.Printf("    ssid           : %s\n", iface.SSID)
-				fmt.Printf("    → use as --ssid for wifi-push: %s\n", iface.SSID)
-			}
-
-			if iface.Signal != "" {
-				fmt.Printf("    signal         : %s\n", iface.Signal)
-			}
-
-			if iface.FrequencyKHz != 0 {
-				fmt.Printf("    frequency      : %d kHz\n", iface.FrequencyKHz)
-			}
-		}
-
-		fmt.Println()
+		return
 	}
 
+	if r.Network == nil {
+		return
+	}
+
+	fmt.Println("Network")
+
+	for i := range r.Network.Interfaces.Interfaces {
+		iface := &r.Network.Interfaces.Interfaces[i]
+
+		fmt.Printf("  %s\n", iface.Type)
+		fmt.Printf("    state          : %s\n", iface.State)
+
+		if iface.IPAddress != "" {
+			fmt.Printf("    ipAddress      : %s\n", iface.IPAddress)
+		}
+
+		if iface.MacAddress != "" {
+			fmt.Printf("    macAddress     : %s\n", iface.MacAddress)
+		}
+
+		if iface.SSID != "" {
+			fmt.Printf("    ssid           : %s\n", iface.SSID)
+			fmt.Printf("    → use as --ssid for wifi-push: %s\n", iface.SSID)
+		}
+
+		if iface.Signal != "" {
+			fmt.Printf("    signal         : %s\n", iface.Signal)
+		}
+
+		if iface.FrequencyKHz != 0 {
+			fmt.Printf("    frequency      : %d kHz\n", iface.FrequencyKHz)
+		}
+	}
+
+	fmt.Println()
+}
+
+func renderInspectSources(r *setup.InspectReport) {
 	if r.SourcesErr != nil {
 		PrintError(fmt.Sprintf("/sources: %v", r.SourcesErr))
-	} else if r.Sources != nil {
-		fmt.Printf("Sources (%d)\n", len(r.Sources.SourceItem))
-		renderSourceTable(r.Sources.SourceItem)
-		fmt.Println()
+		return
 	}
 
+	if r.Sources == nil {
+		return
+	}
+
+	fmt.Printf("Sources (%d)\n", len(r.Sources.SourceItem))
+	renderSourceTable(r.Sources.SourceItem)
+	fmt.Println()
+}
+
+func renderInspectPresets(r *setup.InspectReport) {
 	if r.PresetsErr != nil {
 		PrintError(fmt.Sprintf("/presets: %v", r.PresetsErr))
-	} else if r.Presets != nil {
-		fmt.Printf("Presets (%d)\n", len(r.Presets.Presets))
-
-		for _, p := range r.Presets.Presets {
-			fmt.Printf("  [%s] %s (source=%s)\n", p.ID, p.ContentItem.ItemName, p.ContentItem.Source)
-		}
-
-		if len(r.Presets.Presets) == 0 {
-			fmt.Println("  (none)")
-		}
-
-		fmt.Println()
+		return
 	}
 
+	if r.Presets == nil {
+		return
+	}
+
+	fmt.Printf("Presets (%d)\n", len(r.Presets.Presets))
+
+	for _, p := range r.Presets.Presets {
+		fmt.Printf("  [%s] %s (source=%s)\n", p.ID, p.ContentItem.ItemName, p.ContentItem.Source)
+	}
+
+	if len(r.Presets.Presets) == 0 {
+		fmt.Println("  (none)")
+	}
+
+	fmt.Println()
+}
+
+func renderInspectRuntimeURLs(r *setup.InspectReport) {
 	if r.RuntimeErr != nil {
 		PrintError(fmt.Sprintf("telnet getpdo: %v", r.RuntimeErr))
-	} else if r.RuntimeURLs != "" {
-		fmt.Println("Runtime URL configuration (telnet getpdo)")
-
-		for _, line := range strings.Split(r.RuntimeURLs, "\n") {
-			fmt.Printf("  %s\n", line)
-		}
-
-		fmt.Println()
+		return
 	}
+
+	if r.RuntimeURLs == "" {
+		return
+	}
+
+	fmt.Println("Runtime URL configuration (telnet getpdo)")
+
+	for _, line := range strings.Split(r.RuntimeURLs, "\n") {
+		fmt.Printf("  %s\n", line)
+	}
+
+	fmt.Println()
 }
 
 // sourceLine is the per-source row before any width-padding decisions
@@ -1092,60 +1133,7 @@ func buildPlanSteps(
 	var steps []planStep
 
 	if reset {
-		steps = append(steps, planStep{
-			title:  "Factory-reset the speaker",
-			cmd:    fmt.Sprintf("soundtouch-cli setup factory-reset --host=%s", host),
-			reason: "Wipes account pairing, presets, Wi-Fi — gives a clean baseline for the SETUP state machine.",
-		})
-
-		steps = append(steps, planStep{
-			title:  "Connect this host to the speaker's setup AP",
-			cmd:    `# macOS: networksetup -setairportnetwork en0 "Bose SoundTouch XXXX"`,
-			reason: "After reset the speaker broadcasts its own Wi-Fi at 192.0.2.1.",
-			manual: true,
-		})
-
-		steps = append(steps, planStep{
-			title: "Wait for the speaker's setup-mode IP to respond",
-			cmd:   "soundtouch-cli setup wait-ap",
-		})
-
-		ssidArg := wifiSSID
-		if ssidArg == "" {
-			if currentSSID := inspectedSSID(inspect); currentSSID != "" {
-				ssidArg = currentSSID
-			} else {
-				ssidArg = "<HOME_SSID>"
-			}
-		}
-
-		steps = append(steps, planStep{
-			title:  "Push home Wi-Fi credentials to the speaker",
-			cmd:    fmt.Sprintf(`soundtouch-cli setup wifi-push --ssid=%q --pass=<HOME_PASS>`, ssidArg),
-			reason: "Speaker leaves AP mode and joins your home network within ~30 s.",
-		})
-
-		steps = append(steps, planStep{
-			title:  "Switch this host back to home Wi-Fi",
-			cmd:    fmt.Sprintf(`# macOS: networksetup -setairportnetwork en0 %q <HOME_PASS>`, ssidArg),
-			reason: "Required so wait-online's mDNS browse reaches the right network segment.",
-			manual: true,
-		})
-
-		match := ""
-		if inspect.Info != nil {
-			match = deviceIDSuffix(inspect.Info.DeviceID)
-		}
-
-		if match == "" {
-			match = "<deviceID-suffix>"
-		}
-
-		steps = append(steps, planStep{
-			title: "Discover the speaker's new IP via mDNS",
-			cmd:   fmt.Sprintf("soundtouch-cli setup wait-online --match=%s", match),
-		})
-
+		steps = append(steps, resetSteps(host, wifiSSID, inspect)...)
 		host = "<NEW_IP>" // subsequent commands target the discovered IP
 	}
 
@@ -1153,60 +1141,8 @@ func buildPlanSteps(
 		return steps
 	}
 
-	if !reset && (summary == nil || !summary.IsMigrated) {
-		method, methodReason := recommendMigrationMethod(serviceURL, summary)
-		if method == "" {
-			steps = append(steps, planStep{
-				title:  "Enable SSH on the speaker (USB-stick procedure)",
-				cmd:    "# See `soundtouch-cli setup ssh-check` output for the USB-stick steps.",
-				reason: "Telnet won't respond and SSH is closed — no transport available to apply a migration.",
-				manual: true,
-			})
-		} else {
-			if method == setup.MigrationMethodResolvConf || method == setup.MigrationMethodHosts {
-				if summary != nil && !summary.CACertTrusted {
-					steps = append(steps, planStep{
-						title: "Install AfterTouch's CA cert on the speaker",
-						cmd: fmt.Sprintf("soundtouch-cli setup install-ca --host=%s --service-url=%s",
-							host, serviceURL),
-						reason: "DNS-redirect methods keep using https://*.bose.com URLs — the device needs to trust AfterTouch's cert.",
-					})
-				}
-			}
-
-			steps = append(steps, planStep{
-				title: fmt.Sprintf("Apply URL migration using method=%s", method),
-				cmd: fmt.Sprintf("soundtouch-cli setup migrate --host=%s --service-url=%s --method=%s",
-					host, serviceURL, method),
-				reason: methodReason,
-			})
-
-			steps = append(steps, planStep{
-				title:  "Reboot the speaker",
-				cmd:    fmt.Sprintf("soundtouch-cli setup reboot --host=%s", host),
-				reason: "The envswitch parallel-persistence layer only fully wins on next boot; reboot now to lock the new URLs in before pairing.",
-			})
-		}
-	} else if reset {
-		// Reset path always re-applies a migration after wifi-push.
-		method, methodReason := recommendMigrationMethod(serviceURL, nil)
-		if method == "" {
-			method = setup.MigrationMethodTelnet
-			methodReason = "Default: envswitch — works on most firmware-27 devices without SSH."
-		}
-
-		steps = append(steps, planStep{
-			title: fmt.Sprintf("Apply URL migration using method=%s", method),
-			cmd: fmt.Sprintf("soundtouch-cli setup migrate --host=%s --service-url=%s --method=%s",
-				host, serviceURL, method),
-			reason: methodReason,
-		})
-
-		steps = append(steps, planStep{
-			title:  "Reboot the speaker",
-			cmd:    fmt.Sprintf("soundtouch-cli setup reboot --host=%s", host),
-			reason: "The envswitch parallel-persistence layer only fully wins on next boot; reboot now to lock the new URLs in before pairing.",
-		})
+	if reset || summary == nil || !summary.IsMigrated {
+		steps = append(steps, migrationSteps(host, serviceURL, summary, reset)...)
 	}
 
 	if includePair && (reset || (summary != nil && !summary.IsPaired)) {
@@ -1216,6 +1152,108 @@ func buildPlanSteps(
 			reason: "Required for preset persistence, streaming services, multi-room zones.",
 		})
 	}
+
+	return steps
+}
+
+// resetSteps composes the factory-reset → AP-switch → wait-ap →
+// wifi-push → home-switch → wait-online prefix that --reset adds.
+func resetSteps(host, wifiSSID string, inspect *setup.InspectReport) []planStep {
+	ssidArg := wifiSSID
+	if ssidArg == "" {
+		if currentSSID := inspectedSSID(inspect); currentSSID != "" {
+			ssidArg = currentSSID
+		} else {
+			ssidArg = "<HOME_SSID>"
+		}
+	}
+
+	match := ""
+	if inspect != nil && inspect.Info != nil {
+		match = deviceIDSuffix(inspect.Info.DeviceID)
+	}
+
+	if match == "" {
+		match = "<deviceID-suffix>"
+	}
+
+	return []planStep{
+		{
+			title:  "Factory-reset the speaker",
+			cmd:    fmt.Sprintf("soundtouch-cli setup factory-reset --host=%s", host),
+			reason: "Wipes account pairing, presets, Wi-Fi — gives a clean baseline for the SETUP state machine.",
+		},
+		{
+			title:  "Connect this host to the speaker's setup AP",
+			cmd:    `# macOS: networksetup -setairportnetwork en0 "Bose SoundTouch XXXX"`,
+			reason: "After reset the speaker broadcasts its own Wi-Fi at 192.0.2.1.",
+			manual: true,
+		},
+		{
+			title: "Wait for the speaker's setup-mode IP to respond",
+			cmd:   "soundtouch-cli setup wait-ap",
+		},
+		{
+			title:  "Push home Wi-Fi credentials to the speaker",
+			cmd:    fmt.Sprintf(`soundtouch-cli setup wifi-push --ssid=%q --pass=<HOME_PASS>`, ssidArg),
+			reason: "Speaker leaves AP mode and joins your home network within ~30 s.",
+		},
+		{
+			title:  "Switch this host back to home Wi-Fi",
+			cmd:    fmt.Sprintf(`# macOS: networksetup -setairportnetwork en0 %q <HOME_PASS>`, ssidArg),
+			reason: "Required so wait-online's mDNS browse reaches the right network segment.",
+			manual: true,
+		},
+		{
+			title: "Discover the speaker's new IP via mDNS",
+			cmd:   fmt.Sprintf("soundtouch-cli setup wait-online --match=%s", match),
+		},
+	}
+}
+
+// migrationSteps composes the migrate + reboot pair (plus optional
+// install-ca prelude for DNS-redirect methods). In --reset mode the
+// summary is nil and we default to method=telnet; otherwise we let the
+// recommender pick based on the speaker's current capabilities.
+func migrationSteps(host, serviceURL string, summary *setup.MigrationSummary, reset bool) []planStep {
+	var steps []planStep
+
+	method, methodReason := recommendMigrationMethod(serviceURL, summary)
+
+	if method == "" {
+		if reset {
+			method = setup.MigrationMethodTelnet
+			methodReason = "Default: envswitch — works on most firmware-27 devices without SSH."
+		} else {
+			return []planStep{{
+				title:  "Enable SSH on the speaker (USB-stick procedure)",
+				cmd:    "# See `soundtouch-cli setup ssh-check` output for the USB-stick steps.",
+				reason: "Telnet won't respond and SSH is closed — no transport available to apply a migration.",
+				manual: true,
+			}}
+		}
+	}
+
+	dnsRedirect := method == setup.MigrationMethodResolvConf || method == setup.MigrationMethodHosts
+	if dnsRedirect && summary != nil && !summary.CACertTrusted {
+		steps = append(steps, planStep{
+			title:  "Install AfterTouch's CA cert on the speaker",
+			cmd:    fmt.Sprintf("soundtouch-cli setup install-ca --host=%s --service-url=%s", host, serviceURL),
+			reason: "DNS-redirect methods keep using https://*.bose.com URLs — the device needs to trust AfterTouch's cert.",
+		})
+	}
+
+	steps = append(steps, planStep{
+		title:  fmt.Sprintf("Apply URL migration using method=%s", method),
+		cmd:    fmt.Sprintf("soundtouch-cli setup migrate --host=%s --service-url=%s --method=%s", host, serviceURL, method),
+		reason: methodReason,
+	})
+
+	steps = append(steps, planStep{
+		title:  "Reboot the speaker",
+		cmd:    fmt.Sprintf("soundtouch-cli setup reboot --host=%s", host),
+		reason: "The envswitch parallel-persistence layer only fully wins on next boot; reboot now to lock the new URLs in before pairing.",
+	})
 
 	return steps
 }

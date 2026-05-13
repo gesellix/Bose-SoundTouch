@@ -76,7 +76,46 @@ func mapFromWireFormat(wire string) string {
 // either because it appears in legacy captures or for forward-compat with
 // firmwares that may revert.
 func (c *ClockDisplay) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	for _, attr := range start.Attr {
+	applyClockDisplayOuterAttrs(c, start.Attr)
+
+	for {
+		tok, err := d.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Local == "clockConfig" {
+				applyClockConfigAttrs(c, t.Attr)
+			}
+
+			if err := d.Skip(); err != nil {
+				return err
+			}
+
+		case xml.CharData:
+			if text := strings.TrimSpace(string(t)); text != "" {
+				c.Value = text
+			}
+
+		case xml.EndElement:
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// applyClockDisplayOuterAttrs handles the legacy flat-attribute format
+// (deviceID, enabled, format, brightness, autoDim, timeZone) that older
+// fixtures used directly on the <clockDisplay> element.
+func applyClockDisplayOuterAttrs(c *ClockDisplay, attrs []xml.Attr) {
+	for _, attr := range attrs {
 		switch attr.Name.Local {
 		case "deviceID":
 			c.DeviceID = attr.Value
@@ -92,52 +131,26 @@ func (c *ClockDisplay) UnmarshalXML(d *xml.Decoder, start xml.StartElement) erro
 			c.TimeZone = attr.Value
 		}
 	}
+}
 
-	for {
-		tok, err := d.Token()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-
-		if err != nil {
-			return err
-		}
-
-		switch t := tok.(type) {
-		case xml.StartElement:
-			if t.Name.Local == "clockConfig" {
-				for _, attr := range t.Attr {
-					switch attr.Name.Local {
-					case "timezoneInfo":
-						c.TimeZone = attr.Value
-					case "userEnable":
-						c.Enabled = attr.Value == "true"
-					case "timeFormat":
-						if mapped := mapFromWireFormat(attr.Value); mapped != "" {
-							c.Format = mapped
-						}
-					case "brightnessLevel":
-						c.Brightness, _ = strconv.Atoi(attr.Value)
-					}
-				}
+// applyClockConfigAttrs handles the nested <clockConfig> attributes
+// (timezoneInfo, userEnable, timeFormat, brightnessLevel) — the shape
+// FW 27 emits and accepts.
+func applyClockConfigAttrs(c *ClockDisplay, attrs []xml.Attr) {
+	for _, attr := range attrs {
+		switch attr.Name.Local {
+		case "timezoneInfo":
+			c.TimeZone = attr.Value
+		case "userEnable":
+			c.Enabled = attr.Value == "true"
+		case "timeFormat":
+			if mapped := mapFromWireFormat(attr.Value); mapped != "" {
+				c.Format = mapped
 			}
-
-			if err := d.Skip(); err != nil {
-				return err
-			}
-
-		case xml.CharData:
-			text := strings.TrimSpace(string(t))
-			if text != "" {
-				c.Value = text
-			}
-
-		case xml.EndElement:
-			return nil
+		case "brightnessLevel":
+			c.Brightness, _ = strconv.Atoi(attr.Value)
 		}
 	}
-
-	return nil
 }
 
 // ClockFormat represents supported clock display formats

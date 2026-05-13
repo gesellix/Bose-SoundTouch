@@ -32,7 +32,23 @@ func (m *Manager) applyProbeToSummary(
 		summary.CurrentConfig = fmt.Sprintf("SSH connection failed: %v", probe.Err)
 	}
 
-	// Current SoundTouchSdkPrivateCfg.xml (+ .original backup, if any)
+	m.applyProbeCurrentConfig(summary, probe, plannedCfg, proxyURL, targetURL, options)
+	applyProbeResolvConf(summary, probe)
+	applyProbeRemoteServices(summary, probe)
+	m.applyProbeCACert(summary, probe)
+}
+
+// applyProbeCurrentConfig populates CurrentConfig / OriginalConfig and
+// parses the on-disk SoundTouchSdkPrivateCfg.xml into ParsedCurrentConfig.
+// Also applies proxy options to the planned config when the caller asks
+// for it — that path needs the parsed current config.
+func (m *Manager) applyProbeCurrentConfig(
+	summary *MigrationSummary,
+	probe *speakerProbe,
+	plannedCfg *PrivateCfg,
+	proxyURL, targetURL string,
+	options map[string]string,
+) {
 	if cfg, ok := probe.Files[SoundTouchSdkPrivateCfgPath]; ok && cfg != "" {
 		summary.CurrentConfig = cfg
 		fmt.Printf("Current config from %s (length: %d):\n%q\n", probeDeviceTagFor(summary), len(cfg), cfg)
@@ -54,47 +70,68 @@ func (m *Manager) applyProbeToSummary(
 	if orig, ok := probe.Files[SoundTouchSdkPrivateCfgPath+".original"]; ok && orig != "" {
 		summary.OriginalConfig = orig
 	}
+}
 
-	// /etc/resolv.conf — cached so checkIsMigratedFromProbe doesn't dial again
+// applyProbeResolvConf caches the /etc/resolv.conf contents on the
+// summary so checkIsMigratedFromProbe doesn't have to make another dial.
+func applyProbeResolvConf(summary *MigrationSummary, probe *speakerProbe) {
 	if resolv, ok := probe.Files["/etc/resolv.conf"]; ok {
 		summary.CurrentResolvConf = resolv
 	}
+}
 
-	// remote_services markers (SSH enablement state)
+// applyProbeRemoteServices records which remote_services marker files
+// exist on the device — these toggle SSH enablement state.
+func applyProbeRemoteServices(summary *MigrationSummary, probe *speakerProbe) {
 	for _, loc := range []string{"/etc/remote_services", "/mnt/nv/remote_services", "/tmp/remote_services"} {
-		if probe.Exists[loc] {
-			summary.RemoteServicesFound = append(summary.RemoteServicesFound, loc)
-			summary.RemoteServicesEnabled = true
+		if !probe.Exists[loc] {
+			continue
+		}
 
-			if loc != "/tmp/remote_services" {
-				summary.RemoteServicesPersistent = true
-			}
+		summary.RemoteServicesFound = append(summary.RemoteServicesFound, loc)
+		summary.RemoteServicesEnabled = true
+
+		if loc != "/tmp/remote_services" {
+			summary.RemoteServicesPersistent = true
 		}
 	}
+}
 
-	// CA trust: check the ca-bundle for our injection label first; fall
-	// back to matching the cert payload itself when Manager.Crypto is set
-	// (web-UI/in-process path; the remote CLI has no Crypto so this stays
-	// false until install-ca is run).
-	if bundle, ok := probe.Files["/etc/pki/tls/certs/ca-bundle.crt"]; ok && bundle != "" {
-		switch {
-		case strings.Contains(bundle, CALabel):
-			summary.CACertTrusted = true
-		case m.Crypto != nil:
-			if caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath()); err == nil {
-				for _, line := range strings.Split(string(caCertPEM), "\n") {
-					if line == "" || strings.Contains(line, "BEGIN CERTIFICATE") || strings.Contains(line, "END CERTIFICATE") {
-						continue
-					}
+// applyProbeCACert checks the device's CA bundle for our injection. The
+// fast path is the CALabel grep (works without Manager.Crypto and is the
+// only path the CLI ever uses). The fallback that compares the actual
+// cert payload runs only when Manager.Crypto is configured — i.e., in
+// the web-UI / in-process flow.
+func (m *Manager) applyProbeCACert(summary *MigrationSummary, probe *speakerProbe) {
+	bundle, ok := probe.Files["/etc/pki/tls/certs/ca-bundle.crt"]
+	if !ok || bundle == "" {
+		return
+	}
 
-					if strings.Contains(bundle, line) {
-						summary.CACertTrusted = true
-					}
+	if strings.Contains(bundle, CALabel) {
+		summary.CACertTrusted = true
+		return
+	}
 
-					break
-				}
-			}
+	if m.Crypto == nil {
+		return
+	}
+
+	caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
+	if err != nil {
+		return
+	}
+
+	for _, line := range strings.Split(string(caCertPEM), "\n") {
+		if line == "" || strings.Contains(line, "BEGIN CERTIFICATE") || strings.Contains(line, "END CERTIFICATE") {
+			continue
 		}
+
+		if strings.Contains(bundle, line) {
+			summary.CACertTrusted = true
+		}
+
+		break
 	}
 }
 
