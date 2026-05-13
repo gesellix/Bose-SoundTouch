@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -37,7 +38,10 @@ func getGroupStatus(c *cli.Context) error {
 	return nil
 }
 
-// createGroup forms a stereo pair on the LEFT speaker, which becomes the master.
+// createGroup forms a stereo pair by POSTing /addGroup to both speakers in
+// parallel. LEFT is the master. Addressing each speaker directly (instead of
+// only the master and letting it propagate via marge) sidesteps the
+// inter-device round-trip that surfaced as client timeouts in #252.
 func createGroup(c *cli.Context) error {
 	leftIP := c.String("left")
 	rightIP := c.String("right")
@@ -80,6 +84,7 @@ func createGroup(c *cli.Context) error {
 				{DeviceID: rightInfo.DeviceID, Role: "RIGHT", IPAddress: rightIP},
 			},
 		},
+		SenderIPAddress: leftIP,
 	}
 
 	leftClient, err := clientForHost(c, leftIP)
@@ -88,16 +93,93 @@ func createGroup(c *cli.Context) error {
 		return err
 	}
 
-	result, err := leftClient.AddGroup(req)
+	rightClient, err := clientForHost(c, rightIP)
 	if err != nil {
-		PrintError(fmt.Sprintf("Failed to create group: %v", err))
+		PrintError(fmt.Sprintf("Failed to create client for RIGHT: %v", err))
 		return err
 	}
 
-	PrintSuccess(fmt.Sprintf("Stereo pair created (id=%s)", result.ID))
-	printGroup(result)
+	leftOut, rightOut := propagateAddGroup(leftClient, rightClient, leftIP, rightIP, req)
+
+	if leftOut.err != nil {
+		PrintError(fmt.Sprintf("LEFT (%s) /addGroup failed: %v", leftIP, leftOut.err))
+	}
+
+	if rightOut.err != nil {
+		PrintError(fmt.Sprintf("RIGHT (%s) /addGroup failed: %v", rightIP, rightOut.err))
+	}
+
+	if leftOut.err != nil || rightOut.err != nil {
+		if (leftOut.err == nil) != (rightOut.err == nil) {
+			succeeded := leftIP
+			if leftOut.err != nil {
+				succeeded = rightIP
+			}
+
+			PrintError(fmt.Sprintf("Partial group state on %s — clean up with `soundtouch-cli --host %s group remove`", succeeded, succeeded))
+		}
+
+		return fmt.Errorf("/addGroup propagation failed")
+	}
+
+	// The LEFT (master) response carries the assigned group ID; use it for display.
+	PrintSuccess(fmt.Sprintf("Stereo pair created (id=%s)", leftOut.group.ID))
+	printGroup(leftOut.group)
 
 	return nil
+}
+
+// addGroupOutcome is the per-speaker result of a parallel /addGroup call.
+type addGroupOutcome struct {
+	host  string
+	group *models.Group
+	err   error
+}
+
+// propagateAddGroup POSTs /addGroup to both speakers concurrently and returns
+// the (LEFT, RIGHT) outcomes. A non-GROUP_OK Status in the response is
+// reported as an error so callers don't have to re-inspect the body.
+func propagateAddGroup(left, right *client.Client, leftIP, rightIP string, req *models.Group) (addGroupOutcome, addGroupOutcome) {
+	var (
+		wg                sync.WaitGroup
+		leftOut, rightOut addGroupOutcome
+	)
+
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+
+		leftOut = postAddGroup(left, leftIP, req)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		rightOut = postAddGroup(right, rightIP, req)
+	}()
+
+	wg.Wait()
+
+	return leftOut, rightOut
+}
+
+func postAddGroup(cli *client.Client, host string, req *models.Group) addGroupOutcome {
+	out := addGroupOutcome{host: host}
+
+	g, err := cli.AddGroup(req)
+	if err != nil {
+		out.err = err
+		return out
+	}
+
+	out.group = g
+
+	if g != nil && g.Status != "" && g.Status != "GROUP_OK" {
+		out.err = fmt.Errorf("device returned status %q (want GROUP_OK)", g.Status)
+	}
+
+	return out
 }
 
 // renameGroup updates the name of the existing stereo pair. The device
