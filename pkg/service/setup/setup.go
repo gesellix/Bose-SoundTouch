@@ -357,7 +357,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	return summary, nil
 }
 
-func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, deviceIP, targetURL string) {
+func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, _, targetURL string) {
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil {
 		return
@@ -741,27 +741,6 @@ func applyURLOverrides(cfg *PrivateCfg, options map[string]string) {
 
 	if v := options["bmx_url"]; v != "" {
 		cfg.BmxRegistryUrl = v
-	}
-}
-
-// checkRemoteServices checks for remote services files on the device
-func (m *Manager) checkRemoteServices(summary *MigrationSummary, deviceIP string) {
-	client := m.NewSSH(deviceIP)
-	locations := []string{
-		"/etc/remote_services",
-		"/mnt/nv/remote_services",
-		"/tmp/remote_services",
-	}
-
-	for _, loc := range locations {
-		if _, err := client.Run(fmt.Sprintf("[ -e %s ]", loc)); err == nil {
-			summary.RemoteServicesFound = append(summary.RemoteServicesFound, loc)
-
-			summary.RemoteServicesEnabled = true
-			if loc != "/tmp/remote_services" {
-				summary.RemoteServicesPersistent = true
-			}
-		}
 	}
 }
 

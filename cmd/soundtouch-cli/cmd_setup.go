@@ -626,7 +626,7 @@ func promptBasicAuth() (string, string, error) {
 
 	fmt.Fprint(os.Stderr, "Password: ")
 
-	pass, err := term.ReadPassword(int(syscall.Stdin))
+	pass, err := term.ReadPassword(syscall.Stdin)
 
 	fmt.Fprintln(os.Stderr)
 
@@ -1373,9 +1373,9 @@ func runPairBare(c *cli.Context, deviceIP, accountID string) error {
 
 	fmt.Printf("→ setMargeAccount accountID=%s (no SETUP bracket)\n", accountID)
 
-	if err := session.SetMargeAccount(ctx, accountID, ""); err != nil {
-		PrintError(fmt.Sprintf("setMargeAccount: %v", err))
-		return err
+	if pairErr := session.SetMargeAccount(ctx, accountID, ""); pairErr != nil {
+		PrintError(fmt.Sprintf("setMargeAccount: %v", pairErr))
+		return pairErr
 	}
 
 	time.Sleep(2 * time.Second)

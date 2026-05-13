@@ -137,9 +137,9 @@ func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress P
 		emit(StepURLRewrite, "telnet URL rewrite", StatusRunning, nil)
 
 		urls := defaultTelnetURLs(plan.ServiceURL)
-		if _, err := m.migrateViaTelnet(plan.DeviceIP, plan.ServiceURL, urls); err != nil {
-			emit(StepURLRewrite, "telnet URL rewrite", StatusFailed, err)
-			return plan, fmt.Errorf("URL rewrite: %w", err)
+		if _, rwErr := m.migrateViaTelnet(plan.DeviceIP, plan.ServiceURL, urls); rwErr != nil {
+			emit(StepURLRewrite, "telnet URL rewrite", StatusFailed, rwErr)
+			return plan, fmt.Errorf("URL rewrite: %w", rwErr)
 		}
 
 		emit(StepURLRewrite, "telnet URL rewrite", StatusOK, nil)
@@ -154,10 +154,10 @@ func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress P
 
 			known := listKnownAccountIDs(m)
 
-			id, err := GenerateAccountID(known)
-			if err != nil {
-				emit(StepGenerateAccountID, "generate account ID", StatusFailed, err)
-				return plan, fmt.Errorf("generate account ID: %w", err)
+			id, genErr := GenerateAccountID(known)
+			if genErr != nil {
+				emit(StepGenerateAccountID, "generate account ID", StatusFailed, genErr)
+				return plan, fmt.Errorf("generate account ID: %w", genErr)
 			}
 
 			plan.AccountID = id
@@ -165,19 +165,19 @@ func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress P
 			emit(StepGenerateAccountID, "generate account ID="+id, StatusOK, nil)
 		}
 	} else if !IsValidAccountID(plan.AccountID) {
-		err := fmt.Errorf("invalid AccountID %q: must be exactly 7 digits", plan.AccountID)
-		emit(StepGenerateAccountID, "validate account ID", StatusFailed, err)
+		invalidErr := fmt.Errorf("invalid AccountID %q: must be exactly 7 digits", plan.AccountID)
+		emit(StepGenerateAccountID, "validate account ID", StatusFailed, invalidErr)
 
-		return plan, err
+		return plan, invalidErr
 	}
 
 	emit(StepDialWebSocket, "dial websocket", StatusRunning, nil)
 
 	if m.NewSetupSession == nil {
-		err := errors.New("Manager.NewSetupSession is nil — call NewManager or set it explicitly")
-		emit(StepDialWebSocket, "dial websocket", StatusFailed, err)
+		nilErr := errors.New("Manager.NewSetupSession is nil — call NewManager or set it explicitly")
+		emit(StepDialWebSocket, "dial websocket", StatusFailed, nilErr)
 
-		return plan, err
+		return plan, nilErr
 	}
 
 	session, err := m.NewSetupSession(plan.DeviceIP, info.DeviceID, plan.StepTimeout)
@@ -229,9 +229,9 @@ func (m *Manager) ExecuteInitPlan(ctx context.Context, plan InitPlan, progress P
 
 		emit(st.kind, st.name, StatusRunning, nil)
 
-		if err := st.fn(ctx); err != nil {
-			emit(st.kind, st.name, StatusFailed, err)
-			return plan, fmt.Errorf("%s: %w", st.name, err)
+		if stepErr := st.fn(ctx); stepErr != nil {
+			emit(st.kind, st.name, StatusFailed, stepErr)
+			return plan, fmt.Errorf("%s: %w", st.name, stepErr)
 		}
 
 		emit(st.kind, st.name, StatusOK, nil)

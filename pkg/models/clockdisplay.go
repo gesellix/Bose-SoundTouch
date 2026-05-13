@@ -28,7 +28,7 @@ import (
 // other callers don't have to be rewritten; custom MarshalXML /
 // UnmarshalXML methods bridge to the nested format on the wire.
 type ClockDisplay struct {
-	XMLName    xml.Name `xml:"-"`
+	XMLName    xml.Name `xml:"clockDisplay"`
 	DeviceID   string
 	Enabled    bool
 	Format     string // public-facing values: "12", "24", "auto"
@@ -234,7 +234,7 @@ func (c *ClockDisplay) IsEmpty() bool {
 // settings. Fields use the same public names as the response struct;
 // MarshalXML produces the nested wire format the device requires.
 type ClockDisplayRequest struct {
-	XMLName    xml.Name `xml:"-"`
+	XMLName    xml.Name `xml:"clockDisplay"`
 	Enabled    *bool
 	Format     string
 	Brightness *int

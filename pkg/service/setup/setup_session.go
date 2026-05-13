@@ -141,10 +141,12 @@ func (s *SetupSession) Close() error {
 // sendStep wraps body in the canonical <msg><header url="…" method="…">…
 // envelope, sends it, and drains incoming frames until one references the
 // same requestID, status path, or url attribute — that frame is the ack.
-// Pushed <updates> and <SoundTouchSdkInfo> frames are ignored.
-func (s *SetupSession) sendStep(ctx context.Context, route, method, body string) (string, error) {
+// Pushed <updates> and <SoundTouchSdkInfo> frames are ignored. The ack
+// payload is consumed for error detection (<error …/>) only and never
+// returned — every caller discards it.
+func (s *SetupSession) sendStep(ctx context.Context, route, method, body string) error {
 	if s.conn == nil {
-		return "", errors.New("setup session: connection closed")
+		return errors.New("setup session: connection closed")
 	}
 
 	id := s.reqID.Add(1)
@@ -162,7 +164,7 @@ func (s *SetupSession) sendStep(ctx context.Context, route, method, body string)
 	_ = s.conn.SetWriteDeadline(deadline)
 
 	if err := s.conn.WriteMessage(websocket.TextMessage, []byte(envelope)); err != nil {
-		return "", fmt.Errorf("send %s: %w", route, err)
+		return fmt.Errorf("send %s: %w", route, err)
 	}
 
 	idNeedle := fmt.Sprintf(`requestID="%d"`, id)
@@ -174,7 +176,7 @@ func (s *SetupSession) sendStep(ctx context.Context, route, method, body string)
 
 		_, data, err := s.conn.ReadMessage()
 		if err != nil {
-			return "", fmt.Errorf("await ack for %s: %w", route, err)
+			return fmt.Errorf("await ack for %s: %w", route, err)
 		}
 
 		text := string(data)
@@ -187,19 +189,18 @@ func (s *SetupSession) sendStep(ctx context.Context, route, method, body string)
 
 		// Device-side errors surface as <error …/> in the body.
 		if strings.Contains(strings.ToLower(text), "<error") {
-			return text, fmt.Errorf("device rejected %s: %s", route, strings.TrimSpace(text))
+			return fmt.Errorf("device rejected %s: %s", route, strings.TrimSpace(text))
 		}
 
 		if strings.Contains(text, idNeedle) || strings.Contains(text, statusNeedle) || strings.Contains(text, urlNeedle) {
-			return text, nil
+			return nil
 		}
 	}
 }
 
 // Start sends SETUP_START.
 func (s *SetupSession) Start(ctx context.Context) error {
-	_, err := s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_START"/>`)
-	return err
+	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_START"/>`)
 }
 
 // IdentifyEnter sends SETUP_IDENTIFY_DEVICE_ENTER. timeoutMs defaults to
@@ -210,29 +211,24 @@ func (s *SetupSession) IdentifyEnter(ctx context.Context, timeoutMs int) error {
 	}
 
 	body := fmt.Sprintf(`<setupState state="SETUP_IDENTIFY_DEVICE_ENTER" timeout="%d"/>`, timeoutMs)
-	_, err := s.sendStep(ctx, "setup", "POST", body)
 
-	return err
+	return s.sendStep(ctx, "setup", "POST", body)
 }
 
 // SetLanguage POSTs sysLanguage. Code 2 = English.
 func (s *SetupSession) SetLanguage(ctx context.Context, code int) error {
 	body := fmt.Sprintf(`<sysLanguage>%d</sysLanguage>`, code)
-	_, err := s.sendStep(ctx, "language", "POST", body)
-
-	return err
+	return s.sendStep(ctx, "language", "POST", body)
 }
 
 // Enter sends SETUP_ENTER.
 func (s *SetupSession) Enter(ctx context.Context) error {
-	_, err := s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_ENTER"/>`)
-	return err
+	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_ENTER"/>`)
 }
 
 // IdentifyLeave sends SETUP_IDENTIFY_DEVICE_LEAVE.
 func (s *SetupSession) IdentifyLeave(ctx context.Context) error {
-	_, err := s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_IDENTIFY_DEVICE_LEAVE"/>`)
-	return err
+	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_IDENTIFY_DEVICE_LEAVE"/>`)
 }
 
 // SetName POSTs a device-name change. An empty name is a no-op.
@@ -242,9 +238,8 @@ func (s *SetupSession) SetName(ctx context.Context, name string) error {
 	}
 
 	body := fmt.Sprintf(`<name>%s</name>`, xmlBodyEscape(name))
-	_, err := s.sendStep(ctx, "name", "POST", body)
 
-	return err
+	return s.sendStep(ctx, "name", "POST", body)
 }
 
 // SetMargeAccount sends the canonical PairDeviceWithAccount envelope.
@@ -264,22 +259,19 @@ func (s *SetupSession) SetMargeAccount(ctx context.Context, accountID, authToken
 		`<PairDeviceWithAccount><accountId>%s</accountId><userAuthToken>%s</userAuthToken></PairDeviceWithAccount>`,
 		xmlBodyEscape(accountID), xmlBodyEscape(authToken),
 	)
-	_, err := s.sendStep(ctx, "setMargeAccount", "POST", body)
 
-	return err
+	return s.sendStep(ctx, "setMargeAccount", "POST", body)
 }
 
 // Leave sends SETUP_LEAVE.
 func (s *SetupSession) Leave(ctx context.Context) error {
-	_, err := s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_LEAVE"/>`)
-	return err
+	return s.sendStep(ctx, "setup", "POST", `<setupState state="SETUP_LEAVE"/>`)
 }
 
 // PushCustomerSupportInfo triggers the post-setup telemetry sync. Harmless
 // on our local service.
 func (s *SetupSession) PushCustomerSupportInfo(ctx context.Context) error {
-	_, err := s.sendStep(ctx, "pushCustomerSupportInfoToMarge", "GET", "")
-	return err
+	return s.sendStep(ctx, "pushCustomerSupportInfoToMarge", "GET", "")
 }
 
 // xmlAttrEscape escapes the small set of characters that would break an
