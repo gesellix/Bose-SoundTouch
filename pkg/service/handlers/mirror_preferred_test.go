@@ -134,6 +134,7 @@ func TestSettingsAPI_PreferredSource(t *testing.T) {
 
 	// Test UPDATE
 	update := map[string]interface{}{
+		"server_url":       "http://localhost:8000",
 		"preferred_source": "upstream",
 	}
 	body, err := json.Marshal(update)

@@ -238,18 +238,68 @@ func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
 	}
 }
 
+// resolveServerURLIP returns the IP that the DNS server would hand out as the
+// intercept answer for the given server URL. An empty URL, empty hostname, or a
+// hostname that cannot be resolved to an IP is reported as an error so callers
+// can refuse to start (or reject user input) instead of silently degrading.
+// "localhost" is treated as 127.0.0.1.
+func (s *Server) resolveServerURLIP(serverURL string) (string, error) {
+	if strings.TrimSpace(serverURL) == "" {
+		return "", fmt.Errorf("server URL is empty")
+	}
+
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid server URL %q: %w", serverURL, err)
+	}
+
+	hostname := u.Hostname()
+	if hostname == "" {
+		return "", fmt.Errorf("server URL %q has no hostname", serverURL)
+	}
+
+	if hostname == "localhost" {
+		return "127.0.0.1", nil
+	}
+
+	if ip := net.ParseIP(hostname); ip != nil {
+		return ip.String(), nil
+	}
+
+	// Prefer the setup manager's resolver (it cascades through device SSH ping
+	// then system DNS). Fall back to plain system DNS when no manager is wired,
+	// so this works in tests and lightweight server constructions.
+	if s.sm != nil {
+		if resolved := s.sm.GetResolvedIP(hostname); net.ParseIP(resolved) != nil {
+			return resolved, nil
+		}
+	} else if ips, lookupErr := net.LookupIP(hostname); lookupErr == nil {
+		for _, ip := range ips {
+			if v4 := ip.To4(); v4 != nil {
+				return v4.String(), nil
+			}
+		}
+
+		if len(ips) > 0 {
+			return ips[0].String(), nil
+		}
+	}
+
+	return "", fmt.Errorf("hostname %q did not resolve to an IP — "+
+		"set the server URL to an IP, or to a hostname this host can resolve",
+		hostname)
+}
+
 func (s *Server) startDNSDiscovery(bind string, upstreamList []string) {
 	log.Printf("[DNS] Starting DNS discovery server on %s", bind)
 
-	u, _ := url.Parse(s.serverURL)
+	serviceIP, err := s.resolveServerURLIP(s.serverURL)
+	if err != nil {
+		log.Printf("[DNS] Cannot start DNS discovery server: %v", err)
 
-	serviceIP := u.Hostname()
-	if serviceIP == "localhost" || serviceIP == "" {
-		serviceIP = "127.0.0.1"
-	}
+		s.dnsEnabled = false
 
-	if s.sm != nil {
-		serviceIP = s.sm.GetResolvedIP(serviceIP)
+		return
 	}
 
 	s.dnsDiscovery = discovery.NewDNSDiscovery(upstreamList, serviceIP)

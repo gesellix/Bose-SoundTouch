@@ -172,6 +172,14 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 
 	dnsRunning, actualBind := s.GetDNSRunning()
 
+	var serverURLResolvedIP, serverURLResolveError string
+
+	if ip, err := s.resolveServerURLIP(serverURL); err == nil {
+		serverURLResolvedIP = ip
+	} else {
+		serverURLResolveError = err.Error()
+	}
+
 	// Mask secrets: return "***" if set so the UI can show "configured" without exposing the value.
 	if spotifyClientSecret != "" {
 		spotifyClientSecret = "***"
@@ -182,32 +190,34 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"server_url":            serverURL,
-		"https_server_url":      httpsServerURL,
-		"discovery_interval":    discoveryInterval,
-		"discovery_enabled":     discoveryEnabled,
-		"dns_enabled":           dnsEnabled,
-		"dns_running":           dnsRunning,
-		"dns_actual_bind":       actualBind,
-		"dns_upstream":          strings.Join(dnsUpstream, ","),
-		"dns_bind_addr":         dnsBindAddr,
-		"mirror_enabled":        mirrorEnabled,
-		"mirror_endpoints":      mirrorEndpoints,
-		"skip_mirror_endpoints": skipMirrorEndpoints,
-		"preferred_source":      preferredSource,
-		"internal_paths":        internalPaths,
-		"redact_logs":           redact,
-		"log_bodies":            logBody,
-		"record_interactions":   record,
-		"shortcuts":             shortcuts,
-		"spotify_configured":    spotifyConfigured,
-		"spotify_client_id":     spotifyClientID,
-		"spotify_client_secret": spotifyClientSecret,
-		"spotify_redirect_uri":  spotifyRedirectURI,
-		"amazon_configured":     amazonConfigured,
-		"amazon_client_id":      amazonClientID,
-		"amazon_client_secret":  amazonClientSecret,
-		"amazon_redirect_uri":   amazonRedirectURI,
+		"server_url":               serverURL,
+		"server_url_resolved_ip":   serverURLResolvedIP,
+		"server_url_resolve_error": serverURLResolveError,
+		"https_server_url":         httpsServerURL,
+		"discovery_interval":       discoveryInterval,
+		"discovery_enabled":        discoveryEnabled,
+		"dns_enabled":              dnsEnabled,
+		"dns_running":              dnsRunning,
+		"dns_actual_bind":          actualBind,
+		"dns_upstream":             strings.Join(dnsUpstream, ","),
+		"dns_bind_addr":            dnsBindAddr,
+		"mirror_enabled":           mirrorEnabled,
+		"mirror_endpoints":         mirrorEndpoints,
+		"skip_mirror_endpoints":    skipMirrorEndpoints,
+		"preferred_source":         preferredSource,
+		"internal_paths":           internalPaths,
+		"redact_logs":              redact,
+		"log_bodies":               logBody,
+		"record_interactions":      record,
+		"shortcuts":                shortcuts,
+		"spotify_configured":       spotifyConfigured,
+		"spotify_client_id":        spotifyClientID,
+		"spotify_client_secret":    spotifyClientSecret,
+		"spotify_redirect_uri":     spotifyRedirectURI,
+		"amazon_configured":        amazonConfigured,
+		"amazon_client_id":         amazonClientID,
+		"amazon_client_secret":     amazonClientSecret,
+		"amazon_redirect_uri":      amazonRedirectURI,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -245,6 +255,15 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		// No strict requirement for DNSUpstream here as SetDNSSettings will
 		// try to fall back to system DNS. We only log it if both are empty later.
 		log.Printf("[DNS] DNS Discovery enabled without explicit upstreams, will try system DNS.")
+	}
+
+	// Validate server_url: the same value the DNS server uses to derive its
+	// intercept IP. Reject anything that does not resolve to a routable IP so
+	// users see the error in the UI instead of getting a silently-broken setup
+	// where DNS replies with `CNAME .` for every Bose hostname.
+	if _, err := s.resolveServerURLIP(settings.ServerURL); err != nil {
+		http.Error(w, "Invalid server_url: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	interval, err := time.ParseDuration(settings.DiscoveryInterval)

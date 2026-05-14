@@ -10,16 +10,16 @@ func TestBuildServerHTTPSURL_PortResolution(t *testing.T) {
 	// of each subtest.
 
 	tests := []struct {
-		name        string
-		targetURL   string
+		name         string
+		targetURL    string
 		envHTTPSPort string
-		want        string
+		want         string
 	}{
 		{
-			name:      "https with explicit port wins over HTTPS_PORT env",
-			targetURL: "https://soundtouch.fritz.box:443",
+			name:         "https with explicit port wins over HTTPS_PORT env",
+			targetURL:    "https://soundtouch.fritz.box:443",
 			envHTTPSPort: "8443",
-			want:      "https://soundtouch.fritz.box:443/health",
+			want:         "https://soundtouch.fritz.box:443/health",
 		},
 		{
 			name:      "https without explicit port uses 443",

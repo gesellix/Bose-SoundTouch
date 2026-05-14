@@ -25,6 +25,7 @@ func TestDNSSettingsValidation(t *testing.T) {
 
 	// Test Case 1: Enable DNS with empty upstream (should fallback to system DNS)
 	update := map[string]interface{}{
+		"server_url":    "http://localhost:8001",
 		"dns_enabled":   true,
 		"dns_upstream":  "",
 		"dns_bind_addr": ":5353",
@@ -55,6 +56,7 @@ func TestDNSSettingsValidation(t *testing.T) {
 	// Test Case 2: Enable DNS with valid upstream
 	// Using a random port to avoid conflicts and ensure it's fast
 	updateValid := map[string]interface{}{
+		"server_url":    "http://localhost:8001",
 		"dns_enabled":   true,
 		"dns_upstream":  "8.8.8.8",
 		"dns_bind_addr": "127.0.0.1:0", // Random port

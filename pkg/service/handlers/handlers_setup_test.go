@@ -101,7 +101,7 @@ func TestProxySettingsAPI(t *testing.T) {
 
 	// 3. Test System Settings POST
 	sysUpdate := map[string]string{
-		"server_url": "http://new-server:8000",
+		"server_url": "http://127.0.0.1:8000",
 	}
 
 	sysBody, err := json.Marshal(sysUpdate)
@@ -122,13 +122,13 @@ func TestProxySettingsAPI(t *testing.T) {
 
 	// Verify server state
 	sURL, _ := server.GetSettings()
-	if sURL != "http://new-server:8000" {
+	if sURL != "http://127.0.0.1:8000" {
 		t.Errorf("POST /setup/settings: Server state did not update: serverURL=%s", sURL)
 	}
 
 	// 4. Test Mirror Settings persistence
 	mirrorUpdate := map[string]interface{}{
-		"server_url":       "http://mirror-test:8000",
+		"server_url":       "http://127.0.0.1:8000",
 		"mirror_enabled":   true,
 		"mirror_endpoints": []string{"/test/*"},
 		"internal_paths":   []string{"/setup/*"},

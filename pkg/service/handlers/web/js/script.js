@@ -126,6 +126,19 @@ async function fetchSettings() {
         if (settings.server_url) {
             document.getElementById("target-domain").value = settings.server_url;
         }
+        const resolved = document.getElementById("target-domain-resolved");
+        if (resolved) {
+            if (settings.server_url_resolved_ip) {
+                resolved.style.color = "#2e7d32";
+                resolved.innerHTML = "✅ DNS will hand out <code>" + settings.server_url_resolved_ip +
+                    "</code> for intercepted Bose hostnames. Speakers must be able to reach this address.";
+            } else if (settings.server_url_resolve_error) {
+                resolved.style.color = "#c62828";
+                resolved.innerText = "❌ " + settings.server_url_resolve_error;
+            } else {
+                resolved.innerText = "";
+            }
+        }
         if (settings.discovery_interval) {
             document.getElementById("discovery-interval").value = settings.discovery_interval;
         }
