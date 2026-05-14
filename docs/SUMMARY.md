@@ -54,6 +54,7 @@
 * [Request Recording](REQUEST_RECORDING_CONCEPT.md)
 * [Spotify Priming Strategy](concepts/spotify-priming-strategy.md)
 * [Spotify OAuth](concepts/spotify-oauth.md)
+* [soundtouch-web Roadmap](soundtouch-web-roadmap.md)
 
 ## Analysis & Research
 * [API Coverage Analysis](analysis/API-COVERAGE.md)
