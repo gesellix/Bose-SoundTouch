@@ -55,15 +55,10 @@ func withChiParams(r *http.Request, params map[string]string) *http.Request {
 func TestNewWebApp(t *testing.T) {
 	app := NewWebApp()
 
-	// Use require-style checks that satisfy static analyzer
-	if app == nil {
-		t.Fatal("NewWebApp returned nil")
-	}
 	if app.Devices == nil {
 		t.Fatal("Devices map not initialized")
 	}
 
-	// At this point we know app and app.Devices are not nil
 	if len(app.Devices) != 0 {
 		t.Errorf("Expected empty devices map, got %d devices", len(app.Devices))
 	}
