@@ -21,7 +21,7 @@ func TestHandleBMXRegistry_DNSDependent(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 	_ = ds.Initialize()
 
-	localURL := "https://soundtouch.local"
+	localURL := "https://127.0.0.1"
 	server := NewServer(ds, nil, localURL, false, false, false)
 
 	t.Run("DNSEnabled_UsesBoseURL", func(t *testing.T) {
