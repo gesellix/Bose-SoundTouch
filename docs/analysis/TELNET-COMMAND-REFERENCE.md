@@ -12,6 +12,12 @@ recovery / WiFi setup.
 > some commands listed here have been removed on firmware 27.x. Where a
 > command's availability is known to vary, the **Availability** column says so.
 
+### Telnet via Docker (when not installed locally)
+
+```shell
+docker run --rm --name telnet -it --env IP=192.168.123.123 alpine:edge ash -c 'apk add -U busybox-extras && telnet $IP 17000'
+```
+
 ## Sources
 
 | #  | Source                                                                                                                                                                                                             | Era / focus                                                                                                                                                                                            |
