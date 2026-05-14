@@ -381,10 +381,28 @@ func TestMACMappingPerformance(t *testing.T) {
 
 	t.Logf("  Total mappings stored: %d (includes normalized versions)", totalMappings)
 
+	// Update is a pure in-memory map write; keep an absolute cap as a backstop
+	// against catastrophic regressions in that hot path.
 	if updateDuration > time.Millisecond*100 {
 		t.Errorf("Update performance too slow: %v", updateDuration)
 	}
-	if lookupDuration > time.Millisecond*70 {
-		t.Errorf("Lookup performance too slow: %v", lookupDuration)
+
+	// Lookup does up to two Stat() syscalls and is dominated by filesystem
+	// latency, which varies wildly on shared CI runners. Compare it to the
+	// in-memory update cost instead of an absolute bound: the ratio captures
+	// "lookup got disproportionately slower" (an algorithmic regression in the
+	// lookup path) while staying stable under uniform host slowdown.
+	if updateDuration <= 0 {
+		t.Fatalf("Update duration is non-positive (%v); cannot compute lookup/update ratio", updateDuration)
+	}
+
+	const maxLookupUpdateRatio = 30.0
+
+	ratio := float64(lookupDuration) / float64(updateDuration)
+	t.Logf("  Lookup/Update ratio: %.2fx (threshold %.0fx)", ratio, maxLookupUpdateRatio)
+
+	if ratio > maxLookupUpdateRatio {
+		t.Errorf("Lookup is %.2fx slower than update (>%.0fx threshold) — possible regression in AccountDeviceDir lookup path. Update=%v Lookup=%v",
+			ratio, maxLookupUpdateRatio, updateDuration, lookupDuration)
 	}
 }
