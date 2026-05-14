@@ -84,7 +84,8 @@ func createGroup(c *cli.Context) error {
 				{DeviceID: rightInfo.DeviceID, Role: "RIGHT", IPAddress: rightIP},
 			},
 		},
-		SenderIPAddress: leftIP,
+		// SenderIPAddress is intentionally omitted on the base request.
+		// propagateAddGroup adds it to the slave's copy only — see comment there.
 	}
 
 	leftClient, err := clientForHost(c, leftIP)
@@ -139,7 +140,21 @@ type addGroupOutcome struct {
 // propagateAddGroup POSTs /addGroup to both speakers concurrently and returns
 // the (LEFT, RIGHT) outcomes. A non-GROUP_OK Status in the response is
 // reported as an error so callers don't have to re-inspect the body.
+//
+// The two POSTs carry different payloads: the master (LEFT) receives the base
+// request with no senderIPAddress so its state machine forms the group as the
+// master, while the slave (RIGHT) receives a copy with senderIPAddress set to
+// the master's IP so its state machine joins as the slave. Sending the same
+// payload to both makes both speakers think they're the slave — they enter
+// AddingSlave, wait for a master that never confirms, time out after 5 s, and
+// revert (issue #252).
 func propagateAddGroup(left, right *client.Client, leftIP, rightIP string, req *models.Group) (addGroupOutcome, addGroupOutcome) {
+	masterReq := *req
+	masterReq.SenderIPAddress = ""
+
+	slaveReq := *req
+	slaveReq.SenderIPAddress = leftIP
+
 	var (
 		wg                sync.WaitGroup
 		leftOut, rightOut addGroupOutcome
@@ -150,13 +165,13 @@ func propagateAddGroup(left, right *client.Client, leftIP, rightIP string, req *
 	go func() {
 		defer wg.Done()
 
-		leftOut = postAddGroup(left, leftIP, req)
+		leftOut = postAddGroup(left, leftIP, &masterReq)
 	}()
 
 	go func() {
 		defer wg.Done()
 
-		rightOut = postAddGroup(right, rightIP, req)
+		rightOut = postAddGroup(right, rightIP, &slaveReq)
 	}()
 
 	wg.Wait()

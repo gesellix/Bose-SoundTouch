@@ -61,7 +61,8 @@ func sampleGroupRequest(leftIP, rightIP string) *models.Group {
 				{DeviceID: "F45EAB3115DA", Role: "RIGHT", IPAddress: rightIP},
 			},
 		},
-		SenderIPAddress: leftIP,
+		// senderIPAddress is intentionally not set here; propagateAddGroup
+		// adds it to the slave's copy only.
 	}
 }
 
@@ -95,18 +96,29 @@ func TestPropagateAddGroup_BothSucceed(t *testing.T) {
 		t.Errorf("RIGHT group = %+v, want status=GROUP_OK", rightOut.group)
 	}
 
-	// Both speakers must have received the same payload, including senderIPAddress.
-	for _, bodies := range []*[]string{leftBodies, rightBodies} {
+	// Both speakers must have received the roles, but only the slave's payload
+	// carries senderIPAddress — see propagateAddGroup for the why.
+	for label, bodies := range map[string]*[]string{"LEFT": leftBodies, "RIGHT": rightBodies} {
 		if len(*bodies) != 1 {
-			t.Fatalf("expected exactly one POST, got %d", len(*bodies))
+			t.Fatalf("%s: expected exactly one POST, got %d", label, len(*bodies))
 		}
 
 		body := (*bodies)[0]
-		for _, want := range []string{"<role>LEFT</role>", "<role>RIGHT</role>", "<senderIPAddress>192.168.1.131</senderIPAddress>"} {
+		for _, want := range []string{"<role>LEFT</role>", "<role>RIGHT</role>"} {
 			if !strings.Contains(body, want) {
-				t.Errorf("body missing %q\nbody:\n%s", want, body)
+				t.Errorf("%s body missing %q\nbody:\n%s", label, want, body)
 			}
 		}
+	}
+
+	leftBody := (*leftBodies)[0]
+	if strings.Contains(leftBody, "<senderIPAddress>") {
+		t.Errorf("LEFT (master) body must NOT carry <senderIPAddress>, otherwise the master flips into slave mode (issue #252)\nbody:\n%s", leftBody)
+	}
+
+	rightBody := (*rightBodies)[0]
+	if !strings.Contains(rightBody, "<senderIPAddress>192.168.1.131</senderIPAddress>") {
+		t.Errorf("RIGHT (slave) body must carry <senderIPAddress>192.168.1.131</senderIPAddress>\nbody:\n%s", rightBody)
 	}
 }
 
