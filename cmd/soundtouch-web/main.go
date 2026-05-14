@@ -43,7 +43,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "interface",
-				Usage:   "Network interface name (e.g. eth0) for mDNS and UPnP discovery; leave empty to auto-pick",
+				Usage:   "Network interface name (e.g. eth0) for mDNS and UPnP device discovery. Defaults to the --bind interface name when one was given; leave empty otherwise to auto-pick",
 				EnvVars: []string{"DISCOVERY_INTERFACE"},
 			},
 		},
@@ -60,7 +60,12 @@ func main() {
 				log.Printf("Resolved --bind %q to %s", rawBind, bindAddr)
 			}
 
-			ifaceName := c.String("interface")
+			rawIface := c.String("interface")
+
+			ifaceName := defaultDiscoveryInterface(rawIface, rawBind, bindAddr)
+			if rawIface == "" && ifaceName != "" {
+				log.Printf("Defaulting --interface to %q from --bind", ifaceName)
+			}
 
 			addr := ":" + port
 			if bindAddr != "" {
@@ -113,6 +118,24 @@ func main() {
 	}
 }
 
+// defaultDiscoveryInterface picks the interface name to use for mDNS/UPnP
+// discovery. An explicit --interface always wins; otherwise, when --bind was
+// given an interface name (i.e. resolveBindAddr substituted an IP for it),
+// that name is reused so the common single-interface case "just works".
+// Returns the empty string when there is nothing to propagate, leaving the
+// discovery service to auto-pick.
+func defaultDiscoveryInterface(rawInterface, rawBind, resolvedBind string) string {
+	if rawInterface != "" {
+		return rawInterface
+	}
+
+	if rawBind != "" && rawBind != resolvedBind {
+		return rawBind
+	}
+
+	return ""
+}
+
 // resolveBindAddr returns the address to bind the HTTP listener to.
 //
 // If bindAddr names a local network interface, the interface's single IPv4
@@ -126,8 +149,10 @@ func main() {
 // If bindAddr is not an interface name — including the empty string, a host
 // name, or a literal IP — it is returned unchanged.
 func resolveBindAddr(bindAddr string) (string, error) {
-	iface, err := net.InterfaceByName(bindAddr)
-	if err != nil {
+	// A lookup failure here just means bindAddr isn't an interface name
+	// (it's a host, IP, or empty); fall through to pass-through.
+	iface, _ := net.InterfaceByName(bindAddr)
+	if iface == nil {
 		return bindAddr, nil
 	}
 

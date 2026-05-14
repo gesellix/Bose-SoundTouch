@@ -90,6 +90,69 @@ func findLoopbackWithSingleIPv4(t *testing.T) (name, addr string, ok bool) {
 	return "", "", false
 }
 
+func TestDefaultDiscoveryInterface(t *testing.T) {
+	tests := []struct {
+		name         string
+		rawInterface string
+		rawBind      string
+		resolvedBind string
+		want         string
+	}{
+		{
+			name:         "explicit interface wins over bind-derived default",
+			rawInterface: "eth1",
+			rawBind:      "eth0",
+			resolvedBind: "192.168.1.5",
+			want:         "eth1",
+		},
+		{
+			name:         "derive from --bind when --bind was an interface name",
+			rawInterface: "",
+			rawBind:      "eth0",
+			resolvedBind: "192.168.1.5",
+			want:         "eth0",
+		},
+		{
+			name:         "no derivation when --bind was an IP literal",
+			rawInterface: "",
+			rawBind:      "192.168.1.5",
+			resolvedBind: "192.168.1.5",
+			want:         "",
+		},
+		{
+			name:         "no derivation when --bind was a hostname (pass-through)",
+			rawInterface: "",
+			rawBind:      "localhost",
+			resolvedBind: "localhost",
+			want:         "",
+		},
+		{
+			name:         "both empty stays empty (auto-pick)",
+			rawInterface: "",
+			rawBind:      "",
+			resolvedBind: "",
+			want:         "",
+		},
+		{
+			name:         "explicit interface alone, --bind empty",
+			rawInterface: "eth1",
+			rawBind:      "",
+			resolvedBind: "",
+			want:         "eth1",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := defaultDiscoveryInterface(tc.rawInterface, tc.rawBind, tc.resolvedBind)
+			if got != tc.want {
+				t.Errorf("got %q, want %q (rawInterface=%q rawBind=%q resolvedBind=%q)",
+					got, tc.want, tc.rawInterface, tc.rawBind, tc.resolvedBind)
+			}
+		})
+	}
+}
+
 func quoted(s string) string {
 	if s == "" {
 		return "(empty)"
