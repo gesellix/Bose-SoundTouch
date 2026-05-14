@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"net"
@@ -37,7 +38,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "bind",
-				Usage:   "Address (host or IP) for the HTTP listener; leave empty to listen on all interfaces",
+				Usage:   "Address for the HTTP listener: host, IP, or local interface name (e.g. eth0). Leave empty to listen on all interfaces",
 				EnvVars: []string{"BIND_ADDR"},
 			},
 			&cli.StringFlag{
@@ -48,7 +49,17 @@ func main() {
 		},
 		Action: func(c *cli.Context) error {
 			port := c.String("port")
-			bindAddr := resolveBindAddr(c.String("bind"))
+			rawBind := c.String("bind")
+
+			bindAddr, err := resolveBindAddr(rawBind)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if rawBind != "" && bindAddr != rawBind {
+				log.Printf("Resolved --bind %q to %s", rawBind, bindAddr)
+			}
+
 			ifaceName := c.String("interface")
 
 			addr := ":" + port
@@ -102,16 +113,30 @@ func main() {
 	}
 }
 
-func resolveBindAddr(bindAddr string) string {
+// resolveBindAddr returns the address to bind the HTTP listener to.
+//
+// If bindAddr names a local network interface, the interface's single IPv4
+// address is returned. When no IPv4 is present, the function falls back to the
+// interface's single non-link-local IPv6 address (wrapped in brackets so it
+// composes correctly with ":port"). Ambiguous interfaces (multiple addresses
+// in the chosen family) or interfaces with no usable address produce an error,
+// so misconfiguration surfaces immediately instead of becoming an obscure DNS
+// lookup failure at listen time.
+//
+// If bindAddr is not an interface name — including the empty string, a host
+// name, or a literal IP — it is returned unchanged.
+func resolveBindAddr(bindAddr string) (string, error) {
 	iface, err := net.InterfaceByName(bindAddr)
 	if err != nil {
-		return bindAddr
+		return bindAddr, nil
 	}
 
 	addrs, err := iface.Addrs()
 	if err != nil {
-		return bindAddr
+		return "", fmt.Errorf("--bind %q: failed to list addresses for interface: %w", bindAddr, err)
 	}
+
+	var ipv4, ipv6 []net.IP
 
 	for _, addr := range addrs {
 		var ip net.IP
@@ -123,12 +148,31 @@ func resolveBindAddr(bindAddr string) string {
 			ip = v.IP
 		}
 
-		if ipv4 := ip.To4(); ipv4 != nil {
-			return ipv4.String()
+		if ip == nil {
+			continue
+		}
+
+		if v4 := ip.To4(); v4 != nil {
+			ipv4 = append(ipv4, v4)
+		} else if !ip.IsLinkLocalUnicast() {
+			// Skip IPv6 link-local (fe80::); it requires a zone ID and
+			// can't be used as a plain "[ip]:port" listen address.
+			ipv6 = append(ipv6, ip)
 		}
 	}
 
-	return bindAddr
+	switch {
+	case len(ipv4) == 1:
+		return ipv4[0].String(), nil
+	case len(ipv4) > 1:
+		return "", fmt.Errorf("--bind %q: interface has multiple IPv4 addresses (%v); specify one directly", bindAddr, ipv4)
+	case len(ipv6) == 1:
+		return "[" + ipv6[0].String() + "]", nil
+	case len(ipv6) > 1:
+		return "", fmt.Errorf("--bind %q: interface has multiple IPv6 addresses (%v); specify one directly", bindAddr, ipv6)
+	default:
+		return "", fmt.Errorf("--bind %q: interface has no usable IPv4 or IPv6 address", bindAddr)
+	}
 }
 
 func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
