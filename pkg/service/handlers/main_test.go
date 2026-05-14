@@ -58,7 +58,11 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/account/{account}/device/{device}/group/", server.HandleMargeDeviceGroup)
 		r.Get("/account/{account}/device/{device}/group/server", server.HandleMargeDeviceGroupServer)
 		r.Get("/account/{account}/device/{device}/group/member", server.HandleMargeDeviceGroupMember)
+		// Speakers POST to /group/ (with trailing slash) when forwarding the
+		// addGroup payload to Marge during stereo-pair formation -- see issue
+		// #252. Register both forms so chi accepts either.
 		r.Post("/account/{account}/group", server.HandleMargeAddGroup)
+		r.Post("/account/{account}/group/", server.HandleMargeAddGroup)
 		r.Post("/account/{account}/group/{groupId}", server.HandleMargeModifyGroup)
 		r.Delete("/account/{account}/group/{groupId}", server.HandleMargeDeleteGroup)
 		r.Post("/device_setting/account/{account}/device/{device}/device_settings", server.HandleMargeUpdateDeviceSettings)
@@ -91,6 +95,7 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/{account}/devices/{device}/group/server", server.HandleMargeDeviceGroupServer)
 		r.Get("/{account}/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
 		r.Post("/{account}/group", server.HandleMargeAddGroup)
+		r.Post("/{account}/group/", server.HandleMargeAddGroup)
 		r.Post("/{account}/group/{groupId}", server.HandleMargeModifyGroup)
 		r.Delete("/{account}/group/{groupId}", server.HandleMargeDeleteGroup)
 	}

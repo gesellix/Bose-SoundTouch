@@ -94,6 +94,7 @@ POST     /accounts/{account}/devices                                  handlers.(
 POST     /accounts/{account}/devices/{device}/presets/{presetNumber}  handlers.(*Server).HandleMargeUpdatePreset-fm
 POST     /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleMargeAddRecent-fm
 POST     /accounts/{account}/group                                    handlers.(*Server).HandleMargeAddGroup-fm
+POST     /accounts/{account}/group/                                   handlers.(*Server).HandleMargeAddGroup-fm
 POST     /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeModifyGroup-fm
 POST     /alexa/certificate                                           handlers.(*Server).HandleAlexaCertificate-fm
 POST     /bmx/core02/svc-bmx-adapter-orion/prod/orion/token           handlers.(*Server).HandleOrionToken-fm
@@ -141,6 +142,7 @@ POST     /streaming/account/{account}/device/{device}                 handlers.(
 POST     /streaming/account/{account}/device/{device}/presets/{presetNumber} handlers.(*Server).HandleMargeUpdatePreset-fm
 POST     /streaming/account/{account}/device/{device}/recent          handlers.(*Server).HandleMargeAddRecent-fm
 POST     /streaming/account/{account}/group                           handlers.(*Server).HandleMargeAddGroup-fm
+POST     /streaming/account/{account}/group/                          handlers.(*Server).HandleMargeAddGroup-fm
 POST     /streaming/account/{account}/group/{groupId}                 handlers.(*Server).HandleMargeModifyGroup-fm
 POST     /streaming/account/{account}/source                          handlers.(*Server).HandleMargeAddSource-fm
 POST     /streaming/device_setting/account/{account}/device/{device}/device_settings handlers.(*Server).HandleMargeUpdateDeviceSettings-fm

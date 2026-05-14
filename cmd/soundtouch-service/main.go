@@ -948,7 +948,11 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 				r.Get("/group/member", server.HandleMargeDeviceGroupMember)
 			})
 
+			// Speakers POST to /group/ (with trailing slash) when forwarding
+			// the addGroup payload to Marge during stereo-pair formation --
+			// see issue #252. Register both forms so chi accepts either.
 			r.Post("/group", server.HandleMargeAddGroup)
+			r.Post("/group/", server.HandleMargeAddGroup)
 			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
 			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
 
@@ -997,6 +1001,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Get("/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
 
 			r.Post("/group", server.HandleMargeAddGroup)
+			r.Post("/group/", server.HandleMargeAddGroup)
 			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
 			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
 			r.Get("/devices/{device}/presets", server.HandleMargePresets)

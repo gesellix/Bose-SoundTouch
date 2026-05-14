@@ -1855,3 +1855,108 @@ func TestMargeGroupCRUD(t *testing.T) {
 		}
 	})
 }
+
+// TestMargeAddGroup_FromSpeakerCapture replays the exact request a SoundTouch
+// 10 master sends when it forwards an addGroup to its configured Marge server
+// while forming a stereo pair. The shape is taken verbatim from a live capture
+// in issue #252; account ID and device IDs are anonymised:
+//
+//	POST /streaming/account/{account}/group/
+//	Authorization: Bearer <token>
+//	Content-Type:  application/vnd.bose.streaming-v1.2+xml
+//	<group><masterDeviceId>...</masterDeviceId><name>TEST</name>
+//	  <roles>
+//	    <groupRole><deviceId>{master}</deviceId><role>LEFT</role></groupRole>
+//	    <groupRole><deviceId>{slave}</deviceId><role>RIGHT</role></groupRole>
+//	  </roles>
+//	</group>
+//
+// Notable differences from CLI-side requests this codebase already tests:
+//   - URL has a trailing slash ("/group/", not "/group")
+//   - <groupRole> elements have no <ipAddress>
+//   - <senderIPAddress> is absent (correct for the master-bound payload)
+//   - Content-Type is the vendor-specific media type
+//
+// The speaker retries this POST every 15 s while in AddingMaster state; if
+// AfterTouch doesn't accept it the group never completes and reverts to
+// NoGroup after a timeout. This test pins down the exact wire contract so
+// any future change that breaks it fails loudly.
+func TestMargeAddGroup_FromSpeakerCapture(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "st-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	r, _ := setupRouter("http://localhost:8001", ds)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	const (
+		account     = "1234567"
+		masterDevID = "001122334455"
+		slaveDevID  = "AABBCCDDEEFF"
+	)
+
+	// Body matches the captured MargeClient payload structure verbatim --
+	// no <senderIPAddress>, no per-role <ipAddress>, no <status>, no group id.
+	reqBody := `<?xml version="1.0" encoding="UTF-8" ?><group><masterDeviceId>` + masterDevID +
+		`</masterDeviceId><name>TEST</name><roles><groupRole><deviceId>` + masterDevID +
+		`</deviceId><role>LEFT</role></groupRole><groupRole><deviceId>` + slaveDevID +
+		`</deviceId><role>RIGHT</role></groupRole></roles></group>`
+
+	url := ts.URL + "/streaming/account/" + account + "/group/"
+
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+
+	// Headers copied from the captured CMargeHttpInterface::Post lines.
+	req.Header.Set("Authorization", "Bearer test-token")
+	req.Header.Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(res.Body)
+		t.Fatalf("POST %s: expected 201 Created, got %d. Body: %s", url, res.StatusCode, respBody)
+	}
+
+	if got := res.Header.Get("Content-Type"); got != "application/vnd.bose.streaming-v1.2+xml" {
+		t.Errorf("response Content-Type = %q, want %q", got, "application/vnd.bose.streaming-v1.2+xml")
+	}
+
+	location := res.Header.Get("Location")
+	if !strings.Contains(location, "/account/"+account+"/group/") {
+		t.Errorf("Location header should reference the new group under account %s, got %q", account, location)
+	}
+
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+
+	var got models.Group
+	if err := xml.Unmarshal(respBody, &got); err != nil {
+		t.Fatalf("decode response: %v\nbody: %s", err, respBody)
+	}
+
+	if got.MasterDeviceID != masterDevID {
+		t.Errorf("response masterDeviceId = %q, want %q", got.MasterDeviceID, masterDevID)
+	}
+
+	if got.Name != "TEST" {
+		t.Errorf("response name = %q, want %q", got.Name, "TEST")
+	}
+
+	if len(got.Roles.Roles) != 2 {
+		t.Fatalf("response roles = %d, want 2", len(got.Roles.Roles))
+	}
+}
