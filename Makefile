@@ -169,6 +169,7 @@ test-http-client:
 		/workdir/get_api_versions.http \
 		/workdir/post_musicprovider_is_eligible.http \
 		/workdir/get_full_account.http \
+		/workdir/create_group.http \
 		/workdir/get_group.http \
 		/workdir/unregister_device.http \
 		--report; \

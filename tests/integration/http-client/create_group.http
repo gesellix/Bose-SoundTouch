@@ -1,0 +1,66 @@
+### POST /streaming/account/{{accountId}}/group/ (Create Stereo Pair via Marge)
+###
+### Replays the exact shape a SoundTouch 10 master sends when it forwards the
+### addGroup payload to its configured Marge server while forming a stereo pair
+### (issue #252). Notable properties of the wire contract this exercises:
+###
+###   * URL has a trailing slash ("/group/", not "/group").
+###   * <groupRole> elements have no <ipAddress>.
+###   * No <senderIPAddress> (this is the master-bound payload).
+###   * No numeric group <id> attribute and no <status> on the request.
+###   * Content-Type is the vendor-specific media type.
+###
+### The speaker retries this POST every 15 s while in AddingMaster state; if
+### AfterTouch doesn't accept it, the group never completes and reverts to
+### NoGroup after a timeout.
+POST {{host}}/streaming/account/{{accountId}}/group/
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<group>
+    <masterDeviceId>{{deviceId}}</masterDeviceId>
+    <name>TEST</name>
+    <roles>
+        <groupRole>
+            <deviceId>{{deviceId}}</deviceId>
+            <role>LEFT</role>
+        </groupRole>
+        <groupRole>
+            <deviceId>{{macAddress2}}</deviceId>
+            <role>RIGHT</role>
+        </groupRole>
+    </roles>
+</group>
+
+> {%
+    client.test("Group created successfully", function() {
+        client.assert(response.status === 201, "Response status should be 201 Created, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.2+xml",
+            "Response Content-Type should be application/vnd.bose.streaming-v1.2+xml, got '" + response.contentType.mimeType + "'");
+        client.assert(response.headers.valueOf("Location") !== null,
+            "Response should include a Location header pointing to the new group");
+        client.assert(response.headers.valueOf("Location").includes("/account/" + client.variables.environment.get("accountId") + "/group/"),
+            "Location header should reference the new group under the account, got '" + response.headers.valueOf("Location") + "'");
+    });
+
+    client.test("Response body echoes the requested group", function() {
+        const doc = response.body;
+        const group = doc.getElementsByTagName("group")[0];
+        client.assert(group !== undefined, "Response body should contain <group>");
+
+        const master = group.getElementsByTagName("masterDeviceId")[0];
+        client.assert(master !== undefined, "Response body should contain <masterDeviceId>");
+        client.assert(master.textContent === client.variables.environment.get("deviceId"),
+            "masterDeviceId should match the request, got '" + master.textContent + "'");
+
+        const name = group.getElementsByTagName("name")[0];
+        client.assert(name !== undefined, "Response body should contain <name>");
+        client.assert(name.textContent === "TEST", "name should match the requested 'TEST', got '" + name.textContent + "'");
+
+        const roles = group.getElementsByTagName("groupRole");
+        client.assert(roles.length === 2, "Response should contain exactly 2 <groupRole> entries, got " + roles.length);
+    });
+%}
