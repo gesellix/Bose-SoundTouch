@@ -33,6 +33,10 @@ Authorization: Bearer {{token}}
 
         const ipaddress = device.getElementsByTagName("ipaddress")[0];
         client.assert(ipaddress !== undefined, "Response body should contain <ipaddress>");
+
+        // Capture the initial createdOn so rename_device.http can
+        // assert it survives a PUT later in the test sequence.
+        client.global.set("initialCreatedOn", createdOn.textContent);
     });
 %}
 
@@ -61,6 +65,13 @@ Authorization: Bearer {{token}}
         const createdOn = device.getElementsByTagName("createdOn")[0];
         client.assert(createdOn !== undefined, "Response body should contain <createdOn>");
         client.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|(\+\d{2}:\d{2}))$/.test(createdOn.textContent), "createdOn should be a valid ISO8601 timestamp");
+        // This variant POST re-uses the same deviceId as the first
+        // register above, so it's an upsert — issue #285 made the
+        // datastore preserve the original createdOn unconditionally.
+        // The captured global is the load-bearing assertion: if it
+        // ever differs here, CreatedOn preservation regressed.
+        client.assert(createdOn.textContent === client.global.get("initialCreatedOn"),
+            "createdOn (" + createdOn.textContent + ") differs from the value captured by the first POST (" + client.global.get("initialCreatedOn") + ") — upsert must preserve the original timestamp");
 
         const name = device.getElementsByTagName("name")[0];
         client.assert(name !== undefined, "Response body should contain <name>");
@@ -68,7 +79,7 @@ Authorization: Bearer {{token}}
 
         const updatedOn = device.getElementsByTagName("updatedOn")[0];
         client.assert(updatedOn !== undefined, "Response body should contain <updatedOn>");
-        client.assert(updatedOn.textContent === createdOn.textContent, "updatedOn should match createdOn for a new device");
+        client.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|(\+\d{2}:\d{2}))$/.test(updatedOn.textContent), "updatedOn should be a valid ISO8601 timestamp");
 
         const ipaddress = device.getElementsByTagName("ipaddress")[0];
         client.assert(ipaddress !== undefined, "Response body should contain <ipaddress>");

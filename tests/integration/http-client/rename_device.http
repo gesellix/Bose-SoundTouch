@@ -1,0 +1,99 @@
+### PUT /streaming/account/{accountId}/device/{deviceId} (Rename Device)
+###
+### Speakers fire this against AfterTouch when the user renames them
+### via the Bose App or `soundtouch-cli name set`. Before issue #285's
+### route fix the request fell through to the [UNHANDLED] catch-all
+### and proxied to streaming.bose.com (401), so the speaker retried
+### in a loop and the Bose App showed the rename spinning forever.
+### This test runs after register_device.http (which creates the
+### initial record) and after power_on.http (which seeds the IP at
+### 192.168.1.100). The rename PUT must:
+###
+###   - return 200 OK
+###   - echo the new name
+###   - preserve <createdOn> from the initial registration
+###   - preserve <ipaddress> from the power_on update (request body
+###     doesn't carry one; the datastore merge keeps the existing)
+###   - refresh <updatedOn> to "now"
+PUT {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<device deviceid="{{deviceId}}">
+    <name>{{deviceName}} (renamed)</name>
+    <macaddress>{{macAddress1}}</macaddress>
+</device>
+
+> {%
+    client.test("Rename returned 200 OK", function() {
+        client.assert(response.status === 200, "Response status should be 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.2+xml", "Response Content-Type should be application/vnd.bose.streaming-v1.2+xml");
+    });
+
+    client.test("Response carries the new name and matches the deviceId", function() {
+        const doc = response.body;
+        const device = doc.getElementsByTagName("device")[0];
+        client.assert(device !== undefined, "Response body should contain <device>");
+        client.assert(device.getAttribute("deviceid") === client.variables.environment.get("deviceId"), "Response deviceid should match");
+
+        const name = device.getElementsByTagName("name")[0];
+        client.assert(name !== undefined, "Response body should contain <name>");
+        client.assert(name.textContent === client.variables.environment.get("deviceName") + " (renamed)", "Response should carry the renamed value");
+    });
+
+    client.test("createdOn preserved across rename, updatedOn refreshed", function() {
+        const device = response.body.getElementsByTagName("device")[0];
+
+        const createdOn = device.getElementsByTagName("createdOn")[0];
+        client.assert(createdOn !== undefined, "Response body should contain <createdOn>");
+        client.assert(createdOn.textContent.length > 0, "createdOn should not be empty (it must survive the rename, not be reset)");
+        client.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|(\+\d{2}:\d{2}))$/.test(createdOn.textContent), "createdOn should be ISO8601");
+
+        // The load-bearing assertion: the value must match what
+        // register_device.http captured on the initial POST. If it
+        // doesn't, the rename PUT regressed the "first-paired in
+        // 2017" semantics — the exact bug behind the parity capture
+        // at data/parity_mismatches/1771797308__streaming_account_3230304_device_A81B6A536A98.json.
+        const initial = client.global.get("initialCreatedOn");
+        client.assert(initial !== undefined && initial.length > 0,
+            "initialCreatedOn was not captured by register_device.http — test ordering issue");
+        client.assert(createdOn.textContent === initial,
+            "createdOn (" + createdOn.textContent + ") differs from the value captured at registration (" + initial + ") — the rename PUT must preserve the original timestamp");
+
+        const updatedOn = device.getElementsByTagName("updatedOn")[0];
+        client.assert(updatedOn !== undefined, "Response body should contain <updatedOn>");
+        client.assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|(\+\d{2}:\d{2}))$/.test(updatedOn.textContent), "updatedOn should be ISO8601");
+    });
+
+    client.test("ipaddress preserved from earlier power_on payload", function() {
+        const device = response.body.getElementsByTagName("device")[0];
+        const ipaddress = device.getElementsByTagName("ipaddress")[0];
+        client.assert(ipaddress !== undefined, "Response body should contain <ipaddress>");
+        client.assert(ipaddress.textContent === client.variables.environment.get("deviceIp"),
+            "ipaddress should be preserved from the prior power_on (" + client.variables.environment.get("deviceIp") + "), not overwritten — got " + ipaddress.textContent);
+    });
+%}
+
+### PUT with mismatched deviceid in body (safety check)
+###
+### If the body's deviceid attribute doesn't match the URL's {device}
+### segment the handler refuses with 400 rather than silently re-key
+### the persisted record under the wrong account/device. Pins the
+### second TestIssue285_* unit-test assertion at the integration
+### layer.
+PUT {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<device deviceid="DEADBEEFCAFE">
+    <name>Rogue Rename</name>
+    <macaddress>DEADBEEFCAFE</macaddress>
+</device>
+
+> {%
+    client.test("Mismatched body deviceid returns 400", function() {
+        client.assert(response.status === 400, "Response status should be 400 for body/url deviceid mismatch, got " + response.status);
+    });
+%}
