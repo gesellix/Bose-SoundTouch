@@ -238,6 +238,13 @@ func (s *Server) SetDNSSettings(enabled bool, upstream, bind string) {
 	}
 }
 
+// ResolveServerURLIPForPreflight is an exported wrapper around resolveServerURLIP
+// so callers outside the package (e.g. the service startup pre-flight) can
+// reuse the same resolution path the DNS server uses.
+func (s *Server) ResolveServerURLIPForPreflight(serverURL string) (string, error) {
+	return s.resolveServerURLIP(serverURL)
+}
+
 // resolveServerURLIP returns the IP that the DNS server would hand out as the
 // intercept answer for the given server URL. An empty URL, empty hostname, or a
 // hostname that cannot be resolved to an IP is reported as an error so callers

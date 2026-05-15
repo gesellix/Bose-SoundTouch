@@ -1,3 +1,67 @@
+// FAST_ERROR_MS is the timing threshold used to distinguish "no listener
+// on :443" (very fast browser error, usually TCP RST) from "something
+// answered TCP, TLS handshake failed because of untrusted cert" (slower
+// error). The exact cutoff is fuzzy and varies by browser/network, but
+// the gap between the two cases is large enough (single-digit ms vs.
+// 100+ ms) that this works as a heuristic. We don't expose milliseconds
+// to the user — they'd be misleading without context.
+const FAST_ERROR_MS = 150;
+
+async function probeBrowser443(lanHost, listenerPort, statusEl, serverLocalhostOK, serverLanOK) {
+    const line = document.createElement("div");
+    line.style.fontSize = "0.85em";
+    line.style.marginTop = "2px";
+    line.style.color = "#666";
+    line.innerText = "⏱ Checking from your browser too…";
+    statusEl.appendChild(line);
+
+    const start = performance.now();
+    let outcome;
+    try {
+        // mode:"no-cors" lets the request go on the wire even though the response
+        // would be opaque. We only care about success-or-fail and timing — not
+        // the response body, which we can't read anyway with an untrusted cert.
+        await fetch("https://" + lanHost + ":443/", {
+            mode: "no-cors",
+            cache: "no-store",
+            signal: AbortSignal.timeout(2000),
+        });
+        outcome = { reached: true, elapsed: performance.now() - start };
+    } catch (e) {
+        outcome = { reached: false, elapsed: performance.now() - start, err: e };
+    }
+
+    let msg;
+    let color;
+    if (outcome.reached) {
+        color = "#2e7d32";
+        msg = "✅ Your browser also reaches <code>:443</code> on <code>" + lanHost + "</code>.";
+    } else if (outcome.elapsed >= FAST_ERROR_MS) {
+        color = "#2e7d32";
+        msg = "✅ Your browser reached <code>:" + lanHost + ":443</code> — the failure that follows is the expected " +
+            "untrusted-CA error, not a missing listener.";
+    } else {
+        color = "#c62828";
+        msg = "❌ Your browser sees no listener on <code>" + lanHost + ":443</code> " +
+            "(fast error, likely connection refused).";
+    }
+
+    // Hint when server and browser disagree — that almost always means NAT,
+    // split-horizon DNS, or a host firewall sitting between AfterTouch and
+    // the speaker. Worth pointing out because it's invisible to the server.
+    const browserSees443 = outcome.reached || outcome.elapsed >= FAST_ERROR_MS;
+    if (serverLanOK && !browserSees443) {
+        msg += " <em>(Server sees :443 but your browser doesn't — check intermediate firewalls / split-horizon DNS.)</em>";
+        color = "#c62828";
+    } else if (!serverLanOK && browserSees443) {
+        msg += " <em>(Your browser reaches :443 but the AfterTouch host can't — likely a host-firewall rule on the AfterTouch machine itself.)</em>";
+        color = "#c62828";
+    }
+
+    line.style.color = color;
+    line.innerHTML = msg;
+}
+
 async function fetchSpotifyStatus() {
     try {
         const settingsResponse = await fetch("/setup/settings");
@@ -137,6 +201,55 @@ async function fetchSettings() {
                 resolved.innerText = "❌ " + settings.server_url_resolve_error;
             } else {
                 resolved.innerText = "";
+            }
+        }
+
+        const port443 = document.getElementById("https-443-status");
+        if (port443) {
+            // The :443 check only applies to the DNS-migration path. Hide the row
+            // entirely when AfterTouch's DNS interception is off — those users are
+            // either using SDK overrides (port-explicit URLs) or external DNS
+            // interception (in which case they can read /setup/settings JSON
+            // directly if they want the result).
+            if (!settings.dns_enabled) {
+                port443.innerHTML = "";
+            } else if (settings.https_443_check_skipped) {
+                port443.style.color = "#2e7d32";
+                port443.innerHTML = "✅ HTTPS listener bound directly to <code>:443</code> — speakers can connect.";
+            } else {
+                const localhostOK = settings.https_443_localhost_reachable;
+                const lanOK = settings.https_443_lan_reachable;
+                const lanHost = settings.https_443_lan_host || "";
+                const listenerPort = settings.https_listener_port || "8443";
+                if (localhostOK && lanOK) {
+                    port443.style.color = "#2e7d32";
+                    port443.innerHTML = "✅ <code>:443</code> reachable on <code>localhost</code> and <code>" +
+                        (lanHost || "LAN address") + "</code> (forwarded to <code>:" + listenerPort + "</code>).";
+                } else {
+                    port443.style.color = "#c62828";
+                    const details = [];
+                    details.push("localhost:443 " +
+                        (localhostOK ? "✓" : "❌ " + (settings.https_443_localhost_error || "unreachable")));
+                    details.push((lanHost || "LAN") + ":443 " +
+                        (lanOK ? "✓" : "❌ " + (settings.https_443_lan_error || "unreachable")));
+                    port443.innerHTML = "❌ Speakers connect to <code>:443</code> but AfterTouch listens on <code>:" +
+                        listenerPort + "</code>. " + details.join(" · ") +
+                        ". Set up iptables / setcap / reverse proxy — see " +
+                        "<a href=\"https://github.com/gesellix/Bose-SoundTouch/blob/main/docs/guides/HTTPS-SETUP.md\" target=\"_blank\">HTTPS-SETUP.md</a>.";
+                }
+
+                // Browser-side probe runs in parallel. Mirrors what speakers see from
+                // the LAN; the server-side probe runs from inside AfterTouch's host
+                // and can disagree when there is NAT / split-horizon / a firewall in
+                // between. We can't see TLS-cert vs. TCP-RST from JS, so we fall back
+                // to timing: a fast error suggests no listener; a slower error
+                // suggests the connection got far enough to start TLS, which proves
+                // something is answering. The CA cert is not trusted by the browser
+                // by default, so a clean ✅ resolution is rare — that's fine, the
+                // timing alone is the diagnostic signal.
+                if (lanHost) {
+                    probeBrowser443(lanHost, listenerPort, port443, localhostOK, lanOK);
+                }
             }
         }
         if (settings.discovery_interval) {

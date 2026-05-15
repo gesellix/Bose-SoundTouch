@@ -2,6 +2,14 @@
 
 SoundTouch speakers communicate with cloud services over HTTPS. For the local service to work over HTTPS, speakers must trust the AfterTouch Root CA. The service manages this automatically — it generates a CA on first start and the web UI guides you through installing it on each speaker as part of the migration flow.
 
+> ### ⚠️ Speakers connect to `:443`, AfterTouch defaults to `:8443`
+>
+> Speakers build their target URLs from Bose hostnames *without* an explicit port, so they connect on the default HTTPS port **443**. AfterTouch's built-in HTTPS listener defaults to **8443** because port 443 is privileged on most Unix systems.
+>
+> **If you do nothing, speakers will fail with `Curl 7` / connection refused and nothing will appear in the AfterTouch HTTP log.**
+>
+> Pick one of the three options under [Binding to port 443](#binding-to-port-443) below. The settings page in the web UI shows a ✅ / ❌ indicator for `:443` reachability so you can confirm the routing is in place.
+
 ---
 
 ## How TLS works in AfterTouch
@@ -41,9 +49,40 @@ http://<server>:8000/setup/ca.crt
 
 Speakers expect HTTPS on the default port 443. Since binding to port 443 requires elevated privileges, you have three options:
 
-1. **Port forwarding (recommended)**: Run the service on port 8443 and forward port 443 to it using `iptables` or your firewall/router.
-2. **Capabilities**: Grant the binary permission to bind low ports: `sudo setcap 'cap_net_bind_service=+ep' ./soundtouch-service`
-3. **Reverse proxy**: Use Nginx or Caddy in front of the service (see below).
+1. **Port forwarding (recommended)**: Run the service on port 8443 and forward port 443 to it using `iptables` or your firewall/router. Inside an LXC/Docker container or on the host:
+
+    ```bash
+    iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443
+    iptables -t nat -A OUTPUT     -p tcp --dport 443 -j REDIRECT --to-port 8443
+    ```
+
+    The first rule covers traffic arriving from speakers; the second covers loopback connections from the host itself (useful for the in-built pre-flight probe).
+
+2. **Capabilities**: Grant the binary permission to bind low ports and start the listener directly on `:443`:
+
+    ```bash
+    sudo setcap 'cap_net_bind_service=+ep' ./soundtouch-service
+    ./soundtouch-service --https-port=443
+    ```
+
+3. **Reverse proxy**: Use Nginx or Caddy on `:443` in front of the service (see below).
+
+### Confirming `:443` is reachable
+
+After applying any of the options above, open the AfterTouch web UI → **Settings**. The Target Domain row will show a second line:
+
+* ✅ `:443 reachable on localhost and <IP> (forwarded to :8443)` — you're good.
+* ❌ `Speakers connect to :443 but AfterTouch listens on :8443.` — the routing is missing or not yet active.
+
+A third line follows from the browser itself, which sits on the LAN exactly where the speakers do. The browser can't distinguish an untrusted-CA TLS error from a connection refusal, so it uses timing as a heuristic: a fast error means "no listener / firewall reset", a slower one means "something answered TCP". When the server-side and browser-side checks disagree, the UI flags it — that almost always means NAT, split-horizon DNS, or a host firewall sitting between AfterTouch and the LAN.
+
+The same check runs once at service startup and prints a `[WARN]` log line if `:443` is unreachable, with the exact iptables/setcap commands for your current listener port.
+
+#### When this check is shown
+
+The `:443` indicator is only displayed when **AfterTouch's DNS interception is enabled** (Settings → "Enable DNS Discovery Server"). The check is only meaningful for the **DNS migration method**, where speakers reach AfterTouch via intercepted Bose hostnames and therefore on the implicit `:443`. The other migration method — writing direct `https://<host>:8443/...` URLs into the speaker's private config via SSH — uses the port that's literally in the URL, so `:443` is irrelevant and the check would only add noise.
+
+If you intercept Bose hostnames **outside** AfterTouch (Pi-hole, router DNS rule, `/etc/hosts` on a gateway), the UI gate above will hide the indicator. The data is still in the `GET /setup/settings` JSON response (`https_443_localhost_reachable`, `https_443_lan_reachable`, `https_443_lan_host`) if you want to inspect it directly, or you can briefly enable AfterTouch's DNS server to see the indicator render.
 
 ---
 

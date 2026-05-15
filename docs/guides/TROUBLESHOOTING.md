@@ -105,6 +105,31 @@ iperf3 -c 192.168.1.1  # If iperf server available
 
 ## 🌐 **Connection Issues**
 
+### ❌ Speaker logs `Curl 7, http 0` and AfterTouch sees no HTTP requests
+
+**Symptoms:**
+
+In the speaker's log (`logread -f` over SSH):
+
+```
+SimpleURLFetcher: retry needed, Curl 7, http 0
+```
+
+In the AfterTouch service log: plenty of `[DNS] Intercepted query …` lines but **zero** HTTP requests after each DNS lookup.
+
+**Cause:** speakers connect to Bose hostnames over implicit HTTPS, i.e. port **443**. AfterTouch's built-in HTTPS listener defaults to **8443** because 443 is privileged. The speaker resolves the right IP, dials `:443`, and gets connection refused — which is what `Curl 7` reports.
+
+**Verify:**
+
+```bash
+curl -ksS -o /dev/null -w "443=%{http_code}\n"  https://localhost:443/
+curl -ksS -o /dev/null -w "8443=%{http_code}\n" https://localhost:8443/
+```
+
+Expected when the misconfiguration is present: `443=000` plus a `curl: (7) Failed to connect …` line, `8443=200` (or any 3-digit code).
+
+**Fix:** route `:443` to AfterTouch's HTTPS listener — see [HTTPS-SETUP.md → Binding to port 443](HTTPS-SETUP.md#binding-to-port-443). The AfterTouch settings page shows a ✅ / ❌ indicator for `:443` reachability once the routing is in place.
+
 ### ❌ "Connection refused"
 
 **Symptoms:**

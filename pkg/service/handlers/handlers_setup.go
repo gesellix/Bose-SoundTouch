@@ -180,6 +180,9 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		serverURLResolveError = err.Error()
 	}
 
+	httpsListenerPort := PortFromHTTPSServerURL(httpsServerURL)
+	probe443 := Check443Reachability(httpsListenerPort, serverURL, s.resolveServerURLIP, ProbeDialTimeoutInline)
+
 	// Mask secrets: return "***" if set so the UI can show "configured" without exposing the value.
 	if spotifyClientSecret != "" {
 		spotifyClientSecret = "***"
@@ -190,10 +193,17 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"server_url":               serverURL,
-		"server_url_resolved_ip":   serverURLResolvedIP,
-		"server_url_resolve_error": serverURLResolveError,
-		"https_server_url":         httpsServerURL,
+		"server_url":                    serverURL,
+		"server_url_resolved_ip":        serverURLResolvedIP,
+		"server_url_resolve_error":      serverURLResolveError,
+		"https_server_url":              httpsServerURL,
+		"https_listener_port":           httpsListenerPort,
+		"https_443_check_skipped":       probe443.Skipped,
+		"https_443_localhost_reachable": probe443.Localhost.Reachable,
+		"https_443_localhost_error":     probe443.Localhost.Error,
+		"https_443_lan_reachable":       probe443.LAN.Reachable,
+		"https_443_lan_error":           probe443.LAN.Error,
+		"https_443_lan_host":            probe443.LANHost,
 		"discovery_interval":       discoveryInterval,
 		"discovery_enabled":        discoveryEnabled,
 		"dns_enabled":              dnsEnabled,

@@ -484,6 +484,8 @@ func main() {
 				}
 
 				startHTTPSServer(config.httpsAddr, r, tlsConfig, config.httpsServerURL)
+
+				runHTTPSPreflight(config.httpsServerURL, config.serverURL, config.dnsEnabled, server.ResolveServerURLIPForPreflight)
 			}()
 
 			return http.ListenAndServe(config.addr, r)
@@ -1182,6 +1184,45 @@ func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, h
 			log.Printf("HTTPS server error: %v", err)
 		}
 	}()
+}
+
+// runHTTPSPreflight checks whether speakers' implicit :443 target reaches
+// AfterTouch. Runs after the HTTPS listener has had a moment to come up; if
+// the listener is already on :443 the check is skipped. Emits a single WARN
+// log line with actionable guidance when either probe fails.
+//
+// Only runs when dnsEnabled is true: the :443 reachability only matters when
+// speakers are reaching AfterTouch via intercepted Bose hostnames (i.e. the
+// DNS migration method). For direct SDK-override migration the speaker
+// connects to the configured https-port directly, so :443 is irrelevant.
+// Users with external DNS interception (Pi-hole, router rules) can still see
+// the live result on /setup/settings even when this startup warn is silent.
+func runHTTPSPreflight(httpsServerURL, serverURL string, dnsEnabled bool, resolver func(string) (string, error)) {
+	if !dnsEnabled {
+		return
+	}
+
+	port := handlers.PortFromHTTPSServerURL(httpsServerURL)
+	if port == 0 {
+		// Can't determine the listener port — be silent rather than misleading.
+		return
+	}
+
+	// Give the listener a head start so a successful bind beats the probe.
+	time.Sleep(2 * time.Second)
+
+	res := handlers.Check443Reachability(port, serverURL, resolver, handlers.ProbeDialTimeoutStartup)
+
+	guidance := handlers.FormatPreflightGuidance(port, res)
+	if guidance == "" {
+		if !res.Skipped {
+			log.Printf("HTTPS pre-flight: :443 reachable at localhost and %s ✓", res.LANHost)
+		}
+
+		return
+	}
+
+	log.Print(guidance)
 }
 
 // matchesDomain checks if a certificate domain (which may be a wildcard) matches a server name
