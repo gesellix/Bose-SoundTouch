@@ -10,7 +10,7 @@ AfterTouch usually normally migrates the SoundTouch devices very noninvasive, by
 
 ### AfterTouch Availability
 
-Some devices will expose the AfterTouch port, some won't. We currently (May 2026) suspect that the newer generation devices (those with Bluetooth) will expose the port, while the older ones won't. We're still investigating how to expose AfterTouch on all devices. 
+Some devices will expose the AfterTouch port, some won't. We currently (May 2026) suspect that the newer generation devices (those with Bluetooth) will expose the port, while the older ones won't. We're still investigating how to expose AfterTouch on all devices.
 
 If your device doesn't expose the port, you can still use the on-device installer, but you'll need to run AfterTouch on each one of your speakers individually and may only access AfterTouch via ssh port forwarding. This will also make OAuth authentication a little more tricky, but should also work via SSH port forwarding.
 
@@ -41,15 +41,44 @@ ssh -oHostKeyAlgorithms=+ssh-rsa root@<IP_ADDRESS_OF_SPEAKER>
 
 Then, run the following command to install AfterTouch on the device.
 
-```bash 
+```bash
 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
 ```
 
-After the installation check if you can access AfterTouch from your local device by navigating to `http://<IP_ADDRESS_OF_SPEAKER>:8000`. If you can access the AfterTouch UI, you're good to go! If not, you may need to run AfterTouch on the speaker via SSH port forwarding.
+After the installation check if you can access AfterTouch from your local device by navigating to `http://<IP_ADDRESS_OF_SPEAKER>:8000`. If you can access the AfterTouch UI, you're good to go!
+
+### If `http://<IP_ADDRESS_OF_SPEAKER>:8000` fails: SSH port forwarding
+
+Some firmware images only bind the AfterTouch HTTP port to loopback (see issue #196). The workaround is an SSH tunnel — your machine talks to its own local `:8000`, the SSH connection forwards to the speaker's `:8000` on loopback.
+
+**Open a fresh terminal on your own machine** (Linux/macOS/Windows — NOT another shell inside the speaker's SSH session — see issue #250 for the trap that catches everyone here) and run:
 
 ```bash
-ssh -L 8000:localhost:8000 root@<IP_ADDRESS_OF_SPEAKER>
+ssh -oHostKeyAlgorithms=+ssh-rsa -L 8000:localhost:8000 root@<IP_ADDRESS_OF_SPEAKER>
 ```
+
+The `-oHostKeyAlgorithms=+ssh-rsa` flag is required: SoundTouch speakers offer only legacy SSH host-key algorithms (`ssh-rsa`, `ssh-dss`) that modern OpenSSH clients refuse by default. Without it you'll see `Unable to negotiate with <ip> port 22: no matching host key type found`.
+
+Leave that terminal open while you use AfterTouch. With the tunnel up, navigate to **`http://localhost:8000`** in your browser (`localhost`, not the speaker's IP).
+
+### If the tunnel is open but `http://localhost:8000` still fails
+
+You should see `ERR_CONNECTION_RESET` in the browser and `channel N: open failed: connect failed: Connection refused` in the SSH terminal — that means the tunnel itself works, but the AfterTouch daemon isn't listening on the speaker. Inside the SSH session, check:
+
+```bash
+netstat -tlnp 2>/dev/null | grep 8000     # is anything listening?
+ps | grep -i aftertouch                   # is the daemon running at all?
+logread | grep aftertouch | tail -20      # recent daemon output (panics, errors)
+```
+
+If the daemon isn't running, restart it:
+
+```bash
+/etc/init.d/aftertouch start
+/etc/init.d/aftertouch status
+```
+
+The init script's `status` now distinguishes "running with listener up" from "PID alive but listener silently died" — if you get the latter, the syslog tail above will tell you why.
 
 ## Updating AfterTouch
 
