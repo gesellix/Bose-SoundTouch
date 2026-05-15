@@ -164,6 +164,7 @@ func FormatPreflightGuidance(httpsListenerPort int, res Probe443Result) string {
 	)
 
 	out := ""
+
 	for i, l := range lines {
 		if i > 0 {
 			out += "\n"
