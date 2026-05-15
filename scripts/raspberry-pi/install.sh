@@ -10,7 +10,7 @@ set -euo pipefail
 # Examples (override defaults via env vars):
 #
 #   sudo \
-#     VERSION=v0.17.0 \
+#     VERSION=v0.78.0 \
 #     HOSTNAME_FQDN=soundtouch.local \
 #     HTTP_PORT=80 \
 #     HTTPS_PORT=443 \
@@ -18,7 +18,7 @@ set -euo pipefail
 #     bash install.sh
 #
 # Or with a version argument to perform an update:
-#   sudo bash install.sh v0.18.1
+#   sudo bash install.sh v0.79.0
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
@@ -28,7 +28,7 @@ set -euo pipefail
 # - Safe to re-run; it will update binary/config/unit and restart the service.
 # ==============================================================================
 
-VERSION="${1:-${VERSION:-v0.78.0}}"
+VERSION="${1:-${VERSION:-v0.79.0}}"
 # Normalize version prefix
 if [[ ! "$VERSION" =~ ^v ]]; then
   VERSION="v${VERSION}"
