@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<presets>
+    <preset id="1" createdOn="1700000000" updatedOn="1800000000">
+        <contentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/sEDITED" sourceAccount="" isPresetable="true">
+            <itemName>Edited Station</itemName>
+            <containerArt>https://example.invalid/edited.jpg</containerArt>
+        </contentItem>
+    </preset>
+</presets>
