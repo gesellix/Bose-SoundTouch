@@ -14,12 +14,13 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
 )
 
-//go:embed testdata/info.xml testdata/presets.xml testdata/recents.xml
+//go:embed testdata/info.xml testdata/presets.xml testdata/recents.xml testdata/networkinfo.xml testdata/sources.xml testdata/supportedurls.xml
 var fixtures embed.FS
 
 // Config configures a fake speaker. The zero value is valid and binds the
@@ -120,6 +121,13 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/info", serveFixture("testdata/info.xml"))
 	mux.HandleFunc("/presets", serveFixture("testdata/presets.xml"))
 	mux.HandleFunc("/recents", serveFixture("testdata/recents.xml"))
+	mux.HandleFunc("/networkInfo", serveFixture("testdata/networkinfo.xml"))
+	mux.HandleFunc("/sources", serveFixture("testdata/sources.xml"))
+	mux.HandleFunc("/supportedURLs", serveFixture("testdata/supportedurls.xml"))
+	mux.HandleFunc("/getGroup", serveEmptyGroup)
+	mux.HandleFunc("/addGroup", handleAddGroup)
+	mux.HandleFunc("/updateGroup", handleUpdateGroup)
+	mux.HandleFunc("/removeGroup", handleRemoveGroup)
 }
 
 func serveFixture(path string) http.HandlerFunc {
@@ -136,4 +144,125 @@ func serveFixture(path string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		_, _ = w.Write(body)
 	}
+}
+
+// serveEmptyGroup mirrors a real device's /getGroup response when it is
+// not part of a stereo pair: an empty <group/> element. Tests that want
+// to assert "no group" round-trip semantics can rely on this shape.
+func serveEmptyGroup(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>` + "\n<group/>\n"))
+}
+
+// handleAddGroup echoes the posted <group> XML back with
+// <status>GROUP_OK</status> appended, matching the success path
+// documented for the stereo-pair flow in issue #252 (see also
+// soundtouch-cli/cmd_group.go and pkg/service/handlers/handlers_marge.go).
+// On GET, returns the same empty-group shape as /getGroup so curl
+// smoke-tests don't 405. Anything other than GET/POST gets a 405.
+func handleAddGroup(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		serveEmptyGroup(w, r)
+		return
+	case http.MethodPost:
+	default:
+		w.Header().Set("Allow", "GET, POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 64*1024))
+
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+
+	resp := buildAddGroupResponse(body)
+	_, _ = w.Write(resp)
+}
+
+// handleUpdateGroup mirrors handleAddGroup's contract: POST a <group>
+// payload, get the same payload back with <status>GROUP_OK</status>
+// appended. Real speakers use this for renames (POST /updateGroup with
+// the changed <name>) and other in-place edits to an existing pair.
+// GET returns the same empty-group shape /getGroup uses; non-GET/POST
+// gets a 405.
+func handleUpdateGroup(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		serveEmptyGroup(w, r)
+		return
+	case http.MethodPost:
+	default:
+		w.Header().Set("Allow", "GET, POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 64*1024))
+
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+
+	resp := buildAddGroupResponse(body)
+	_, _ = w.Write(resp)
+}
+
+// handleRemoveGroup matches the documented wiki behaviour: GET on the
+// master speaker, no body, returns the now-empty group shape. The real
+// device dissolves the pair on receipt; the fake is stateless so it
+// just always responds as "no group right now".
+func handleRemoveGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	serveEmptyGroup(w, r)
+}
+
+// buildAddGroupResponse inserts <status>GROUP_OK</status> before the
+// closing </group> tag of the posted body. If the body is empty or does
+// not contain </group>, it falls back to a minimal canned success
+// response so callers still see a 200 + parseable XML.
+func buildAddGroupResponse(posted []byte) []byte {
+	const closeTag = "</group>"
+
+	const okFragment = "    <status>GROUP_OK</status>\n"
+
+	if len(posted) == 0 {
+		return []byte(`<?xml version="1.0" encoding="UTF-8"?>` + "\n<group>\n" + okFragment + closeTag + "\n")
+	}
+
+	idx := indexOfClose(posted, closeTag)
+	if idx < 0 {
+		return []byte(`<?xml version="1.0" encoding="UTF-8"?>` + "\n<group>\n" + okFragment + closeTag + "\n")
+	}
+
+	out := make([]byte, 0, len(posted)+len(okFragment))
+	out = append(out, posted[:idx]...)
+	out = append(out, []byte(okFragment)...)
+	out = append(out, posted[idx:]...)
+
+	return out
+}
+
+// indexOfClose returns the index of the last occurrence of needle in b,
+// or -1 if not present. We scan from the right because real-world
+// payloads can technically nest <group> blocks (e.g. inside <roles>),
+// even though the documented stereo-pair payload does not.
+func indexOfClose(b []byte, needle string) int {
+	if len(needle) == 0 || len(b) < len(needle) {
+		return -1
+	}
+
+	for i := len(b) - len(needle); i >= 0; i-- {
+		if string(b[i:i+len(needle)]) == needle {
+			return i
+		}
+	}
+
+	return -1
 }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<sources deviceID="DEADBEEFCAFE">
+    <sourceItem source="AUX" sourceAccount="AUX" status="READY" isLocal="true" multiroomallowed="true">AUX IN</sourceItem>
+    <sourceItem source="BLUETOOTH" status="UNAVAILABLE" isLocal="true" multiroomallowed="true"/>
+    <sourceItem source="SPOTIFY" sourceAccount="DemoSpotifyAccount" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">DemoSpotifyAccount</sourceItem>
+    <sourceItem source="TUNEIN" status="READY" isLocal="false" multiroomallowed="true"/>
+    <sourceItem source="LOCAL_INTERNET_RADIO" status="READY" isLocal="false" multiroomallowed="true"/>
+</sources>

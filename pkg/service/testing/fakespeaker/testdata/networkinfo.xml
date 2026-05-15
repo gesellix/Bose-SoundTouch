@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<networkInfo wifiProfileCount="1">
+<interfaces>
+<interface type="WIFI_INTERFACE" name="wlan0" macAddress="02:00:00:00:00:01" ipAddress="127.0.0.1" ssid="DemoNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
+</interfaces>
+</networkInfo>

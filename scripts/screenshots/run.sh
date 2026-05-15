@@ -39,11 +39,18 @@ go build -o "$LOG_DIR/soundtouch-service" ./cmd/soundtouch-service
 go build -o "$LOG_DIR/dummy-speaker" ./cmd/dummy-speaker
 go build -o "$LOG_DIR/screenshots" ./scripts/screenshots
 
-echo "==> seeding settings.json (generic hostname + discovery off to avoid leaking real network info)"
+echo "==> seeding settings.json (aftertouch.localhost + discovery off to avoid leaking real network info)"
+# `aftertouch.localhost` is RFC 6761: any *.localhost name resolves to
+# loopback via the system resolver in milliseconds (verified ~8ms on
+# macOS / glibc / systemd-resolved). That gives us a brand-friendly URL
+# in the screenshots without the ~5s DNS-timeout cliff that bites on
+# unresolvable hostnames like aftertouch.local — that cliff compounds
+# across /setup/settings + /setup/summary and pushes past the chromedp
+# 30s per-shot budget.
 cat > "$DATA_DIR/settings.json" <<'EOF'
 {
-  "server_url": "http://aftertouch.local:8000",
-  "https_server_url": "https://aftertouch.local:8443",
+  "server_url": "http://aftertouch.localhost:8000",
+  "https_server_url": "https://aftertouch.localhost:8443",
   "discovery_enabled": false,
   "discovery_interval": "1h"
 }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<supportedURLs deviceID="DEADBEEFCAFE">
+    <URL location="/info"/>
+    <URL location="/capabilities"/>
+    <URL location="/supportedURLs"/>
+    <URL location="/volume"/>
+    <URL location="/presets"/>
+    <URL location="/recents"/>
+    <URL location="/nowPlaying"/>
+    <URL location="/key"/>
+    <URL location="/sources"/>
+    <URL location="/serviceAvailability"/>
+    <URL location="/name"/>
+    <URL location="/networkInfo"/>
+    <URL location="/setZone"/>
+    <URL location="/addZoneSlave"/>
+    <URL location="/removeZoneSlave"/>
+    <URL location="/getGroup"/>
+    <URL location="/addGroup"/>
+    <URL location="/updateGroup"/>
+    <URL location="/removeGroup"/>
+    <URL location="/setMargeAccount"/>
+</supportedURLs>

@@ -2673,8 +2673,11 @@ function readPlanURLOptions() {
 // validateURL classifies a string as an OK service URL.
 // Empty value is valid (means "use the canonical default"). Otherwise
 // the URL must parse, the scheme must be http or https, the hostname
-// must be non-empty, and we reject "localhost" because the speaker
-// can't reach this machine via that name.
+// must be non-empty, and we flag loopback hostnames because they only
+// reach AfterTouch in the on-device-install case (AfterTouch running
+// on the speaker itself). For the typical "AfterTouch on a separate
+// host" deployment, the speaker can't reach loopback on a different
+// machine, so the URL must be a LAN-reachable IP or hostname.
 function validateURL(value) {
     const v = (value || "").trim();
     if (!v) return {ok: true, error: ""};
@@ -2693,7 +2696,7 @@ function validateURL(value) {
     if (!u.hostname) return {ok: false, error: "hostname is empty"};
 
     if (u.hostname === "localhost" || u.hostname === "127.0.0.1") {
-        return {ok: false, error: "use the LAN IP/hostname, not localhost — the speaker can't reach this machine via that name"};
+        return {ok: false, error: "loopback URL — speakers can only reach this if AfterTouch is installed on the speaker itself (on-device install). For the typical multi-device setup, use a LAN-reachable IP or hostname."};
     }
 
     return {ok: true, error: ""};
