@@ -1,6 +1,6 @@
 # soundtouch-web: remaining features
 
-Three features complete the parity gap between soundtouch-web and the Stockholm
+Four features complete the parity gap between soundtouch-web and the Stockholm
 app's local-control functionality. Everything else in Stockholm (OAuth flows,
 setup wizard, service account linking, onboarding, analytics) is cloud
 infrastructure that is either shut down or already handled by soundtouch-service.
@@ -83,6 +83,48 @@ rename and network/firmware info.
 - `DeviceSettings.js` component: editable name field (save on blur/Enter),
   read-only network info card, optional firmware version badge
 - Back button returns to `'device'` page
+
+---
+
+## 4. Render stereo pairs as a single device
+
+Today soundtouch-web shows the two halves of a stereo pair (formed via
+`/addGroup` — see issue #252) as independent entries in the device list. The
+Bose app collapsed a paired ST10 set into one "L+R" entry; restoring that
+presentation closes the perception gap BirdyBA flagged at
+<https://github.com/gesellix/Bose-SoundTouch/issues/252#issuecomment-4458140305>.
+
+**Device API:**
+- `GET /getGroup` on each speaker — returns the current `<group>` with
+  `<masterDeviceId>` + `<roles>` (each `<groupRole>` carries the speaker's
+  deviceId, role `LEFT|RIGHT`, and ipAddress)
+- Empty `<group/>` means the speaker is standalone
+- Querying the master and slave returns the same `<group>` payload, so either
+  side is sufficient to detect the pair
+
+**Backend:**
+- During device-list assembly, call `GET /getGroup` for each discovered device
+  in parallel (matches the propagation pattern already used by
+  `soundtouch-cli group create` in `cmd/soundtouch-cli/cmd_group.go`)
+- Bucket devices by `<masterDeviceId>` — each bucket emits one entry in the
+  list response. Standalone devices stay as their own bucket-of-one
+- Expose pair metadata on the list entry so the UI can render role chips
+  (`L`/`R`) and resolve role → physical device for actions
+
+**Frontend:**
+- Device list collapses paired devices into one card titled with both names
+  (e.g. `"Wohnzimmer L+R"`) and role chips
+- Clicking the card opens a device-detail page that exposes both per-role
+  status and a "Dissolve pair" action (DELETE flow, already wired in
+  `soundtouch-cli group remove` and in fakespeaker's `/removeGroup` GET)
+- Standalone speakers continue to render as today
+
+**Note:** Pair lifecycle (create / rename / remove) already works
+end-to-end — `pkg/client` group endpoints + `cmd/soundtouch-cli/cmd_group.go`,
+covered by tests in `cmd/soundtouch-cli/cmd_group_test.go` and exercisable
+against the fake speaker's group routes
+(`pkg/service/testing/fakespeaker/fakespeaker.go`). This task is purely about
+presentation in soundtouch-web's device list — no protocol work required.
 
 ---
 

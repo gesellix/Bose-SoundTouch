@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"sort"
 	"strconv"
@@ -1816,8 +1817,26 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 	return append([]byte(header+"\n"), data...)
 }
 
-// AddDeviceToAccount adds a new device to the specified account.
-func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte) (string, []byte, error) {
+// AddDeviceToAccount upserts a device record for the given account.
+// Called by both the device-create (POST) and device-rename (PUT)
+// handlers — the persistence layer doesn't distinguish; only the
+// response status differs.
+//
+// remoteAddr is the speaker's address as seen by the HTTP server
+// (r.RemoteAddr, "host:port"). When the request body doesn't carry
+// an `<ipaddress>` and the datastore has no IP for this device yet,
+// we fall back to remoteAddr's host portion. An empty remoteAddr
+// is treated as "no fallback available" — never errors.
+//
+// Timestamps:
+//   - CreatedOn is preserved from any existing datastore record so a
+//     rename doesn't reset the "first paired in 2017" semantics real
+//     Bose emits. New devices get CreatedOn = now() at first save.
+//   - UpdatedOn is set to now() on every call.
+//
+// Returns the persisted deviceID and the marge XML response shape
+// (`<device deviceid="…"><createdOn/><ipaddress/><name/><updatedOn/></device>`).
+func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte, remoteAddr string) (string, []byte, error) {
 	var newDeviceElem struct {
 		DeviceID   string `xml:"deviceid,attr"`
 		Name       string `xml:"name"`
@@ -1827,28 +1846,68 @@ func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 		return "", nil, err
 	}
 
+	now := FormatTime(time.Now())
+
+	// Build the info to save. Empty fields are filled in by the
+	// datastore's mergeWithExistingDeviceInfo (which preserves IP,
+	// MAC, CreatedOn, etc.) before the write — so the precedence
+	// here is "explicit > merged > remoteAddr fallback".
 	info := &models.ServiceDeviceInfo{
 		DeviceID:   newDeviceElem.DeviceID,
 		Name:       newDeviceElem.Name,
 		MacAddress: newDeviceElem.MACAddress,
-		// Other fields will be filled by discovery later or default
+		UpdatedOn:  now,
+	}
+
+	existing, _ := ds.GetDeviceInfo(account, newDeviceElem.DeviceID)
+
+	// CreatedOn: preserve from existing record for renames; set
+	// now() only on first registration (no prior record OR the
+	// record has no CreatedOn — older AfterTouch installs may
+	// have records without one).
+	if existing != nil && existing.CreatedOn != "" {
+		info.CreatedOn = existing.CreatedOn
+	} else {
+		info.CreatedOn = now
+	}
+
+	// IPAddress: prefer existing record's IP (the speaker may be
+	// hitting us through a different network path right now, e.g.
+	// SSH port-forward, and the persisted IP is the one other
+	// flows like DNS hints care about). Fall back to the inbound
+	// connection's remote address only when there's no existing
+	// IP to preserve. Invalid remoteAddr leaves info.IPAddress
+	// empty, which the merge then handles.
+	if existing == nil || existing.IPAddress == "" {
+		if remoteAddr != "" {
+			if host, _, splitErr := net.SplitHostPort(remoteAddr); splitErr == nil {
+				info.IPAddress = host
+			}
+		}
 	}
 
 	if err := ds.SaveDeviceInfo(account, newDeviceElem.DeviceID, info); err != nil {
 		return "", nil, err
 	}
 
-	createdOn := FormatTime(time.Now())
-	res := fmt.Sprintf(`<device deviceid="%s">`, EscapeXML(newDeviceElem.DeviceID))
-	res += fmt.Sprintf(`<createdOn>%s</createdOn>`, EscapeXML(createdOn))
-	res += `<ipaddress></ipaddress>`
-	res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(newDeviceElem.Name))
-	res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, EscapeXML(createdOn))
+	// Re-read the persisted record so the response XML reflects
+	// the merged state (preserved CreatedOn, preserved IP if the
+	// new info had none and the existing record did, etc.).
+	persisted, err := ds.GetDeviceInfo(account, newDeviceElem.DeviceID)
+	if err != nil {
+		return "", nil, fmt.Errorf("re-read persisted device info: %w", err)
+	}
+
+	res := fmt.Sprintf(`<device deviceid="%s">`, EscapeXML(persisted.DeviceID))
+	res += fmt.Sprintf(`<createdOn>%s</createdOn>`, EscapeXML(persisted.CreatedOn))
+	res += fmt.Sprintf(`<ipaddress>%s</ipaddress>`, EscapeXML(persisted.IPAddress))
+	res += fmt.Sprintf(`<name>%s</name>`, EscapeXML(persisted.Name))
+	res += fmt.Sprintf(`<updatedOn>%s</updatedOn>`, EscapeXML(persisted.UpdatedOn))
 	res += `</device>`
 
 	header := constants.XMLHeader
 
-	return newDeviceElem.DeviceID, append([]byte(header), []byte(res)...), nil
+	return persisted.DeviceID, append([]byte(header), []byte(res)...), nil
 }
 
 // RemoveDeviceFromAccount removes a device from the specified account.
