@@ -48,6 +48,12 @@ logread -f | grep -Ei '(marge|preset)'
 ```
 This is particularly useful for debugging preset synchronization and service redirection issues.
 
+For HTTPS / connection-refused debugging (e.g. `Curl 7, http 0`), drop the speaker's loopback chatter so only outbound calls remain visible:
+```bash
+logread -f | grep -v '127.0.0.1'
+```
+The speaker generates a steady stream of localhost-to-localhost HTTP traffic between its internal services; filtering it out makes the actual cloud / AfterTouch attempts (the ones that matter when diagnosing redirect or TLS issues) easy to read in real time.
+
 ---
 
 ## 2. Traffic Logging & Interception

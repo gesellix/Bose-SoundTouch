@@ -109,7 +109,7 @@ iperf3 -c 192.168.1.1  # If iperf server available
 
 **Symptoms:**
 
-In the speaker's log (`logread -f` over SSH):
+In the speaker's log (see [DEVICE-LOGGING.md](../DEVICE-LOGGING.md#1-accessing-system-logs-requires-root) for the SSH/`logread` setup — the filtered command `logread -f | grep -v '127.0.0.1'` is what you want here):
 
 ```
 SimpleURLFetcher: retry needed, Curl 7, http 0
