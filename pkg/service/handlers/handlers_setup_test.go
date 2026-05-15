@@ -410,6 +410,11 @@ func TestRemoveDevice(t *testing.T) {
 type mockSSH struct {
 	host     string
 	runCount int
+
+	// uploaded mirrors UploadContent calls so that a subsequent
+	// `cat <path>` (notably the tmp-readback step in
+	// TrustCACertFromBytes) returns what we just wrote there.
+	uploaded map[string][]byte
 }
 
 func (m *mockSSH) Run(command string) (string, error) {
@@ -427,7 +432,21 @@ func (m *mockSSH) Run(command string) (string, error) {
 	if strings.HasPrefix(command, "grep -F") {
 		return "matched", nil // CA trusted
 	}
+	if strings.HasPrefix(command, "cat ") {
+		path := strings.TrimPrefix(command, "cat ")
+		if body, ok := m.uploaded[path]; ok {
+			return string(body), nil
+		}
+	}
 	return "", nil
 }
 
-func (m *mockSSH) UploadContent(content []byte, remotePath string) error { return nil }
+func (m *mockSSH) UploadContent(content []byte, remotePath string) error {
+	if m.uploaded == nil {
+		m.uploaded = make(map[string][]byte)
+	}
+
+	m.uploaded[remotePath] = append([]byte(nil), content...)
+
+	return nil
+}

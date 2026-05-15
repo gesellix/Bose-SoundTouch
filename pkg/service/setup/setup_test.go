@@ -18,6 +18,15 @@ import (
 type mockSSH struct {
 	runFunc           func(command string) (string, error)
 	uploadContentFunc func(content []byte, remotePath string) error
+
+	// uploaded mirrors UploadContent calls so that a subsequent
+	// `cat <path>` against a path that the test didn't explicitly
+	// script via runFunc returns what we just wrote there. This is
+	// what makes the tmp-then-mv flow in TrustCACertFromBytes work
+	// against tests that only scripted the live-bundle path. Tests
+	// that *do* script `cat <path>` keep priority — runFunc is
+	// consulted first and the upload mirror is the fallback.
+	uploaded map[string][]byte
 }
 
 // probeScriptHeader is the first line of the batched probe script
@@ -35,7 +44,24 @@ func (m *mockSSH) Run(command string) (string, error) {
 	}
 
 	if m.runFunc != nil {
-		return m.runFunc(command)
+		out, err := m.runFunc(command)
+		if err != nil {
+			return out, err
+		}
+
+		if out != "" {
+			return out, nil
+		}
+		// runFunc returned ("", nil) — fall through to the upload
+		// mirror so tmp readbacks that the test didn't script
+		// explicitly still produce the bytes we just wrote there.
+	}
+
+	if strings.HasPrefix(command, "cat ") {
+		path := strings.TrimPrefix(command, "cat ")
+		if body, ok := m.uploaded[path]; ok {
+			return string(body), nil
+		}
 	}
 
 	return "", nil
@@ -93,6 +119,12 @@ func (m *mockSSH) synthesizeProbeResponse(script string) (string, error) {
 }
 
 func (m *mockSSH) UploadContent(content []byte, remotePath string) error {
+	if m.uploaded == nil {
+		m.uploaded = make(map[string][]byte)
+	}
+
+	m.uploaded[remotePath] = append([]byte(nil), content...)
+
 	if m.uploadContentFunc != nil {
 		return m.uploadContentFunc(content, remotePath)
 	}
@@ -780,6 +812,10 @@ func TestTrustCACert(t *testing.T) {
 					return "", fmt.Errorf("file not found")
 				}
 				return "", nil
+				// mockSSH automatically mirrors uploads back on
+				// `cat <path>` when runFunc returns ("", nil), so the
+				// post-upload tmp readback in TrustCACertFromBytes
+				// works without test-side wiring.
 			},
 			uploadContentFunc: func(content []byte, remotePath string) error {
 				uploadCalls = append(uploadCalls, remotePath)
@@ -805,16 +841,267 @@ func TestTrustCACert(t *testing.T) {
 		t.Errorf("Expected ca-bundle.crt backup")
 	}
 
-	// Verify CA upload
-	foundUpload := false
+	// Verify CA upload landed on the tmp path (atomic-replace flow).
+	foundTmpUpload := false
 	for _, path := range uploadCalls {
-		if path == "/etc/pki/tls/certs/ca-bundle.crt" {
-			foundUpload = true
+		if path == "/etc/pki/tls/certs/ca-bundle.crt.aftertouch.tmp" {
+			foundTmpUpload = true
 			break
 		}
 	}
-	if !foundUpload {
-		t.Errorf("Expected updated bundle to be uploaded to /etc/pki/tls/certs/ca-bundle.crt")
+
+	if !foundTmpUpload {
+		t.Errorf("Expected candidate bundle to be uploaded to ca-bundle.crt.aftertouch.tmp; got upload paths: %v", uploadCalls)
+	}
+
+	// Verify the live bundle was NOT touched directly by UploadContent —
+	// the rename via Run() is the only path that touches the live file.
+	for _, path := range uploadCalls {
+		if path == "/etc/pki/tls/certs/ca-bundle.crt" {
+			t.Errorf("UploadContent wrote directly to live bundle %s — atomic-replace flow expects tmp + mv only", path)
+		}
+	}
+
+	// Verify the atomic rename ran and that no rm of the tmp happened
+	// (rm only fires on a verification failure).
+	foundMv := false
+	foundRm := false
+
+	for _, call := range runCalls {
+		if call == "mv /etc/pki/tls/certs/ca-bundle.crt.aftertouch.tmp /etc/pki/tls/certs/ca-bundle.crt" {
+			foundMv = true
+		}
+
+		if strings.HasPrefix(call, "rm -f /etc/pki/tls/certs/ca-bundle.crt.aftertouch.tmp") {
+			foundRm = true
+		}
+	}
+
+	if !foundMv {
+		t.Errorf("Expected atomic mv from .aftertouch.tmp to live bundle; got run calls: %v", runCalls)
+	}
+
+	if foundRm {
+		t.Errorf("Did not expect a cleanup rm on the happy path; got run calls: %v", runCalls)
+	}
+}
+
+// TestTrustCACert_StripsMultipleStaleEntriesSilently pins the
+// behaviour the user flagged for AfterTouch installs that pre-date
+// the strip-then-append logic: live bundles in the field can carry
+// two or more copies of our CA from older releases that appended
+// without cleanup. The new install must:
+//
+//   - strip every stale AfterTouch entry,
+//   - log how many duplicates were cleaned up,
+//   - append exactly one fresh entry,
+//   - upload to the tmp path,
+//   - verify and rename — i.e. the cleanup itself must not break the
+//     validation or trigger the rollback path.
+func TestTrustCACert_StripsMultipleStaleEntriesSilently(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "trust-ca-multi-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://localhost:8000", nil, cm)
+
+	const (
+		bundlePath = "/etc/pki/tls/certs/ca-bundle.crt"
+		tmpPath    = bundlePath + ".aftertouch.tmp"
+	)
+
+	// Pre-existing bundle: one legitimate upstream cert plus two
+	// stale AfterTouch entries from old installs. Generated inline
+	// to stay self-contained.
+	upstream := generatePEMCertificate(t, "upstream-root")
+	stale1 := generatePEMCertificate(t, "aftertouch-stale-1")
+	stale2 := generatePEMCertificate(t, "aftertouch-stale-2")
+	preexisting := string(upstream) +
+		CALabel + "\n" + string(stale1) + CALabel + "\n" +
+		CALabel + "\n" + string(stale2) + CALabel + "\n"
+
+	runCalls := []string{}
+
+	var sshMock *mockSSH
+
+	m.NewSSH = func(_ string) SSHClient {
+		sshMock = &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+
+				if strings.HasPrefix(command, "[ -f") {
+					// .original doesn't exist yet → triggers initial backup
+					return "", fmt.Errorf("file not found")
+				}
+
+				if command == "cat "+bundlePath {
+					return preexisting, nil
+				}
+
+				return "", nil
+				// Tmp readback falls through to mockSSH's upload mirror.
+			},
+		}
+
+		return sshMock
+	}
+
+	logs, err := m.TrustCACert("192.168.1.10")
+	if err != nil {
+		t.Fatalf("TrustCACert failed: %v", err)
+	}
+
+	if !strings.Contains(logs, "Cleaned up 2 duplicate AfterTouch CA entries") {
+		t.Errorf("logs do not mention duplicate cleanup; got:\n%s", logs)
+	}
+
+	uploaded, ok := sshMock.uploaded[tmpPath]
+	if !ok {
+		t.Fatalf("nothing uploaded to %s; only got: %v", tmpPath, uploadKeys(sshMock.uploaded))
+	}
+
+	// The uploaded bundle must contain exactly two sentinels (open +
+	// close) bracketing exactly one CERTIFICATE block, regardless of
+	// how many stale entries the input had.
+	if err := validateAfterTouchLabelBracketing(uploaded); err != nil {
+		t.Errorf("uploaded bundle has malformed AfterTouch bracketing despite the cleanup: %v", err)
+	}
+
+	// And the cleanup must not have dropped the legitimate upstream cert.
+	count, err := validateCABundleBytes(uploaded)
+	if err != nil {
+		t.Fatalf("uploaded bundle does not validate: %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("uploaded bundle has %d CERTIFICATE blocks, want 2 (the upstream root + our fresh AfterTouch CA)", count)
+	}
+
+	// Atomic rename should have fired, and no rollback rm.
+	foundMv := false
+	foundRm := false
+
+	for _, call := range runCalls {
+		if call == "mv "+tmpPath+" "+bundlePath {
+			foundMv = true
+		}
+
+		if strings.HasPrefix(call, "rm -f "+tmpPath) {
+			foundRm = true
+		}
+	}
+
+	if !foundMv {
+		t.Errorf("Expected atomic mv after cleanup; got run calls: %v", runCalls)
+	}
+
+	if foundRm {
+		t.Errorf("Cleanup path triggered rollback rm — multi-entry input should not be a failure case; got: %v", runCalls)
+	}
+}
+
+func uploadKeys(m map[string][]byte) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	return keys
+}
+
+// TestTrustCACert_PostUploadVerificationFailureCleansUpTmp pins the
+// rollback-free recovery story from issue #262: when the tmp file's
+// readback doesn't validate (here we simulate transport truncation by
+// returning the tmp content stripped of its closing AfterTouch label),
+// the rename must NOT fire, the tmp must be removed, and the error
+// must name the verification failure plus reassure the caller the
+// live bundle wasn't touched.
+func TestTrustCACert_PostUploadVerificationFailureCleansUpTmp(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "trust-ca-fail-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://localhost:8000", nil, cm)
+
+	const (
+		bundlePath = "/etc/pki/tls/certs/ca-bundle.crt"
+		tmpPath    = bundlePath + ".aftertouch.tmp"
+	)
+
+	runCalls := []string{}
+
+	var sshMock *mockSSH
+
+	m.NewSSH = func(_ string) SSHClient {
+		sshMock = &mockSSH{
+			runFunc: func(command string) (string, error) {
+				runCalls = append(runCalls, command)
+
+				switch {
+				case strings.HasPrefix(command, "[ -f"):
+					return "", fmt.Errorf("file not found")
+				case command == "cat "+tmpPath:
+					// Simulate transport corruption: chop the closing
+					// AfterTouch sentinel off the bytes mockSSH would
+					// otherwise mirror back. Pre-upload validation
+					// passed (the full bytes were well-formed), but
+					// the readback doesn't bracket cleanly anymore.
+					return strings.Replace(string(sshMock.uploaded[tmpPath]), "\n"+CALabel+"\n", "\n", 1), nil
+				}
+
+				return "", nil
+			},
+		}
+
+		return sshMock
+	}
+
+	_, err = m.TrustCACert("192.168.1.10")
+	if err == nil {
+		t.Fatalf("TrustCACert succeeded, want a verification failure")
+	}
+
+	if !strings.Contains(err.Error(), "verification of "+tmpPath+" failed") {
+		t.Errorf("error does not name the verification target: %v", err)
+	}
+
+	if !strings.Contains(err.Error(), "live bundle untouched") {
+		t.Errorf("error does not reassure that the live bundle was untouched: %v", err)
+	}
+
+	foundRm := false
+	foundMv := false
+
+	for _, call := range runCalls {
+		if call == "rm -f "+tmpPath {
+			foundRm = true
+		}
+
+		if strings.HasPrefix(call, "mv "+tmpPath) {
+			foundMv = true
+		}
+	}
+
+	if !foundRm {
+		t.Errorf("Expected cleanup rm of %s after verification failure; got run calls: %v", tmpPath, runCalls)
+	}
+
+	if foundMv {
+		t.Errorf("mv ran despite verification failure — live bundle was overwritten with bad content; run calls: %v", runCalls)
 	}
 }
 

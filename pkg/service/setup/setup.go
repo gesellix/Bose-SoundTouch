@@ -1180,6 +1180,22 @@ func (m *Manager) TrustCACert(deviceIP string) (string, error) {
 // the speaker's shared trust store. Identical to TrustCACert except the
 // cert bytes come from the caller — used by the remote CLI which fetches
 // /setup/ca.crt over HTTP and never touches Manager.Crypto.
+//
+// The write path is two-phase to keep the live bundle never half-written:
+//
+//  1. Upload the modified bundle to <bundlePath>.aftertouch.tmp (a sibling
+//     on the same filesystem, so the same rw remount covers it).
+//  2. Read the tmp back over SSH, validate that every PEM block parses
+//     and that the AfterTouch CA sentinel brackets exactly one certificate,
+//     then atomically rename the tmp into place via `mv`. On any failure
+//     between steps 1 and 2 the tmp is unlinked and the live bundle is
+//     untouched — there is no rollback semantics to reason about.
+//
+// The .original backup written on first install is retained as
+// defense-in-depth (a user can manually restore from it if anything outside
+// this code path corrupts the live bundle), but it is no longer the
+// primary safety net for our own writes. See issue #262 for the original
+// failure-mode reporter.
 func (m *Manager) TrustCACertFromBytes(deviceIP string, caCertPEM []byte) (string, error) {
 	if !strings.Contains(string(caCertPEM), "BEGIN CERTIFICATE") {
 		return "", fmt.Errorf("CA payload does not contain a PEM certificate")
@@ -1191,6 +1207,7 @@ func (m *Manager) TrustCACertFromBytes(deviceIP string, caCertPEM []byte) (strin
 	var logs string
 
 	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
+	tmpPath := bundlePath + ".aftertouch.tmp"
 	out, _ := client.Run(rwCmd)
 	logs += rwCmd + ": " + out + "\n"
 
@@ -1210,27 +1227,21 @@ func (m *Manager) TrustCACertFromBytes(deviceIP string, caCertPEM []byte) (strin
 
 	if strings.Contains(bundleContent, CALabel) {
 		// Rebuild the bundle without our previously-injected CA so the
-		// fresh one replaces the old.
-		lines := strings.Split(bundleContent, "\n")
+		// fresh one replaces the old. Older AfterTouch releases are
+		// reported to have appended the CA on every install without
+		// stripping the previous one, so live bundles can carry
+		// several stale copies — stripAfterTouchEntries collapses
+		// them all and reports the count so we can log a single line
+		// of cleanup rather than failing validation.
+		stripped := stripAfterTouchEntries(bundleContent)
+		bundleContent = stripped.CleanedBundle
 
-		var newLines []string
-
-		inOurCA := false
-
-		for _, line := range lines {
-			if strings.Contains(line, CALabel) {
-				inOurCA = !inOurCA
-				continue
-			}
-
-			if !inOurCA {
-				newLines = append(newLines, line)
-			}
+		if stripped.RemovedEntries > 1 {
+			logs += fmt.Sprintf("Cleaned up %d duplicate AfterTouch CA entries from existing bundle\n", stripped.RemovedEntries)
 		}
 
-		bundleContent = strings.Join(newLines, "\n")
-		if bundleContent != "" && !strings.HasSuffix(bundleContent, "\n") {
-			bundleContent += "\n"
+		if stripped.UnpairedSentinel {
+			logs += "Warning: existing bundle had an unpaired AfterTouch sentinel; content after it was dropped along with the orphan. If anything legitimate was after the sentinel, restore from " + bundlePath + ".original.\n"
 		}
 	} else if bundleContent != "" && !strings.HasSuffix(bundleContent, "\n") {
 		bundleContent += "\n"
@@ -1239,11 +1250,55 @@ func (m *Manager) TrustCACertFromBytes(deviceIP string, caCertPEM []byte) (strin
 	labeledCert := fmt.Sprintf("\n%s\n%s%s\n", CALabel, string(caCertPEM), CALabel)
 	newBundleContent := bundleContent + labeledCert
 
-	if err := client.UploadContent([]byte(newBundleContent), bundlePath); err != nil {
-		return logs, fmt.Errorf("failed to update bundle: %w", err)
+	// Pre-upload validation: catch construction-time bugs (mangled PEM,
+	// missing sentinel, etc.) before any SSH write. The live bundle is
+	// untouched at this point.
+	if _, vErr := validateCABundleBytes([]byte(newBundleContent)); vErr != nil {
+		return logs, fmt.Errorf("constructed bundle failed validation, live bundle untouched: %w", vErr)
 	}
 
-	logs += "Uploaded updated bundle to " + bundlePath + "\n"
+	if vErr := validateAfterTouchLabelBracketing([]byte(newBundleContent)); vErr != nil {
+		return logs, fmt.Errorf("constructed bundle has malformed AfterTouch sentinel, live bundle untouched: %w", vErr)
+	}
+
+	// Phase 1: upload to a sibling tmp file on the same filesystem.
+	if err := client.UploadContent([]byte(newBundleContent), tmpPath); err != nil {
+		return logs, fmt.Errorf("failed to upload bundle to %s: %w", tmpPath, err)
+	}
+
+	logs += "Uploaded candidate bundle to " + tmpPath + "\n"
+
+	// Phase 2: read the tmp back and verify the bytes survived transport.
+	// On any failure here, unlink the tmp; the live bundle was never
+	// touched, so no rollback is required.
+	verifyContent, verifyErr := client.Run(fmt.Sprintf("cat %s", tmpPath))
+	if verifyErr != nil {
+		_, _ = client.Run(fmt.Sprintf("rm -f %s", tmpPath))
+		return logs, fmt.Errorf("failed to read back candidate bundle %s for verification, live bundle untouched: %w", tmpPath, verifyErr)
+	}
+
+	if _, vErr := validateCABundleBytes([]byte(verifyContent)); vErr != nil {
+		_, _ = client.Run(fmt.Sprintf("rm -f %s", tmpPath))
+		return logs, fmt.Errorf("verification of %s failed (post-upload PEM parse), live bundle untouched: %w", tmpPath, vErr)
+	}
+
+	if vErr := validateAfterTouchLabelBracketing([]byte(verifyContent)); vErr != nil {
+		_, _ = client.Run(fmt.Sprintf("rm -f %s", tmpPath))
+		return logs, fmt.Errorf("verification of %s failed (post-upload sentinel bracketing), live bundle untouched: %w", tmpPath, vErr)
+	}
+
+	logs += "Verified candidate bundle at " + tmpPath + "\n"
+
+	// Atomic replace. On the device's local filesystem this is a
+	// rename(2) — observers see either the pre- or post-bundle, never
+	// a half-written one.
+	mvCmd := fmt.Sprintf("mv %s %s", tmpPath, bundlePath)
+	if mvOut, mvErr := client.Run(mvCmd); mvErr != nil {
+		_, _ = client.Run(fmt.Sprintf("rm -f %s", tmpPath))
+		return logs, fmt.Errorf("failed to atomically replace bundle (%s -> %s, output=%q): %w", tmpPath, bundlePath, mvOut, mvErr)
+	}
+
+	logs += mvCmd + "\n"
 
 	return logs, nil
 }
