@@ -588,7 +588,7 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body)
+	deviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body, r.RemoteAddr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -637,7 +637,7 @@ func (s *Server) HandleMargeUpdateDevice(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	bodyDeviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body)
+	bodyDeviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body, r.RemoteAddr)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

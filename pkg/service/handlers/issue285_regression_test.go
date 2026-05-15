@@ -65,20 +65,26 @@ func TestIssue285_RenamePutAcceptedAndPersisted(t *testing.T) {
 	_ = ds.Initialize()
 
 	const (
-		accountID = "3981561"
-		deviceID  = "884AEAEEBD27"
-		oldName   = "Wohnzimmer"
-		newName   = "Wohnzimmer SB"
+		accountID         = "3981561"
+		deviceID          = "884AEAEEBD27"
+		oldName           = "Wohnzimmer"
+		newName           = "Wohnzimmer SB"
+		preExistingIP     = "192.168.0.109"
+		preExistingPaired = "2017-02-07T11:13:03.000+00:00"
 	)
 
-	// 1. Seed datastore with the device under its original name —
-	// modelling a pre-existing paired device the user is now
-	// renaming.
+	// 1. Seed datastore with the device under its original name and
+	// a known pre-existing first-paired timestamp. The pre-existing
+	// data models a long-paired device the user is now renaming —
+	// CreatedOn must survive the PUT (real Bose preserves it
+	// across renames; see parity capture at
+	// data/parity_mismatches/1771797308__streaming_account_3230304_device_A81B6A536A98.json).
 	if err := ds.SaveDeviceInfo(accountID, deviceID, &models.ServiceDeviceInfo{
 		DeviceID:  deviceID,
 		AccountID: accountID,
 		Name:      oldName,
-		IPAddress: "192.168.0.109",
+		IPAddress: preExistingIP,
+		CreatedOn: preExistingPaired,
 	}); err != nil {
 		t.Fatalf("seed datastore: %v", err)
 	}
@@ -146,10 +152,35 @@ func TestIssue285_RenamePutAcceptedAndPersisted(t *testing.T) {
 		t.Errorf("response still carries old name %q; body:\n%s", oldName, respBody)
 	}
 
+	// Parity assertion: the pre-existing first-paired CreatedOn
+	// must survive the rename. This is the load-bearing fix versus
+	// the prior behaviour that rewrote `now()` on every PUT, and
+	// matches what real Bose's pre-shutdown 200 OK responses
+	// carried (see the parity capture referenced above).
+	if !bytes.Contains(respBody, []byte(`<createdOn>`+preExistingPaired+`</createdOn>`)) {
+		t.Errorf("response did not preserve pre-existing CreatedOn %q; body:\n%s", preExistingPaired, respBody)
+	}
+
+	// Parity assertion: the pre-existing IP address must survive
+	// the rename. The request body doesn't carry an `<ipaddress>`,
+	// so the datastore merge has to inject what was already on
+	// disk rather than writing back empty.
+	if !bytes.Contains(respBody, []byte(`<ipaddress>`+preExistingIP+`</ipaddress>`)) {
+		t.Errorf("response did not preserve pre-existing IPAddress %q; body:\n%s", preExistingIP, respBody)
+	}
+
+	// Parity assertion: UpdatedOn refreshes. Don't pin the exact
+	// value — it's "now()" — but assert it's present and
+	// non-empty.
+	if !bytes.Contains(respBody, []byte(`<updatedOn>`)) ||
+		bytes.Contains(respBody, []byte(`<updatedOn></updatedOn>`)) {
+		t.Errorf("response missing or empty <updatedOn>; body:\n%s", respBody)
+	}
+
 	// 4. Persistence assertion: the datastore now reflects the new
-	// name. This is what the Bose App reads back on its next
-	// /streaming/account/.../full poll, which is what closes the
-	// visible rename loop.
+	// name AND keeps the original CreatedOn. This is what the
+	// Bose App reads back on its next /streaming/account/.../full
+	// poll, which is what closes the visible rename loop.
 	persisted, err := ds.GetDeviceInfo(accountID, deviceID)
 	if err != nil {
 		t.Fatalf("read persisted device info: %v", err)
@@ -157,6 +188,109 @@ func TestIssue285_RenamePutAcceptedAndPersisted(t *testing.T) {
 
 	if persisted.Name != newName {
 		t.Errorf("persisted Name = %q, want %q", persisted.Name, newName)
+	}
+
+	if persisted.CreatedOn != preExistingPaired {
+		t.Errorf("persisted CreatedOn = %q, want %q (preserved across rename)", persisted.CreatedOn, preExistingPaired)
+	}
+
+	if persisted.IPAddress != preExistingIP {
+		t.Errorf("persisted IPAddress = %q, want %q (preserved across rename)", persisted.IPAddress, preExistingIP)
+	}
+
+	if persisted.UpdatedOn == "" {
+		t.Errorf("persisted UpdatedOn is empty; want a fresh timestamp from the rename")
+	}
+}
+
+// TestIssue285_NewDeviceGetsRemoteAddrAndFreshTimestamps covers the
+// "first-time registration" path on a PUT (which can happen if the
+// speaker emits a rename before AfterTouch has ever heard of it).
+// With no pre-existing datastore record:
+//
+//   - CreatedOn must be a fresh timestamp (no record to preserve).
+//   - IPAddress must come from r.RemoteAddr (the inbound connection)
+//     since the request body doesn't carry one.
+//   - UpdatedOn must be the same fresh timestamp.
+//
+// Pairs with the parity-preservation assertions in the main test:
+// existing records win, but new records seed sensibly instead of
+// landing with empty CreatedOn / IPAddress.
+func TestIssue285_NewDeviceGetsRemoteAddrAndFreshTimestamps(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "issue285-new-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	const (
+		accountID = "1111111"
+		deviceID  = "A81B6A536A98"
+		newName   = "Sound Machinechen"
+	)
+
+	r, _ := setupRouter("http://localhost:8001", ds)
+	ts := httptest.NewServer(r)
+
+	t.Cleanup(ts.Close)
+
+	body := []byte(`<?xml version="1.0" encoding="UTF-8" ?>` +
+		`<device deviceid="` + deviceID + `"><name>` + newName + `</name><macaddress>` + deviceID + `</macaddress></device>`)
+
+	req, err := http.NewRequest(http.MethodPut,
+		ts.URL+"/streaming/account/"+accountID+"/device/"+deviceID,
+		bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/xml")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("PUT: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("PUT status = %d, want 200; body:\n%s", resp.StatusCode, respBody)
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+
+	// CreatedOn present and non-empty (will be "now()" since no
+	// prior record existed).
+	if !bytes.Contains(respBody, []byte(`<createdOn>`)) ||
+		bytes.Contains(respBody, []byte(`<createdOn></createdOn>`)) {
+		t.Errorf("first-registration response missing CreatedOn; body:\n%s", respBody)
+	}
+
+	// IPAddress should be the httptest connection's remote host
+	// (127.0.0.1) since the body didn't carry one and there was
+	// no existing record to preserve from.
+	if !bytes.Contains(respBody, []byte(`<ipaddress>127.0.0.1</ipaddress>`)) {
+		t.Errorf("first-registration response missing IPAddress from RemoteAddr; body:\n%s", respBody)
+	}
+
+	// Persistence: CreatedOn and IPAddress on disk too.
+	persisted, err := ds.GetDeviceInfo(accountID, deviceID)
+	if err != nil {
+		t.Fatalf("read persisted device info: %v", err)
+	}
+
+	if persisted.CreatedOn == "" {
+		t.Errorf("persisted CreatedOn is empty for new device; want a fresh timestamp")
+	}
+
+	if persisted.IPAddress != "127.0.0.1" {
+		t.Errorf("persisted IPAddress = %q, want %q (from RemoteAddr)", persisted.IPAddress, "127.0.0.1")
 	}
 }
 

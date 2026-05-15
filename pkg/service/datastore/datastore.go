@@ -565,6 +565,8 @@ func (ds *DataStore) getDeviceInfoNoLock(account, device string) (*models.Servic
 			MacAddress string `xml:"macAddress"`
 		} `xml:"networkInfo"`
 		DiscoveryMethod string `xml:"discoveryMethod"`
+		CreatedOn       string `xml:"createdOn,omitempty"`
+		UpdatedOn       string `xml:"updatedOn,omitempty"`
 	}
 
 	if err := xml.Unmarshal(data, &info); err != nil {
@@ -577,6 +579,8 @@ func (ds *DataStore) getDeviceInfoNoLock(account, device string) (*models.Servic
 		ProductCode:     fmt.Sprintf("%s %s", info.Type, info.ModuleType),
 		Name:            info.Name,
 		DiscoveryMethod: info.DiscoveryMethod,
+		CreatedOn:       info.CreatedOn,
+		UpdatedOn:       info.UpdatedOn,
 	}
 
 	for _, comp := range info.Components {
@@ -789,6 +793,8 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 			MacAddress string `xml:"macAddress"`
 		} `xml:"networkInfo"`
 		DiscoveryMethod string `xml:"discoveryMethod"`
+		CreatedOn       string `xml:"createdOn,omitempty"`
+		UpdatedOn       string `xml:"updatedOn,omitempty"`
 	}
 
 	if err := xml.Unmarshal(data, &info); err != nil {
@@ -1192,6 +1198,8 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 		Components      []componentXML   `xml:"components>component"`
 		NetworkInfo     []NetworkInfoXML `xml:"networkInfo"`
 		DiscoveryMethod string           `xml:"discoveryMethod,omitempty"`
+		CreatedOn       string           `xml:"createdOn,omitempty"`
+		UpdatedOn       string           `xml:"updatedOn,omitempty"`
 	}
 
 	// Parsing product code back to type and moduleType (best effort)
@@ -1203,6 +1211,8 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 		Type:            devType,
 		ModuleType:      moduleType,
 		DiscoveryMethod: info.DiscoveryMethod,
+		CreatedOn:       info.CreatedOn,
+		UpdatedOn:       info.UpdatedOn,
 	}
 
 	if ix.DiscoveryMethod == "" {
@@ -1265,6 +1275,21 @@ func (ds *DataStore) mergeWithExistingDeviceInfo(account, device string, info *m
 
 	if info.DiscoveryMethod == "" {
 		info.DiscoveryMethod = existing.DiscoveryMethod
+	}
+
+	// CreatedOn is set once at first persistence and never re-derived
+	// from inbound data — preserve unconditionally so the
+	// "first-paired" timestamp survives renames, IP refreshes, etc.
+	// UpdatedOn is the opposite: every write that reaches here is by
+	// definition an update, so callers that want it refreshed must
+	// set it explicitly. If they didn't, fall back to the existing
+	// value (better than a regression to empty).
+	if existing.CreatedOn != "" {
+		info.CreatedOn = existing.CreatedOn
+	}
+
+	if info.UpdatedOn == "" {
+		info.UpdatedOn = existing.UpdatedOn
 	}
 }
 

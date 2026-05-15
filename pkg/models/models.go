@@ -597,6 +597,16 @@ type ServiceDeviceInfo struct {
 	DiscoveryMethod     string             `json:"discovery_method,omitempty"`
 	AccountID           string             `json:"account_id,omitempty"`
 	Components          []ServiceComponent `json:"components,omitempty" xml:"-"`
+	// CreatedOn is the ISO8601 timestamp the device was first
+	// registered against the account. Preserved across renames so
+	// AfterTouch's PUT response matches real Bose's "first paired
+	// in 2017" semantics rather than rewriting `now()` on every
+	// update. Empty for never-persisted records.
+	CreatedOn string `json:"created_on,omitempty" xml:"-"`
+	// UpdatedOn is the ISO8601 timestamp of the most recent change
+	// to the device record (rename, IP refresh, …). Refreshed by
+	// every SaveDeviceInfo write that mutates a known device.
+	UpdatedOn string `json:"updated_on,omitempty" xml:"-"`
 }
 
 // ServiceComponent represents a hardware or software component of a device.
