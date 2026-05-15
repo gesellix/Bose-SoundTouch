@@ -8,6 +8,7 @@ DELETE   /setup/dns-discoveries                                       handlers.(
 DELETE   /setup/interactions/sessions                                 handlers.(*Server).HandleCleanupSessions-fm
 DELETE   /setup/interactions/sessions/{session}                       handlers.(*Server).HandleDeleteSession-fm
 DELETE   /setup/parity-mismatches                                     handlers.(*Server).HandleClearParityMismatches-fm
+DELETE   /streaming/account/{account}/device/{device}                 handlers.(*Server).HandleMargeRemoveDevice-fm
 DELETE   /streaming/account/{account}/device/{device}/preset/{presetNumber} handlers.(*Server).HandleMargeRemovePreset-fm
 DELETE   /streaming/account/{account}/group/{groupId}                 handlers.(*Server).HandleMargeDeleteGroup-fm
 GET      /                                                            handlers.(*Server).HandleRoot-fm

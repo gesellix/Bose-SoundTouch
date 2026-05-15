@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"runtime"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
 	"github.com/go-chi/chi/v5"
 )
@@ -100,5 +102,58 @@ func TestPrintRoutes(t *testing.T) {
 
 	if string(existingOutput) != output {
 		t.Errorf("Router routes changed! Diff the snapshot at %s with %s", snapshotPath, actualPath)
+	}
+}
+
+// TestPUTRenameRoutesToLocalHandler reproduces the runtime routing
+// behaviour the user saw on their deployed v0.80.0: a PUT to
+// /streaming/account/{a}/device/{d} should land on
+// HandleMargeUpdateDevice, not fall through to the [UNHANDLED]
+// proxy. The handlers-package test (TestIssue285_*) uses a simplified
+// router that doesn't have the overlapping `/device` and
+// `/device/{device}` route groups, so it can't catch a chi radix-
+// tree resolution that prefers the more-specific subrouter.
+//
+// This test exercises the actual production setupRouter so a
+// regression in the route topology is caught against the same chi
+// behaviour speakers will see.
+func TestPUTRenameRoutesToLocalHandler(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "router-rename-")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	server := handlers.NewServer(ds, nil, "http://localhost:8000", false, false, false)
+	r := setupRouter(server)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	body := `<?xml version="1.0" encoding="UTF-8" ?><device deviceid="A81B6A536A98"><name>Sound Machinechen</name><macaddress>A81B6A536A98</macaddress></device>`
+
+	req, err := http.NewRequest(http.MethodPut,
+		ts.URL+"/streaming/account/1111111/device/A81B6A536A98",
+		strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/xml")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("PUT: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// 200 means our local HandleMargeUpdateDevice handled it.
+	// 401 / 502 / anything else means the request fell through to
+	// the [UNHANDLED] proxy and got the upstream response — which
+	// is exactly the failure mode #285 was supposed to fix.
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PUT status = %d, want 200 (local handler). Anything else means the request fell through to [UNHANDLED] proxy — chi is routing to a different subrouter than the PUT registration intended.", resp.StatusCode)
 	}
 }

@@ -936,6 +936,16 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Get("/presets/all", server.HandleMargeAccountPresets)
 			r.Get("/provider_settings", server.HandleMargeProviderSettings)
 
+			// All `/device` routes share one chi subrouter. Two
+			// overlapping subrouters (`/device` + `/device/{device}`)
+			// caused chi's radix-tree resolver to bind a runtime
+			// request to the more-specific prefix even when only the
+			// less-specific subrouter had a matching method handler,
+			// producing the [UNHANDLED] → upstream-proxy fall-through
+			// behind issue #285's first-attempted fix. One subrouter
+			// keeps every device-scoped path resolvable; see
+			// TestPUTRenameRoutesToLocalHandler for the regression
+			// against the production router.
 			r.Route("/device", func(r chi.Router) {
 				r.Post("/", server.HandleMargeAddDevice)
 				r.Post("/{device}", server.HandleMargeAddDevice)
@@ -944,21 +954,20 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 				// when the user renames via Bose App or
 				// `soundtouch-cli name set`. Issue #285.
 				r.Put("/{device}", server.HandleMargeUpdateDevice)
-			})
+				r.Delete("/{device}", server.HandleMargeRemoveDevice)
 
-			r.Route("/device/{device}", func(r chi.Router) {
-				r.Get("/presets", server.HandleMargePresets)
-				r.Post("/presets/{presetNumber}", server.HandleMargeUpdatePreset)
-				r.Put("/preset/{presetNumber}", server.HandleMargeUpdatePreset)
-				r.Delete("/preset/{presetNumber}", server.HandleMargeRemovePreset)
-				r.Get("/recent", server.HandleMargeRecents)
-				r.Get("/recents", server.HandleMargeRecents)
-				r.Post("/recent", server.HandleMargeAddRecent)
+				r.Get("/{device}/presets", server.HandleMargePresets)
+				r.Post("/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
+				r.Put("/{device}/preset/{presetNumber}", server.HandleMargeUpdatePreset)
+				r.Delete("/{device}/preset/{presetNumber}", server.HandleMargeRemovePreset)
+				r.Get("/{device}/recent", server.HandleMargeRecents)
+				r.Get("/{device}/recents", server.HandleMargeRecents)
+				r.Post("/{device}/recent", server.HandleMargeAddRecent)
 
-				r.Get("/group", server.HandleMargeDeviceGroup)
-				r.Get("/group/", server.HandleMargeDeviceGroup)
-				r.Get("/group/server", server.HandleMargeDeviceGroupServer)
-				r.Get("/group/member", server.HandleMargeDeviceGroupMember)
+				r.Get("/{device}/group", server.HandleMargeDeviceGroup)
+				r.Get("/{device}/group/", server.HandleMargeDeviceGroup)
+				r.Get("/{device}/group/server", server.HandleMargeDeviceGroupServer)
+				r.Get("/{device}/group/member", server.HandleMargeDeviceGroupMember)
 			})
 
 			// Speakers POST to /group/ (with trailing slash) when forwarding
@@ -968,8 +977,6 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Post("/group/", server.HandleMargeAddGroup)
 			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
 			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
-
-			r.Delete("/device/{device}", server.HandleMargeRemoveDevice)
 		})
 
 		r.Get("/device/{device}/streaming_token", server.HandleMargeStreamingToken)
