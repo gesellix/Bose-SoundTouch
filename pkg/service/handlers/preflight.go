@@ -147,11 +147,12 @@ func FormatPreflightGuidance(httpsListenerPort int, res Probe443Result) string {
 		lines = append(lines, "  - localhost:443: "+res.Localhost.Error)
 	}
 
-	if res.LAN.Reachable {
+	switch {
+	case res.LAN.Reachable:
 		lines = append(lines, fmt.Sprintf("  - %s:443 (LAN): reachable ✓", res.LANHost))
-	} else if res.LANHost != "" {
+	case res.LANHost != "":
 		lines = append(lines, fmt.Sprintf("  - %s:443 (LAN): %s", res.LANHost, res.LAN.Error))
-	} else {
+	default:
 		lines = append(lines, "  - LAN: "+res.LAN.Error)
 	}
 
