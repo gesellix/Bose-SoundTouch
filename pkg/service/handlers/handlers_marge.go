@@ -637,17 +637,29 @@ func (s *Server) HandleMargeUpdateDevice(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	bodyDeviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body, r.RemoteAddr)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// Validate body deviceID against the URL segment *before* the
+	// upsert in AddDeviceToAccount runs — otherwise a mismatched PUT
+	// would still persist a row for the body's deviceID before the
+	// 400 response, leaving spurious state in the datastore.
+	var probe struct {
+		DeviceID string `xml:"deviceid,attr"`
+	}
+	if xmlErr := xml.Unmarshal(body, &probe); xmlErr != nil {
+		http.Error(w, xmlErr.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if bodyDeviceID != device {
+	if probe.DeviceID != device {
 		http.Error(w,
-			fmt.Sprintf("device ID in body (%q) does not match URL (%q)", bodyDeviceID, device),
+			fmt.Sprintf("device ID in body (%q) does not match URL (%q)", probe.DeviceID, device),
 			http.StatusBadRequest)
 
+		return
+	}
+
+	_, data, err := marge.AddDeviceToAccount(s.ds, account, body, r.RemoteAddr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

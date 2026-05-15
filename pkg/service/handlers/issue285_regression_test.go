@@ -339,4 +339,15 @@ func TestIssue285_RenamePutRejectsMismatchedDeviceID(t *testing.T) {
 		respBody, _ := io.ReadAll(resp.Body)
 		t.Fatalf("PUT status = %d, want 400; body:\n%s", resp.StatusCode, respBody)
 	}
+
+	// Mismatched body must be rejected *before* the upsert runs —
+	// otherwise the datastore ends up with a row keyed on the body's
+	// deviceID even though we return 400. Verify by reading both keys.
+	if got, _ := ds.GetDeviceInfo("3981561", "DEADBEEFCAFE"); got != nil {
+		t.Fatalf("body deviceID DEADBEEFCAFE was persisted despite 400 response: %+v", got)
+	}
+
+	if got, _ := ds.GetDeviceInfo("3981561", urlDeviceID); got != nil {
+		t.Fatalf("URL deviceID %s was persisted despite 400 response: %+v", urlDeviceID, got)
+	}
 }
