@@ -47,6 +47,8 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Route("/account/{account}/device", func(r chi.Router) {
 			r.Post("/", server.HandleMargeAddDevice)
 			r.Post("/{device}", server.HandleMargeAddDevice)
+			// Rename PUT — mirrors the production router. Issue #285.
+			r.Put("/{device}", server.HandleMargeUpdateDevice)
 		})
 		r.Get("/account/{account}/device/{device}/recent", server.HandleMargeRecents)
 		r.Post("/account/{account}/device/{device}/recent", server.HandleMargeAddRecent)

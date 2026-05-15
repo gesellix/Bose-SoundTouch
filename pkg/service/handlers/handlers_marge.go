@@ -600,6 +600,62 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// HandleMargeUpdateDevice handles the speaker's rename PUT against
+// /streaming/account/{account}/device/{device}. The speaker fires
+// this whenever the user renames it via the Bose App or via
+// `soundtouch-cli name set`; before this handler existed AfterTouch
+// returned 502, the speaker retried in a loop, and the App showed
+// the rename hanging indefinitely (issue #285).
+//
+// The expected payload mirrors the POST shape:
+//
+//	<device deviceid="DEVID"><name>NEW</name><macaddress>DEVID</macaddress></device>
+//
+// AddDeviceToAccount is already an upsert via ds.SaveDeviceInfo, so
+// rather than introduce a parallel UpdateDevice function we route
+// the PUT through the same persistence path. The semantic delta is
+// purely in the HTTP envelope: 200 (not 201), no Location header,
+// and the deviceID in the body has to match the URL — a mismatch
+// means the speaker is targeting the wrong record and we refuse
+// rather than silently re-key.
+func (s *Server) HandleMargeUpdateDevice(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
+
+	device := chi.URLParam(r, "device")
+	if !validatePathID(device) {
+		http.Error(w, "Invalid device ID", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		return
+	}
+
+	bodyDeviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if bodyDeviceID != device {
+		http.Error(w,
+			fmt.Sprintf("device ID in body (%q) does not match URL (%q)", bodyDeviceID, device),
+			http.StatusBadRequest)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
 // HandleMargeRemovePreset removes a preset for the specified account and device.
 func (s *Server) HandleMargeRemovePreset(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")

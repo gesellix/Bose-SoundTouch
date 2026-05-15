@@ -155,5 +155,6 @@ POST     /streaming/support/power_on                                  handlers.(
 POST     /v1/scmudc/{deviceId}                                        handlers.(*Server).HandleAppEvents-fm
 POST     /v1/stapp/{deviceId}                                         handlers.(*Server).HandleAppEvents-fm
 PUT      /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm
+PUT      /streaming/account/{account}/device/{device}                 handlers.(*Server).HandleMargeUpdateDevice-fm
 PUT      /streaming/account/{account}/device/{device}/preset/{presetNumber} handlers.(*Server).HandleMargeUpdatePreset-fm
 TRACE    /oauth/*                                                     handlers.(*Server).HandleBoseProxy-fm

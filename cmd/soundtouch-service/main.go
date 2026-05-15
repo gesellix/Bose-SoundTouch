@@ -939,6 +939,11 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Route("/device", func(r chi.Router) {
 				r.Post("/", server.HandleMargeAddDevice)
 				r.Post("/{device}", server.HandleMargeAddDevice)
+				// PUT is the rename / update path — speakers fire
+				// this against PUT /streaming/account/{a}/device/{d}
+				// when the user renames via Bose App or
+				// `soundtouch-cli name set`. Issue #285.
+				r.Put("/{device}", server.HandleMargeUpdateDevice)
 			})
 
 			r.Route("/device/{device}", func(r chi.Router) {
