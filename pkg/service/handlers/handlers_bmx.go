@@ -173,14 +173,20 @@ func (s *Server) HandleOrionToken(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// HandleOrionPlayback returns Orion playback information.
+// HandleOrionPlayback returns Orion playback information for the
+// /core02/svc-bmx-adapter-orion/prod/orion/station?data=... endpoint
+// the speaker reaches by following its stored LOCAL_INTERNET_RADIO
+// preset's `location` attribute. The `data` query string is the
+// base64-encoded JSON blob (streamUrl/imageUrl/name) that the speaker
+// constructed when the preset was first saved; we just decode and
+// rewrap it into the Bose BmxPlaybackResponse shape via
+// bmx.PlayCustomStream.
+//
+// No auth check: the data is the speaker's own input, nothing
+// privileged is being protected, and soundcork's reference impl
+// behaves the same way.
 func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
-	}
-
-	data := chi.URLParam(r, "data")
+	data := r.URL.Query().Get("data")
 
 	resp, err := bmx.PlayCustomStream(data)
 	if err != nil {

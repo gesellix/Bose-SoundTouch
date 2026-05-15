@@ -909,9 +909,16 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Delete("/v1/favorite/{stationID}", server.HandleTuneInDeleteFavorite)
 		})
 
-		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
-		r.Post("/core02/svc-bmx-adapter-orion/prod/orion/token", server.HandleOrionToken)
 	})
+
+	// Orion (LOCAL_INTERNET_RADIO) lives at the top level — the BMX registry
+	// advertises baseUrl `{BMX_SERVER}/core02/svc-bmx-adapter-orion/prod/orion`
+	// (no `/bmx/` prefix; verified against the upstream capture in
+	// pkg/service/handlers/static/bmx_services_ustream.json), so speakers
+	// reach the token + station endpoints at exactly these paths under
+	// either DNS-interception or URL-flip migration.
+	r.Post("/core02/svc-bmx-adapter-orion/prod/orion/token", server.HandleOrionToken)
+	r.Get("/core02/svc-bmx-adapter-orion/prod/orion/station", server.HandleOrionPlayback)
 
 	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 

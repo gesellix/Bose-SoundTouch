@@ -32,8 +32,13 @@ func setupRouter(targetURL string, ds *datastore.DataStore) (*chi.Mux, *Server) 
 		r.Get("/tunein/v1/navigate", server.HandleTuneInNavigate)
 		r.Get("/tunein/v1/navigate/*", server.HandleTuneInNavigate)
 		r.Get("/tunein/v1/search", server.HandleTuneInSearch)
-		r.Post("/orion/v1/playback/station/{data}", server.HandleOrionPlayback)
 	})
+
+	// Orion lives at the top level — see the matching note in
+	// cmd/soundtouch-service/main.go. Mirrored here so the test router
+	// exercises the same paths the production router does.
+	r.Post("/core02/svc-bmx-adapter-orion/prod/orion/token", server.HandleOrionToken)
+	r.Get("/core02/svc-bmx-adapter-orion/prod/orion/station", server.HandleOrionPlayback)
 
 	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 

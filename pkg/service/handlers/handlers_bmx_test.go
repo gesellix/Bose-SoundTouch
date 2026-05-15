@@ -87,8 +87,13 @@ func TestOrionPlayback(t *testing.T) {
 	// Base64 encoded: {"streamUrl": "http://example.com/stream", "imageUrl": "http://example.com/img.jpg", "name": "Test Orion"}
 	data := "eyJzdHJlYW1VcmwiOiAiaHR0cDovL2V4YW1wbGUuY29tL3N0cmVhbSIsICJpbWFnZVVybCI6ICJodHRwOi8vZXhhbXBsZS5jb20vaW1nLmpwZyIsICJuYW1lIjogIlRlc3QgT3Jpb24ifQ=="
 
-	req, _ := http.NewRequest("POST", ts.URL+"/bmx/orion/v1/playback/station/"+data, nil)
-	req.Header.Set("Authorization", "Bearer mock-token")
+	// Speakers reach this endpoint by following the `location` attribute
+	// stored in a LOCAL_INTERNET_RADIO preset's contentItem — a GET to
+	// the upstream path with `data` as a query string. The data is
+	// already base64-URL-safe; passing it raw mirrors what the speaker
+	// emits (Go's url package re-encodes any `=` padding for transport).
+	req, _ := http.NewRequest("GET",
+		ts.URL+"/core02/svc-bmx-adapter-orion/prod/orion/station?data="+url.QueryEscape(data), nil)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +170,11 @@ func TestBMXUnauthorized(t *testing.T) {
 		{"GET", "/bmx/tunein/v1/playback/station/s123"},
 		{"GET", "/bmx/tunein/v1/playback/episodes/p123"},
 		{"GET", "/bmx/tunein/v1/playback/episode/p123"},
-		{"POST", "/bmx/orion/v1/playback/station/data"},
+		// Note: /core02/.../prod/orion/station is intentionally NOT in this
+		// list — orion playback takes its `data` blob from the speaker's
+		// own preset payload, there's no privileged material to gate, and
+		// soundcork's reference impl makes the same call (no auth on the
+		// station endpoint). See HandleOrionPlayback's doc comment.
 	}
 
 	for _, tc := range paths {

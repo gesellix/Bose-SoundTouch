@@ -30,6 +30,7 @@ GET      /bmx/tunein/v1/playback/episodes/{podcastID}                 handlers.(
 GET      /bmx/tunein/v1/playback/station/{stationID}                  handlers.(*Server).HandleTuneInPlayback-fm
 GET      /bmx/tunein/v1/search                                        handlers.(*Server).HandleTuneInSearch-fm
 GET      /ced/*                                                       handlers.(*Server).HandleCedStatic
+GET      /core02/svc-bmx-adapter-orion/prod/orion/station             handlers.(*Server).HandleOrionPlayback-fm
 GET      /custom/v1/playback/{encodedURL}                             handlers.(*Server).HandleCustomPlayback-fm
 GET      /customer/account/{account}                                  handlers.(*Server).HandleMargeAccountProfile-fm
 GET      /docs/*                                                      handlers.(*Server).HandleDocs-fm
@@ -97,11 +98,10 @@ POST     /accounts/{account}/group                                    handlers.(
 POST     /accounts/{account}/group/                                   handlers.(*Server).HandleMargeAddGroup-fm
 POST     /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeModifyGroup-fm
 POST     /alexa/certificate                                           handlers.(*Server).HandleAlexaCertificate-fm
-POST     /bmx/core02/svc-bmx-adapter-orion/prod/orion/token           handlers.(*Server).HandleOrionToken-fm
-POST     /bmx/orion/v1/playback/station/{data}                        handlers.(*Server).HandleOrionPlayback-fm
 POST     /bmx/tunein/v1/favorite/{stationID}                          handlers.(*Server).HandleTuneInFavorite-fm
 POST     /bmx/tunein/v1/report                                        handlers.(*Server).HandleTuneInReport-fm
 POST     /bmx/tunein/v1/token                                         handlers.(*Server).HandleTuneInToken-fm
+POST     /core02/svc-bmx-adapter-orion/prod/orion/token               handlers.(*Server).HandleOrionToken-fm
 POST     /customer/account/{account}                                  handlers.(*Server).HandleMargeUpdateAccountProfile-fm
 POST     /customer/account/{account}/password                         handlers.(*Server).HandleMargeChangePassword-fm
 POST     /mgmt/accounts/{accountId}/language                          handlers.(*Server).HandleMgmtUpdateAccountLanguage-fm
