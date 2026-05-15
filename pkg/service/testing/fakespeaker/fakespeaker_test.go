@@ -172,6 +172,61 @@ func TestFakeSpeakerUpdateGroupEchoesWithGroupOK(t *testing.T) {
 	}
 }
 
+func TestFakeSpeakerFixtureOverride_ReplacesEmbeddedBody(t *testing.T) {
+	custom := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<presets>
+    <preset id="42"><ContentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/sCUSTOM" isPresetable="true"><itemName>Custom Override</itemName></ContentItem></preset>
+</presets>`)
+
+	s, err := Start(Config{
+		FixtureOverrides: map[string][]byte{
+			"/presets": custom,
+		},
+	})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_ = s.Stop(ctx)
+	})
+
+	// Overridden route returns the custom body verbatim.
+	resp, err := http.Get("http://" + s.HTTPAddr() + "/presets") //nolint:noctx
+	if err != nil {
+		t.Fatalf("get /presets: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+
+	if !bytes.Equal(body, custom) {
+		t.Errorf("/presets body mismatch.\ngot:\n%s\nwant:\n%s", body, custom)
+	}
+
+	// Non-overridden route still serves the embedded default.
+	resp2, err := http.Get("http://" + s.HTTPAddr() + "/info") //nolint:noctx
+	if err != nil {
+		t.Fatalf("get /info: %v", err)
+	}
+	defer func() { _ = resp2.Body.Close() }()
+
+	body2, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		t.Fatalf("read /info body: %v", err)
+	}
+
+	if !bytes.Contains(body2, []byte(`deviceID="DEADBEEFCAFE"`)) {
+		t.Errorf("/info default fixture missing expected deviceID; body:\n%s", body2)
+	}
+}
+
 func TestFakeSpeakerRemoveGroupRejectsNonGET(t *testing.T) {
 	s, err := Start(Config{})
 	if err != nil {

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<presets>
+    <preset id="1" createdOn="1575607101" updatedOn="1593644620">
+        <ContentItem source="LOCAL_INTERNET_RADIO" type="stationurl" location="https://content.api.bose.io/core02/svc-bmx-adapter-orion/prod/orion/station?data=eyJuYW1lIjoiT1BCIiwiaW1hZ2VVcmwiOiIiLCJzdHJlYW1VcmwiOiJodHRwOi8vYWlzLXNhMy5jZG5zdHJlYW0xLmNvbS8yNDQwXzEyOC5hYWMifQ%3D%3D" sourceAccount="" isPresetable="true">
+            <itemName>OPB</itemName>
+            <containerArt></containerArt>
+        </ContentItem>
+    </preset>
+</presets>

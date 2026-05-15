@@ -35,6 +35,19 @@ type Config struct {
 	// diagnostic shell. Empty disables the telnet listener entirely.
 	// Use "127.0.0.1:17000" to match the real port the wizard probes.
 	TelnetListen string
+
+	// FixtureOverrides replaces the response body for the given fixture
+	// route (e.g. "/info", "/presets", "/sources") with the supplied
+	// bytes. Routes not present in the map fall through to the embedded
+	// defaults shipped under testdata/. A nil or empty map keeps the
+	// default behaviour the screenshot pipeline relies on.
+	//
+	// Stateful handlers (/getGroup, /addGroup, /updateGroup,
+	// /removeGroup) are not affected — overrides only apply to the
+	// GET fixture routes. Use this to wire issue-specific payloads
+	// into per-issue regression tests; see
+	// pkg/service/setup/issue218_regression_test.go for the pattern.
+	FixtureOverrides map[string][]byte
 }
 
 // Server is a running fake speaker. It bundles whichever sub-servers
@@ -61,7 +74,7 @@ func Start(cfg Config) (*Server, error) {
 	}
 
 	mux := http.NewServeMux()
-	registerRoutes(mux)
+	registerRoutes(mux, cfg.FixtureOverrides)
 
 	s := &Server{
 		srv: &http.Server{
@@ -117,17 +130,38 @@ func (s *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
-func registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/info", serveFixture("testdata/info.xml"))
-	mux.HandleFunc("/presets", serveFixture("testdata/presets.xml"))
-	mux.HandleFunc("/recents", serveFixture("testdata/recents.xml"))
-	mux.HandleFunc("/networkInfo", serveFixture("testdata/networkinfo.xml"))
-	mux.HandleFunc("/sources", serveFixture("testdata/sources.xml"))
-	mux.HandleFunc("/supportedURLs", serveFixture("testdata/supportedurls.xml"))
+func registerRoutes(mux *http.ServeMux, overrides map[string][]byte) {
+	fixture := func(route, embedPath string) {
+		mux.HandleFunc(route, serveFixtureOr(embedPath, overrides[route]))
+	}
+
+	fixture("/info", "testdata/info.xml")
+	fixture("/presets", "testdata/presets.xml")
+	fixture("/recents", "testdata/recents.xml")
+	fixture("/networkInfo", "testdata/networkinfo.xml")
+	fixture("/sources", "testdata/sources.xml")
+	fixture("/supportedURLs", "testdata/supportedurls.xml")
+
 	mux.HandleFunc("/getGroup", serveEmptyGroup)
 	mux.HandleFunc("/addGroup", handleAddGroup)
 	mux.HandleFunc("/updateGroup", handleUpdateGroup)
 	mux.HandleFunc("/removeGroup", handleRemoveGroup)
+}
+
+// serveFixtureOr returns a handler that writes override (when non-nil)
+// or the embedded fixture at embedPath (when override is nil). The
+// override is snapshotted at construction so later mutations of the
+// caller's slice don't change the served body.
+func serveFixtureOr(embedPath string, override []byte) http.HandlerFunc {
+	if override != nil {
+		snapshot := append([]byte(nil), override...)
+		return func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			_, _ = w.Write(snapshot)
+		}
+	}
+
+	return serveFixture(embedPath)
 }
 
 func serveFixture(path string) http.HandlerFunc {
