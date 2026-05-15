@@ -1809,7 +1809,31 @@ async function updateDeviceInfo(deviceId, ip) {
             if (deviceIdEl && info.deviceID) deviceIdEl.innerText = info.deviceID;
 
             const accountIdEl = row.querySelector(".col-accountid");
-            if (accountIdEl && info.margeAccountUUID) accountIdEl.innerText = info.margeAccountUUID;
+            if (accountIdEl) {
+                if (info.margeAccountUUID) {
+                    accountIdEl.innerText = info.margeAccountUUID;
+                    accountIdEl.style.color = "#666";
+                } else {
+                    // Empty <margeAccountUUID/> in /info → speaker is
+                    // either factory-reset or never paired. The
+                    // Migration tab's wizard already detects this
+                    // state and prompts for re-pairing; this badge
+                    // surfaces the affordance from the devices list
+                    // so users don't have to know to open the
+                    // Migration tab cold. See issue #234.
+                    accountIdEl.replaceChildren();
+                    const badge = document.createElement("a");
+                    badge.href = "#";
+                    badge.onclick = (e) => {
+                        e.preventDefault();
+                        prepareMigration(deviceId);
+                    };
+                    badge.innerText = "⚠ Not paired — re-pair";
+                    badge.style.color = "#c62828";
+                    badge.title = "Open the Migration tab to re-pair this speaker (factory-reset or never paired).";
+                    accountIdEl.appendChild(badge);
+                }
+            }
         }
     } catch (error) {
         console.warn("Failed to fetch live info for " + ip, error);

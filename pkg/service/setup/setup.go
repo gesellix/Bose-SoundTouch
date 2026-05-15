@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
@@ -2490,7 +2491,16 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 	// 4. Fetch Sources
 	m.syncSources(deviceIP, accountID, deviceID)
 
-	// 5. Create off-device backup of system configuration
+	// 5. Nudge the device to re-render its source list. After a factory
+	// reset (issue #234) the speaker's /sources only lists the always-on
+	// local entries until it receives a <sourcesUpdated/> notification;
+	// the reporter's workaround was to POST this by hand. Wiring it into
+	// the sync flow means the user gets the visible recovery for free
+	// after they click Data Sync — re-pairing (which the wizard already
+	// detects + prompts for) is the orthogonal half of the fix.
+	m.notifySpeakerSourcesUpdated(deviceIP, deviceID)
+
+	// 6. Create off-device backup of system configuration
 	_ = m.BackupConfigOffDevice(deviceIP)
 
 	return nil
@@ -2665,4 +2675,34 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 
 		_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, configuredSources)
 	}
+}
+
+// notifySpeakerSourcesUpdated POSTs the <sourcesUpdated/> notification
+// to /notification on the device, mirroring the manual workaround
+// documented in issue #234. The device responds by re-evaluating its
+// /sources catalogue — after a factory reset that's what makes TUNEIN /
+// LOCAL_INTERNET_RADIO / DEEZER / linked Spotify accounts reappear in
+// the list. The wizard's pair-account flow restores playback (it
+// recreates the Marge.xml token); this nudge restores the *visible*
+// source list. Both are needed for a full #234 recovery; this is the
+// half AfterTouch can automate without user input.
+//
+// Delegates the HTTP plumbing to pkg/client.Client.NotifySourcesUpdated,
+// which is the same path handlers_mgmt.go uses after music-service
+// account changes — keeping the wire-shape definition in one place
+// (pkg/models.NewSourcesUpdatedNotification).
+//
+// Fire-and-forget: a network failure (or the device returning an
+// unexpected response) doesn't fail the surrounding sync. The sync's
+// persisted state is already on disk by the time we fire the
+// notification; whether the device acts on it is observable on the
+// next sync.
+func (m *Manager) notifySpeakerSourcesUpdated(deviceIP, deviceID string) {
+	c := client.NewClientFromHost(deviceIP)
+	if err := c.NotifySourcesUpdated(deviceID); err != nil {
+		log.Printf("[SYNC] notify %s: %v", deviceIP, err)
+		return
+	}
+
+	log.Printf("[SYNC] notify %s sourcesUpdated -> ok", deviceIP)
 }

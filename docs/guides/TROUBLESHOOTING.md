@@ -130,6 +130,37 @@ Expected when the misconfiguration is present: `443=000` plus a `curl: (7) Faile
 
 **Fix:** route `:443` to AfterTouch's HTTPS listener — see [HTTPS-SETUP.md → Binding to port 443](HTTPS-SETUP.md#binding-to-port-443). The AfterTouch settings page shows a ✅ / ❌ indicator for `:443` reachability once the routing is in place.
 
+### ❌ Presets flash then revert to "Select a preset" after a factory reset
+
+**Symptoms:**
+
+- You factory-reset a SoundTouch (Wave / 10 / 20 / 30 / …) that was previously migrated.
+- After reconnecting it to Wi-Fi, AfterTouch sees the speaker again, but pressing a preset on the device or in the app makes the display briefly show the preset name and then revert to *"Select a preset or explore music in the SoundTouch App"*.
+- Spotify presets show the same revert unless Spotify Connect is started from the mobile app first.
+- The speaker's `/sources` is missing TUNEIN / LOCAL_INTERNET_RADIO / DEEZER / your linked Spotify account — only AUX, BLUETOOTH, AIRPLAY, the SpotifyConnectUserName placeholder, NOTIFICATION, and QPLAY appear.
+
+**Cause:**
+
+A factory reset wipes `/mnt/nv/BoseApp-Persistence/1/Marge.xml` — the file that carries the speaker's auth token for the AfterTouch (or Bose) cloud service. The migrated URL configuration is preserved (it lives in `envswitch`), so the speaker keeps talking to AfterTouch, but with no token it can't authenticate for preset playback. Separately, the device's `/sources` cache is reduced until it receives a `<sourcesUpdated/>` notification.
+
+**Fix:**
+
+1. **Re-open the Migration tab** in the AfterTouch UI. The wizard reads `/info`, sees `margeAccountUUID` is empty, and renders:
+
+   > **Current: ❌ Not paired (factory-reset or never paired) — set an ID to pair as part of Apply**
+
+   The devices list now also shows a `⚠ Not paired — re-pair` badge next to such speakers, so you don't have to remember to open the Migration tab cold.
+
+2. **Pick the previously-used account ID** from the "pick from datastore" dropdown (if AfterTouch remembers it), or click **Generate** for a fresh one.
+
+3. **Click Apply.** The wizard runs `pair-account` along with the rest, recreating `Marge.xml` on the device with the chosen ID.
+
+4. **Click Data Sync** (Tab 3). AfterTouch persists the speaker's presets/recents/sources and posts a `<sourcesUpdated/>` notification to the device — the missing TUNEIN / LOCAL_INTERNET_RADIO / DEEZER / linked Spotify entries reappear in `/sources` automatically.
+
+5. Press a preset. It should play normally.
+
+If presets still won't play after step 5, capture `logread -f | grep -v '127.0.0.1:'` on the speaker (see [DEVICE-LOGGING.md](../DEVICE-LOGGING.md#1-accessing-system-logs-requires-root)) while pressing the preset and file an issue with the snippet — the lines around the failed playback name the deeper cause.
+
 ### ❌ "Connection refused"
 
 **Symptoms:**

@@ -2,7 +2,7 @@
 <info deviceID="DEADBEEFCAFE">
     <name>Demo SoundTouch</name>
     <type>SoundTouch 10</type>
-    <margeAccountUUID>0000000</margeAccountUUID>
+    <margeAccountUUID>1234567</margeAccountUUID>
     <components>
         <component>
             <componentCategory>SCM</componentCategory>

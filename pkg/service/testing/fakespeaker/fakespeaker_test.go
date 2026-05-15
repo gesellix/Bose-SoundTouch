@@ -228,6 +228,73 @@ func TestFakeSpeakerFixtureOverride_ReplacesEmbeddedBody(t *testing.T) {
 	}
 }
 
+func TestFakeSpeakerNotificationRecorder(t *testing.T) {
+	s, err := Start(Config{})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		_ = s.Stop(ctx)
+	})
+
+	body := `<updates deviceID="DEADBEEFCAFE"><sourcesUpdated/></updates>`
+
+	req, err := http.NewRequest(http.MethodPost,
+		"http://"+s.HTTPAddr()+"/notification",
+		strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/xml")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+
+	got := s.Notifications()
+	if len(got) != 1 {
+		t.Fatalf("Notifications() returned %d entries, want 1", len(got))
+	}
+
+	// The test POSTs the request body verbatim; the recorder must
+	// return it byte-identical. (Wire-shape variation — self-closing
+	// vs long-form sourcesUpdated — happens upstream in
+	// pkg/client.NotifySourcesUpdated, not here.)
+	if string(got[0].Body) != body {
+		t.Errorf("body = %q, want %q", got[0].Body, body)
+	}
+
+	if got[0].ContentType != "application/xml" {
+		t.Errorf("ContentType = %q, want application/xml", got[0].ContentType)
+	}
+
+	// GET on the same path is a 405 — real speakers don't expose it.
+	getResp, err := http.Get("http://" + s.HTTPAddr() + "/notification") //nolint:noctx
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = getResp.Body.Close() }()
+
+	if getResp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("GET status = %d, want 405", getResp.StatusCode)
+	}
+
+	if got := getResp.Header.Get("Allow"); got != "POST" {
+		t.Errorf("Allow header = %q, want POST", got)
+	}
+}
+
 func TestFakeSpeakerRemoveGroupRejectsNonGET(t *testing.T) {
 	s, err := Start(Config{})
 	if err != nil {

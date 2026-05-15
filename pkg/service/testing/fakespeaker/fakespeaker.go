@@ -17,6 +17,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -57,6 +58,34 @@ type Server struct {
 	srv      *http.Server
 	httpAddr string
 	telnet   *telnetServer
+
+	mu            sync.Mutex
+	notifications []NotificationCall
+}
+
+// NotificationCall records a single POST /notification request the
+// fake received. Tests use it to assert that AfterTouch (or any
+// other component under test) fired the expected speaker-side
+// notification.
+type NotificationCall struct {
+	// Body is the request body verbatim.
+	Body []byte
+	// ContentType is the value of the Content-Type header.
+	ContentType string
+}
+
+// Notifications returns a snapshot of every POST /notification call
+// the fake has received, in arrival order. The slice is independent
+// of the server's internal state — callers can keep it for assertions
+// without holding a lock.
+func (s *Server) Notifications() []NotificationCall {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]NotificationCall, len(s.notifications))
+	copy(out, s.notifications)
+
+	return out
 }
 
 // Start binds the configured listeners and serves them in background
@@ -73,15 +102,16 @@ func Start(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("fakespeaker: listen %s: %w", httpListen, err)
 	}
 
-	mux := http.NewServeMux()
-	registerRoutes(mux, cfg.FixtureOverrides)
-
 	s := &Server{
-		srv: &http.Server{
-			Handler:           mux,
-			ReadHeaderTimeout: 5 * time.Second,
-		},
 		httpAddr: ln.Addr().String(),
+	}
+
+	mux := http.NewServeMux()
+	registerRoutes(mux, cfg.FixtureOverrides, s)
+
+	s.srv = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go func() {
@@ -130,7 +160,7 @@ func (s *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
-func registerRoutes(mux *http.ServeMux, overrides map[string][]byte) {
+func registerRoutes(mux *http.ServeMux, overrides map[string][]byte, s *Server) {
 	fixture := func(route, embedPath string) {
 		mux.HandleFunc(route, serveFixtureOr(embedPath, overrides[route]))
 	}
@@ -147,6 +177,36 @@ func registerRoutes(mux *http.ServeMux, overrides map[string][]byte) {
 	mux.HandleFunc("/addGroup", handleAddGroup)
 	mux.HandleFunc("/updateGroup", handleUpdateGroup)
 	mux.HandleFunc("/removeGroup", handleRemoveGroup)
+	mux.HandleFunc("/notification", s.handleNotification)
+}
+
+// handleNotification records a POST /notification call so tests can
+// assert that AfterTouch fired the expected speaker-side nudge (e.g.
+// the <sourcesUpdated/> notification that recovers the source list
+// after a factory reset, per issue #234). GET returns 405 — real
+// speakers expose /notification as POST-only.
+func (s *Server) handleNotification(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+
+		return
+	}
+
+	body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 64*1024))
+
+	s.mu.Lock()
+	s.notifications = append(s.notifications, NotificationCall{
+		Body:        body,
+		ContentType: r.Header.Get("Content-Type"),
+	})
+	s.mu.Unlock()
+
+	// Real speakers respond with <status>/notification</status>; the
+	// pkg/client.Client.NotifySourcesUpdated path validates that
+	// shape, so the fake has to match it too.
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8" ?>` + "\n<status>/notification</status>\n"))
 }
 
 // serveFixtureOr returns a handler that writes override (when non-nil)

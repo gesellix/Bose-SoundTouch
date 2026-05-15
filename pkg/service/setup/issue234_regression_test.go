@@ -115,12 +115,22 @@ func TestIssue234_FactoryResetSpeakerSyncsReducedSources(t *testing.T) {
 		t.Errorf("DeviceID = %q, want %q", info.DeviceID, "DEADBEEFCAFE")
 	}
 
-	// 2. Source round-trip: reduced list survives sync verbatim.
-	const accountID = "issue234"
+	// 2. End-to-end sync. Driving SyncDeviceData rather than
+	// syncSources directly exercises the wiring between
+	// syncSources and notifySpeakerSourcesUpdated — the source
+	// list still lands on disk (assertions below) AND the
+	// sourcesUpdated notification fires against the device.
+	// SyncDeviceData derives accountID/deviceID from /info; with
+	// an empty margeAccountUUID the account falls through to
+	// "default".
+	if err := m.SyncDeviceData(deviceIP); err != nil {
+		t.Fatalf("SyncDeviceData: %v", err)
+	}
 
-	const deviceID = "DEADBEEFCAFE"
-
-	m.syncSources(deviceIP, accountID, deviceID)
+	const (
+		accountID = "default"
+		deviceID  = "DEADBEEFCAFE"
+	)
 
 	sourcesPath := filepath.Join(tempDir, "accounts", accountID, "devices", deviceID, "Sources.xml")
 
@@ -144,14 +154,46 @@ func TestIssue234_FactoryResetSpeakerSyncsReducedSources(t *testing.T) {
 	}
 
 	// Casualties: TUNEIN / LOCAL_INTERNET_RADIO are the symptom of
-	// #234 — they should remain absent until auto-recovery lands.
+	// #234 — they should remain absent on the persisted side
+	// because fakespeaker is stateless (the next /sources read
+	// returns the same reduced fixture even after the
+	// notification). On a real speaker the device would react to
+	// the notification, re-expose the missing sources, and the
+	// next Data Sync would persist them — that second-sync step
+	// is the runbook user-facing flow, not something we model
+	// here.
 	for _, missingKey := range []string{
 		`<sourceKey type="TUNEIN"`,
 		`<sourceKey type="LOCAL_INTERNET_RADIO"`,
 	} {
 		if strings.Contains(content, missingKey) {
-			t.Errorf("persisted Sources.xml unexpectedly contains %s — auto-recovery for issue #234 may have landed; if so, flip this assertion and the doc-comment;\nbody:\n%s",
+			t.Errorf("persisted Sources.xml unexpectedly contains %s — fixture changed?;\nbody:\n%s",
 				missingKey, content)
 		}
+	}
+
+	// 3. The sourcesUpdated notification must have fired against
+	// the device with the right deviceID and shape, regardless of
+	// what the fakespeaker decided to do with it.
+	notifs := s.Notifications()
+	if len(notifs) != 1 {
+		t.Fatalf("Notifications() returned %d entries, want exactly 1 sourcesUpdated POST", len(notifs))
+	}
+
+	// The exact serialization (self-closing vs long-form
+	// <sourcesUpdated></sourcesUpdated>) is up to encoding/xml and
+	// not protocol-meaningful — assert on the load-bearing pieces
+	// instead of the byte-identical body.
+	body := string(notifs[0].Body)
+	if !strings.Contains(body, `deviceID="DEADBEEFCAFE"`) {
+		t.Errorf("notification body missing deviceID; got: %q", body)
+	}
+
+	if !strings.Contains(body, "sourcesUpdated") {
+		t.Errorf("notification body missing sourcesUpdated; got: %q", body)
+	}
+
+	if !strings.Contains(notifs[0].ContentType, "xml") {
+		t.Errorf("notification Content-Type = %q, want something xml-shaped", notifs[0].ContentType)
 	}
 }
