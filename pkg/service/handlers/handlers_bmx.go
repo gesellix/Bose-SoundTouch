@@ -182,10 +182,18 @@ func (s *Server) HandleOrionToken(w http.ResponseWriter, _ *http.Request) {
 // rewrap it into the Bose BmxPlaybackResponse shape via
 // bmx.PlayCustomStream.
 //
-// No auth check: the data is the speaker's own input, nothing
-// privileged is being protected, and soundcork's reference impl
-// behaves the same way.
+// Requires a Bearer token in the `Authorization` header — same as
+// the rest of the BMX playback surface (TuneIn variants and the
+// orion token endpoint). Real speakers obtain the token via
+// POST /core02/svc-bmx-adapter-orion/prod/orion/token (HandleOrionToken)
+// before they ever follow a LOCAL_INTERNET_RADIO preset, so this
+// check shouldn't cost any legitimate caller.
 func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		s.writeBMXUnauthorized(w)
+		return
+	}
+
 	data := r.URL.Query().Get("data")
 
 	resp, err := bmx.PlayCustomStream(data)

@@ -94,6 +94,7 @@ func TestOrionPlayback(t *testing.T) {
 	// emits (Go's url package re-encodes any `=` padding for transport).
 	req, _ := http.NewRequest("GET",
 		ts.URL+"/core02/svc-bmx-adapter-orion/prod/orion/station?data="+url.QueryEscape(data), nil)
+	req.Header.Set("Authorization", "Bearer mock-token")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -170,11 +171,7 @@ func TestBMXUnauthorized(t *testing.T) {
 		{"GET", "/bmx/tunein/v1/playback/station/s123"},
 		{"GET", "/bmx/tunein/v1/playback/episodes/p123"},
 		{"GET", "/bmx/tunein/v1/playback/episode/p123"},
-		// Note: /core02/.../prod/orion/station is intentionally NOT in this
-		// list — orion playback takes its `data` blob from the speaker's
-		// own preset payload, there's no privileged material to gate, and
-		// soundcork's reference impl makes the same call (no auth on the
-		// station endpoint). See HandleOrionPlayback's doc comment.
+		{"GET", "/core02/svc-bmx-adapter-orion/prod/orion/station?data=AAAA"},
 	}
 
 	for _, tc := range paths {

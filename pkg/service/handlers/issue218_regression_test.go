@@ -79,7 +79,17 @@ func TestIssue218_OrionStationResolvesPresetStreamURL(t *testing.T) {
 
 	resolved := ts.URL + parsedLocation.RequestURI()
 
-	resp, err := http.Get(resolved) //nolint:noctx
+	// Real speakers retrieve an orion token from
+	// POST /core02/svc-bmx-adapter-orion/prod/orion/token before they
+	// ever follow a LOCAL_INTERNET_RADIO preset; the playback handler
+	// rejects an empty Authorization header for parity with the other
+	// BMX playback routes. Use a sentinel Bearer token to match that
+	// shape — HandleOrionPlayback doesn't validate the token contents,
+	// only its presence.
+	req, _ := http.NewRequest("GET", resolved, nil)
+	req.Header.Set("Authorization", "Bearer mock-token")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", resolved, err)
 	}
