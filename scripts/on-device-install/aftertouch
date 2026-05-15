@@ -17,6 +17,7 @@ PIDFILE="/var/run/$NAME.pid"
 DATADIR="/opt/aftertouch/data"
 SCRIPTNAME="/etc/init.d/$NAME"
 USER="root"
+LOG_TAG="aftertouch"
 
 
 # Export PATH
@@ -41,6 +42,17 @@ case "$1" in
 
     mkdir -p "$DATADIR"
 
+    # Pipe stdout + stderr through `logger -t $LOG_TAG` so the
+    # daemon's output lands in busybox syslog (bounded ring buffer,
+    # never grows on disk). Users diagnose with:
+    #
+    #   logread        | grep aftertouch | tail -20
+    #   logread -f     | grep aftertouch     # live tail
+    #
+    # `exec` on the daemon replaces /bin/sh so --make-pidfile records
+    # the daemon's own PID (not the shell wrapper). The `logger`
+    # process sits on the read end of the pipe and exits cleanly
+    # when the daemon dies and closes its end.
     start-stop-daemon --start \
         --quiet \
         --pidfile "$PIDFILE" \
@@ -48,7 +60,7 @@ case "$1" in
         --make-pidfile \
         --chuid "$USER" \
         --startas "/bin/sh" \
-        -- -c "\"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false --discovery-interval=60m"
+        -- -c "exec \"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false --discovery-interval=60m 2>&1 | logger -t $LOG_TAG"
 
     tries=0
     max_tries=60
@@ -60,6 +72,9 @@ case "$1" in
         tries=$((tries + 1))
     done
 
+    echo "ERROR: daemon started but http://localhost:8000 never responded within $((max_tries * 2))s." >&2
+    echo "       Inspect the daemon's syslog output:" >&2
+    echo "         logread | grep $LOG_TAG | tail -20" >&2
     exit 1
     ;;
 
@@ -86,12 +101,27 @@ case "$1" in
     if [ -f "$PIDFILE" ]; then
       PID=$(cat "$PIDFILE")
       if kill -0 "$PID" 2>/dev/null; then
-        echo "$NAME is running."
+        # PID is alive — does it actually serve HTTP? A live process
+        # with a dead listener is the symptom behind issue #250
+        # (Gustour's ST30: status said running, curl said
+        # connection-refused). Distinguish the two states here so
+        # status isn't a false-positive.
+        if curl -fsS --max-time 3 http://localhost:8000 >/dev/null 2>&1; then
+          echo "$NAME is running (PID $PID, http://localhost:8000 responding)."
+          exit 0
+        else
+          echo "$NAME PID $PID is alive but http://localhost:8000 is not responding." >&2
+          echo "Recent log:" >&2
+          logread 2>/dev/null | grep "$LOG_TAG" | tail -10 >&2
+          exit 3
+        fi
       else
-        echo "$NAME is not running (PID file exists but process is dead)."
+        echo "$NAME is not running (PID file exists but process is dead)." >&2
+        exit 1
       fi
     else
       echo "$NAME is not running."
+      exit 3
     fi
     ;;
 

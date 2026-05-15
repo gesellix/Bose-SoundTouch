@@ -16,9 +16,20 @@ If your device doesn't expose the port, you can still use the on-device installe
 
 ### Space Limitation
 
-The storage space on the SoundTouch devices is very limited. At the moment only one AfterTouch installation barely fits on them with enough room for the data it needs to maintain. When installing, make sure that you have removed any binaries and folders of previous installation attempts.
+The storage space on the SoundTouch devices is very limited — stock rootfs typically has only a few MB free (e.g. ~4 MB on the ST20, see issue #268), well below the AfterTouch binary's ~12 MB. To work around this, the installer puts everything on `/mnt/nv/aftertouch` by default (the persistent partition, typically ~30 MB free) and points `/opt/aftertouch` at it via a symlink so the init script and runtime paths stay unchanged. Override the install target with `INSTALL_DIR=/some/path` if you've got room elsewhere.
 
 The space limitation also means we are currently unsure on how to update the system, because two binaries are already too large. We are currently working on this - both by checking how we can make the binaries smaller, but also on how we can extend the storage space (e.g. by running AfterTouch from a USB drive).
+
+### Logs
+
+The daemon writes to BusyBox syslog (tagged `aftertouch`) rather than to a file. Disk usage stays bounded — the syslog ring buffer is in memory — and the same `logread` recipe used elsewhere in this project works:
+
+```sh
+logread        | grep aftertouch | tail -20   # recent entries
+logread -f     | grep aftertouch              # live tail
+```
+
+If the install command reports "running but :8000 not responding" or `aftertouch status` reports the listener is down, the syslog tail is the first place to look.
 
 ## Installation
 
