@@ -156,6 +156,7 @@ func registerRoutes(mux *http.ServeMux, overrides map[string][]byte) {
 func serveFixtureOr(embedPath string, override []byte) http.HandlerFunc {
 	if override != nil {
 		snapshot := append([]byte(nil), override...)
+
 		return func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 			_, _ = w.Write(snapshot)

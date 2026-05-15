@@ -908,7 +908,6 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 			r.Post("/v1/favorite/{stationID}", server.HandleTuneInFavorite)
 			r.Delete("/v1/favorite/{stationID}", server.HandleTuneInDeleteFavorite)
 		})
-
 	})
 
 	// Orion (LOCAL_INTERNET_RADIO) lives at the top level — the BMX registry
