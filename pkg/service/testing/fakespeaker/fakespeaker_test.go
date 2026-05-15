@@ -36,6 +36,7 @@ func TestFakeSpeakerServesFixtures(t *testing.T) {
 		{"/supportedURLs", "supportedURLs"},
 		{"/getGroup", "group"},
 		{"/removeGroup", "group"},
+		{"/now_playing", "nowPlaying"},
 	}
 
 	for _, tc := range cases {

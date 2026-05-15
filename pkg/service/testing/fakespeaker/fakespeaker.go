@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-//go:embed testdata/info.xml testdata/presets.xml testdata/recents.xml testdata/networkinfo.xml testdata/sources.xml testdata/supportedurls.xml
+//go:embed testdata/info.xml testdata/presets.xml testdata/recents.xml testdata/networkinfo.xml testdata/sources.xml testdata/supportedurls.xml testdata/now_playing.xml
 var fixtures embed.FS
 
 // Config configures a fake speaker. The zero value is valid and binds the
@@ -141,6 +141,7 @@ func registerRoutes(mux *http.ServeMux, overrides map[string][]byte) {
 	fixture("/networkInfo", "testdata/networkinfo.xml")
 	fixture("/sources", "testdata/sources.xml")
 	fixture("/supportedURLs", "testdata/supportedurls.xml")
+	fixture("/now_playing", "testdata/now_playing.xml")
 
 	mux.HandleFunc("/getGroup", serveEmptyGroup)
 	mux.HandleFunc("/addGroup", handleAddGroup)

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<nowPlaying deviceID="DEADBEEFCAFE" source="SPOTIFY" sourceAccount="SpotifyConnectUserName">
+    <ContentItem source="SPOTIFY" sourceAccount="SpotifyConnectUserName" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDozN2k5ZFFaRjFEWDBraFRZM0hGQTRN" isPresetable="false">
+        <itemName>Aiyomi</itemName>
+        <containerArt>https://example.invalid/cover.jpg</containerArt>
+    </ContentItem>
+    <track>Aiyomi</track>
+    <artist>Naritomi</artist>
+    <album>Aiyomi</album>
+    <stationName></stationName>
+    <art artImageStatus="IMAGE_PRESENT">https://example.invalid/cover.jpg</art>
+    <time total="156">29</time>
+    <skipEnabled/>
+    <playStatus>PLAY_STATE</playStatus>
+    <streamType>TRACK_ONDEMAND</streamType>
+</nowPlaying>
