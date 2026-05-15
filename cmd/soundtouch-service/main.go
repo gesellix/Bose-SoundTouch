@@ -893,6 +893,7 @@ func setupRouter(server *handlers.Server) *chi.Mux {
 	r.Get("/docs/*", server.HandleDocs)
 
 	r.Route("/bmx", func(r chi.Router) {
+		r.Get("/stream", server.HandlePlaybackStreamProxy)
 		r.Get("/registry/v1/services", server.HandleBMXRegistry)
 		r.Get("/registry/v1/servicesAvailability", server.HandleBMXServicesAvailability)
 

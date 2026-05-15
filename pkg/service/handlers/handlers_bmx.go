@@ -4,12 +4,14 @@ package handlers
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/go-chi/chi/v5"
@@ -68,6 +70,8 @@ func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.proxyPlaybackAudio(resp)
+
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -115,11 +119,80 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	s.proxyPlaybackAudio(resp)
+
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
+	}
+}
+
+func (s *Server) proxyPlaybackAudio(resp interface{}) {
+	playback, ok := resp.(*models.BmxPlaybackResponse)
+	if !ok || playback == nil || strings.TrimSpace(s.serverURL) == "" {
+		return
+	}
+
+	playback.Audio.StreamUrl = s.proxyStreamURL(playback.Audio.StreamUrl)
+	for i := range playback.Audio.Streams {
+		playback.Audio.Streams[i].StreamUrl = s.proxyStreamURL(playback.Audio.Streams[i].StreamUrl)
+	}
+}
+
+func (s *Server) proxyStreamURL(rawURL string) string {
+	if rawURL == "" {
+		return rawURL
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return rawURL
+	}
+
+	return strings.TrimRight(s.serverURL, "/") + "/bmx/stream?url=" + url.QueryEscape(rawURL)
+}
+
+// HandlePlaybackStreamProxy relays remote audio bytes over local HTTP so
+// older speakers don't have to negotiate third-party TLS/CDN redirects.
+func (s *Server) HandlePlaybackStreamProxy(w http.ResponseWriter, r *http.Request) {
+	targetURL := strings.TrimSpace(r.URL.Query().Get("url"))
+	if targetURL == "" {
+		http.Error(w, "url is required", http.StatusBadRequest)
+		return
+	}
+
+	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
+	if err != nil {
+		http.Error(w, "invalid upstream URL", http.StatusBadRequest)
+		return
+	}
+
+	if accept := r.Header.Get("Accept"); accept != "" {
+		upstreamReq.Header.Set("Accept", accept)
+	}
+	if userAgent := r.Header.Get("User-Agent"); userAgent != "" {
+		upstreamReq.Header.Set("User-Agent", userAgent)
+	}
+
+	resp, err := http.DefaultClient.Do(upstreamReq)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.Header().Set("X-Proxy-Origin", "upstream-stream")
+	w.WriteHeader(resp.StatusCode)
+
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		log.Printf("[STREAM_PROXY_ERR] %s -> %v", targetURL, err)
 	}
 }
 

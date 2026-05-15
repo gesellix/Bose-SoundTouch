@@ -3,6 +3,8 @@ package bmx
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -219,5 +221,60 @@ func TestTuneInPodcastInfo_Base64(t *testing.T) {
 
 	if resp.Name != name {
 		t.Errorf("Expected name %s, got %s", name, resp.Name)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestPreferTuneInStreamURLs_PrefersDirectAudioSibling(t *testing.T) {
+	oldTransport := tuneInClient.Transport
+	tuneInClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.String() {
+		case "https://maestro.emfcdn.com/stream_for/k-love/tunein/aac":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"audio/aacp"}},
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		default:
+			t.Fatalf("unexpected probe URL: %s", req.URL.String())
+			return nil, nil
+		}
+	})
+	t.Cleanup(func() { tuneInClient.Transport = oldTransport })
+
+	got := preferTuneInStreamURLs([]string{"https://maestro.emfcdn.com/stream_for/k-love/tunein/hls"})
+	if len(got) != 2 {
+		t.Fatalf("expected 2 stream URLs, got %d: %#v", len(got), got)
+	}
+
+	if got[0] != "https://maestro.emfcdn.com/stream_for/k-love/tunein/aac" {
+		t.Fatalf("preferred stream URL = %q, want direct AAC sibling", got[0])
+	}
+
+	if got[1] != "https://maestro.emfcdn.com/stream_for/k-love/tunein/hls" {
+		t.Fatalf("fallback stream URL = %q, want original HLS URL", got[1])
+	}
+}
+
+func TestPreferTuneInStreamURLs_KeepsOriginalWhenProbeIsNotAudio(t *testing.T) {
+	oldTransport := tuneInClient.Transport
+	tuneInClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/vnd.apple.mpegurl"}},
+			Body:       io.NopCloser(strings.NewReader("")),
+		}, nil
+	})
+	t.Cleanup(func() { tuneInClient.Transport = oldTransport })
+
+	want := "https://maestro.emfcdn.com/stream_for/k-love/tunein/hls"
+	got := preferTuneInStreamURLs([]string{want})
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("preferred stream URLs = %#v, want only original URL %q", got, want)
 	}
 }

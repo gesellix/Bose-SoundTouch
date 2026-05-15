@@ -559,7 +559,7 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, stationID)
 
-	resp, err := http.Get(describeURL)
+	resp, err := tuneInClient.Get(describeURL)
 	if err != nil {
 		return nil, err
 	}
@@ -590,7 +590,7 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 
 	streamReq := fmt.Sprintf(TuneInStream, stationID)
 
-	streamResp, err := http.Get(streamReq)
+	streamResp, err := tuneInClient.Get(streamReq)
 	if err != nil {
 		return nil, err
 	}
@@ -603,6 +603,7 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	}
 
 	streamURLList := strings.Split(strings.TrimSpace(string(streamBody)), "\n")
+	streamURLList = preferTuneInStreamURLs(streamURLList)
 	if len(streamURLList) == 0 || streamURLList[0] == "" {
 		return nil, fmt.Errorf("no streams found")
 	}
@@ -660,6 +661,86 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 	return response, nil
 }
 
+func preferTuneInStreamURLs(streamURLList []string) []string {
+	seen := make(map[string]bool)
+	preferred := make([]string, 0, len(streamURLList))
+	fallback := make([]string, 0, len(streamURLList))
+
+	for _, rawURL := range streamURLList {
+		rawURL = strings.TrimSpace(rawURL)
+		if rawURL == "" {
+			continue
+		}
+
+		if directURL, ok := tuneInDirectStreamVariant(rawURL); ok && !seen[directURL] {
+			preferred = append(preferred, directURL)
+			seen[directURL] = true
+		}
+
+		if !seen[rawURL] {
+			fallback = append(fallback, rawURL)
+			seen[rawURL] = true
+		}
+	}
+
+	return append(preferred, fallback...)
+}
+
+func tuneInDirectStreamVariant(rawURL string) (string, bool) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", false
+	}
+
+	basePath := ""
+	switch {
+	case strings.HasSuffix(u.Path, "/hls"):
+		basePath = strings.TrimSuffix(u.Path, "/hls")
+	case strings.HasSuffix(u.Path, "/hls.m3u8"):
+		basePath = strings.TrimSuffix(u.Path, "/hls.m3u8")
+	default:
+		return "", false
+	}
+
+	for _, suffix := range []string{"aac", "aacp", "stream", "mp3"} {
+		candidate := *u
+		candidate.Path = basePath + "/" + suffix
+		if tuneInDirectAudioProbe(candidate.String()) {
+			return candidate.String(), true
+		}
+	}
+
+	return "", false
+}
+
+func tuneInDirectAudioProbe(rawURL string) bool {
+	req, err := http.NewRequest(http.MethodHead, rawURL, nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := tuneInClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	return isDirectAudioContentType(resp.Header.Get("Content-Type"))
+}
+
+func isDirectAudioContentType(contentType string) bool {
+	contentType = strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if contentType == "" {
+		return false
+	}
+
+	return strings.HasPrefix(contentType, "audio/") || contentType == "application/octet-stream"
+}
+
 // TuneInPodcastInfo returns minimal podcast/episode metadata for UI selection.
 func TuneInPodcastInfo(podcastID, encodedName string) (*models.BmxPodcastInfoResponse, error) {
 	// Bose app sometimes sends non-standard base64, so try both standard and URL-safe
@@ -701,7 +782,7 @@ func TuneInPodcastInfo(podcastID, encodedName string) (*models.BmxPodcastInfoRes
 func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, podcastID)
 
-	resp, err := http.Get(describeURL)
+	resp, err := tuneInClient.Get(describeURL)
 	if err != nil {
 		return nil, err
 	}
@@ -735,7 +816,7 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 
 	streamReq := fmt.Sprintf(TuneInStream, podcastID)
 
-	streamResp, err := http.Get(streamReq)
+	streamResp, err := tuneInClient.Get(streamReq)
 	if err != nil {
 		return nil, err
 	}
@@ -748,6 +829,7 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 	}
 
 	streamURLList := strings.Split(strings.TrimSpace(string(streamBody)), "\n")
+	streamURLList = preferTuneInStreamURLs(streamURLList)
 	if len(streamURLList) == 0 || streamURLList[0] == "" {
 		return nil, fmt.Errorf("no streams found")
 	}
