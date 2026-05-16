@@ -42,6 +42,11 @@ type PushWiFiCredentialsParams struct {
 //
 // The speaker confirms the request before disconnecting; expect to lose
 // the AP link within ~30 seconds.
+//
+// Empirically the first POST often races the speaker's setup endpoint
+// readiness — the connection times out, then a second POST a few seconds
+// later succeeds immediately. We retry once internally so the caller
+// doesn't have to.
 func PushWiFiCredentials(ctx context.Context, p PushWiFiCredentialsParams) error {
 	if p.SSID == "" {
 		return fmt.Errorf("PushWiFiCredentials: SSID is required")
@@ -69,35 +74,78 @@ func PushWiFiCredentials(ctx context.Context, p PushWiFiCredentialsParams) error
 
 	url := "http://" + hostPort + "/addWirelessProfile"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("build request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "text/xml")
-
 	httpClient := p.HTTPClient
 	if httpClient == nil {
-		// No client-side timeout: let the caller's context govern.
-		// The CLI passes a context deadline (default 30 s in
-		// setupWiFiPushCmd) and a hard-coded 10 s here would race
-		// it for no benefit.
+		// No client-side timeout: let the per-attempt sub-context
+		// govern. The CLI passes a context deadline (default 30 s
+		// in setupWiFiPushCmd) and a hard-coded 10 s here would
+		// race it for no benefit.
 		httpClient = &http.Client{}
 	}
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("POST %s: %w", url, err)
+	// Per-attempt cap so a stuck first attempt doesn't burn the whole
+	// budget. 12 s is well above the typical sub-second response time
+	// when the endpoint is healthy, and the failure mode we're working
+	// around (first attempt hangs until the deadline elapses) means
+	// any value here is mostly a sub-budget for a stuck attempt.
+	const perAttemptTimeout = 12 * time.Second
+	// Pause between attempts gives the speaker's setup endpoint a
+	// moment to finish whatever initialization the first POST kicked
+	// off (the empirical workaround that motivated this retry).
+	const interAttemptDelay = 2 * time.Second
+
+	attempt := func(ctx context.Context) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("build request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "text/xml")
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("POST %s: %w", url, err)
+		}
+
+		defer func() { _ = resp.Body.Close() }()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			respBody, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("POST %s returned %d: %s", url, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		}
+
+		return nil
 	}
 
-	defer func() { _ = resp.Body.Close() }()
+	// Two attempts: the second is silent on the wire when the first
+	// already succeeded (returns at the first non-error), or carries
+	// the recovery when the first failed.
+	const maxAttempts = 2
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("POST %s returned %d: %s", url, resp.StatusCode, strings.TrimSpace(string(respBody)))
+	var lastErr error
+
+	for i := 0; i < maxAttempts; i++ {
+		if i > 0 {
+			select {
+			case <-time.After(interAttemptDelay):
+			case <-ctx.Done():
+				return fmt.Errorf("PushWiFiCredentials: %w (last attempt error: %w)", ctx.Err(), lastErr)
+			}
+		}
+
+		attemptCtx, cancel := context.WithTimeout(ctx, perAttemptTimeout)
+		err := attempt(attemptCtx)
+
+		cancel()
+
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
 	}
 
-	return nil
+	return fmt.Errorf("PushWiFiCredentials: both attempts failed (last: %w)", lastErr)
 }
 
 // PollConfig governs the retry cadence of WaitForAP and WaitForOnline.
