@@ -206,7 +206,12 @@ func TestPrimeDeviceWithSpotify_SkipsWhenDeviceUnmapped(t *testing.T) {
 			"bose_secret":  "bs-deadbeef",
 		},
 	}
-	accountsJSON, _ := json.Marshal(accountsPayload)
+
+	accountsJSON, err := json.Marshal(accountsPayload)
+	if err != nil {
+		t.Fatalf("marshal accounts: %v", err)
+	}
+
 	_ = os.WriteFile(filepath.Join(spotifyDir, "accounts.json"), accountsJSON, 0o600)
 
 	ss := spotify.NewSpotifyService("client-id", "client-secret", "http://localhost/callback", tmpDir)
@@ -309,7 +314,12 @@ func TestPrimeDeviceWithSpotify_LiveMargeAccountUUIDWins(t *testing.T) {
 			"bose_secret":  "bs-deadbeef",
 		},
 	}
-	accountsJSON, _ := json.Marshal(accountsPayload)
+
+	accountsJSON, err := json.Marshal(accountsPayload)
+	if err != nil {
+		t.Fatalf("marshal accounts: %v", err)
+	}
+
 	_ = os.WriteFile(filepath.Join(spotifyDir, "accounts.json"), accountsJSON, 0o600)
 
 	ss := spotify.NewSpotifyService("client-id", "client-secret", "http://localhost/callback", tmpDir)

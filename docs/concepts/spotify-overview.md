@@ -167,13 +167,13 @@ initiated playback does.
 
 ## Troubleshooting quick reference
 
-| Symptom                                           | Most likely cause                                                                              |
-|---------------------------------------------------|------------------------------------------------------------------------------------------------|
-| Preset stores then fails: "invalid SourceID"      | No `SPOTIFY` source in marge for the speaker's paired account. Re-run priming.                 |
-| Preset stores fine; playback dies after ~1 hour   | `streamingoauth.bose.com` not pointed at AfterTouch (DNS rewrite gap).                         |
-| Speaker has source but `Sources.xml` looks stale  | `<sourcesUpdated/>` notification did not reach the speaker. Re-run priming or POST it by hand. |
-| ZeroConf `addUser` returns 404, empty body        | Benign no-op; speaker already has `activeUser` set. Marge path is authoritative.               |
-| Spotify Connect device picker doesn't show speaker| Unrelated to AfterTouch; check the speaker's mDNS visibility on the LAN.                       |
+| Symptom                                            | Most likely cause                                                                              |
+|----------------------------------------------------|------------------------------------------------------------------------------------------------|
+| Preset stores then fails: "invalid SourceID"       | No `SPOTIFY` source in marge for the speaker's paired account. Re-run priming.                 |
+| Preset stores fine; playback dies after ~1 hour    | `streamingoauth.bose.com` not pointed at AfterTouch (DNS rewrite gap).                         |
+| Speaker has source but `Sources.xml` looks stale   | `<sourcesUpdated/>` notification did not reach the speaker. Re-run priming or POST it by hand. |
+| ZeroConf `addUser` returns 404, empty body         | Benign no-op; speaker already has `activeUser` set. Marge path is authoritative.               |
+| Spotify Connect device picker doesn't show speaker | Unrelated to AfterTouch; check the speaker's mDNS visibility on the LAN.                       |
 
 ## Where to go next
 
