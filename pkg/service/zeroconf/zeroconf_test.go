@@ -3,6 +3,7 @@ package zeroconf
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -359,6 +360,115 @@ func TestValidateZcBaseURL(t *testing.T) {
 				}
 			} else if err == nil {
 				t.Errorf("validateZcBaseURL(%q) succeeded, want error", tc.input)
+			}
+		})
+	}
+}
+
+// TestPushCredentials_AddUserNoOp covers the firmware quirk we observed in
+// production: ?action=addUser sometimes returns 404 with an empty body when
+// the speaker already has the requested user as its active one. That is NOT a
+// failure — the speaker silently kept its state. PushCredentials must signal
+// this via ErrAddUserNoOp so the watchdog can demote it from "Failed to prime"
+// to a benign success.
+func TestPushCredentials_AddUserNoOp(t *testing.T) {
+	_, speakerPublicBytes, err := GenerateDHKeyPair()
+	if err != nil {
+		t.Fatalf("speaker keygen: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("action") {
+		case "getInfo":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":    101,
+				"publicKey": base64.StdEncoding.EncodeToString(speakerPublicBytes),
+			})
+		case "addUser":
+			// Firmware no-op: 404 + empty body, no Server / Content-Type header.
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	err = PushCredentials(srv.URL+"/zc", "gesellix", "fresh-access-token")
+	if !errors.Is(err, ErrAddUserNoOp) {
+		t.Fatalf("PushCredentials: got %v, want ErrAddUserNoOp", err)
+	}
+}
+
+// TestPushCredentials_AddUserNoOpInSimplifiedPath asserts the same narrow
+// pattern is recognised on the simplified-token fallback (firmware that
+// 404s getInfo entirely).
+func TestPushCredentials_AddUserNoOpInSimplifiedPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("action") {
+		case "getInfo":
+			http.Error(w, "not supported", http.StatusNotFound)
+		case "addUser":
+			w.WriteHeader(http.StatusNotFound) // empty body
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	err := PushCredentials(srv.URL+"/zc", "gesellix", "raw-access-token")
+	if !errors.Is(err, ErrAddUserNoOp) {
+		t.Fatalf("PushCredentials (simplified path): got %v, want ErrAddUserNoOp", err)
+	}
+}
+
+// TestPushCredentials_AddUserRealError_NotMisclassified guards the narrowness
+// of isAddUserNoOp: a 404 *with* a body (or any non-404 error) must still
+// surface as a regular error, not the benign sentinel. Otherwise we'd silently
+// swallow genuine credential rejections that happen to come back as 4xx.
+func TestPushCredentials_AddUserRealError_NotMisclassified(t *testing.T) {
+	_, speakerPublicBytes, err := GenerateDHKeyPair()
+	if err != nil {
+		t.Fatalf("speaker keygen: %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"404 with body should NOT be no-op", http.StatusNotFound, "spotifyError=12 invalid_token"},
+		{"400 empty body should NOT be no-op", http.StatusBadRequest, ""},
+		{"500 empty body should NOT be no-op", http.StatusInternalServerError, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Query().Get("action") {
+				case "getInfo":
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"status":    101,
+						"publicKey": base64.StdEncoding.EncodeToString(speakerPublicBytes),
+					})
+				case "addUser":
+					w.WriteHeader(tc.status)
+					if tc.body != "" {
+						_, _ = w.Write([]byte(tc.body))
+					}
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+
+			err := PushCredentials(srv.URL+"/zc", "gesellix", "fresh-access-token")
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if errors.Is(err, ErrAddUserNoOp) {
+				t.Errorf("got ErrAddUserNoOp, want a real failure for status=%d body=%q", tc.status, tc.body)
 			}
 		})
 	}

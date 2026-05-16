@@ -3,19 +3,24 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
@@ -659,11 +664,121 @@ func (s *Server) PrimeDeviceWithSpotify(deviceIP string) {
 
 	log.Printf("[Spotify Watchdog] Proactively priming %s with Spotify user %s", deviceIP, username)
 
+	// Register the SPOTIFY source in our marge datastore before pushing credentials.
+	// Without this, storePreset later fails with "AddPreset - failed due to invalid SourceID"
+	// because marge.UpdatePreset can't match SourceID="SPOTIFY" against any ConfiguredSource.
+	s.registerSpotifySourceForDevice(deviceIP, accounts)
+
 	if err := s.pushSpotifyTokenToDevice(deviceIP, username, accessToken); err != nil {
-		log.Printf("[Spotify Watchdog] Failed to prime %s: %v", deviceIP, err)
+		// addUser may return a benign 404+empty-body no-op when the speaker
+		// already has the activeUser set. The zeroconf-level log already
+		// recorded the specifics; here we just upgrade the watchdog's view to
+		// "primed" since marge holds the authoritative SPOTIFY source.
+		if errors.Is(err, spotify.ErrAddUserNoOp) {
+			log.Printf("[Spotify Watchdog] Successfully primed %s (ZeroConf addUser was an expected no-op)", deviceIP)
+		} else {
+			log.Printf("[Spotify Watchdog] Failed to prime %s: %v", deviceIP, err)
+		}
 	} else {
 		log.Printf("[Spotify Watchdog] Successfully primed %s", deviceIP)
 	}
+}
+
+// registerSpotifySourceForDevice writes a SPOTIFY ConfiguredSource into the marge
+// datastore under the device's currently-paired account. No-op (with a log
+// message) if the device can't be resolved to an account — falling back to
+// "default" here would risk polluting an unrelated account's source list, and
+// any storePreset the device sends will be under its real paired account anyway.
+func (s *Server) registerSpotifySourceForDevice(deviceIP string, accounts []spotify.Account) {
+	host := deviceIP
+	if h, _, err := net.SplitHostPort(deviceIP); err == nil {
+		host = h
+	}
+
+	accountID, deviceID := s.resolvePairedAccount(deviceIP, host)
+	if accountID == "" {
+		log.Printf("[Spotify Watchdog] No paired account for %s yet — skipping marge source registration", deviceIP)
+		return
+	}
+
+	registered := false
+
+	for _, acc := range accounts {
+		credential := acc.BoseSecret
+		if credential == "" {
+			credential = acc.AccessToken
+		}
+
+		if _, err := marge.AddSource(s.ds, accountID, acc.UserID, strconv.Itoa(constants.SpotifyProviderID), credential, "token_version_3", acc.DisplayName); err != nil {
+			log.Printf("[Spotify Watchdog] Failed to register Spotify source for account %s: %v", accountID, err)
+			continue
+		}
+
+		log.Printf("[Spotify Watchdog] Registered Spotify source %s for account %s (device %s)", acc.UserID, accountID, deviceID)
+
+		registered = true
+	}
+
+	// Tell the speaker its sources list changed so it re-fetches from marge.
+	// Without this its on-device Sources.xml stays stale until something else
+	// triggers a sync — which leaves storePreset failing with
+	// "AddPreset - failed due to invalid SourceID" even though our marge
+	// datastore already has the SPOTIFY entry.
+	if registered && deviceID != "" {
+		c := client.NewClientFromHost(deviceIP)
+		if err := c.NotifySourcesUpdated(deviceID); err != nil {
+			log.Printf("[Spotify Watchdog] sourcesUpdated notification for %s failed: %v", deviceIP, err)
+		} else {
+			log.Printf("[Spotify Watchdog] Notified %s to re-sync sources (deviceID=%s)", deviceIP, deviceID)
+		}
+	}
+}
+
+// resolvePairedAccount returns the device's currently-paired account ID and its
+// canonical deviceID. It prefers the live :8090/info margeAccountUUID (matches
+// what the device will actually send on storePreset) and falls back to the
+// datastore record. Mirrors setup.populateDeviceInfo's resolution order so
+// priming and migration agree on which account a device belongs to.
+//
+// deviceIP is the original input (may carry a :port for tests); host is the
+// bare host for datastore IPAddress matching.
+func (s *Server) resolvePairedAccount(deviceIP, host string) (accountID, deviceID string) {
+	if devInfo := s.findExistingDeviceInfoByIP(host); devInfo != nil {
+		accountID = devInfo.AccountID
+		deviceID = devInfo.DeviceID
+	}
+
+	if s.sm != nil {
+		if info, err := s.sm.GetLiveDeviceInfo(deviceIP); err == nil {
+			if info.MargeAccountUUID != "" {
+				accountID = info.MargeAccountUUID
+			}
+
+			if info.DeviceID != "" {
+				deviceID = info.DeviceID
+			}
+		} else {
+			log.Printf("[Spotify Watchdog] live /info lookup for %s failed: %v (falling back to datastore account=%q)", deviceIP, err, accountID)
+		}
+	}
+
+	return accountID, deviceID
+}
+
+// findExistingDeviceInfoByIP looks up a device record by IP address across all accounts.
+func (s *Server) findExistingDeviceInfoByIP(ip string) *models.ServiceDeviceInfo {
+	allDevices, err := s.ds.ListAllDevices()
+	if err != nil {
+		return nil
+	}
+
+	for i := range allDevices {
+		if allDevices[i].IPAddress == ip {
+			return &allDevices[i]
+		}
+	}
+
+	return nil
 }
 
 func (s *Server) pushSpotifyTokenToDevice(deviceIP, username, accessToken string) error {
@@ -701,7 +816,11 @@ func (s *Server) PrimeDeviceWithAmazon(deviceIP string) {
 	log.Printf("[Amazon Watchdog] Proactively priming %s with Amazon user %s", deviceIP, username)
 
 	if err := s.pushAmazonTokenToDevice(deviceIP, username, accessToken); err != nil {
-		log.Printf("[Amazon Watchdog] Failed to prime %s: %v", deviceIP, err)
+		if errors.Is(err, amazon.ErrAddUserNoOp) {
+			log.Printf("[Amazon Watchdog] Successfully primed %s (ZeroConf addUser was an expected no-op)", deviceIP)
+		} else {
+			log.Printf("[Amazon Watchdog] Failed to prime %s: %v", deviceIP, err)
+		}
 	} else {
 		log.Printf("[Amazon Watchdog] Successfully primed %s", deviceIP)
 	}

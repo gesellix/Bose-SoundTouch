@@ -1,5 +1,10 @@
 # Spotify OAuth Integration
 
+> **New here?** Start with [spotify-overview.md](spotify-overview.md) for the
+> mental model (Spotify Connect vs OAuth-intercept, DNS rewrite gotcha,
+> end-to-end token lifecycle). This document zooms in on the OAuth flows and
+> management endpoints.
+
 The SoundTouch service supports Spotify OAuth integration to broker access tokens for SoundTouch speakers. This is particularly useful for maintaining Spotify Connect functionality after the Bose cloud shutdown (scheduled for May 2026).
 
 ## OAuth Flows
@@ -91,43 +96,23 @@ sequenceDiagram
     Note over Speaker: Speaker now has Spotify access
 ```
 
-## Boot Primer Script
+## Priming Speakers
 
-A boot primer script that uses these endpoints to feed Spotify tokens to speakers via ZeroConf is available in the `scripts/spotify/` directory: [spotify-boot-primer.sh](../../scripts/spotify/spotify-boot-primer.sh).
-
-This script can be installed on the speaker itself (which runs embedded Linux) to automatically prime Spotify Connect at boot time. See [README.md](../../scripts/spotify/README.md) and [INSTALL.md](../../scripts/spotify/INSTALL.md) for instructions.
-
-### Automated Installation via Service
-
-The SoundTouch service provides a dedicated management endpoint to automatically handle the installation of the Spotify boot primer on the speaker:
-`POST /mgmt/devices/{deviceId}/spotify/install-primer`
-
-### Automated Installation Steps
-When you run the Spotify primer installation, the service performs the following:
-1.  **Directories**: Creates `/mnt/nv/bin` and `/mnt/nv/BoseApp-Persistence/1` on the speaker.
-2.  **Binary**: Uploads the `spotify-boot-primer` script to the speaker.
-3.  **Configuration**: Automatically generates and uploads `spotify-primer.conf` containing the service's URL and management credentials.
-4.  **Boot Hook**: Injects a call to the primer in the speaker's `/mnt/nv/rc.local` using idempotent markers.
-5.  **Environment**: Updates `/mnt/nv/.profile` to include `/mnt/nv/bin` in the `PATH` for easier manual troubleshooting via SSH.
-
-- **Idempotent Patching**: The service uses explicit markers to inject the hook, ensuring it doesn't corrupt existing content.
-- **Coexistence**: The service-injected hook is designed to coexist with a manually installed `rc.local` (e.g., from the community gist). It only adds a call to `/mnt/nv/bin/spotify-boot-primer` if it's not already managed by a service-controlled block.
-- **Markers**: Look for the following markers in your speaker's `/mnt/nv/rc.local`:
-  - `# --- Aftertouch Spotify hook START ---`
-  - `# --- Aftertouch Spotify hook END ---`
-- **Cleanup**: Reverting a migration via the service will cleanly remove these marker-delimited blocks.
+> **Note:** The on-device boot-primer flow (installing `spotify-boot-primer.sh` onto the speaker's `/mnt/nv` and hooking it from `rc.local`) is **deprecated**. AfterTouch now uses a server-centric model: the service registers a `SPOTIFY` source in marge for the device's paired account and pushes credentials via ZeroConf from the server side, triggered on `power_on` and a manual "Prime" action. See [spotify-priming-strategy.md](spotify-priming-strategy.md) for the current model and rationale.
+>
+> The artifacts under `scripts/spotify/` are kept as historical reference for users who still rely on the on-device approach. There is no longer a `/mgmt/devices/{deviceId}/spotify/install-primer` endpoint.
 
 ## Endpoints
 
 | Method | Path                                              | Auth  | Purpose                                                               |
 |--------|---------------------------------------------------|-------|-----------------------------------------------------------------------|
-| POST   | `/mgmt/devices/{deviceId}/spotify/install-primer` | Basic | Install Spotify boot primer on speaker (deviceId or IP)               |
-| GET    | `/mgmt/spotify/callback`                          | None  | Browser OAuth callback (redirect from Spotify, returns HTML)          |
 | POST   | `/mgmt/spotify/init`                              | Basic | Start OAuth flow, returns authorization URL                           |
+| GET    | `/mgmt/spotify/callback`                          | None  | Browser OAuth callback (redirect from Spotify, returns HTML)          |
 | POST   | `/mgmt/spotify/confirm`                           | Basic | Mobile app confirm (ueberboese deep link delivers code, returns JSON) |
 | GET    | `/mgmt/spotify/accounts`                          | Basic | List linked Spotify accounts (tokens stripped)                        |
 | GET    | `/mgmt/spotify/token`                             | Basic | Get fresh access token (auto-refreshes if expired)                    |
 | POST   | `/mgmt/spotify/entity`                            | Basic | Resolve Spotify URI to name + image URL                               |
+| POST   | `/mgmt/spotify/prime`                             | Basic | Manually trigger server-side priming of a discovered speaker          |
 
 ## Security
 

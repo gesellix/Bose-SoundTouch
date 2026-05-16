@@ -2,6 +2,11 @@ package spotify
 
 import "github.com/gesellix/bose-soundtouch/pkg/service/zeroconf"
 
+// ErrAddUserNoOp re-exports zeroconf.ErrAddUserNoOp so callers in the spotify
+// package don't need a direct dependency on the zeroconf package to recognise
+// the benign-no-op sentinel.
+var ErrAddUserNoOp = zeroconf.ErrAddUserNoOp
+
 // ZeroConfGetInfo fetches the speaker's DH public key via GET ?action=getInfo.
 func ZeroConfGetInfo(zcBaseURL string) ([]byte, error) {
 	return zeroconf.GetInfo(zcBaseURL)

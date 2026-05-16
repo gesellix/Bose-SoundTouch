@@ -2,6 +2,12 @@
 
 This guide explains how to link your Spotify or Amazon Music account to AfterTouch so your speakers can stream music from those services.
 
+> For Spotify, a higher-level mental model of how the integration works —
+> Spotify Connect vs. AfterTouch's OAuth-intercept path, the
+> `streamingoauth.bose.com` DNS gotcha, and the token lifecycle — is in
+> [docs/concepts/spotify-overview.md](../concepts/spotify-overview.md).
+> Read that if priming or playback isn't behaving as you'd expect.
+
 ---
 
 ## How it works

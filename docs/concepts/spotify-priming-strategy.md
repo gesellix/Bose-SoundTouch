@@ -1,5 +1,9 @@
 # Spotify Priming Strategy
 
+> **New here?** Start with [spotify-overview.md](spotify-overview.md) for the
+> mental model. This document goes deep on the priming protocol, ZeroConf DH
+> exchange, and deployment topologies.
+
 This document outlines the strategy for ensuring Bose SoundTouch devices are correctly "primed" for Spotify Connect integration within the AfterTouch ecosystem.
 
 ## Overview

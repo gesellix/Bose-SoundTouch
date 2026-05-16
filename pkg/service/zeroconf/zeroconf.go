@@ -12,6 +12,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,12 +20,22 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
 // AuthTypeOAuthToken is the protobuf auth_type value for OAuth token credentials
 // (AUTHENTICATION_SPOTIFY_TOKEN = 4). Both Spotify and Amazon use this value.
 const AuthTypeOAuthToken uint64 = 4
+
+// ErrAddUserNoOp signals a benign 404-with-empty-body reply from the speaker's
+// ?action=addUser endpoint. SoundTouch firmware uses that exact response shape
+// to mean "no transition required" — typically because the requested
+// activeUser is already the active one. It is NOT a credential or transport
+// failure; the speaker silently kept its current state. Callers that have
+// already written the authoritative source record to marge (the path
+// presets/playback actually go through) should treat this as success.
+var ErrAddUserNoOp = errors.New("zeroconf: addUser no-op (speaker already in target state)")
 
 // dhPrimeBytes is the 768-bit MODP Group 1 prime from RFC 2409 §6.1.
 var dhPrimeBytes = []byte{
@@ -333,10 +344,54 @@ func PushCredentials(zcBaseURL, username, accessToken string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if isAddUserNoOp(resp.StatusCode, body) {
+			logAddUserNoOp("DH", base, username, resp)
+
+			return ErrAddUserNoOp
+		}
+
+		logAddUserFailure("DH", base, username, resp, body)
+
 		return fmt.Errorf("pushCredentials: addUser status %d: %s", resp.StatusCode, body)
 	}
 
 	return nil
+}
+
+// isAddUserNoOp recognises the narrow firmware pattern (status 404, empty body)
+// that signals "no transition required". Anything else — including 404 with a
+// body, or any other non-2xx — falls through to the real failure path so we
+// don't silently swallow genuine errors.
+func isAddUserNoOp(status int, body []byte) bool {
+	return status == http.StatusNotFound && len(bytes.TrimSpace(body)) == 0
+}
+
+// logAddUserNoOp emits a single line marking the benign no-op explicitly —
+// kept visible (not Debug-level) so the operator can correlate it with priming
+// runs, but worded so it's clearly not a failure.
+func logAddUserNoOp(path string, base *url.URL, username string, resp *http.Response) {
+	log.Printf("[ZeroConf] addUser produced expected no-op via %s path (speaker already has activeUser=%q or equivalent state): url=%s status=%d body=<empty> — marge source registration is authoritative for preset/playback",
+		path, username, withAction(base, "addUser"), resp.StatusCode)
+}
+
+// logAddUserFailure emits a single diagnostic line capturing what the speaker
+// said about an `?action=addUser` rejection. Bose firmware often returns 4xx
+// with an empty body, so the headers (libspotify version, content-type,
+// content-length) are the only clue about whether the speaker refused the
+// transition, the credential, or the action entirely. Kept verbose on purpose —
+// these failures are rare and worth grepping for.
+func logAddUserFailure(path string, base *url.URL, username string, resp *http.Response, body []byte) {
+	ct := resp.Header.Get("Content-Type")
+	cl := resp.Header.Get("Content-Length")
+	server := resp.Header.Get("Server")
+
+	bodySummary := strings.TrimSpace(string(body))
+	if bodySummary == "" {
+		bodySummary = "<empty>"
+	}
+
+	log.Printf("[ZeroConf] addUser rejected via %s path: url=%s userName=%q status=%d server=%q content-type=%q content-length=%q body=%q",
+		path, withAction(base, "addUser"), username, resp.StatusCode, server, ct, cl, bodySummary)
 }
 
 // pushSimplifiedToken is the fallback for firmware that does not support DH
@@ -364,6 +419,14 @@ func pushSimplifiedToken(zcBaseURL, username, accessToken string) error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if isAddUserNoOp(resp.StatusCode, body) {
+			logAddUserNoOp("simplified", base, username, resp)
+
+			return ErrAddUserNoOp
+		}
+
+		logAddUserFailure("simplified", base, username, resp, body)
+
 		return fmt.Errorf("pushSimplifiedToken: status %d: %s", resp.StatusCode, body)
 	}
 
