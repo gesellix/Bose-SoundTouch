@@ -86,6 +86,7 @@ A factory reset wipes Wi-Fi credentials, account pairing, and all presets, retur
 | SoundTouch 10            | Power on; hold **Preset 1** + **Volume −** for 10 s                 | Wi-Fi indicator glows solid amber  |
 | SoundTouch 20            | Power on; hold **Preset 1** + **Volume −** for 10 s                 | Lights blink L→R, then solid amber |
 | SoundTouch 20 Series III | Hold **Preset 1** + **Preset 6** simultaneously for ~10 s           | White LED sweep                    |
+| SoundTouch 30            | Power on; hold **Preset 1** + **Volume −** for 10 s (display counts down 10–1) | Display shows "Hold to restore factory settings", then restarts |
 | SoundTouch 30 Series III | Hold **Preset 1** + **Preset 6** simultaneously for ~10 s           | White LED sweep                    |
 | SoundTouch 300           | Hold **Volume −** until light bar blinks rapidly (~15 s)            | Rapid blink → off → on             |
 | SoundTouch 10 (alt)      | Press and hold the back recessed **Reset** pinhole for 10 s         | Status LED restarts                |
