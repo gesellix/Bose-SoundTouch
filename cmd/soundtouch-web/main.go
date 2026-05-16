@@ -46,6 +46,11 @@ func main() {
 				Usage:   "Network interface name (e.g. eth0) for mDNS and UPnP device discovery. Defaults to the --bind interface name when one was given; leave empty otherwise to auto-pick",
 				EnvVars: []string{"DISCOVERY_INTERFACE"},
 			},
+			&cli.StringFlag{
+				Name:    "host",
+				Usage:   "SoundTouch device IP address to add manually",
+				EnvVars: []string{"SOUNDTOUCH_HOST"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			port := c.String("port")
@@ -61,6 +66,7 @@ func main() {
 			}
 
 			rawIface := c.String("interface")
+			manualHost := c.String("host")
 
 			ifaceName := defaultDiscoveryInterface(rawIface, rawBind, bindAddr)
 			if rawIface == "" && ifaceName != "" {
@@ -99,12 +105,14 @@ func main() {
 
 				webApp.BroadcastDiscoveryStatus("starting", len(webApp.Devices))
 
+				if manualHost != "" {
+					addManualDevice(webApp, manualHost, 8090)
+				}
 				discoverDevices(ctx, webApp, discoveryService)
 
 				webApp.BroadcastDiscoveryStatus("completed", len(webApp.Devices))
 				webApp.BroadcastDeviceList()
 			}()
-
 			r := setupRoutes(webApp, discoveryService)
 
 			log.Printf("SoundTouch Web UI starting on http://%s", addr)
@@ -198,6 +206,38 @@ func resolveBindAddr(bindAddr string) (string, error) {
 	default:
 		return "", fmt.Errorf("--bind %q: interface has no usable IPv4 or IPv6 address", bindAddr)
 	}
+}
+
+func addManualDevice(app *handlers.WebApp, host string, port int) {
+	clientConfig := &client.Config{
+		Host:    host,
+		Port:    port,
+		Timeout: 10 * time.Second,
+	}
+
+	soundTouchClient := client.NewClient(clientConfig)
+
+	deviceInfo, err := soundTouchClient.GetDeviceInfo()
+	if err != nil {
+		log.Printf("Failed to get device info for manual host %s: %v", host, err)
+		return
+	}
+
+	conn := &webtypes.DeviceConnection{
+		Client:     soundTouchClient,
+		DeviceInfo: deviceInfo,
+		LastSeen:   time.Now(),
+		Status: webtypes.DeviceStatus{
+			IsConnected:  false,
+			LastActivity: time.Now(),
+		},
+	}
+
+	go app.UpdateDeviceStatus(host, conn)
+
+	app.Devices[host] = conn
+
+	log.Printf("Added manual device: %s (%s) at %s:%d", deviceInfo.Name, deviceInfo.Type, host, port)
 }
 
 func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
