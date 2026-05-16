@@ -64,12 +64,16 @@ func TestMargeCreateAccount(t *testing.T) {
 		t.Errorf("Expected 7-digit ID, got %v", resp.ID)
 	}
 
-	// Verify it has default sources
-	if len(resp.Sources) != 5 {
-		t.Errorf("Expected 5 default sources, got %d", len(resp.Sources))
+	// Verify default sources. AUX (id=10001, sourceproviderid=9) is
+	// intentionally excluded from cloud responses — real Bose never
+	// emitted AUX in /full; the speaker enumerates AUX from its own
+	// hardware via isLocal=true in :8090/sources. See
+	// pkg/service/marge/marge.go getAccountSources.
+	if len(resp.Sources) != 4 {
+		t.Errorf("Expected 4 cloud default sources (AUX excluded), got %d", len(resp.Sources))
 	} else {
-		if resp.Sources[0].ID != "10001" {
-			t.Errorf("Expected first source ID 10001, got %s", resp.Sources[0].ID)
+		if resp.Sources[0].ID != "10002" {
+			t.Errorf("Expected first cloud source ID 10002 (INTERNET_RADIO), got %s", resp.Sources[0].ID)
 		}
 	}
 
@@ -380,10 +384,12 @@ func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
 		t.Errorf("/full response must not include an empty-credential Amazon source; body:\n%s", bodyStr)
 	}
 
-	// The 6 sources from lastDeviceID's stored Sources.xml must all be present.
-	// Checked by sourceproviderid since <name> may hold a display name rather than the type string.
+	// The cloud-visible sources from lastDeviceID's stored Sources.xml
+	// must all be present. AUX (sourceproviderid=9) is intentionally
+	// excluded — real Bose never emitted AUX in /full; the speaker
+	// enumerates AUX from its own hardware via isLocal=true. See
+	// pkg/service/marge/marge.go getAccountSources.
 	for _, wantProviderID := range []string{
-		"<sourceproviderid>9</sourceproviderid>",  // AUX
 		"<sourceproviderid>2</sourceproviderid>",  // INTERNET_RADIO
 		"<sourceproviderid>11</sourceproviderid>", // LOCAL_INTERNET_RADIO
 		"<sourceproviderid>25</sourceproviderid>", // TUNEIN
@@ -393,6 +399,11 @@ func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
 		if !strings.Contains(bodyStr, wantProviderID) {
 			t.Errorf("/full response is missing source with %s; body:\n%s", wantProviderID, bodyStr)
 		}
+	}
+
+	// And explicitly assert AUX is NOT present.
+	if strings.Contains(bodyStr, "<sourceproviderid>9</sourceproviderid>") {
+		t.Errorf("/full response must not include AUX (sourceproviderid=9); body:\n%s", bodyStr)
 	}
 }
 
@@ -627,19 +638,26 @@ func TestMargeAccountSourcesNoDevices(t *testing.T) {
 	body, _ := io.ReadAll(res.Body)
 	bodyStr := string(body)
 
-	// Verify that we get the default sources with correct IDs and empty display names
+	// Verify that we get the default cloud sources with correct IDs. AUX
+	// (id=10001) is intentionally excluded — real Bose never emitted AUX
+	// in cloud responses; the speaker enumerates AUX from its own
+	// hardware (isLocal=true on :8090/sources). See
+	// pkg/service/marge/marge.go getAccountSources.
 	expectedSnippets := []string{
 		"<sources>",
 		"<source id=\"10004\" type=\"Audio\"",
 		"<source id=\"10003\" type=\"Audio\"",
 		"<source id=\"10002\" type=\"Audio\"",
-		"<source id=\"10001\" type=\"Audio\"",
 	}
 
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(bodyStr, snippet) {
 			t.Errorf("Response missing expected snippet [%s]: %s", snippet, bodyStr)
 		}
+	}
+
+	if strings.Contains(bodyStr, "<source id=\"10001\"") {
+		t.Errorf("Response must not include AUX (id=10001); body:\n%s", bodyStr)
 	}
 
 	// Verify that no sources have empty display names

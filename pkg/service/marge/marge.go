@@ -1036,6 +1036,25 @@ func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []
 
 	for i := range sources {
 		s := sources[i]
+		// Real Bose's /streaming/account/{a}/full never emitted AUX as
+		// a cloud-side <source> (verified across 61 captured upstream
+		// /full responses in scripts/android/captures/.../
+		// parity_mismatches/). AUX is hardware-local — the speaker
+		// enumerates it via isLocal=true in its own /sources response,
+		// it doesn't need the cloud to list it. AfterTouch emitting a
+		// malformed AUX entry here (with displayName=, empty
+		// <credential>, non-empty <name>/<username>) is the suspected
+		// trigger for issue #195: the speaker's source-reconciliation
+		// code marks AUX as cloud-side inconsistent and refuses
+		// dispatch, even though the local availability check reports
+		// it READY. We still keep AUX in getDefaultSources() because
+		// other call sites (default-sources init at startup, the
+		// SoundTouch web UI source picker) rely on it; the filter
+		// just keeps it out of /full's wire shape.
+		if s.SourceKeyType == constants.ProviderAux {
+			continue
+		}
+
 		PrepareConfiguredSource(&s)
 		fullSources = append(fullSources, mapToFullResponseSource(s))
 	}
