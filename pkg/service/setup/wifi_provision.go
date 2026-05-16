@@ -78,7 +78,11 @@ func PushWiFiCredentials(ctx context.Context, p PushWiFiCredentialsParams) error
 
 	httpClient := p.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 10 * time.Second}
+		// No client-side timeout: let the caller's context govern.
+		// The CLI passes a context deadline (default 30 s in
+		// setupWiFiPushCmd) and a hard-coded 10 s here would race
+		// it for no benefit.
+		httpClient = &http.Client{}
 	}
 
 	resp, err := httpClient.Do(req)

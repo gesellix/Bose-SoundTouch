@@ -404,7 +404,7 @@ func setupWiFiPushCmd() *cli.Command {
 			&cli.StringFlag{Name: "pass", Required: true, Usage: "Home Wi-Fi password"},
 			&cli.StringFlag{Name: "security", Value: setup.DefaultWiFiSecurity, Usage: "Security type (wpa_or_wpa2, wep, open)"},
 			&cli.StringFlag{Name: "ap-host", Value: setup.SpeakerSetupAP, Usage: "Speaker's setup-mode IP"},
-			&cli.DurationFlag{Name: "request-timeout", Value: 10 * time.Second},
+			&cli.DurationFlag{Name: "request-timeout", Value: 30 * time.Second, Usage: "Per-request timeout (the speaker can be slow to ACK before tearing down AP mode; 10 s often races)"},
 		},
 		Action: func(c *cli.Context) error {
 			params := setup.PushWiFiCredentialsParams{
