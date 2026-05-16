@@ -18,14 +18,20 @@ Authorization: Bearer dummy-token
         client.assert(sources.nodeName === "sources", "Root element is not 'sources'");
 
         const sourceList = sources.getElementsByTagName("source");
-        client.assert(sourceList.length >= 4, "Expected at least 4 source elements, found " + sourceList.length);
+        client.assert(sourceList.length >= 3, "Expected at least 3 source elements, found " + sourceList.length);
 
-        const expectedIds = ["10001", "10002", "10003", "10004"];
+        // AUX (id=10001, sourceproviderid=9) is intentionally excluded from
+        // cloud responses — real Bose never emitted AUX in /full or /sources;
+        // the speaker enumerates AUX from its own hardware via isLocal=true
+        // in :8090/sources. See pkg/service/marge/marge.go getAccountSources
+        // and commit 2b40481 (#195/#269).
+        const expectedIds = ["10002", "10003", "10004"];
         for (let i = 0; i < sourceList.length; i++) {
             const source = sourceList.item(i);
             const sourceId = source.getAttribute("id");
+            client.assert(sourceId !== "10001", "Cloud /sources must not include AUX (id=10001)");
             if (i < expectedIds.length) {
-                client.assert(sourceId === expectedIds[i], "Wrong source ID at index " + i);
+                client.assert(sourceId === expectedIds[i], "Wrong source ID at index " + i + ": got " + sourceId + ", want " + expectedIds[i]);
             }
             client.assert(source.getAttribute("type") === "Audio", "Wrong source type for source " + sourceId);
 

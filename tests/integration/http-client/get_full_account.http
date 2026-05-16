@@ -47,6 +47,18 @@ Authorization: Bearer {{token}}
         client.assert(sources !== null, "Missing 'sources' element");
         var sourceCount = sources.getElementsByTagName("source").length;
         client.assert(sourceCount > 0, "No 'source' elements found in account sources");
-        client.assert(sourceCount === 6, "Expected 6 sources (AUX, INTERNET_RADIO, LOCAL_INTERNET_RADIO, TUNEIN, RADIO_BROWSER, Spotify) but got " + sourceCount);
+        // AUX (sourceproviderid=9) is intentionally excluded from cloud-side
+        // /full responses — real Bose never emitted it; the speaker enumerates
+        // AUX from its own hardware via isLocal=true in :8090/sources. See
+        // pkg/service/marge/marge.go getAccountSources for the reasoning and
+        // commit 2b40481 for the fix that closed #195/#269.
+        client.assert(sourceCount === 5, "Expected 5 cloud sources (INTERNET_RADIO, LOCAL_INTERNET_RADIO, TUNEIN, RADIO_BROWSER, Spotify; AUX is hardware-local) but got " + sourceCount);
+
+        // Explicit negative assertion: AUX must not appear in /full.
+        var sourceList = sources.getElementsByTagName("source");
+        for (var i = 0; i < sourceList.length; i++) {
+            var pid = sourceList[i].getElementsByTagName("sourceproviderid")[0];
+            client.assert(!pid || pid.textContent !== "9", "/full must not include AUX (sourceproviderid=9)");
+        }
     });
 %}
