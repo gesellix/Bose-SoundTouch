@@ -46,10 +46,10 @@ func main() {
 				Usage:   "Network interface name (e.g. eth0) for mDNS and UPnP device discovery. Defaults to the --bind interface name when one was given; leave empty otherwise to auto-pick",
 				EnvVars: []string{"DISCOVERY_INTERFACE"},
 			},
-			&cli.StringFlag{
-				Name:    "host",
-				Usage:   "SoundTouch device IP address to add manually",
-				EnvVars: []string{"SOUNDTOUCH_HOST"},
+			&cli.StringSliceFlag{
+				Name:    "devices",
+				Usage:   "SoundTouch device IP address(es) to add manually (can be specified multiple times)",
+				EnvVars: []string{"SOUNDTOUCH_DEVICES"},
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -66,7 +66,7 @@ func main() {
 			}
 
 			rawIface := c.String("interface")
-			manualHost := c.String("host")
+			manualHosts := c.StringSlice("devices")
 
 			ifaceName := defaultDiscoveryInterface(rawIface, rawBind, bindAddr)
 			if rawIface == "" && ifaceName != "" {
@@ -105,8 +105,8 @@ func main() {
 
 				webApp.BroadcastDiscoveryStatus("starting", len(webApp.Devices))
 
-				if manualHost != "" {
-					addManualDevice(webApp, manualHost, 8090)
+				for _, host := range manualHosts {
+					addManualDevice(webApp, host, 8090)
 				}
 				discoverDevices(ctx, webApp, discoveryService)
 
