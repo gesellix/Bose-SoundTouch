@@ -320,6 +320,41 @@ func TestStripAfterTouchEntries_UnpairedSentinelFlagged(t *testing.T) {
 // runs in CI; it's the Mozilla CCADB public dataset, no per-device
 // information.
 //
+// Cross-model note: byte-identical to the corresponding ST10
+// firmware-27 bundle (verified 2026-05-16 against
+// firmware/_backup_ST10/_/etc/pki/tls/certs/ca-bundle.crt — same
+// md5 2d150987b312e4280fc576b508e62b43, same 165 certs). Same
+// fixture stands in for both speaker models while they're on the
+// same firmware build, so expired-root hypotheses (e.g. PR #292)
+// should be evaluated against this single dataset.
+//
+// Reproduce the #292 cert-chain probe locally — point curl at this
+// fixture and try the actual TuneIn stream chain a SoundTouch
+// speaker would walk. If the handshake validates here, the speaker
+// can also validate it (modulo any speaker-side TLS-stack quirks
+// the OpenSSL binary on your laptop doesn't share). System bundle
+// shown alongside for control:
+//
+//	BUNDLE=pkg/service/setup/testdata/ca_bundle_st20_pristine.crt
+//
+//	# Control: system trust store
+//	curl -sS -o /dev/null -w "%{http_code}\n" \
+//	    "https://maestro.emfcdn.com/stream_for/k-love/tunein/hls"
+//
+//	# Same URL, restricted to the speaker's 2022 CCADB snapshot
+//	curl -sS -o /dev/null -w "%{http_code}\n" --cacert "$BUNDLE" \
+//	    "https://maestro.emfcdn.com/stream_for/k-love/tunein/hls"
+//
+//	# Follow the 302 to the actual audio host
+//	curl -sSL -o /dev/null -w "%{http_code} %{url_effective}\n" \
+//	    --cacert "$BUNDLE" \
+//	    "https://maestro.emfcdn.com/stream_for/k-love/tunein/hls"
+//
+// Both bundles handle the K-LOVE chain (Amazon Root CA 1 + DigiCert
+// Global Root, valid through 2026+) cleanly — recorded against
+// firmware 27 on 2026-05-16, ruling out expired-root for that
+// firmware vintage.
+//
 // The point of this test is to catch over-eager validator changes
 // before they ship. An earlier iteration of validateCABundleBytes
 // called x509.ParseCertificate per block — that rejected the real
