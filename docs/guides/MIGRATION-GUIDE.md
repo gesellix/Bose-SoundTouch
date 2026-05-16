@@ -206,6 +206,82 @@ Each speaker is migrated independently. You can run multiple migrations in paral
 
 ---
 
+## Alternative: CLI-driven factory-reset workflow
+
+If you prefer scripting the migration, or the wizard isn't an option (headless server, automation, batch onboarding of many speakers), `soundtouch-cli` exposes the same building blocks. The flow below is **not** an in-place migration — it factory-resets the speaker and brings it up fresh against AfterTouch, so any data Bose preserved on the device is wiped. Use this when:
+
+- You're starting from a factory-reset speaker anyway.
+- The wizard's in-place migration didn't take and you want a clean slate.
+- You're scripting setup for many speakers and want a reproducible recipe.
+
+### Prerequisites
+
+- AfterTouch service running and reachable at a stable URL (e.g., `https://soundtouch.local` from your `.env`).
+- The speaker reachable on its current IP (passed as `--host`).
+- For the AP-mode handover step, your laptop must be able to join the speaker's `Bose SoundTouch` Wi-Fi (you'll switch between home Wi-Fi and the speaker's AP).
+
+### The full sequence
+
+```bash
+# 1. Plan what the reset+pair pipeline will write (dry run, no changes yet).
+soundtouch-cli --host 192.168.1.50 setup plan \
+  --reset=true --include-pair=false \
+  --service-url='https://soundtouch.local'
+
+# 2. Trigger the factory reset. The speaker reboots into AP mode.
+soundtouch-cli --host 192.168.1.50 setup factory-reset
+
+# --- Manual step: join the speaker's Wi-Fi AP (SSID "Bose SoundTouch ...") ---
+
+# 3. Wait for the AP-mode endpoint to answer.
+soundtouch-cli setup wait-ap
+
+# 4. Push your home Wi-Fi credentials to the speaker.
+#    Run twice if the first attempt's ACK races the AP teardown — the second
+#    one is a no-op if the first succeeded.
+soundtouch-cli setup wifi-push --ssid="YourHomeSSID" --pass='your-wifi-password'
+
+# --- Manual step: switch your laptop back to the home Wi-Fi network ---
+
+# 5. Wait for the speaker to come back online on the home network.
+#    --match takes the last 4-6 hex chars of the speaker's MAC (visible on
+#    the bottom of the device).
+soundtouch-cli setup wait-online --match=42CAFE
+
+# 6. Pair the speaker with an AfterTouch account.
+#    --mode=full runs the canonical WebSocket SETUP sequence (matches the
+#    Bose app's flow); --account is the 7-digit account ID AfterTouch
+#    should attach the speaker to.
+soundtouch-cli --host 192.168.1.50 setup pair \
+  --mode=full --account=1111111 \
+  --service-url='https://soundtouch.local'
+```
+
+### Verifying the result
+
+After pairing completes:
+
+- The speaker should appear on the **Devices** tab in the web UI.
+- AUX should switch and play audio when selected.
+- Pressing presets should fetch their content from AfterTouch (the `[LOG]` rows on the service confirm).
+- TuneIn search and playback should work end-to-end.
+
+If any of these fail post-pair, see [Troubleshooting](TROUBLESHOOTING.md) — most commonly the speaker just needs a power cycle to pick up everything cleanly.
+
+### Differences vs the wizard
+
+| Aspect                              | Wizard (in-place migration)                             | CLI factory-reset workflow                              |
+|-------------------------------------|---------------------------------------------------------|---------------------------------------------------------|
+| Preserves speaker's existing state  | yes (Presets, recents, attached account)                | **no** — wipes everything                               |
+| Requires Wi-Fi-network switching    | no                                                      | yes (laptop joins speaker AP, then home network)        |
+| Scriptable / reproducible           | clickable, not scriptable                               | full bash recipe                                        |
+| Cloud-side data (Bose Marge backup) | preserved if Sync ran while cloud was alive             | not relevant — fresh account on AfterTouch              |
+| Best for                            | "I want this speaker to keep working with what's on it" | "I want a clean, reproducible setup against AfterTouch" |
+
+The wizard is still the recommended path for a one-off migration of an existing setup. The CLI workflow is the right choice when you're scripting, batching, or already starting from a reset.
+
+---
+
 ## Rollback
 
 If you need to undo a migration:
