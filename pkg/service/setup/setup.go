@@ -92,7 +92,18 @@ type MigrationSummary struct {
 	// flag pairing as a precondition independently of the URL flip.
 	IsPaired bool `json:"is_paired"`
 
-	ResolveIPError      string   `json:"resolve_ip_error,omitempty"`
+	ResolveIPError string `json:"resolve_ip_error,omitempty"`
+	// ResolveIPSource records where the resolved IP came from:
+	// "device" — authoritative answer via SSH ping (preferred for
+	// migration). "service" — service-side DNS lookup (fast but may
+	// differ when NAT or split-DNS is in play). Empty when host was
+	// already an IP literal or could not be resolved at all.
+	ResolveIPSource string `json:"resolve_ip_source,omitempty"`
+	// ResolveIPDurationMS measures how long the resolve call took
+	// (wall-clock, milliseconds). Captured during preflight so we can
+	// observe the SSH-ping cost in the wild.
+	ResolveIPDurationMS int64 `json:"resolve_ip_duration_ms,omitempty"`
+
 	MirrorEnabled       bool     `json:"mirror_enabled"`
 	MirrorEndpoints     []string `json:"mirror_endpoints,omitempty"`
 	SkipMirrorEndpoints []string `json:"skip_mirror_endpoints,omitempty"`
@@ -323,8 +334,16 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 
 	summary.PlannedConfig = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + string(xmlContent)
 
-	// 2b. Planned network config (hosts entries, resolv.conf preview, resolve error)
-	m.populatePlannedNetworkConfig(summary, deviceIP, targetURL)
+	// 2b. Planned network config (hosts entries, resolv.conf preview, resolve error).
+	// Pass an SSH client only when the probe succeeded — opening a fresh
+	// dial when we already know SSH is dead would burn ~handshake-timeout
+	// of wall time per refresh.
+	var resolveClient SSHClient
+	if probe.SSHOK && m.NewSSH != nil {
+		resolveClient = m.NewSSH(deviceIP)
+	}
+
+	m.populatePlannedNetworkConfig(summary, deviceIP, targetURL, resolveClient)
 
 	// 3. Provide HTTPS URL for testing (consumed by the migration UI)
 	summary.ServerHTTPSURL = m.buildServerHTTPSURL(targetURL)
@@ -359,7 +378,7 @@ func (m *Manager) GetMigrationSummary(deviceIP, targetURL, proxyURL string, opti
 	return summary, nil
 }
 
-func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, _, targetURL string) {
+func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, _, targetURL string, sshClient SSHClient) {
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil {
 		return
@@ -370,14 +389,42 @@ func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, _, tar
 		return
 	}
 
-	// Resolve locally only. The "from-device" lookup that resolveIP can
-	// do via SSH (`ping -c 1 host`) costs another fresh SSH handshake
-	// plus the ping's own runtime — easily 2–5 s on firmware-27 devices
-	// — and the result feeds only the PlannedResolv/PlannedHosts preview.
-	// For the actual apply paths (migrateViaHosts/migrateViaResolv) the
-	// device-side resolution is still used; this is only the preview.
-	hostIP, resolveErr := m.resolveIP(hostName, nil)
-	if resolveErr != nil {
+	// Resolve the target hostname. When the caller provides an SSH
+	// client (i.e. the speaker already answered the probe), we prefer
+	// the device-side lookup — it's authoritative for the actual
+	// network path the speaker will use. When SSH isn't available we
+	// fall back to service-side DNS and tag the result with
+	// ErrResolvedFromServiceOnly so the summary can render it as
+	// informational rather than as a hard error.
+	//
+	// Historical note: the SSH path was previously skipped here for
+	// cost reasons (a comment claimed "2–5 s extra per preflight
+	// refresh"). Measured 2026-05-16 across ST10 + ST20 on firmware
+	// 27.0.6.46330.5043500: ~290 ms ± 10 ms per resolve, three runs.
+	// Well under the original estimate — promoted to the default path.
+	// ResolveIPDurationMS stays on the summary so any regression
+	// (firmware upgrade, slower kex, etc.) is visible.
+	start := time.Now()
+	hostIP, resolveErr := m.resolveIP(hostName, sshClient)
+	summary.ResolveIPDurationMS = time.Since(start).Milliseconds()
+
+	switch {
+	case resolveErr == nil && hostIP != "":
+		summary.ResolveIPSource = "device"
+		if sshClient == nil {
+			// Caller didn't ask for the SSH path, and we got a clean
+			// answer — that only happens when host was already an IP
+			// literal. Source is neither "device" nor "service" in a
+			// meaningful sense; leave it empty.
+			summary.ResolveIPSource = ""
+		}
+	case errors.Is(resolveErr, ErrResolvedFromServiceOnly):
+		summary.ResolveIPSource = "service"
+		// Sentinel-tagged errors are informational — the resolved IP
+		// is still usable for the preview, the caller just shouldn't
+		// treat it as authoritative. We do NOT populate ResolveIPError
+		// here; the CLI/UI use that field for hard failures only.
+	case resolveErr != nil:
 		summary.ResolveIPError = resolveErr.Error()
 	}
 
@@ -2389,11 +2436,20 @@ func (m *Manager) GetResolvedIP(host string) string {
 	return ip
 }
 
+// ErrResolvedFromServiceOnly is returned (wrapped) by resolveIP when the
+// service-side DNS fallback produced an IP but the device-side SSH ping
+// either wasn't attempted or didn't yield a usable result. The error
+// carries the resolved IP — callers that don't need an authoritative
+// device-side answer (preview/summary builders) can errors.Is()-check
+// and treat the IP as informational. Apply-path callers that DO need
+// authoritative resolution can bail.
+var ErrResolvedFromServiceOnly = errors.New("resolved from service, not from device")
+
 // resolveIP resolves a hostname to an IP address.
 // It first tries to resolve from the device via SSH ping (authoritative for migration).
-// If that fails, it falls back to resolving from the service itself.
-// An error is returned whenever the SSH ping did not produce the IP, so callers that
-// write config to the device can abort rather than risk writing an unresolvable hostname.
+// If that fails, it falls back to resolving from the service itself, returning the
+// resolved IP wrapped with ErrResolvedFromServiceOnly so callers can distinguish
+// "authoritative device-side answer" from "best-effort service-side fallback".
 func (m *Manager) resolveIP(host string, client SSHClient) (string, error) {
 	if net.ParseIP(host) != nil {
 		return host, nil
@@ -2439,7 +2495,8 @@ func (m *Manager) resolveIP(host string, client SSHClient) (string, error) {
 		resolved = ips[0].String()
 	}
 
-	return resolved, fmt.Errorf("resolved %q to %s from service, not from device — result may be wrong if NAT or split-DNS is in use", host, resolved)
+	return resolved, fmt.Errorf("%w: %q → %s (NAT or split-DNS may differ from what the device would see)",
+		ErrResolvedFromServiceOnly, host, resolved)
 }
 
 // SyncDeviceData fetches presets, recents and sources from the device and saves them to the datastore.

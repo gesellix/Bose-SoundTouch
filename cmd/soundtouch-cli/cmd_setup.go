@@ -949,6 +949,17 @@ func renderMigrationSummary(deviceIP, serviceURL string, s *setup.MigrationSumma
 	if s.ResolveIPError != "" {
 		PrintError("Resolve IP error: " + s.ResolveIPError)
 	}
+
+	// Observability for the IP-resolve path. Source tells the user whether
+	// the speaker itself was consulted (authoritative) or only the service
+	// (best-effort). DurationMS lets us watch the SSH-ping cost trend in
+	// the wild — historical comment claimed 2-5 s on firmware 27, worth
+	// re-evaluating as data accumulates.
+	if s.ResolveIPSource != "" {
+		fmt.Printf("Resolve IP source : %s (%d ms)\n", s.ResolveIPSource, s.ResolveIPDurationMS)
+	} else if s.ResolveIPDurationMS > 0 {
+		fmt.Printf("Resolve IP        : %d ms\n", s.ResolveIPDurationMS)
+	}
 }
 
 func setupRebootCmd() *cli.Command {

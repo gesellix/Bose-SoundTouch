@@ -2,6 +2,7 @@ package setup
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -732,6 +733,58 @@ func TestResolveIP(t *testing.T) {
 	}
 	if err == nil {
 		t.Errorf("Expected error for unresolvable host, got nil")
+	}
+}
+
+// TestResolveIP_ServiceFallbackTagsSentinel pins the #282 fix:
+// service-side fallback returns the resolved IP wrapped with
+// ErrResolvedFromServiceOnly. Callers can errors.Is()-check the
+// sentinel to distinguish informational fallback from a hard
+// failure, which fixes the long-standing CLI/UI ❌ row that appeared
+// every time a hostname target was used with SSH off.
+func TestResolveIP_ServiceFallbackTagsSentinel(t *testing.T) {
+	m := &Manager{}
+
+	// No SSH client → forces the service-side fallback path.
+	ip, err := m.resolveIP("localhost", nil)
+	if ip != "127.0.0.1" && ip != "::1" {
+		t.Fatalf("expected localhost to resolve service-side, got ip=%q err=%v", ip, err)
+	}
+
+	if err == nil {
+		t.Fatalf("expected service-side fallback to surface ErrResolvedFromServiceOnly, got nil err")
+	}
+
+	if !errors.Is(err, ErrResolvedFromServiceOnly) {
+		t.Errorf("expected error to wrap ErrResolvedFromServiceOnly, got %v", err)
+	}
+}
+
+// TestResolveIP_DeviceSuccessReturnsNilError keeps the happy-path
+// guarantee explicit alongside the sentinel-tagging contract above.
+func TestResolveIP_DeviceSuccessReturnsNilError(t *testing.T) {
+	m := &Manager{}
+
+	mock := &mockSSH{
+		runFunc: func(command string) (string, error) {
+			if strings.Contains(command, "ping -c 1 myhost") {
+				return "PING myhost (10.0.0.5): 56 data bytes", nil
+			}
+			return "", nil
+		},
+	}
+
+	ip, err := m.resolveIP("myhost", mock)
+	if ip != "10.0.0.5" {
+		t.Errorf("expected 10.0.0.5, got %s", ip)
+	}
+
+	if err != nil {
+		t.Errorf("device-side success must return nil error, got %v", err)
+	}
+
+	if errors.Is(err, ErrResolvedFromServiceOnly) {
+		t.Errorf("device-side success must NOT carry ErrResolvedFromServiceOnly sentinel")
 	}
 }
 
