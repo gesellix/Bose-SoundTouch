@@ -2127,6 +2127,19 @@ type Settings struct {
 	// reverse proxy on the same host. Override only if the proxy lives on a
 	// different host within a known-good private subnet.
 	TrustedProxyCIDRs []string `json:"trusted_proxy_cidrs,omitempty"`
+
+	// TuneInStreamFormats overrides the comma-separated format list
+	// AfterTouch sends to TuneIn's Tune.ashx (formats=…). Empty value
+	// uses bmx.DefaultTuneInStreamFormats ("mp3,aac,ogg"), which
+	// matches AfterTouch's pre-2026-05-10 behaviour and plays on
+	// every SoundTouch model verified so far. PR #249 had added
+	// "hls" unconditionally; that regressed playback on the
+	// SoundTouch line (#292 — speaker can't parse the .m3u8 playlist
+	// and blinks amber). Operators with HLS-compatible speakers can
+	// set this to e.g. "mp3,aac,ogg,hls" via settings.json. The value
+	// is passed through verbatim; AfterTouch does not validate the
+	// individual format tokens.
+	TuneInStreamFormats string `json:"tunein_stream_formats,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.

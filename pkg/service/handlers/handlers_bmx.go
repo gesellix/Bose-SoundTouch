@@ -15,6 +15,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// tuneInStreamFormats returns the formats= list AfterTouch should send
+// to TuneIn's Tune.ashx, honouring Settings.TuneInStreamFormats when
+// set. Empty (the default) lets bmx.TuneInStream fall back to
+// bmx.DefaultTuneInStreamFormats — the SoundTouch-line-compatible
+// "mp3,aac,ogg" shape. Operators with HLS-capable speakers can set
+// the field to "mp3,aac,ogg,hls" (or any other comma-separated list)
+// in settings.json.
+func (s *Server) tuneInStreamFormats() string {
+	if s == nil || s.ds == nil {
+		return ""
+	}
+
+	settings, err := s.ds.GetSettings()
+	if err != nil {
+		return ""
+	}
+
+	return settings.TuneInStreamFormats
+}
+
 // HandleBMXRegistry returns the BMX service registry.
 func (s *Server) HandleBMXRegistry(w http.ResponseWriter, _ *http.Request) {
 	baseURL := s.serverURL
@@ -62,7 +82,7 @@ func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 
 	stationID := chi.URLParam(r, "stationID")
 
-	resp, err := bmx.TuneInPlayback(stationID)
+	resp, err := bmx.TuneInPlayback(stationID, s.tuneInStreamFormats())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -109,7 +129,7 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 
 	podcastID := chi.URLParam(r, "podcastID")
 
-	resp, err := bmx.TuneInPlaybackPodcast(podcastID)
+	resp, err := bmx.TuneInPlaybackPodcast(podcastID, s.tuneInStreamFormats())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

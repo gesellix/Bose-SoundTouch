@@ -221,3 +221,52 @@ func TestTuneInPodcastInfo_Base64(t *testing.T) {
 		t.Errorf("Expected name %s, got %s", name, resp.Name)
 	}
 }
+
+// TestTuneInStream_EmptyFormatsUsesDefault pins the post-#292 contract:
+// AfterTouch must NOT request HLS streams from TuneIn unless the
+// operator has explicitly opted in. The default request shape is
+// "mp3,aac,ogg" — matches pre-2026-05-10 behaviour and works on
+// every SoundTouch model verified. PR #249 had added "hls"
+// unconditionally; that regressed playback on ST10/firmware 27 (the
+// speaker can't parse the .m3u8 playlist TuneIn returns when HLS is
+// in the format list).
+func TestTuneInStream_EmptyFormatsUsesDefault(t *testing.T) {
+	got := TuneInStream("s33828", "")
+
+	if strings.Contains(got, "hls") {
+		t.Errorf("default TuneInStream URL must NOT request HLS; got %s", got)
+	}
+
+	want := "formats=" + DefaultTuneInStreamFormats
+	if !strings.Contains(got, want) {
+		t.Errorf("default TuneInStream URL must request %q; got %s", want, got)
+	}
+
+	if !strings.Contains(got, "id=s33828") {
+		t.Errorf("TuneInStream URL must carry the station ID; got %s", got)
+	}
+}
+
+// TestTuneInStream_OverrideHonoured verifies the opt-in path: when an
+// operator sets Settings.TuneInStreamFormats to a custom list,
+// TuneInStream passes it through verbatim. Two sub-cases catch the
+// common opt-in (re-add hls) and a more drastic override (single
+// format) so a future regression in the trim/fallback logic surfaces
+// at compile/test time.
+func TestTuneInStream_OverrideHonoured(t *testing.T) {
+	cases := []struct {
+		formats string
+		want    string
+	}{
+		{"mp3,aac,ogg,hls", "formats=mp3,aac,ogg,hls"}, // opt-in: re-add HLS
+		{"aac", "formats=aac"},                         // single format
+		{"  mp3 ", "formats=mp3"},                      // whitespace stripped
+	}
+
+	for _, tc := range cases {
+		got := TuneInStream("s33828", tc.formats)
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("TuneInStream(%q) URL must contain %q; got %s", tc.formats, tc.want, got)
+		}
+	}
+}

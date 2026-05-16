@@ -20,10 +20,34 @@ import (
 // TuneIn endpoint templates used to resolve station and stream URLs.
 const (
 	TuneInDescribe     = "https://opml.radiotime.com/describe.ashx?id=%s"
-	TuneInStream       = "http://opml.radiotime.com/Tune.ashx?id=%s&formats=mp3,aac,ogg,hls"
 	TuneInNavigateAshx = "http://opml.radiotime.com/?render=json"
 	TuneInSearchAPI    = "https://api.radiotime.com/profiles?fulltextsearch=true&version=1.3&query="
+
+	// DefaultTuneInStreamFormats is the comma-separated format list
+	// AfterTouch sends to TuneIn's Tune.ashx by default. Matches the
+	// pre-2026-05-10 behaviour from before PR #249 added "hls"
+	// unconditionally — HLS playback is broken on SoundTouch 10/
+	// firmware 27 (and probably the rest of the line; see #292).
+	// Speakers receive an .m3u8 playlist URL they can't parse, blink
+	// amber, fall silent. Operators with HLS-compatible speakers can
+	// override via Settings.TuneInStreamFormats.
+	DefaultTuneInStreamFormats = "mp3,aac,ogg"
 )
+
+// TuneInStream returns the formatted Tune.ashx URL for a station or
+// podcast. The formats argument controls the formats= query parameter;
+// empty falls back to DefaultTuneInStreamFormats. Operators can set
+// arbitrary lists (e.g. "mp3,aac,ogg,hls" to re-enable HLS, or
+// "aac" to force a single format) via Settings.TuneInStreamFormats.
+// The value is passed through verbatim — no token-level validation.
+func TuneInStream(stationID, formats string) string {
+	formats = strings.TrimSpace(formats)
+	if formats == "" {
+		formats = DefaultTuneInStreamFormats
+	}
+
+	return fmt.Sprintf("http://opml.radiotime.com/Tune.ashx?id=%s&formats=%s", stationID, formats)
+}
 
 var tuneInClient = &http.Client{Timeout: 10 * time.Second}
 
@@ -555,8 +579,10 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 }
 
 // TuneInPlayback resolves a live radio station and returns a Bose-compatible
-// playback response with primary stream and variants.
-func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
+// playback response with primary stream and variants. formats is the
+// comma-separated list passed to Tune.ashx?formats=… ; empty falls back to
+// DefaultTuneInStreamFormats (the SoundTouch-line-compatible shape).
+func TuneInPlayback(stationID, formats string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, stationID)
 
 	resp, err := http.Get(describeURL)
@@ -588,7 +614,7 @@ func TuneInPlayback(stationID string) (*models.BmxPlaybackResponse, error) {
 
 	station := opml.Body.Outline.Station
 
-	streamReq := fmt.Sprintf(TuneInStream, stationID)
+	streamReq := TuneInStream(stationID, formats)
 
 	streamResp, err := http.Get(streamReq)
 	if err != nil {
@@ -697,8 +723,9 @@ func TuneInPodcastInfo(podcastID, encodedName string) (*models.BmxPodcastInfoRes
 }
 
 // TuneInPlaybackPodcast resolves an on-demand podcast episode and returns
-// a playback response suitable for SoundTouch devices.
-func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error) {
+// a playback response suitable for SoundTouch devices. formats has the
+// same semantics as in TuneInPlayback.
+func TuneInPlaybackPodcast(podcastID, formats string) (*models.BmxPlaybackResponse, error) {
 	describeURL := fmt.Sprintf(TuneInDescribe, podcastID)
 
 	resp, err := http.Get(describeURL)
@@ -733,7 +760,7 @@ func TuneInPlaybackPodcast(podcastID string) (*models.BmxPlaybackResponse, error
 
 	topic := opml.Body.Outline.Topic
 
-	streamReq := fmt.Sprintf(TuneInStream, podcastID)
+	streamReq := TuneInStream(podcastID, formats)
 
 	streamResp, err := http.Get(streamReq)
 	if err != nil {
