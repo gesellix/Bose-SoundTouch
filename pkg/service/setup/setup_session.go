@@ -21,7 +21,52 @@ const (
 	// LanguageEnglish is the sysLanguage code for English. ‹2› is the
 	// value the official Bose app sends during English-locale setup.
 	LanguageEnglish = 2
+
+	// DefaultMargeAuthToken is the placeholder userAuthToken sent in
+	// <PairDeviceWithAccount> when the caller didn't supply one. The
+	// speaker accepts any non-empty value; a real Bose-issued token
+	// shape (128-char base64 per docs/reference/DEVICE-PAIRING-FLOW.md
+	// line 154) is not required — verified during #195 investigation
+	// where the speaker happily persisted "Bearer AfterTouch" and
+	// re-derived its post-pair state from the marge endpoints
+	// regardless of token content.
+	DefaultMargeAuthToken = "Bearer AfterTouch"
+
+	// DefaultMargePairingEmail is the synthetic accountEmail used when
+	// PairingExtras requests the extended <PairDeviceWithAccount> payload
+	// but doesn't supply an email. RFC 2606 reserves ".invalid" as a TLD
+	// guaranteed never to resolve, which is what we want here — the
+	// speaker writes it into its persistent state but no real address
+	// receives anything.
+	DefaultMargePairingEmail = "local@aftertouch.invalid"
 )
+
+// MargePairingExtras carries the optional fields that the official Bose
+// Android app and Zimbo88's USB-less OpenCloudTouch script include in
+// their <PairDeviceWithAccount> payloads. AfterTouch historically sent
+// only <accountId> + <userAuthToken>; that minimal shape is the
+// suspected trigger for the post-pair AUX/preset breakage tracked in
+// issues #195 and #269.
+//
+// Set BoseServer (and optionally UpdateServer/AccountEmail) on the
+// SessionConfig to opt into the richer payload. Empty fields are
+// omitted from the XML so callers can choose any subset.
+//
+// Reference: docs/reference/DEVICE-PAIRING-FLOW.md and
+// https://github.com/scheilch/opencloudtouch/discussions/201.
+type MargePairingExtras struct {
+	// BoseServer is the marge server URL the speaker should use after
+	// pairing. Typically equal to AfterTouch's service URL.
+	BoseServer string
+	// UpdateServer is the firmware-update server URL. If empty and
+	// BoseServer is set, SetMargeAccount derives it as
+	// BoseServer + "/updates/soundtouch".
+	UpdateServer string
+	// AccountEmail is the synthetic email persisted alongside the
+	// account. If empty and BoseServer is set, SetMargeAccount fills
+	// in DefaultMargePairingEmail.
+	AccountEmail string
+}
 
 // StateMachine is the surface the InitPlan orchestrator drives. The
 // concrete WebSocket-backed implementation is *Session; tests inject
@@ -52,6 +97,11 @@ type SessionConfig struct {
 	WSScheme string
 	// WSPort overrides 8080 when deviceIP does not already carry a port.
 	WSPort int
+	// PairingExtras opts the session into the richer
+	// <PairDeviceWithAccount> payload (boseServer / updateServer /
+	// accountEmail) used by the official Bose Android app. Zero value
+	// retains the historical minimal payload.
+	PairingExtras MargePairingExtras
 }
 
 // Session is a synchronous request/response WebSocket session driving
@@ -60,10 +110,11 @@ type SessionConfig struct {
 // and stateful) — setup is a short, linear sequence and benefits from a
 // purpose-built transport.
 type Session struct {
-	deviceID    string
-	conn        *websocket.Conn
-	reqID       atomic.Int64
-	stepTimeout time.Duration
+	deviceID      string
+	conn          *websocket.Conn
+	reqID         atomic.Int64
+	stepTimeout   time.Duration
+	pairingExtras MargePairingExtras
 }
 
 // DialSession opens a WebSocket to the speaker at deviceIP and
@@ -117,7 +168,12 @@ func DialSession(deviceIP, deviceID string, cfg SessionConfig) (*Session, error)
 		step = defaultSetupStepTimeout
 	}
 
-	return &Session{deviceID: deviceID, conn: conn, stepTimeout: step}, nil
+	return &Session{
+		deviceID:      deviceID,
+		conn:          conn,
+		stepTimeout:   step,
+		pairingExtras: cfg.PairingExtras,
+	}, nil
 }
 
 // Close sends a normal-closure frame and closes the underlying socket.
@@ -243,24 +299,55 @@ func (s *Session) SetName(ctx context.Context, name string) error {
 }
 
 // SetMargeAccount sends the canonical PairDeviceWithAccount envelope.
-// authToken defaults to "Bearer aftertouch" when empty — our local
-// service does not validate it, but a non-empty value matches the
-// official app's shape.
+// authToken defaults to DefaultMargeAuthToken when empty.
+//
+// If SessionConfig.PairingExtras.BoseServer is set, the payload is
+// extended with <boseServer>, <updateServer>, and <accountEmail>
+// matching the official Bose app's shape (and Zimbo88's OpenCloudTouch
+// USB-less script). UpdateServer and AccountEmail derive from
+// BoseServer when not explicitly set.
 func (s *Session) SetMargeAccount(ctx context.Context, accountID, authToken string) error {
 	if accountID == "" {
 		return errors.New("SetMargeAccount: accountID is required")
 	}
 
 	if authToken == "" {
-		authToken = "Bearer aftertouch"
+		authToken = DefaultMargeAuthToken
 	}
 
-	body := fmt.Sprintf(
-		`<PairDeviceWithAccount><accountId>%s</accountId><userAuthToken>%s</userAuthToken></PairDeviceWithAccount>`,
-		xmlBodyEscape(accountID), xmlBodyEscape(authToken),
-	)
+	return s.sendStep(ctx, "setMargeAccount", "POST", buildPairDeviceWithAccountXML(accountID, authToken, s.pairingExtras))
+}
 
-	return s.sendStep(ctx, "setMargeAccount", "POST", body)
+// buildPairDeviceWithAccountXML serializes the <PairDeviceWithAccount>
+// body. Extracted so tests can pin the exact shape without driving a
+// full WebSocket session.
+func buildPairDeviceWithAccountXML(accountID, authToken string, extras MargePairingExtras) string {
+	var b strings.Builder
+	b.WriteString(`<PairDeviceWithAccount>`)
+	b.WriteString(`<accountId>` + xmlBodyEscape(accountID) + `</accountId>`)
+	b.WriteString(`<userAuthToken>` + xmlBodyEscape(authToken) + `</userAuthToken>`)
+
+	if extras.BoseServer != "" {
+		b.WriteString(`<boseServer>` + xmlBodyEscape(extras.BoseServer) + `</boseServer>`)
+
+		updateServer := extras.UpdateServer
+		if updateServer == "" {
+			updateServer = strings.TrimRight(extras.BoseServer, "/") + "/updates/soundtouch"
+		}
+
+		b.WriteString(`<updateServer>` + xmlBodyEscape(updateServer) + `</updateServer>`)
+
+		email := extras.AccountEmail
+		if email == "" {
+			email = DefaultMargePairingEmail
+		}
+
+		b.WriteString(`<accountEmail>` + xmlBodyEscape(email) + `</accountEmail>`)
+	}
+
+	b.WriteString(`</PairDeviceWithAccount>`)
+
+	return b.String()
 }
 
 // Leave sends SETUP_LEAVE.

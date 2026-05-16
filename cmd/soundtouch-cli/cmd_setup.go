@@ -1353,10 +1353,11 @@ func setupPairCmd() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "account", Usage: "7-digit account ID (empty = generate)"},
 			&cli.StringFlag{Name: "mode", Value: "full", Usage: "full (state machine) or bare (setMargeAccount only — experimental)"},
-			&cli.StringFlag{Name: "service-url", Value: "http://aftertouch.local:8000", Usage: "AfterTouch base URL (used by mode=full for defaults)"},
+			&cli.StringFlag{Name: "service-url", Value: "http://aftertouch.local:8000", Usage: "AfterTouch base URL (also populates <boseServer>/<updateServer> in setMargeAccount)"},
 			&cli.StringFlag{Name: "name", Usage: "Speaker name to set during pairing (empty = keep current)"},
 			&cli.IntFlag{Name: "language", Value: setup.LanguageEnglish, Usage: "sysLanguage code (2 = English)"},
 			&cli.DurationFlag{Name: "step-timeout", Value: 8 * time.Second},
+			&cli.StringFlag{Name: "token", Usage: "userAuthToken value (empty = use built-in placeholder matching the Bose app token shape)"},
 		},
 		Action: func(c *cli.Context) error {
 			cfg := GetClientConfig(c)
@@ -1401,8 +1402,20 @@ func runPairBare(c *cli.Context, deviceIP, accountID string) error {
 	fmt.Printf("pre  /info deviceID=%s margeAccountUUID=%q margeURL=%q\n",
 		info.DeviceID, info.MargeAccountUUID, info.MargeURL)
 
+	// Service URL drives the extended <PairDeviceWithAccount> payload
+	// (boseServer/updateServer/accountEmail). When empty, the session
+	// falls back to the minimal historical shape (accountId +
+	// userAuthToken only).
+	serviceURL := c.String("service-url")
+
+	var extras setup.MargePairingExtras
+	if serviceURL != "" {
+		extras = setup.MargePairingExtras{BoseServer: serviceURL}
+	}
+
 	session, err := setup.DialSession(deviceIP, info.DeviceID, setup.SessionConfig{
-		StepTimeout: c.Duration("step-timeout"),
+		StepTimeout:   c.Duration("step-timeout"),
+		PairingExtras: extras,
 	})
 	if err != nil {
 		return fmt.Errorf("dial WS: %w", err)
@@ -1413,9 +1426,13 @@ func runPairBare(c *cli.Context, deviceIP, accountID string) error {
 	ctx, cancel := context.WithTimeout(c.Context, c.Duration("step-timeout")+2*time.Second)
 	defer cancel()
 
-	fmt.Printf("→ setMargeAccount accountID=%s (no SETUP bracket)\n", accountID)
+	if serviceURL != "" {
+		fmt.Printf("→ setMargeAccount accountID=%s (extended: boseServer=%s)\n", accountID, serviceURL)
+	} else {
+		fmt.Printf("→ setMargeAccount accountID=%s (minimal payload, no SETUP bracket)\n", accountID)
+	}
 
-	if pairErr := session.SetMargeAccount(ctx, accountID, ""); pairErr != nil {
+	if pairErr := session.SetMargeAccount(ctx, accountID, c.String("token")); pairErr != nil {
 		PrintError(fmt.Sprintf("setMargeAccount: %v", pairErr))
 		return pairErr
 	}

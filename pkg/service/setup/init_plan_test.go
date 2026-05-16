@@ -147,7 +147,7 @@ func TestExecuteInitPlan_FactoryReset_GeneratesAccountAndRunsAllSteps(t *testing
 		"Enter",
 		"IdentifyLeave",
 		"SetName(Living Room)",
-		"SetMargeAccount(1234567,Bearer aftertouch)",
+		"SetMargeAccount(1234567," + DefaultMargeAuthToken + ")",
 		"Leave",
 		"PushCustomerSupportInfo",
 	}

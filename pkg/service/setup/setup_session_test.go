@@ -184,7 +184,7 @@ func TestSession_SendsCanonicalEnvelopes(t *testing.T) {
 	mustContain(t, frames[3], `<setupState state="SETUP_ENTER"/>`)
 	mustContain(t, frames[4], `<setupState state="SETUP_IDENTIFY_DEVICE_LEAVE"/>`)
 	mustContain(t, frames[5], `url="name"`, `<name>Living Room</name>`)
-	mustContain(t, frames[6], `url="setMargeAccount"`, `<accountId>1234567</accountId>`, `<userAuthToken>Bearer aftertouch</userAuthToken>`)
+	mustContain(t, frames[6], `url="setMargeAccount"`, `<accountId>1234567</accountId>`, `<userAuthToken>`+DefaultMargeAuthToken+`</userAuthToken>`)
 	mustContain(t, frames[7], `<setupState state="SETUP_LEAVE"/>`)
 	mustContain(t, frames[8], `url="pushCustomerSupportInfoToMarge"`, `method="GET"`)
 }
@@ -299,6 +299,69 @@ func TestSession_XMLAttributeEscape(t *testing.T) {
 	}
 
 	mustContain(t, frames[0], `deviceID="quoted&quot;&lt;id>"`)
+}
+
+// TestBuildPairDeviceWithAccountXML pins both the minimal-payload
+// shape (historical AfterTouch behaviour) and the extended-payload
+// shape introduced for #195/#269 investigation. The extended path
+// mirrors what the official Bose app and Zimbo88's OpenCloudTouch
+// USB-less script send (see docs/reference/DEVICE-PAIRING-FLOW.md
+// and https://github.com/scheilch/opencloudtouch/discussions/201).
+func TestBuildPairDeviceWithAccountXML(t *testing.T) {
+	t.Run("minimal payload — no extras", func(t *testing.T) {
+		got := buildPairDeviceWithAccountXML("1234567", "Bearer tok", MargePairingExtras{})
+
+		want := `<PairDeviceWithAccount>` +
+			`<accountId>1234567</accountId>` +
+			`<userAuthToken>Bearer tok</userAuthToken>` +
+			`</PairDeviceWithAccount>`
+		if got != want {
+			t.Errorf("\n got: %s\nwant: %s", got, want)
+		}
+	})
+
+	t.Run("extended payload — BoseServer triggers derived defaults", func(t *testing.T) {
+		got := buildPairDeviceWithAccountXML(
+			"1234567", "Bearer tok",
+			MargePairingExtras{BoseServer: "https://soundtouch.local"},
+		)
+
+		mustContain(t, got,
+			`<boseServer>https://soundtouch.local</boseServer>`,
+			`<updateServer>https://soundtouch.local/updates/soundtouch</updateServer>`,
+			`<accountEmail>`+DefaultMargePairingEmail+`</accountEmail>`,
+		)
+	})
+
+	t.Run("extended payload — explicit UpdateServer + AccountEmail honoured", func(t *testing.T) {
+		got := buildPairDeviceWithAccountXML(
+			"1234567", "Bearer tok",
+			MargePairingExtras{
+				BoseServer:   "https://example.test",
+				UpdateServer: "https://updates.example.test/firmware",
+				AccountEmail: "user@example.test",
+			},
+		)
+
+		mustContain(t, got,
+			`<boseServer>https://example.test</boseServer>`,
+			`<updateServer>https://updates.example.test/firmware</updateServer>`,
+			`<accountEmail>user@example.test</accountEmail>`,
+		)
+	})
+
+	t.Run("extended payload — BoseServer trailing slash trimmed when deriving UpdateServer", func(t *testing.T) {
+		got := buildPairDeviceWithAccountXML(
+			"1234567", "Bearer tok",
+			MargePairingExtras{BoseServer: "https://soundtouch.local/"},
+		)
+
+		// Derived path uses TrimRight on BoseServer so we don't get
+		// "soundtouch.local//updates/soundtouch".
+		mustContain(t, got,
+			`<updateServer>https://soundtouch.local/updates/soundtouch</updateServer>`,
+		)
+	})
 }
 
 func mustContain(t *testing.T, s string, needles ...string) {
