@@ -12,11 +12,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/handlers"
-	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/config"
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 	"github.com/urfave/cli/v2"
 )
@@ -79,7 +79,7 @@ func main() {
 			}
 
 			// Create web app without templates (SPA mode)
-			webApp := handlers.NewWebApp()
+			webApp := soundtouchweb.NewWebApp()
 
 			// Initialize discovery service
 			cfg, err := config.LoadFromEnv()
@@ -216,7 +216,7 @@ func resolveBindAddr(bindAddr string) (string, error) {
 // tell apart entries that came from --devices from those found via
 // mDNS/UPnP. If the host is already known, the existing entry's
 // LastSeen is bumped and the function returns without re-fetching.
-func addDevice(app *handlers.WebApp, host string, port int, source string) {
+func addDevice(app *soundtouchweb.WebApp, host string, port int, source string) {
 	// Fast path: skip the network call if we already know this host.
 	if app.TouchDevice(host) {
 		return
@@ -247,7 +247,7 @@ func addDevice(app *handlers.WebApp, host string, port int, source string) {
 	log.Printf("Added %s device %s (%s) at %s:%d", source, info.Name, info.Type, host, port)
 }
 
-func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
+func setupRoutes(app *soundtouchweb.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Static assets (embedded in binary)
@@ -312,7 +312,7 @@ func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscov
 	return r
 }
 
-func discoverDevices(ctx context.Context, app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) {
+func discoverDevices(ctx context.Context, app *soundtouchweb.WebApp, discoveryService *discovery.UnifiedDiscoveryService) {
 	log.Println("Starting device discovery...")
 
 	devices, err := discoveryService.DiscoverDevices(ctx)

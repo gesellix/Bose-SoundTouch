@@ -1,5 +1,5 @@
-// Package handlers contains WebSocket handlers for real-time communication.
-package handlers
+// Package soundtouchweb contains WebSocket handlers for real-time communication.
+package soundtouchweb
 
 import (
 	"encoding/json"
@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/handlers"
-	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -99,7 +99,7 @@ func TestSPARouting(t *testing.T) {
 }
 
 func TestAPIEndpoints(t *testing.T) {
-	app := handlers.NewWebApp()
+	app := soundtouchweb.NewWebApp()
 
 	tests := []struct {
 		name           string
@@ -170,7 +170,7 @@ func TestAPIEndpoints(t *testing.T) {
 }
 
 func TestAPIResponseFormat(t *testing.T) {
-	app := handlers.NewWebApp()
+	app := soundtouchweb.NewWebApp()
 
 	req := httptest.NewRequest("GET", "/api/devices", nil)
 	w := httptest.NewRecorder()
@@ -203,7 +203,7 @@ func TestAPIResponseFormat(t *testing.T) {
 }
 
 func TestControlAPIValidation(t *testing.T) {
-	app := handlers.NewWebApp()
+	app := soundtouchweb.NewWebApp()
 
 	tests := []struct {
 		name           string
@@ -296,7 +296,7 @@ func TestControlAPIValidation(t *testing.T) {
 }
 
 func TestWebSocketUpgrade(t *testing.T) {
-	app := handlers.NewWebApp()
+	app := soundtouchweb.NewWebApp()
 
 	// Test WebSocket upgrade request
 	req := httptest.NewRequest("GET", "/ws", nil)
@@ -316,7 +316,7 @@ func TestWebSocketUpgrade(t *testing.T) {
 }
 
 func TestJSONAPIConsistency(t *testing.T) {
-	app := handlers.NewWebApp()
+	app := soundtouchweb.NewWebApp()
 
 	endpoints := []string{
 		"/api/devices",

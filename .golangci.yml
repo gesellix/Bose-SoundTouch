@@ -78,6 +78,13 @@ linters:
         linters:
           - errcheck
 
+      # Carry-over from cmd/soundtouch-web/handlers relocation: same code,
+      # same waiver. Tighten in a follow-up if/when the package is reviewed.
+      - path: pkg/service/soundtouchweb/.*\.go
+        text: "Error return value of.*is not checked"
+        linters:
+          - errcheck
+
   settings:
     errcheck:
       check-type-assertions: true

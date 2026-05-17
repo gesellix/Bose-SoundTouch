@@ -1,15 +1,15 @@
 // Package handlers contains tests for the device registry API on
 // WebApp (GetDevice, AddDevice, TouchDevice, DeviceSnapshot,
 // DeviceCount).
-package handlers
+package soundtouchweb
 
 import (
 	"fmt"
 	"sync"
 	"testing"
 
-	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 )
 
 func newRegistryDevice(name string) *webtypes.DeviceConnection {

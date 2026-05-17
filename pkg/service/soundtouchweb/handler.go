@@ -1,5 +1,5 @@
-// Package handlers contains HTTP handlers for the SoundTouch web UI.
-package handlers
+// Package soundtouchweb contains HTTP handlers for the SoundTouch web UI.
+package soundtouchweb
 
 import (
 	"encoding/json"
@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
