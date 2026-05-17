@@ -64,6 +64,19 @@ func New(stockholmDir, workspaceRoot, backendURL, basePath string) (*Handler, er
 	}
 
 	basePath = strings.TrimRight(basePath, "/")
+
+	// Defence in depth: basePath is operator-provided (CLI flag /
+	// STOCKHOLM_BASE_PATH env var), not request input — but if it
+	// were ever set to "//evil.com" (typo or hostile env injection)
+	// the bare-path redirect below would go scheme-relative to
+	// evil.com. Reject any leading-double-slash and any backslash
+	// so the redirect target can only ever be an absolute local
+	// path. CodeQL go/bad-redirect-check raised the original
+	// concern.
+	if strings.HasPrefix(basePath, "//") || strings.HasPrefix(basePath, "/\\") || strings.ContainsAny(basePath, "\\") {
+		return nil, fmt.Errorf("invalid stockholm base path %q: must be an absolute path starting with a single '/'", basePath)
+	}
+
 	cfg.BasePath = basePath
 
 	state.SeedFromEnv(cfg)
