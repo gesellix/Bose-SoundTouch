@@ -681,6 +681,250 @@ func (app *WebApp) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// findIPByHwID returns the registry key (IP) for the device whose
+// hardware ID matches hwID. Used by zone handlers to bridge between
+// the speaker's hwID-keyed zone protocol and our IP-keyed registry.
+// Returns "" when no match is found.
+func (app *WebApp) findIPByHwID(hwID string) string {
+	for _, entry := range app.DeviceSnapshot() {
+		if entry.Device.DeviceInfo != nil && entry.Device.DeviceInfo.DeviceID == hwID {
+			return entry.ID
+		}
+	}
+
+	return ""
+}
+
+// HandleGetZone returns zone info for a device, enriched with member
+// names and role flags (isMaster / isSlave / isStandalone) computed
+// from the perspective of the queried device.
+func (app *WebApp) HandleGetZone(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	zone, err := device.Client.GetZone()
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	currentHwID := ""
+	if device.DeviceInfo != nil {
+		currentHwID = device.DeviceInfo.DeviceID
+	}
+
+	masterIP := app.findIPByHwID(zone.Master)
+
+	masterName := ""
+	if conn, ok := app.GetDevice(masterIP); ok && conn.DeviceInfo != nil {
+		masterName = conn.DeviceInfo.Name
+	}
+
+	type memberInfo struct {
+		IP   string `json:"ip"`
+		HwID string `json:"hwId"`
+		Name string `json:"name"`
+	}
+
+	members := make([]memberInfo, 0, len(zone.Members))
+
+	for _, m := range zone.Members {
+		name := ""
+		if conn, ok := app.GetDevice(m.IP); ok && conn.DeviceInfo != nil {
+			name = conn.DeviceInfo.Name
+		}
+
+		members = append(members, memberInfo{IP: m.IP, HwID: m.DeviceID, Name: name})
+	}
+
+	isMaster := zone.Master == currentHwID && !zone.IsStandalone()
+	isSlave := false
+
+	for _, m := range zone.Members {
+		if m.DeviceID == currentHwID {
+			isSlave = true
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"masterIp":     masterIP,
+			"masterHwId":   zone.Master,
+			"masterName":   masterName,
+			"members":      members,
+			"isMaster":     isMaster,
+			"isSlave":      isSlave,
+			"isStandalone": !isMaster && !isSlave,
+		},
+	}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleZoneAdd adds a slave device to the zone where {id} is or
+// becomes the master.
+func (app *WebApp) HandleZoneAdd(w http.ResponseWriter, r *http.Request) {
+	masterIP := chi.URLParam(r, "id")
+	slaveIP := chi.URLParam(r, "slaveId")
+
+	masterConn, ok := app.GetDevice(masterIP)
+	if !ok {
+		app.sendError(w, "Master device not found", http.StatusNotFound)
+		return
+	}
+
+	slaveConn, ok := app.GetDevice(slaveIP)
+	if !ok {
+		app.sendError(w, "Slave device not found", http.StatusNotFound)
+		return
+	}
+
+	if masterConn.Client == nil || masterConn.DeviceInfo == nil || slaveConn.DeviceInfo == nil {
+		app.sendError(w, "Device not ready", http.StatusInternalServerError)
+		return
+	}
+
+	masterHwID := masterConn.DeviceInfo.DeviceID
+	slaveHwID := slaveConn.DeviceInfo.DeviceID
+
+	zone, err := masterConn.Client.GetZone()
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var zoneReq *models.ZoneRequest
+	if zone.IsStandalone() {
+		zoneReq = models.NewZoneRequest(masterHwID)
+	} else {
+		zoneReq = zone.ToZoneRequest()
+	}
+
+	zoneReq.AddMember(slaveHwID, slaveIP)
+
+	w.Header().Set("Content-Type", "application/json")
+	app.sendControlResponse(w, masterConn.Client.SetZone(zoneReq), "Device added to zone")
+}
+
+// HandleZoneRemove removes a slave from the zone.
+func (app *WebApp) HandleZoneRemove(w http.ResponseWriter, r *http.Request) {
+	masterIP := chi.URLParam(r, "id")
+	slaveIP := chi.URLParam(r, "slaveId")
+
+	masterConn, ok := app.GetDevice(masterIP)
+	if !ok {
+		app.sendError(w, "Master device not found", http.StatusNotFound)
+		return
+	}
+
+	slaveConn, ok := app.GetDevice(slaveIP)
+	if !ok {
+		app.sendError(w, "Slave device not found", http.StatusNotFound)
+		return
+	}
+
+	if masterConn.Client == nil || slaveConn.DeviceInfo == nil {
+		app.sendError(w, "Device not ready", http.StatusInternalServerError)
+		return
+	}
+
+	zone, err := masterConn.Client.GetZone()
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	zoneReq := zone.ToZoneRequest()
+	zoneReq.RemoveMember(slaveConn.DeviceInfo.DeviceID)
+
+	w.Header().Set("Content-Type", "application/json")
+	app.sendControlResponse(w, masterConn.Client.SetZone(zoneReq), "Device removed from zone")
+}
+
+// HandleZoneDissolve dissolves the zone, making all devices standalone.
+func (app *WebApp) HandleZoneDissolve(w http.ResponseWriter, r *http.Request) {
+	masterIP := chi.URLParam(r, "id")
+
+	masterConn, ok := app.GetDevice(masterIP)
+	if !ok {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if masterConn.Client == nil || masterConn.DeviceInfo == nil {
+		app.sendError(w, "Device not ready", http.StatusInternalServerError)
+		return
+	}
+
+	zoneReq := models.NewZoneRequest(masterConn.DeviceInfo.DeviceID)
+
+	w.Header().Set("Content-Type", "application/json")
+	app.sendControlResponse(w, masterConn.Client.SetZone(zoneReq), "Zone dissolved")
+}
+
+// HandleZoneLeave removes the calling device from its zone (slave
+// perspective). The slave is identified by {id}; the master is
+// located by walking the registry for the hwID the slave's zone
+// names as Master, then SetZone is issued against that master.
+func (app *WebApp) HandleZoneLeave(w http.ResponseWriter, r *http.Request) {
+	slaveIP := chi.URLParam(r, "id")
+
+	slaveConn, ok := app.GetDevice(slaveIP)
+	if !ok {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if slaveConn.Client == nil || slaveConn.DeviceInfo == nil {
+		app.sendError(w, "Device not ready", http.StatusInternalServerError)
+		return
+	}
+
+	zone, err := slaveConn.Client.GetZone()
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	masterIP := app.findIPByHwID(zone.Master)
+	if masterIP == "" {
+		app.sendError(w, "Zone master not found in device list", http.StatusNotFound)
+		return
+	}
+
+	masterConn, ok := app.GetDevice(masterIP)
+	if !ok || masterConn.Client == nil {
+		app.sendError(w, "Master device not available", http.StatusInternalServerError)
+		return
+	}
+
+	masterZone, err := masterConn.Client.GetZone()
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	zoneReq := masterZone.ToZoneRequest()
+	zoneReq.RemoveMember(slaveConn.DeviceInfo.DeviceID)
+
+	w.Header().Set("Content-Type", "application/json")
+	app.sendControlResponse(w, masterConn.Client.SetZone(zoneReq), "Left zone")
+}
+
 // HandleDeviceRecents returns recently played items for a device.
 func (app *WebApp) HandleDeviceRecents(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
