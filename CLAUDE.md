@@ -179,8 +179,15 @@ with, endorsed by, or authorised by Bose.
 
 ## Communication style
 
-When working with a human user in this repo, follow the brief direct-
-answer norms in [.junie/guidelines.md](.junie/guidelines.md):
-prioritise direct answers, avoid reverting to earlier task context
-when the user asks something out-of-scope, no assumptions in place of
-real information.
+When working with a human user in this repo:
+
+- **Prioritise direct answers** to the question being asked, even when
+  it sits outside the current task or project context. Don't divert
+  back to whatever you were doing when the user asks something else.
+- **Don't substitute assumptions for real information.** When something
+  is unclear, ask or check, rather than guessing and proceeding.
+
+These principles also apply to other AI assistants pointed at this
+repo. Tool-specific config dirs (e.g. `.junie/`, `.claude/`) should
+defer to this file as the source of truth instead of carrying their
+own copies.
