@@ -270,3 +270,265 @@ func TestTuneInStream_OverrideHonoured(t *testing.T) {
 		}
 	}
 }
+
+func TestParseTuneInStreamBody(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		wantURLs  []string
+		wantError bool
+	}{
+		{
+			name:     "single URL",
+			body:     "https://stream.example.com/foo.mp3\n",
+			wantURLs: []string{"https://stream.example.com/foo.mp3"},
+		},
+		{
+			name:     "multiple URLs",
+			body:     "https://a/1.mp3\nhttps://b/2.mp3\n",
+			wantURLs: []string{"https://a/1.mp3", "https://b/2.mp3"},
+		},
+		{
+			// The bug behind PR #313's i314 follow-up — TuneIn 200's the
+			// response body with `#STATUS: 400` for guide-ids that aren't
+			// streamable (e.g. podcast program IDs sent to Tune.ashx).
+			// Pre-fix, this string went out to the speaker as if it were a
+			// stream URL.
+			name:      "comment-only body — TuneIn 400 error",
+			body:      "#STATUS: 400\n#description=Bad request\n",
+			wantError: true,
+		},
+		{
+			name:     "comments mixed with real URL",
+			body:     "#EXTM3U\nhttps://stream.example.com/foo.mp3\n#END\n",
+			wantURLs: []string{"https://stream.example.com/foo.mp3"},
+		},
+		{
+			name:      "empty body",
+			body:      "",
+			wantError: true,
+		},
+		{
+			name:      "only blank lines",
+			body:      "\n\n  \n",
+			wantError: true,
+		},
+		{
+			name:     "trims surrounding whitespace per line",
+			body:     "  https://a/1.mp3  \n\thttps://b/2.mp3\t\n",
+			wantURLs: []string{"https://a/1.mp3", "https://b/2.mp3"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseTuneInStreamBody([]byte(tc.body), "test-guide-id")
+
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("expected error, got %v", got)
+				}
+
+				if !strings.Contains(err.Error(), "test-guide-id") {
+					t.Errorf("error should mention the guide-id for diagnosis: %v", err)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(got) != len(tc.wantURLs) {
+				t.Fatalf("len mismatch: got %d (%v), want %d (%v)", len(got), got, len(tc.wantURLs), tc.wantURLs)
+			}
+
+			for i := range got {
+				if got[i] != tc.wantURLs[i] {
+					t.Errorf("URL[%d] mismatch: got %q, want %q", i, got[i], tc.wantURLs[i])
+				}
+			}
+		})
+	}
+}
+
+// TestTuneInSearchProfileEmitsBmxPlayback pins the rule that
+// program-card play buttons appear in the web/CLI search UI: Program
+// search items get a BmxPlayback link (so the speaker hits our
+// podcast endpoint and the p<N> → t<N> expansion kicks in), while
+// Artist items stay navigate-only — there's no single sensible
+// stream for an artist.
+func TestTuneInSearchProfileEmitsBmxPlayback(t *testing.T) {
+	cases := []struct {
+		name         string
+		profileName  string
+		guideID      string
+		wantPlayback bool
+		wantType     string
+	}{
+		{name: "Program with guide-id gets play link", profileName: "Program", guideID: "p290778", wantPlayback: true, wantType: "tracklisturl"},
+		{name: "Artist with guide-id is navigate-only", profileName: "Artist", guideID: "a12345", wantPlayback: false},
+		{name: "Program without guide-id is navigate-only", profileName: "Program", guideID: "", wantPlayback: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			item := map[string]interface{}{
+				"GuideId":  tc.guideID,
+				"Title":    "Die Nachrichten",
+				"Image":    "http://example.com/logo.png",
+				"Subtitle": "Deutschlandfunk",
+				"Actions": map[string]interface{}{
+					"Profile": map[string]interface{}{
+						"Url": "https://api.radiotime.com/profiles/" + tc.guideID,
+					},
+				},
+			}
+
+			navItem := tuneInSearchProfile(item, tc.profileName)
+
+			if navItem.Links == nil {
+				t.Fatal("expected Links to be set")
+			}
+
+			if tc.wantPlayback {
+				if navItem.Links.BmxPlayback == nil {
+					t.Fatal("expected BmxPlayback link for Program")
+				}
+
+				if navItem.Links.BmxPlayback.Type != tc.wantType {
+					t.Errorf("BmxPlayback.Type = %q, want %q", navItem.Links.BmxPlayback.Type, tc.wantType)
+				}
+
+				if !strings.Contains(navItem.Links.BmxPlayback.Href, tc.guideID) {
+					t.Errorf("BmxPlayback.Href must carry the guide-id %q; got %q", tc.guideID, navItem.Links.BmxPlayback.Href)
+				}
+
+				if !strings.Contains(navItem.Links.BmxPlayback.Href, "encoded_name=") {
+					t.Errorf("BmxPlayback.Href should carry encoded_name; got %q", navItem.Links.BmxPlayback.Href)
+				}
+			} else if navItem.Links.BmxPlayback != nil {
+				t.Errorf("did not expect BmxPlayback link; got %+v", navItem.Links.BmxPlayback)
+			}
+
+			// Navigation drill-in must always remain available, even when
+			// a play button is emitted — clicking the card body should
+			// still take the user to the episode list.
+			if navItem.Links.BmxNavigate == nil {
+				t.Error("expected BmxNavigate link to remain available")
+			}
+		})
+	}
+}
+
+// TestParseTuneInProgramContents pins the contract behind the
+// p<N> → t<N> expansion that powers `--program` playback for issue
+// #226. Real-world fixture shape captured from
+// api.tunein.com/profiles/p290778/contents (see
+// `_/i226/tunein-probe/profile_contents.json`).
+func TestParseTuneInProgramContents(t *testing.T) {
+	const happyPath = `{
+		"Items": [
+			{
+				"ContainerType": "Topics",
+				"Title": "Episodes",
+				"Children": [
+					{ "GuideId": "t554138374", "Type": "Topic", "Title": "newest" },
+					{ "GuideId": "t554134863", "Type": "Topic", "Title": "previous" }
+				]
+			}
+		]
+	}`
+
+	// TuneIn varies the localised container title; verify the
+	// fallback picks the first Topics container even when the title
+	// doesn't match "Episodes".
+	const localisedTitle = `{
+		"Items": [
+			{
+				"ContainerType": "Topics",
+				"Title": "Folgen",
+				"Children": [
+					{ "GuideId": "t111", "Type": "Topic", "Title": "newest" }
+				]
+			}
+		]
+	}`
+
+	// "Episodes" container precedence: even if a "Related Shows"
+	// Topics container appears first, we must pick the named one.
+	const episodesAfterRelated = `{
+		"Items": [
+			{
+				"ContainerType": "Topics",
+				"Title": "Related Shows",
+				"Children": [
+					{ "GuideId": "t999", "Type": "Topic", "Title": "wrong" }
+				]
+			},
+			{
+				"ContainerType": "Topics",
+				"Title": "Episodes",
+				"Children": [
+					{ "GuideId": "t222", "Type": "Topic", "Title": "right" }
+				]
+			}
+		]
+	}`
+
+	// Skip non-topic children — TuneIn occasionally mixes in
+	// container-style children (rare, but defensive).
+	const skipsNonTopic = `{
+		"Items": [
+			{
+				"ContainerType": "Topics",
+				"Title": "Episodes",
+				"Children": [
+					{ "GuideId": "p333", "Type": "Container", "Title": "nested program" },
+					{ "GuideId": "t444", "Type": "Topic", "Title": "real episode" }
+				]
+			}
+		]
+	}`
+
+	cases := []struct {
+		name      string
+		body      string
+		wantID    string
+		wantError bool
+	}{
+		{name: "happy path — first child wins", body: happyPath, wantID: "t554138374"},
+		{name: "localised title — falls back to first Topics container", body: localisedTitle, wantID: "t111"},
+		{name: "Episodes container preferred over Related", body: episodesAfterRelated, wantID: "t222"},
+		{name: "skips non-Topic children", body: skipsNonTopic, wantID: "t444"},
+		{name: "empty body — error", body: `{}`, wantError: true},
+		{name: "no Topics containers — error", body: `{"Items":[{"ContainerType":"Banner","Children":[]}]}`, wantError: true},
+		{name: "Topics with no t-prefixed children — error",
+			body:      `{"Items":[{"ContainerType":"Topics","Title":"Episodes","Children":[{"GuideId":"p1"}]}]}`,
+			wantError: true},
+		{name: "malformed JSON — error", body: `{not json`, wantError: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseTuneInProgramContents([]byte(tc.body), "p290778")
+
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("expected error, got id=%q", got)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got != tc.wantID {
+				t.Errorf("got episode id %q, want %q", got, tc.wantID)
+			}
+		})
+	}
+}

@@ -1055,6 +1055,43 @@ func main() {
 						},
 					},
 					{
+						Name:   "tunein",
+						Usage:  "Play a TuneIn station / episode / program by guide ID (#226)",
+						Action: playTuneIn,
+						Before: RequireHost,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:  "station",
+								Usage: "TuneIn live-station guide ID (e.g. s14991)",
+							},
+							&cli.StringFlag{
+								Name:  "episode",
+								Usage: "TuneIn single-episode guide ID (e.g. e789012)",
+							},
+							&cli.StringFlag{
+								Name:  "program",
+								Usage: "TuneIn podcast/program guide ID (e.g. p123456)",
+							},
+							&cli.StringFlag{
+								Name:  "id",
+								Usage: "TuneIn guide ID; kind auto-detected from s/e/p prefix",
+							},
+							&cli.StringFlag{
+								Name:    "name",
+								Aliases: []string{"n"},
+								Usage:   "Override the display name (skips name lookup)",
+							},
+							&cli.StringFlag{
+								Name:  "artwork",
+								Usage: "Override the artwork URL (skips artwork lookup)",
+							},
+							&cli.BoolFlag{
+								Name:  "no-lookup",
+								Usage: "Skip the TuneIn describe lookup; send the bare ContentItem",
+							},
+						},
+					},
+					{
 						Name:   "availability",
 						Usage:  "Show service availability",
 						Action: getServiceAvailability,

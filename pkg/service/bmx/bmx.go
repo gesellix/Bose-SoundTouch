@@ -23,6 +23,17 @@ const (
 	TuneInNavigateAshx = "http://opml.radiotime.com/?render=json"
 	TuneInSearchAPI    = "https://api.radiotime.com/profiles?fulltextsearch=true&version=1.3&query="
 
+	// TuneInProfileContents is the modern JSON API that lists a
+	// program's (`p<N>`) episodes. The legacy OPML endpoints can't —
+	// `Tune.ashx?id=p<N>` returns `#STATUS: 400`, `Browse.ashx?id=p<N>`
+	// only surfaces related genres + networks. Same payload is served
+	// from api.tunein.com and api.radiotime.com; we use radiotime
+	// because TuneInNavigateProfile already navigates there via
+	// Pivots.Contents.Url, so all program-related traffic stays on the
+	// same host that's already in allowedTuneInHosts. See
+	// `_/i226/tunein-api-findings.md` for the full endpoint map.
+	TuneInProfileContents = "https://api.radiotime.com/profiles/%s/contents?version=1.3"
+
 	// DefaultTuneInStreamFormats is the comma-separated format list
 	// AfterTouch sends to TuneIn's Tune.ashx by default. Matches the
 	// pre-2026-05-10 behaviour from before PR #249 added "hls"
@@ -512,11 +523,26 @@ func tuneInSearchProfile(item map[string]interface{}, name string) models.BmxNav
 	apiURL, _ := profile["Url"].(string)
 	apiURLEncoded := base64.URLEncoding.EncodeToString([]byte(apiURL))
 
+	links := &models.Links{
+		BmxNavigate: &models.Link{Href: fmt.Sprintf("/v1/navigate/profiles/%s/%s/%s", name, guideID, apiURLEncoded)},
+		BmxPreset:   &models.Link{ContainerArt: image, Href: fmt.Sprintf("/v1/preset/program/%s", guideID), Name: title, Type: "tracklisturl"},
+	}
+
+	// Programs are containers, but with the `p` → `t` expansion in
+	// TuneInPlaybackPodcast a single "play this program" click can now
+	// route to the newest episode. Surface that as a BmxPlayback link so
+	// the web UI renders a play button on the program card itself, not
+	// just on individual episode cards reached by drilling in. Artists
+	// stay navigate-only — there's no single sensible "play this artist"
+	// stream.
+	if name == "Program" && guideID != "" {
+		encodedName := base64.URLEncoding.EncodeToString([]byte(title))
+		playbackHref := fmt.Sprintf("/v1/playback/episodes/%s?encoded_name=%s", guideID, encodedName)
+		links.BmxPlayback = &models.Link{Href: playbackHref, Type: "tracklisturl"}
+	}
+
 	return models.BmxNavItem{
-		Links: &models.Links{
-			BmxNavigate: &models.Link{Href: fmt.Sprintf("/v1/navigate/profiles/%s/%s/%s", name, guideID, apiURLEncoded)},
-			BmxPreset:   &models.Link{ContainerArt: image, Href: fmt.Sprintf("/v1/preset/program/%s", guideID), Name: title, Type: "tracklisturl"},
-		},
+		Links:    links,
 		ImageUrl: image,
 		Name:     title,
 		Subtitle: subtitle,
@@ -539,10 +565,26 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 	profileTitle, _ := profileItem["Title"].(string)
 	profileImage, _ := profileItem["Image"].(string)
 	profileSubtitle, _ := profileItem["Subtitle"].(string)
+	profileType, _ := profileItem["Type"].(string)
+	profileGuideID, _ := profileItem["GuideId"].(string)
+
+	heroItem := models.BmxNavItem{Name: profileTitle, ImageUrl: profileImage, Subtitle: profileSubtitle}
+
+	// Surface "play latest episode" on the profile hero so users don't
+	// have to scroll to the episode list. Matches the BmxPlayback link
+	// emitted for Program cards in search results; the backend
+	// p<N> → t<N> expansion resolves the actual stream.
+	if profileType == "Program" && profileGuideID != "" {
+		encodedName := base64.URLEncoding.EncodeToString([]byte(profileTitle))
+		playbackHref := fmt.Sprintf("/v1/playback/episodes/%s?encoded_name=%s", profileGuideID, encodedName)
+		heroItem.Links = &models.Links{
+			BmxPlayback: &models.Link{Href: playbackHref, Type: "tracklisturl"},
+		}
+	}
 
 	sections := []models.BmxNavSection{
 		{
-			Items:  []models.BmxNavItem{{Name: profileTitle, ImageUrl: profileImage, Subtitle: profileSubtitle}},
+			Items:  []models.BmxNavItem{heroItem},
 			Layout: "hero",
 			Name:   "",
 		},
@@ -576,6 +618,194 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 		BmxSections: sections,
 		Layout:      "classic",
 	}, nil
+}
+
+// parseTuneInStreamBody filters a Tune.ashx response body down to the
+// playable stream URLs. TuneIn responds with HTTP 200 even on errors,
+// embedding a `#STATUS: <code>` comment line in the body (the body is
+// pls/m3u-like, so `#`-prefixed lines are comments — including error
+// markers like `#STATUS: 400`). Without this filter the caller would
+// happily pass `#STATUS: 400` to the speaker as if it were a stream URL.
+//
+// Returns the cleaned list of URL strings (TrimSpaced, comment lines
+// dropped, empty lines dropped). Returns an error if no playable URL
+// remains so callers surface a real 500 instead of silently corrupting
+// the playback response.
+func parseTuneInStreamBody(body []byte, guideID string) ([]string, error) {
+	raw := strings.Split(strings.TrimSpace(string(body)), "\n")
+	out := make([]string, 0, len(raw))
+
+	for _, line := range raw {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		out = append(out, line)
+	}
+
+	if len(out) == 0 {
+		return nil, fmt.Errorf("TuneIn returned no playable stream URL for guide-id %q (body: %q)",
+			guideID, strings.TrimSpace(string(body)))
+	}
+
+	return out, nil
+}
+
+// tuneInProfileContentsResponse models the subset of the
+// api.tunein.com/profiles/{id}/contents JSON we need to pick a
+// program's newest episode. The endpoint returns substantially more
+// fields per item; everything outside this struct is ignored.
+type tuneInProfileContentsResponse struct {
+	Items []tuneInProfileContentsItem `json:"Items"`
+}
+
+type tuneInProfileContentsItem struct {
+	ContainerType      string                       `json:"ContainerType"`
+	Title              string                       `json:"Title"`
+	AccessibilityTitle string                       `json:"AccessibilityTitle"`
+	Children           []tuneInProfileContentsTopic `json:"Children"`
+}
+
+type tuneInProfileContentsTopic struct {
+	GuideId string `json:"GuideId"`
+	Type    string `json:"Type"`
+	Title   string `json:"Title"`
+	Image   string `json:"Image"`
+}
+
+// parseTuneInProgramContents walks a profile/contents JSON body and
+// returns the guide-id of the newest playable episode. The contract:
+//
+//   - Items[] entry with ContainerType=="Topics" and Title (or
+//     AccessibilityTitle) equal to "Episodes" is treated as the
+//     authoritative episode list.
+//   - If no item matches by name, the first ContainerType=="Topics"
+//     entry is used as fallback — TuneIn occasionally varies the
+//     localised title.
+//   - Inside the chosen container the first child with a `t`-prefixed
+//     GuideId wins. TuneIn orders children newest-first.
+//
+// Returns a wrapped error if the body is malformed or contains no
+// playable topic; callers surface this as a 500 rather than handing
+// the speaker a broken stream URL.
+func parseTuneInProgramContents(body []byte, programID string) (episodeID string, err error) {
+	var parsed tuneInProfileContentsResponse
+	if decErr := json.Unmarshal(body, &parsed); decErr != nil {
+		return "", fmt.Errorf("decode TuneIn profile/contents for %q: %w", programID, decErr)
+	}
+
+	var fallback *tuneInProfileContentsItem
+
+	for i := range parsed.Items {
+		item := &parsed.Items[i]
+		if item.ContainerType != "Topics" {
+			continue
+		}
+
+		if fallback == nil {
+			fallback = item
+		}
+
+		if strings.EqualFold(item.Title, "Episodes") ||
+			strings.EqualFold(item.AccessibilityTitle, "Episodes") {
+			if id := firstTuneInTopicGuideID(item.Children); id != "" {
+				return id, nil
+			}
+		}
+	}
+
+	if fallback != nil {
+		if id := firstTuneInTopicGuideID(fallback.Children); id != "" {
+			return id, nil
+		}
+	}
+
+	return "", fmt.Errorf("no playable episode found in TuneIn profile/contents for program %q", programID)
+}
+
+func firstTuneInTopicGuideID(children []tuneInProfileContentsTopic) string {
+	for _, child := range children {
+		if strings.HasPrefix(child.GuideId, "t") {
+			return child.GuideId
+		}
+	}
+
+	return ""
+}
+
+// resolveTuneInProgramLatestEpisode fetches the program's profile from
+// api.tunein.com and returns the newest playable episode's topic
+// guide-id (the `t<N>` form Tune.ashx accepts). The legacy OPML
+// endpoints can't enumerate program episodes; see
+// `_/i226/tunein-api-findings.md` for the full endpoint contract.
+func resolveTuneInProgramLatestEpisode(programID string) (episodeID string, err error) {
+	contentsURL := fmt.Sprintf(TuneInProfileContents, programID)
+
+	resp, err := http.Get(contentsURL)
+	if err != nil {
+		return "", err
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("TuneIn profile/contents returned status %d for program %q",
+			resp.StatusCode, programID)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return parseTuneInProgramContents(body, programID)
+}
+
+// TuneInDescribeMeta fetches just the display name and logo URL for a TuneIn
+// guide ID via the same describe endpoint TuneInPlayback uses. Useful for
+// CLI / UI enrichment that wants to populate ContentItem.ItemName +
+// ContainerArt before sending a SelectContentItem to the speaker — without
+// resolving the full stream URL.
+//
+// Returns empty strings (and a nil error) if the describe payload doesn't
+// contain a recognisable station / show element. Network errors and XML
+// decode errors surface verbatim.
+func TuneInDescribeMeta(id string) (name, logo string, err error) {
+	describeURL := fmt.Sprintf(TuneInDescribe, id)
+
+	resp, err := http.Get(describeURL)
+	if err != nil {
+		return "", "", err
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Same shape TuneInPlayback parses for stations. For programs and
+	// episodes the describe endpoint returns analogous structures; if
+	// the station element is absent the response yields empty strings
+	// and the caller can fall back to user-supplied values.
+	var opml struct {
+		Body struct {
+			Outline struct {
+				Station struct {
+					Name string `xml:"name"`
+					Logo string `xml:"logo"`
+				} `xml:"station"`
+			} `xml:"outline"`
+		} `xml:"body"`
+	}
+
+	if uErr := xml.Unmarshal(body, &opml); uErr != nil {
+		return "", "", uErr
+	}
+
+	return opml.Body.Outline.Station.Name, opml.Body.Outline.Station.Logo, nil
 }
 
 // TuneInPlayback resolves a live radio station and returns a Bose-compatible
@@ -628,9 +858,9 @@ func TuneInPlayback(stationID, formats string) (*models.BmxPlaybackResponse, err
 		return nil, err
 	}
 
-	streamURLList := strings.Split(strings.TrimSpace(string(streamBody)), "\n")
-	if len(streamURLList) == 0 || streamURLList[0] == "" {
-		return nil, fmt.Errorf("no streams found")
+	streamURLList, err := parseTuneInStreamBody(streamBody, stationID)
+	if err != nil {
+		return nil, err
 	}
 
 	streamID := "e3342"
@@ -725,7 +955,24 @@ func TuneInPodcastInfo(podcastID, encodedName string) (*models.BmxPodcastInfoRes
 // TuneInPlaybackPodcast resolves an on-demand podcast episode and returns
 // a playback response suitable for SoundTouch devices. formats has the
 // same semantics as in TuneInPlayback.
+//
+// Accepts three TuneIn guide-id shapes:
+//   - `t<N>` — topic/episode; played directly.
+//   - `e<N>` — live episode; played directly.
+//   - `p<N>` — podcast program (a container, not a stream). Expanded
+//     to its newest episode via the JSON profile/contents API before
+//     resolving the stream URL. The legacy OPML `Tune.ashx?id=p<N>`
+//     would return `#STATUS: 400` for this case.
 func TuneInPlaybackPodcast(podcastID, formats string) (*models.BmxPlaybackResponse, error) {
+	if strings.HasPrefix(podcastID, "p") {
+		episodeID, resolveErr := resolveTuneInProgramLatestEpisode(podcastID)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+
+		podcastID = episodeID
+	}
+
 	describeURL := fmt.Sprintf(TuneInDescribe, podcastID)
 
 	resp, err := http.Get(describeURL)
@@ -774,9 +1021,9 @@ func TuneInPlaybackPodcast(podcastID, formats string) (*models.BmxPlaybackRespon
 		return nil, err
 	}
 
-	streamURLList := strings.Split(strings.TrimSpace(string(streamBody)), "\n")
-	if len(streamURLList) == 0 || streamURLList[0] == "" {
-		return nil, fmt.Errorf("no streams found")
+	streamURLList, err := parseTuneInStreamBody(streamBody, podcastID)
+	if err != nil {
+		return nil, err
 	}
 
 	streamID := "e3342"
