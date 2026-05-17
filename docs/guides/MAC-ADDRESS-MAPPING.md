@@ -54,7 +54,7 @@ The service handles all common MAC address formats automatically:
 | Standard    | `AABBCCDDEEFF`      | ✅ Supported |
 | Lowercase   | `a81b6a536a98`      | ✅ Supported |
 | With Colons | `AA:BB:CC:DD:EE:FF` | ✅ Supported |
-| With Dashes | `A8-1B-6A-53-6A-98` | ✅ Supported |
+| With Dashes | `AA-BB-CC-DD-EE-FF` | ✅ Supported |
 | Mixed Case  | `a81B6a536A98`      | ✅ Supported |
 | With Spaces | ` AABBCCDDEEFF `    | ✅ Supported |
 
@@ -187,7 +187,7 @@ For developers interested in the technical details:
 // 2. Converting to uppercase
 // Examples:
 // "a8:1b:6a:53:6a:98" → "AABBCCDDEEFF"
-// "A8-1B-6A-53-6A-98" → "AABBCCDDEEFF"
+// "AA-BB-CC-DD-EE-FF" → "AABBCCDDEEFF"
 ```
 
 ### Lookup Process
