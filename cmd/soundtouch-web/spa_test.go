@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/handlers"
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
@@ -250,12 +249,8 @@ func TestControlAPIValidation(t *testing.T) {
 	}
 
 	// Add a mock device for testing unknown action validation
-	mockDevice := &webtypes.DeviceConnection{
-		Client:     nil,
-		DeviceInfo: &models.DeviceInfo{Name: "Test Device"},
-		LastSeen:   time.Now(),
-		Status:     webtypes.DeviceStatus{IsConnected: true},
-	}
+	mockDevice := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{Name: "Test Device"})
+	mockDevice.SetStatus(&webtypes.DeviceStatus{IsConnected: true})
 	app.AddDevice("testdevice", mockDevice)
 
 	for _, tt := range tests {

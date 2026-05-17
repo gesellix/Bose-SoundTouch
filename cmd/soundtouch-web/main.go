@@ -234,15 +234,7 @@ func addDevice(app *handlers.WebApp, host string, port int, source string) {
 		return
 	}
 
-	conn := &webtypes.DeviceConnection{
-		Client:     c,
-		DeviceInfo: info,
-		LastSeen:   time.Now(),
-		Status: webtypes.DeviceStatus{
-			IsConnected:  false,
-			LastActivity: time.Now(),
-		},
-	}
+	conn := webtypes.NewDeviceConnection(c, info)
 	if !app.AddDevice(host, conn) {
 		// Lost a race — another goroutine inserted the same host
 		// between TouchDevice and AddDevice. AddDevice bumped LastSeen

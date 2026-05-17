@@ -28,17 +28,13 @@ func createTestApp() *WebApp {
 		},
 	}
 
-	device := &webtypes.DeviceConnection{
-		Client:     nil, // No real client for unit tests
-		DeviceInfo: deviceInfo,
-		LastSeen:   time.Now(),
-		Status: webtypes.DeviceStatus{
-			Volume:       &models.Volume{ActualVolume: 50, MuteEnabled: false},
-			Bass:         &models.Bass{ActualBass: 0},
-			IsConnected:  true,
-			LastActivity: time.Now(),
-		},
-	}
+	device := webtypes.NewDeviceConnection(nil, deviceInfo)
+	device.SetStatus(&webtypes.DeviceStatus{
+		Volume:       &models.Volume{ActualVolume: 50, MuteEnabled: false},
+		Bass:         &models.Bass{ActualBass: 0},
+		IsConnected:  true,
+		LastActivity: time.Now(),
+	})
 
 	app.AddDevice("test-device", device)
 	return app
@@ -545,11 +541,9 @@ func BenchmarkHandleAPIDevices(b *testing.B) {
 	// Add more devices for realistic benchmarking
 	for i := 0; i < 10; i++ {
 		deviceID := "device-" + string(rune('0'+i))
-		app.AddDevice(deviceID, &webtypes.DeviceConnection{
-			Client:     &client.Client{},
-			DeviceInfo: &models.DeviceInfo{Name: "Test Device " + deviceID},
-			Status:     webtypes.DeviceStatus{IsConnected: true},
-		})
+		conn := webtypes.NewDeviceConnection(&client.Client{}, &models.DeviceInfo{Name: "Test Device " + deviceID})
+		conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true})
+		app.AddDevice(deviceID, conn)
 	}
 
 	req := httptest.NewRequest("GET", "/api/devices", nil)

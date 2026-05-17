@@ -2,6 +2,7 @@
 package webtypes
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
@@ -29,13 +30,21 @@ type SoundTouchClient interface {
 	NewWebSocketClient(config interface{}) *client.WebSocketClient
 }
 
-// DeviceConnection wraps a SoundTouch client with WebSocket connection
+// DeviceConnection wraps a SoundTouch client with WebSocket connection.
+//
+// The Status field is stored behind atomic.Pointer so concurrent
+// readers (HTTP handlers, WebSocket broadcasters) never observe a
+// torn struct while a writer (UpdateDeviceStatus, WebSocket event
+// handlers) is mid-update. Access status through Status / SetStatus
+// / UpdateStatus rather than the private field; construct connections
+// via NewDeviceConnection to guarantee the status is initialised.
 type DeviceConnection struct {
 	Client     *client.Client
 	WebSocket  *client.WebSocketClient
 	DeviceInfo *models.DeviceInfo
 	LastSeen   time.Time
-	Status     DeviceStatus
+
+	status atomic.Pointer[DeviceStatus]
 }
 
 // DeviceStatus represents the current device state
@@ -47,6 +56,64 @@ type DeviceStatus struct {
 	Bass         *models.Bass       `json:"bass,omitempty"`
 	IsConnected  bool               `json:"isConnected"`
 	LastActivity time.Time          `json:"lastActivity"`
+}
+
+// NewDeviceConnection creates a fully-initialised connection. The
+// status starts with IsConnected=false and LastActivity set to now;
+// real values arrive via UpdateStatus once the device responds.
+func NewDeviceConnection(c *client.Client, info *models.DeviceInfo) *DeviceConnection {
+	conn := &DeviceConnection{
+		Client:     c,
+		DeviceInfo: info,
+		LastSeen:   time.Now(),
+	}
+	conn.status.Store(&DeviceStatus{
+		IsConnected:  false,
+		LastActivity: time.Now(),
+	})
+
+	return conn
+}
+
+// Status returns a snapshot of the current device status. The returned
+// pointer is read-only from the caller's perspective; mutating the
+// pointed-to struct has no effect on the stored status. Use
+// UpdateStatus or SetStatus to apply changes. Never returns nil for
+// connections built via NewDeviceConnection.
+func (c *DeviceConnection) Status() *DeviceStatus {
+	return c.status.Load()
+}
+
+// SetStatus atomically replaces the entire status. Use sparingly —
+// UpdateStatus is the preferred entry point because it preserves
+// concurrent changes from other goroutines.
+func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
+	c.status.Store(s)
+}
+
+// UpdateStatus atomically applies mut to a copy of the current status
+// and stores the result. If another goroutine updates the status while
+// mut runs, UpdateStatus retries with the newer status — so concurrent
+// writers cannot silently lose each other's changes.
+//
+// The copy mut receives is a shallow value copy of the previous status.
+// Nested pointer fields (NowPlaying, Volume, Presets, Sources, Bass)
+// share their backing struct with the previous version: callers MUST
+// REPLACE these pointers (s.Volume = &models.Volume{...}) rather than
+// mutate through them (s.Volume.ActualVolume++ would race with any
+// reader still holding the previous snapshot). Production callers
+// receive these values fresh from the device API, so this is the
+// natural shape.
+func (c *DeviceConnection) UpdateStatus(mut func(*DeviceStatus)) {
+	for {
+		old := c.status.Load()
+		next := *old
+		mut(&next)
+
+		if c.status.CompareAndSwap(old, &next) {
+			return
+		}
+	}
 }
 
 // APIResponse is a standard JSON response wrapper

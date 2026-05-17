@@ -41,7 +41,7 @@ func (app *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for _, entry := range snapshot {
 		devices[entry.ID] = map[string]interface{}{
 			"info":     entry.Device.DeviceInfo,
-			"status":   entry.Device.Status,
+			"status":   entry.Device.Status(),
 			"lastSeen": entry.Device.LastSeen,
 		}
 	}
@@ -91,11 +91,12 @@ func (app *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Send periodic status updates
 		for _, entry := range app.DeviceSnapshot() {
-			if entry.Device.Status.IsConnected {
+			status := entry.Device.Status()
+			if status.IsConnected {
 				statusMessage := webtypes.WebSocketMessage{
 					Type:     "status_update",
 					DeviceID: entry.ID,
-					Data:     entry.Device.Status,
+					Data:     status,
 				}
 
 				if err := conn.WriteJSON(statusMessage); err != nil {
@@ -136,25 +137,35 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 	wsClient := conn.Client.NewWebSocketClient(nil)
 
-	// Setup event handlers
+	// Setup event handlers. Each handler funnels its change through
+	// UpdateStatus so concurrent events and the periodic poller
+	// (UpdateDeviceStatus) cannot lose each other's writes.
 	wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
-		conn.Status.NowPlaying = &event.NowPlaying
-		conn.Status.LastActivity = time.Now()
+		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+			s.NowPlaying = &event.NowPlaying
+			s.LastActivity = time.Now()
+		})
 	})
 
 	wsClient.OnVolumeUpdated(func(event *models.VolumeUpdatedEvent) {
-		conn.Status.Volume = &event.Volume
-		conn.Status.LastActivity = time.Now()
+		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+			s.Volume = &event.Volume
+			s.LastActivity = time.Now()
+		})
 	})
 
 	wsClient.OnConnectionState(func(event *models.ConnectionStateUpdatedEvent) {
-		conn.Status.IsConnected = event.ConnectionState.IsConnected()
-		conn.Status.LastActivity = time.Now()
+		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+			s.IsConnected = event.ConnectionState.IsConnected()
+			s.LastActivity = time.Now()
+		})
 	})
 
 	wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
-		conn.Status.Presets = &event.Presets
-		conn.Status.LastActivity = time.Now()
+		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+			s.Presets = &event.Presets
+			s.LastActivity = time.Now()
+		})
 	})
 
 	// Connect WebSocket
@@ -164,64 +175,81 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 	}
 
 	conn.WebSocket = wsClient
-	conn.Status.IsConnected = true
+
+	conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+		s.IsConnected = true
+	})
 
 	log.Printf("WebSocket connected for device %s", deviceID)
 
 	// Wait for disconnection
 	wsClient.Wait()
 
-	conn.Status.IsConnected = false
+	conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+		s.IsConnected = false
+	})
 
 	log.Printf("WebSocket disconnected for device %s", deviceID)
 }
 
-// UpdateDeviceStatus fetches current status from device
+// UpdateDeviceStatus fetches current status from the device.
+//
+// Network calls run outside the atomic merge so the CAS loop in
+// UpdateStatus stays fast and doesn't retry slow IO. WebSocket event
+// handlers running concurrently are not lost: their UpdateStatus
+// runs against whichever snapshot they observe, and the merge below
+// sees their changes when it CAS-loops onto the latest status.
 func (app *WebApp) UpdateDeviceStatus(_ string, conn *webtypes.DeviceConnection) {
 	// Skip status update if client is not available (e.g., in tests)
 	if conn.Client == nil {
 		return
 	}
 
-	statusUpdated := false
+	// Phase 1: slow network fetches. Local vars only, no shared state
+	// is touched yet. Errors are recorded so the merge below can tell
+	// "field N stayed unchanged" apart from "field N got refreshed".
+	nowPlaying, nowPlayingErr := conn.Client.GetNowPlaying()
+	volume, volumeErr := conn.Client.GetVolume()
+	presets, presetsErr := conn.Client.GetPresets()
+	sources, sourcesErr := conn.Client.GetSources()
+	bass, bassErr := conn.Client.GetBass()
 
-	// Get current now playing
-	if nowPlaying, err := conn.Client.GetNowPlaying(); err == nil {
-		conn.Status.NowPlaying = nowPlaying
-		statusUpdated = true
-	}
+	// Phase 2: fast merge. Only fields we successfully fetched
+	// overwrite; everything else keeps the value other goroutines may
+	// have just written.
+	conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+		statusUpdated := false
 
-	// Get current volume
-	if volume, err := conn.Client.GetVolume(); err == nil {
-		conn.Status.Volume = volume
-		statusUpdated = true
-	}
+		if nowPlayingErr == nil {
+			s.NowPlaying = nowPlaying
+			statusUpdated = true
+		}
 
-	// Get presets
-	if presets, err := conn.Client.GetPresets(); err == nil {
-		conn.Status.Presets = presets
-		statusUpdated = true
-	}
+		if volumeErr == nil {
+			s.Volume = volume
+			statusUpdated = true
+		}
 
-	// Update last activity if any status was updated
-	if statusUpdated {
-		conn.Status.LastActivity = time.Now()
-	}
-	// Get sources
-	if sources, err := conn.Client.GetSources(); err == nil {
-		conn.Status.Sources = sources
-		statusUpdated = true
-	}
+		if presetsErr == nil {
+			s.Presets = presets
+			statusUpdated = true
+		}
 
-	// Get bass (if available)
-	if bass, err := conn.Client.GetBass(); err == nil {
-		conn.Status.Bass = bass
-		statusUpdated = true
-	}
+		if sourcesErr == nil {
+			s.Sources = sources
+			statusUpdated = true
+		}
 
-	// Mark as connected if we successfully got at least one status
-	conn.Status.IsConnected = statusUpdated
-	conn.Status.LastActivity = time.Now()
+		if bassErr == nil {
+			s.Bass = bass
+			statusUpdated = true
+		}
+
+		// Mark as connected if we successfully got at least one
+		// status from this round. Mirrors prior behaviour.
+		s.IsConnected = statusUpdated
+		s.LastActivity = time.Now()
+	})
 }
 
 // HandleDeviceWebSocket handles individual device WebSocket connections for real-time device-specific updates
@@ -253,7 +281,7 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 		DeviceID: deviceID,
 		Data: map[string]interface{}{
 			"info":   device.DeviceInfo,
-			"status": device.Status,
+			"status": device.Status(),
 		},
 	}
 
@@ -295,12 +323,13 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 		}
 
 		// Send device status update
+		status := device.Status()
 		statusMessage := webtypes.WebSocketMessage{
 			Type:     "device_status",
 			DeviceID: deviceID,
 			Data: map[string]interface{}{
 				"info":   device.DeviceInfo,
-				"status": device.Status,
+				"status": status,
 			},
 		}
 
@@ -311,13 +340,13 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 
 		// If device has active WebSocket connection to SoundTouch device,
 		// also send any real-time updates from that connection
-		if device.WebSocket != nil && device.Status.IsConnected {
+		if device.WebSocket != nil && status.IsConnected {
 			realtimeMessage := webtypes.WebSocketMessage{
 				Type:     "device_realtime",
 				DeviceID: deviceID,
 				Data: map[string]interface{}{
-					"nowPlaying": device.Status.NowPlaying,
-					"volume":     device.Status.Volume,
+					"nowPlaying": status.NowPlaying,
+					"volume":     status.Volume,
 					"timestamp":  time.Now(),
 				},
 			}

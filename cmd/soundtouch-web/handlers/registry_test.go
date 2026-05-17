@@ -13,10 +13,10 @@ import (
 )
 
 func newRegistryDevice(name string) *webtypes.DeviceConnection {
-	return &webtypes.DeviceConnection{
-		DeviceInfo: &models.DeviceInfo{Name: name},
-		Status:     webtypes.DeviceStatus{IsConnected: true},
-	}
+	conn := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{Name: name})
+	conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true})
+
+	return conn
 }
 
 func TestAddDevice_Inserts(t *testing.T) {

@@ -145,31 +145,30 @@ func TestDeviceConnection(t *testing.T) {
 		MuteEnabled:  false,
 	}
 
-	conn := &DeviceConnection{
-		DeviceInfo: deviceInfo,
-		LastSeen:   time.Now(),
-		Status: DeviceStatus{
-			NowPlaying:   nowPlaying,
-			Volume:       volume,
-			IsConnected:  true,
-			LastActivity: time.Now(),
-		},
-	}
+	conn := NewDeviceConnection(nil, deviceInfo)
+	conn.SetStatus(&DeviceStatus{
+		NowPlaying:   nowPlaying,
+		Volume:       volume,
+		IsConnected:  true,
+		LastActivity: time.Now(),
+	})
 
 	t.Run("device connection fields", func(t *testing.T) {
 		if conn.DeviceInfo.Name != "Test Speaker" {
 			t.Errorf("Expected device name 'Test Speaker', got '%s'", conn.DeviceInfo.Name)
 		}
 
-		if conn.Status.NowPlaying.Track != "Test Track" {
-			t.Errorf("Expected track 'Test Track', got '%s'", conn.Status.NowPlaying.Track)
+		status := conn.Status()
+
+		if status.NowPlaying.Track != "Test Track" {
+			t.Errorf("Expected track 'Test Track', got '%s'", status.NowPlaying.Track)
 		}
 
-		if conn.Status.Volume.ActualVolume != 50 {
-			t.Errorf("Expected volume 50, got %d", conn.Status.Volume.ActualVolume)
+		if status.Volume.ActualVolume != 50 {
+			t.Errorf("Expected volume 50, got %d", status.Volume.ActualVolume)
 		}
 
-		if !conn.Status.IsConnected {
+		if !status.IsConnected {
 			t.Error("Expected device to be connected")
 		}
 	})

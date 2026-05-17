@@ -134,7 +134,7 @@ func (app *WebApp) HandleAPIDevices(w http.ResponseWriter, _ *http.Request) {
 	for _, entry := range snapshot {
 		devices[entry.ID] = map[string]interface{}{
 			"info":     entry.Device.DeviceInfo,
-			"status":   entry.Device.Status,
+			"status":   entry.Device.Status(),
 			"lastSeen": entry.Device.LastSeen,
 		}
 	}
@@ -177,7 +177,7 @@ func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data: map[string]interface{}{
 			"info":   device.DeviceInfo,
-			"status": device.Status,
+			"status": device.Status(),
 		},
 	}
 
@@ -539,7 +539,7 @@ func (app *WebApp) BroadcastDeviceList() {
 	for _, entry := range snapshot {
 		devices[entry.ID] = map[string]interface{}{
 			"info":     entry.Device.DeviceInfo,
-			"status":   entry.Device.Status,
+			"status":   entry.Device.Status(),
 			"lastSeen": entry.Device.LastSeen,
 		}
 	}
