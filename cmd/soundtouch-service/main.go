@@ -912,8 +912,11 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 	// reach it without a reboot.
 	r.Post("/setup/peer-probe/{deviceId}", server.HandlePeerProbe)
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = "/media/favicon-braille.svg"
-		server.HandleMedia()(w, r)
+		// The favicon lives in the embedded web/img bundle, not under
+		// static/media — HandleMedia would 404. HandleWeb serves from
+		// webFS at its native path.
+		r.URL.Path = "/web/img/favicon-braille.svg"
+		server.HandleWeb()(w, r)
 	})
 
 	r.Get("/media/*", server.HandleMedia())
