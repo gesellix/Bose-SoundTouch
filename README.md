@@ -4,7 +4,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/gesellix/bose-soundtouch)](https://goreportcard.com/report/github.com/gesellix/bose-soundtouch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> Independent project. Not affiliated with or endorsed by Bose Corporation.
+> Independent project. **Not affiliated with, endorsed by, sponsored
+> by, or otherwise connected to Bose Corporation.** See
+> [Disclaimer](#disclaimer) for the full statement.
 
 ## Context: Cloud Shutdown
 
@@ -122,8 +124,35 @@ See the [API Reference](https://gesellix.github.io/Bose-SoundTouch/reference/API
 
 ---
 
+## Contributing
+
+Issues and pull requests welcome — code, documentation, bug reports, and feature ideas all land in the same place. By submitting a contribution you agree to license it under MIT. For significant changes please open an issue first to discuss the approach. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+
+## Support the project
+
+If this toolkit kept a speaker (or several) of yours alive past the Bose cloud shutdown and you want to give back, [GitHub Sponsors](https://github.com/sponsors/gesellix) is open. No expectation — everything in this repo stays MIT regardless.
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/gesellix?label=Sponsor%20on%20GitHub&logo=GitHub&color=ea4aaa)](https://github.com/sponsors/gesellix)
+
+## Disclaimer
+
+This is an independent open-source project. **Bose** and **SoundTouch**
+are registered trademarks of Bose Corporation in the United States and
+other countries. This project is **not affiliated with, endorsed by,
+sponsored by, or otherwise connected to** Bose Corporation.
+
+The toolkit exists solely to restore functionality of Bose SoundTouch
+speakers after the official cloud service shutdown on May 6, 2026.
+Reverse engineering for the sole purpose of interoperability is
+permitted under [EU Directive 2009/24/EC, Article 6](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009L0024)
+("Decompilation"), and comparable provisions in other jurisdictions.
+
+The optional Stockholm frontend integration (`STOCKHOLM_DIR`) requires
+the user to supply the Stockholm web-app sources themselves; no Bose
+code is redistributed in this repository.
+
+The software is provided AS IS, without warranty. Use at your own risk.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-SoundTouch is a trademark of Bose Corporation.

@@ -2,6 +2,17 @@
 
 Thank you for your interest in contributing to the Bose SoundTouch API Client! This project aims to provide a comprehensive, reliable, and well-tested Go library for controlling Bose SoundTouch devices.
 
+## Ways to Contribute
+
+All contributions are welcome — large or small:
+
+- **Code suggestions** — bug fixes, new features, refactoring, performance improvements.
+- **Documentation updates** — README, guides, examples, troubleshooting notes, inline doc comments.
+- **Bug fixes** — even just a clear reproducer in an issue is a real contribution.
+- **Donations** — if the project kept a speaker (or several) of yours alive past the Bose cloud shutdown and you want to give back, [GitHub Sponsors](https://github.com/sponsors/gesellix) is open. No expectation; everything in this repo stays MIT regardless.
+
+By submitting a code or documentation contribution you agree to license it under MIT. The detailed guides below cover the mechanics.
+
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
@@ -15,6 +26,7 @@ Thank you for your interest in contributing to the Bose SoundTouch API Client! T
 - [Reporting Issues](#reporting-issues)
 - [Device Testing](#device-testing)
 - [Community](#community)
+- [Support the Project](#support-the-project)
 
 ## Code of Conduct
 
@@ -464,6 +476,14 @@ Contributors will be:
 - **Listed in CONTRIBUTORS.md**
 - **Mentioned in release notes** for significant contributions
 - **Credited in documentation** where appropriate
+
+## Support the Project
+
+If you want to support the maintenance effort beyond code:
+
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/gesellix?label=Sponsor%20on%20GitHub&logo=GitHub&color=ea4aaa)](https://github.com/sponsors/gesellix)
+
+Sponsorship is entirely optional. Code, docs, and bug reports remain the most useful contributions for the project itself.
 
 ## Additional Resources
 
