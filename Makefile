@@ -412,8 +412,12 @@ prepare-stockholm:
 		rm -f "$(STOCKHOLM_DIR)/js/browse.js.bak"
 	@# Patch bridge JS: replace hardcoded /api/* paths with __stockholmBase-prefixed
 	@# versions so the bridge works when Stockholm is mounted under a base path.
+	@# browser_http_proxy.js declares the proxy URL as a top-level constant;
+	@# without patching it, requests from a /stockholm/* page hit /api/http-proxy
+	@# directly and 404 because the proxy is mounted under the base path.
 	@# Also fix resolveWebviewUrl to include the base path when resolving relative URLs.
 	@python3 scripts/patch-stockholm-bridge.py \
+		"$(STOCKHOLM_DIR)/js/browser_http_proxy.js" \
 		"$(STOCKHOLM_DIR)/js/browser_native_bridge.js" \
 		"$(STOCKHOLM_DIR)/js/app_comm.js" \
 		"$(STOCKHOLM_DIR)/setup/js/app_comm.js"
