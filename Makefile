@@ -252,7 +252,7 @@ dev-discover: build-cli
 dev-info: build-cli
 	@echo "Getting device info (requires -host flag)..."
 	@if [ -z "$(HOST)" ]; then \
-		echo "Usage: make dev-info HOST=192.168.1.10"; \
+		echo "Usage: make dev-info HOST=192.0.2.10"; \
 		exit 1; \
 	fi
 	$(BUILD_DIR)/$(BINARY_NAME) -host $(HOST) -info
@@ -328,7 +328,7 @@ dev-backup-local: build-backup
 dev-web-host: build-web
 	@echo "Starting web UI with specific host..."
 	@if [ -z "$(HOST)" ]; then \
-		echo "Usage: make dev-web-host HOST=192.168.1.10"; \
+		echo "Usage: make dev-web-host HOST=192.0.2.10"; \
 		exit 1; \
 	fi
 	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME) -host $(HOST)
@@ -488,9 +488,9 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make dev-service"
-	@echo "  make dev-service-proxy PROXY_URL=http://192.168.1.50:8001"
+	@echo "  make dev-service-proxy PROXY_URL=http://192.0.2.50:8001"
 	@echo "  make dev-discover"
-	@echo "  make dev-info HOST=192.168.1.10"
+	@echo "  make dev-info HOST=192.0.2.10"
 	@echo "  make dev-mdns"
 	@echo "  make dev-mdns-verbose"
 	@echo "  make dev-mdns-timeout TIMEOUT=10s"
@@ -501,6 +501,6 @@ help:
 	@echo "  make dev-scan-soundtouch"
 	@echo "  make dev-web"
 	@echo "  make dev-web-port PORT=8888"
-	@echo "  make dev-web-host HOST=192.168.1.10"
+	@echo "  make dev-web-host HOST=192.0.2.10"
 	@echo "  make test"
 	@echo "  make build-all"
