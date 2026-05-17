@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"io/fs"
 	"log"
@@ -21,8 +20,10 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-//go:embed static
-var staticFS embed.FS
+// staticFS is sourced from the soundtouchweb package's embedded
+// filesystem. The static assets relocated alongside the handlers in
+// the relocation commit; the binary just consumes them.
+var staticFS = soundtouchweb.StaticFS
 
 func main() {
 	app := &cli.App{
