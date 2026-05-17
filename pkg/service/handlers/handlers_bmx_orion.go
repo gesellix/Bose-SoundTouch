@@ -7,6 +7,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
@@ -52,9 +53,12 @@ func (s *Server) HandleOrionToken(w http.ResponseWriter, _ *http.Request) {
 // before they ever follow a LOCAL_INTERNET_RADIO preset, so this
 // check shouldn't cost any legitimate caller.
 func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
+	// Authorization gate temporarily disabled (was: 401 if header missing).
+	// See HandleTuneInPlayback for the rationale. Logged so we can spot
+	// callers that would have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
 	}
 
 	data := r.URL.Query().Get("data")

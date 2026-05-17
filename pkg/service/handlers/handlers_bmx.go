@@ -45,8 +45,11 @@ func (s *Server) HandleBMXServicesAvailability(w http.ResponseWriter, _ *http.Re
 
 // writeBMXUnauthorized writes the canonical 401 used by every BMX adapter
 // handler that requires an Authorization header (TuneIn variants, Orion
-// playback). Kept here so all per-service files can share it without
-// duplicating the body markup.
+// playback). Currently unused because all gate sites are temporarily
+// disabled (log-only); kept as the future-restore point — when we re-add
+// the gate, callers will use this helper.
+//
+//nolint:unused // intentional: future-restore point for the disabled auth gate.
 func (s *Server) writeBMXUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)

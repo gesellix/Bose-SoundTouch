@@ -38,9 +38,13 @@ func (s *Server) tuneInStreamFormats() string {
 
 // HandleTuneInPlayback returns TuneIn playback information.
 func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
+	// Authorization gate temporarily disabled (was: 401 if header missing).
+	// The Stockholm browser proxy doesn't inject Authorization for requests
+	// that target our own service. Logged so we can spot callers that would
+	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
 	}
 
 	stationID := chi.URLParam(r, "stationID")
@@ -61,9 +65,13 @@ func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 
 // HandleTuneInPodcastInfo returns TuneIn podcast information.
 func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request) {
+	// Authorization gate temporarily disabled (was: 401 if header missing).
+	// The Stockholm browser proxy doesn't inject Authorization for requests
+	// that target our own service. Logged so we can spot callers that would
+	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
 	}
 
 	podcastID := chi.URLParam(r, "podcastID")
@@ -85,9 +93,13 @@ func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request)
 
 // HandleTuneInPlaybackPodcast returns TuneIn podcast playback information.
 func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Request) {
+	// Authorization gate temporarily disabled (was: 401 if header missing).
+	// The Stockholm browser proxy doesn't inject Authorization for requests
+	// that target our own service. Logged so we can spot callers that would
+	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
 	}
 
 	podcastID := chi.URLParam(r, "podcastID")
@@ -135,9 +147,13 @@ func (s *Server) HandleTuneInToken(w http.ResponseWriter, r *http.Request) {
 
 // HandleTuneInReport handles TuneIn playback reporting.
 func (s *Server) HandleTuneInReport(w http.ResponseWriter, r *http.Request) {
+	// Authorization gate temporarily disabled (was: 401 if header missing).
+	// The Stockholm browser proxy doesn't inject Authorization for requests
+	// that target our own service. Logged so we can spot callers that would
+	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
 	}
 
 	var req struct {
@@ -179,9 +195,13 @@ func (s *Server) HandleTuneInReport(w http.ResponseWriter, r *http.Request) {
 //   - sub/{n}/{encodedURI}                  → single subsection of a browse page
 //   - profiles/{type}/{id}/{encodedURI}     → artist/program profile page
 func (s *Server) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
+	// Authorization gate temporarily disabled (was: 401 if header missing).
+	// The Stockholm browser proxy doesn't inject Authorization for requests
+	// that target our own service. Logged so we can spot callers that would
+	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
 	}
 
 	wildcard := chi.URLParam(r, "*")
@@ -242,9 +262,13 @@ func parseTuneInNavigatePath(wildcard string) (interface{}, error) {
 
 // HandleTuneInSearch returns live TuneIn search results for the given query.
 func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
+	// Authorization gate temporarily disabled (was: 401 if header missing).
+	// The Stockholm browser proxy doesn't inject Authorization for requests
+	// that target our own service. Logged so we can spot callers that would
+	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
-		s.writeBMXUnauthorized(w)
-		return
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
 	}
 
 	query := r.URL.Query().Get("q")
