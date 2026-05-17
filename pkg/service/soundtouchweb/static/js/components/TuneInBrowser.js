@@ -115,14 +115,12 @@ export function TuneInBrowser({ devices }) {
                 ${items.map((item, i) => {
                     const isNav = !!navPath(item);
                     const play = playbackInfo(item);
-                    // Programs have BOTH a navigate link (drill into
-                    // episodes) and a playback link (play latest
-                    // episode). Surface both: a dedicated play button
-                    // (stopPropagation so it doesn't trigger the row's
-                    // navigate) plus the chevron. Pure-leaf items
-                    // (stations) fall through to the single ▶ arrow,
-                    // because the whole row is already a play target.
-                    const showPlayBtn = isNav && play;
+                    // Uniform play affordance: any item with a playback
+                    // link gets the same pill button (stops propagation
+                    // so it doesn't trigger the row's navigate). The
+                    // arrow span carries only the drill-in chevron;
+                    // stations no longer reuse it for ▶, which kept the
+                    // two affordances visually distinct.
                     return html`
                         <li key=${item._links?.self?.href || i} class="tunein-item" onClick=${() => navigate(item)}>
                             ${item.imageUrl && html`<img class="tunein-thumb" src=${item.imageUrl} alt="" />`}
@@ -130,7 +128,7 @@ export function TuneInBrowser({ devices }) {
                                 <span class="tunein-item-name">${item.name}</span>
                                 ${item.subtitle && html`<span class="tunein-item-desc">${item.subtitle}</span>`}
                             </div>
-                            ${showPlayBtn && html`
+                            ${play && html`
                                 <button
                                     class="tunein-play-btn"
                                     title="Play"
@@ -140,7 +138,7 @@ export function TuneInBrowser({ devices }) {
                                     }}
                                 >▶</button>
                             `}
-                            <span class="tunein-item-arrow">${isNav ? '›' : '▶'}</span>
+                            ${isNav && html`<span class="tunein-item-arrow">›</span>`}
                         </li>
                     `;
                 })}
