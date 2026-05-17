@@ -108,11 +108,13 @@ func main() {
 				for _, host := range manualHosts {
 					addManualDevice(webApp, host, 8090)
 				}
+
 				discoverDevices(ctx, webApp, discoveryService)
 
 				webApp.BroadcastDiscoveryStatus("completed", len(webApp.Devices))
 				webApp.BroadcastDeviceList()
 			}()
+
 			r := setupRoutes(webApp, discoveryService)
 
 			log.Printf("SoundTouch Web UI starting on http://%s", addr)
