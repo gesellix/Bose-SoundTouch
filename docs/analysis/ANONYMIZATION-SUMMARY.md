@@ -1,115 +1,76 @@
-# Data Anonymization Summary
+# Placeholder values for examples
 
-This document summarizes all changes made to anonymize personal and specific data throughout the Bose SoundTouch Go client codebase.
+This repo is public. Documentation, READMEs, example configs, and test
+fixtures must never carry real LAN IPs, real device MACs, real Bose
+account IDs, or personal device names from any maintainer or
+contributor.
 
-## Overview
+This file is the **canonical mapping table** for the placeholders we
+use across the codebase. Use these values in new examples and tests.
 
-All specific IP addresses, device IDs, device names, and other potentially personal information have been replaced with generic, example values to protect privacy while maintaining the functionality and usefulness of the documentation and test examples.
+## Placeholder mapping
 
-## Changes Made
+| Concept                  | Placeholder                                                  |
+|--------------------------|--------------------------------------------------------------|
+| Example IP (primary)     | `192.0.2.10`                                                 |
+| Example IP (secondary)   | `192.0.2.11`                                                 |
+| Example IP (third)       | `192.0.2.12`                                                 |
+| Network / CIDR           | `192.0.2.0/24`                                               |
+| External / non-LAN IP    | `198.51.100.10` or `203.0.113.10`                            |
+| Gateway IP               | `192.0.2.1`                                                  |
+| Device MAC (primary)     | `AA:BB:CC:DD:EE:FF` (no separator: `AABBCCDDEEFF`)           |
+| Device MAC (secondary)   | `AA:BB:CC:DD:EE:01` (no separator: `AABBCCDDEE01`)           |
+| Device ID (some XML)     | `ABCD1234EFGH` — legacy placeholder still in some fixtures   |
+| Device display name      | `Living Room SoundTouch` / `Kitchen SoundTouch` / `Bedroom SoundTouch` |
+| Bose account ID          | `1000001` / `1000002`                                        |
 
-### IP Addresses
+`192.0.2.0/24`, `198.51.100.0/24`, and `203.0.113.0/24` are reserved
+by [RFC 5737](https://www.rfc-editor.org/rfc/rfc5737) exclusively for
+documentation. They won't ever route on a real network, so readers
+know at a glance that they're placeholders and not addresses they
+need to think about.
 
-**Original → Anonymized:**
-- `192.168.178.35` → `192.168.1.10`
-- `192.168.178.28` → `192.168.1.10`
-- `192.168.1.100` → `192.168.1.10`
-- `192.168.1.101` → `192.168.1.11`
-- `192.168.1.102` → `192.168.1.12`
+`AA:BB:CC:DD:EE:FF` is the conventional "locally administered" MAC
+placeholder used in many vendor docs.
 
-### Device IDs
+`1000001` / `1000002` are well outside the range of real Bose customer
+account IDs (which are typically 6–7 digits with no leading 1 0 0…
+pattern) but stay numeric for parsers that expect integer-looking IDs.
 
-**Original → Anonymized:**
-- `A81B6A536A98` → `ABCD1234EFGH`
-- `1234567890AB` → `ABCD1234EFGH`
-- `1234567890AC` → `ABCD1234EFGH`
+## Why we don't use 192.168.1.x
 
-### Device Names
+An earlier anonymisation pass (now superseded) used `192.168.1.x` as
+its target. That range is RFC-1918 private space — perfectly valid on
+real networks, which means a reader can't tell whether `192.168.1.10`
+is a placeholder or a documented LAN address. RFC-5737 ranges fix
+that.
 
-**Original → Anonymized:**
-- `Sound Machinechen` → `My SoundTouch Device`
+A broader follow-up sweep of remaining `192.168.1.*` references is
+tracked separately in NEXT.md (still pending at the time this file
+was rewritten).
 
-### MAC Addresses
+## How to audit before committing
 
-**Original → Anonymized:**
-- `A81B6A536A98` → `AA:BB:CC:DD:EE:FF`
-- `A81B6A849D99` → `AA:BB:CC:DD:EE:FF`
-- `A8:1B:6A:53:6A:98` → `AA:BB:CC:DD:EE:FF`
-- `A8:1B:6A:84:9D:99` → `AA:BB:CC:DD:EE:01`
+When you add or edit examples that contain IP addresses, MACs, account
+IDs, or device names, mentally answer: "would I be comfortable
+publishing this on a postcard?" If not, swap in a placeholder from
+the table above.
 
-## Files Modified
+Some patterns flag clearly-non-placeholder values:
 
-### Documentation Files
-- `README.md` - Updated all IP addresses and device examples
-- `Makefile` - Updated example IP addresses in help text
-- `docs/SYSTEM-ENDPOINTS.md` - Anonymized all example data
-- `docs/VOLUME-CONTROLS.md` - Updated device IDs and IP addresses
-- `docs/KEY-CONTROLS.md` - Updated IP addresses
-- `docs/BASS-CONTROLS.md` - Updated device IDs
-- `docs/HOST-PORT-PARSING.md` - Updated IP addresses and device names
-- `docs/STATUS.md` - Updated IP addresses
+```sh
+# Any IPv4 not in a documentation range or the 192.168.1.x default:
+git ls-files | xargs grep -hoE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" 2>/dev/null \
+  | grep -vE "^(192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|0\.0\.0\.0|127\.0\.0\.1|255\.255\.255\.255|192\.168\.1\.[0-9])" \
+  | sort -u
 
-### Source Code Files
-- `cmd/soundtouch-cli/main.go` - Updated all example IP addresses in help text
-- `cmd/soundtouch-cli/main_test.go` - Updated test IP addresses
+# Any colon-separated MAC that doesn't start with AA:BB:CC:DD:EE:
+git ls-files | xargs grep -hoE "[0-9A-F]{2}(:[0-9A-F]{2}){5}" 2>/dev/null \
+  | grep -vE "^AA:BB:CC:DD:EE:" \
+  | sort -u
+```
 
-### Test Data Files
-- `pkg/client/testdata/info_response.xml` - Updated device ID, name, and network info
-- `pkg/client/testdata/info_response_st20.xml` - Updated device ID and network info
-- `pkg/client/testdata/capabilities_response.xml` - Updated device ID
-- `pkg/client/testdata/name_response.xml` - Updated device name
-- `pkg/client/testdata/networkinfo_response.xml` - Updated device ID and network info
-- `pkg/client/testdata/clockdisplay_response.xml` - Updated device ID
-
-### Test Files
-- `pkg/client/client_test.go` - Updated device IDs, names, and IP addresses
-- `pkg/client/system_test.go` - Updated device IDs and IP addresses
-- `pkg/client/balance_test.go` - Updated device IDs in test responses
-- `pkg/client/bass_test.go` - Updated device IDs in test responses
-- `pkg/models/networkinfo_test.go` - Updated device IDs and network info
-
-## Anonymization Strategy
-
-### IP Addresses
-- Used standard RFC 1918 private IP ranges (192.168.1.x)
-- Maintained realistic network structure (same subnet for related devices)
-- Used sequential numbering (.10, .11, .12) for clarity
-
-### Device IDs
-- Used generic alphanumeric pattern `ABCD1234EFGH`
-- Maintained consistent usage across all files
-- Preserved original length and format
-
-### Device Names
-- Used generic but descriptive names like "My SoundTouch Device"
-- Removed any potentially personal identifiers
-
-### MAC Addresses
-- Used standard placeholder format `AA:BB:CC:DD:EE:FF`
-- Used sequential variants (EE:01) when multiple addresses needed
-- Maintained proper MAC address format
-
-## Verification
-
-After anonymization:
-- ✅ All tests continue to pass
-- ✅ All builds succeed
-- ✅ Documentation remains accurate and useful
-- ✅ No personal data remains in examples
-- ✅ Functionality is preserved
-
-## Benefits
-
-1. **Privacy Protection**: No personal network information exposed
-2. **Professional Examples**: Clean, generic examples suitable for public documentation
-3. **Consistency**: Uniform use of example data across all files
-4. **Maintainability**: Easy to identify example vs. real data
-
-## Standards Used
-
-- **IP Addresses**: RFC 1918 private ranges (192.168.1.x/24)
-- **Device IDs**: Generic alphanumeric placeholders
-- **MAC Addresses**: Standard placeholder format
-- **Device Names**: Generic descriptive names
-
-All changes maintain the original functionality while ensuring no personal or specific network information is exposed in the codebase.
+If real values slip into a commit, treat it as a sanitisation task:
+revert or fix, then audit nearby files for sibling leaks. Personal
+device names and Bose account IDs don't have a regex-friendly shape —
+catch those at review time.
