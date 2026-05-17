@@ -106,7 +106,7 @@ func main() {
 				webApp.BroadcastDiscoveryStatus("starting", len(webApp.Devices))
 
 				for _, host := range manualHosts {
-					addManualDevice(webApp, host, 8090)
+					addDevice(webApp, host, 8090, "manual")
 				}
 
 				discoverDevices(ctx, webApp, discoveryService)
@@ -210,36 +210,44 @@ func resolveBindAddr(bindAddr string) (string, error) {
 	}
 }
 
-func addManualDevice(app *handlers.WebApp, host string, port int) {
-	clientConfig := &client.Config{
+// addDevice registers a SoundTouch device with the WebApp by fetching
+// its /info and creating a DeviceConnection. The source label
+// ("manual" or "discovered") appears in log lines so the operator can
+// tell apart entries that came from --devices from those found via
+// mDNS/UPnP. If the host is already known, the existing entry's
+// LastSeen is bumped and the function returns without re-fetching.
+func addDevice(app *handlers.WebApp, host string, port int, source string) {
+	if existing, ok := app.Devices[host]; ok {
+		existing.LastSeen = time.Now()
+		return
+	}
+
+	c := client.NewClient(&client.Config{
 		Host:    host,
 		Port:    port,
 		Timeout: 10 * time.Second,
-	}
+	})
 
-	soundTouchClient := client.NewClient(clientConfig)
-
-	deviceInfo, err := soundTouchClient.GetDeviceInfo()
+	info, err := c.GetDeviceInfo()
 	if err != nil {
-		log.Printf("Failed to get device info for manual host %s: %v", host, err)
+		log.Printf("Failed to fetch device info from %s (%s): %v", host, source, err)
 		return
 	}
 
 	conn := &webtypes.DeviceConnection{
-		Client:     soundTouchClient,
-		DeviceInfo: deviceInfo,
+		Client:     c,
+		DeviceInfo: info,
 		LastSeen:   time.Now(),
 		Status: webtypes.DeviceStatus{
 			IsConnected:  false,
 			LastActivity: time.Now(),
 		},
 	}
+	app.Devices[host] = conn
 
 	go app.UpdateDeviceStatus(host, conn)
 
-	app.Devices[host] = conn
-
-	log.Printf("Added manual device: %s (%s) at %s:%d", deviceInfo.Name, deviceInfo.Type, host, port)
+	log.Printf("Added %s device %s (%s) at %s:%d", source, info.Name, info.Type, host, port)
 }
 
 func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
@@ -321,46 +329,6 @@ func discoverDevices(ctx context.Context, app *handlers.WebApp, discoveryService
 	log.Printf("Found %d devices", len(devices))
 
 	for _, device := range devices {
-		deviceID := device.Host // Use host as unique ID for now
-
-		// Skip if we already have this device
-		if _, exists := app.Devices[deviceID]; exists {
-			app.Devices[deviceID].LastSeen = time.Now()
-			continue
-		}
-
-		// Create new device connection
-		clientConfig := &client.Config{
-			Host:    device.Host,
-			Port:    device.Port,
-			Timeout: 10 * time.Second,
-		}
-
-		soundTouchClient := client.NewClient(clientConfig)
-
-		// Get device info
-		deviceInfo, err := soundTouchClient.GetDeviceInfo()
-		if err != nil {
-			log.Printf("Failed to get device info for %s: %v", device.Host, err)
-			continue
-		}
-
-		// Create device connection
-		conn := &webtypes.DeviceConnection{
-			Client:     soundTouchClient,
-			DeviceInfo: deviceInfo,
-			LastSeen:   time.Now(),
-			Status: webtypes.DeviceStatus{
-				IsConnected:  false,
-				LastActivity: time.Now(),
-			},
-		}
-
-		// Initial status fetch asynchronously to avoid blocking discovery
-		go app.UpdateDeviceStatus(deviceID, conn)
-
-		app.Devices[deviceID] = conn
-
-		log.Printf("Added device: %s (%s) at %s", deviceInfo.Name, deviceInfo.Type, device.Host)
+		addDevice(app, device.Host, device.Port, "discovered")
 	}
 }
