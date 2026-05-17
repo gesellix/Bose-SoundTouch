@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"embed"
-	"fmt"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -36,8 +36,25 @@ var swUpdateXML []byte
 func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
 	if !strings.Contains(accept, "text/html") && (strings.Contains(accept, "application/json") || accept == "*/*" || accept == "") {
+		// Mirror the version + VCS metadata exposed by /health so any
+		// caller hitting "/" gets identical release context. Keys that
+		// would carry empty strings are omitted by buildVersionInfo.
+		payload := map[string]string{
+			"Bose":    "AfterTouch",
+			"service": "Go/Chi",
+			"docs":    "https://gesellix.github.io/Bose-SoundTouch/",
+		}
+
+		for k, v := range buildVersionInfo() {
+			payload[k] = v
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"Bose": "AfterTouch", "service": "Go/Chi", "docs": "https://gesellix.github.io/Bose-SoundTouch/"}`)
+
+		if err := json.NewEncoder(w).Encode(payload); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			return
+		}
 
 		return
 	}

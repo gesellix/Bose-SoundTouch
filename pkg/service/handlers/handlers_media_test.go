@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -66,10 +67,26 @@ func TestRootEndpointJSON(t *testing.T) {
 		t.Errorf("Expected application/json content type, got %s", contentType)
 	}
 
-	body, _ := io.ReadAll(res.Body)
-	expected := `{"Bose": "AfterTouch", "service": "Go/Chi", "docs": "https://gesellix.github.io/Bose-SoundTouch/"}`
-	if strings.TrimSpace(string(body)) != expected {
-		t.Errorf("Expected body %s, got %s", expected, string(body))
+	var got map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode root response: %v", err)
+	}
+
+	for _, want := range []struct{ key, value string }{
+		{"Bose", "AfterTouch"},
+		{"service", "Go/Chi"},
+		{"docs", "https://gesellix.github.io/Bose-SoundTouch/"},
+	} {
+		if got[want.key] != want.value {
+			t.Errorf("payload[%q] = %q, want %q", want.key, got[want.key], want.value)
+		}
+	}
+
+	// Version mirrors /health — falls back to "0.0.1" under `go test`
+	// (debug.ReadBuildInfo reports Main.Version="(devel)") but must
+	// always be present so monitoring tools can pin a release.
+	if got["version"] == "" {
+		t.Error("expected version field to be present")
 	}
 }
 

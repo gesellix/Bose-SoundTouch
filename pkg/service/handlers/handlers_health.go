@@ -7,45 +7,53 @@ import (
 	"time"
 )
 
-// HandleHealth returns the health status of the service.
-func (s *Server) HandleHealth(w http.ResponseWriter, _ *http.Request) {
-	version := "0.0.1"
-	vcsRevision := ""
-	vcsTime := ""
-	vcsModified := ""
+// buildVersionInfo extracts module version + VCS metadata from the
+// runtime/debug build info, falling back to "0.0.1" when the binary
+// wasn't built with module info (e.g. local `go run`). Shared between
+// HandleHealth and HandleRoot so both endpoints report identical
+// release context; keys present-when-non-empty so a `go run` response
+// stays minimal instead of carrying empty strings.
+func buildVersionInfo() map[string]string {
+	info := map[string]string{"version": "0.0.1"}
 
-	if info, ok := debug.ReadBuildInfo(); ok {
-		if info.Main.Version != "" && info.Main.Version != "(devel)" {
-			version = info.Main.Version
-		}
+	build, ok := debug.ReadBuildInfo()
+	if !ok {
+		return info
+	}
 
-		for _, setting := range info.Settings {
-			switch setting.Key {
-			case "vcs.revision":
-				vcsRevision = setting.Value
-			case "vcs.time":
-				vcsTime = setting.Value
-			case "vcs.modified":
-				vcsModified = setting.Value
+	if build.Main.Version != "" && build.Main.Version != "(devel)" {
+		info["version"] = build.Main.Version
+	}
+
+	for _, setting := range build.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			if setting.Value != "" {
+				info["vcs_revision"] = setting.Value
+			}
+		case "vcs.time":
+			if setting.Value != "" {
+				info["vcs_time"] = setting.Value
+			}
+		case "vcs.modified":
+			if setting.Value != "" {
+				info["vcs_modified"] = setting.Value
 			}
 		}
 	}
 
+	return info
+}
+
+// HandleHealth returns the health status of the service.
+func (s *Server) HandleHealth(w http.ResponseWriter, _ *http.Request) {
 	status := map[string]interface{}{
 		"status":    "up",
 		"timestamp": time.Now().Format(time.RFC3339),
-		"version":   version,
-	}
-	if vcsRevision != "" {
-		status["vcs_revision"] = vcsRevision
 	}
 
-	if vcsTime != "" {
-		status["vcs_time"] = vcsTime
-	}
-
-	if vcsModified != "" {
-		status["vcs_modified"] = vcsModified
+	for k, v := range buildVersionInfo() {
+		status[k] = v
 	}
 
 	w.Header().Set("Content-Type", "application/json")
