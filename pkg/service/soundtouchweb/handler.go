@@ -681,6 +681,96 @@ func (app *WebApp) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// HandleDeviceRecents returns recently played items for a device.
+func (app *WebApp) HandleDeviceRecents(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	recents, err := device.Client.GetRecents()
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: recents}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleDevicePlay plays an arbitrary content item on a device. Generic
+// counterpart to HandlePlayTuneIn — used by the Recents panel to replay
+// items the speaker reports under /recents, regardless of their source.
+func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	var req struct {
+		Source        string `json:"source"`
+		Type          string `json:"type"`
+		Location      string `json:"location"`
+		SourceAccount string `json:"sourceAccount"`
+		ItemName      string `json:"itemName"`
+		ContainerArt  string `json:"containerArt"`
+		IsPresetable  bool   `json:"isPresetable"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		app.sendError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Location == "" {
+		app.sendError(w, "location is required", http.StatusBadRequest)
+		return
+	}
+
+	contentItem := &models.ContentItem{
+		Source:        req.Source,
+		Type:          req.Type,
+		Location:      req.Location,
+		SourceAccount: req.SourceAccount,
+		ItemName:      req.ItemName,
+		ContainerArt:  req.ContainerArt,
+		IsPresetable:  req.IsPresetable,
+	}
+
+	if err := device.Client.SelectContentItem(contentItem); err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
+		Success: true,
+		Data:    map[string]string{"message": "Playing " + req.ItemName},
+	}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 // HandlePlayTuneIn plays a TuneIn content item on a specific device via POST /select.
 func (app *WebApp) HandlePlayTuneIn(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")

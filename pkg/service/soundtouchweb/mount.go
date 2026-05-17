@@ -59,6 +59,8 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	r.Post("/api/device-volume/{id}/{volume}", app.HandleDirectVolumeControl)
 	r.Post("/api/device-power/{id}", app.HandleDevicePower)
 	r.Get("/api/device-power-status/{id}", app.HandleDevicePowerStatus)
+	r.Get("/api/device-recents/{id}", app.HandleDeviceRecents)
+	r.Post("/api/device-play/{id}", app.HandleDevicePlay)
 	r.Get("/api/device-ws/{id}", app.HandleDeviceWebSocket)
 
 	// SPA routes — serve index.html for client-side routing
