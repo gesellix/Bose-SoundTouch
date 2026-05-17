@@ -35,12 +35,14 @@ func (app *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	app.WSMutex.Unlock()
 
 	// Send initial device list
-	devices := make(map[string]interface{})
-	for id, device := range app.Devices {
-		devices[id] = map[string]interface{}{
-			"info":     device.DeviceInfo,
-			"status":   device.Status,
-			"lastSeen": device.LastSeen,
+	snapshot := app.DeviceSnapshot()
+	devices := make(map[string]interface{}, len(snapshot))
+
+	for _, entry := range snapshot {
+		devices[entry.ID] = map[string]interface{}{
+			"info":     entry.Device.DeviceInfo,
+			"status":   entry.Device.Status,
+			"lastSeen": entry.Device.LastSeen,
 		}
 	}
 
@@ -88,12 +90,12 @@ func (app *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Send periodic status updates
-		for id, device := range app.Devices {
-			if device.Status.IsConnected {
+		for _, entry := range app.DeviceSnapshot() {
+			if entry.Device.Status.IsConnected {
 				statusMessage := webtypes.WebSocketMessage{
 					Type:     "status_update",
-					DeviceID: id,
-					Data:     device.Status,
+					DeviceID: entry.ID,
+					Data:     entry.Device.Status,
 				}
 
 				if err := conn.WriteJSON(statusMessage); err != nil {
@@ -230,7 +232,7 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		http.Error(w, "Device not found", http.StatusNotFound)
 		return

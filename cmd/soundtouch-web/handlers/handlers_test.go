@@ -40,7 +40,7 @@ func createTestApp() *WebApp {
 		},
 	}
 
-	app.Devices["test-device"] = device
+	app.AddDevice("test-device", device)
 	return app
 }
 
@@ -59,13 +59,9 @@ func TestNewWebApp(t *testing.T) {
 	if app == nil {
 		t.Fatal("NewWebApp returned nil")
 	}
-	if app.Devices == nil {
-		t.Fatal("Devices map not initialized")
-	}
 
-	// At this point we know app and app.Devices are not nil
-	if len(app.Devices) != 0 {
-		t.Errorf("Expected empty devices map, got %d devices", len(app.Devices))
+	if count := app.DeviceCount(); count != 0 {
+		t.Errorf("Expected empty device registry, got %d devices", count)
 	}
 }
 
@@ -549,11 +545,11 @@ func BenchmarkHandleAPIDevices(b *testing.B) {
 	// Add more devices for realistic benchmarking
 	for i := 0; i < 10; i++ {
 		deviceID := "device-" + string(rune('0'+i))
-		app.Devices[deviceID] = &webtypes.DeviceConnection{
+		app.AddDevice(deviceID, &webtypes.DeviceConnection{
 			Client:     &client.Client{},
 			DeviceInfo: &models.DeviceInfo{Name: "Test Device " + deviceID},
 			Status:     webtypes.DeviceStatus{IsConnected: true},
-		}
+		})
 	}
 
 	req := httptest.NewRequest("GET", "/api/devices", nil)

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/cmd/soundtouch-web/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -17,18 +18,34 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// WebApp holds the application state and dependencies
+// WebApp holds the application state and dependencies.
+//
+// The device registry (devices map + devicesMu) is encapsulated:
+// callers go through GetDevice / DeviceSnapshot / AddDevice /
+// TouchDevice / DeviceCount instead of touching the map directly.
+// This prevents the concurrent-map-read/write panic that would
+// otherwise be reachable any time an HTTP handler runs while
+// discovery or the /api/discover endpoint is registering devices.
 type WebApp struct {
-	Devices   map[string]*webtypes.DeviceConnection
+	devicesMu sync.RWMutex
+	devices   map[string]*webtypes.DeviceConnection
+
 	Upgrader  websocket.Upgrader
 	WSClients map[*websocket.Conn]bool
 	WSMutex   sync.RWMutex
 }
 
+// DeviceEntry pairs a device id with its connection. Used by
+// DeviceSnapshot so callers can iterate without holding the lock.
+type DeviceEntry struct {
+	ID     string
+	Device *webtypes.DeviceConnection
+}
+
 // NewWebApp creates a new WebApp instance for SPA mode
 func NewWebApp() *WebApp {
 	return &WebApp{
-		Devices:   make(map[string]*webtypes.DeviceConnection),
+		devices:   make(map[string]*webtypes.DeviceConnection),
 		WSClients: make(map[*websocket.Conn]bool),
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(_ *http.Request) bool { return true },
@@ -36,17 +53,89 @@ func NewWebApp() *WebApp {
 	}
 }
 
+// GetDevice returns the device for id and whether it exists.
+func (app *WebApp) GetDevice(id string) (*webtypes.DeviceConnection, bool) {
+	app.devicesMu.RLock()
+	defer app.devicesMu.RUnlock()
+
+	device, ok := app.devices[id]
+
+	return device, ok
+}
+
+// DeviceSnapshot returns a list of (id, *DeviceConnection) pairs taken
+// under a single read lock. Callers can iterate the result without
+// holding any registry lock. Devices added or removed after the call
+// are not reflected; the pointers themselves remain valid because
+// nothing deletes from the underlying map today.
+func (app *WebApp) DeviceSnapshot() []DeviceEntry {
+	app.devicesMu.RLock()
+	defer app.devicesMu.RUnlock()
+
+	out := make([]DeviceEntry, 0, len(app.devices))
+	for id, device := range app.devices {
+		out = append(out, DeviceEntry{ID: id, Device: device})
+	}
+
+	return out
+}
+
+// DeviceCount returns the number of registered devices at call time.
+func (app *WebApp) DeviceCount() int {
+	app.devicesMu.RLock()
+	defer app.devicesMu.RUnlock()
+
+	return len(app.devices)
+}
+
+// AddDevice atomically registers conn under id when id is not already
+// known. If id existed, its LastSeen is bumped and AddDevice returns
+// false (the caller should discard conn). Returns true if conn was
+// inserted.
+func (app *WebApp) AddDevice(id string, conn *webtypes.DeviceConnection) bool {
+	app.devicesMu.Lock()
+	defer app.devicesMu.Unlock()
+
+	if existing, ok := app.devices[id]; ok {
+		existing.LastSeen = time.Now()
+		return false
+	}
+
+	app.devices[id] = conn
+
+	return true
+}
+
+// TouchDevice bumps LastSeen for id if it exists; returns true if
+// found. Use this as a fast-path check before doing the network work
+// needed to construct a new DeviceConnection.
+func (app *WebApp) TouchDevice(id string) bool {
+	app.devicesMu.Lock()
+	defer app.devicesMu.Unlock()
+
+	existing, ok := app.devices[id]
+	if !ok {
+		return false
+	}
+
+	existing.LastSeen = time.Now()
+
+	return true
+}
+
 // HandleAPIDevices returns all devices as JSON
 func (app *WebApp) HandleAPIDevices(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Return all devices as JSON
-	devices := make(map[string]interface{})
-	for id, device := range app.Devices {
-		devices[id] = map[string]interface{}{
-			"info":     device.DeviceInfo,
-			"status":   device.Status,
-			"lastSeen": device.LastSeen,
+	snapshot := app.DeviceSnapshot()
+	devices := make(map[string]interface{}, len(snapshot))
+
+	for _, entry := range snapshot {
+		devices[entry.ID] = map[string]interface{}{
+			"info":     entry.Device.DeviceInfo,
+			"status":   entry.Device.Status,
+			"lastSeen": entry.Device.LastSeen,
 		}
 	}
 
@@ -68,7 +157,7 @@ func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		app.sendError(w, "Device not found", http.StatusNotFound)
 		return
@@ -107,7 +196,7 @@ func (app *WebApp) HandleAPIControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		app.sendError(w, "Device not found", http.StatusNotFound)
 		return
@@ -318,7 +407,7 @@ func (app *WebApp) HandleDeviceKey(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
 	key := chi.URLParam(r, "key")
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		app.sendError(w, "Device not found", http.StatusNotFound)
 		return
@@ -350,7 +439,7 @@ func (app *WebApp) HandleDirectVolumeControl(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		app.sendError(w, "Device not found", http.StatusNotFound)
 		return
@@ -376,7 +465,7 @@ func (app *WebApp) HandleDirectVolumeControl(w http.ResponseWriter, r *http.Requ
 func (app *WebApp) HandleDevicePower(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		app.sendError(w, "Device not found", http.StatusNotFound)
 		return
@@ -403,7 +492,7 @@ func (app *WebApp) HandleDevicePower(w http.ResponseWriter, r *http.Request) {
 func (app *WebApp) HandleDevicePowerStatus(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		app.sendError(w, "Device not found", http.StatusNotFound)
 		return
@@ -444,12 +533,14 @@ func (app *WebApp) BroadcastDeviceList() {
 	app.WSMutex.RLock()
 	defer app.WSMutex.RUnlock()
 
-	devices := make(map[string]interface{})
-	for id, device := range app.Devices {
-		devices[id] = map[string]interface{}{
-			"info":     device.DeviceInfo,
-			"status":   device.Status,
-			"lastSeen": device.LastSeen,
+	snapshot := app.DeviceSnapshot()
+	devices := make(map[string]interface{}, len(snapshot))
+
+	for _, entry := range snapshot {
+		devices[entry.ID] = map[string]interface{}{
+			"info":     entry.Device.DeviceInfo,
+			"status":   entry.Device.Status,
+			"lastSeen": entry.Device.LastSeen,
 		}
 	}
 
@@ -598,7 +689,7 @@ func (app *WebApp) HandlePlayTuneIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	device, exists := app.Devices[deviceID]
+	device, exists := app.GetDevice(deviceID)
 	if !exists {
 		app.sendError(w, fmt.Sprintf("Device '%s' not found", deviceID), http.StatusNotFound)
 		return

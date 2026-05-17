@@ -103,7 +103,7 @@ func main() {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 
-				webApp.BroadcastDiscoveryStatus("starting", len(webApp.Devices))
+				webApp.BroadcastDiscoveryStatus("starting", webApp.DeviceCount())
 
 				for _, host := range manualHosts {
 					addDevice(webApp, host, 8090, "manual")
@@ -111,7 +111,7 @@ func main() {
 
 				discoverDevices(ctx, webApp, discoveryService)
 
-				webApp.BroadcastDiscoveryStatus("completed", len(webApp.Devices))
+				webApp.BroadcastDiscoveryStatus("completed", webApp.DeviceCount())
 				webApp.BroadcastDeviceList()
 			}()
 
@@ -217,8 +217,8 @@ func resolveBindAddr(bindAddr string) (string, error) {
 // mDNS/UPnP. If the host is already known, the existing entry's
 // LastSeen is bumped and the function returns without re-fetching.
 func addDevice(app *handlers.WebApp, host string, port int, source string) {
-	if existing, ok := app.Devices[host]; ok {
-		existing.LastSeen = time.Now()
+	// Fast path: skip the network call if we already know this host.
+	if app.TouchDevice(host) {
 		return
 	}
 
@@ -243,7 +243,12 @@ func addDevice(app *handlers.WebApp, host string, port int, source string) {
 			LastActivity: time.Now(),
 		},
 	}
-	app.Devices[host] = conn
+	if !app.AddDevice(host, conn) {
+		// Lost a race — another goroutine inserted the same host
+		// between TouchDevice and AddDevice. AddDevice bumped LastSeen
+		// on the existing entry; discard our conn.
+		return
+	}
 
 	go app.UpdateDeviceStatus(host, conn)
 
@@ -280,12 +285,12 @@ func setupRoutes(app *handlers.WebApp, discoveryService *discovery.UnifiedDiscov
 			defer cancel()
 
 			// Broadcast discovery start
-			app.BroadcastDiscoveryStatus("starting", len(app.Devices))
+			app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
 
 			discoverDevices(ctx, app, discoveryService)
 
 			// Broadcast discovery completion and updated device list
-			app.BroadcastDiscoveryStatus("completed", len(app.Devices))
+			app.BroadcastDiscoveryStatus("completed", app.DeviceCount())
 			app.BroadcastDeviceList()
 		}()
 	})
@@ -321,7 +326,7 @@ func discoverDevices(ctx context.Context, app *handlers.WebApp, discoveryService
 	devices, err := discoveryService.DiscoverDevices(ctx)
 	if err != nil {
 		log.Printf("Discovery failed: %v", err)
-		app.BroadcastDiscoveryStatus("failed", len(app.Devices))
+		app.BroadcastDiscoveryStatus("failed", app.DeviceCount())
 
 		return
 	}
