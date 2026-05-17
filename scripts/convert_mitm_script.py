@@ -1,3 +1,20 @@
+"""mitmproxy add-on: dump request/response pairs to disk for analysis.
+
+Optionally redact a real Bose account ID and device ID from paths and
+WebSocket text payloads, replacing them with `{accountId}` /
+`{device_id}` so captures can be shared without leaking personal data.
+
+Usage:
+
+    mitmdump -s convert_mitm_script.py \
+        --set out_dir=_/mitm \
+        --set account_id=1234567 \
+        --set device_id=AABBCCDDEEFF
+
+`account_id` and `device_id` default to empty strings, in which case
+no redaction is performed.
+"""
+
 from mitmproxy import http
 import os
 from datetime import datetime
@@ -8,6 +25,18 @@ def load(loader):
         typespec=str,
         default="_/mitm",
         help="Output directory",
+    )
+    loader.add_option(
+        name="account_id",
+        typespec=str,
+        default="",
+        help="Real Bose account ID to redact from paths and WS payloads (replaced with {accountId}). Empty = no redaction.",
+    )
+    loader.add_option(
+        name="device_id",
+        typespec=str,
+        default="",
+        help="Real device ID/MAC to redact from paths and WS payloads (replaced with {device_id}). Empty = no redaction.",
     )
 
 def request(flow: http.HTTPFlow):
@@ -41,9 +70,13 @@ def process_flow(flow: http.HTTPFlow):
         path = path.split('?')[0]
 
     dir_path = path
-    # Apply replacements as seen in other scripts
-    dir_path = dir_path.replace("9569497", "{accountId}")
-    dir_path = dir_path.replace("A81B6A536A98", "{device_id}")
+    # Optional redaction — see module docstring for --set flags.
+    account_id = ctx.options.account_id
+    device_id = ctx.options.device_id
+    if account_id:
+        dir_path = dir_path.replace(account_id, "{accountId}")
+    if device_id:
+        dir_path = dir_path.replace(device_id, "{device_id}")
 
     # Ensure dir_path doesn't have double slashes and is relative
     dir_path = dir_path.lstrip('/')
@@ -103,8 +136,10 @@ def process_flow(flow: http.HTTPFlow):
             # Apply replacements to content as well if it's text
             if msg.type == 1: # Text
                 content_str = content.decode('utf-8', errors='ignore')
-                content_str = content_str.replace("9569497", "{accountId}")
-                content_str = content_str.replace("A81B6A536A98", "{device_id}")
+                if account_id:
+                    content_str = content_str.replace(account_id, "{accountId}")
+                if device_id:
+                    content_str = content_str.replace(device_id, "{device_id}")
                 content = content_str.encode('utf-8')
 
             msg_filename = f"{i:04d}-{direction}.{'bin' if msg.type == 2 else 'txt'}"
