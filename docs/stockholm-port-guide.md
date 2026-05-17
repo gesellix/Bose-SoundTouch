@@ -76,7 +76,10 @@ Look for `stockholm/index.html`. If absent:
 ### 3b. Versioned patch application
 
 Patch files are named `stockholm-changes_v<N>.patch` and applied in ascending
-order. The current patches are v1 (1 153 lines) and v2 (1 475 lines).
+order. The set is scanned dynamically at preparation time; today the upstream
+project ships v1 (1 153 lines), v2 (1 475 lines), v3 (44 lines, `now_play.js`
+fix), and v4 (68 lines, `app_comm.js` clientId polish). New versions added
+upstream are picked up automatically — our code does not hardcode a list.
 
 A marker file `stockholm/.soundcork-stockholm-app.json` tracks the last applied
 version:
@@ -580,8 +583,12 @@ process, do these steps once before running the binary:
 # Requires: unzip, patch, npm/prettier@3.8.3
 unzip stockholm_zip/stockholm.zip -d stockholm
 npx prettier@3.8.3 --ignore-path /dev/null --write "stockholm/**/*.js"
-patch -p1 --batch < stockholm-changes_v1.patch
-patch -p1 --batch < stockholm-changes_v2.patch
+# Apply every stockholm-changes_v<N>.patch that exists, in ascending order.
+# Today the upstream ships v1..v4; new ones get picked up automatically when
+# the upstream repo is re-cloned via `make build-stockholm-image`.
+for patch in stockholm-changes_v*.patch; do
+    patch -p1 --batch < "$patch"
+done
 ```
 
 Or run the Docker container once and copy the `stockholm/` directory out.
@@ -645,3 +652,11 @@ or one level up. Run from the project root.
 - `stockholm/js/presets.js` — minor fix
 - `stockholm/js/sources.js` — minor fix
 - `stockholm/setup/js/app_comm.js` — same fixes as main app_comm.js
+
+**v3** (44 lines):
+
+- `stockholm/js/now_play.js` — small playback-state guard.
+
+**v4** (68 lines):
+
+- `stockholm/js/app_comm.js` — further `clientId` handling polish (localStorage persistence).
