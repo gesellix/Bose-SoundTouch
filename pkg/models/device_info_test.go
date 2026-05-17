@@ -7,7 +7,7 @@ import (
 )
 
 func TestName_UnmarshalXML(t *testing.T) {
-	xmlData := `<?xml version="1.0" encoding="UTF-8" ?><name>Sound Machinechen</name>`
+	xmlData := `<?xml version="1.0" encoding="UTF-8" ?><name>Living Room SoundTouch</name>`
 
 	var name Name
 
@@ -16,16 +16,16 @@ func TestName_UnmarshalXML(t *testing.T) {
 		t.Fatalf("Failed to unmarshal XML: %v", err)
 	}
 
-	if name.Value != "Sound Machinechen" {
-		t.Errorf("Expected name 'Sound Machinechen', got '%s'", name.Value)
+	if name.Value != "Living Room SoundTouch" {
+		t.Errorf("Expected name 'Living Room SoundTouch', got '%s'", name.Value)
 	}
 
-	if name.GetName() != "Sound Machinechen" {
-		t.Errorf("Expected GetName() 'Sound Machinechen', got '%s'", name.GetName())
+	if name.GetName() != "Living Room SoundTouch" {
+		t.Errorf("Expected GetName() 'Living Room SoundTouch', got '%s'", name.GetName())
 	}
 
-	if name.String() != "Sound Machinechen" {
-		t.Errorf("Expected String() 'Sound Machinechen', got '%s'", name.String())
+	if name.String() != "Living Room SoundTouch" {
+		t.Errorf("Expected String() 'Living Room SoundTouch', got '%s'", name.String())
 	}
 
 	if name.IsEmpty() {
@@ -54,7 +54,7 @@ func TestName_EmptyName(t *testing.T) {
 
 func TestCapabilities_UnmarshalXML(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
-<capabilities deviceID="A81B6A536A98">
+<capabilities deviceID="AABBCCDDEEFF">
     <networkConfig>
         <dualMode>true</dualMode>
         <wsapiproxy>true</wsapiproxy>
@@ -82,8 +82,8 @@ func TestCapabilities_UnmarshalXML(t *testing.T) {
 	}
 
 	// Test basic fields
-	if capabilities.DeviceID != "A81B6A536A98" {
-		t.Errorf("Expected DeviceID 'A81B6A536A98', got '%s'", capabilities.DeviceID)
+	if capabilities.DeviceID != "AABBCCDDEEFF" {
+		t.Errorf("Expected DeviceID 'AABBCCDDEEFF', got '%s'", capabilities.DeviceID)
 	}
 
 	// Test boolean capabilities

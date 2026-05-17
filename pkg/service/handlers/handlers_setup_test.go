@@ -183,7 +183,7 @@ func TestMigrationAndCA(t *testing.T) {
 	// Mock HTTPGet to avoid real network timeouts
 	sm.HTTPGet = func(url string) (*http.Response, error) {
 		if strings.HasSuffix(url, "/info") {
-			xml := `<?xml version="1.0" encoding="UTF-8" ?><info deviceID="192.168.1.10"><name>Test Speaker</name><type>SoundTouch 10</type><margeAccountUUID>default</margeAccountUUID></info>`
+			xml := `<?xml version="1.0" encoding="UTF-8" ?><info deviceID="192.0.2.10"><name>Test Speaker</name><type>SoundTouch 10</type><margeAccountUUID>default</margeAccountUUID></info>`
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(xml)),
@@ -202,9 +202,9 @@ func TestMigrationAndCA(t *testing.T) {
 	defer ts.Close()
 
 	// Add device to datastore for resolution
-	_ = ds.SaveDeviceInfo("default", "192.168.1.10", &models.ServiceDeviceInfo{
-		DeviceID:  "192.168.1.10",
-		IPAddress: "192.168.1.10",
+	_ = ds.SaveDeviceInfo("default", "192.0.2.10", &models.ServiceDeviceInfo{
+		DeviceID:  "192.0.2.10",
+		IPAddress: "192.0.2.10",
 		AccountID: "default",
 	})
 
@@ -223,7 +223,7 @@ func TestMigrationAndCA(t *testing.T) {
 	}
 
 	// 2. Test POST /setup/migrate/{deviceIP}?method=hosts
-	res, err = http.Post(ts.URL+"/setup/migrate/192.168.1.10?method=hosts&target_url=http://192.168.1.100:8000", "application/json", nil)
+	res, err = http.Post(ts.URL+"/setup/migrate/192.0.2.10?method=hosts&target_url=http://192.0.2.100:8000", "application/json", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestMigrationAndCA(t *testing.T) {
 	}
 
 	// 3. Test POST /setup/trust-ca/{deviceIP}
-	res, err = http.Post(ts.URL+"/setup/trust-ca/192.168.1.10", "application/json", nil)
+	res, err = http.Post(ts.URL+"/setup/trust-ca/192.0.2.10", "application/json", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestMigrationAndCA(t *testing.T) {
 	}
 
 	// 4. Test POST /setup/reboot/{deviceIP}
-	res, err = http.Post(ts.URL+"/setup/reboot/192.168.1.10", "application/json", nil)
+	res, err = http.Post(ts.URL+"/setup/reboot/192.0.2.10", "application/json", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestMigrationAndCA(t *testing.T) {
 	}
 
 	// 5. Test POST /setup/remove-remote-services/{deviceIP}
-	res, err = http.Post(ts.URL+"/setup/remove-remote-services/192.168.1.10", "application/json", nil)
+	res, err = http.Post(ts.URL+"/setup/remove-remote-services/192.0.2.10", "application/json", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func (m *mockSSH) Run(command string) (string, error) {
 		m.runCount++
 		if m.runCount > 1 {
 			// Return updated hosts for verification
-			return "127.0.0.1 localhost\n192.168.1.100\tstreaming.bose.com\n192.168.1.100\tupdates.bose.com\n192.168.1.100\tstats.bose.com\n192.168.1.100\tbmx.bose.com\n192.168.1.100\tcontent.api.bose.io\n192.168.1.100\tevents.api.bosecm.com\n192.168.1.100\tbose-prod.apigee.net\n192.168.1.100\tworldwide.bose.com\n192.168.1.100\tmedia.bose.io\n192.168.1.100\tdownloads.bose.com\n192.168.1.100\tvoice.api.bose.io", nil
+			return "127.0.0.1 localhost\n192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 		}
 		return "127.0.0.1 localhost", nil
 	}

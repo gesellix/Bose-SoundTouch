@@ -85,15 +85,15 @@ func TestBuildMSearchRequest(t *testing.T) {
 
 func TestParseLocationURL_Valid(t *testing.T) {
 	service := NewService(1 * time.Second)
-	location := "http://192.168.1.100:8090/device.xml"
+	location := "http://192.0.2.100:8090/device.xml"
 
 	device, err := service.parseLocationURL(location, "")
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	if device.Host != "192.168.1.100" {
-		t.Errorf("Expected host '192.168.1.100', got '%s'", device.Host)
+	if device.Host != "192.0.2.100" {
+		t.Errorf("Expected host '192.0.2.100', got '%s'", device.Host)
 	}
 
 	if device.Port != 8090 {
@@ -108,7 +108,7 @@ func TestParseLocationURL_Valid(t *testing.T) {
 		t.Error("Expected device name to be set")
 	}
 
-	expectedName := "SoundTouch-192.168.1.100"
+	expectedName := "SoundTouch-192.0.2.100"
 	if device.Name != expectedName {
 		t.Errorf("Expected name '%s', got '%s'", expectedName, device.Name)
 	}
@@ -119,7 +119,7 @@ func TestParseLocationURL_Invalid(t *testing.T) {
 
 	invalidURLs := []string{
 		"not-a-url",
-		"ftp://192.168.1.100/device.xml",
+		"ftp://192.0.2.100/device.xml",
 		"http://invalid-format",
 		"",
 	}
@@ -179,7 +179,7 @@ func TestParseResponse_NotMediaRenderer(t *testing.T) {
 Cache-Control: max-age=1800
 Date: Mon, 22 Jun 1998 09:55:21 GMT
 EXT:
-Location: http://192.168.1.100:8090/device.xml
+Location: http://192.0.2.100:8090/device.xml
 Server: Linux/3.14.0 UPnP/1.0 SomeDevice/1.0
 ST: urn:schemas-upnp-org:device:SomeOtherDevice:1
 USN: uuid:12345678-1234-5678-9012-123456789012::urn:schemas-upnp-org:device:SomeOtherDevice:1
@@ -260,13 +260,13 @@ func TestCacheOperations(t *testing.T) {
 	// Add devices to cache
 	testDevices := []*models.DiscoveredDevice{
 		{
-			Host:     "192.168.1.100",
+			Host:     "192.0.2.100",
 			Port:     8090,
 			Name:     "Device 1",
 			LastSeen: time.Now(),
 		},
 		{
-			Host:     "192.168.1.101",
+			Host:     "192.0.2.101",
 			Port:     8090,
 			Name:     "Device 2",
 			LastSeen: time.Now(),
@@ -296,7 +296,7 @@ func TestCacheExpiration(t *testing.T) {
 
 	// Add device with old timestamp
 	expiredDevice := &models.DiscoveredDevice{
-		Host:     "192.168.1.100",
+		Host:     "192.0.2.100",
 		Port:     8090,
 		Name:     "Expired Device",
 		LastSeen: time.Now().Add(-200 * time.Millisecond), // Expired
@@ -304,7 +304,7 @@ func TestCacheExpiration(t *testing.T) {
 
 	// Add device with recent timestamp
 	freshDevice := &models.DiscoveredDevice{
-		Host:     "192.168.1.101",
+		Host:     "192.0.2.101",
 		Port:     8090,
 		Name:     "Fresh Device",
 		LastSeen: time.Now(), // Fresh
@@ -321,7 +321,7 @@ func TestCacheExpiration(t *testing.T) {
 		t.Errorf("Expected 1 non-expired device, got %d", len(devices))
 	}
 
-	if len(devices) > 0 && devices[0].Host != "192.168.1.101" {
+	if len(devices) > 0 && devices[0].Host != "192.0.2.101" {
 		t.Errorf("Expected fresh device, got %s", devices[0].Host)
 	}
 }
@@ -331,7 +331,7 @@ func TestDiscoverDevices_UseCache(t *testing.T) {
 
 	// Add fresh device to cache
 	freshDevice := &models.DiscoveredDevice{
-		Host:     "192.168.1.100",
+		Host:     "192.0.2.100",
 		Port:     8090,
 		Name:     "Cached Device",
 		LastSeen: time.Now(),
@@ -352,7 +352,7 @@ func TestDiscoverDevices_UseCache(t *testing.T) {
 		t.Errorf("Expected 1 cached device, got %d", len(devices))
 	}
 
-	if len(devices) > 0 && devices[0].Host != "192.168.1.100" {
+	if len(devices) > 0 && devices[0].Host != "192.0.2.100" {
 		t.Errorf("Expected cached device host, got %s", devices[0].Host)
 	}
 }
@@ -362,7 +362,7 @@ func TestDiscoverDevice_FromCache(t *testing.T) {
 
 	// Add device to cache
 	device := &models.DiscoveredDevice{
-		Host:     "192.168.1.100",
+		Host:     "192.0.2.100",
 		Port:     8090,
 		Name:     "Test Device",
 		LastSeen: time.Now(),
@@ -374,13 +374,13 @@ func TestDiscoverDevice_FromCache(t *testing.T) {
 	defer cancel()
 
 	// Discover specific device from cache
-	foundDevice, err := service.DiscoverDevice(ctx, "192.168.1.100")
+	foundDevice, err := service.DiscoverDevice(ctx, "192.0.2.100")
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	if foundDevice.Host != "192.168.1.100" {
-		t.Errorf("Expected host '192.168.1.100', got '%s'", foundDevice.Host)
+	if foundDevice.Host != "192.0.2.100" {
+		t.Errorf("Expected host '192.0.2.100', got '%s'", foundDevice.Host)
 	}
 
 	if foundDevice.Name != "Test Device" {
@@ -395,12 +395,12 @@ func TestDiscoverDevice_NotFound(t *testing.T) {
 	defer cancel()
 
 	// Try to discover non-existent device
-	_, err := service.DiscoverDevice(ctx, "192.168.1.999")
+	_, err := service.DiscoverDevice(ctx, "192.0.2.999")
 	if err == nil {
 		t.Error("Expected error for non-existent device, got nil")
 	}
 
-	expectedError := "device with host 192.168.1.999 not found"
+	expectedError := "device with host 192.0.2.999 not found"
 	if !contains(err.Error(), expectedError) {
 		t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
 	}
@@ -412,7 +412,7 @@ func TestNewDiscoveryServiceWithConfig(t *testing.T) {
 		CacheTTL:         60 * time.Second,
 		UPnPEnabled:      false,
 		PreferredDevices: []config.DeviceConfig{
-			{Name: "Test Device", Host: "192.168.1.100", Port: 8090},
+			{Name: "Test Device", Host: "192.0.2.100", Port: 8090},
 		},
 	}
 
@@ -434,8 +434,8 @@ func TestNewDiscoveryServiceWithConfig(t *testing.T) {
 func TestGetConfiguredDevices(t *testing.T) {
 	cfg := &config.Config{
 		PreferredDevices: []config.DeviceConfig{
-			{Name: "Living Room", Host: "192.168.1.100", Port: 8090},
-			{Name: "Kitchen", Host: "192.168.1.101", Port: 8091},
+			{Name: "Living Room", Host: "192.0.2.100", Port: 8090},
+			{Name: "Kitchen", Host: "192.0.2.101", Port: 8091},
 		},
 	}
 
@@ -450,8 +450,8 @@ func TestGetConfiguredDevices(t *testing.T) {
 		t.Errorf("Expected first device name 'Living Room', got '%s'", devices[0].Name)
 	}
 
-	if devices[0].Host != "192.168.1.100" {
-		t.Errorf("Expected first device host '192.168.1.100', got '%s'", devices[0].Host)
+	if devices[0].Host != "192.0.2.100" {
+		t.Errorf("Expected first device host '192.0.2.100', got '%s'", devices[0].Host)
 	}
 
 	if devices[1].Port != 8091 {
@@ -463,13 +463,13 @@ func TestMergeDevices(t *testing.T) {
 	service := NewService(5 * time.Second)
 
 	existing := []*models.DiscoveredDevice{
-		{Host: "192.168.1.100", Name: "Device 1", Port: 8090},
-		{Host: "192.168.1.101", Name: "Device 2", Port: 8090},
+		{Host: "192.0.2.100", Name: "Device 1", Port: 8090},
+		{Host: "192.0.2.101", Name: "Device 2", Port: 8090},
 	}
 
 	newDevices := []*models.DiscoveredDevice{
-		{Host: "192.168.1.101", Name: "Duplicate", Port: 8090}, // Duplicate
-		{Host: "192.168.1.102", Name: "Device 3", Port: 8090},  // New
+		{Host: "192.0.2.101", Name: "Duplicate", Port: 8090}, // Duplicate
+		{Host: "192.0.2.102", Name: "Device 3", Port: 8090},  // New
 	}
 
 	merged := service.mergeDevices(existing, newDevices)
@@ -491,7 +491,7 @@ func TestMergeDevices(t *testing.T) {
 	}
 
 	// Check that all unique hosts are present
-	expectedHosts := []string{"192.168.1.100", "192.168.1.101", "192.168.1.102"}
+	expectedHosts := []string{"192.0.2.100", "192.0.2.101", "192.0.2.102"}
 	for _, expectedHost := range expectedHosts {
 		if _, exists := hosts[expectedHost]; !exists {
 			t.Errorf("Expected host %s not found in merged devices", expectedHost)
@@ -503,7 +503,7 @@ func TestDiscoverDevices_ConfiguredOnly(t *testing.T) {
 	cfg := &config.Config{
 		UPnPEnabled: false, // Disable UPnP
 		PreferredDevices: []config.DeviceConfig{
-			{Name: "Test Device", Host: "192.168.1.100", Port: 8090},
+			{Name: "Test Device", Host: "192.0.2.100", Port: 8090},
 		},
 	}
 
@@ -523,8 +523,8 @@ func TestDiscoverDevices_ConfiguredOnly(t *testing.T) {
 		t.Errorf("Expected device name 'Test Device', got '%s'", devices[0].Name)
 	}
 
-	if devices[0].Host != "192.168.1.100" {
-		t.Errorf("Expected device host '192.168.1.100', got '%s'", devices[0].Host)
+	if devices[0].Host != "192.0.2.100" {
+		t.Errorf("Expected device host '192.0.2.100', got '%s'", devices[0].Host)
 	}
 }
 

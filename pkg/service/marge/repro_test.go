@@ -103,7 +103,7 @@ func TestReproduceMissingName(t *testing.T) {
 		t.Fatal(err)
 	}
 	dev1Info := `<info deviceID="08DF1F0BA325">
-    <name>A Sound Machine</name>
+    <name>Kitchen SoundTouch</name>
     <type>SoundTouch</type>
     <moduleType>20</moduleType>
     <components>
@@ -128,7 +128,7 @@ func TestReproduceMissingName(t *testing.T) {
 	}
 	dev2Info := `<?xml version="1.0" encoding="UTF-8"?>
 <info deviceID="001122334455">
-    <name>Sound Machinechen</name>
+    <name>Living Room SoundTouch</name>
     <type>SoundTouch</type>
     <moduleType>10 sm2</moduleType>
     <components>
@@ -143,7 +143,7 @@ func TestReproduceMissingName(t *testing.T) {
         </component>
     </components>
     <networkInfo type="SCM">
-        <ipAddress>192.168.178.35</ipAddress>
+        <ipAddress>192.0.2.35</ipAddress>
         <macAddress>001122334455</macAddress>
     </networkInfo>
     <discoveryMethod>sync_full</discoveryMethod>
@@ -190,7 +190,7 @@ func TestReproduceMissingName(t *testing.T) {
 	globalDevDir := filepath.Join("st-go", "data", "accounts", "default", "devices", "001122334455")
 	os.MkdirAll(globalDevDir, 0755)
 	defer os.RemoveAll("st-go")
-	globalDevInfo := `<info deviceID="001122334455"><name>Sound Machinechen</name><type>SoundTouch</type><moduleType>10 sm2</moduleType></info>`
+	globalDevInfo := `<info deviceID="001122334455"><name>Living Room SoundTouch</name><type>SoundTouch</type><moduleType>10 sm2</moduleType></info>`
 	os.WriteFile(filepath.Join(globalDevDir, "DeviceInfo.xml"), []byte(globalDevInfo), 0644)
 
 	// Create a directory in 'default' with EMPTY name (the one that GetDeviceInfo will pick up)
@@ -210,8 +210,8 @@ func TestReproduceMissingName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if info.Name != "Sound Machinechen" {
-		t.Errorf("Expected name 'Sound Machinechen' to be preserved, got '%s'", info.Name)
+	if info.Name != "Living Room SoundTouch" {
+		t.Errorf("Expected name 'Living Room SoundTouch' to be preserved, got '%s'", info.Name)
 	}
 
 	// Re-generate XML to see if it now uses the preserved name

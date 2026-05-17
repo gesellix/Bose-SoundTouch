@@ -201,7 +201,7 @@ func TestSourceItem_Methods(t *testing.T) {
 
 func TestSources_UnmarshalXML(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
-<sources deviceID="A81B6A536A98">
+<sources deviceID="AABBCCDDEEFF">
     <sourceItem source="AUX" sourceAccount="AUX" status="READY" isLocal="true" multiroomallowed="true">AUX IN</sourceItem>
     <sourceItem source="SPOTIFY" sourceAccount="user@example.com" status="READY" isLocal="false" multiroomallowed="true">user+spotify@example.com</sourceItem>
     <sourceItem source="BLUETOOTH" status="UNAVAILABLE" isLocal="true" multiroomallowed="true" />
@@ -216,8 +216,8 @@ func TestSources_UnmarshalXML(t *testing.T) {
 	}
 
 	// Test basic fields
-	if sources.DeviceID != "A81B6A536A98" {
-		t.Errorf("Expected DeviceID 'A81B6A536A98', got '%s'", sources.DeviceID)
+	if sources.DeviceID != "AABBCCDDEEFF" {
+		t.Errorf("Expected DeviceID 'AABBCCDDEEFF', got '%s'", sources.DeviceID)
 	}
 
 	if len(sources.SourceItem) != 4 {

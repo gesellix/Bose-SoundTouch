@@ -121,7 +121,7 @@ func TestClient_GetBassCapabilities(t *testing.T) {
 		{
 			name:           "bass supported device",
 			responseStatus: http.StatusOK,
-			responseBody: `<bassCapabilities deviceID="A81B6A536A98">
+			responseBody: `<bassCapabilities deviceID="AABBCCDDEEFF">
 				<bassAvailable>true</bassAvailable>
 				<bassMin>-9</bassMin>
 				<bassMax>9</bassMax>
@@ -129,7 +129,7 @@ func TestClient_GetBassCapabilities(t *testing.T) {
 			</bassCapabilities>`,
 			expectError: false,
 			expectedCaps: &models.BassCapabilities{
-				DeviceID:      "A81B6A536A98",
+				DeviceID:      "AABBCCDDEEFF",
 				BassAvailable: true,
 				BassMin:       -9,
 				BassMax:       9,
@@ -139,7 +139,7 @@ func TestClient_GetBassCapabilities(t *testing.T) {
 		{
 			name:           "bass not supported device",
 			responseStatus: http.StatusOK,
-			responseBody: `<bassCapabilities deviceID="A81B6A536A98">
+			responseBody: `<bassCapabilities deviceID="AABBCCDDEEFF">
 				<bassAvailable>false</bassAvailable>
 				<bassMin>0</bassMin>
 				<bassMax>0</bassMax>
@@ -147,7 +147,7 @@ func TestClient_GetBassCapabilities(t *testing.T) {
 			</bassCapabilities>`,
 			expectError: false,
 			expectedCaps: &models.BassCapabilities{
-				DeviceID:      "A81B6A536A98",
+				DeviceID:      "AABBCCDDEEFF",
 				BassAvailable: false,
 				BassMin:       0,
 				BassMax:       0,
@@ -306,7 +306,7 @@ func TestClient_GetTrackInfo(t *testing.T) {
 		{
 			name:           "track info with full details",
 			responseStatus: http.StatusOK,
-			responseBody: `<nowPlaying deviceID="A81B6A536A98" source="SPOTIFY">
+			responseBody: `<nowPlaying deviceID="AABBCCDDEEFF" source="SPOTIFY">
 				<ContentItem source="SPOTIFY" location="/12345" sourceAccount="user@example.com" isPresetable="true">
 					<itemName>Test Track</itemName>
 				</ContentItem>
@@ -317,7 +317,7 @@ func TestClient_GetTrackInfo(t *testing.T) {
 			</nowPlaying>`,
 			expectError: false,
 			expectedInfo: &models.NowPlaying{
-				DeviceID:   "A81B6A536A98",
+				DeviceID:   "AABBCCDDEEFF",
 				Source:     "SPOTIFY",
 				Track:      "Test Track",
 				Artist:     "Test Artist",
@@ -328,7 +328,7 @@ func TestClient_GetTrackInfo(t *testing.T) {
 		{
 			name:           "radio station info",
 			responseStatus: http.StatusOK,
-			responseBody: `<nowPlaying deviceID="A81B6A536A98" source="TUNEIN">
+			responseBody: `<nowPlaying deviceID="AABBCCDDEEFF" source="TUNEIN">
 				<ContentItem source="TUNEIN" location="/station123" isPresetable="true">
 					<itemName>Jazz FM</itemName>
 				</ContentItem>
@@ -337,7 +337,7 @@ func TestClient_GetTrackInfo(t *testing.T) {
 			</nowPlaying>`,
 			expectError: false,
 			expectedInfo: &models.NowPlaying{
-				DeviceID:    "A81B6A536A98",
+				DeviceID:    "AABBCCDDEEFF",
 				Source:      "TUNEIN",
 				StationName: "Jazz FM",
 				PlayStatus:  "PLAY_STATE",
@@ -346,7 +346,7 @@ func TestClient_GetTrackInfo(t *testing.T) {
 		{
 			name:           "standby state",
 			responseStatus: http.StatusOK,
-			responseBody: `<nowPlaying deviceID="A81B6A536A98" source="STANDBY">
+			responseBody: `<nowPlaying deviceID="AABBCCDDEEFF" source="STANDBY">
 				<ContentItem source="STANDBY">
 					<itemName>STANDBY</itemName>
 				</ContentItem>
@@ -354,7 +354,7 @@ func TestClient_GetTrackInfo(t *testing.T) {
 			</nowPlaying>`,
 			expectError: false,
 			expectedInfo: &models.NowPlaying{
-				DeviceID:   "A81B6A536A98",
+				DeviceID:   "AABBCCDDEEFF",
 				Source:     "STANDBY",
 				PlayStatus: "STOP_STATE",
 			},
@@ -462,7 +462,7 @@ func TestClient_GetTrackInfo(t *testing.T) {
 func TestClient_NewEndpoints_NetworkError(t *testing.T) {
 	// Create client pointing to non-existent server
 	config := &Config{
-		Host: "192.168.1.999", // Invalid IP
+		Host: "192.0.2.999", // Invalid IP
 		Port: 8090,
 	}
 	client := NewClient(config)

@@ -20,7 +20,7 @@ func TestUPnP_EnrichDeviceInfo_RealDeviceXML(t *testing.T) {
     </specVersion>
     <device>
         <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
-        <friendlyName>Sound Machinechen</friendlyName>
+        <friendlyName>Living Room SoundTouch</friendlyName>
         <qq:X_QPlay_SoftwareCapability xmlns:qq="http://www.tencent.com">QPlay:2</qq:X_QPlay_SoftwareCapability>
         <manufacturer>Bose Corporation</manufacturer>
         <manufacturerURL>http://www.bose.com</manufacturerURL>
@@ -28,8 +28,8 @@ func TestUPnP_EnrichDeviceInfo_RealDeviceXML(t *testing.T) {
         <modelNumber></modelNumber>
         <modelDescription>Bose SoundTouch Wireless Streaming Audio Device</modelDescription>
         <modelURL>http://www.bose.com</modelURL>
-        <serialNumber>A81B6A536A98</serialNumber>
-        <UDN>uuid:BO5EBO5E-F00D-F00D-FEED-A81B6A536A98</UDN>
+        <serialNumber>AABBCCDDEEFF</serialNumber>
+        <UDN>uuid:BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF</UDN>
         <serviceList>
             <service>
                 <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
@@ -72,7 +72,7 @@ func TestUPnP_EnrichDeviceInfo_RealDeviceXML(t *testing.T) {
 
 	// Create a discovered device to enrich
 	device := &models.DiscoveredDevice{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 		Port: 8091,
 		Name: "Initial Device Name",
 	}
@@ -86,13 +86,13 @@ func TestUPnP_EnrichDeviceInfo_RealDeviceXML(t *testing.T) {
 	}
 
 	// Verify that the MAC address was extracted correctly from serialNumber
-	expectedMAC := "A81B6A536A98"
+	expectedMAC := "AABBCCDDEEFF"
 	if device.UPnPSerial != expectedMAC {
 		t.Errorf("Expected UPnPSerial '%s', got '%s'", expectedMAC, device.UPnPSerial)
 	}
 
 	// Verify other enriched fields
-	expectedName := "Sound Machinechen"
+	expectedName := "Living Room SoundTouch"
 	if device.Name != expectedName {
 		t.Errorf("Expected Name '%s', got '%s'", expectedName, device.Name)
 	}
@@ -117,32 +117,32 @@ func TestUPnP_MACAddressDiscovery_Integration(t *testing.T) {
 	}{
 		{
 			name:               "StandardMAC",
-			serialNumberInXML:  "A81B6A536A98",
-			expectedUPnPSerial: "A81B6A536A98",
+			serialNumberInXML:  "AABBCCDDEEFF",
+			expectedUPnPSerial: "AABBCCDDEEFF",
 			description:        "Standard MAC address format without separators",
 		},
 		{
 			name:               "MACWithColons",
-			serialNumberInXML:  "A8:1B:6A:53:6A:98",
-			expectedUPnPSerial: "A8:1B:6A:53:6A:98",
+			serialNumberInXML:  "AA:BB:CC:DD:EE:FF",
+			expectedUPnPSerial: "AA:BB:CC:DD:EE:FF",
 			description:        "MAC address with colon separators",
 		},
 		{
 			name:               "MACWithDashes",
-			serialNumberInXML:  "A8-1B-6A-53-6A-98",
-			expectedUPnPSerial: "A8-1B-6A-53-6A-98",
+			serialNumberInXML:  "AA-BB-CC-DD-EE-FF",
+			expectedUPnPSerial: "AA-BB-CC-DD-EE-FF",
 			description:        "MAC address with dash separators",
 		},
 		{
 			name:               "LowercaseMAC",
-			serialNumberInXML:  "a81b6a536a98",
-			expectedUPnPSerial: "a81b6a536a98",
+			serialNumberInXML:  "aabbccddeeff",
+			expectedUPnPSerial: "aabbccddeeff",
 			description:        "Lowercase MAC address",
 		},
 		{
 			name:               "MixedCaseMAC",
-			serialNumberInXML:  "a81B6a536A98",
-			expectedUPnPSerial: "a81B6a536A98",
+			serialNumberInXML:  "aaBBccddEEff",
+			expectedUPnPSerial: "aaBBccddEEff",
 			description:        "Mixed case MAC address",
 		},
 	}
@@ -173,7 +173,7 @@ func TestUPnP_MACAddressDiscovery_Integration(t *testing.T) {
 
 			// Create and enrich device
 			device := &models.DiscoveredDevice{
-				Host: "192.168.1.100",
+				Host: "192.0.2.100",
 				Port: 8090,
 			}
 
@@ -197,23 +197,23 @@ func TestUPnP_MACAddressDiscovery_Integration(t *testing.T) {
 
 func TestUPnP_URLPattern_Realistic(t *testing.T) {
 	// Test the exact URL pattern mentioned:
-	// http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-A81B6A536A98.xml
+	// http://192.0.2.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml
 
 	realDeviceXML := `<?xml version="1.0" encoding="utf-8"?>
 <root xmlns="urn:schemas-upnp-org:device-1-0">
     <device>
         <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
-        <friendlyName>Sound Machinechen</friendlyName>
+        <friendlyName>Living Room SoundTouch</friendlyName>
         <manufacturer>Bose Corporation</manufacturer>
         <modelName>SoundTouch 10</modelName>
-        <serialNumber>A81B6A536A98</serialNumber>
-        <UDN>uuid:BO5EBO5E-F00D-F00D-FEED-A81B6A536A98</UDN>
+        <serialNumber>AABBCCDDEEFF</serialNumber>
+        <UDN>uuid:BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF</UDN>
     </device>
 </root>`
 
 	// Create server that responds to the specific path
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/XD/BO5EBO5E-F00D-F00D-FEED-A81B6A536A98.xml" {
+		if r.URL.Path == "/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml" {
 			w.Header().Set("Content-Type", "text/xml")
 			fmt.Fprint(w, realDeviceXML)
 		} else {
@@ -224,13 +224,13 @@ func TestUPnP_URLPattern_Realistic(t *testing.T) {
 
 	// Test enrichment using the realistic URL path
 	device := &models.DiscoveredDevice{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 		Port: 8091,
 		Name: "Initial Name",
 	}
 
 	service := NewService(5 * time.Second)
-	locationURL := server.URL + "/XD/BO5EBO5E-F00D-F00D-FEED-A81B6A536A98.xml"
+	locationURL := server.URL + "/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml"
 	err := service.EnrichDeviceInfo(device, locationURL)
 
 	if err != nil {
@@ -238,7 +238,7 @@ func TestUPnP_URLPattern_Realistic(t *testing.T) {
 	}
 
 	// Verify MAC address extraction
-	expectedMAC := "A81B6A536A98"
+	expectedMAC := "AABBCCDDEEFF"
 	if device.UPnPSerial != expectedMAC {
 		t.Errorf("Expected MAC '%s', got '%s'", expectedMAC, device.UPnPSerial)
 	}
@@ -254,7 +254,7 @@ func TestUPnP_URLPattern_Realistic(t *testing.T) {
 func TestUPnP_ErrorHandling(t *testing.T) {
 	service := NewService(5 * time.Second)
 	device := &models.DiscoveredDevice{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 		Name: "Test Device",
 	}
 

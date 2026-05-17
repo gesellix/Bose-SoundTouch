@@ -180,7 +180,7 @@ func TestListAllDevices(t *testing.T) {
 	info := &models.ServiceDeviceInfo{
 		DeviceID:           deviceID,
 		Name:               "Test Speaker",
-		IPAddress:          "192.168.1.100",
+		IPAddress:          "192.0.2.100",
 		DeviceSerialNumber: deviceID,
 		ProductCode:        "SoundTouch 10",
 		FirmwareVersion:    "1.2.3",
@@ -264,13 +264,13 @@ func TestListAllDevices_MultipleEmptyIDs(t *testing.T) {
 	info1 := &models.ServiceDeviceInfo{
 		DeviceID:  "",
 		Name:      "Speaker 1",
-		IPAddress: "192.168.1.1",
+		IPAddress: "192.0.2.1",
 		AccountID: account,
 	}
 	info2 := &models.ServiceDeviceInfo{
 		DeviceID:  "",
 		Name:      "Speaker 2",
-		IPAddress: "192.168.1.2",
+		IPAddress: "192.0.2.2",
 		AccountID: account,
 	}
 

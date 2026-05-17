@@ -68,10 +68,10 @@ func TestRunPeerReachabilityProbe_HappyPath(t *testing.T) {
 	// On nudge, simulate the device fanning out to /updates/soundtouch
 	// which the middleware would signal as a hit on this IP.
 	m := peerProbeManager(func() {
-		obs.signal("192.168.1.42", PeerHit{Path: "/updates/soundtouch", At: time.Now()})
+		obs.signal("192.0.2.42", PeerHit{Path: "/updates/soundtouch", At: time.Now()})
 	})
 
-	result, err := m.RunPeerReachabilityProbe("192.168.1.42", obs, 2*time.Second)
+	result, err := m.RunPeerReachabilityProbe("192.0.2.42", obs, 2*time.Second)
 	if err != nil {
 		t.Fatalf("RunPeerReachabilityProbe error: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestRunPeerReachabilityProbe_HappyPath(t *testing.T) {
 	if result.ObservedPath != "/updates/soundtouch" {
 		t.Errorf("ObservedPath = %q, want %q", result.ObservedPath, "/updates/soundtouch")
 	}
-	if len(obs.forgotten) != 1 || obs.forgotten[0] != "192.168.1.42" {
+	if len(obs.forgotten) != 1 || obs.forgotten[0] != "192.0.2.42" {
 		t.Errorf("Forget not called for IP: forgotten = %v", obs.forgotten)
 	}
 }
@@ -91,7 +91,7 @@ func TestRunPeerReachabilityProbe_Timeout(t *testing.T) {
 	m := peerProbeManager(nil) // nudge fires but device never responds
 
 	start := time.Now()
-	result, err := m.RunPeerReachabilityProbe("192.168.1.42", obs, 200*time.Millisecond)
+	result, err := m.RunPeerReachabilityProbe("192.0.2.42", obs, 200*time.Millisecond)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -110,7 +110,7 @@ func TestRunPeerReachabilityProbe_Timeout(t *testing.T) {
 
 func TestRunPeerReachabilityProbe_NilObserver(t *testing.T) {
 	m := peerProbeManager(nil)
-	_, err := m.RunPeerReachabilityProbe("192.168.1.42", nil, time.Second)
+	_, err := m.RunPeerReachabilityProbe("192.0.2.42", nil, time.Second)
 	if err == nil {
 		t.Error("expected error for nil observer, got nil")
 	}
@@ -132,7 +132,7 @@ func TestRunPeerReachabilityProbe_NilHTTPGetTimesOut(t *testing.T) {
 	m := &Manager{} // HTTPGet nil
 	obs := newFakePeerObserver()
 
-	result, err := m.RunPeerReachabilityProbe("192.168.1.42", obs, 100*time.Millisecond)
+	result, err := m.RunPeerReachabilityProbe("192.0.2.42", obs, 100*time.Millisecond)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}

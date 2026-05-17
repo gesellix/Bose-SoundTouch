@@ -22,7 +22,7 @@ Authorization: Bearer dummy-token
 
         const expectedDeviceId = "B05ECAFE";
         const expectedName = "SoundTouch-11";
-        const expectedIp = "192.168.1.100";
+        const expectedIp = "192.0.2.100";
 
         const device = deviceList.item(0);
         client.assert(device.getAttribute("deviceid") === expectedDeviceId, "Wrong device ID");

@@ -181,7 +181,7 @@ func TestClient_Introspect_ErrorCases_Integration(t *testing.T) {
 // ExampleClient_Introspect demonstrates how to use the Introspect method
 func ExampleClient_Introspect() {
 	config := &Config{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 		Port: 8090,
 	}
 	client := NewClient(config)
@@ -216,7 +216,7 @@ func ExampleClient_Introspect() {
 // ExampleClient_IntrospectSpotify demonstrates the Spotify convenience method
 func ExampleClient_IntrospectSpotify() {
 	config := &Config{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 		Port: 8090,
 	}
 	client := NewClient(config)

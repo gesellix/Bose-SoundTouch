@@ -34,7 +34,7 @@ func TestPathPatterns_Sanitize(t *testing.T) {
 		segment  string
 		wantRepl string
 	}{
-		{"192.168.1.100", "{ip}"},
+		{"192.0.2.100", "{ip}"},
 		{"1234567", "{accountId}"},
 		{"12345", "{accountId}"},
 		{"12345678-1234-5678-9012-123456789012", "{uuid}"},

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<nowPlaying deviceID="A81B6A536A98" source="TUNEIN">
+<nowPlaying deviceID="AABBCCDDEEFF" source="TUNEIN">
     <ContentItem source="TUNEIN" type="stationurl" location="http://stream.example.com/radio" sourceAccount="" isPresetable="true">
         <itemName>Classic Rock 101.5</itemName>
         <containerArt>https://cdn-radiotime-logos.tunein.com/s123456q.png</containerArt>

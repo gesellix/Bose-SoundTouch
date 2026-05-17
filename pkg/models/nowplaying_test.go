@@ -182,7 +182,7 @@ func TestRepeatSetting_UnmarshalXML(t *testing.T) {
 
 func TestNowPlaying_UnmarshalXML(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
-<nowPlaying deviceID="A81B6A536A98" source="SPOTIFY" sourceAccount="user@example.com">
+<nowPlaying deviceID="AABBCCDDEEFF" source="SPOTIFY" sourceAccount="user@example.com">
     <ContentItem source="SPOTIFY" type="tracklisturl" location="/playbook/container/abc123" sourceAccount="user@example.com" isPresetable="true">
         <itemName>SYML</itemName>
         <containerArt>https://i.scdn.co/image/ab67616d0000b273ca6f00df62ef197fdc8af79c</containerArt>
@@ -211,8 +211,8 @@ func TestNowPlaying_UnmarshalXML(t *testing.T) {
 	}
 
 	// Test basic fields
-	if nowPlaying.DeviceID != "A81B6A536A98" {
-		t.Errorf("Expected DeviceID 'A81B6A536A98', got '%s'", nowPlaying.DeviceID)
+	if nowPlaying.DeviceID != "AABBCCDDEEFF" {
+		t.Errorf("Expected DeviceID 'AABBCCDDEEFF', got '%s'", nowPlaying.DeviceID)
 	}
 
 	if nowPlaying.Source != "SPOTIFY" {
@@ -309,7 +309,7 @@ func TestNowPlaying_UnmarshalXML(t *testing.T) {
 
 func TestNowPlaying_RadioStation(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
-<nowPlaying deviceID="A81B6A536A98" source="TUNEIN">
+<nowPlaying deviceID="AABBCCDDEEFF" source="TUNEIN">
     <stationName>Classic Rock 101.5</stationName>
     <description>The Best Classic Rock Hits</description>
     <stationLocation>New York, NY</stationLocation>
@@ -343,7 +343,7 @@ func TestNowPlaying_RadioStation(t *testing.T) {
 
 func TestNowPlaying_EmptyState(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8" ?>
-<nowPlaying deviceID="A81B6A536A98" source="">
+<nowPlaying deviceID="AABBCCDDEEFF" source="">
     <playStatus>STOP_STATE</playStatus>
 </nowPlaying>`
 

@@ -7,10 +7,10 @@ import (
 
 func TestDeviceInfoXML_RealWorldParsing(t *testing.T) {
 	// Real XML response from a SoundTouch device's /info endpoint
-	xmlData := `<info deviceID="A81B6A536A98">
-<name>Sound Machinechen</name>
+	xmlData := `<info deviceID="AABBCCDDEEFF">
+<name>Living Room SoundTouch</name>
 <type>SoundTouch 10</type>
-<margeAccountUUID>3230304</margeAccountUUID>
+<margeAccountUUID>1000001</margeAccountUUID>
 <components>
 <component>
 <componentCategory>SCM</componentCategory>
@@ -25,12 +25,12 @@ func TestDeviceInfoXML_RealWorldParsing(t *testing.T) {
 </components>
 <margeURL>https://streaming.bose.com</margeURL>
 <networkInfo type="SCM">
-<macAddress>A81B6A536A98</macAddress>
-<ipAddress>192.168.1.100</ipAddress>
+<macAddress>AABBCCDDEEFF</macAddress>
+<ipAddress>192.0.2.100</ipAddress>
 </networkInfo>
 <networkInfo type="SMSC">
-<macAddress>A81B6A849D99</macAddress>
-<ipAddress>192.168.1.100</ipAddress>
+<macAddress>AABBCCDDEE01</macAddress>
+<ipAddress>192.0.2.100</ipAddress>
 </networkInfo>
 <moduleType>sm2</moduleType>
 <variant>rhino</variant>
@@ -48,12 +48,12 @@ func TestDeviceInfoXML_RealWorldParsing(t *testing.T) {
 	}
 
 	// Verify basic fields
-	if infoXML.DeviceID != "A81B6A536A98" {
-		t.Errorf("Expected deviceID 'A81B6A536A98', got '%s'", infoXML.DeviceID)
+	if infoXML.DeviceID != "AABBCCDDEEFF" {
+		t.Errorf("Expected deviceID 'AABBCCDDEEFF', got '%s'", infoXML.DeviceID)
 	}
 
-	if infoXML.Name != "Sound Machinechen" {
-		t.Errorf("Expected name 'Sound Machinechen', got '%s'", infoXML.Name)
+	if infoXML.Name != "Living Room SoundTouch" {
+		t.Errorf("Expected name 'Living Room SoundTouch', got '%s'", infoXML.Name)
 	}
 
 	if infoXML.Type != "SoundTouch 10" {
@@ -64,8 +64,8 @@ func TestDeviceInfoXML_RealWorldParsing(t *testing.T) {
 		t.Errorf("Expected moduleType 'sm2', got '%s'", infoXML.ModuleType)
 	}
 
-	if infoXML.MargeAccountUUID != "3230304" {
-		t.Errorf("Expected margeAccountUUID '3230304', got '%s'", infoXML.MargeAccountUUID)
+	if infoXML.MargeAccountUUID != "1000001" {
+		t.Errorf("Expected margeAccountUUID '1000001', got '%s'", infoXML.MargeAccountUUID)
 	}
 
 	if infoXML.MargeURL != "https://streaming.bose.com" {
@@ -132,19 +132,19 @@ func TestDeviceInfoXML_RealWorldParsing(t *testing.T) {
 		switch net.Type {
 		case "SCM":
 			scmNetworkFound = true
-			if net.MacAddress != "A81B6A536A98" {
-				t.Errorf("Expected SCM MAC 'A81B6A536A98', got '%s'", net.MacAddress)
+			if net.MacAddress != "AABBCCDDEEFF" {
+				t.Errorf("Expected SCM MAC 'AABBCCDDEEFF', got '%s'", net.MacAddress)
 			}
-			if net.IPAddress != "192.168.1.100" {
-				t.Errorf("Expected SCM IP '192.168.1.100', got '%s'", net.IPAddress)
+			if net.IPAddress != "192.0.2.100" {
+				t.Errorf("Expected SCM IP '192.0.2.100', got '%s'", net.IPAddress)
 			}
 		case "SMSC":
 			smscNetworkFound = true
-			if net.MacAddress != "A81B6A849D99" {
-				t.Errorf("Expected SMSC MAC 'A81B6A849D99', got '%s'", net.MacAddress)
+			if net.MacAddress != "AABBCCDDEE01" {
+				t.Errorf("Expected SMSC MAC 'AABBCCDDEE01', got '%s'", net.MacAddress)
 			}
-			if net.IPAddress != "192.168.1.100" {
-				t.Errorf("Expected SMSC IP '192.168.1.100', got '%s'", net.IPAddress)
+			if net.IPAddress != "192.0.2.100" {
+				t.Errorf("Expected SMSC IP '192.0.2.100', got '%s'", net.IPAddress)
 			}
 		}
 	}
@@ -158,8 +158,8 @@ func TestDeviceInfoXML_RealWorldParsing(t *testing.T) {
 
 	// Test the GetPrimaryMacAddress method
 	primaryMAC := infoXML.GetPrimaryMacAddress()
-	if primaryMAC != "A81B6A536A98" {
-		t.Errorf("Expected primary MAC 'A81B6A536A98', got '%s'", primaryMAC)
+	if primaryMAC != "AABBCCDDEEFF" {
+		t.Errorf("Expected primary MAC 'AABBCCDDEEFF', got '%s'", primaryMAC)
 	}
 
 	t.Logf("✅ Successfully parsed real device info XML")
@@ -194,10 +194,10 @@ func TestDeviceInfoXML_GetPrimaryMacAddress_EdgeCases(t *testing.T) {
 				MacAddress string
 				IPAddress  string
 			}{
-				{"SCM", "A81B6A536A98", "192.168.1.1"},
-				{"SMSC", "A81B6A849D99", "192.168.1.1"},
+				{"SCM", "AABBCCDDEEFF", "192.0.2.1"},
+				{"SMSC", "AABBCCDDEE01", "192.0.2.1"},
 			},
-			expected: "A81B6A536A98",
+			expected: "AABBCCDDEEFF",
 		},
 		{
 			name: "scm_second",
@@ -206,10 +206,10 @@ func TestDeviceInfoXML_GetPrimaryMacAddress_EdgeCases(t *testing.T) {
 				MacAddress string
 				IPAddress  string
 			}{
-				{"SMSC", "A81B6A849D99", "192.168.1.1"},
-				{"SCM", "A81B6A536A98", "192.168.1.1"},
+				{"SMSC", "AABBCCDDEE01", "192.0.2.1"},
+				{"SCM", "AABBCCDDEEFF", "192.0.2.1"},
 			},
-			expected: "A81B6A536A98",
+			expected: "AABBCCDDEEFF",
 		},
 		{
 			name: "no_scm",
@@ -218,8 +218,8 @@ func TestDeviceInfoXML_GetPrimaryMacAddress_EdgeCases(t *testing.T) {
 				MacAddress string
 				IPAddress  string
 			}{
-				{"SMSC", "A81B6A849D99", "192.168.1.1"},
-				{"OTHER", "A81B6A849D88", "192.168.1.1"},
+				{"SMSC", "AABBCCDDEE01", "192.0.2.1"},
+				{"OTHER", "AABBCCDDEE03", "192.0.2.1"},
 			},
 			expected: "",
 		},
@@ -230,8 +230,8 @@ func TestDeviceInfoXML_GetPrimaryMacAddress_EdgeCases(t *testing.T) {
 				MacAddress string
 				IPAddress  string
 			}{
-				{"SCM", "", "192.168.1.1"},
-				{"SMSC", "A81B6A849D99", "192.168.1.1"},
+				{"SCM", "", "192.0.2.1"},
+				{"SMSC", "AABBCCDDEE01", "192.0.2.1"},
 			},
 			expected: "",
 		},
@@ -261,7 +261,7 @@ func TestDeviceInfoXML_GetPrimaryMacAddress_EdgeCases(t *testing.T) {
 }
 
 func TestDeviceInfoXML_ComponentParsing(t *testing.T) {
-	xmlData := `<info deviceID="A81B6A536A98">
+	xmlData := `<info deviceID="AABBCCDDEEFF">
 <name>Test Device</name>
 <type>SoundTouch 10</type>
 <components>

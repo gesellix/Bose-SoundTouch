@@ -44,7 +44,7 @@ func TestSaveDeviceInfo_MergesName(t *testing.T) {
 		AccountID:   account,
 		Name:        "",
 		ProductCode: "SoundTouch 20",
-		IPAddress:   "192.168.1.100",
+		IPAddress:   "192.0.2.100",
 	}
 	if err := ds.SaveDeviceInfo(account, device, info2); err != nil {
 		t.Fatalf("Second SaveDeviceInfo failed: %v", err)
@@ -58,7 +58,7 @@ func TestSaveDeviceInfo_MergesName(t *testing.T) {
 	if saved2.Name != "Living Room" {
 		t.Errorf("Expected name 'Living Room' to be preserved, but got '%s'", saved2.Name)
 	}
-	if saved2.IPAddress != "192.168.1.100" {
-		t.Errorf("Expected IPAddress '192.168.1.100', got '%s'", saved2.IPAddress)
+	if saved2.IPAddress != "192.0.2.100" {
+		t.Errorf("Expected IPAddress '192.0.2.100', got '%s'", saved2.IPAddress)
 	}
 }

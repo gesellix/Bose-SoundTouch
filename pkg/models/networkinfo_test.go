@@ -15,7 +15,7 @@ func TestNetworkInformation_UnmarshalXML(t *testing.T) {
 			name: "WiFi device with connected and disconnected interfaces",
 			xmlData: `<networkInfo wifiProfileCount="2">
 <interfaces>
-<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" ssid="MyHomeNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
+<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" ssid="MyHomeNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
 <interface type="WIFI_INTERFACE" name="wlan1" macAddress="AA:BB:CC:DD:EE:01" state="NETWORK_WIFI_DISCONNECTED"/>
 </interfaces>
 </networkInfo>`,
@@ -27,7 +27,7 @@ func TestNetworkInformation_UnmarshalXML(t *testing.T) {
 							Type:         "WIFI_INTERFACE",
 							Name:         "wlan0",
 							MacAddress:   "AA:BB:CC:DD:EE:FF",
-							IPAddress:    "192.168.1.10",
+							IPAddress:    "192.0.2.10",
 							SSID:         "MyHomeNetwork",
 							FrequencyKHz: 5500000,
 							State:        "NETWORK_WIFI_CONNECTED",
@@ -48,7 +48,7 @@ func TestNetworkInformation_UnmarshalXML(t *testing.T) {
 			name: "Ethernet device",
 			xmlData: `<networkInfo wifiProfileCount="3">
 <interfaces>
-<interface type="ETHERNET_INTERFACE" name="eth0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" state="NETWORK_ETHERNET_CONNECTED"/>
+<interface type="ETHERNET_INTERFACE" name="eth0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" state="NETWORK_ETHERNET_CONNECTED"/>
 </interfaces>
 </networkInfo>`,
 			expected: NetworkInformation{
@@ -59,7 +59,7 @@ func TestNetworkInformation_UnmarshalXML(t *testing.T) {
 							Type:       "ETHERNET_INTERFACE",
 							Name:       "eth0",
 							MacAddress: "AA:BB:CC:DD:EE:FF",
-							IPAddress:  "192.168.1.10",
+							IPAddress:  "192.0.2.10",
 							State:      "NETWORK_ETHERNET_CONNECTED",
 						},
 					},
@@ -83,7 +83,7 @@ func TestNetworkInformation_UnmarshalXML(t *testing.T) {
 			name: "Multiple WiFi interfaces with different signals",
 			xmlData: `<networkInfo wifiProfileCount="1">
 <interfaces>
-<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" ssid="StrongNetwork" frequencyKHz="2400000" state="NETWORK_WIFI_CONNECTED" signal="GOOD_SIGNAL" mode="STATION"/>
+<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" ssid="StrongNetwork" frequencyKHz="2400000" state="NETWORK_WIFI_CONNECTED" signal="GOOD_SIGNAL" mode="STATION"/>
 <interface type="WIFI_INTERFACE" name="wlan1" macAddress="AA:BB:CC:DD:EE:01" ssid="WeakNetwork" frequencyKHz="5200000" state="NETWORK_WIFI_CONNECTED" signal="POOR_SIGNAL" mode="STATION"/>
 </interfaces>
 </networkInfo>`,
@@ -95,7 +95,7 @@ func TestNetworkInformation_UnmarshalXML(t *testing.T) {
 							Type:         "WIFI_INTERFACE",
 							Name:         "wlan0",
 							MacAddress:   "AA:BB:CC:DD:EE:FF",
-							IPAddress:    "192.168.1.10",
+							IPAddress:    "192.0.2.10",
 							SSID:         "StrongNetwork",
 							FrequencyKHz: 2400000,
 							State:        "NETWORK_WIFI_CONNECTED",
@@ -594,7 +594,7 @@ func TestNetworkInterface_ValidateAddresses(t *testing.T) {
 		{
 			name: "Valid IPv4 and MAC",
 			iface: NetworkInterface{
-				IPAddress:  "192.168.1.10",
+				IPAddress:  "192.0.2.10",
 				MacAddress: "AA:BB:CC:DD:EE:FF",
 			},
 			validIP:  true,
@@ -650,7 +650,7 @@ func TestNetworkInformation_GetConnectedInterfaces(t *testing.T) {
 					Type:       InterfaceTypeWiFi,
 					State:      StateWiFiConnected,
 					SSID:       "WiFiNetwork",
-					IPAddress:  "192.168.1.10",
+					IPAddress:  "192.0.2.10",
 					MacAddress: "AA:BB:CC:DD:EE:FF",
 				},
 				{
@@ -661,7 +661,7 @@ func TestNetworkInformation_GetConnectedInterfaces(t *testing.T) {
 				{
 					Type:       InterfaceTypeEthernet,
 					State:      StateEthernetConnected,
-					IPAddress:  "192.168.1.11",
+					IPAddress:  "192.0.2.11",
 					MacAddress: "11:22:33:44:55:66",
 				},
 			},
@@ -680,8 +680,8 @@ func TestNetworkInformation_GetConnectedInterfaces(t *testing.T) {
 	ethIface := networkInfo.GetConnectedEthernetInterface()
 	if ethIface == nil {
 		t.Error("Expected to find connected Ethernet interface")
-	} else if ethIface.IPAddress != "192.168.1.11" {
-		t.Errorf("Expected Ethernet IP '192.168.1.11', got %q", ethIface.IPAddress)
+	} else if ethIface.IPAddress != "192.0.2.11" {
+		t.Errorf("Expected Ethernet IP '192.0.2.11', got %q", ethIface.IPAddress)
 	}
 
 	// Test with no connected interfaces

@@ -24,7 +24,7 @@ func TestDNSDiscoveryPersistence(t *testing.T) {
 			QueryCount:    10,
 			IsBoseService: true,
 			IsIntercepted: true,
-			RemoteAddr:    "192.168.1.100",
+			RemoteAddr:    "192.0.2.100",
 		},
 		{
 			Hostname:      "google.com",
@@ -33,7 +33,7 @@ func TestDNSDiscoveryPersistence(t *testing.T) {
 			QueryCount:    5,
 			IsBoseService: false,
 			IsIntercepted: false,
-			RemoteAddr:    "192.168.1.101",
+			RemoteAddr:    "192.0.2.101",
 		},
 	}
 

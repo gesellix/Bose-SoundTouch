@@ -24,7 +24,7 @@ func TestClient_AddZoneSlave(t *testing.T) {
 			name:           "successful add zone slave with IP",
 			masterID:       "MASTER123",
 			slaveID:        "SLAVE456",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusOK,
 			responseBody:   `<status>OK</status>`,
 			expectError:    false,
@@ -44,7 +44,7 @@ func TestClient_AddZoneSlave(t *testing.T) {
 			name:           "server error response",
 			masterID:       "MASTER123",
 			slaveID:        "SLAVE456",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusInternalServerError,
 			responseBody:   `<error>Internal Server Error</error>`,
 			expectError:    true,
@@ -54,7 +54,7 @@ func TestClient_AddZoneSlave(t *testing.T) {
 			name:           "empty master device ID",
 			masterID:       "",
 			slaveID:        "SLAVE456",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusOK,
 			responseBody:   `<status>OK</status>`,
 			expectError:    true,
@@ -64,7 +64,7 @@ func TestClient_AddZoneSlave(t *testing.T) {
 			name:           "empty slave device ID",
 			masterID:       "MASTER123",
 			slaveID:        "",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusOK,
 			responseBody:   `<status>OK</status>`,
 			expectError:    true,
@@ -84,7 +84,7 @@ func TestClient_AddZoneSlave(t *testing.T) {
 			name:           "same master and slave device ID",
 			masterID:       "MASTER123",
 			slaveID:        "MASTER123",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusOK,
 			responseBody:   `<status>OK</status>`,
 			expectError:    true,
@@ -218,7 +218,7 @@ func TestClient_RemoveZoneSlave(t *testing.T) {
 			name:           "successful remove zone slave with IP",
 			masterID:       "MASTER123",
 			slaveID:        "SLAVE456",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusOK,
 			responseBody:   `<status>OK</status>`,
 			expectError:    false,
@@ -238,7 +238,7 @@ func TestClient_RemoveZoneSlave(t *testing.T) {
 			name:           "server error response",
 			masterID:       "MASTER123",
 			slaveID:        "SLAVE456",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusBadRequest,
 			responseBody:   `<error>Bad Request</error>`,
 			expectError:    true,
@@ -248,7 +248,7 @@ func TestClient_RemoveZoneSlave(t *testing.T) {
 			name:           "device not found",
 			masterID:       "MASTER123",
 			slaveID:        "NONEXISTENT",
-			slaveIP:        "192.168.1.101",
+			slaveIP:        "192.0.2.101",
 			responseStatus: http.StatusNotFound,
 			responseBody:   `<error>Device not found</error>`,
 			expectError:    true,
@@ -374,7 +374,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 			request: &models.ZoneSlaveRequest{
 				Master: "MASTER123",
 				Members: []models.ZoneSlaveEntry{
-					{DeviceID: "SLAVE456", IP: "192.168.1.101"},
+					{DeviceID: "SLAVE456", IP: "192.0.2.101"},
 				},
 			},
 			expectError: false,
@@ -394,7 +394,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 			request: &models.ZoneSlaveRequest{
 				Master: "",
 				Members: []models.ZoneSlaveEntry{
-					{DeviceID: "SLAVE456", IP: "192.168.1.101"},
+					{DeviceID: "SLAVE456", IP: "192.0.2.101"},
 				},
 			},
 			expectError: true,
@@ -414,8 +414,8 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 			request: &models.ZoneSlaveRequest{
 				Master: "MASTER123",
 				Members: []models.ZoneSlaveEntry{
-					{DeviceID: "SLAVE456", IP: "192.168.1.101"},
-					{DeviceID: "SLAVE789", IP: "192.168.1.102"},
+					{DeviceID: "SLAVE456", IP: "192.0.2.101"},
+					{DeviceID: "SLAVE789", IP: "192.0.2.102"},
 				},
 			},
 			expectError: true,
@@ -426,7 +426,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 			request: &models.ZoneSlaveRequest{
 				Master: "MASTER123",
 				Members: []models.ZoneSlaveEntry{
-					{DeviceID: "", IP: "192.168.1.101"},
+					{DeviceID: "", IP: "192.0.2.101"},
 				},
 			},
 			expectError: true,
@@ -437,7 +437,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 			request: &models.ZoneSlaveRequest{
 				Master: "MASTER123",
 				Members: []models.ZoneSlaveEntry{
-					{DeviceID: "MASTER123", IP: "192.168.1.101"},
+					{DeviceID: "MASTER123", IP: "192.0.2.101"},
 				},
 			},
 			expectError: true,
@@ -481,7 +481,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 func TestZoneSlaveRequest_HelperMethods(t *testing.T) {
 	t.Run("GetSlaveDeviceID", func(t *testing.T) {
 		request := models.NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
+		request.AddSlave("SLAVE456", "192.0.2.101")
 
 		deviceID := request.GetSlaveDeviceID()
 		if deviceID != "SLAVE456" {
@@ -491,11 +491,11 @@ func TestZoneSlaveRequest_HelperMethods(t *testing.T) {
 
 	t.Run("GetSlaveIP", func(t *testing.T) {
 		request := models.NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
+		request.AddSlave("SLAVE456", "192.0.2.101")
 
 		ip := request.GetSlaveIP()
-		if ip != "192.168.1.101" {
-			t.Errorf("Expected IP '192.168.1.101', got '%s'", ip)
+		if ip != "192.0.2.101" {
+			t.Errorf("Expected IP '192.0.2.101', got '%s'", ip)
 		}
 	})
 
@@ -510,11 +510,11 @@ func TestZoneSlaveRequest_HelperMethods(t *testing.T) {
 
 	t.Run("String representation", func(t *testing.T) {
 		request := models.NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
+		request.AddSlave("SLAVE456", "192.0.2.101")
 
 		str := request.String()
 
-		expected := "Zone slave operation: master=MASTER123, slave=SLAVE456 (192.168.1.101)"
+		expected := "Zone slave operation: master=MASTER123, slave=SLAVE456 (192.0.2.101)"
 		if str != expected {
 			t.Errorf("Expected string '%s', got '%s'", expected, str)
 		}
@@ -541,13 +541,13 @@ func TestClient_ZoneSlaveOperations_NetworkError(t *testing.T) {
 	client := NewClient(config)
 
 	// Test AddZoneSlave with network error
-	err := client.AddZoneSlave("MASTER123", "SLAVE456", "192.168.1.101")
+	err := client.AddZoneSlave("MASTER123", "SLAVE456", "192.0.2.101")
 	if err == nil {
 		t.Errorf("Expected network error for AddZoneSlave but got none")
 	}
 
 	// Test RemoveZoneSlave with network error
-	err = client.RemoveZoneSlave("MASTER123", "SLAVE456", "192.168.1.101")
+	err = client.RemoveZoneSlave("MASTER123", "SLAVE456", "192.0.2.101")
 	if err == nil {
 		t.Errorf("Expected network error for RemoveZoneSlave but got none")
 	}

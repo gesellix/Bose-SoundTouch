@@ -34,7 +34,7 @@ import (
 // and the Bose App showed the rename spinning indefinitely.
 //
 // The fixture at testdata/issue285/rename_request.xml is the exact
-// payload from the log (line 36) — `deviceid="884AEAEEBD27"`,
+// payload from the log (line 36) — `deviceid="AABBCCDDEE02"`,
 // `<name>Wohnzimmer SB</name>`. The test:
 //
 //  1. Pre-seeds the datastore with a device record under the
@@ -66,7 +66,7 @@ func TestIssue285_RenamePutAcceptedAndPersisted(t *testing.T) {
 
 	const (
 		accountID         = "3981561"
-		deviceID          = "884AEAEEBD27"
+		deviceID          = "AABBCCDDEE02"
 		oldName           = "Wohnzimmer"
 		newName           = "Wohnzimmer SB"
 		preExistingIP     = "192.168.0.109"
@@ -78,7 +78,7 @@ func TestIssue285_RenamePutAcceptedAndPersisted(t *testing.T) {
 	// data models a long-paired device the user is now renaming —
 	// CreatedOn must survive the PUT (real Bose preserves it
 	// across renames; see parity capture at
-	// data/parity_mismatches/1771797308__streaming_account_3230304_device_A81B6A536A98.json).
+	// data/parity_mismatches/1771797308__streaming_account_1000001_device_AABBCCDDEEFF.json).
 	if err := ds.SaveDeviceInfo(accountID, deviceID, &models.ServiceDeviceInfo{
 		DeviceID:  deviceID,
 		AccountID: accountID,
@@ -228,8 +228,8 @@ func TestIssue285_NewDeviceGetsRemoteAddrAndFreshTimestamps(t *testing.T) {
 
 	const (
 		accountID = "1111111"
-		deviceID  = "A81B6A536A98"
-		newName   = "Sound Machinechen"
+		deviceID  = "AABBCCDDEEFF"
+		newName   = "Living Room SoundTouch"
 	)
 
 	r, _ := setupRouter("http://localhost:8001", ds)
@@ -314,7 +314,7 @@ func TestIssue285_RenamePutRejectsMismatchedDeviceID(t *testing.T) {
 
 	t.Cleanup(ts.Close)
 
-	const urlDeviceID = "884AEAEEBD27"
+	const urlDeviceID = "AABBCCDDEE02"
 
 	// Body claims a different deviceID than the URL.
 	body := []byte(`<?xml version="1.0" encoding="UTF-8" ?>` +

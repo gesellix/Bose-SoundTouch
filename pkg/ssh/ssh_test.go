@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	host := "192.168.1.10"
+	host := "192.0.2.10"
 
 	client := NewClient(host)
 	if client.Host != host {

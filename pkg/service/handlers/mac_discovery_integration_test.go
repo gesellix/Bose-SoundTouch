@@ -24,7 +24,7 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 
 	// Mock device info response (real-world example)
 	deviceInfoXML := `<info deviceID="001122334455">
-<name>Sound Machinechen</name>
+<name>Living Room SoundTouch</name>
 <type>SoundTouch 10</type>
 <margeAccountUUID>1234567</margeAccountUUID>
 <components>
@@ -42,11 +42,11 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 <margeURL>https://streaming.bose.com</margeURL>
 <networkInfo type="SCM">
 <macAddress>001122334455</macAddress>
-<ipAddress>192.168.1.100</ipAddress>
+<ipAddress>192.0.2.100</ipAddress>
 </networkInfo>
 <networkInfo type="SMSC">
-<macAddress>A81B6A849D99</macAddress>
-<ipAddress>192.168.1.100</ipAddress>
+<macAddress>AABBCCDDEE01</macAddress>
+<ipAddress>192.0.2.100</ipAddress>
 </networkInfo>
 <moduleType>sm2</moduleType>
 <variant>rhino</variant>
@@ -127,8 +127,8 @@ func TestMACBasedDeviceDiscovery_Integration(t *testing.T) {
 		t.Errorf("Expected accountID '%s', got '%s'", expectedAccountID, deviceInfo.AccountID)
 	}
 
-	if deviceInfo.Name != "Sound Machinechen" {
-		t.Errorf("Expected name 'Sound Machinechen' (from /info), got '%s'", deviceInfo.Name)
+	if deviceInfo.Name != "Living Room SoundTouch" {
+		t.Errorf("Expected name 'Living Room SoundTouch' (from /info), got '%s'", deviceInfo.Name)
 	}
 
 	if deviceInfo.ProductCode != "SoundTouch 10 sm2" {
@@ -244,7 +244,7 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 	accountID := "1234567"
 
 	// 1. Create an existing device entry using IP address (old style)
-	oldDeviceID := "192.168.1.100"
+	oldDeviceID := "192.0.2.100"
 	oldInfo := &models.ServiceDeviceInfo{
 		DeviceID:        oldDeviceID,
 		AccountID:       accountID,
@@ -282,7 +282,7 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 
 	// 2. Mock the same device now providing proper /info response
 	deviceInfoXML := `<info deviceID="001122334455">
-<name>Sound Machinechen</name>
+<name>Living Room SoundTouch</name>
 <type>SoundTouch 10</type>
 <margeAccountUUID>1234567</margeAccountUUID>
 <components>
@@ -294,7 +294,7 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 </components>
 <networkInfo type="SCM">
 <macAddress>001122334455</macAddress>
-<ipAddress>192.168.1.100</ipAddress>
+<ipAddress>192.0.2.100</ipAddress>
 </networkInfo>
 <moduleType>sm2</moduleType>
 </info>`
@@ -336,8 +336,8 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 		t.Errorf("Expected new deviceID '%s', got '%s'", newDeviceID, newInfo.DeviceID)
 	}
 
-	if newInfo.Name != "Sound Machinechen" {
-		t.Errorf("Expected name from /info 'Sound Machinechen', got '%s'", newInfo.Name)
+	if newInfo.Name != "Living Room SoundTouch" {
+		t.Errorf("Expected name from /info 'Living Room SoundTouch', got '%s'", newInfo.Name)
 	}
 
 	t.Logf("\nMigration completed:")

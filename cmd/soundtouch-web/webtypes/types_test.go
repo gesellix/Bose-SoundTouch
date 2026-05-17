@@ -128,7 +128,7 @@ func TestDeviceConnection(t *testing.T) {
 		Name: "Test Speaker",
 		Type: "SoundTouch 30",
 		NetworkInfo: []models.NetworkInfo{
-			{MacAddress: "TEST123", IPAddress: "192.168.1.100"},
+			{MacAddress: "TEST123", IPAddress: "192.0.2.100"},
 		},
 	}
 

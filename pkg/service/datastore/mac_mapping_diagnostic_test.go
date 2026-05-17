@@ -16,9 +16,9 @@ func TestMacMappingDiagnostic(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	accountID := "3230304"
+	accountID := "1000001"
 	serialNumber := "I6332527703739342000020"
-	macAddress := "A81B6A536A98"
+	macAddress := "AABBCCDDEEFF"
 
 	// Create the directory structure as it exists in production
 	deviceDir := filepath.Join(tmpDir, "accounts", accountID, "devices", serialNumber)
@@ -39,7 +39,7 @@ func TestMacMappingDiagnostic(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + macAddress + `</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`
 	if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {
@@ -127,8 +127,8 @@ func TestMacMappingDiagnostic(t *testing.T) {
 
 	// Test 5: Check case sensitivity
 	t.Run("CheckCaseSensitivity", func(t *testing.T) {
-		lowercaseMAC := "a81b6a536a98"
-		uppercaseMAC := "A81B6A536A98"
+		lowercaseMAC := "aabbccddeeff"
+		uppercaseMAC := "AABBCCDDEEFF"
 
 		ds.idMutex.RLock()
 		_, lowercaseOk := ds.deviceMappings[lowercaseMAC]
@@ -191,11 +191,11 @@ func TestMacMappingWithDifferentFormats(t *testing.T) {
 		macInRequest string
 		shouldWork   bool
 	}{
-		{"ExactMatch", "A81B6A536A98", "A81B6A536A98", true},
-		{"LowerCase", "A81B6A536A98", "a81b6a536a98", true},       // Should work with normalization
-		{"UpperCase", "a81b6a536a98", "A81B6A536A98", true},       // Should work with normalization
-		{"WithColons", "A8:1B:6A:53:6A:98", "A81B6A536A98", true}, // Should work with normalization
-		{"WithDashes", "A8-1B-6A-53-6A-98", "A81B6A536A98", true}, // Should work with normalization
+		{"ExactMatch", "AABBCCDDEEFF", "AABBCCDDEEFF", true},
+		{"LowerCase", "AABBCCDDEEFF", "aabbccddeeff", true},       // Should work with normalization
+		{"UpperCase", "aabbccddeeff", "AABBCCDDEEFF", true},       // Should work with normalization
+		{"WithColons", "AA:BB:CC:DD:EE:FF", "AABBCCDDEEFF", true}, // Should work with normalization
+		{"WithDashes", "AA-BB-CC-DD-EE-FF", "AABBCCDDEEFF", true}, // Should work with normalization
 	}
 
 	for _, tc := range testCases {
@@ -223,7 +223,7 @@ func TestMacMappingWithDifferentFormats(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + tc.macInXML + `</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`
 			if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {

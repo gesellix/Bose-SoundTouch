@@ -28,14 +28,14 @@ func TestTrustedRealIP(t *testing.T) {
 		{
 			name:           "trusted peer with X-Real-IP is honoured",
 			remoteAddr:     "127.0.0.1:54321",
-			xRealIP:        "192.168.1.10",
-			wantRemoteAddr: "192.168.1.10",
+			xRealIP:        "192.0.2.10",
+			wantRemoteAddr: "192.0.2.10",
 		},
 		{
 			name:           "trusted peer with X-Forwarded-For is honoured",
 			remoteAddr:     "127.0.0.1:54321",
-			xForwardedFor:  "192.168.1.20, 10.0.0.1",
-			wantRemoteAddr: "192.168.1.20",
+			xForwardedFor:  "192.0.2.20, 10.0.0.1",
+			wantRemoteAddr: "192.0.2.20",
 		},
 		{
 			name:           "trusted peer with no headers leaves RemoteAddr alone",
@@ -44,15 +44,15 @@ func TestTrustedRealIP(t *testing.T) {
 		},
 		{
 			name:           "untrusted peer's X-Real-IP is ignored",
-			remoteAddr:     "192.168.1.99:54321",
+			remoteAddr:     "192.0.2.99:54321",
 			xRealIP:        "1.2.3.4",
-			wantRemoteAddr: "192.168.1.99:54321",
+			wantRemoteAddr: "192.0.2.99:54321",
 		},
 		{
 			name:           "untrusted peer's X-Forwarded-For is ignored",
-			remoteAddr:     "192.168.1.99:54321",
+			remoteAddr:     "192.0.2.99:54321",
 			xForwardedFor:  "1.2.3.4",
-			wantRemoteAddr: "192.168.1.99:54321",
+			wantRemoteAddr: "192.0.2.99:54321",
 		},
 		{
 			name:           "trusted peer with garbage X-Real-IP leaves RemoteAddr alone",

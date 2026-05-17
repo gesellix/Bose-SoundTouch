@@ -13,9 +13,9 @@ func TestClockDisplay_UnmarshalXML(t *testing.T) {
 	}{
 		{
 			name:    "Full clock display configuration",
-			xmlData: `<clockDisplay deviceID="A81B6A536A98" enabled="true" format="24" brightness="75" autoDim="true" timeZone="America/New_York">Clock Display</clockDisplay>`,
+			xmlData: `<clockDisplay deviceID="AABBCCDDEEFF" enabled="true" format="24" brightness="75" autoDim="true" timeZone="America/New_York">Clock Display</clockDisplay>`,
 			expected: ClockDisplay{
-				DeviceID:   "A81B6A536A98",
+				DeviceID:   "AABBCCDDEEFF",
 				Enabled:    true,
 				Format:     "24",
 				Brightness: 75,
@@ -677,15 +677,15 @@ func TestClockDisplayRequest_MarshalXML_TimezoneOnly(t *testing.T) {
 
 func TestClockDisplay_UnmarshalXML_NestedClockConfig(t *testing.T) {
 	// The real wire format — what firmware-27 devices emit and accept.
-	xmlData := `<clockDisplay deviceID="A81B6A536A98"><clockConfig timezoneInfo="Europe/Berlin" userEnable="true" timeFormat="TIME_FORMAT_24HOUR_ID" userOffsetMinute="0" brightnessLevel="70" userUtcTime="0"/></clockDisplay>`
+	xmlData := `<clockDisplay deviceID="AABBCCDDEEFF"><clockConfig timezoneInfo="Europe/Berlin" userEnable="true" timeFormat="TIME_FORMAT_24HOUR_ID" userOffsetMinute="0" brightnessLevel="70" userUtcTime="0"/></clockDisplay>`
 
 	var got ClockDisplay
 	if err := xml.Unmarshal([]byte(xmlData), &got); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
 
-	if got.DeviceID != "A81B6A536A98" {
-		t.Errorf("DeviceID = %q, want A81B6A536A98", got.DeviceID)
+	if got.DeviceID != "AABBCCDDEEFF" {
+		t.Errorf("DeviceID = %q, want AABBCCDDEEFF", got.DeviceID)
 	}
 
 	if got.TimeZone != "Europe/Berlin" {

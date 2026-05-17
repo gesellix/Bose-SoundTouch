@@ -19,7 +19,7 @@ func TestMergeOverlappingDevices(t *testing.T) {
 	s := NewServer(ds, nil, "http://localhost", false, false, false)
 
 	// Case 1: IP-only entry and Serial-based entry for the same IP
-	ip := "192.168.1.100"
+	ip := "192.0.2.100"
 	serial := "SERIAL123"
 
 	// 1. Save IP-based entry
@@ -76,7 +76,7 @@ func TestFindExistingDeviceID(t *testing.T) {
 	ds := datastore.NewDataStore(tempDir)
 	s := NewServer(ds, nil, "http://localhost", false, false, false)
 
-	ip := "192.168.1.101"
+	ip := "192.0.2.101"
 	serial := "SERIAL456"
 
 	// Save IP-based

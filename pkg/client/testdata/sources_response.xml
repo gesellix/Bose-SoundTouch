@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<sources deviceID="A81B6A536A98">
+<sources deviceID="AABBCCDDEEFF">
     <sourceItem source="AUX" sourceAccount="AUX" status="READY" isLocal="true" multiroomallowed="true">AUX IN</sourceItem>
     <sourceItem source="AIRPLAY" sourceAccount="AirPlayUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="false">AirPlayUserName</sourceItem>
     <sourceItem source="QPLAY" sourceAccount="QPlay1UserName" status="UNAVAILABLE" isLocal="true" multiroomallowed="true">QPlay1UserName</sourceItem>

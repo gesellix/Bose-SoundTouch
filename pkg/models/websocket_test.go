@@ -202,12 +202,12 @@ func TestParseWebSocketEvent(t *testing.T) {
 				<groupRole>
 					<deviceId>9070658C9D4A</deviceId>
 					<role>LEFT</role>
-					<ipAddress>192.168.1.131</ipAddress>
+					<ipAddress>192.0.2.131</ipAddress>
 				</groupRole>
 				<groupRole>
 					<deviceId>F45EAB3115DA</deviceId>
 					<role>RIGHT</role>
-					<ipAddress>192.168.1.134</ipAddress>
+					<ipAddress>192.0.2.134</ipAddress>
 				</groupRole>
 			</roles>
 			<status>GROUP_OK</status>

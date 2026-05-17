@@ -37,7 +37,7 @@ func TestDataStore_MacAddressMapping(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + macAddress + `</macAddress>
-        <ipAddress>192.168.1.10</ipAddress>
+        <ipAddress>192.0.2.10</ipAddress>
     </networkInfo>
 </info>`
 	if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {

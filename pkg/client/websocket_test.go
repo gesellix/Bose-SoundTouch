@@ -120,7 +120,7 @@ func TestDefaultWebSocketConfig(t *testing.T) {
 }
 
 func TestNewWebSocketClient(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	if wsClient == nil {
@@ -145,7 +145,7 @@ func TestNewWebSocketClient(t *testing.T) {
 }
 
 func TestWebSocketClient_SetHandlers(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	handlers := &models.WebSocketEventHandlers{
@@ -170,7 +170,7 @@ func TestWebSocketClient_SetHandlers(t *testing.T) {
 }
 
 func TestWebSocketClient_IndividualHandlers(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	wsClient.OnNowPlaying(func(_ *models.NowPlayingUpdatedEvent) {
@@ -204,7 +204,7 @@ func TestWebSocketClient_IndividualHandlers(t *testing.T) {
 }
 
 func TestWebSocketClient_IsConnected(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	// Initially should not be connected
@@ -245,7 +245,7 @@ func TestWebSocketClient_ConnectToMockServer(t *testing.T) {
 }
 
 func TestWebSocketClient_Disconnect(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	// Test disconnect when not connected
@@ -270,7 +270,7 @@ func TestWebSocketClient_Disconnect(t *testing.T) {
 }
 
 func TestWebSocketClient_HandleMessage(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(&WebSocketConfig{
 		Logger: &mockLogger{},
 	})
@@ -358,7 +358,7 @@ func TestWebSocketClient_HandleMessage(t *testing.T) {
 }
 
 func TestWebSocketClient_HandleUnknownEvent(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	logger := &mockLogger{}
 	wsClient := client.NewWebSocketClient(&WebSocketConfig{
 		Logger: logger,
@@ -389,7 +389,7 @@ func TestWebSocketClient_HandleUnknownEvent(t *testing.T) {
 }
 
 func TestWebSocketClient_SendMessage(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	// Test send when not connected
@@ -400,7 +400,7 @@ func TestWebSocketClient_SendMessage(t *testing.T) {
 }
 
 func TestWebSocketClient_ConfigValidation(t *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 
 	t.Run("NilConfig", func(t *testing.T) {
 		wsClient := client.NewWebSocketClient(nil)
@@ -428,7 +428,7 @@ func TestWebSocketClient_ConfigValidation(t *testing.T) {
 }
 
 func TestWebSocketClient_ConcurrentAccess(_ *testing.T) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	// Test concurrent access to handlers
@@ -460,7 +460,7 @@ func TestWebSocketClient_ConcurrentAccess(_ *testing.T) {
 
 // Benchmark tests
 func BenchmarkWebSocketClient_HandleMessage(b *testing.B) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(&WebSocketConfig{
 		Logger: &mockLogger{},
 	})
@@ -489,7 +489,7 @@ func BenchmarkWebSocketClient_HandleMessage(b *testing.B) {
 }
 
 func BenchmarkWebSocketClient_SetHandlers(b *testing.B) {
-	client := NewClientFromHost("192.168.1.10")
+	client := NewClientFromHost("192.0.2.10")
 	wsClient := client.NewWebSocketClient(nil)
 
 	handlers := &models.WebSocketEventHandlers{

@@ -16,16 +16,16 @@ func TestMacAddressSerialization(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := NewDataStore(tempDir)
-	account := "3230304"
+	account := "1000001"
 	device := "I6332527703739342000020"
-	macAddress := "A81B6A536A98"
+	macAddress := "AABBCCDDEEFF"
 
 	// Create device info with MAC address
 	info := &models.ServiceDeviceInfo{
 		DeviceID:            device,
 		Name:                "Test SoundTouch",
 		ProductCode:         "SoundTouch 10",
-		IPAddress:           "192.168.1.100",
+		IPAddress:           "192.0.2.100",
 		MacAddress:          macAddress,
 		DeviceSerialNumber:  device,
 		ProductSerialNumber: "PROD123456",
@@ -61,8 +61,8 @@ func TestMacAddressSerialization(t *testing.T) {
 		t.Errorf("DeviceID mismatch. Expected: %s, Got: %s", device, loadedInfo.DeviceID)
 	}
 
-	if loadedInfo.IPAddress != "192.168.1.100" {
-		t.Errorf("IPAddress mismatch. Expected: 192.168.1.100, Got: %s", loadedInfo.IPAddress)
+	if loadedInfo.IPAddress != "192.0.2.100" {
+		t.Errorf("IPAddress mismatch. Expected: 192.0.2.100, Got: %s", loadedInfo.IPAddress)
 	}
 
 	// Initialize datastore to populate MAC mappings
@@ -112,10 +112,10 @@ func TestMacAddressSerializationEdgeCases(t *testing.T) {
 		macAddress string
 		expected   string
 	}{
-		{"uppercase", "A81B6A536A98", "A81B6A536A98"},
-		{"lowercase", "a81b6a536a98", "a81b6a536a98"},
-		{"with_colons", "A8:1B:6A:53:6A:98", "A8:1B:6A:53:6A:98"},
-		{"with_dashes", "A8-1B-6A-53-6A-98", "A8-1B-6A-53-6A-98"},
+		{"uppercase", "AABBCCDDEEFF", "AABBCCDDEEFF"},
+		{"lowercase", "aabbccddeeff", "aabbccddeeff"},
+		{"with_colons", "AA:BB:CC:DD:EE:FF", "AA:BB:CC:DD:EE:FF"},
+		{"with_dashes", "AA-BB-CC-DD-EE-FF", "AA-BB-CC-DD-EE-FF"},
 		{"empty", "", ""},
 	}
 
@@ -127,7 +127,7 @@ func TestMacAddressSerializationEdgeCases(t *testing.T) {
 				DeviceID:           deviceID,
 				Name:               "Test Device " + tc.name,
 				ProductCode:        "SoundTouch 10",
-				IPAddress:          "192.168.1.100",
+				IPAddress:          "192.0.2.100",
 				MacAddress:         tc.macAddress,
 				DeviceSerialNumber: deviceID,
 			}
@@ -159,7 +159,7 @@ func TestExistingDeviceInfoUpdate(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	ds := NewDataStore(tempDir)
-	account := "3230304"
+	account := "1000001"
 	device := "I6332527703739342000020"
 
 	// First save without MAC address (simulating old DeviceInfo.xml)
@@ -167,7 +167,7 @@ func TestExistingDeviceInfoUpdate(t *testing.T) {
 		DeviceID:           device,
 		Name:               "Test SoundTouch",
 		ProductCode:        "SoundTouch 10",
-		IPAddress:          "192.168.1.100",
+		IPAddress:          "192.0.2.100",
 		MacAddress:         "", // No MAC address initially
 		DeviceSerialNumber: device,
 	}
@@ -188,12 +188,12 @@ func TestExistingDeviceInfoUpdate(t *testing.T) {
 	}
 
 	// Now update with MAC address (simulating discovery update)
-	macAddress := "A81B6A536A98"
+	macAddress := "AABBCCDDEEFF"
 	infoWithMAC := &models.ServiceDeviceInfo{
 		DeviceID:           device,
 		Name:               "Test SoundTouch",
 		ProductCode:        "SoundTouch 10",
-		IPAddress:          "192.168.1.100",
+		IPAddress:          "192.0.2.100",
 		MacAddress:         macAddress,
 		DeviceSerialNumber: device,
 	}

@@ -108,7 +108,7 @@ func TestGetMigrationSummary_IsPairedFromLiveInfo(t *testing.T) {
 
 	t.Run("with margeAccountUUID", func(t *testing.T) {
 		m, host, cleanup := telnetSummaryEnvWithInfo(t, nil, ft,
-			`<info deviceID="123"><name>Test</name><margeAccountUUID>3230304</margeAccountUUID></info>`,
+			`<info deviceID="123"><name>Test</name><margeAccountUUID>1000001</margeAccountUUID></info>`,
 		)
 		defer cleanup()
 
@@ -121,8 +121,8 @@ func TestGetMigrationSummary_IsPairedFromLiveInfo(t *testing.T) {
 			t.Errorf("IsPaired = false, want true (margeAccountUUID present in :8090/info)")
 		}
 
-		if summary.AccountID != "3230304" {
-			t.Errorf("AccountID = %q, want 3230304 (live info should populate)", summary.AccountID)
+		if summary.AccountID != "1000001" {
+			t.Errorf("AccountID = %q, want 1000001 (live info should populate)", summary.AccountID)
 		}
 	})
 

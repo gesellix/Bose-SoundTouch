@@ -26,7 +26,7 @@ func TestSyncFromAccountFull(t *testing.T) {
     <devices>
         <device deviceid="DEVICE_ABC">
             <name>Living Room</name>
-            <ipaddress>192.168.1.10</ipaddress>
+            <ipaddress>192.0.2.10</ipaddress>
             <serialNumber>ABC123XYZ</serialNumber>
             <firmwareVersion>27.0.6</firmwareVersion>
             <attachedProduct product_code="ST10">

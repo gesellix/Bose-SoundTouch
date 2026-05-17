@@ -144,7 +144,7 @@ func TestMigrateViaHosts(t *testing.T) {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
 
-	m := NewManager("http://192.168.1.100:8000", nil, cm)
+	m := NewManager("http://192.0.2.100:8000", nil, cm)
 
 	runCalls := []string{}
 	m.NewSSH = func(host string) SSHClient {
@@ -154,7 +154,7 @@ func TestMigrateViaHosts(t *testing.T) {
 				if command == "cat /etc/hosts" {
 					// Handle both initial read and verification read
 					if len(runCalls) > 2 { // Rough heuristic: verification happens after upload
-						return "192.168.1.100\tstreaming.bose.com\n192.168.1.100\tupdates.bose.com\n192.168.1.100\tstats.bose.com\n192.168.1.100\tbmx.bose.com\n192.168.1.100\tcontent.api.bose.io\n192.168.1.100\tevents.api.bosecm.com\n192.168.1.100\tbose-prod.apigee.net\n192.168.1.100\tworldwide.bose.com\n192.168.1.100\tmedia.bose.io\n192.168.1.100\tdownloads.bose.com\n192.168.1.100\tvoice.api.bose.io", nil
+						return "192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 					}
 					return "127.0.0.1 localhost", nil
 				}
@@ -168,7 +168,7 @@ func TestMigrateViaHosts(t *testing.T) {
 			},
 			uploadContentFunc: func(content []byte, remotePath string) error {
 				if remotePath == "/etc/hosts" {
-					if !strings.Contains(string(content), "192.168.1.100\tstreaming.bose.com") {
+					if !strings.Contains(string(content), "192.0.2.100\tstreaming.bose.com") {
 						t.Errorf("Expected hosts content to contain redirect, got %s", string(content))
 					}
 				}
@@ -177,7 +177,7 @@ func TestMigrateViaHosts(t *testing.T) {
 		}
 	}
 
-	_, err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaHosts("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaHosts failed: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestMigrateViaHosts_UpdateExisting(t *testing.T) {
 	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
 	_ = cm.EnsureCA()
 
-	m := NewManager("http://192.168.1.100:8000", nil, cm)
+	m := NewManager("http://192.0.2.100:8000", nil, cm)
 
 	m.NewSSH = func(host string) SSHClient {
 		runCount := 0
@@ -232,7 +232,7 @@ func TestMigrateViaHosts_UpdateExisting(t *testing.T) {
 				runCount++
 				if command == "cat /etc/hosts" {
 					if runCount > 1 {
-						return "127.0.0.1 localhost\n192.168.1.100\tstreaming.bose.com\n192.168.1.100\tupdates.bose.com\n192.168.1.100\tstats.bose.com\n192.168.1.100\tbmx.bose.com\n192.168.1.100\tcontent.api.bose.io\n192.168.1.100\tevents.api.bosecm.com\n192.168.1.100\tbose-prod.apigee.net\n192.168.1.100\tworldwide.bose.com\n192.168.1.100\tmedia.bose.io\n192.168.1.100\tdownloads.bose.com\n192.168.1.100\tvoice.api.bose.io", nil
+						return "127.0.0.1 localhost\n192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 					}
 					return "127.0.0.1 localhost\n1.2.3.4\tstreaming.bose.com\n1.2.3.4\tupdates.bose.com", nil
 				}
@@ -247,13 +247,13 @@ func TestMigrateViaHosts_UpdateExisting(t *testing.T) {
 			uploadContentFunc: func(content []byte, remotePath string) error {
 				if remotePath == "/etc/hosts" {
 					c := string(content)
-					if !strings.Contains(c, "192.168.1.100\tstreaming.bose.com") {
+					if !strings.Contains(c, "192.0.2.100\tstreaming.bose.com") {
 						t.Errorf("Expected updated IP for streaming.bose.com, got:\n%s", c)
 					}
-					if !strings.Contains(c, "192.168.1.100\tupdates.bose.com") {
+					if !strings.Contains(c, "192.0.2.100\tupdates.bose.com") {
 						t.Errorf("Expected updated IP for updates.bose.com, got:\n%s", c)
 					}
-					if !strings.Contains(c, "192.168.1.100\tevents.api.bosecm.com") {
+					if !strings.Contains(c, "192.0.2.100\tevents.api.bosecm.com") {
 						t.Errorf("Expected new domain events.api.bosecm.com, got:\n%s", c)
 					}
 					// Ensure no duplicates
@@ -266,7 +266,7 @@ func TestMigrateViaHosts_UpdateExisting(t *testing.T) {
 		}
 	}
 
-	_, err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaHosts("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaHosts failed: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestCheckCACertTrusted(t *testing.T) {
 	}
 
 	summary := &MigrationSummary{}
-	m.checkCACertTrusted(summary, "192.168.1.10")
+	m.checkCACertTrusted(summary, "192.0.2.10")
 	if !summary.CACertTrusted {
 		t.Errorf("Expected CACertTrusted to be true when label is found")
 	}
@@ -429,7 +429,7 @@ func TestCheckCACertTrusted(t *testing.T) {
 	}
 
 	summary = &MigrationSummary{}
-	m.checkCACertTrusted(summary, "192.168.1.10")
+	m.checkCACertTrusted(summary, "192.0.2.10")
 	if !summary.CACertTrusted {
 		t.Errorf("Expected CACertTrusted to be true when cert data is found")
 	}
@@ -447,7 +447,7 @@ func TestCheckCACertTrusted(t *testing.T) {
 	}
 
 	summary = &MigrationSummary{}
-	m.checkCACertTrusted(summary, "192.168.1.10")
+	m.checkCACertTrusted(summary, "192.0.2.10")
 	if summary.CACertTrusted {
 		t.Errorf("Expected CACertTrusted to be false when nothing is found")
 	}
@@ -486,7 +486,7 @@ func TestTestConnection(t *testing.T) {
 	}
 
 	// Test 1: Shared trust store (no explicit CA)
-	output, err := m.TestConnection("192.168.1.10", "https://localhost:8443/health", false)
+	output, err := m.TestConnection("192.0.2.10", "https://localhost:8443/health", false)
 	if err != nil {
 		t.Fatalf("TestConnection failed: %v", err)
 	}
@@ -498,7 +498,7 @@ func TestTestConnection(t *testing.T) {
 	}
 
 	// Test 2: Explicit CA
-	output, err = m.TestConnection("192.168.1.10", "https://localhost:8443/health", true)
+	output, err = m.TestConnection("192.0.2.10", "https://localhost:8443/health", true)
 	if err != nil {
 		t.Fatalf("TestConnection failed: %v", err)
 	}
@@ -585,7 +585,7 @@ func TestTestHostsRedirection(t *testing.T) {
 		return mock
 	}
 
-	output, err := m.TestHostsRedirection("192.168.1.10", "http://1.2.3.4:8000")
+	output, err := m.TestHostsRedirection("192.0.2.10", "http://1.2.3.4:8000")
 	if err != nil {
 		t.Fatalf("TestHostsRedirection failed: %v", err)
 	}
@@ -761,7 +761,7 @@ func TestMigrateViaHosts_SkipCAIfTrusted(t *testing.T) {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
 
-	m := NewManager("http://192.168.1.100:8000", nil, cm)
+	m := NewManager("http://192.0.2.100:8000", nil, cm)
 
 	runCalls := []string{}
 	m.NewSSH = func(host string) SSHClient {
@@ -771,7 +771,7 @@ func TestMigrateViaHosts_SkipCAIfTrusted(t *testing.T) {
 				if command == "cat /etc/hosts" {
 					// Handle both initial read and verification read
 					if len(runCalls) > 2 { // Rough heuristic: verification happens after upload
-						return "192.168.1.100\tstreaming.bose.com\n192.168.1.100\tupdates.bose.com\n192.168.1.100\tstats.bose.com\n192.168.1.100\tbmx.bose.com\n192.168.1.100\tcontent.api.bose.io\n192.168.1.100\tevents.api.bosecm.com\n192.168.1.100\tbose-prod.apigee.net\n192.168.1.100\tworldwide.bose.com\n192.168.1.100\tmedia.bose.io\n192.168.1.100\tdownloads.bose.com\n192.168.1.100\tvoice.api.bose.io", nil
+						return "192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 					}
 					return "127.0.0.1 localhost", nil
 				}
@@ -784,7 +784,7 @@ func TestMigrateViaHosts_SkipCAIfTrusted(t *testing.T) {
 		}
 	}
 
-	_, err = m.migrateViaHosts("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaHosts("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaHosts failed: %v", err)
 	}
@@ -838,7 +838,7 @@ func TestTrustCACert(t *testing.T) {
 		}
 	}
 
-	_, err = m.TrustCACert("192.168.1.10")
+	_, err = m.TrustCACert("192.0.2.10")
 	if err != nil {
 		t.Fatalf("TrustCACert failed: %v", err)
 	}
@@ -967,7 +967,7 @@ func TestTrustCACert_StripsMultipleStaleEntriesSilently(t *testing.T) {
 		return sshMock
 	}
 
-	logs, err := m.TrustCACert("192.168.1.10")
+	logs, err := m.TrustCACert("192.0.2.10")
 	if err != nil {
 		t.Fatalf("TrustCACert failed: %v", err)
 	}
@@ -1084,7 +1084,7 @@ func TestTrustCACert_PostUploadVerificationFailureCleansUpTmp(t *testing.T) {
 		return sshMock
 	}
 
-	_, err = m.TrustCACert("192.168.1.10")
+	_, err = m.TrustCACert("192.0.2.10")
 	if err == nil {
 		t.Fatalf("TrustCACert succeeded, want a verification failure")
 	}
@@ -1149,7 +1149,7 @@ func TestRevertMigration(t *testing.T) {
 		}
 	}
 
-	_, err := m.RevertMigration("192.168.1.10")
+	_, err := m.RevertMigration("192.0.2.10")
 	if err != nil {
 		t.Fatalf("RevertMigration failed: %v", err)
 	}
@@ -1262,7 +1262,7 @@ func TestRevertMigration_CorruptedRcLocal(t *testing.T) {
 		}
 	}
 
-	_, err := m.RevertMigration("192.168.1.10")
+	_, err := m.RevertMigration("192.0.2.10")
 	if err != nil {
 		t.Fatalf("RevertMigration failed: %v", err)
 	}
@@ -1293,7 +1293,7 @@ func TestRevertMigration_NoBackup(t *testing.T) {
 		}
 	}
 
-	_, err := m.RevertMigration("192.168.1.10")
+	_, err := m.RevertMigration("192.0.2.10")
 	if err == nil {
 		t.Errorf("Expected error when backup is missing, got nil")
 	} else if !strings.Contains(err.Error(), "backup") {
@@ -1314,7 +1314,7 @@ func TestReboot(t *testing.T) {
 		}
 	}
 
-	_, err := m.Reboot("192.168.1.10", "")
+	_, err := m.Reboot("192.0.2.10", "")
 	if err != nil {
 		t.Fatalf("Reboot failed: %v", err)
 	}
@@ -1332,7 +1332,7 @@ func TestReboot(t *testing.T) {
 }
 
 func TestTestDNSRedirection(t *testing.T) {
-	m := NewManager("http://192.168.1.100:8000", nil, nil)
+	m := NewManager("http://192.0.2.100:8000", nil, nil)
 
 	runCalls := []string{}
 	m.NewSSH = func(host string) SSHClient {
@@ -1344,29 +1344,29 @@ func TestTestDNSRedirection(t *testing.T) {
 					if !strings.Contains(command, "\\x00\\x21") {
 						return "", fmt.Errorf("missing TCP length prefix in nc command")
 					}
-					// Mock od output: " 192 168 1 100"
-					return " 192 168 1 100", nil
+					// Mock od output: " 192 0 2 100"
+					return " 192 0 2 100", nil
 				}
-				if strings.HasPrefix(command, "nslookup aftertouch.test 192.168.1.100") {
-					return "Server: 192.168.1.100\nAddress 1: 192.168.1.100\n\nName: aftertouch.test\nAddress 1: 192.168.1.100", nil
+				if strings.HasPrefix(command, "nslookup aftertouch.test 192.0.2.100") {
+					return "Server: 192.0.2.100\nAddress 1: 192.0.2.100\n\nName: aftertouch.test\nAddress 1: 192.0.2.100", nil
 				}
 				return "", nil
 			},
 		}
 	}
 
-	output, err := m.TestDNSRedirection("192.168.1.10", "http://192.168.1.100:8000")
+	output, err := m.TestDNSRedirection("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("TestDNSRedirection failed: %v", err)
 	}
 
-	if !strings.Contains(output, "192.168.1.100") {
+	if !strings.Contains(output, "192.0.2.100") {
 		t.Errorf("Expected output to contain service IP, got %s", output)
 	}
 
 	foundNc := false
 	for _, call := range runCalls {
-		if strings.Contains(call, "nc") && !strings.Contains(call, "-u") && strings.Contains(call, "192.168.1.100 53") {
+		if strings.Contains(call, "nc") && !strings.Contains(call, "-u") && strings.Contains(call, "192.0.2.100 53") {
 			foundNc = true
 			break
 		}
@@ -1389,7 +1389,7 @@ func TestTestDNSRedirection_CustomPort(t *testing.T) {
 		DNSBindAddr: ":1053",
 	})
 
-	m := NewManager("http://192.168.1.100:8000", ds, nil)
+	m := NewManager("http://192.0.2.100:8000", ds, nil)
 
 	runCalls := []string{}
 	m.NewSSH = func(host string) SSHClient {
@@ -1401,25 +1401,25 @@ func TestTestDNSRedirection_CustomPort(t *testing.T) {
 					if !strings.Contains(command, "\\x00\\x21") {
 						return "", fmt.Errorf("missing TCP length prefix in nc command")
 					}
-					return " 192 168 1 100", nil
+					return " 192 0 2 100", nil
 				}
 				return "", nil
 			},
 		}
 	}
 
-	output, err := m.TestDNSRedirection("192.168.1.10", "http://192.168.1.100:8000")
+	output, err := m.TestDNSRedirection("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("TestDNSRedirection failed: %v", err)
 	}
 
-	if !strings.Contains(output, "192.168.1.100") {
+	if !strings.Contains(output, "192.0.2.100") {
 		t.Errorf("Expected output to contain service IP, got %s", output)
 	}
 
 	foundNc := false
 	for _, call := range runCalls {
-		if strings.Contains(call, "nc") && !strings.Contains(call, "-u") && strings.Contains(call, "192.168.1.100 1053") {
+		if strings.Contains(call, "nc") && !strings.Contains(call, "-u") && strings.Contains(call, "192.0.2.100 1053") {
 			foundNc = true
 			break
 		}
@@ -1442,7 +1442,7 @@ func TestBackupConfigOffDevice(t *testing.T) {
 	m := NewManager("http://localhost:8000", ds, nil)
 
 	serial := "08DF1F0BA325"
-	accountID := "3230304"
+	accountID := "1000001"
 
 	// Mock info server
 	infoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1462,7 +1462,7 @@ func TestBackupConfigOffDevice(t *testing.T) {
 					return "<SoundTouchSdkPrivateCfg><margeServerUrl>http://original</margeServerUrl></SoundTouchSdkPrivateCfg>", nil
 				}
 				if strings.Contains(command, "/etc/hosts") {
-					return "127.0.0.1 localhost\n192.168.1.1 bmx.bose.com", nil
+					return "127.0.0.1 localhost\n192.0.2.1 bmx.bose.com", nil
 				}
 				return "", nil
 			},
@@ -1512,7 +1512,7 @@ func TestMigrateSpeaker_PreFlightFailure(t *testing.T) {
 		}
 	}
 
-	_, err := m.MigrateSpeaker("192.168.1.10", "", "", nil, MigrationMethodXML)
+	_, err := m.MigrateSpeaker("192.0.2.10", "", "", nil, MigrationMethodXML)
 	if err == nil {
 		t.Errorf("Expected error during pre-flight write check, got nil")
 	}
@@ -1533,7 +1533,7 @@ func TestMigrateViaResolvConf(t *testing.T) {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
 
-	m := NewManager("http://192.168.1.100:8000", nil, cm)
+	m := NewManager("http://192.0.2.100:8000", nil, cm)
 
 	runCalls := []string{}
 	uploads := make(map[string]string)
@@ -1560,13 +1560,13 @@ func TestMigrateViaResolvConf(t *testing.T) {
 		}
 	}
 
-	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaResolvConf("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaResolvConf failed: %v", err)
 	}
 
 	// Verify uploads
-	if !strings.Contains(uploads["/mnt/nv/soundtouch-service/aftertouch.resolv.conf"], "nameserver 192.168.1.100") {
+	if !strings.Contains(uploads["/mnt/nv/soundtouch-service/aftertouch.resolv.conf"], "nameserver 192.0.2.100") {
 		t.Errorf("aftertouch.resolv.conf missing nameserver")
 	}
 
@@ -1599,7 +1599,7 @@ func TestMigrateViaResolvConf_CorruptedRcLocal(t *testing.T) {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
 
-	m := NewManager("http://192.168.1.100:8000", nil, cm)
+	m := NewManager("http://192.0.2.100:8000", nil, cm)
 
 	uploads := make(map[string]string)
 
@@ -1625,7 +1625,7 @@ func TestMigrateViaResolvConf_CorruptedRcLocal(t *testing.T) {
 		}
 	}
 
-	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaResolvConf("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaResolvConf failed: %v", err)
 	}
@@ -1655,7 +1655,7 @@ func TestMigrateViaResolvConf_UdhcpcScript(t *testing.T) {
 		t.Fatalf("Failed to ensure CA: %v", err)
 	}
 
-	m := NewManager("http://192.168.1.100:8000", nil, cm)
+	m := NewManager("http://192.0.2.100:8000", nil, cm)
 
 	runCalls := []string{}
 	uploads := make(map[string]string)
@@ -1687,7 +1687,7 @@ func TestMigrateViaResolvConf_UdhcpcScript(t *testing.T) {
 		}
 	}
 
-	_, err = m.migrateViaResolvConf("192.168.1.10", "http://192.168.1.100:8000")
+	_, err = m.migrateViaResolvConf("192.0.2.10", "http://192.0.2.100:8000")
 	if err != nil {
 		t.Fatalf("migrateViaResolvConf failed: %v", err)
 	}
@@ -1725,7 +1725,7 @@ func TestRevertMigration_ResolvConf(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	m := NewManager("http://192.168.1.100:8000", nil, nil)
+	m := NewManager("http://192.0.2.100:8000", nil, nil)
 
 	runCalls := []string{}
 	uploads := make(map[string]string)
@@ -1754,7 +1754,7 @@ func TestRevertMigration_ResolvConf(t *testing.T) {
 		}
 	}
 
-	_, err = m.RevertMigration("192.168.1.10")
+	_, err = m.RevertMigration("192.0.2.10")
 	if err != nil {
 		t.Fatalf("RevertMigration failed: %v", err)
 	}
@@ -1843,7 +1843,7 @@ func TestCheckIsMigrated(t *testing.T) {
 		summary := &MigrationSummary{
 			SSHSuccess:        true,
 			CACertTrusted:     true,
-			CurrentResolvConf: "# Priority nameserver for Bose service redirection\nnameserver 192.168.1.1\n",
+			CurrentResolvConf: "# Priority nameserver for Bose service redirection\nnameserver 192.0.2.1\n",
 		}
 		m.checkIsMigrated(summary, "127.0.0.1")
 		if !summary.IsMigrated {
@@ -1946,7 +1946,7 @@ func TestMigrateSpeaker_ResolvBlocking(t *testing.T) {
 
 	ds := datastore.NewDataStore(tempDir)
 	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
-	m := NewManager("http://192.168.1.100:8000", ds, cm)
+	m := NewManager("http://192.0.2.100:8000", ds, cm)
 
 	m.NewSSH = func(host string) SSHClient {
 		return &mockSSH{

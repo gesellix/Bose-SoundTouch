@@ -158,9 +158,9 @@ func newClientFor(t *testing.T, s *scriptedServer) *Client {
 }
 
 func TestNewClient_Defaults(t *testing.T) {
-	c := NewClient("192.168.1.10")
-	if c.Host != "192.168.1.10" {
-		t.Errorf("Host = %q, want 192.168.1.10", c.Host)
+	c := NewClient("192.0.2.10")
+	if c.Host != "192.0.2.10" {
+		t.Errorf("Host = %q, want 192.0.2.10", c.Host)
 	}
 
 	if c.Port != DefaultPort {

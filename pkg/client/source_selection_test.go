@@ -594,7 +594,7 @@ func TestClient_SelectContentItem(t *testing.T) {
 				SourceAccount: "3f205110-4a57-4e91-810a-123456789012",
 				IsPresetable:  true,
 				ItemName:      "Welcome to the New",
-				ContainerArt:  "http://192.168.1.14:8085/v1/albums/983/image",
+				ContainerArt:  "http://192.0.2.14:8085/v1/albums/983/image",
 			},
 			wantError: false,
 		},
@@ -761,7 +761,7 @@ func TestClient_SelectLocalMusic(t *testing.T) {
 			location:      "album:983",
 			sourceAccount: "3f205110-4a57-4e91-810a-123456789012",
 			itemName:      "Welcome to the New",
-			containerArt:  "http://192.168.1.14:8085/v1/albums/983/image",
+			containerArt:  "http://192.0.2.14:8085/v1/albums/983/image",
 			wantError:     false,
 		},
 		{

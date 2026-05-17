@@ -17,7 +17,7 @@ func TestAccountDeviceDir_MACFirstResolution(t *testing.T) {
 
 	ds := NewDataStore(tempDir)
 	accountID := "testaccount"
-	macAddress := "A81B6A536A98"
+	macAddress := "AABBCCDDEEFF"
 	serialNumber := "I6332527703739342000020"
 
 	t.Run("NewMACBasedDevice", func(t *testing.T) {
@@ -26,7 +26,7 @@ func TestAccountDeviceDir_MACFirstResolution(t *testing.T) {
 			DeviceID:           macAddress,
 			AccountID:          accountID,
 			Name:               "New MAC Device",
-			IPAddress:          "192.168.1.100",
+			IPAddress:          "192.0.2.100",
 			MacAddress:         macAddress,
 			DeviceSerialNumber: serialNumber,
 			ProductCode:        "SoundTouch 10 sm2",
@@ -59,7 +59,7 @@ func TestAccountDeviceDir_MACFirstResolution(t *testing.T) {
 			DeviceID:           serialNumber,
 			AccountID:          accountID,
 			Name:               "Legacy Serial Device",
-			IPAddress:          "192.168.1.101",
+			IPAddress:          "192.0.2.101",
 			MacAddress:         macAddress,
 			DeviceSerialNumber: serialNumber,
 			ProductCode:        "SoundTouch 10",
@@ -153,11 +153,11 @@ func TestAccountDeviceDir_MACFirstResolution(t *testing.T) {
 	t.Run("MACNormalization", func(t *testing.T) {
 		// Test different MAC address formats
 		macFormats := []string{
-			"A81B6A536A98",      // No separators
-			"A8:1B:6A:53:6A:98", // Colons
-			"A8-1B-6A-53-6A-98", // Dashes
-			"a81b6a536a98",      // Lowercase
-			"a8:1b:6a:53:6a:98", // Lowercase with colons
+			"AABBCCDDEEFF",      // No separators
+			"AA:BB:CC:DD:EE:FF", // Colons
+			"AA-BB-CC-DD-EE-FF", // Dashes
+			"aabbccddeeff",      // Lowercase
+			"aa:bb:cc:dd:ee:ff", // Lowercase with colons
 		}
 
 		for _, macFormat := range macFormats {
@@ -275,17 +275,17 @@ func TestMACAddressFormatDetection(t *testing.T) {
 		expected bool
 		name     string
 	}{
-		{"A81B6A536A98", true, "12-char hex"},
-		{"a81b6a536a98", true, "12-char hex lowercase"},
-		{"A8:1B:6A:53:6A:98", true, "colon-separated"},
-		{"A8-1B-6A-53-6A-98", true, "dash-separated"},
-		{"a8:1b:6a:53:6a:98", true, "colon-separated lowercase"},
-		{"a8-1b-6a-53-6a-98", true, "dash-separated lowercase"},
+		{"AABBCCDDEEFF", true, "12-char hex"},
+		{"aabbccddeeff", true, "12-char hex lowercase"},
+		{"AA:BB:CC:DD:EE:FF", true, "colon-separated"},
+		{"AA-BB-CC-DD-EE-FF", true, "dash-separated"},
+		{"aa:bb:cc:dd:ee:ff", true, "colon-separated lowercase"},
+		{"aa-bb-cc-dd-ee-ff", true, "dash-separated lowercase"},
 		{"I6332527703739342000020", false, "device serial"},
-		{"192.168.1.100", false, "IP address"},
+		{"192.0.2.100", false, "IP address"},
 		{"ABCDEFGHIJKL", false, "12-char non-hex"},
-		{"A8:1B:6A:53:6A", false, "incomplete MAC"},
-		{"A8:1B:6A:53:6A:98:01", false, "too long MAC"},
+		{"AA:BB:CC:DD:EE", false, "incomplete MAC"},
+		{"AA:BB:CC:DD:EE:FF:01", false, "too long MAC"},
 		{"", false, "empty string"},
 	}
 
@@ -308,7 +308,7 @@ func TestAccountDeviceDir_PriorityOrder(t *testing.T) {
 
 	ds := NewDataStore(tempDir)
 	accountID := "prioritytest"
-	macAddress := "A8:1B:6A:53:6A:98"
+	macAddress := "AA:BB:CC:DD:EE:FF"
 	serialNumber := "PRIORITY123456789"
 
 	// Create both MAC-based and serial-based devices for the same physical device

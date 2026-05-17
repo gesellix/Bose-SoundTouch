@@ -32,8 +32,8 @@ func TestClient_GetZone(t *testing.T) {
 			name: "Zone with members",
 			responseXML: `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
-	<member ipaddress="192.168.1.12">IJKL9012MNOP</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.12">IJKL9012MNOP</member>
 </zone>`,
 			responseStatus:  http.StatusOK,
 			expectError:     false,
@@ -117,7 +117,7 @@ func TestClient_SetZone(t *testing.T) {
 			name: "Valid zone request",
 			zoneRequest: func() *models.ZoneRequest {
 				zr := models.NewZoneRequest("ABCD1234EFGH")
-				zr.AddMember("EFGH5678IJKL", "192.168.1.11")
+				zr.AddMember("EFGH5678IJKL", "192.0.2.11")
 
 				return zr
 			}(),
@@ -140,7 +140,7 @@ func TestClient_SetZone(t *testing.T) {
 			name: "Invalid zone request - duplicate device",
 			zoneRequest: func() *models.ZoneRequest {
 				zr := models.NewZoneRequest("ABCD1234EFGH")
-				zr.AddMember("ABCD1234EFGH", "192.168.1.10") // Same as master
+				zr.AddMember("ABCD1234EFGH", "192.0.2.10") // Same as master
 
 				return zr
 			}(),
@@ -238,8 +238,8 @@ func TestClient_CreateZoneWithIPs(t *testing.T) {
 
 	masterDeviceID := "ABCD1234EFGH"
 	members := map[string]string{
-		"EFGH5678IJKL": "192.168.1.11",
-		"IJKL9012MNOP": "192.168.1.12",
+		"EFGH5678IJKL": "192.0.2.11",
+		"IJKL9012MNOP": "192.0.2.12",
 	}
 
 	err := client.CreateZoneWithIPs(masterDeviceID, members)
@@ -260,7 +260,7 @@ func TestClient_AddToZone(t *testing.T) {
 			// Return existing zone
 			response := `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
 </zone>`
 
 			w.WriteHeader(http.StatusOK)
@@ -277,7 +277,7 @@ func TestClient_AddToZone(t *testing.T) {
 
 	client := createTestClient(server.URL)
 
-	err := client.AddToZone("IJKL9012MNOP", "192.168.1.12")
+	err := client.AddToZone("IJKL9012MNOP", "192.0.2.12")
 	if err != nil {
 		t.Errorf("Expected no error, but got: %v", err)
 	}
@@ -303,8 +303,8 @@ func TestClient_RemoveFromZone(t *testing.T) {
 			// Return existing zone with members
 			response := `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
-	<member ipaddress="192.168.1.12">IJKL9012MNOP</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.12">IJKL9012MNOP</member>
 </zone>`
 
 			w.WriteHeader(http.StatusOK)
@@ -347,8 +347,8 @@ func TestClient_DissolveZone(t *testing.T) {
 			// Return existing zone with members
 			response := `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
-	<member ipaddress="192.168.1.12">IJKL9012MNOP</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.12">IJKL9012MNOP</member>
 </zone>`
 
 			w.WriteHeader(http.StatusOK)
@@ -397,7 +397,7 @@ func TestClient_IsInZone(t *testing.T) {
 			name: "Device in zone",
 			responseXML: `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
 </zone>`,
 			expectedResult: true,
 			expectError:    false,
@@ -469,7 +469,7 @@ func TestClient_GetZoneStatus(t *testing.T) {
 </info>`,
 			zoneXML: `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
 </zone>`,
 			expectedStatus: models.ZoneStatusMaster,
 			expectError:    false,
@@ -483,7 +483,7 @@ func TestClient_GetZoneStatus(t *testing.T) {
 </info>`,
 			zoneXML: `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
 </zone>`,
 			expectedStatus: models.ZoneStatusSlave,
 			expectError:    false,
@@ -548,8 +548,8 @@ func TestClient_GetZoneMembers(t *testing.T) {
 			name: "Zone with members",
 			responseXML: `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
-	<member ipaddress="192.168.1.12">IJKL9012MNOP</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.12">IJKL9012MNOP</member>
 </zone>`,
 			expectedMembers: []string{"ABCD1234EFGH", "EFGH5678IJKL", "IJKL9012MNOP"},
 			expectError:     false,
@@ -633,7 +633,7 @@ func TestClient_Zone_ErrorHandling(t *testing.T) {
 
 		client := createTestClient(server.URL)
 
-		err := client.AddToZone("DEVICE456", "192.168.1.10")
+		err := client.AddToZone("DEVICE456", "192.0.2.10")
 		if err == nil {
 			t.Error("Expected error when GetZone fails, but got none")
 		}
@@ -650,8 +650,8 @@ func BenchmarkClient_GetZone(b *testing.B) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		response := `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
-	<member ipaddress="192.168.1.11">EFGH5678IJKL</member>
-	<member ipaddress="192.168.1.12">IJKL9012MNOP</member>
+	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
+	<member ipaddress="192.0.2.12">IJKL9012MNOP</member>
 </zone>`
 
 		w.Header().Set("Content-Type", "application/xml")
@@ -681,7 +681,7 @@ func BenchmarkClient_SetZone(b *testing.B) {
 
 	client := createTestClient(server.URL)
 	zoneRequest := models.NewZoneRequest("ABCD1234EFGH")
-	zoneRequest.AddMember("EFGH5678IJKL", "192.168.1.11")
+	zoneRequest.AddMember("EFGH5678IJKL", "192.0.2.11")
 
 	b.ResetTimer()
 

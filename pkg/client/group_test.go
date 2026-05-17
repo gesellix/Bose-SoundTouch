@@ -20,15 +20,15 @@ func TestClient_GetGroup_Configured(t *testing.T) {
     <groupRole>
       <deviceId>9070658C9D4A</deviceId>
       <role>LEFT</role>
-      <ipAddress>192.168.1.131</ipAddress>
+      <ipAddress>192.0.2.131</ipAddress>
     </groupRole>
     <groupRole>
       <deviceId>F45EAB3115DA</deviceId>
       <role>RIGHT</role>
-      <ipAddress>192.168.1.134</ipAddress>
+      <ipAddress>192.0.2.134</ipAddress>
     </groupRole>
   </roles>
-  <senderIPAddress>192.168.1.131</senderIPAddress>
+  <senderIPAddress>192.0.2.131</senderIPAddress>
   <status>GROUP_OK</status>
 </group>`
 
@@ -121,7 +121,7 @@ func TestClient_AddGroup(t *testing.T) {
 
 		got.ID = "9999999"
 		got.Status = "GROUP_OK"
-		got.SenderIPAddress = "192.168.1.131"
+		got.SenderIPAddress = "192.0.2.131"
 
 		w.Header().Set("Content-Type", "application/xml")
 
@@ -135,8 +135,8 @@ func TestClient_AddGroup(t *testing.T) {
 		MasterDeviceID: "9070658C9D4A",
 		Roles: models.GroupRoles{
 			Roles: []models.GroupRole{
-				{DeviceID: "9070658C9D4A", Role: "LEFT", IPAddress: "192.168.1.131"},
-				{DeviceID: "F45EAB3115DA", Role: "RIGHT", IPAddress: "192.168.1.134"},
+				{DeviceID: "9070658C9D4A", Role: "LEFT", IPAddress: "192.0.2.131"},
+				{DeviceID: "F45EAB3115DA", Role: "RIGHT", IPAddress: "192.0.2.134"},
 			},
 		},
 	}

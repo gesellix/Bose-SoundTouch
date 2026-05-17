@@ -14,7 +14,7 @@ func TestGetServiceAvailability_Integration(t *testing.T) {
 
 	// This test requires a real SoundTouch device
 	// Set the SOUNDTOUCH_HOST environment variable to run this test
-	// Example: SOUNDTOUCH_HOST=192.168.1.100 go test -v -run TestGetServiceAvailability_Integration
+	// Example: SOUNDTOUCH_HOST=192.0.2.100 go test -v -run TestGetServiceAvailability_Integration
 	host := os.Getenv("SOUNDTOUCH_TEST_HOST")
 	if host == "" {
 		t.Skip("SOUNDTOUCH_TEST_HOST environment variable not set - skipping integration tests")

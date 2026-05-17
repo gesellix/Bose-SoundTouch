@@ -18,7 +18,7 @@ func TestEnrichDeviceInfo(t *testing.T) {
     <device>
         <friendlyName>Sound Machinery</friendlyName>
         <modelName>SoundTouch 10</modelName>
-        <serialNumber>A81B6A536A09</serialNumber>
+        <serialNumber>AABBCCDDEE04</serialNumber>
     </device>
 </root>`
 
@@ -49,8 +49,8 @@ func TestEnrichDeviceInfo(t *testing.T) {
 		t.Errorf("expected ModelID 'SoundTouch 10', got '%s'", device.ModelID)
 	}
 
-	if device.UPnPSerial != "A81B6A536A09" {
-		t.Errorf("expected UPnPSerial 'A81B6A536A09', got '%s'", device.UPnPSerial)
+	if device.UPnPSerial != "AABBCCDDEE04" {
+		t.Errorf("expected UPnPSerial 'AABBCCDDEE04', got '%s'", device.UPnPSerial)
 	}
 }
 
@@ -60,7 +60,7 @@ func TestUPnP_Unmarshal(t *testing.T) {
     <device>
         <friendlyName>Sound Machinery</friendlyName>
         <modelName>SoundTouch 10</modelName>
-        <serialNumber>A81B6A536A09</serialNumber>
+        <serialNumber>AABBCCDDEE04</serialNumber>
     </device>
 </root>`
 
@@ -84,7 +84,7 @@ func TestUPnP_Unmarshal(t *testing.T) {
 	if upnpRoot.Device.ModelName != "SoundTouch 10" {
 		t.Errorf("expected ModelName 'SoundTouch 10', got '%s'", upnpRoot.Device.ModelName)
 	}
-	if upnpRoot.Device.SerialNumber != "A81B6A536A09" {
-		t.Errorf("expected SerialNumber 'A81B6A536A09', got '%s'", upnpRoot.Device.SerialNumber)
+	if upnpRoot.Device.SerialNumber != "AABBCCDDEE04" {
+		t.Errorf("expected SerialNumber 'AABBCCDDEE04', got '%s'", upnpRoot.Device.SerialNumber)
 	}
 }

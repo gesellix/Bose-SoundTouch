@@ -104,7 +104,7 @@ func TestFormatPreflightGuidance_BothFailMentionsRedirectPort(t *testing.T) {
 	res := Probe443Result{
 		Localhost: ProbeOutcome{Error: "connection refused"},
 		LAN:       ProbeOutcome{Error: "connection refused"},
-		LANHost:   "192.168.1.151",
+		LANHost:   "192.0.2.151",
 	}
 
 	out := FormatPreflightGuidance(8443, res)
@@ -112,7 +112,7 @@ func TestFormatPreflightGuidance_BothFailMentionsRedirectPort(t *testing.T) {
 		t.Errorf("guidance must reference configured listener port for iptables, got: %s", out)
 	}
 
-	if !strings.Contains(out, "192.168.1.151:443") {
+	if !strings.Contains(out, "192.0.2.151:443") {
 		t.Errorf("guidance must mention probed LAN host, got: %s", out)
 	}
 

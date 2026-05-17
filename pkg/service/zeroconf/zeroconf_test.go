@@ -324,19 +324,24 @@ func TestValidateZcBaseURL(t *testing.T) {
 	}{
 		{"loopback", "http://127.0.0.1:8200/zc", true, "127.0.0.1:8200", "/zc"},
 		{"loopback no port", "http://127.0.0.1/zc", true, "127.0.0.1", "/zc"},
-		{"private 192", "http://192.168.1.10:8200/zc", true, "192.168.1.10:8200", "/zc"},
+		// The "private 192" and "strips query" cases must use an
+		// RFC-1918 192.168/16 value — validateZcBaseURL only accepts
+		// loopback, RFC-1918, and link-local. RFC-5737 doc IPs
+		// (which we use as placeholders elsewhere) would be rejected
+		// here, so the test uses a generic-but-real 192.168 value.
+		{"private 192", "http://192.168.10.10:8200/zc", true, "192.168.10.10:8200", "/zc"},
 		{"private 10", "http://10.0.0.5/zc", true, "10.0.0.5", "/zc"},
 		{"private 172", "http://172.16.0.1/zc", true, "172.16.0.1", "/zc"},
 		{"link-local v4", "http://169.254.10.20/zc", true, "169.254.10.20", "/zc"},
 		{"ipv6 loopback", "http://[::1]:8200/zc", true, "[::1]:8200", "/zc"},
 		{"ipv6 link-local", "http://[fe80::1]:8200/zc", true, "[fe80::1]:8200", "/zc"},
-		{"strips query", "http://192.168.1.10:8200/zc?foo=bar", true, "192.168.1.10:8200", "/zc"},
+		{"strips query", "http://192.168.10.10:8200/zc?foo=bar", true, "192.168.10.10:8200", "/zc"},
 
 		{"public IP rejected", "http://1.1.1.1/zc", false, "", ""},
 		{"public ipv6 rejected", "http://[2001:db8::1]/zc", false, "", ""},
 		{"hostname rejected", "http://myspeaker.local/zc", false, "", ""},
 		{"plain hostname rejected", "http://speaker/zc", false, "", ""},
-		{"ftp scheme rejected", "ftp://192.168.1.10/zc", false, "", ""},
+		{"ftp scheme rejected", "ftp://192.0.2.10/zc", false, "", ""},
 		{"file scheme rejected", "file:///etc/passwd", false, "", ""},
 		{"empty host rejected", "http:///zc", false, "", ""},
 		{"unparseable rejected", "::not a url::", false, "", ""},

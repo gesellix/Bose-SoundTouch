@@ -132,10 +132,10 @@ func TestPUTRenameRoutesToLocalHandler(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	body := `<?xml version="1.0" encoding="UTF-8" ?><device deviceid="A81B6A536A98"><name>Sound Machinechen</name><macaddress>A81B6A536A98</macaddress></device>`
+	body := `<?xml version="1.0" encoding="UTF-8" ?><device deviceid="AABBCCDDEEFF"><name>Living Room SoundTouch</name><macaddress>AABBCCDDEEFF</macaddress></device>`
 
 	req, err := http.NewRequest(http.MethodPut,
-		ts.URL+"/streaming/account/1111111/device/A81B6A536A98",
+		ts.URL+"/streaming/account/1111111/device/AABBCCDDEEFF",
 		strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("build request: %v", err)

@@ -17,7 +17,7 @@ func TestIntrospectCommands(t *testing.T) {
 	}{
 		{
 			name: "introspect service with source flag",
-			args: []string{"soundtouch-cli", "--host", "192.168.1.100", "source", "introspect", "--source", "SPOTIFY"},
+			args: []string{"soundtouch-cli", "--host", "192.0.2.100", "source", "introspect", "--source", "SPOTIFY"},
 			expectedOutput: []string{
 				"Getting introspect data for SPOTIFY",
 				"=== SPOTIFY Service Introspect Data ===",
@@ -47,7 +47,7 @@ func TestIntrospectCommands(t *testing.T) {
 		},
 		{
 			name: "introspect spotify convenience command",
-			args: []string{"soundtouch-cli", "--host", "192.168.1.100", "source", "introspect-spotify"},
+			args: []string{"soundtouch-cli", "--host", "192.0.2.100", "source", "introspect-spotify"},
 			expectedOutput: []string{
 				"Getting Spotify introspect data",
 				"=== Spotify Service Introspect Data ===",
@@ -60,7 +60,7 @@ func TestIntrospectCommands(t *testing.T) {
 		},
 		{
 			name: "introspect with account parameter",
-			args: []string{"soundtouch-cli", "--host", "192.168.1.100", "source", "introspect", "--source", "SPOTIFY", "--account", "my_spotify_account"},
+			args: []string{"soundtouch-cli", "--host", "192.0.2.100", "source", "introspect", "--source", "SPOTIFY", "--account", "my_spotify_account"},
 			expectedOutput: []string{
 				"Getting introspect data for SPOTIFY",
 				"Source Account: my_spotify_account",
@@ -68,7 +68,7 @@ func TestIntrospectCommands(t *testing.T) {
 		},
 		{
 			name:        "introspect missing source flag",
-			args:        []string{"soundtouch-cli", "--host", "192.168.1.100", "source", "introspect"},
+			args:        []string{"soundtouch-cli", "--host", "192.0.2.100", "source", "introspect"},
 			expectError: true,
 		},
 		{

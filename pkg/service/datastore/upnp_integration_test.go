@@ -28,10 +28,10 @@ func TestUPnPDiscoveryToDatastoreMapping_FullFlow(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Test data matching the user's scenario
-	accountID := "3230304"
+	accountID := "1000001"
 	deviceSerial := "I6332527703739342000020"
-	deviceMAC := "A81B6A536A98"
-	deviceName := "Sound Machinechen"
+	deviceMAC := "AABBCCDDEEFF"
+	deviceName := "Living Room SoundTouch"
 
 	t.Logf("Test scenario:")
 	t.Logf("  Account: %s", accountID)
@@ -60,7 +60,7 @@ func TestUPnPDiscoveryToDatastoreMapping_FullFlow(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + deviceMAC + `</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`
 	if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {
@@ -128,7 +128,7 @@ func TestUPnPDiscoveryToDatastoreMapping_FullFlow(t *testing.T) {
 		// Simulate UPnP discovery
 		discoveryService := discovery.NewService(5 * time.Second)
 		device := &models.DiscoveredDevice{
-			Host: "192.168.1.100",
+			Host: "192.0.2.100",
 			Port: 8091,
 			Name: "Initial Name",
 		}
@@ -195,25 +195,25 @@ func TestUPnPDiscoveryToDatastoreMapping_FullFlow(t *testing.T) {
 		}{
 			{
 				name:        "ExactMatch",
-				requestMAC:  "A81B6A536A98",
+				requestMAC:  "AABBCCDDEEFF",
 				shouldWork:  true,
 				description: "Exact MAC match",
 			},
 			{
 				name:        "LowercaseMAC",
-				requestMAC:  "a81b6a536a98",
+				requestMAC:  "aabbccddeeff",
 				shouldWork:  true,
 				description: "Lowercase MAC (should work with normalization)",
 			},
 			{
 				name:        "MACWithColons",
-				requestMAC:  "A8:1B:6A:53:6A:98",
+				requestMAC:  "AA:BB:CC:DD:EE:FF",
 				shouldWork:  true,
 				description: "MAC with colons (should work with normalization)",
 			},
 			{
 				name:        "MACWithDashes",
-				requestMAC:  "A8-1B-6A-53-6A-98",
+				requestMAC:  "AA-BB-CC-DD-EE-FF",
 				shouldWork:  true,
 				description: "MAC with dashes (should work with normalization)",
 			},
@@ -315,16 +315,16 @@ func TestNormalizationEdgeCases(t *testing.T) {
 		{"", "", "empty string"},
 		{"a", "A", "single character"},
 		{"ab", "AB", "two characters"},
-		{"A81B6A536A98", "A81B6A536A98", "standard MAC"},
-		{"a81b6a536a98", "A81B6A536A98", "lowercase MAC"},
-		{"A8:1B:6A:53:6A:98", "A81B6A536A98", "MAC with colons"},
-		{"A8-1B-6A-53-6A-98", "A81B6A536A98", "MAC with dashes"},
-		{"a8:1b:6a:53:6a:98", "A81B6A536A98", "lowercase MAC with colons"},
-		{"a8-1b-6a-53-6a-98", "A81B6A536A98", "lowercase MAC with dashes"},
-		{"A8::1B::6A", "A81B6A", "multiple consecutive colons"},
-		{"A8--1B--6A", "A81B6A", "multiple consecutive dashes"},
-		{"A8:-1B-:6A", "A81B6A", "mixed separators"},
-		{"  A81B6A536A98  ", "A81B6A536A98", "MAC with spaces (handled by normalization)"},
+		{"AABBCCDDEEFF", "AABBCCDDEEFF", "standard MAC"},
+		{"aabbccddeeff", "AABBCCDDEEFF", "lowercase MAC"},
+		{"AA:BB:CC:DD:EE:FF", "AABBCCDDEEFF", "MAC with colons"},
+		{"AA-BB-CC-DD-EE-FF", "AABBCCDDEEFF", "MAC with dashes"},
+		{"aa:bb:cc:dd:ee:ff", "AABBCCDDEEFF", "lowercase MAC with colons"},
+		{"aa-bb-cc-dd-ee-ff", "AABBCCDDEEFF", "lowercase MAC with dashes"},
+		{"AA::BB::CC", "AABBCC", "multiple consecutive colons"},
+		{"AA--BB--CC", "AABBCC", "multiple consecutive dashes"},
+		{"AA:-BB-:CC", "AABBCC", "mixed separators"},
+		{"  AABBCCDDEEFF  ", "AABBCCDDEEFF", "MAC with spaces (handled by normalization)"},
 	}
 
 	for _, tc := range testCases {

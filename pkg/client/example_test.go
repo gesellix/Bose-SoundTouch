@@ -13,7 +13,7 @@ import (
 func Example() {
 	// Create a client for your SoundTouch device
 	config := &client.Config{
-		Host:    "192.168.1.100",
+		Host:    "192.0.2.100",
 		Port:    8090,
 		Timeout: 10 * time.Second,
 	}
@@ -45,7 +45,7 @@ func Example() {
 
 // ExampleClient_GetNowPlaying demonstrates how to get current playback information.
 func ExampleClient_GetNowPlaying() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	nowPlaying, err := c.GetNowPlaying()
@@ -67,7 +67,7 @@ func ExampleClient_GetNowPlaying() {
 
 // ExampleClient_SetVolume demonstrates volume control with validation.
 func ExampleClient_SetVolume() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	// Set volume to 75%
@@ -92,7 +92,7 @@ func ExampleClient_SetVolume() {
 
 // ExampleClient_SelectSource demonstrates how to change audio sources.
 func ExampleClient_SelectSource() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	// Switch to Spotify
@@ -121,7 +121,7 @@ func ExampleClient_SelectSource() {
 
 // ExampleClient_SetBass demonstrates bass control.
 func ExampleClient_SetBass() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	// Set bass to +3 (range: -9 to +9)
@@ -144,7 +144,7 @@ func ExampleClient_SetBass() {
 
 // ExampleClient_SetBalance demonstrates balance control.
 func ExampleClient_SetBalance() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	// Set balance slightly to the right (range: -50 to +50)
@@ -167,15 +167,15 @@ func ExampleClient_SetBalance() {
 
 // ExampleClient_SetZone demonstrates multiroom zone management.
 func ExampleClient_SetZone() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	// Create a zone with multiple speakers
 	zone := &models.ZoneRequest{
-		Master: "192.168.1.100",
+		Master: "192.0.2.100",
 		Members: []models.MemberEntry{
-			{IP: "192.168.1.101"},
-			{IP: "192.168.1.102"},
+			{IP: "192.0.2.101"},
+			{IP: "192.0.2.102"},
 		},
 	}
 
@@ -192,7 +192,7 @@ func ExampleClient_SetZone() {
 
 // ExampleClient_GetPresets demonstrates how to retrieve configured presets.
 func ExampleClient_GetPresets() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	presets, err := c.GetPresets()
@@ -212,7 +212,7 @@ func ExampleClient_GetPresets() {
 
 // ExampleClient_NewWebSocketClient demonstrates WebSocket client creation.
 func ExampleClient_NewWebSocketClient() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	// Create WebSocket client for real-time events
@@ -236,7 +236,7 @@ func ExampleClient_NewWebSocketClient() {
 
 // ExampleClient_SendKey demonstrates sending key commands.
 func ExampleClient_SendKey() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	// Send various key commands
@@ -262,7 +262,7 @@ func ExampleClient_SendKey() {
 
 // ExampleClient_GetCapabilities demonstrates how to check device capabilities.
 func ExampleClient_GetCapabilities() {
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	capabilities, err := c.GetCapabilities()
@@ -288,7 +288,7 @@ func ExampleClient_GetCapabilities() {
 func ExampleClient_GetSupportedURLs_concept() {
 	// Example of how to use GetSupportedURLs() method
 	// Note: This example shows the concept but doesn't execute to avoid requiring a real device
-	config := &client.Config{Host: "192.168.1.100"}
+	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
 	supportedURLs, err := c.GetSupportedURLs()

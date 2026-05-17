@@ -10,19 +10,19 @@ import (
 func TestPeerObserver_RegisterSignalForget(t *testing.T) {
 	o := newPeerObserver()
 
-	ch := o.Register("192.168.1.42")
+	ch := o.Register("192.0.2.42")
 	if ch == nil {
 		t.Fatal("Register returned nil channel")
 	}
 
 	first := setup.PeerHit{Path: "/updates/soundtouch", At: time.Now()}
-	if !o.Signal("192.168.1.42", first) {
+	if !o.Signal("192.0.2.42", first) {
 		t.Error("Signal returned false for registered IP")
 	}
 
 	// Second signal while the buffer is still full (no reader yet) drops
 	// silently and returns false — only the first hit per window matters.
-	if o.Signal("192.168.1.42", setup.PeerHit{Path: "/streaming/x"}) {
+	if o.Signal("192.0.2.42", setup.PeerHit{Path: "/streaming/x"}) {
 		t.Error("second Signal returned true; expected false (buffer full, undrained)")
 	}
 
@@ -35,10 +35,10 @@ func TestPeerObserver_RegisterSignalForget(t *testing.T) {
 		t.Error("Signal did not deliver hit to channel")
 	}
 
-	o.Forget("192.168.1.42")
+	o.Forget("192.0.2.42")
 
 	// After Forget, Signal returns false.
-	if o.Signal("192.168.1.42", first) {
+	if o.Signal("192.0.2.42", first) {
 		t.Error("Signal returned true after Forget")
 	}
 }
@@ -52,12 +52,12 @@ func TestPeerObserver_UnknownIP(t *testing.T) {
 
 func TestPeerObserver_SignalIsNonBlocking(t *testing.T) {
 	o := newPeerObserver()
-	o.Register("192.168.1.42") // never drain
+	o.Register("192.0.2.42") // never drain
 
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 100; i++ {
-			o.Signal("192.168.1.42", setup.PeerHit{Path: "/x"})
+			o.Signal("192.0.2.42", setup.PeerHit{Path: "/x"})
 		}
 		close(done)
 	}()

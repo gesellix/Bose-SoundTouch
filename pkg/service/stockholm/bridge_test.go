@@ -125,8 +125,8 @@ func TestBridge_DeviceDiscovery_CumulativeList(t *testing.T) {
 
 	// Simulate what runDeviceDiscovery now does: build a cumulative slice and
 	// enqueue it with every new device.
-	d1 := RendererDevice{UID: "AABBCC112233", IP: "192.168.1.10"}
-	d2 := RendererDevice{UID: "DDEEFF445566", IP: "192.168.1.11"}
+	d1 := RendererDevice{UID: "AABBCC112233", IP: "192.0.2.10"}
+	d2 := RendererDevice{UID: "DDEEFF445566", IP: "192.0.2.11"}
 
 	var seen []RendererDevice
 	for _, d := range []RendererDevice{d1, d2} {

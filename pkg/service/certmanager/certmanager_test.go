@@ -138,7 +138,7 @@ func TestCertificateManagerIPAddress(t *testing.T) {
 	cm := NewCertificateManager(filepath.Join(tempDir, "certs"))
 
 	// Test certificate generation with an IP address
-	domains := []string{"192.168.1.100", "localhost"}
+	domains := []string{"192.0.2.100", "localhost"}
 	certPEM, _, err := cm.GenerateCertificate(domains)
 	if err != nil {
 		t.Fatalf("Failed to generate certificate: %v", err)
@@ -154,20 +154,20 @@ func TestCertificateManagerIPAddress(t *testing.T) {
 	// Check IP addresses
 	foundIP := false
 	for _, ip := range cert.IPAddresses {
-		if ip.String() == "192.168.1.100" {
+		if ip.String() == "192.0.2.100" {
 			foundIP = true
 			break
 		}
 	}
 
 	if !foundIP {
-		t.Errorf("Expected IP address 192.168.1.100 in IPAddresses, but it was not found")
+		t.Errorf("Expected IP address 192.0.2.100 in IPAddresses, but it was not found")
 	}
 
 	// Check if it was mistakenly added to DNSNames
 	for _, dns := range cert.DNSNames {
-		if dns == "192.168.1.100" {
-			t.Errorf("IP address 192.168.1.100 should NOT be in DNSNames")
+		if dns == "192.0.2.100" {
+			t.Errorf("IP address 192.0.2.100 should NOT be in DNSNames")
 		}
 	}
 }

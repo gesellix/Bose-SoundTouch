@@ -7,7 +7,7 @@
 ### in a loop and the Bose App showed the rename spinning forever.
 ### This test runs after register_device.http (which creates the
 ### initial record) and after power_on.http (which seeds the IP at
-### 192.168.1.100). The rename PUT must:
+### 192.0.2.100). The rename PUT must:
 ###
 ###   - return 200 OK
 ###   - echo the new name
@@ -54,7 +54,7 @@ Authorization: Bearer {{token}}
         // register_device.http captured on the initial POST. If it
         // doesn't, the rename PUT regressed the "first-paired in
         // 2017" semantics — the exact bug behind the parity capture
-        // at data/parity_mismatches/1771797308__streaming_account_3230304_device_A81B6A536A98.json.
+        // at data/parity_mismatches/1771797308__streaming_account_1000001_device_AABBCCDDEEFF.json.
         const initial = client.global.get("initialCreatedOn");
         client.assert(initial !== undefined && initial.length > 0,
             "initialCreatedOn was not captured by register_device.http — test ordering issue");

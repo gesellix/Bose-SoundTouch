@@ -253,7 +253,7 @@ func TestMargeAccountFull(t *testing.T) {
 				</component>
 			</components>
 			<networkInfo type="SCM">
-				<ipAddress>192.168.1.100</ipAddress>
+				<ipAddress>192.0.2.100</ipAddress>
 			</networkInfo>
 		</info>
 	`), 0644); err != nil {
@@ -283,7 +283,7 @@ func TestMargeAccountFull(t *testing.T) {
 }
 
 // TestMargeAccountFullExcludesEmptyAmazonSource is a regression test for the two-device scenario
-// observed in production: device A81B6A536A98 (alphabetically last, used as lastDeviceID)
+// observed in production: device AABBCCDDEEFF (alphabetically last, used as lastDeviceID)
 // has Sources.xml with 6 sources but no Amazon. The first device has Amazon with empty
 // credentials (written before OAuth was implemented). Amazon must NOT appear in /full —
 // an empty-credential Amazon causes the speaker's AmazonController to fail JSON parsing.
@@ -296,7 +296,7 @@ func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
 
 	ds := datastore.NewDataStore(tempDir)
 
-	account := "3230304"
+	account := "1000001"
 
 	// First device (alphabetically): has Amazon in Sources.xml
 	firstDeviceID := "08DF1F0BA325"
@@ -306,7 +306,7 @@ func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(firstDir, "DeviceInfo.xml"), []byte(`
 		<info deviceID="08DF1F0BA325">
-			<name>A Sound Machine</name>
+			<name>Kitchen SoundTouch</name>
 			<type>SoundTouch 20 scm</type>
 		</info>
 	`), 0644); err != nil {
@@ -322,13 +322,13 @@ func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
 
 	// Second device (alphabetically last = lastDeviceID): 6 sources but NO Amazon.
 	// This reproduces the real full.xml returned by the live service.
-	lastDeviceID := "A81B6A536A98"
+	lastDeviceID := "AABBCCDDEEFF"
 	lastDir := filepath.Join(tempDir, "accounts", account, "devices", lastDeviceID)
 	if err := os.MkdirAll(lastDir, 0755); err != nil {
 		t.Fatalf("Failed to create last device dir: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(lastDir, "DeviceInfo.xml"), []byte(`
-		<info deviceID="A81B6A536A98">
+		<info deviceID="AABBCCDDEEFF">
 			<name>Another Speaker</name>
 			<type>SoundTouch 300</type>
 		</info>
@@ -565,7 +565,7 @@ func TestMargeAccountDevices(t *testing.T) {
 	deviceInfo := models.ServiceDeviceInfo{
 		DeviceID:            deviceID,
 		Name:                "Test Device",
-		IPAddress:           "192.168.1.100",
+		IPAddress:           "192.0.2.100",
 		DeviceSerialNumber:  "ABCDE12345",
 		ProductCode:         "SoundTouch 20",
 		ProductSerialNumber: "066802942560222AE",
@@ -599,7 +599,7 @@ func TestMargeAccountDevices(t *testing.T) {
 		"<devices>",
 		"<device deviceid=\"DEV1\">",
 		"<name>Test Device</name>",
-		"<ipaddress>192.168.1.100</ipaddress>",
+		"<ipaddress>192.0.2.100</ipaddress>",
 		"<providerSettings>",
 		"ELIGIBLE_FOR_TRIAL",
 	}
@@ -1296,7 +1296,7 @@ func TestMargeAddRemoveDevice(t *testing.T) {
 				</component>
 			</components>
 			<networkInfo type="SCM">
-				<ipAddress>192.168.1.101</ipAddress>
+				<ipAddress>192.0.2.101</ipAddress>
 			</networkInfo>
 		</device>`
 
@@ -1358,7 +1358,7 @@ func TestMargePowerOn(t *testing.T) {
 	})
 
 	t.Run("FullBody", func(t *testing.T) {
-		payload := `<?xml version="1.0" encoding="UTF-8" ?><device-data><device id="001122334455"><serialnumber>I6332527703739342000020</serialnumber><firmware-version>27.0.6.46330</firmware-version><product product_code="SoundTouch 10 sm2" type="5"><serialnumber>069231P63364828AE</serialnumber></product></device><diagnostic-data><device-landscape><rssi>Excellent</rssi><gateway-ip-address>192.168.1.1</gateway-ip-address><macaddresses><macaddress>001122334455</macaddress></macaddresses><ip-address>192.168.1.100</ip-address><network-connection-type>Wireless</network-connection-type></device-landscape></diagnostic-data></device-data>`
+		payload := `<?xml version="1.0" encoding="UTF-8" ?><device-data><device id="001122334455"><serialnumber>I6332527703739342000020</serialnumber><firmware-version>27.0.6.46330</firmware-version><product product_code="SoundTouch 10 sm2" type="5"><serialnumber>069231P63364828AE</serialnumber></product></device><diagnostic-data><device-landscape><rssi>Excellent</rssi><gateway-ip-address>192.0.2.1</gateway-ip-address><macaddresses><macaddress>001122334455</macaddress></macaddresses><ip-address>192.0.2.100</ip-address><network-connection-type>Wireless</network-connection-type></device-landscape></diagnostic-data></device-data>`
 		res, err := http.Post(ts.URL+"/marge/streaming/support/power_on", "application/vnd.bose.streaming-v1.2+xml", strings.NewReader(payload))
 		if err != nil {
 			t.Fatal(err)
@@ -1386,7 +1386,7 @@ func TestMargePowerOn(t *testing.T) {
 		firmware := "27.0.6.46330"
 		productCode := "SoundTouch 10 sm2"
 		productSerial := "069231P63364828AE"
-		ipAddress := "192.168.1.100"
+		ipAddress := "192.0.2.100"
 		macAddress := "001122334455"
 
 		payload := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" ?>
@@ -1401,7 +1401,7 @@ func TestMargePowerOn(t *testing.T) {
 			<diagnostic-data>
 				<device-landscape>
 					<rssi>Excellent</rssi>
-					<gateway-ip-address>192.168.1.1</gateway-ip-address>
+					<gateway-ip-address>192.0.2.1</gateway-ip-address>
 					<macaddresses>
 						<macaddress>%s</macaddress>
 					</macaddresses>
@@ -1528,7 +1528,7 @@ func TestMargeAdvancedFeatures(t *testing.T) {
 		account := "A123"
 		deviceId := "587A628A4042"
 		macAddress := "AABBCCDDEEFF"
-		ipAddress := "192.168.1.100"
+		ipAddress := "192.0.2.100"
 		firmware := "27.0.6"
 
 		// Pre-register device
@@ -1722,10 +1722,10 @@ func TestMargeGroupCRUD(t *testing.T) {
   <name>Living Room Stereo</name>
   <masterDeviceId>` + device1 + `</masterDeviceId>
   <roles>
-    <groupRole><deviceId>` + device1 + `</deviceId><role>LEFT</role><ipAddress>192.168.1.10</ipAddress></groupRole>
-    <groupRole><deviceId>` + device2 + `</deviceId><role>RIGHT</role><ipAddress>192.168.1.11</ipAddress></groupRole>
+    <groupRole><deviceId>` + device1 + `</deviceId><role>LEFT</role><ipAddress>192.0.2.10</ipAddress></groupRole>
+    <groupRole><deviceId>` + device2 + `</deviceId><role>RIGHT</role><ipAddress>192.0.2.11</ipAddress></groupRole>
   </roles>
-  <senderIPAddress>192.168.1.10</senderIPAddress>
+  <senderIPAddress>192.0.2.10</senderIPAddress>
 </group>`
 
 	var groupID string

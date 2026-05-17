@@ -76,9 +76,9 @@ func TestPropagateAddGroup_BothSucceed(t *testing.T) {
 	leftClient := newTestGroupClient(leftSrv.URL)
 	rightClient := newTestGroupClient(rightSrv.URL)
 
-	req := sampleGroupRequest("192.168.1.131", "192.168.1.134")
+	req := sampleGroupRequest("192.0.2.131", "192.0.2.134")
 
-	leftOut, rightOut := propagateAddGroup(leftClient, rightClient, "192.168.1.131", "192.168.1.134", req)
+	leftOut, rightOut := propagateAddGroup(leftClient, rightClient, "192.0.2.131", "192.0.2.134", req)
 
 	if leftOut.err != nil {
 		t.Errorf("LEFT err = %v, want nil", leftOut.err)
@@ -117,8 +117,8 @@ func TestPropagateAddGroup_BothSucceed(t *testing.T) {
 	}
 
 	rightBody := (*rightBodies)[0]
-	if !strings.Contains(rightBody, "<senderIPAddress>192.168.1.131</senderIPAddress>") {
-		t.Errorf("RIGHT (slave) body must carry <senderIPAddress>192.168.1.131</senderIPAddress>\nbody:\n%s", rightBody)
+	if !strings.Contains(rightBody, "<senderIPAddress>192.0.2.131</senderIPAddress>") {
+		t.Errorf("RIGHT (slave) body must carry <senderIPAddress>192.0.2.131</senderIPAddress>\nbody:\n%s", rightBody)
 	}
 }
 
@@ -134,9 +134,9 @@ func TestPropagateAddGroup_RightFails(t *testing.T) {
 	leftClient := newTestGroupClient(leftSrv.URL)
 	rightClient := newTestGroupClient(rightSrv.URL)
 
-	req := sampleGroupRequest("192.168.1.131", "192.168.1.134")
+	req := sampleGroupRequest("192.0.2.131", "192.0.2.134")
 
-	leftOut, rightOut := propagateAddGroup(leftClient, rightClient, "192.168.1.131", "192.168.1.134", req)
+	leftOut, rightOut := propagateAddGroup(leftClient, rightClient, "192.0.2.131", "192.0.2.134", req)
 
 	if leftOut.err != nil {
 		t.Errorf("LEFT err = %v, want nil", leftOut.err)

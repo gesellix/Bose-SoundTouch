@@ -94,12 +94,12 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	// 1. Setup Device Info with Components
 	info := &models.ServiceDeviceInfo{
 		DeviceID:            device,
-		Name:                "A Sound Machine",
+		Name:                "Kitchen SoundTouch",
 		ProductCode:         "SoundTouch 20",
 		DeviceSerialNumber:  device,
 		ProductSerialNumber: "066802942560222AE",
 		FirmwareVersion:     "27.0.6.46330.5043500",
-		IPAddress:           "192.168.178.28",
+		IPAddress:           "192.0.2.28",
 		Components: []models.ServiceComponent{
 			{
 				Category:        "SMSC",
@@ -186,8 +186,8 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	if !strings.Contains(xmlStr, `<device deviceid="08DF1F0BA325">`) {
 		t.Errorf("Expected device attribute deviceid, got %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, `<name>A Sound Machine</name>`) {
-		t.Errorf("Expected <name>A Sound Machine</name> under device, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<name>Kitchen SoundTouch</name>`) {
+		t.Errorf("Expected <name>Kitchen SoundTouch</name> under device, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<serialNumber>08DF1F0BA325</serialNumber>`) {
 		t.Errorf("Expected <serialNumber>08DF1F0BA325</serialNumber> under device, got %s", xmlStr)
@@ -715,7 +715,7 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 
 	deviceInfoXML := `<?xml version="1.0" encoding="UTF-8"?>
 <info deviceID="001122334455">
-    <name>Sound Machinechen</name>
+    <name>Living Room SoundTouch</name>
     <type>SoundTouch</type>
     <moduleType>10 sm2</moduleType>
     <components>
@@ -726,7 +726,7 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
         </component>
     </components>
     <networkInfo type="SCM">
-        <ipAddress>192.168.178.35</ipAddress>
+        <ipAddress>192.0.2.35</ipAddress>
         <macAddress>001122334455</macAddress>
     </networkInfo>
     <discoveryMethod>sync_full</discoveryMethod>
@@ -744,8 +744,8 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	xmlStr := string(fullXML)
 
 	// Verify Name is present
-	if !strings.Contains(xmlStr, `<name>Sound Machinechen</name>`) {
-		t.Errorf("Expected <name>Sound Machinechen</name> under device, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<name>Living Room SoundTouch</name>`) {
+		t.Errorf("Expected <name>Living Room SoundTouch</name> under device, got %s", xmlStr)
 	}
 
 	// 2. Verify ButtonNumber and ContentItemType mapping

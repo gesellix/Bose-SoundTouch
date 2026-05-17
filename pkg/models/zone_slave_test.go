@@ -22,7 +22,7 @@ func TestZoneSlaveRequest_Creation(t *testing.T) {
 
 	t.Run("AddSlave", func(t *testing.T) {
 		request := NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
+		request.AddSlave("SLAVE456", "192.0.2.101")
 
 		if len(request.Members) != 1 {
 			t.Errorf("Expected 1 member, got %d", len(request.Members))
@@ -34,8 +34,8 @@ func TestZoneSlaveRequest_Creation(t *testing.T) {
 			t.Errorf("Expected device ID 'SLAVE456', got '%s'", member.DeviceID)
 		}
 
-		if member.IP != "192.168.1.101" {
-			t.Errorf("Expected IP '192.168.1.101', got '%s'", member.IP)
+		if member.IP != "192.0.2.101" {
+			t.Errorf("Expected IP '192.0.2.101', got '%s'", member.IP)
 		}
 	})
 }
@@ -52,7 +52,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 			name:     "valid request with IP",
 			masterID: "MASTER123",
 			members: []ZoneSlaveEntry{
-				{DeviceID: "SLAVE456", IP: "192.168.1.101"},
+				{DeviceID: "SLAVE456", IP: "192.0.2.101"},
 			},
 			expectError: false,
 		},
@@ -67,7 +67,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 		{
 			name:        "empty master ID",
 			masterID:    "",
-			members:     []ZoneSlaveEntry{{DeviceID: "SLAVE456", IP: "192.168.1.101"}},
+			members:     []ZoneSlaveEntry{{DeviceID: "SLAVE456", IP: "192.0.2.101"}},
 			expectError: true,
 			errorMsg:    "master device ID is required",
 		},
@@ -82,8 +82,8 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 			name:     "multiple members",
 			masterID: "MASTER123",
 			members: []ZoneSlaveEntry{
-				{DeviceID: "SLAVE456", IP: "192.168.1.101"},
-				{DeviceID: "SLAVE789", IP: "192.168.1.102"},
+				{DeviceID: "SLAVE456", IP: "192.0.2.101"},
+				{DeviceID: "SLAVE789", IP: "192.0.2.102"},
 			},
 			expectError: true,
 			errorMsg:    "zone slave operations require exactly one member",
@@ -91,14 +91,14 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 		{
 			name:        "empty slave device ID",
 			masterID:    "MASTER123",
-			members:     []ZoneSlaveEntry{{DeviceID: "", IP: "192.168.1.101"}},
+			members:     []ZoneSlaveEntry{{DeviceID: "", IP: "192.0.2.101"}},
 			expectError: true,
 			errorMsg:    "slave device ID cannot be empty",
 		},
 		{
 			name:        "same master and slave ID",
 			masterID:    "MASTER123",
-			members:     []ZoneSlaveEntry{{DeviceID: "MASTER123", IP: "192.168.1.101"}},
+			members:     []ZoneSlaveEntry{{DeviceID: "MASTER123", IP: "192.0.2.101"}},
 			expectError: true,
 			errorMsg:    "slave device ID cannot be the same as master",
 		},
@@ -148,7 +148,7 @@ func TestZoneSlaveRequest_Validation(t *testing.T) {
 func TestZoneSlaveRequest_HelperMethods(t *testing.T) {
 	t.Run("GetSlaveDeviceID with member", func(t *testing.T) {
 		request := NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
+		request.AddSlave("SLAVE456", "192.0.2.101")
 
 		deviceID := request.GetSlaveDeviceID()
 
@@ -169,11 +169,11 @@ func TestZoneSlaveRequest_HelperMethods(t *testing.T) {
 
 	t.Run("GetSlaveIP with member", func(t *testing.T) {
 		request := NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
+		request.AddSlave("SLAVE456", "192.0.2.101")
 
 		ip := request.GetSlaveIP()
 
-		expected := "192.168.1.101"
+		expected := "192.0.2.101"
 		if ip != expected {
 			t.Errorf("Expected IP '%s', got '%s'", expected, ip)
 		}
@@ -209,11 +209,11 @@ func TestZoneSlaveRequest_String(t *testing.T) {
 			name: "with IP address",
 			setup: func() *ZoneSlaveRequest {
 				req := NewZoneSlaveRequest("MASTER123")
-				req.AddSlave("SLAVE456", "192.168.1.101")
+				req.AddSlave("SLAVE456", "192.0.2.101")
 
 				return req
 			},
-			expected: "Zone slave operation: master=MASTER123, slave=SLAVE456 (192.168.1.101)",
+			expected: "Zone slave operation: master=MASTER123, slave=SLAVE456 (192.0.2.101)",
 		},
 		{
 			name: "without IP address",
@@ -249,7 +249,7 @@ func TestZoneSlaveRequest_String(t *testing.T) {
 func TestZoneSlaveRequest_XMLMarshaling(t *testing.T) {
 	t.Run("marshal with IP", func(t *testing.T) {
 		request := NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
+		request.AddSlave("SLAVE456", "192.0.2.101")
 
 		xmlData, err := xml.Marshal(request)
 		if err != nil {
@@ -263,7 +263,7 @@ func TestZoneSlaveRequest_XMLMarshaling(t *testing.T) {
 			t.Error("Expected XML to contain zone element with master attribute")
 		}
 
-		if !strings.Contains(xmlStr, `<member ipaddress="192.168.1.101">SLAVE456</member>`) {
+		if !strings.Contains(xmlStr, `<member ipaddress="192.0.2.101">SLAVE456</member>`) {
 			t.Error("Expected XML to contain member with IP address")
 		}
 	})
@@ -304,11 +304,11 @@ func TestZoneSlaveRequest_XMLUnmarshaling(t *testing.T) {
 	}{
 		{
 			name:    "valid XML with IP",
-			xmlData: `<zone master="MASTER123"><member ipaddress="192.168.1.101">SLAVE456</member></zone>`,
+			xmlData: `<zone master="MASTER123"><member ipaddress="192.0.2.101">SLAVE456</member></zone>`,
 			expectedReq: &ZoneSlaveRequest{
 				Master: "MASTER123",
 				Members: []ZoneSlaveEntry{
-					{DeviceID: "SLAVE456", IP: "192.168.1.101"},
+					{DeviceID: "SLAVE456", IP: "192.0.2.101"},
 				},
 			},
 			expectError: false,
@@ -378,7 +378,7 @@ func TestZoneSlaveEntry_XMLMarshaling(t *testing.T) {
 	t.Run("entry with IP", func(t *testing.T) {
 		entry := ZoneSlaveEntry{
 			DeviceID: "SLAVE456",
-			IP:       "192.168.1.101",
+			IP:       "192.0.2.101",
 		}
 
 		xmlData, err := xml.Marshal(entry)
@@ -388,7 +388,7 @@ func TestZoneSlaveEntry_XMLMarshaling(t *testing.T) {
 
 		xmlStr := string(xmlData)
 
-		expected := `<member ipaddress="192.168.1.101">SLAVE456</member>`
+		expected := `<member ipaddress="192.0.2.101">SLAVE456</member>`
 		if xmlStr != expected {
 			t.Errorf("Expected XML '%s', got '%s'", expected, xmlStr)
 		}
@@ -417,8 +417,8 @@ func TestZoneSlaveEntry_XMLMarshaling(t *testing.T) {
 func TestZoneSlaveRequest_EdgeCases(t *testing.T) {
 	t.Run("multiple AddSlave calls", func(t *testing.T) {
 		request := NewZoneSlaveRequest("MASTER123")
-		request.AddSlave("SLAVE456", "192.168.1.101")
-		request.AddSlave("SLAVE789", "192.168.1.102")
+		request.AddSlave("SLAVE456", "192.0.2.101")
+		request.AddSlave("SLAVE789", "192.0.2.102")
 
 		if len(request.Members) != 2 {
 			t.Errorf("Expected 2 members, got %d", len(request.Members))

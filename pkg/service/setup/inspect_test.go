@@ -56,7 +56,7 @@ func TestInspect_HappyPath(t *testing.T) {
 </info>`,
 			"/networkInfo": `<networkInfo wifiProfileCount="1">
   <interfaces>
-    <interface type="WIFI_INTERFACE" name="wlan0" macAddress="aa:bb:cc:dd:ee:ff" ipAddress="192.168.1.42" ssid="MyHomeNetwork" frequencyKHz="2452000" state="NETWORK_WIFI_CONNECTED" signal="GOOD_SIGNAL" mode="STATION"/>
+    <interface type="WIFI_INTERFACE" name="wlan0" macAddress="aa:bb:cc:dd:ee:ff" ipAddress="192.0.2.42" ssid="MyHomeNetwork" frequencyKHz="2452000" state="NETWORK_WIFI_CONNECTED" signal="GOOD_SIGNAL" mode="STATION"/>
   </interfaces>
 </networkInfo>`,
 			"/sources": `<sources><sourceItem source="TUNEIN" status="READY"/><sourceItem source="SPOTIFY" sourceAccount="user@example.com" status="READY"/></sources>`,
@@ -66,7 +66,7 @@ func TestInspect_HappyPath(t *testing.T) {
 
 	m := &Manager{HTTPGet: f.get}
 
-	r := m.Inspect("192.168.1.42", InspectOptions{})
+	r := m.Inspect("192.0.2.42", InspectOptions{})
 
 	if r.InfoErr != nil {
 		t.Errorf("InfoErr = %v, want nil", r.InfoErr)
@@ -119,7 +119,7 @@ func TestInspect_PartialFailureRecordsPerSectionErrors(t *testing.T) {
 
 	m := &Manager{HTTPGet: f.get}
 
-	r := m.Inspect("192.168.1.42", InspectOptions{})
+	r := m.Inspect("192.0.2.42", InspectOptions{})
 
 	if r.InfoErr != nil {
 		t.Errorf("InfoErr = %v, want nil", r.InfoErr)
@@ -152,7 +152,7 @@ func TestInspect_TelnetRuntimeURLs(t *testing.T) {
 		NewTelnet: func(string) TelnetClient { return tn },
 	}
 
-	r := m.Inspect("192.168.1.42", InspectOptions{IncludeTelnet: true})
+	r := m.Inspect("192.0.2.42", InspectOptions{IncludeTelnet: true})
 
 	if r.RuntimeErr != nil {
 		t.Errorf("RuntimeErr = %v, want nil", r.RuntimeErr)
@@ -172,7 +172,7 @@ func TestInspect_TelnetSkippedWhenOptionDisabled(t *testing.T) {
 
 	m := &Manager{HTTPGet: f.get}
 
-	r := m.Inspect("192.168.1.42", InspectOptions{IncludeTelnet: false})
+	r := m.Inspect("192.0.2.42", InspectOptions{IncludeTelnet: false})
 
 	if r.RuntimeURLs != "" || r.RuntimeErr != nil {
 		t.Errorf("telnet runtime fields should be zero when IncludeTelnet=false, got %q / %v",

@@ -169,7 +169,7 @@ func TestBuildPlanSteps_NoOpWhenAlreadyMigratedAndPaired(t *testing.T) {
 	summary := &setup.MigrationSummary{IsMigrated: true, IsPaired: true, TelnetMigrated: true}
 	inspect := &setup.InspectReport{Info: &setup.DeviceInfoXML{DeviceID: "AABBCCDDEEFF"}}
 
-	steps := buildPlanSteps("192.168.1.42", "http://aftertouch.local:8000", "", true, false, inspect, summary)
+	steps := buildPlanSteps("192.0.2.42", "http://aftertouch.local:8000", "", true, false, inspect, summary)
 
 	if len(steps) != 0 {
 		t.Errorf("expected no steps for fully-set-up device, got %d:\n%v", len(steps), steps)
@@ -180,7 +180,7 @@ func TestBuildPlanSteps_RecommendsPairWhenMigratedButUnpaired(t *testing.T) {
 	summary := &setup.MigrationSummary{IsMigrated: true, IsPaired: false, TelnetMigrated: true, TelnetReachable: true}
 	inspect := &setup.InspectReport{Info: &setup.DeviceInfoXML{DeviceID: "AABBCCDDEEFF"}}
 
-	steps := buildPlanSteps("192.168.1.42", "http://aftertouch.local:8000", "", true, false, inspect, summary)
+	steps := buildPlanSteps("192.0.2.42", "http://aftertouch.local:8000", "", true, false, inspect, summary)
 
 	if len(steps) != 1 {
 		t.Fatalf("expected exactly the pair step, got %d:\n%v", len(steps), steps)
@@ -195,7 +195,7 @@ func TestBuildPlanSteps_MigrateRebootThenPairWhenFresh(t *testing.T) {
 	summary := &setup.MigrationSummary{TelnetReachable: true, SSHSuccess: false, IsPaired: false}
 	inspect := &setup.InspectReport{Info: &setup.DeviceInfoXML{DeviceID: "AABBCCDDEEFF"}}
 
-	steps := buildPlanSteps("192.168.1.42", "http://aftertouch.local:8000", "", true, false, inspect, summary)
+	steps := buildPlanSteps("192.0.2.42", "http://aftertouch.local:8000", "", true, false, inspect, summary)
 
 	// migrate → reboot → pair. The reboot step exists because envswitch's
 	// parallel-persistence layer only fully wins on the next boot, and we
@@ -228,7 +228,7 @@ func TestBuildPlanSteps_DNSMethodPrependsCAInstall(t *testing.T) {
 	}
 	inspect := &setup.InspectReport{Info: &setup.DeviceInfoXML{DeviceID: "X"}}
 
-	steps := buildPlanSteps("192.168.1.42", "http://aftertouch.local:8000", "", false, false, inspect, summary)
+	steps := buildPlanSteps("192.0.2.42", "http://aftertouch.local:8000", "", false, false, inspect, summary)
 
 	if len(steps) < 2 {
 		t.Fatalf("expected at least install-ca + migrate, got %d steps:\n%v", len(steps), steps)
@@ -256,7 +256,7 @@ func TestBuildPlanSteps_ResetModeIncludesManualNetworkSwitches(t *testing.T) {
 	}
 	summary := &setup.MigrationSummary{IsMigrated: true, IsPaired: true} // doesn't matter in reset mode
 
-	steps := buildPlanSteps("192.168.1.42", "http://aftertouch.local:8000", "", true, true, inspect, summary)
+	steps := buildPlanSteps("192.0.2.42", "http://aftertouch.local:8000", "", true, true, inspect, summary)
 
 	// Expected sequence in --reset mode:
 	//   factory-reset, manual AP switch, wait-ap, wifi-push, manual home switch,

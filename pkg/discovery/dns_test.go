@@ -11,7 +11,7 @@ import (
 )
 
 func TestDNSDiscovery_Interception(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"8.8.8.8"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
@@ -65,7 +65,7 @@ func TestDNSDiscovery_Interception(t *testing.T) {
 func TestDNSDiscovery_Forwarding(t *testing.T) {
 	// This test is harder because it needs a real upstream or a mock.
 	// For now, let's just test that it calls forward and record.
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"127.0.0.1:5353"} // Use a port that is likely closed or we can mock
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
@@ -106,7 +106,7 @@ func TestDNSDiscovery_Forwarding(t *testing.T) {
 }
 
 func TestDNSDiscovery_StartTCP(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"8.8.8.8"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
@@ -164,7 +164,7 @@ func TestDNSDiscovery_SelfForwarding(t *testing.T) {
 	mux.HandleFunc("soundtouch.local.", func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
-		rr, _ := dns.NewRR("soundtouch.local. 60 IN A 192.168.178.10")
+		rr, _ := dns.NewRR("soundtouch.local. 60 IN A 192.0.2.10")
 		m.Answer = append(m.Answer, rr)
 		_ = w.WriteMsg(m)
 	})
@@ -194,8 +194,8 @@ func TestDNSDiscovery_SelfForwarding(t *testing.T) {
 	}
 
 	if a, ok := rw.msg.Answer[0].(*dns.A); ok {
-		if a.A.String() != "192.168.178.10" {
-			t.Errorf("Expected IP 192.168.178.10, got %s", a.A.String())
+		if a.A.String() != "192.0.2.10" {
+			t.Errorf("Expected IP 192.0.2.10, got %s", a.A.String())
 		}
 	}
 
@@ -214,7 +214,7 @@ func TestDNSDiscovery_SelfForwarding(t *testing.T) {
 }
 
 func TestDNSDiscovery_ForwardLocal(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"127.0.0.1:5356"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
@@ -227,7 +227,7 @@ func TestDNSDiscovery_ForwardLocal(t *testing.T) {
 	mux.HandleFunc("someone-else.local.", func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
-		rr, _ := dns.NewRR("someone-else.local. 60 IN A 192.168.1.50")
+		rr, _ := dns.NewRR("someone-else.local. 60 IN A 192.0.2.50")
 		m.Answer = append(m.Answer, rr)
 		_ = w.WriteMsg(m)
 	})
@@ -255,7 +255,7 @@ func TestDNSDiscovery_ForwardLocal(t *testing.T) {
 }
 
 func TestDNSDiscovery_IsRunning(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"8.8.8.8"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 
@@ -301,7 +301,7 @@ func (m *mockResponseWriter) TsigTimersOnly(bool)         {}
 func (m *mockResponseWriter) Hijack()                     {}
 
 func TestDNSDiscovery_LogThrottling(t *testing.T) {
-	d := NewDNSDiscovery([]string{"8.8.8.8"}, "192.168.1.100")
+	d := NewDNSDiscovery([]string{"8.8.8.8"}, "192.0.2.100")
 
 	// Capture log output
 	var logBuf strings.Builder
@@ -332,7 +332,7 @@ func TestDNSDiscovery_LogThrottling(t *testing.T) {
 }
 
 func TestDNSDiscovery_LoopPrevention(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 	bindAddr := "127.0.0.1:53"
 	upstreamDNS := []string{"127.0.0.1:53"}
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
@@ -360,7 +360,7 @@ func TestDNSDiscovery_LoopPrevention(t *testing.T) {
 }
 
 func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 	var upstreamDNS []string // Empty upstream
 	d := NewDNSDiscovery(upstreamDNS, serviceIP)
 	d.bindAddr = ":53"
@@ -383,7 +383,7 @@ func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
 }
 
 func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 
 	// Mock server that deliberately delays its response
 	mux := dns.NewServeMux()
@@ -426,7 +426,7 @@ func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 }
 
 func TestDNSDiscovery_MultipleUpstreams(t *testing.T) {
-	serviceIP := "192.168.1.100"
+	serviceIP := "192.0.2.100"
 
 	// Mock server 1: returns NXDOMAIN
 	mux1 := dns.NewServeMux()

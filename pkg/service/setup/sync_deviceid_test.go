@@ -24,7 +24,7 @@ func TestSyncDeviceData_UsesDeviceID(t *testing.T) {
 			// Return device info with MAC address as deviceID
 			w.Header().Set("Content-Type", "application/xml")
 			fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
-<info deviceID="A81B6A536A98">
+<info deviceID="AABBCCDDEEFF">
     <name>Test Device</name>
     <type>SoundTouch 30</type>
     <margeAccountUUID>test-account-123</margeAccountUUID>
@@ -36,20 +36,20 @@ func TestSyncDeviceData_UsesDeviceID(t *testing.T) {
         </component>
     </components>
     <networkInfo type="SCM">
-        <macAddress>A81B6A536A98</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <macAddress>AABBCCDDEEFF</macAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`)
 		case "/presets":
 			// Return empty presets for simplicity
 			w.Header().Set("Content-Type", "application/xml")
 			fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
-<presets deviceID="A81B6A536A98"/>`)
+<presets deviceID="AABBCCDDEEFF"/>`)
 		case "/recents":
 			// Return empty recents for simplicity
 			w.Header().Set("Content-Type", "application/xml")
 			fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
-<recents deviceID="A81B6A536A98"/>`)
+<recents deviceID="AABBCCDDEEFF"/>`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -70,7 +70,7 @@ func TestSyncDeviceData_UsesDeviceID(t *testing.T) {
 	}
 
 	// Verify that data was synced to the correct directory using MAC address (deviceID)
-	expectedDeviceID := "A81B6A536A98"
+	expectedDeviceID := "AABBCCDDEEFF"
 	expectedAccountID := "test-account-123"
 
 	// Check that the device directory is resolved correctly using MAC address
@@ -151,7 +151,7 @@ func TestSyncDeviceData_FallbackToExistingDeviceMapping(t *testing.T) {
 	// Pre-populate device data using serial number (legacy scenario)
 	accountID := "test-account-123"
 	serialNumber := "I6332527703739342000020"
-	macAddress := "A81B6A536A98"
+	macAddress := "AABBCCDDEEFF"
 
 	// Save device info under serial number (simulating legacy behavior)
 	legacyDeviceInfo := &models.ServiceDeviceInfo{
@@ -207,11 +207,11 @@ func TestSyncDeviceData_FallbackToExistingDeviceMapping(t *testing.T) {
 		case "/presets":
 			w.Header().Set("Content-Type", "application/xml")
 			fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
-<presets deviceID="A81B6A536A98"/>`)
+<presets deviceID="AABBCCDDEEFF"/>`)
 		case "/recents":
 			w.Header().Set("Content-Type", "application/xml")
 			fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
-<recents deviceID="A81B6A536A98"/>`)
+<recents deviceID="AABBCCDDEEFF"/>`)
 		}
 	}))
 	defer server.Close()

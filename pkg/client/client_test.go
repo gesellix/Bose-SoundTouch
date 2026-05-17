@@ -15,15 +15,15 @@ import (
 
 func TestNewClient(t *testing.T) {
 	config := &Config{
-		Host:    "192.168.1.100",
+		Host:    "192.0.2.100",
 		Port:    8090,
 		Timeout: 15 * time.Second,
 	}
 
 	client := NewClient(config)
 
-	if client.baseURL != "http://192.168.1.100:8090" {
-		t.Errorf("Expected baseURL 'http://192.168.1.100:8090', got '%s'", client.baseURL)
+	if client.baseURL != "http://192.0.2.100:8090" {
+		t.Errorf("Expected baseURL 'http://192.0.2.100:8090', got '%s'", client.baseURL)
 	}
 
 	if client.timeout != 15*time.Second {
@@ -37,12 +37,12 @@ func TestNewClient(t *testing.T) {
 
 func TestNewClientWithDefaults(t *testing.T) {
 	config := &Config{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 	}
 
 	client := NewClient(config)
 
-	if client.baseURL != "http://192.168.1.100:8090" {
+	if client.baseURL != "http://192.0.2.100:8090" {
 		t.Errorf("Expected default port 8090 in baseURL, got '%s'", client.baseURL)
 	}
 
@@ -56,9 +56,9 @@ func TestNewClientWithDefaults(t *testing.T) {
 }
 
 func TestNewClientFromHost(t *testing.T) {
-	client := NewClientFromHost("192.168.1.200")
+	client := NewClientFromHost("192.0.2.200")
 
-	expected := "http://192.168.1.200:8090"
+	expected := "http://192.0.2.200:8090"
 	if client.baseURL != expected {
 		t.Errorf("Expected baseURL '%s', got '%s'", expected, client.baseURL)
 	}
@@ -152,8 +152,8 @@ func TestGetDeviceInfo_Success(t *testing.T) {
 			t.Errorf("Expected first network type 'SCM', got '%s'", net.Type)
 		}
 
-		if net.IPAddress != "192.168.1.10" {
-			t.Errorf("Expected IP address '192.168.1.10', got '%s'", net.IPAddress)
+		if net.IPAddress != "192.0.2.10" {
+			t.Errorf("Expected IP address '192.0.2.10', got '%s'", net.IPAddress)
 		}
 	}
 }
@@ -259,8 +259,8 @@ func TestPing_Failure(t *testing.T) {
 }
 
 func TestBaseURL(t *testing.T) {
-	client := NewClientFromHost("192.168.1.100")
-	expected := "http://192.168.1.100:8090"
+	client := NewClientFromHost("192.0.2.100")
+	expected := "http://192.0.2.100:8090"
 
 	if client.BaseURL() != expected {
 		t.Errorf("Expected BaseURL '%s', got '%s'", expected, client.BaseURL())

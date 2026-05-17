@@ -254,7 +254,7 @@ func TestClient_GetRecents_ErrorConditions(t *testing.T) {
 // ExampleClient_GetRecents demonstrates how to use the GetRecents method
 func ExampleClient_GetRecents() {
 	config := &Config{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 		Port: 8090,
 	}
 	client := NewClient(config)
@@ -299,7 +299,7 @@ func ExampleClient_GetRecents() {
 // ExampleRecentsResponse_filtering demonstrates filtering recent items
 func ExampleRecentsResponse_filtering() {
 	config := &Config{
-		Host: "192.168.1.100",
+		Host: "192.0.2.100",
 		Port: 8090,
 	}
 	client := NewClient(config)

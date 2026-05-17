@@ -17,7 +17,7 @@ func TestMacAddressCaseSensitivity(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	accountID := "3230304"
+	accountID := "1000001"
 	serialNumber := "I6332527703739342000020"
 
 	// Test scenarios that could occur in production
@@ -30,43 +30,43 @@ func TestMacAddressCaseSensitivity(t *testing.T) {
 	}{
 		{
 			name:            "ExactMatch",
-			macInDeviceInfo: "A81B6A536A98",
-			macInRequest:    "A81B6A536A98",
+			macInDeviceInfo: "AABBCCDDEEFF",
+			macInRequest:    "AABBCCDDEEFF",
 			expectedToWork:  true,
 			description:     "Exact case match should work",
 		},
 		{
 			name:            "DeviceInfoUpperRequestLower",
-			macInDeviceInfo: "A81B6A536A98",
-			macInRequest:    "a81b6a536a98",
+			macInDeviceInfo: "AABBCCDDEEFF",
+			macInRequest:    "aabbccddeeff",
 			expectedToWork:  true,
 			description:     "DeviceInfo has uppercase, request has lowercase (should work with normalization)",
 		},
 		{
 			name:            "DeviceInfoLowerRequestUpper",
-			macInDeviceInfo: "a81b6a536a98",
-			macInRequest:    "A81B6A536A98",
+			macInDeviceInfo: "aabbccddeeff",
+			macInRequest:    "AABBCCDDEEFF",
 			expectedToWork:  true,
 			description:     "DeviceInfo has lowercase, request has uppercase (should work with normalization)",
 		},
 		{
 			name:            "MixedCaseInDeviceInfo",
-			macInDeviceInfo: "a81B6a536A98",
-			macInRequest:    "A81B6A536A98",
+			macInDeviceInfo: "aaBBccddEEff",
+			macInRequest:    "AABBCCDDEEFF",
 			expectedToWork:  true,
 			description:     "Mixed case in DeviceInfo vs uppercase request (should work with normalization)",
 		},
 		{
 			name:            "WithColonsInDeviceInfo",
-			macInDeviceInfo: "A8:1B:6A:53:6A:98",
-			macInRequest:    "A81B6A536A98",
+			macInDeviceInfo: "AA:BB:CC:DD:EE:FF",
+			macInRequest:    "AABBCCDDEEFF",
 			expectedToWork:  true,
 			description:     "DeviceInfo has colons, request without (should work with normalization)",
 		},
 		{
 			name:            "WithDashesInDeviceInfo",
-			macInDeviceInfo: "A8-1B-6A-53-6A-98",
-			macInRequest:    "A81B6A536A98",
+			macInDeviceInfo: "AA-BB-CC-DD-EE-FF",
+			macInRequest:    "AABBCCDDEEFF",
 			expectedToWork:  true,
 			description:     "DeviceInfo has dashes, request without (should work with normalization)",
 		},
@@ -94,7 +94,7 @@ func TestMacAddressCaseSensitivity(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + tc.macInDeviceInfo + `</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`
 			if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {
@@ -152,8 +152,8 @@ func TestMacAddressCaseSensitivity(t *testing.T) {
 // TestProductionScenarioSimulation simulates the exact issue described
 func TestProductionScenarioSimulation(t *testing.T) {
 	// This test specifically simulates the production scenario where:
-	// Request: GET /streaming/account/3230304/device/A81B6A536A98/presets
-	// File exists at: /var/lib/soundtouch-service/accounts/3230304/devices/I6332527703739342000020/Presets.xml
+	// Request: GET /streaming/account/1000001/device/AABBCCDDEEFF/presets
+	// File exists at: /var/lib/soundtouch-service/accounts/1000001/devices/I6332527703739342000020/Presets.xml
 
 	tmpDir, err := os.MkdirTemp("", "production-scenario")
 	if err != nil {
@@ -161,19 +161,19 @@ func TestProductionScenarioSimulation(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	accountID := "3230304"
+	accountID := "1000001"
 	serialNumber := "I6332527703739342000020"
-	requestMAC := "A81B6A536A98"
+	requestMAC := "AABBCCDDEEFF"
 
 	// Test different MAC address formats that could be in DeviceInfo.xml
 	possibleMACFormats := []string{
-		"A81B6A536A98",      // Exact match
-		"a81b6a536a98",      // All lowercase
-		"A81b6a536A98",      // Mixed case
-		"A8:1B:6A:53:6A:98", // With colons
-		"A8-1B-6A-53-6A-98", // With dashes
-		"a8:1b:6a:53:6a:98", // Lowercase with colons
-		"a8-1b-6a-53-6a-98", // Lowercase with dashes
+		"AABBCCDDEEFF",      // Exact match
+		"aabbccddeeff",      // All lowercase
+		"AAbbccddEEff",      // Mixed case
+		"AA:BB:CC:DD:EE:FF", // With colons
+		"AA-BB-CC-DD-EE-FF", // With dashes
+		"aa:bb:cc:dd:ee:ff", // Lowercase with colons
+		"aa-bb-cc-dd-ee-ff", // Lowercase with dashes
 	}
 
 	t.Logf("Production scenario simulation:")
@@ -203,7 +203,7 @@ func TestProductionScenarioSimulation(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + macFormat + `</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`
 			if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {
@@ -259,13 +259,13 @@ func TestNormalizationSuggestion(t *testing.T) {
 		original   string
 		normalized string
 	}{
-		{"A81B6A536A98", "A81B6A536A98"},
-		{"a81b6a536a98", "A81B6A536A98"},
-		{"A8:1B:6A:53:6A:98", "A81B6A536A98"},
-		{"a8:1b:6a:53:6a:98", "A81B6A536A98"},
-		{"A8-1B-6A-53-6A-98", "A81B6A536A98"},
-		{"a8-1b-6a-53-6a-98", "A81B6A536A98"},
-		{"a81B6a536A98", "A81B6A536A98"},
+		{"AABBCCDDEEFF", "AABBCCDDEEFF"},
+		{"aabbccddeeff", "AABBCCDDEEFF"},
+		{"AA:BB:CC:DD:EE:FF", "AABBCCDDEEFF"},
+		{"aa:bb:cc:dd:ee:ff", "AABBCCDDEEFF"},
+		{"AA-BB-CC-DD-EE-FF", "AABBCCDDEEFF"},
+		{"aa-bb-cc-dd-ee-ff", "AABBCCDDEEFF"},
+		{"aaBBccddEEff", "AABBCCDDEEFF"},
 	}
 
 	t.Log("MAC Address Normalization Test:")
@@ -273,7 +273,7 @@ func TestNormalizationSuggestion(t *testing.T) {
 	t.Log("")
 
 	allNormalizedSame := true
-	expectedNormalized := "A81B6A536A98"
+	expectedNormalized := "AABBCCDDEEFF"
 
 	for _, tc := range testCases {
 		normalized := normalizeMAC(tc.original)

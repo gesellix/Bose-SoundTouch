@@ -29,8 +29,8 @@ func Example() {
 
 	// Example output:
 	// Found 2 devices:
-	// - Living Room at 192.168.1.100:8090
-	// - Kitchen at 192.168.1.101:8090
+	// - Living Room at 192.0.2.100:8090
+	// - Kitchen at 192.0.2.101:8090
 }
 
 // ExampleService_DiscoverDevices demonstrates discovering devices with timeout.
@@ -61,16 +61,16 @@ func ExampleService_DiscoverDevices() {
 
 	// Example output:
 	// Device: Living Room
-	//   Address: 192.168.1.100:8090
+	//   Address: 192.0.2.100:8090
 	//   Serial: AA123456789
 	//   Location: /device.xml
-	//   Host: 192.168.1.100:8090
+	//   Host: 192.0.2.100:8090
 	//
 	// Device: Kitchen
-	//   Address: 192.168.1.101:8090
+	//   Address: 192.0.2.101:8090
 	//   Serial: BB123456789
 	//   Location: /device.xml
-	//   Host: 192.168.1.101:8090
+	//   Host: 192.0.2.101:8090
 }
 
 // ExampleUnifiedDiscoveryService_DiscoverDevices demonstrates caching functionality.
@@ -130,7 +130,7 @@ func Example_upnpOnlyDiscovery() {
 
 	// Example output:
 	// UPnP discovered 1 devices:
-	// - Living Room at 192.168.1.100:8090
+	// - Living Room at 192.0.2.100:8090
 }
 
 // ExampleMDNSDiscoveryService_DiscoverDevices demonstrates mDNS-only discovery.
@@ -152,7 +152,7 @@ func ExampleMDNSDiscoveryService_DiscoverDevices() {
 
 	// Example output:
 	// mDNS discovered 1 devices:
-	// - Kitchen at 192.168.1.101:8090
+	// - Kitchen at 192.0.2.101:8090
 }
 
 // Example_errorHandling demonstrates proper error handling in discovery.

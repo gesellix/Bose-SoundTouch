@@ -7,7 +7,7 @@ import (
 
 // ExampleClient_Navigate demonstrates basic navigation of content sources
 func ExampleClient_Navigate() {
-	config := &Config{Host: "192.168.1.100", Port: 8090}
+	config := &Config{Host: "192.0.2.100", Port: 8090}
 	client := NewClient(config)
 
 	// Navigate TuneIn content
@@ -25,7 +25,7 @@ func ExampleClient_Navigate() {
 
 // ExampleClient_SearchStation demonstrates searching for radio stations
 func ExampleClient_SearchStation() {
-	config := &Config{Host: "192.168.1.100", Port: 8090}
+	config := &Config{Host: "192.0.2.100", Port: 8090}
 	client := NewClient(config)
 
 	// Search for jazz stations on TuneIn
@@ -49,7 +49,7 @@ func ExampleClient_SearchStation() {
 
 // ExampleClient_AddStation demonstrates adding a station and playing it
 func ExampleClient_AddStation() {
-	config := &Config{Host: "192.168.1.100", Port: 8090}
+	config := &Config{Host: "192.0.2.100", Port: 8090}
 	client := NewClient(config)
 
 	// First, search for content to get a token
@@ -79,7 +79,7 @@ func ExampleClient_AddStation() {
 
 // Example_navigationWorkflow demonstrates a complete workflow
 func Example_navigationWorkflow() {
-	config := &Config{Host: "192.168.1.100", Port: 8090}
+	config := &Config{Host: "192.0.2.100", Port: 8090}
 	client := NewClient(config)
 
 	// 1. Search for content
@@ -134,7 +134,7 @@ func Example_navigationWorkflow() {
 
 // ExampleClient_NavigateContainer demonstrates browsing into directories
 func ExampleClient_NavigateContainer() {
-	config := &Config{Host: "192.168.1.100", Port: 8090}
+	config := &Config{Host: "192.0.2.100", Port: 8090}
 	client := NewClient(config)
 
 	// First, get the stored music library root
@@ -187,7 +187,7 @@ func ExampleClient_NavigateContainer() {
 
 // Example_searchAndPlayWorkflow demonstrates search -> add -> play workflow
 func Example_searchAndPlayWorkflow() {
-	config := &Config{Host: "192.168.1.100", Port: 8090}
+	config := &Config{Host: "192.0.2.100", Port: 8090}
 	client := NewClient(config)
 
 	searchTerm := "classic rock"

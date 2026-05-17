@@ -46,7 +46,7 @@ func TestMacMappingIntegration_HTTPHandler(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + macAddress + `</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`
 	if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {
@@ -184,7 +184,7 @@ func TestMacMappingIntegration_HTTPHandler(t *testing.T) {
 
 	// Test 4: Case sensitivity test
 	t.Run("RequestWithLowercaseMAC", func(t *testing.T) {
-		lowercaseMAC := "a81b6a536a98"
+		lowercaseMAC := "aabbccddeeff"
 		requestURL := "/streaming/account/" + accountID + "/device/" + lowercaseMAC + "/presets"
 		req, err := http.NewRequest("GET", requestURL, nil)
 		if err != nil {
@@ -287,7 +287,7 @@ func TestMacMappingDebug(t *testing.T) {
     </components>
     <networkInfo type="SCM">
         <macAddress>` + device.mac + `</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>`
 		if err := os.WriteFile(filepath.Join(deviceDir, constants.DeviceInfoFile), []byte(deviceInfoXML), 0644); err != nil {

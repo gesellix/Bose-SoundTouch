@@ -211,8 +211,8 @@ func TestWaitForOnline_MatchesSubstringInNameOrSerial(t *testing.T) {
 		results: [][]*models.DiscoveredDevice{
 			nil, // first poll: nothing yet
 			{
-				{Name: "Other Bose Speaker", SerialNo: "AAAAAAAAAAAA", Host: "192.168.1.50"},
-				{Name: "Bose SoundTouch DE4803", SerialNo: "506583DE4803", Host: "192.168.1.42"},
+				{Name: "Other Bose Speaker", SerialNo: "AAAAAAAAAAAA", Host: "192.0.2.50"},
+				{Name: "Bose SoundTouch DE4803", SerialNo: "506583DE4803", Host: "192.0.2.42"},
 			},
 		},
 	}
@@ -224,8 +224,8 @@ func TestWaitForOnline_MatchesSubstringInNameOrSerial(t *testing.T) {
 		t.Fatalf("WaitForOnline: %v", err)
 	}
 
-	if d.Host != "192.168.1.42" {
-		t.Errorf("Host = %q, want 192.168.1.42", d.Host)
+	if d.Host != "192.0.2.42" {
+		t.Errorf("Host = %q, want 192.0.2.42", d.Host)
 	}
 }
 
@@ -233,7 +233,7 @@ func TestWaitForOnline_EmptyMatcherReturnsFirst(t *testing.T) {
 	stub := &stubMDNS{
 		results: [][]*models.DiscoveredDevice{
 			{
-				{Name: "Bose SoundTouch DE4803", Host: "192.168.1.42"},
+				{Name: "Bose SoundTouch DE4803", Host: "192.0.2.42"},
 			},
 		},
 	}
@@ -245,17 +245,17 @@ func TestWaitForOnline_EmptyMatcherReturnsFirst(t *testing.T) {
 		t.Fatalf("WaitForOnline: %v", err)
 	}
 
-	if d.Host != "192.168.1.42" {
-		t.Errorf("Host = %q, want 192.168.1.42", d.Host)
+	if d.Host != "192.0.2.42" {
+		t.Errorf("Host = %q, want 192.0.2.42", d.Host)
 	}
 }
 
 func TestWaitForOnline_TimesOutWhenNoMatch(t *testing.T) {
 	stub := &stubMDNS{
 		results: [][]*models.DiscoveredDevice{
-			{{Name: "Wrong One", SerialNo: "X", Host: "192.168.1.99"}},
-			{{Name: "Wrong One", SerialNo: "X", Host: "192.168.1.99"}},
-			{{Name: "Wrong One", SerialNo: "X", Host: "192.168.1.99"}},
+			{{Name: "Wrong One", SerialNo: "X", Host: "192.0.2.99"}},
+			{{Name: "Wrong One", SerialNo: "X", Host: "192.0.2.99"}},
+			{{Name: "Wrong One", SerialNo: "X", Host: "192.0.2.99"}},
 		},
 	}
 

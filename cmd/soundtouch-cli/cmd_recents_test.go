@@ -17,7 +17,7 @@ func TestRecentsCommands(t *testing.T) {
 	}{
 		{
 			name: "recents list command",
-			args: []string{"soundtouch-cli", "--host", "192.168.1.100", "recents", "list"},
+			args: []string{"soundtouch-cli", "--host", "192.0.2.100", "recents", "list"},
 			expectedOutput: []string{
 				"Getting recently played content",
 				"Recent Items Summary:",
@@ -26,7 +26,7 @@ func TestRecentsCommands(t *testing.T) {
 		},
 		{
 			name: "recents filter by source",
-			args: []string{"soundtouch-cli", "--host", "192.168.1.100", "recents", "filter", "--source", "SPOTIFY"},
+			args: []string{"soundtouch-cli", "--host", "192.0.2.100", "recents", "filter", "--source", "SPOTIFY"},
 			expectedOutput: []string{
 				"Getting filtered recent content",
 				"filtered by source: SPOTIFY",
@@ -34,7 +34,7 @@ func TestRecentsCommands(t *testing.T) {
 		},
 		{
 			name: "recents latest command",
-			args: []string{"soundtouch-cli", "--host", "192.168.1.100", "recents", "latest"},
+			args: []string{"soundtouch-cli", "--host", "192.0.2.100", "recents", "latest"},
 			expectedOutput: []string{
 				"Getting most recent item",
 				"Most Recent Item:",
@@ -42,7 +42,7 @@ func TestRecentsCommands(t *testing.T) {
 		},
 		{
 			name: "recents stats command",
-			args: []string{"soundtouch-cli", "--host", "192.168.1.100", "recents", "stats"},
+			args: []string{"soundtouch-cli", "--host", "192.0.2.100", "recents", "stats"},
 			expectedOutput: []string{
 				"Getting recent items statistics",
 				"Recent Items Statistics",

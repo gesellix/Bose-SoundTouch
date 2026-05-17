@@ -464,7 +464,7 @@ func TestClient_GetNetworkInfo(t *testing.T) {
 			name: "Successful network info retrieval - WiFi device",
 			serverResponse: `<networkInfo wifiProfileCount="2">
 <interfaces>
-<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" ssid="MyHomeNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
+<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" ssid="MyHomeNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
 <interface type="WIFI_INTERFACE" name="wlan1" macAddress="AA:BB:CC:DD:EE:01" state="NETWORK_WIFI_DISCONNECTED"/>
 </interfaces>
 </networkInfo>`,
@@ -477,7 +477,7 @@ func TestClient_GetNetworkInfo(t *testing.T) {
 			name: "Ethernet device",
 			serverResponse: `<networkInfo wifiProfileCount="3">
 <interfaces>
-<interface type="ETHERNET_INTERFACE" name="eth0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" state="NETWORK_ETHERNET_CONNECTED"/>
+<interface type="ETHERNET_INTERFACE" name="eth0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" state="NETWORK_ETHERNET_CONNECTED"/>
 </interfaces>
 </networkInfo>`,
 			statusCode:             http.StatusOK,
@@ -557,7 +557,7 @@ func TestClient_SystemEndpoints_Integration(t *testing.T) {
 		case "/networkInfo":
 			_, _ = w.Write([]byte(`<networkInfo wifiProfileCount="2">
 <interfaces>
-<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" ssid="TestNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
+<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" ssid="TestNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
 </interfaces>
 </networkInfo>`))
 		default:
