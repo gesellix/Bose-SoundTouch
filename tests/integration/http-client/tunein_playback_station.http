@@ -1,4 +1,8 @@
-### GET /bmx/tunein/v1/playback/station/_station_
+### GET /bmx/tunein/v1/playback/station/_station_ (no Authorization)
+### Auth gate temporarily disabled — see handlers_bmx.go (writeBMXUnauthorized
+### is kept as the future-restore point). When the gate is re-enabled,
+### swap the 200/audio assertions below back to the 401/Unauthorized ones
+### that were here historically.
 GET {{host}}/bmx/tunein/v1/playback/station/_station_
 Accept: */*
 Accept-Language: en
@@ -7,13 +11,13 @@ X-Bmx-Device-Id: bmx-device-id-dummy
 User-Agent: Bose_Lisa/27.0.6
 
 > {%
-    client.test("Response is 401 Unauthorized", function() {
-        client.assert(response.status === 401, "Response status is not 401");
+    client.test("Response is 200 OK (auth gate temporarily disabled)", function() {
+        client.assert(response.status === 200, "Response status is not 200");
     });
 
-    client.test("Response body contains 'Unauthorized'", function() {
-        client.assert(response.body.includes("401 Unauthorized"), "Response body does not contain '401 Unauthorized'");
-        client.assert(response.body.includes("No access token found."), "Response body does not contain 'No access token found.'");
+    client.test("Response contains audio information", function() {
+        client.assert(response.body.hasOwnProperty("audio"), "Response missing 'audio'");
+        client.assert(response.body.audio.hasOwnProperty("streamUrl"), "Response missing 'streamUrl'");
     });
 %}
 
