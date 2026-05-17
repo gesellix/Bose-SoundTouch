@@ -408,6 +408,19 @@ img { display: block; max-width: 100%; }
 .tunein-item-name { display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tunein-item-desc { display: block; font-size: .75rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tunein-item-arrow { color: var(--text-dim); font-size: .9rem; flex-shrink: 0; }
+.tunein-play-btn {
+    background: transparent;
+    border: 1px solid var(--text-dim);
+    color: var(--text);
+    border-radius: 999px;
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    font-size: .85rem; line-height: 1;
+    padding: 0;
+    transition: background .15s, border-color .15s;
+}
+.tunein-play-btn:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 
 /* ── Device picker overlay ───────────────────────────────────────────────── */
 .overlay {
