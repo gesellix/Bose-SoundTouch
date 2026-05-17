@@ -219,6 +219,10 @@ The `./stockholm/` directory is now ready to use.
 Pass the directory to the service at startup:
 
 ```bash
+# Development (recommended): builds the service and runs it with
+# Stockholm enabled, checking that prepare-stockholm has run.
+make dev-service-stockholm
+
 # Binary
 soundtouch-service --stockholm-dir ./stockholm
 
