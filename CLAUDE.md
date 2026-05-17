@@ -65,6 +65,33 @@ before `git push`. CI runs it on every PR; running it locally first
 saves a round-trip. `make check` covers `lint` is its own target —
 combine as needed.
 
+## Integration tests
+
+The `.http` integration tests under `tests/integration/http-client/`
+run via `make test-http-client`, which spins up the service plus
+support mocks (`spotify-mock`, `amazon-mock`) using
+`docker-compose.yml` + `docker-compose.ci.yml`, executes the suite
+through the JetBrains HTTP client image, then tears the stack down.
+Requires Docker.
+
+The compose CI override mounts `tests/integration/testdata/` into the
+service container as its persistent data dir. That directory is
+listed in `tests/.gitignore` — it's local developer state, not source.
+
+**Treat the testdata dir as debug evidence, not disposable scratch.**
+When a fixture or schema change makes the old state stale (e.g.
+post-anonymisation, the previous run's IPs no longer match the
+assertions), don't `rm -rf` it — archive it:
+
+```bash
+make test-http-client-rotate   # renames testdata/ → testdata_<timestamp>/
+make test-http-client          # fresh run on a clean slate
+```
+
+The rotate target is non-destructive (it moves, never deletes) and
+opt-in (no other target invokes it). Old archives stay around for
+retrospective diffing whenever something goes sideways.
+
 ## Project structure
 
 ```

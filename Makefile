@@ -1,4 +1,4 @@
-.PHONY: all build build-cli test test-coverage check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm
+.PHONY: all build build-cli test test-coverage test-http-client test-http-client-rotate check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm
 
 # Load .env if present (simple KEY=VALUE format, no shell quoting)
 -include .env
@@ -148,6 +148,20 @@ test-coverage:
 	@echo "Coverage report generated: coverage.html"
 
 check: fmt vet test test-http-client
+
+# Archive any existing tests/integration/testdata/ to a timestamped sibling
+# so the next `make test-http-client` starts from a clean slate. Keeps the
+# old state around for retrospective debugging — never destructive.
+# Run BEFORE test-http-client when fixtures or schemas have changed and
+# stale state would otherwise be reused via the compose volume mount.
+test-http-client-rotate:
+	@if [ -d tests/integration/testdata ]; then \
+		archive=tests/integration/testdata_$$(date +%Y%m%d-%H%M%S); \
+		mv tests/integration/testdata "$$archive"; \
+		echo "Archived existing testdata to $$archive"; \
+	else \
+		echo "No tests/integration/testdata/ to archive — already fresh."; \
+	fi
 
 test-http-client:
 	@echo "Starting services with docker compose..."
@@ -448,6 +462,8 @@ help:
 	@echo "  build-linux-armv7 - Build for Linux ARMv7 (kernel 3.14+ compatible, CGO_ENABLED=0)"
 	@echo "  test          - Run tests"
 	@echo "  test-coverage - Run tests with coverage report"
+	@echo "  test-http-client         - Run .http integration tests via Docker Compose"
+	@echo "  test-http-client-rotate  - Archive tests/integration/testdata/ before a fresh run (non-destructive)"
 	@echo "  check         - Run fmt, vet, and tests"
 	@echo "  fmt           - Format code"
 	@echo "  vet           - Run go vet"
