@@ -129,67 +129,102 @@ func (app *WebApp) HandleAPIDiscover(w http.ResponseWriter, r *http.Request) {
 }
 
 // ConnectDeviceWebSocket establishes a WebSocket connection to a device
+// and keeps it alive: on disconnect or connect failure, it reconnects
+// with exponential backoff (1 s → 30 s cap, reset after each successful
+// connect). The goroutine runs for the lifetime of the device entry,
+// so status flows from the speaker keep streaming through transient
+// network blips, speaker reboots, and idle timeouts.
+//
+// conn.WebSocket is only updated on a successful (re)connect, never
+// cleared, so the duplicate-spawn guards at the callsites (which check
+// `if device.WebSocket == nil`) stay correct — once this goroutine is
+// running for a device, no second one is needed.
 func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.DeviceConnection) {
 	// Skip WebSocket connection if client is not available (e.g., in tests)
 	if conn.Client == nil {
 		return
 	}
 
-	wsClient := conn.Client.NewWebSocketClient(nil)
+	const (
+		initialBackoff = 1 * time.Second
+		maxBackoff     = 30 * time.Second
+	)
 
-	// Setup event handlers. Each handler funnels its change through
-	// UpdateStatus so concurrent events and the periodic poller
-	// (UpdateDeviceStatus) cannot lose each other's writes.
-	wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
-		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
-			s.NowPlaying = &event.NowPlaying
-			s.LastActivity = time.Now()
+	backoff := initialBackoff
+
+	for {
+		wsClient := conn.Client.NewWebSocketClient(nil)
+
+		// Setup event handlers. Each handler funnels its change through
+		// UpdateStatus so concurrent events and the periodic poller
+		// (UpdateDeviceStatus) cannot lose each other's writes.
+		wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
+			conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+				s.NowPlaying = &event.NowPlaying
+				s.LastActivity = time.Now()
+			})
 		})
-	})
 
-	wsClient.OnVolumeUpdated(func(event *models.VolumeUpdatedEvent) {
-		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
-			s.Volume = &event.Volume
-			s.LastActivity = time.Now()
+		wsClient.OnVolumeUpdated(func(event *models.VolumeUpdatedEvent) {
+			conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+				s.Volume = &event.Volume
+				s.LastActivity = time.Now()
+			})
 		})
-	})
 
-	wsClient.OnConnectionState(func(event *models.ConnectionStateUpdatedEvent) {
-		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
-			s.IsConnected = event.ConnectionState.IsConnected()
-			s.LastActivity = time.Now()
+		wsClient.OnConnectionState(func(event *models.ConnectionStateUpdatedEvent) {
+			conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+				s.IsConnected = event.ConnectionState.IsConnected()
+				s.LastActivity = time.Now()
+			})
 		})
-	})
 
-	wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
-		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
-			s.Presets = &event.Presets
-			s.LastActivity = time.Now()
+		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
+			conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+				s.Presets = &event.Presets
+				s.LastActivity = time.Now()
+			})
 		})
-	})
 
-	// Connect WebSocket
-	if err := wsClient.Connect(); err != nil {
-		log.Printf("Failed to connect WebSocket for device %s: %v", deviceID, err)
-		return
+		if err := wsClient.Connect(); err != nil {
+			log.Printf("Failed to connect WebSocket for device %s: %v (retrying in %s)", deviceID, err, backoff)
+			time.Sleep(backoff)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+
+			continue
+		}
+
+		conn.WebSocket = wsClient
+
+		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+			s.IsConnected = true
+		})
+
+		log.Printf("WebSocket connected for device %s", deviceID)
+
+		// Reset backoff after a successful connect so the next failure
+		// starts at the lowest cadence again.
+		backoff = initialBackoff
+
+		// Block until the device-side WebSocket disconnects.
+		wsClient.Wait()
+
+		conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
+			s.IsConnected = false
+		})
+
+		log.Printf("WebSocket disconnected for device %s — reconnecting in %s", deviceID, backoff)
+		time.Sleep(backoff)
+
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
 	}
-
-	conn.WebSocket = wsClient
-
-	conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
-		s.IsConnected = true
-	})
-
-	log.Printf("WebSocket connected for device %s", deviceID)
-
-	// Wait for disconnection
-	wsClient.Wait()
-
-	conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
-		s.IsConnected = false
-	})
-
-	log.Printf("WebSocket disconnected for device %s", deviceID)
 }
 
 // UpdateDeviceStatus fetches current status from the device.
