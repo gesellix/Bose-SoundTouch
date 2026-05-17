@@ -17,7 +17,7 @@ Observed live on ST10 firmware `27.0.6.46330.5043500` (build `epdbuild.trunk.hep
 
 3. **Speaker notifies its LAN peers.** Two HTTP POSTs to each known peer at `:8090/notification`:
    ```
-   [NotificationSender] SendNotifyLisas_: URL: >>http://192.168.123.122:8090/notification<<, m_msgdata.size(58)
+   [NotificationSender] SendNotifyLisas_: URL: >>http://192.0.2.122:8090/notification<<, m_msgdata.size(58)
    [SimpleURLFetcher]   multipart/form-data text/xml
    ```
    ~58 bytes of `multipart/form-data` carrying `text/xml`. "Lisas" is the firmware's internal term for LAN peers (devices on the same account on the same network segment). AfterTouch is **not** on this path — it's pure peer-to-peer over the LAN. Peers presumably refresh their account info as a result.
@@ -63,31 +63,31 @@ End-to-end command sequence used during the 2026-05-12 bare-pairing experiment, 
 # === 1. Reconnaissance — confirm what state the speaker is in before touching it. ===
 
 # Identity, network, sources, presets.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup inspect
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup inspect
 
 # Green/red status across every migration axis (SSH, telnet, CA, pairing, …).
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup verify \
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup verify \
   --service-url=https://soundtouch.fritz.box
 
 # What `setup plan --reset` would recommend, so you can preview the sequence.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup plan \
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup plan \
   --service-url=https://soundtouch.fritz.box --reset
 
 
 # === 2. Reset and Wi-Fi re-provisioning. ===
 
 # Tell the speaker to wipe itself. Speaker drops Wi-Fi and reboots into AP mode.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup factory-reset
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup factory-reset
 
 # Manual: switch this host to the speaker's setup AP.
 #   macOS: networksetup -setairportnetwork en0 "Bose SoundTouch XXXX"
 
 # Poll 192.0.2.1:8090/info until the speaker answers (interval=2s, timeout=5m).
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup wait-ap
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup wait-ap
 
 # Push home Wi-Fi credentials. NOTE the single-quoted password: zsh expands `!`
 # inside double quotes as history-expansion and will refuse the command.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup wifi-push \
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup wifi-push \
   --ssid="wifi-name" --pass='a.secure!password'
 
 # Manual: switch host back to home Wi-Fi.
@@ -95,42 +95,42 @@ go run ./cmd/soundtouch-cli --host 192.168.123.123 setup wifi-push \
 
 # mDNS-poll for the speaker on the home network, matched by deviceID suffix
 # (which survives the reset since it's the MAC). Returns the new IP.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup wait-online --match=536A98
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup wait-online --match=536A98
 
 
 # === 3. Clock, migrate, pair. From here on use the new IP wait-online reported. ===
 
 # Set the speaker's wall-clock. `clock set --time=now` fails on FW 27;
 # `clock now` is the working subcommand.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 clock now
+go run ./cmd/soundtouch-cli --host 192.0.2.123 clock now
 
 # Reboot to clear any half-initialized resolver / NTP state from the wifi-push flap.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup reboot
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup reboot
 
 # Apply DNS-redirect migration: routes *.bose.com to AfterTouch and installs its CA.
 # Idempotent; safe to re-run.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup migrate \
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup migrate \
   --service-url=https://soundtouch.fritz.box --method=resolv
 
 # Reboot again so the envswitch parallel-persistence layer and the resolv hook
 # both take effect on the next boot.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup reboot
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup reboot
 
 # Pair the device with an AfterTouch account — bare experiment variant.
 # Drop --mode=bare and add --name=… / --language=… for the full state-machine variant.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup pair \
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup pair \
   --mode=bare --account=1111111 --service-url='https://soundtouch.fritz.box'
 
 
 # === 4. Verify. ===
 
 # Reboot to verify persistence survives.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup reboot
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup reboot
 
 # Snapshot the result. margeAccountUUID should still equal --account, and Sources
 # should list ~14 entries (TUNEIN, RADIO_BROWSER, LOCAL_INTERNET_RADIO,
 # SPOTIFY slots, AIRPLAY, etc.) materialized by the firmware.
-go run ./cmd/soundtouch-cli --host 192.168.123.123 setup inspect
+go run ./cmd/soundtouch-cli --host 192.0.2.123 setup inspect
 ```
 
 Total wall-clock for the above on this hardware: roughly 5 minutes including the two manual Wi-Fi switches and three reboots.

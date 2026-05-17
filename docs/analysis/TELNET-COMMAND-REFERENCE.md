@@ -15,7 +15,7 @@ recovery / WiFi setup.
 ### Telnet via Docker (when not installed locally)
 
 ```shell
-docker run --rm --name telnet -it --env IP=192.168.123.123 alpine:edge ash -c 'apk add -U busybox-extras && telnet $IP 17000'
+docker run --rm --name telnet -it --env IP=192.0.2.123 alpine:edge ash -c 'apk add -U busybox-extras && telnet $IP 17000'
 ```
 
 ## Sources

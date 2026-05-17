@@ -85,7 +85,7 @@ func TestAccountFullToXML_RecentWithPoisonedSourceProviderID(t *testing.T) {
 	recentsXML := `<?xml version="1.0" encoding="UTF-8"?>
 <recents>
     <recent deviceID="ABCDEF012345" utcTime="1778014606" id="260505002">
-        <contentItem source="INVALID" type="stationurl" location="http://192.168.123.123/custom/v1/playback/aHR0cHM6Ly9zdHJlYW0ubGF1dC5mbS9zbW9vdGgtamF6eg==" sourceAccount="" isPresetable="true">
+        <contentItem source="INVALID" type="stationurl" location="http://192.0.2.123/custom/v1/playback/aHR0cHM6Ly9zdHJlYW0ubGF1dC5mbS9zbW9vdGgtamF6eg==" sourceAccount="" isPresetable="true">
             <itemName>Smooth Jazz Instrumental 24/7</itemName>
         </contentItem>
         <createdOn>2026-05-05T20:56:49.305+00:00</createdOn>
@@ -152,7 +152,7 @@ func TestClassifyLearnedSource_LocalInternetRadioCustomPlayback(t *testing.T) {
 		{
 			name:     "laut.fm /custom/v1/playback URL",
 			sourceID: "10003",
-			location: "http://192.168.123.123/custom/v1/playback/aHR0cHM6Ly9zdHJlYW0ubGF1dC5mbS9zbW9vdGgtamF6eg==",
+			location: "http://192.0.2.123/custom/v1/playback/aHR0cHM6Ly9zdHJlYW0ubGF1dC5mbS9zbW9vdGgtamF6eg==",
 		},
 		{
 			name:             "sourceProviderID==11 alone",
