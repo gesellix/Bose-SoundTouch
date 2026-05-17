@@ -9,7 +9,7 @@
 // Create a client and control your SoundTouch device:
 //
 //	config := &client.Config{
-//		Host: "192.168.1.100",
+//		Host: "192.0.2.100",
 //		Port: 8090,
 //		Timeout: 10 * time.Second,
 //	}
@@ -74,10 +74,10 @@
 //
 //	// Create a new zone with multiple speakers
 //	newZone := &models.ZoneRequest{
-//		Master: "192.168.1.100",
+//		Master: "192.0.2.100",
 //		Members: []models.MemberEntry{
-//			{IP: "192.168.1.101"},
-//			{IP: "192.168.1.102"},
+//			{IP: "192.0.2.101"},
+//			{IP: "192.0.2.102"},
 //		},
 //	}
 //	err = client.SetZone(newZone)
@@ -120,7 +120,7 @@
 // The Config struct supports various options:
 //
 //	config := &client.Config{
-//		Host:      "192.168.1.100",
+//		Host:      "192.0.2.100",
 //		Port:      8090,
 //		Timeout:   15 * time.Second,
 //		UserAgent: "MyApp/1.0",
@@ -901,7 +901,7 @@ func (c *Client) SelectLocalInternetRadio(location, sourceAccount, itemName, con
 //
 // Example:
 //
-//	err := client.SelectLocalMusic("album:983", "3f205110-4a57-4e91-810a-123456789012", "Welcome to the New", "http://192.168.1.14:8085/v1/albums/983/image")
+//	err := client.SelectLocalMusic("album:983", "3f205110-4a57-4e91-810a-123456789012", "Welcome to the New", "http://192.0.2.14:8085/v1/albums/983/image")
 func (c *Client) SelectLocalMusic(location, sourceAccount, itemName, containerArt string) error {
 	if location == "" {
 		return fmt.Errorf("location cannot be empty")

@@ -14,7 +14,7 @@
 #   ./spotify-prime-speaker SPEAKER_IP ACCESS_TOKEN
 #
 # Example:
-#   ./spotify-prime-speaker 192.168.1.143 BQDj...your_token...
+#   ./spotify-prime-speaker 192.0.2.143 BQDj...your_token...
 #
 # How to get an access token:
 #   - Spotify Developer Console: https://developer.spotify.com

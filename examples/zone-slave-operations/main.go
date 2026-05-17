@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// Configure your device
-	deviceIP := "192.168.1.100" // Replace with your SoundTouch device IP
+	deviceIP := "192.0.2.100" // Replace with your SoundTouch device IP
 
 	// Create client
 	soundtouchClient := client.NewClientFromHost(deviceIP)
@@ -24,7 +24,7 @@ func main() {
 
 	masterDeviceID := "ABCD1234EFGH" // Replace with actual master device ID
 	slaveDeviceID := "WXYZ5678IJKL"  // Replace with actual slave device ID
-	slaveIP := "192.168.1.101"       // Replace with actual slave IP
+	slaveIP := "192.0.2.101"         // Replace with actual slave IP
 
 	err := soundtouchClient.AddZoneSlave(masterDeviceID, slaveDeviceID, slaveIP)
 	if err != nil {
@@ -117,7 +117,7 @@ func main() {
 	fmt.Println("\n8. Error handling example...")
 
 	// Try to add a non-existent device to demonstrate error handling
-	err = soundtouchClient.AddZoneSlave("INVALID123", "NOTFOUND456", "192.168.1.999")
+	err = soundtouchClient.AddZoneSlave("INVALID123", "NOTFOUND456", "192.0.2.999")
 	if err != nil {
 		fmt.Printf("⚠️  Expected error for invalid operation: %v\n", err)
 		fmt.Println("   This demonstrates proper error handling for invalid device IDs or IPs")

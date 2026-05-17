@@ -27,7 +27,7 @@
 //	func main() {
 //		// Create a client for your SoundTouch device
 //		config := &client.Config{
-//			Host: "192.168.1.100",
+//			Host: "192.0.2.100",
 //			Port: 8090,
 //		}
 //		client := client.NewClient(config)
@@ -70,7 +70,7 @@
 //	soundtouch-cli discover devices
 //
 //	# Control a device
-//	soundtouch-cli --host 192.168.1.100 play start
+//	soundtouch-cli --host 192.0.2.100 play start
 //
 // # Supported Features
 //

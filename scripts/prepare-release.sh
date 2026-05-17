@@ -133,7 +133,7 @@ import (
 
 func main() {
     // Create client
-    c := client.New("192.168.1.100", 8090)
+    c := client.New("192.0.2.100", 8090)
 
     // Get device info
     info, err := c.GetInfo()
@@ -161,10 +161,10 @@ Download the CLI tool for your platform from the releases below:
 ./soundtouch-cli -discover
 
 # Get device information
-./soundtouch-cli -host 192.168.1.100 -info
+./soundtouch-cli -host 192.0.2.100 -info
 
 # Monitor real-time events
-./soundtouch-cli -host 192.168.1.100 -nowplaying
+./soundtouch-cli -host 192.0.2.100 -nowplaying
 \`\`\`
 
 ## 🧪 Tested Hardware

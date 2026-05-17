@@ -41,10 +41,10 @@
 // Creating zone configurations:
 //
 //	zone := models.Zone{
-//		Master: "192.168.1.100",
+//		Master: "192.0.2.100",
 //		Members: []models.ZoneMember{
-//			{IPAddress: "192.168.1.101"},
-//			{IPAddress: "192.168.1.102"},
+//			{IPAddress: "192.0.2.101"},
+//			{IPAddress: "192.0.2.102"},
 //		},
 //	}
 //
@@ -89,7 +89,7 @@
 //
 //	device := models.DiscoveredDevice{
 //		Name:     "Living Room",
-//		Host:     "192.168.1.100",
+//		Host:     "192.0.2.100",
 //		Port:     8090,
 //		SerialNo: "AA123456789",
 //		Location: "/device.xml",

@@ -15,7 +15,7 @@ func ZeroConfGetInfo(zcBaseURL string) ([]byte, error) {
 // PushSpotifyCredentials pushes Spotify credentials to a speaker using the full
 // ZeroConf DH key exchange protocol. Falls back to simplified token push if
 // the speaker does not support DH (older firmware).
-// zcBaseURL is the base URL of the ZeroConf endpoint, e.g. "http://192.168.1.10:8200/zc".
+// zcBaseURL is the base URL of the ZeroConf endpoint, e.g. "http://192.168.10.10:8200/zc".
 func PushSpotifyCredentials(zcBaseURL, username, accessToken string) error {
 	return zeroconf.PushCredentials(zcBaseURL, username, accessToken)
 }

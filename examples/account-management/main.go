@@ -13,7 +13,7 @@ import (
 func main() {
 	// Configure the SoundTouch client
 	config := &client.Config{
-		Host:    "192.168.1.100", // Replace with your device IP
+		Host:    "192.0.2.100", // Replace with your device IP
 		Port:    8090,
 		Timeout: 10 * time.Second,
 	}

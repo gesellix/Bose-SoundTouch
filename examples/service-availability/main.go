@@ -16,7 +16,7 @@ func main() {
 	host := getSoundTouchHost()
 	if host == "" {
 		fmt.Println("Usage: go run main.go <soundtouch-host>")
-		fmt.Println("   or: SOUNDTOUCH_TEST_HOST=192.168.1.100 go run main.go")
+		fmt.Println("   or: SOUNDTOUCH_TEST_HOST=192.0.2.100 go run main.go")
 		os.Exit(1)
 	}
 

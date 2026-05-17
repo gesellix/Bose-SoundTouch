@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// Configure your device
-	deviceIP := "192.168.1.100" // Replace with your SoundTouch device IP
+	deviceIP := "192.0.2.100" // Replace with your SoundTouch device IP
 
 	// Create client
 	soundtouchClient := client.NewClientFromHost(deviceIP)

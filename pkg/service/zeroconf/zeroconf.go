@@ -300,7 +300,7 @@ func GetInfo(zcBaseURL string) ([]byte, error) {
 // PushCredentials pushes OAuth credentials to a speaker using the ZeroConf DH
 // key exchange protocol. If getInfo fails (older firmware without DH support),
 // it falls back to the simplified tokenType=accesstoken approach.
-// zcBaseURL is the base URL of the ZeroConf endpoint, e.g. "http://192.168.1.10:8200/zc".
+// zcBaseURL is the base URL of the ZeroConf endpoint, e.g. "http://192.168.10.10:8200/zc".
 func PushCredentials(zcBaseURL, username, accessToken string) error {
 	base, err := validateZcBaseURL(zcBaseURL)
 	if err != nil {

@@ -378,7 +378,7 @@ func printUsage() {
 	fmt.Printf("  %s <device_ip>\n", os.Args[0])
 	fmt.Println()
 	fmt.Println("Example:")
-	fmt.Printf("  %s 192.168.1.100\n", os.Args[0])
+	fmt.Printf("  %s 192.0.2.100\n", os.Args[0])
 	fmt.Println()
 	fmt.Println("Prerequisites:")
 	fmt.Println("• SoundTouch device on your network")

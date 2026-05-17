@@ -358,7 +358,7 @@ jobs:
 
           func main() {
               // Create client
-              c := client.New("192.168.1.100", 8090)
+              c := client.New("192.0.2.100", 8090)
 
               // Get device info
               info, err := c.GetInfo()

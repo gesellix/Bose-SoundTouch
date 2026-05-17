@@ -163,7 +163,7 @@ body:
       label: Network Configuration
       description: Details about your network setup (if relevant to the issue)
       placeholder: |
-        - Device IP: 192.168.1.100
+        - Device IP: 192.0.2.100
         - Network type: WiFi/Ethernet
         - Router model:
         - Any firewalls or network restrictions:

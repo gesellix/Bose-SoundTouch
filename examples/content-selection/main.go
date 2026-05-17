@@ -163,7 +163,7 @@ func demoLocalMusic(c *client.Client) error {
 	location := "album:983"
 	sourceAccount := "3f205110-4a57-4e91-810a-123456789012" // Example GUID
 	itemName := "Welcome to the New"
-	containerArt := "http://192.168.1.14:8085/v1/albums/983/image"
+	containerArt := "http://192.0.2.14:8085/v1/albums/983/image"
 
 	fmt.Printf("      Album: %s\n", itemName)
 	fmt.Printf("      Location: %s\n", location)
@@ -276,7 +276,7 @@ func printUsage() {
 	fmt.Printf("  %s <device_ip>\n", os.Args[0])
 	fmt.Println()
 	fmt.Println("Example:")
-	fmt.Printf("  %s 192.168.1.100\n", os.Args[0])
+	fmt.Printf("  %s 192.0.2.100\n", os.Args[0])
 	fmt.Println()
 	fmt.Println("Prerequisites:")
 	fmt.Println("• SoundTouch device on your network")

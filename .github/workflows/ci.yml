@@ -275,7 +275,7 @@ jobs:
 
           func main() {
               // Test basic client creation
-              c := client.NewClientFromHost("192.168.1.100")
+              c := client.NewClientFromHost("192.0.2.100")
               fmt.Printf("Client created for %s\n", c.BaseURL())
 
               // Test models can be imported

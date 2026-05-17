@@ -131,7 +131,7 @@ body:
       render: go
       placeholder: |
         // Example of how you envision using this feature
-        client := soundtouch.New("192.168.1.100", 8090)
+        client := soundtouch.New("192.0.2.100", 8090)
 
         // Your desired API call
         result, err := client.NewFeature(options)
