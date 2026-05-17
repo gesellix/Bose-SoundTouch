@@ -20,7 +20,7 @@ See the [Survival Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SURVI
 
 A local server that replaces the Bose cloud ("AfterTouch"). Once your speaker is redirected to it, you have full control without any Bose cloud dependency. The built-in web UI at `http://localhost:8000` handles all setup — no config files needed to get started.
 
-If you want to run a server for this - no problem. The service is small enough to run on the SoundTouch itself. See the [On-Device Installer](./scripts/on-device-install/README.md) for instructions.
+If you don't want to run a server for this - no problem. The service is small enough to run on the SoundTouch itself. See the [On-Device Installer](./scripts/on-device-install/README.md) for instructions.
 
 **Two scenarios:**
 
