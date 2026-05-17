@@ -31,7 +31,7 @@ import (
 
 func main() {
     // Connect to SoundTouch device
-    soundTouchClient := client.NewClientFromHost("192.168.1.10")
+    soundTouchClient := client.NewClientFromHost("192.0.2.10")
     
     // Get current zone information
     zone, err := soundTouchClient.GetZone()
@@ -54,25 +54,25 @@ func main() {
 
 ```bash
 # Get zone information
-go run ./cmd/soundtouch-cli -host 192.168.1.10 -zone
+go run ./cmd/soundtouch-cli -host 192.0.2.10 -zone
 
 # Check zone status for this device
-go run ./cmd/soundtouch-cli -host 192.168.1.10 -zone-status
+go run ./cmd/soundtouch-cli -host 192.0.2.10 -zone-status
 
 # List all zone members
-go run ./cmd/soundtouch-cli -host 192.168.1.10 -zone-members
+go run ./cmd/soundtouch-cli -host 192.0.2.10 -zone-members
 
 # Create a new zone
-go run ./cmd/soundtouch-cli -host 192.168.1.10 -create-zone MASTER123,MEMBER456,MEMBER789
+go run ./cmd/soundtouch-cli -host 192.0.2.10 -create-zone MASTER123,MEMBER456,MEMBER789
 
 # Add device to existing zone
-go run ./cmd/soundtouch-cli -host 192.168.1.10 -add-to-zone DEVICE456@192.168.1.11
+go run ./cmd/soundtouch-cli -host 192.0.2.10 -add-to-zone DEVICE456@192.0.2.11
 
 # Remove device from zone
-go run ./cmd/soundtouch-cli -host 192.168.1.10 -remove-from-zone DEVICE456
+go run ./cmd/soundtouch-cli -host 192.0.2.10 -remove-from-zone DEVICE456
 
 # Dissolve current zone
-go run ./cmd/soundtouch-cli -host 192.168.1.10 -dissolve-zone
+go run ./cmd/soundtouch-cli -host 192.0.2.10 -dissolve-zone
 ```
 
 ## Zone Concepts
@@ -112,8 +112,8 @@ for i, member := range zone.Members {
 **Response Structure:**
 ```xml
 <zone master="ABCD1234EFGH">
-    <member ipaddress="192.168.1.11">EFGH5678IJKL</member>
-    <member ipaddress="192.168.1.12">IJKL9012MNOP</member>
+    <member ipaddress="192.0.2.11">EFGH5678IJKL</member>
+    <member ipaddress="192.0.2.12">IJKL9012MNOP</member>
 </zone>
 ```
 
@@ -162,8 +162,8 @@ if err != nil {
 ```go
 masterID := "ABCD1234EFGH"
 members := map[string]string{
-    "EFGH5678IJKL": "192.168.1.11",
-    "IJKL9012MNOP": "192.168.1.12",
+    "EFGH5678IJKL": "192.0.2.11",
+    "IJKL9012MNOP": "192.0.2.12",
 }
 
 err := client.CreateZoneWithIPs(masterID, members)
@@ -176,7 +176,7 @@ if err != nil {
 
 ```go
 // Add device with IP address
-err := client.AddToZone("DEVICE789", "192.168.1.13")
+err := client.AddToZone("DEVICE789", "192.0.2.13")
 if err != nil {
     log.Fatal(err)
 }
@@ -207,7 +207,7 @@ if err != nil {
 
 ```go
 zoneRequest, err := models.NewZoneBuilder("MASTER123").
-    WithMember("DEVICE456", "192.168.1.11").
+    WithMember("DEVICE456", "192.0.2.11").
     WithMemberByDeviceID("DEVICE789").
     Build()
 
@@ -226,8 +226,8 @@ if err != nil {
 ```go
 // Create zone request manually
 zoneRequest := models.NewZoneRequest("MASTER123")
-zoneRequest.AddMember("DEVICE456", "192.168.1.11")
-zoneRequest.AddMember("DEVICE789", "192.168.1.12")
+zoneRequest.AddMember("DEVICE456", "192.0.2.11")
+zoneRequest.AddMember("DEVICE789", "192.0.2.12")
 
 // Validate before sending
 if err := zoneRequest.Validate(); err != nil {
@@ -262,9 +262,9 @@ if zone.IsMember("DEVICE456") {
 }
 
 // Find device by IP
-member, found := zone.GetMemberByIP("192.168.1.11")
+member, found := zone.GetMemberByIP("192.0.2.11")
 if found {
-    fmt.Printf("Device at 192.168.1.11 is %s\n", member.DeviceID)
+    fmt.Printf("Device at 192.0.2.11 is %s\n", member.DeviceID)
 }
 
 // Get all device IDs
@@ -305,7 +305,7 @@ defer wsClient.Disconnect()
 ### Zone-Specific Errors
 
 ```go
-err := client.AddToZone("INVALID_DEVICE", "192.168.1.99")
+err := client.AddToZone("INVALID_DEVICE", "192.0.2.99")
 if err != nil {
     // Handle specific zone errors
     if zoneErr, ok := err.(*models.ZoneError); ok {
@@ -411,11 +411,11 @@ func createRoomZones() {
     kitchenMembers := []string{"KITCHEN_COUNTER"}
     
     // Create living room zone
-    livingRoomClient := client.NewClientFromHost("192.168.1.10")
+    livingRoomClient := client.NewClientFromHost("192.0.2.10")
     livingRoomClient.CreateZone(livingRoomMaster, livingRoomMembers)
     
     // Create kitchen zone
-    kitchenClient := client.NewClientFromHost("192.168.1.20")
+    kitchenClient := client.NewClientFromHost("192.0.2.20")
     kitchenClient.CreateZone(kitchenMaster, kitchenMembers)
 }
 ```
@@ -434,7 +434,7 @@ func enablePartyMode() {
         master := allDevices[0]
         members := allDevices[1:]
         
-        masterClient := client.NewClientFromHost("192.168.1.10")
+        masterClient := client.NewClientFromHost("192.0.2.10")
         err := masterClient.CreateZone(master, members)
         if err != nil {
             log.Printf("Failed to create party zone: %v", err)
@@ -444,7 +444,7 @@ func enablePartyMode() {
 
 func disablePartyMode() {
     // Dissolve all zones
-    for _, ip := range []string{"192.168.1.10", "192.168.1.11", "192.168.1.12"} {
+    for _, ip := range []string{"192.0.2.10", "192.0.2.11", "192.0.2.12"} {
         client := client.NewClientFromHost(ip)
         client.DissolveZone()
     }

@@ -171,7 +171,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **Notification System**: TTS and URL playback with multi-language support
 - **API Compliance**: Proper press+release key pattern implementation
 - **Safety First**: Volume warnings and limits for user protection
-- **User Experience**: Host:port parsing (e.g., `-host 192.168.1.100:8090`)
+- **User Experience**: Host:port parsing (e.g., `-host 192.0.2.100:8090`)
 - **CLI Enhancement**: Direct flags for common operations and audio control
 - **Discovery Excellence**: Multi-protocol discovery (UPnP + mDNS) with caching
 - **Real Device Testing**: Validated with SoundTouch 10 and SoundTouch 20
@@ -193,7 +193,7 @@ This project implements a comprehensive Go client library and CLI tool for Bose 
 - **HTTP Client**: Mock server tests with real response data
 
 ### Integration Tests
-- **Real Devices**: SoundTouch 10 (192.168.1.10) and SoundTouch 20 (192.168.1.11)
+- **Real Devices**: SoundTouch 10 (192.0.2.10) and SoundTouch 20 (192.0.2.11)
 - **All Endpoints**: Validated against actual hardware
 - **Source Selection**: Tested with Spotify, TuneIn, and other available sources
 - **Bass Control**: Tested bass adjustment, validation, and device-specific behavior

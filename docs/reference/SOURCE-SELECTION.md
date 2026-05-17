@@ -49,7 +49,7 @@ import "github.com/gesellix/bose-soundtouch/pkg/client"
 
 // Create client
 config := client.ClientConfig{
-    Host: "192.168.1.100",
+    Host: "192.0.2.100",
     Port: 8090,
 }
 c := client.NewClient(config)
@@ -131,28 +131,28 @@ if err != nil {
 
 ```bash
 # Select source using generic method
-soundtouch-cli -host 192.168.1.100 -select-source SPOTIFY -source-account "your_account"
+soundtouch-cli -host 192.0.2.100 -select-source SPOTIFY -source-account "your_account"
 
 # Select source with convenience flags
-soundtouch-cli -host 192.168.1.100 -spotify -source-account "your_account"
-soundtouch-cli -host 192.168.1.100 -bluetooth
-soundtouch-cli -host 192.168.1.100 -aux
+soundtouch-cli -host 192.0.2.100 -spotify -source-account "your_account"
+soundtouch-cli -host 192.0.2.100 -bluetooth
+soundtouch-cli -host 192.0.2.100 -aux
 ```
 
 ### Real Examples
 
 ```bash
 # Check available sources first
-soundtouch-cli -host 192.168.1.100 -sources
+soundtouch-cli -host 192.0.2.100 -sources
 
 # Select Spotify with account
-soundtouch-cli -host 192.168.1.100 -spotify -source-account "your_account"
+soundtouch-cli -host 192.0.2.100 -spotify -source-account "your_account"
 
 # Select TuneIn
-soundtouch-cli -host 192.168.1.100 -select-source TUNEIN
+soundtouch-cli -host 192.0.2.100 -select-source TUNEIN
 
 # Select AUX input
-soundtouch-cli -host 192.168.1.100 -aux
+soundtouch-cli -host 192.0.2.100 -aux
 ```
 
 ### CLI Flags
@@ -180,7 +180,7 @@ soundtouch-cli -host 192.168.1.100 -aux
 Use the sources endpoint to discover available accounts:
 
 ```bash
-soundtouch-cli -host 192.168.1.100 -sources
+soundtouch-cli -host 192.0.2.100 -sources
 ```
 
 This shows account names for each source:
@@ -299,7 +299,7 @@ go test ./pkg/client -v -run ".*SelectSource.*"
 
 Test with real hardware:
 ```bash
-SOUNDTOUCH_TEST_HOST=192.168.1.100 go test ./pkg/client -v -run ".*Integration.*"
+SOUNDTOUCH_TEST_HOST=192.0.2.100 go test ./pkg/client -v -run ".*Integration.*"
 ```
 
 ### Manual Testing

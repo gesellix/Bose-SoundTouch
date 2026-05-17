@@ -58,7 +58,7 @@ import "github.com/gesellix/bose-soundtouch/pkg/client"
 
 // Create client
 config := client.ClientConfig{
-    Host: "192.168.1.100",
+    Host: "192.0.2.100",
     Port: 8090,
 }
 c := client.NewClient(config)
@@ -138,35 +138,35 @@ fmt.Printf("Default: %d\n", models.BassLevelDefault)  // 0
 
 ```bash
 # Get current bass level
-soundtouch-cli -host 192.168.1.100 -bass
+soundtouch-cli -host 192.0.2.100 -bass
 
 # Set specific bass level
-soundtouch-cli -host 192.168.1.100 -set-bass 3
-soundtouch-cli -host 192.168.1.100 -set-bass -5
+soundtouch-cli -host 192.0.2.100 -set-bass 3
+soundtouch-cli -host 192.0.2.100 -set-bass -5
 
 # Increment/decrement bass
-soundtouch-cli -host 192.168.1.100 -inc-bass 1
-soundtouch-cli -host 192.168.1.100 -dec-bass 2
+soundtouch-cli -host 192.0.2.100 -inc-bass 1
+soundtouch-cli -host 192.0.2.100 -dec-bass 2
 ```
 
 ### Real Examples
 
 ```bash
 # Check current bass settings
-soundtouch-cli -host 192.168.1.100 -bass
+soundtouch-cli -host 192.0.2.100 -bass
 # Output: Bass Level: 0 (Neutral)
 #         Category: Flat
 
 # Set bass boost
-soundtouch-cli -host 192.168.1.100 -set-bass 6
+soundtouch-cli -host 192.0.2.100 -set-bass 6
 # Output: ✓ Bass set to 6 (High)
 
 # Reset to neutral
-soundtouch-cli -host 192.168.1.100 -set-bass 0
+soundtouch-cli -host 192.0.2.100 -set-bass 0
 # Output: ✓ Bass set to 0 (Neutral)
 
 # Gradual bass adjustment
-soundtouch-cli -host 192.168.1.100 -inc-bass 2
+soundtouch-cli -host 192.0.2.100 -inc-bass 2
 # Output: ✓ Bass increased to 2 (Slightly High)
 ```
 
@@ -316,7 +316,7 @@ err := client.SetBass(15)
 
 #### 2. Device Connection Errors
 ```bash
-soundtouch-cli -host 192.168.1.100 -bass
+soundtouch-cli -host 192.0.2.100 -bass
 # Error: failed to get bass: API request failed with status 404
 ```
 
@@ -370,7 +370,7 @@ go test ./pkg/client -v -run ".*Bass.*"
 
 Test with real hardware:
 ```bash
-SOUNDTOUCH_TEST_HOST=192.168.1.100 go test ./pkg/client -v -run ".*Bass.*Integration.*"
+SOUNDTOUCH_TEST_HOST=192.0.2.100 go test ./pkg/client -v -run ".*Bass.*Integration.*"
 ```
 
 ### Manual Testing

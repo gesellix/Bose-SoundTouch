@@ -316,7 +316,7 @@ MX:3
 NOTIFY * HTTP/1.1
 HOST:239.255.255.250:1900
 CACHE-CONTROL:max-age=1800
-LOCATION:http://192.168.1.100:8090/device_description.xml
+LOCATION:http://192.0.2.100:8090/device_description.xml
 NT:upnp:rootdevice
 NTS:ssdp:alive
 USN:uuid:12345678-1234-1234-1234-123456789012::upnp:rootdevice
@@ -328,7 +328,7 @@ HTTP/1.1 200 OK
 CACHE-CONTROL:max-age=1800
 DATE:Wed, 18 Dec 2024 10:30:00 GMT
 EXT:
-LOCATION:http://192.168.1.100:8090/device_description.xml
+LOCATION:http://192.0.2.100:8090/device_description.xml
 SERVER:Linux/3.0 UPnP/1.0 Device/1.0
 ST:upnp:rootdevice
 USN:uuid:12345678-1234-1234-1234-123456789012::upnp:rootdevice
@@ -363,7 +363,7 @@ arp -a
 
 # Scan local network segment (requires nmap)
 brew install nmap
-nmap -sn 192.168.1.0/24  # Adjust network range as needed
+nmap -sn 192.0.2.0/24  # Adjust network range as needed
 
 # Quick ping sweep (built-in)
 for i in {1..254}; do ping -c 1 -t 1 192.168.1.$i >/dev/null 2>&1 && echo "192.168.1.$i is up"; done
@@ -439,10 +439,10 @@ sudo tcpdump -i any -n -A 'port 5353' | grep -i soundtouch
 netstat -g
 
 # Test UDP connectivity
-nc -u 192.168.1.100 8090  # Replace with actual device IP
+nc -u 192.0.2.100 8090  # Replace with actual device IP
 
 # Test HTTP connectivity to discovered devices
-curl -i http://192.168.1.100:8090/info  # SoundTouch info endpoint
+curl -i http://192.0.2.100:8090/info  # SoundTouch info endpoint
 ```
 
 ## Protocol Comparison

@@ -87,7 +87,7 @@ func getDevicesWithFallback() []*client.Client {
     log.Printf("Discovery failed: %v, trying known IPs...", err)
 
     // Fallback to known IP addresses
-    knownIPs := []string{"192.168.1.100", "192.168.1.101", "192.168.1.102"}
+    knownIPs := []string{"192.0.2.100", "192.0.2.101", "192.0.2.102"}
     
     var clients []*client.Client
     for _, ip := range knownIPs {

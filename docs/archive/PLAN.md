@@ -656,10 +656,10 @@ func main() {
 soundtouch discover
 
 # Device operations
-soundtouch --device 192.168.1.100 info
-soundtouch --device 192.168.1.100 play
-soundtouch --device 192.168.1.100 volume 50
-soundtouch --device 192.168.1.100 preset 1
+soundtouch --device 192.0.2.100 info
+soundtouch --device 192.0.2.100 play
+soundtouch --device 192.0.2.100 volume 50
+soundtouch --device 192.0.2.100 preset 1
 
 # Interactive mode
 soundtouch interactive

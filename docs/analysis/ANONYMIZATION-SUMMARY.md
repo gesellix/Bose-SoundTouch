@@ -10,19 +10,19 @@ use across the codebase. Use these values in new examples and tests.
 
 ## Placeholder mapping
 
-| Concept                  | Placeholder                                                  |
-|--------------------------|--------------------------------------------------------------|
-| Example IP (primary)     | `192.0.2.10`                                                 |
-| Example IP (secondary)   | `192.0.2.11`                                                 |
-| Example IP (third)       | `192.0.2.12`                                                 |
-| Network / CIDR           | `192.0.2.0/24`                                               |
-| External / non-LAN IP    | `198.51.100.10` or `203.0.113.10`                            |
-| Gateway IP               | `192.0.2.1`                                                  |
-| Device MAC (primary)     | `AA:BB:CC:DD:EE:FF` (no separator: `AABBCCDDEEFF`)           |
-| Device MAC (secondary)   | `AA:BB:CC:DD:EE:01` (no separator: `AABBCCDDEE01`)           |
-| Device ID (some XML)     | `ABCD1234EFGH` — legacy placeholder still in some fixtures   |
-| Device display name      | `Living Room SoundTouch` / `Kitchen SoundTouch` / `Bedroom SoundTouch` |
-| Bose account ID          | `1000001` / `1000002`                                        |
+| Concept                | Placeholder                                                            |
+|------------------------|------------------------------------------------------------------------|
+| Example IP (primary)   | `192.0.2.10`                                                           |
+| Example IP (secondary) | `192.0.2.11`                                                           |
+| Example IP (third)     | `192.0.2.12`                                                           |
+| Network / CIDR         | `192.0.2.0/24`                                                         |
+| External / non-LAN IP  | `198.51.100.10` or `203.0.113.10`                                      |
+| Gateway IP             | `192.0.2.1`                                                            |
+| Device MAC (primary)   | `AA:BB:CC:DD:EE:FF` (no separator: `AABBCCDDEEFF`)                     |
+| Device MAC (secondary) | `AA:BB:CC:DD:EE:01` (no separator: `AABBCCDDEE01`)                     |
+| Device ID (some XML)   | `ABCD1234EFGH` — legacy placeholder still in some fixtures             |
+| Device display name    | `Living Room SoundTouch` / `Kitchen SoundTouch` / `Bedroom SoundTouch` |
+| Bose account ID        | `1000001` / `1000002`                                                  |
 
 `192.0.2.0/24`, `198.51.100.0/24`, and `203.0.113.0/24` are reserved
 by [RFC 5737](https://www.rfc-editor.org/rfc/rfc5737) exclusively for
@@ -39,15 +39,17 @@ pattern) but stay numeric for parsers that expect integer-looking IDs.
 
 ## Why we don't use 192.168.1.x
 
-An earlier anonymisation pass (now superseded) used `192.168.1.x` as
-its target. That range is RFC-1918 private space — perfectly valid on
-real networks, which means a reader can't tell whether `192.168.1.10`
-is a placeholder or a documented LAN address. RFC-5737 ranges fix
-that.
+An earlier anonymisation pass used `192.168.1.x` as its target. That
+range is RFC-1918 private space — perfectly valid on real networks,
+which means a reader can't tell whether `192.168.1.10` is a
+placeholder or a documented LAN address. RFC-5737 ranges fix that:
+because they're reserved for documentation only, any reader knows on
+sight that they don't represent a real device.
 
-A broader follow-up sweep of remaining `192.168.1.*` references is
-tracked separately in NEXT.md (still pending at the time this file
-was rewritten).
+The `.md` / `.txt` portion of the `192.168.1.*` → `192.0.2.x` sweep
+is complete. Test files (`.go` / `.xml` / `.http`) still carry the
+old placeholder pending Phase 2 in the audit at
+`_/RFC-5737-cleanup/assessment.md`.
 
 ## How to audit before committing
 

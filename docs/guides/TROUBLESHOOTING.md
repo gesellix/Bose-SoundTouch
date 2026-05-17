@@ -14,13 +14,13 @@ Run these commands to quickly diagnose your setup:
 go run ./cmd/soundtouch-cli -discover
 
 # 2. Test specific device connection
-go run ./cmd/soundtouch-cli -host 192.168.1.100 -info
+go run ./cmd/soundtouch-cli -host 192.0.2.100 -info
 
 # 3. Test basic controls
-go run ./cmd/soundtouch-cli -host 192.168.1.100 -volume
+go run ./cmd/soundtouch-cli -host 192.0.2.100 -volume
 
 # 4. Test network connectivity
-ping 192.168.1.100
+ping 192.0.2.100
 ```
 
 ---
@@ -70,7 +70,7 @@ discoverer := discovery.NewDiscoverer(discovery.Config{
 #### 5. **Use Manual IP**
 ```go
 // Bypass discovery entirely
-client := client.NewClientFromHost("192.168.1.100")
+client := client.NewClientFromHost("192.0.2.100")
 ```
 
 ### ❌ "Discovery timeout"
@@ -93,10 +93,10 @@ discoverer := discovery.NewDiscoverer(discovery.Config{
 2. **Check network performance:**
 ```bash
 # Test network latency
-ping -c 4 192.168.1.1
+ping -c 4 192.0.2.1
 
 # Check for network congestion
-iperf3 -c 192.168.1.1  # If iperf server available
+iperf3 -c 192.0.2.1  # If iperf server available
 ```
 
 3. **Use wired connection if possible**
@@ -213,7 +213,7 @@ If presets still won't play after step 5, capture `logread -f | grep -v '127.0.0
 
 **Symptoms:**
 ```go
-Failed to connect: dial tcp 192.168.1.100:8090: connection refused
+Failed to connect: dial tcp 192.0.2.100:8090: connection refused
 ```
 
 **Diagnostic Steps:**
@@ -221,12 +221,12 @@ Failed to connect: dial tcp 192.168.1.100:8090: connection refused
 #### 1. **Verify IP and Port**
 ```bash
 # Test if port 8090 is open
-telnet 192.168.1.100 8090
+telnet 192.0.2.100 8090
 # OR
-nc -zv 192.168.1.100 8090
+nc -zv 192.0.2.100 8090
 
 # Scan for open ports
-nmap -p 8080-8100 192.168.1.100
+nmap -p 8080-8100 192.0.2.100
 ```
 
 #### 2. **Check Device Status**
@@ -237,10 +237,10 @@ nmap -p 8080-8100 192.168.1.100
 #### 3. **Router/Network Issues**
 ```bash
 # Check routing
-traceroute 192.168.1.100
+traceroute 192.0.2.100
 
 # Test basic connectivity
-ping -c 4 192.168.1.100
+ping -c 4 192.0.2.100
 ```
 
 ### ❌ "Timeout" / "Context deadline exceeded"
@@ -255,7 +255,7 @@ Failed to get device info: context deadline exceeded
 #### 1. **Increase Client Timeout**
 ```go
 config := client.ClientConfig{
-    Host:    "192.168.1.100",
+    Host:    "192.0.2.100",
     Port:    8090,
     Timeout: 30 * time.Second,  // Increase from default 10s
 }
@@ -264,7 +264,7 @@ config := client.ClientConfig{
 #### 2. **Check Network Latency**
 ```bash
 # Test response time
-ping -c 10 192.168.1.100
+ping -c 10 192.0.2.100
 
 # Should be < 100ms typically
 ```
@@ -285,7 +285,7 @@ Failed to connect: dial tcp: lookup soundtouch.local: no such host
 
 1. **Use IP instead of hostname:**
 ```go
-client := client.NewClientFromHost("192.168.1.100")  // Not "soundtouch.local"
+client := client.NewClientFromHost("192.0.2.100")  // Not "soundtouch.local"
 ```
 
 2. **Fix DNS/mDNS:**
@@ -630,7 +630,7 @@ fmt.Printf("Current source: %s, status: %s\n",
 
 **Symptoms:**
 ```go
-Failed to connect WebSocket: dial ws://192.168.1.100:8080/: connection refused
+Failed to connect WebSocket: dial ws://192.0.2.100:8080/: connection refused
 ```
 
 **Solutions:**
@@ -638,7 +638,7 @@ Failed to connect WebSocket: dial ws://192.168.1.100:8080/: connection refused
 #### 1. **Verify WebSocket Port (8080)**
 ```bash
 # WebSocket uses port 8080, not 8090
-nc -zv 192.168.1.100 8080
+nc -zv 192.0.2.100 8080
 ```
 
 #### 2. **Check Protocol Specification**
@@ -647,7 +647,7 @@ nc -zv 192.168.1.100 8080
 wsClient := client.NewWebSocketClient(nil)
 
 // Manual connection (if needed)
-url := "ws://192.168.1.100:8080/"
+url := "ws://192.0.2.100:8080/"
 headers := http.Header{}
 headers.Set("Sec-WebSocket-Protocol", "gabbo")
 ```
@@ -677,7 +677,7 @@ wsClient := client.NewWebSocketClient(config)
 2. **Check network stability:**
 ```bash
 # Test for packet loss
-ping -c 100 192.168.1.100 | grep loss
+ping -c 100 192.0.2.100 | grep loss
 ```
 
 3. **Power management issues:**
@@ -809,7 +809,7 @@ transport := &http.Transport{
 }
 
 config := client.ClientConfig{
-    Host:    "192.168.1.100",
+    Host:    "192.0.2.100",
     Port:    8090,
     Timeout: 10 * time.Second,
 }
@@ -831,14 +831,14 @@ config.Logger = &client.DefaultLogger{}  // Or custom logger
 
 ```bash
 # Capture SoundTouch traffic
-sudo tcpdump -i any host 192.168.1.100 and port 8090
+sudo tcpdump -i any host 192.0.2.100 and port 8090
 
 # Monitor WebSocket traffic  
-sudo tcpdump -i any host 192.168.1.100 and port 8080
+sudo tcpdump -i any host 192.0.2.100 and port 8080
 
 # HTTP debugging with curl
-curl -v http://192.168.1.100:8090/info
-curl -v http://192.168.1.100:8090/volume
+curl -v http://192.0.2.100:8090/info
+curl -v http://192.0.2.100:8090/volume
 ```
 
 ---
@@ -1059,7 +1059,7 @@ SSH ping from device failed and service-side DNS lookup also failed
 ```
 or:
 ```
-resolved "soundtouch.local" to 192.168.1.100 from service, not from device —
+resolved "soundtouch.local" to 192.0.2.100 from service, not from device —
 result may be wrong if NAT or split-DNS is in use
 ```
 
@@ -1078,7 +1078,7 @@ ssh root@<speaker-ip>
 # Try to resolve the service hostname
 ping -c 1 soundtouch.local
 # or use the IP directly to verify connectivity
-ping -c 1 192.168.1.100
+ping -c 1 192.0.2.100
 
 # Check the speaker's current DNS config
 cat /etc/resolv.conf
@@ -1096,8 +1096,8 @@ The most reliable fix. If the hostname cannot be resolved from the device, use a
 
 ```bash
 # In your .env
-SERVER_URL=http://192.168.1.100:8000
-HTTPS_SERVER_URL=https://192.168.1.100:8443
+SERVER_URL=http://192.0.2.100:8000
+HTTPS_SERVER_URL=https://192.0.2.100:8443
 ```
 
 HTTPS works correctly with IP addresses — the service certificate includes the IP as a Subject Alternative Name (SAN).

@@ -268,10 +268,10 @@ Device migration switches your SoundTouch devices from Bose's cloud services to 
 
 ```bash
 # Get migration summary first
-curl http://localhost:8000/setup/migration-summary/192.168.1.100
+curl http://localhost:8000/setup/migration-summary/192.0.2.100
 
 # Perform migration
-curl -X POST http://localhost:8000/setup/migrate/192.168.1.100
+curl -X POST http://localhost:8000/setup/migrate/192.0.2.100
 
 # Verify migration status
 curl http://localhost:8000/setup/devices
@@ -281,16 +281,16 @@ curl http://localhost:8000/setup/devices
 
 ```bash
 # Migration with custom target URL
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?target_url=https://my-server.com:8000"
+curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?target_url=https://my-server.com:8000"
 
 # Per-field literal URL overrides (preferred — used by the web wizard)
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=xml&target_url=http://server:8000&marge_url=http://server:8000/marge"
+curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?method=xml&target_url=http://server:8000&marge_url=http://server:8000/marge"
 
 # SSH-less migration over the device's port-17000 diagnostic shell
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=telnet&target_url=http://server:8000"
+curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?method=telnet&target_url=http://server:8000"
 
 # Legacy proxy-fallback for selected fields (kept for API back-compat)
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?proxy_url=http://localhost:8000&marge=original&stats=original"
+curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?proxy_url=http://localhost:8000&marge=original&stats=original"
 ```
 
 See the full parameter reference at `POST /setup/migrate/{deviceIP}` below for `method`, `target_url`, `*_url`, and the legacy mode selectors.
@@ -304,10 +304,10 @@ After migration, verify the device is working correctly:
 curl http://localhost:8000/setup/devices
 
 # Test preset functionality
-curl "http://192.168.1.100:8090/presets"
+curl "http://192.0.2.100:8090/presets"
 
 # Monitor device events (if needed)
-curl "http://localhost:8000/events/192.168.1.100"
+curl "http://localhost:8000/events/192.0.2.100"
 ```
 
 #### DNS/DHCP Migration (DHCP-Aware DNS Redirection)
@@ -420,7 +420,7 @@ Lists all discovered SoundTouch devices with their current status.
   {
     "device_id": "08DF1F0BA325",
     "name": "Living Room Speaker",
-    "ip_address": "192.168.1.100",
+    "ip_address": "192.0.2.100",
     "product_code": "SoundTouch 20",
     "firmware_version": "19.0.5",
     "migrated": true,
@@ -489,13 +489,13 @@ Migrates device to use local services.
 
 ```bash
 # Canonical XML migration over SSH to the default service URL
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=xml"
+curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?method=xml"
 
 # Telnet migration with the soundcork redirect (only marge gets the /marge suffix)
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=telnet&target_url=http://soundcork.local:8000&marge_url=http://soundcork.local:8000/marge"
+curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?method=telnet&target_url=http://soundcork.local:8000&marge_url=http://soundcork.local:8000/marge"
 
 # DNS interception (writes /etc/resolv.conf hook + installs CA) — *_url overrides are ignored
-curl -X POST "http://localhost:8000/setup/migrate/192.168.1.100?method=resolv&target_url=https://my-server.com:8443"
+curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?method=resolv&target_url=https://my-server.com:8443"
 ```
 
 #### `POST /setup/telnet-probe/{deviceIP}`
@@ -834,25 +834,25 @@ Clears all recorded DNS discovery data from memory and disk.
 #### Device Not Discovered
 ```bash
 # Check network connectivity
-ping 192.168.1.100
+ping 192.0.2.100
 
 # Trigger manual discovery
 curl -X POST http://localhost:8000/setup/discover
 
 # Check device accessibility
-curl http://192.168.1.100:8090/info
+curl http://192.0.2.100:8090/info
 ```
 
 #### Migration Failures
 ```bash
 # Check SSH connectivity
-ssh-keyscan 192.168.1.100
+ssh-keyscan 192.0.2.100
 
 # Get migration summary
-curl http://localhost:8000/setup/migration-summary/192.168.1.100
+curl http://localhost:8000/setup/migration-summary/192.0.2.100
 
 # Verify device configuration
-curl http://192.168.1.100:8090/info
+curl http://192.0.2.100:8090/info
 ```
 
 #### Service Connectivity Issues
@@ -931,7 +931,7 @@ func main() {
 ```yaml
 # configuration.yaml
 soundtouch:
-  - host: 192.168.1.100
+  - host: 192.0.2.100
     port: 8090
     name: "Living Room Speaker"
 

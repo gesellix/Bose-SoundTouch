@@ -26,7 +26,7 @@ The service automatically maps between these identifiers so that API requests us
 The service extracts MAC addresses from UPnP device descriptions:
 
 ```xml
-<!-- From http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml -->
+<!-- From http://192.0.2.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml -->
 <root xmlns="urn:schemas-upnp-org:device-1-0">
     <device>
         <friendlyName>Sound Machinery</friendlyName>
@@ -115,7 +115,7 @@ cat > data/accounts/1000001/devices/I6332527703739342000020/DeviceInfo.xml << EO
     <name>My SoundTouch Device</name>
     <networkInfo type="SCM">
         <macAddress>AABBCCDDEEFF</macAddress>
-        <ipAddress>192.168.1.100</ipAddress>
+        <ipAddress>192.0.2.100</ipAddress>
     </networkInfo>
 </info>
 EOF
@@ -126,7 +126,7 @@ EOF
 **Check UPnP accessibility:**
 ```bash
 # Test UPnP endpoint directly
-curl http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml
+curl http://192.0.2.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml
 
 # Should return XML with <serialNumber> field
 ```

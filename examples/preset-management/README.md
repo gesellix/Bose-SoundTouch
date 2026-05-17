@@ -40,7 +40,7 @@ go run ./cmd/soundtouch-cli discover devices
 cd examples/preset-management
 
 # Run with your device IP
-go run . 192.168.1.100
+go run . 192.0.2.100
 ```
 
 ## What the Example Does
@@ -60,7 +60,7 @@ go run . 192.168.1.100
 
 ```
 🎵 SoundTouch Preset Management Example
-📱 Device: 192.168.1.100:8090
+📱 Device: 192.0.2.100:8090
 
 📋 Step 1: Getting current presets...
   📻 Found 2 configured presets:
@@ -191,7 +191,7 @@ Location: "https://stream.example.com/radio"
 
 ```bash
 # Show current content details (includes location)
-go run ./cmd/soundtouch-cli --host 192.168.1.100 play now
+go run ./cmd/soundtouch-cli --host 192.0.2.100 play now
 ```
 
 ### Method 2: From Spotify URLs
@@ -215,23 +215,23 @@ This example shows programmatic usage. For command-line usage:
 
 ```bash
 # List presets
-go run ./cmd/soundtouch-cli --host 192.168.1.100 preset list
+go run ./cmd/soundtouch-cli --host 192.0.2.100 preset list
 
 # Store current content
-go run ./cmd/soundtouch-cli --host 192.168.1.100 preset store-current --slot 1
+go run ./cmd/soundtouch-cli --host 192.0.2.100 preset store-current --slot 1
 
 # Store specific content
-go run ./cmd/soundtouch-cli --host 192.168.1.100 preset store \
+go run ./cmd/soundtouch-cli --host 192.0.2.100 preset store \
   --slot 2 \
   --source SPOTIFY \
   --location "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M" \
   --name "My Playlist"
 
 # Select preset
-go run ./cmd/soundtouch-cli --host 192.168.1.100 preset select --slot 1
+go run ./cmd/soundtouch-cli --host 192.0.2.100 preset select --slot 1
 
 # Remove preset
-go run ./cmd/soundtouch-cli --host 192.168.1.100 preset remove --slot 6
+go run ./cmd/soundtouch-cli --host 192.0.2.100 preset remove --slot 6
 ```
 
 ## Troubleshooting

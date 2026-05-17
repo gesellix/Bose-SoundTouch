@@ -403,7 +403,7 @@ Retrieves network information.
 ```xml
 <networkInfo wifiProfileCount="1">
   <interfaces>
-    <interface type="WIFI_INTERFACE" name="wlan0" macAddress="..." ipAddress="192.168.1.131" ssid="network_name" frequencyKHz="2452000" state="NETWORK_WIFI_CONNECTED" signal="MARGINAL_SIGNAL" mode="STATION" />
+    <interface type="WIFI_INTERFACE" name="wlan0" macAddress="..." ipAddress="192.0.2.131" ssid="network_name" frequencyKHz="2452000" state="NETWORK_WIFI_CONNECTED" signal="MARGINAL_SIGNAL" mode="STATION" />
     <interface type="WIFI_INTERFACE" name="wlan1" macAddress="..." state="NETWORK_WIFI_DISCONNECTED" />
   </interfaces>
 </networkInfo>

@@ -157,7 +157,7 @@ golangci-lint run --fix
 go install ./cmd/soundtouch-cli
 
 # Run integration tests (requires real device)
-make test-integration HOST=192.168.1.100
+make test-integration HOST=192.0.2.100
 ```
 
 ### Environment Setup
@@ -166,7 +166,7 @@ For development with real devices, create a `.env` file:
 
 ```env
 # Optional: Pre-configured device for testing
-SOUNDTOUCH_HOST=192.168.1.100
+SOUNDTOUCH_HOST=192.0.2.100
 SOUNDTOUCH_PORT=8090
 
 # Optional: Enable debug logging
@@ -340,7 +340,7 @@ When possible, test with real SoundTouch devices:
 
 ```bash
 # Set device IP for integration tests
-export SOUNDTOUCH_HOST=192.168.1.100
+export SOUNDTOUCH_HOST=192.0.2.100
 go test -tags integration ./pkg/client/
 ```
 
@@ -361,7 +361,7 @@ go test -tags integration ./pkg/client/
 // Basic usage:
 //
 //     client := client.NewClient(&client.Config{
-//         Host: "192.168.1.100",
+//         Host: "192.0.2.100",
 //         Port: 8090,
 //     })
 //     
@@ -410,8 +410,8 @@ If you have access to other SoundTouch models:
 
 2. **Test basic functionality**:
    ```bash
-   ./soundtouch-cli -h 192.168.1.100 info get
-   ./soundtouch-cli -h 192.168.1.100 now-playing get
+   ./soundtouch-cli -h 192.0.2.100 info get
+   ./soundtouch-cli -h 192.0.2.100 now-playing get
    ```
 
 3. **Report compatibility** in your PR or issue

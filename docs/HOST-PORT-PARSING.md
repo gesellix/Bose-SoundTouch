@@ -11,7 +11,7 @@ The SoundTouch CLI now supports parsing host and port combinations in the `-host
 ### Basic Host:Port Format
 ```bash
 # Specify host and port together
-soundtouch-cli -host 192.168.1.100:8090 -info
+soundtouch-cli -host 192.0.2.100:8090 -info
 soundtouch-cli -host 192.0.2.10:8090 -play
 soundtouch-cli -host soundtouch.local:8090 -pause
 ```
@@ -19,7 +19,7 @@ soundtouch-cli -host soundtouch.local:8090 -pause
 ### Traditional Separate Flags (Still Supported)
 ```bash
 # Traditional separate host and port flags
-soundtouch-cli -host 192.168.1.100 -port 8090 -info
+soundtouch-cli -host 192.0.2.100 -port 8090 -info
 soundtouch-cli -host 192.0.2.10 -port 8090 -play
 ```
 
@@ -27,7 +27,7 @@ soundtouch-cli -host 192.0.2.10 -port 8090 -play
 When both formats are used, the port specified in the host:port format takes precedence:
 ```bash
 # Uses port 8090 from host:port, ignores -port 9999
-soundtouch-cli -host 192.168.1.100:8090 -port 9999 -info
+soundtouch-cli -host 192.0.2.100:8090 -port 9999 -info
 ```
 
 ## Supported Formats
@@ -35,10 +35,10 @@ soundtouch-cli -host 192.168.1.100:8090 -port 9999 -info
 ### IPv4 Addresses
 ```bash
 # Standard IPv4 with port
-soundtouch-cli -host 192.168.1.100:8090 -info
+soundtouch-cli -host 192.0.2.100:8090 -info
 
 # IPv4 without port (uses default 8090)
-soundtouch-cli -host 192.168.1.100 -info
+soundtouch-cli -host 192.0.2.100 -info
 ```
 
 ### Hostnames
@@ -123,31 +123,31 @@ Tested with real SoundTouch devices:
 # Discover devices to find host:port
 $ soundtouch-cli -discover
 Found SoundTouch devices:
-  My SoundTouch Device (192.168.1.10:8090) - SoundTouch 20
+  My SoundTouch Device (192.0.2.10:8090) - SoundTouch 20
 
 # Use discovered host:port directly
-$ soundtouch-cli -host 192.168.1.10:8090 -play
+$ soundtouch-cli -host 192.0.2.10:8090 -play
 ```
 
 ### Different Port Scenarios
 ```bash
 # Standard SoundTouch port
-soundtouch-cli -host 192.168.1.100:8090 -info
+soundtouch-cli -host 192.0.2.100:8090 -info
 
 # Custom port (if device configured differently)
-soundtouch-cli -host 192.168.1.100:9000 -info
+soundtouch-cli -host 192.0.2.100:9000 -info
 
 # Default port fallback
-soundtouch-cli -host 192.168.1.100 -info  # Uses 8090
+soundtouch-cli -host 192.0.2.100 -info  # Uses 8090
 ```
 
 ### Error Scenarios
 ```bash
 # Invalid port - uses default 8090
-soundtouch-cli -host 192.168.1.100:invalid -info
+soundtouch-cli -host 192.0.2.100:invalid -info
 
 # Out of range port - uses default 8090  
-soundtouch-cli -host 192.168.1.100:99999 -info
+soundtouch-cli -host 192.0.2.100:99999 -info
 
 # Malformed input - treats as hostname
 soundtouch-cli -host "malformed::input" -info
@@ -163,10 +163,10 @@ Options:
   -port <port>      SoundTouch device port (default: 8090)
 
 Examples:
-  soundtouch-cli -host 192.168.1.100 -info
-  soundtouch-cli -host 192.168.1.100:8090 -info
-  soundtouch-cli -host 192.168.1.100:8090 -pause
-  soundtouch-cli -host 192.168.1.100:8090 -preset 1
+  soundtouch-cli -host 192.0.2.100 -info
+  soundtouch-cli -host 192.0.2.100:8090 -info
+  soundtouch-cli -host 192.0.2.100:8090 -pause
+  soundtouch-cli -host 192.0.2.100:8090 -preset 1
 ```
 
 ## Technical Implementation
@@ -197,7 +197,7 @@ The parsed values are used throughout the CLI:
 
 Potential improvements for the future:
 
-1. **URL Format Support**: Support full URLs like `http://192.168.1.100:8090`
+1. **URL Format Support**: Support full URLs like `http://192.0.2.100:8090`
 2. **Service Discovery**: Auto-detect port via service discovery protocols
 3. **Configuration File**: Save frequently used host:port combinations
 4. **Environment Variables**: Support `SOUNDTOUCH_HOST` with host:port format

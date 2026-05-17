@@ -121,7 +121,7 @@ sa.GetUnavailableServiceCount()
 ### Basic Usage
 
 ```go
-client := client.NewClientFromHost("192.168.1.100")
+client := client.NewClientFromHost("192.0.2.100")
 
 serviceAvailability, err := client.GetServiceAvailability()
 if err != nil {

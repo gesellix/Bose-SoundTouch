@@ -50,7 +50,7 @@ Please check the type of change your PR introduces:
 
 **Device(s) tested with:**
 - Device model: [e.g. SoundTouch 10]
-- Device IP: [e.g. 192.168.1.100]
+- Device IP: [e.g. 192.0.2.100]
 - Test results: [brief description]
 
 ### Test Commands
@@ -58,7 +58,7 @@ Please check the type of change your PR introduces:
 # Commands used to test this change
 make test
 go test ./pkg/client -v -run TestNewFeature
-soundtouch-cli --host 192.168.1.100 new-command
+soundtouch-cli --host 192.0.2.100 new-command
 ```
 
 ## Documentation

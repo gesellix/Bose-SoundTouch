@@ -568,7 +568,7 @@ Response: 200 OK
       "reason": "mdns_discovery",
       "source": "discovery",
       "context": {
-        "ip_address": "192.168.1.100",
+        "ip_address": "192.0.2.100",
         "discovery_method": "mdns"
       }
     },
@@ -586,7 +586,7 @@ Response: 200 OK
     "serial_number": "I6332527703739342000020",
     "firmware_version": "4.8.1.25341.2677643.1597353330",
     "mac_address": "AA:BB:CC:DD:EE:FF",
-    "ip_address": "192.168.1.100",
+    "ip_address": "192.0.2.100",
     "last_seen": "2024-01-20T15:30:00Z",
     "is_legacy_id": false,
     "capabilities": ["multiroom", "bluetooth", "aux"]

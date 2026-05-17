@@ -275,8 +275,8 @@ Returns detected UPnP/DLNA media servers.
 **Response Example:**
 ```xml
 <ListMediaServersResponse>
-  <media_server id="2f402f80-da50-11e1-9b23-123456789012" mac="0017886e13fe" ip="192.168.1.4" manufacturer="Signify" model_name="Philips hue bridge 2015" friendly_name="Hue Bridge (192.168.1.4)" model_description="Philips hue Personal Wireless Lighting" location="http://192.168.1.4:80/description.xml" />
-  <media_server id="d09708a1-5953-44bc-a413-123456789012" mac="S-1-5-21-240303764-901663538-1234567890-1001" ip="192.168.1.5" manufacturer="Microsoft Corporation" model_name="Windows Media Player Sharing" friendly_name="My NAS Media Library" model_description="" location="http://192.168.1.5:2869/upnphost/udhisapi.dll?content=uuid:d09708a1-5953-44bc-a413-123456789012" />
+  <media_server id="2f402f80-da50-11e1-9b23-123456789012" mac="0017886e13fe" ip="192.0.2.4" manufacturer="Signify" model_name="Philips hue bridge 2015" friendly_name="Hue Bridge (192.0.2.4)" model_description="Philips hue Personal Wireless Lighting" location="http://192.0.2.4:80/description.xml" />
+  <media_server id="d09708a1-5953-44bc-a413-123456789012" mac="S-1-5-21-240303764-901663538-1234567890-1001" ip="192.0.2.5" manufacturer="Microsoft Corporation" model_name="Windows Media Player Sharing" friendly_name="My NAS Media Library" model_description="" location="http://192.0.2.5:2869/upnphost/udhisapi.dll?content=uuid:d09708a1-5953-44bc-a413-123456789012" />
 </ListMediaServersResponse>
 ```
 
@@ -641,15 +641,15 @@ Gets current stereo pair configuration.
     <groupRole>
       <deviceId>9070658C9D4A</deviceId>
       <role>LEFT</role>
-      <ipAddress>192.168.1.131</ipAddress>
+      <ipAddress>192.0.2.131</ipAddress>
     </groupRole>
     <groupRole>
       <deviceId>F45EAB3115DA</deviceId>
       <role>RIGHT</role>
-      <ipAddress>192.168.1.134</ipAddress>
+      <ipAddress>192.0.2.134</ipAddress>
     </groupRole>
   </roles>
-  <senderIPAddress>192.168.1.131</senderIPAddress>
+  <senderIPAddress>192.0.2.131</senderIPAddress>
   <status>GROUP_OK</status>
 </group>
 ```
@@ -671,12 +671,12 @@ Creates new stereo pair group.
     <groupRole>
       <deviceId>9070658C9D4A</deviceId>
       <role>LEFT</role>
-      <ipAddress>192.168.1.131</ipAddress>
+      <ipAddress>192.0.2.131</ipAddress>
     </groupRole>
     <groupRole>
       <deviceId>F45EAB3115DA</deviceId>
       <role>RIGHT</role>
-      <ipAddress>192.168.1.134</ipAddress>
+      <ipAddress>192.0.2.134</ipAddress>
     </groupRole>
   </roles>
 </group>
@@ -707,12 +707,12 @@ Updates stereo pair group name.
     <groupRole>
       <deviceId>9070658C9D4A</deviceId>
       <role>LEFT</role>
-      <ipAddress>192.168.1.131</ipAddress>
+      <ipAddress>192.0.2.131</ipAddress>
     </groupRole>
     <groupRole>
       <deviceId>F45EAB3115DA</deviceId>
       <role>RIGHT</role>
-      <ipAddress>192.168.1.134</ipAddress>
+      <ipAddress>192.0.2.134</ipAddress>
     </groupRole>
   </roles>
 </group>
@@ -762,7 +762,7 @@ Returns network status configuration.
           <name>eth0</name>
           <mac-addr>1004567890AA</mac-addr>
           <bindings>
-            <ipv4address>192.168.1.131</ipv4address>
+            <ipv4address>192.0.2.131</ipv4address>
           </bindings>
           <running>true</running>
           <kind>Wireless</kind>

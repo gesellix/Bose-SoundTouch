@@ -472,7 +472,7 @@ Filter: if `margeAccountID` is set in state, only include speakers whose
 
 Result payload per speaker:
 ```json
-{"uID": "AA:BB:CC:DD:EE:FF", "ip": "192.168.1.10"}
+{"uID": "AA:BB:CC:DD:EE:FF", "ip": "192.0.2.10"}
 ```
 
 Push incremental results as they arrive (push one device at a time via the

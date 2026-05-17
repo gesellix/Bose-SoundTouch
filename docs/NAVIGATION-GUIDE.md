@@ -40,7 +40,7 @@ import (
 func main() {
     // Create client
     config := &client.Config{
-        Host: "192.168.1.100",
+        Host: "192.0.2.100",
         Port: 8090,
     }
     soundtouch := client.NewClient(config)

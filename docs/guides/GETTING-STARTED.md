@@ -172,14 +172,14 @@ discoverer := discovery.NewDiscoverer(discovery.Config{
 devices, err := discoverer.DiscoverDevices()
 
 // Or connect directly if you know the IP
-soundtouch := client.NewClientFromHost("192.168.1.100")
+soundtouch := client.NewClientFromHost("192.0.2.100")
 ```
 
 ### Client Configuration
 
 ```go
 config := client.ClientConfig{
-    Host:      "192.168.1.100",
+    Host:      "192.0.2.100",
     Port:      8090,  // Default SoundTouch port
     Timeout:   10 * time.Second,
     UserAgent: "MyApp/1.0",  // Optional
@@ -318,7 +318,7 @@ import (
 
 func main() {
     // Connect to device
-    soundtouch := client.NewClientFromHost("192.168.1.100")
+    soundtouch := client.NewClientFromHost("192.0.2.100")
 
     // Create WebSocket client
     wsClient := soundtouch.NewWebSocketClient(nil)
@@ -369,7 +369,7 @@ memberIDs := []string{"DEVICE456", "DEVICE789"}
 soundtouch.CreateZone(masterID, memberIDs)
 
 // Add device to existing zone
-soundtouch.AddToZone("DEVICE999", "192.168.1.15")
+soundtouch.AddToZone("DEVICE999", "192.0.2.15")
 
 // Remove device from zone
 soundtouch.RemoveFromZone("DEVICE456")
@@ -387,7 +387,7 @@ soundtouch.DissolveZone()
 **Solutions:**
 - Ensure SoundTouch is powered on
 - Check both devices are on same network
-- Try specifying IP directly: `client.NewClientFromHost("192.168.1.100")`
+- Try specifying IP directly: `client.NewClientFromHost("192.0.2.100")`
 - Check firewall settings
 
 ### Connection Timeouts
@@ -397,7 +397,7 @@ soundtouch.DissolveZone()
 **Solutions:**
 - Increase timeout: `Timeout: 30 * time.Second`
 - Verify IP address and port (default 8090)
-- Check network connectivity with `ping 192.168.1.100`
+- Check network connectivity with `ping 192.0.2.100`
 
 ### Volume/Control Issues
 ```
@@ -444,14 +444,14 @@ Use the included CLI for quick testing:
 go run ./cmd/soundtouch-cli discover devices
 
 # Device info
-go run ./cmd/soundtouch-cli --host 192.168.1.100 info
+go run ./cmd/soundtouch-cli --host 192.0.2.100 info
 
 # Basic controls
-go run ./cmd/soundtouch-cli --host 192.168.1.100 play start
-go run ./cmd/soundtouch-cli --host 192.168.1.100 volume set --level 50
+go run ./cmd/soundtouch-cli --host 192.0.2.100 play start
+go run ./cmd/soundtouch-cli --host 192.0.2.100 volume set --level 50
 
 # WebSocket monitoring (use websocket-demo)
-go run ./cmd/websocket-demo --host 192.168.1.100
+go run ./cmd/websocket-demo --host 192.0.2.100
 ```
 
 ### Configuration Management
@@ -462,7 +462,7 @@ import "os"
 
 host := os.Getenv("SOUNDTOUCH_HOST")
 if host == "" {
-    host = "192.168.1.100"  // fallback
+    host = "192.0.2.100"  // fallback
 }
 
 soundtouch := client.NewClientFromHost(host)

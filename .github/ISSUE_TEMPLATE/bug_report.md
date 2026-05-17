@@ -30,7 +30,7 @@ A clear and concise description of what you expected to happen.
 **Command/Code that failed**
 ```bash
 # If using CLI tool, provide the exact command
-soundtouch-cli --host 192.168.1.100 info get
+soundtouch-cli --host 192.0.2.100 info get
 
 # If using Go library, provide minimal code example
 ```

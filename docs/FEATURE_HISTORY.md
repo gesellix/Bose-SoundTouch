@@ -294,7 +294,7 @@ This document tracks the detailed evolution of features and capabilities in the 
 - **Phase 9**: Bug fixes (speaker beep reliability)
 
 #### CLI Feature Enhancements
-- **Host:Port Parsing**: Support for `192.168.1.100:8090` format
+- **Host:Port Parsing**: Support for `192.0.2.100:8090` format
 - **Auto-Discovery Integration**: Seamless device discovery
 - **Formatted Output**: Human-readable, structured output
 - **Error Handling**: Comprehensive error messages and recovery suggestions

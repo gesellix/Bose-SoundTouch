@@ -25,7 +25,7 @@ This allows Spotify applications to automatically discover available speakers wi
 http://[SPEAKER_IP]:8200/zc?action=[ACTION]&[PARAMETERS]
 ```
 
-Example: `http://192.168.1.100:8200/zc?action=getInfo`
+Example: `http://192.0.2.100:8200/zc?action=getInfo`
 
 ## The getInfo Action
 
@@ -158,7 +158,7 @@ The `version` parameter is optional but recommended for compatibility.
 
 ```bash
 # Check if Spotify is active
-curl -s "http://192.168.1.100:8200/zc?action=getInfo" | \
+curl -s "http://192.0.2.100:8200/zc?action=getInfo" | \
   grep -o '"activeUser" *: *"[^"]*"' | \
   sed 's/"activeUser" *: *"//;s/"$//'
 ```
@@ -167,7 +167,7 @@ curl -s "http://192.168.1.100:8200/zc?action=getInfo" | \
 
 ```bash
 # Get device name and ID
-info=$(curl -s "http://192.168.1.100:8200/zc?action=getInfo")
+info=$(curl -s "http://192.0.2.100:8200/zc?action=getInfo")
 device_name=$(echo "$info" | grep -o '"remoteName" *: *"[^"]*"' | sed 's/"remoteName" *: *"//;s/"$//')
 device_id=$(echo "$info" | grep -o '"deviceID" *: *"[^"]*"' | sed 's/"deviceID" *: *"//;s/"$//')
 ```
@@ -176,7 +176,7 @@ device_id=$(echo "$info" | grep -o '"deviceID" *: *"[^"]*"' | sed 's/"deviceID" 
 
 ```bash
 # Check multiroom status
-group_status=$(curl -s "http://192.168.1.100:8200/zc?action=getInfo" | \
+group_status=$(curl -s "http://192.0.2.100:8200/zc?action=getInfo" | \
   grep -o '"groupStatus" *: *"[^"]*"' | \
   sed 's/"groupStatus" *: *"//;s/"$//')
 ```
@@ -186,7 +186,7 @@ group_status=$(curl -s "http://192.168.1.100:8200/zc?action=getInfo" | \
 The ZeroConf API supports the `addUser` action for Spotify authentication:
 
 ```bash
-curl -X POST "http://192.168.1.100:8200/zc" \
+curl -X POST "http://192.0.2.100:8200/zc" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "action=addUser&userName=${SPOTIFY_USER}&blob=${ACCESS_TOKEN}&clientKey=&tokenType=accesstoken"
 ```
@@ -252,7 +252,7 @@ See `spotify-prime-speaker.sh` for standalone token injection:
 ```bash
 #!/bin/bash
 # Health check script
-SPEAKER_IP="192.168.1.100"
+SPEAKER_IP="192.0.2.100"
 info=$(curl -sf --max-time 5 "http://${SPEAKER_IP}:8200/zc?action=getInfo" 2>/dev/null)
 
 if [ $? -eq 0 ]; then
@@ -290,14 +290,14 @@ fi
 
 ```bash
 # Test basic connectivity
-curl -sf --max-time 5 "http://192.168.1.100:8200/zc?action=getInfo"
+curl -sf --max-time 5 "http://192.0.2.100:8200/zc?action=getInfo"
 
 # Check detailed response
-curl -s "http://192.168.1.100:8200/zc?action=getInfo" | jq .
+curl -s "http://192.0.2.100:8200/zc?action=getInfo" | jq .
 
 # Monitor authentication status
 while true; do
-    active=$(curl -s "http://192.168.1.100:8200/zc?action=getInfo" | \
+    active=$(curl -s "http://192.0.2.100:8200/zc?action=getInfo" | \
              grep -o '"activeUser" *: *"[^"]*"' | sed 's/"activeUser" *: *"//;s/"$//')
     echo "$(date): activeUser = '$active'"
     sleep 10

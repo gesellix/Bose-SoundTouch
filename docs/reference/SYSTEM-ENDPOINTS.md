@@ -34,7 +34,7 @@ fmt.Printf("Timezone: %s\n", clockTime.GetZone())
 
 **CLI Usage:**
 ```bash
-soundtouch-cli -host 192.168.1.100 -clock-time
+soundtouch-cli -host 192.0.2.100 -clock-time
 ```
 
 ### POST /clockTime
@@ -64,10 +64,10 @@ err := client.SetClockTime(request)
 **CLI Usage:**
 ```bash
 # Set to current system time
-soundtouch-cli -host 192.168.1.100 -set-clock-time now
+soundtouch-cli -host 192.0.2.100 -set-clock-time now
 
 # Set to specific Unix timestamp
-soundtouch-cli -host 192.168.1.100 -set-clock-time 1609459200
+soundtouch-cli -host 192.0.2.100 -set-clock-time 1609459200
 ```
 
 ### GET /clockDisplay
@@ -94,7 +94,7 @@ fmt.Printf("Auto-Dim: %v\n", clockDisplay.IsAutoDimEnabled())
 
 **CLI Usage:**
 ```bash
-soundtouch-cli -host 192.168.1.100 -clock-display
+soundtouch-cli -host 192.0.2.100 -clock-display
 ```
 
 ### POST /clockDisplay
@@ -132,14 +132,14 @@ err := client.SetClockDisplay(request)
 **CLI Usage:**
 ```bash
 # Enable/disable clock display
-soundtouch-cli -host 192.168.1.100 -enable-clock
-soundtouch-cli -host 192.168.1.100 -disable-clock
+soundtouch-cli -host 192.0.2.100 -enable-clock
+soundtouch-cli -host 192.0.2.100 -disable-clock
 
 # Set clock format (12, 24, auto)
-soundtouch-cli -host 192.168.1.100 -clock-format 24
+soundtouch-cli -host 192.0.2.100 -clock-format 24
 
 # Set brightness (0-100)
-soundtouch-cli -host 192.168.1.10 -clock-brightness 75
+soundtouch-cli -host 192.0.2.10 -clock-brightness 75
 ```
 
 **Clock Formats:**
@@ -166,7 +166,7 @@ Retrieves comprehensive network information including interfaces, connectivity s
 ```xml
 <networkInfo wifiProfileCount="2">
 <interfaces>
-<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" ssid="MyHomeNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
+<interface type="WIFI_INTERFACE" name="wlan0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" ssid="MyHomeNetwork" frequencyKHz="5500000" state="NETWORK_WIFI_CONNECTED" signal="EXCELLENT_SIGNAL" mode="STATION"/>
 <interface type="WIFI_INTERFACE" name="wlan1" macAddress="AA:BB:CC:DD:EE:01" state="NETWORK_WIFI_DISCONNECTED"/>
 </interfaces>
 </networkInfo>
@@ -176,7 +176,7 @@ Retrieves comprehensive network information including interfaces, connectivity s
 ```xml
 <networkInfo wifiProfileCount="3">
 <interfaces>
-<interface type="ETHERNET_INTERFACE" name="eth0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.168.1.10" state="NETWORK_ETHERNET_CONNECTED"/>
+<interface type="ETHERNET_INTERFACE" name="eth0" macAddress="AA:BB:CC:DD:EE:FF" ipAddress="192.0.2.10" state="NETWORK_ETHERNET_CONNECTED"/>
 </interfaces>
 </networkInfo>
 ```
@@ -224,7 +224,7 @@ if stats := networkInfo.GetStatistics(); stats != nil {
 
 **CLI Usage:**
 ```bash
-soundtouch-cli -host 192.168.1.100 -network-info
+soundtouch-cli -host 192.0.2.100 -network-info
 ```
 
 **CLI Output Example (WiFi Device):**
@@ -237,7 +237,7 @@ Network Information:
 Interface 1:
   • Type: WIFI_INTERFACE (wlan0)
   • MAC Address: AA:BB:CC:DD:EE:FF
-  • IP Address: 192.168.1.10
+  • IP Address: 192.0.2.10
   • State: WiFi Connected ✓
   • SSID: MyHomeNetwork
   • Signal: Excellent (90%)
@@ -254,7 +254,7 @@ Interface 2:
 Active WiFi Connection:
   • Network: MyHomeNetwork (Excellent, 5GHz)
   • Interface: wlan0
-  • IP Address: 192.168.1.10
+  • IP Address: 192.0.2.10
 
 Connectivity Summary:
   ✓ WiFi Available (Connected)
@@ -514,17 +514,17 @@ All system endpoints are fully integrated into the CLI tool with comprehensive h
 soundtouch-cli -help
 
 # Device time management
-soundtouch-cli -host 192.168.1.100 -clock-time
-soundtouch-cli -host 192.168.1.100 -set-clock-time now
+soundtouch-cli -host 192.0.2.100 -clock-time
+soundtouch-cli -host 192.0.2.100 -set-clock-time now
 
 # Clock display configuration  
-soundtouch-cli -host 192.168.1.100 -clock-display
-soundtouch-cli -host 192.168.1.100 -enable-clock
-soundtouch-cli -host 192.168.1.100 -clock-format 24
-soundtouch-cli -host 192.168.1.100 -clock-brightness 75
+soundtouch-cli -host 192.0.2.100 -clock-display
+soundtouch-cli -host 192.0.2.100 -enable-clock
+soundtouch-cli -host 192.0.2.100 -clock-format 24
+soundtouch-cli -host 192.0.2.100 -clock-brightness 75
 
 # Network diagnostics
-soundtouch-cli -host 192.168.1.100 -network-info
+soundtouch-cli -host 192.0.2.100 -network-info
 ```
 
 ## Testing

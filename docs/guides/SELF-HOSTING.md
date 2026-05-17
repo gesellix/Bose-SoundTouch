@@ -69,7 +69,7 @@ In a web browser on any device on your network, go to:
 http://<your-server-ip>:8000
 ```
 
-Replace `<your-server-ip>` with the actual IP address of the computer running AfterTouch. For example: `http://192.168.1.100:8000`.
+Replace `<your-server-ip>` with the actual IP address of the computer running AfterTouch. For example: `http://192.0.2.100:8000`.
 
 If you are on the same computer that is running AfterTouch, you can use `http://localhost:8000`.
 
@@ -82,7 +82,7 @@ You should see the AfterTouch web interface with tabs: Overview, Settings, Devic
 This is the most important setting. Go to the **Settings** tab and set the **Target Domain** to the full address of your AfterTouch server — the same address you used to open the web interface:
 
 ```
-http://192.168.1.100:8000
+http://192.0.2.100:8000
 ```
 
 Use the IP address of your server, **not** `localhost`. Your speakers need to reach this address over the network, and they cannot resolve `localhost`.

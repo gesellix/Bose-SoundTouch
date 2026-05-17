@@ -17,7 +17,7 @@ The SoundTouch library supports multiple discovery methods to find devices on yo
 You can manually configure known devices in your `.env` file:
 
 ```bash
-PREFERRED_DEVICES=Living Room:192.168.1.100:8090,Kitchen:192.168.1.101:8090
+PREFERRED_DEVICES=Living Room:192.0.2.100:8090,Kitchen:192.0.2.101:8090
 ```
 
 This method is:
@@ -90,7 +90,7 @@ CACHE_ENABLED=true
 CACHE_TTL=60s
 
 # Known devices (fastest method)
-PREFERRED_DEVICES=Living Room:192.168.1.100:8090,Kitchen:192.168.1.101:8090,Bedroom:192.168.1.102
+PREFERRED_DEVICES=Living Room:192.0.2.100:8090,Kitchen:192.0.2.101:8090,Bedroom:192.0.2.102
 ```
 
 ## Usage Examples

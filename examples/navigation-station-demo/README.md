@@ -43,7 +43,7 @@ go run ./cmd/soundtouch-cli discover devices
 cd examples/navigation-station-demo
 
 # Run with your device IP
-go run . 192.168.1.100
+go run . 192.0.2.100
 ```
 
 ## What the Demo Does
@@ -61,7 +61,7 @@ go run . 192.168.1.100
 
 ```
 🎵 SoundTouch Navigation & Station Management Demo
-📱 Device: 192.168.1.100:8090
+📱 Device: 192.0.2.100:8090
 
 📻 Step 1: Browsing TuneIn stations...
   📡 Getting TuneIn stations (first 10)...
@@ -173,23 +173,23 @@ This example shows programmatic usage. For command-line usage:
 
 ```bash
 # Browse TuneIn stations
-go run ./cmd/soundtouch-cli --host 192.168.1.100 browse tunein
+go run ./cmd/soundtouch-cli --host 192.0.2.100 browse tunein
 
 # Search for jazz stations
-go run ./cmd/soundtouch-cli --host 192.168.1.100 station search-tunein --query "jazz"
+go run ./cmd/soundtouch-cli --host 192.0.2.100 station search-tunein --query "jazz"
 
 # Add a station from search results
-go run ./cmd/soundtouch-cli --host 192.168.1.100 station add \
+go run ./cmd/soundtouch-cli --host 192.0.2.100 station add \
   --source TUNEIN \
   --token "c121508" \
   --name "Jazz FM"
 
 # Browse Pandora stations (requires account)
-go run ./cmd/soundtouch-cli --host 192.168.1.100 browse pandora \
+go run ./cmd/soundtouch-cli --host 192.0.2.100 browse pandora \
   --source-account "your_pandora_username"
 
 # Search Spotify content (requires account)
-go run ./cmd/soundtouch-cli --host 192.168.1.100 station search-spotify \
+go run ./cmd/soundtouch-cli --host 192.0.2.100 station search-spotify \
   --source-account "your_spotify_username" \
   --query "workout playlist"
 ```
@@ -265,7 +265,7 @@ The demo handles common error cases:
 ### "Device not responding"
 ```bash
 # Test basic connectivity first
-go run ./cmd/soundtouch-cli --host 192.168.1.100 info
+go run ./cmd/soundtouch-cli --host 192.0.2.100 info
 ```
 
 ### "Search returns no results"

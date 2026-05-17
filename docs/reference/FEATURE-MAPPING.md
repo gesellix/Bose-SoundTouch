@@ -16,16 +16,16 @@ The SoundTouch API client now includes intelligent feature mapping that:
 ### Basic Feature Overview
 ```bash
 # Get device feature overview (default view)
-soundtouch-cli --host 192.168.1.100 supported-urls
+soundtouch-cli --host 192.0.2.100 supported-urls
 
 # Show detailed feature mapping with CLI commands
-soundtouch-cli --host 192.168.1.100 supported-urls --features
+soundtouch-cli --host 192.0.2.100 supported-urls --features
 
 # Show complete endpoint list
-soundtouch-cli --host 192.168.1.100 supported-urls --verbose
+soundtouch-cli --host 192.0.2.100 supported-urls --verbose
 
 # Get comprehensive device analysis with recommendations
-soundtouch-cli --host 192.168.1.100 analyze
+soundtouch-cli --host 192.0.2.100 analyze
 ```
 
 ## Understanding Feature Categories
@@ -80,7 +80,7 @@ Device system settings:
 
 ### Premium Device Example
 ```bash
-$ soundtouch-cli --host 192.168.1.100 analyze
+$ soundtouch-cli --host 192.0.2.100 analyze
 
 🔍 Device Capability Analysis:
   Device ID: 08DF1F0BA325
@@ -99,7 +99,7 @@ $ soundtouch-cli --host 192.168.1.100 analyze
 
 💡 Recommendations:
     🏠 This device supports multiroom - you can create speaker groups
-       Try: soundtouch-cli zone create --master 192.168.1.100 --members <other-devices>
+       Try: soundtouch-cli zone create --master 192.0.2.100 --members <other-devices>
     ⭐ Save your favorite content as presets for quick access
        Try: soundtouch-cli preset store-current --slot 1
     📻 Browse and discover new content from streaming services
@@ -120,7 +120,7 @@ $ soundtouch-cli --host 192.168.1.100 analyze
 
 ### Basic Device Example
 ```bash
-$ soundtouch-cli --host 192.168.1.101 analyze
+$ soundtouch-cli --host 192.0.2.101 analyze
 
 🔍 Device Capability Analysis:
   Device ID: 4C569D123456
@@ -341,9 +341,9 @@ soundtouch-cli preset remove --slot 1      # Remove preset 1
 ```bash
 # Zone Management
 soundtouch-cli zone list                   # List current zones
-soundtouch-cli zone create --master 192.168.1.100 --members 192.168.1.101,192.168.1.102
-soundtouch-cli zone add --member 192.168.1.103    # Add member to zone
-soundtouch-cli zone remove --member 192.168.1.103 # Remove from zone
+soundtouch-cli zone create --master 192.0.2.100 --members 192.0.2.101,192.0.2.102
+soundtouch-cli zone add --member 192.0.2.103    # Add member to zone
+soundtouch-cli zone remove --member 192.0.2.103 # Remove from zone
 ```
 
 ## Feature Detection Patterns

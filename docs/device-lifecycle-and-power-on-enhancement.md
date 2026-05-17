@@ -50,7 +50,7 @@ The current system uses multiple data collection methods to build a complete dev
       <margeURL>https://streaming.bose.com</margeURL>
       <networkInfo type="SCM">
           <macAddress>AA:BB:CC:DD:EE:FF</macAddress>
-          <ipAddress>192.168.1.10</ipAddress>
+          <ipAddress>192.0.2.10</ipAddress>
       </networkInfo>
       <moduleType>sm2</moduleType>
       <variant>rhino</variant>

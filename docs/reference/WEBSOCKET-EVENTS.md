@@ -33,7 +33,7 @@ import (
 
 func main() {
     // Create SoundTouch client
-    soundTouchClient := client.NewClientFromHost("192.168.1.10")
+    soundTouchClient := client.NewClientFromHost("192.0.2.10")
     
     // Create WebSocket client with default configuration
     wsClient := soundTouchClient.NewWebSocketClient(nil)
@@ -70,16 +70,16 @@ The recommended way to monitor WebSocket events is through the built-in CLI comm
 
 ```bash
 # Monitor all events from a specific device
-soundtouch-cli --host 192.168.1.10 events subscribe
+soundtouch-cli --host 192.0.2.10 events subscribe
 
 # Monitor only volume and now playing events
-soundtouch-cli --host 192.168.1.10 events subscribe --filter volume,nowPlaying
+soundtouch-cli --host 192.0.2.10 events subscribe --filter volume,nowPlaying
 
 # Monitor for 5 minutes with verbose output
-soundtouch-cli --host 192.168.1.10 events subscribe --duration 5m --verbose
+soundtouch-cli --host 192.0.2.10 events subscribe --duration 5m --verbose
 
 # Monitor zone events without automatic reconnection
-soundtouch-cli --host 192.168.1.10 events subscribe --filter zone --no-reconnect
+soundtouch-cli --host 192.0.2.10 events subscribe --filter zone --no-reconnect
 ```
 
 ### Using the CLI Demo (Alternative)
@@ -91,13 +91,13 @@ For development or testing purposes, you can also use the standalone demo:
 go run ./cmd/websocket-demo -discover
 
 # Connect to specific device
-go run ./cmd/websocket-demo -host 192.168.1.10
+go run ./cmd/websocket-demo -host 192.0.2.10
 
 # Monitor only volume changes for 5 minutes
-go run ./cmd/websocket-demo -host 192.168.1.10 -filter volume -duration 5m
+go run ./cmd/websocket-demo -host 192.0.2.10 -filter volume -duration 5m
 
 # Monitor multiple event types with verbose logging
-go run ./cmd/websocket-demo -host 192.168.1.10 -filter nowPlaying,volume -verbose
+go run ./cmd/websocket-demo -host 192.0.2.10 -filter nowPlaying,volume -verbose
 ```
 
 ## Configuration
@@ -427,7 +427,7 @@ The WebSocket connects to:
 - **Port**: `8080` (different from HTTP API port 8090)
 - **Path**: `/`
 
-Example: `ws://192.168.1.10:8080/`
+Example: `ws://192.0.2.10:8080/`
 
 ### Message Format
 
@@ -493,10 +493,10 @@ Use the CLI demo to test WebSocket functionality:
 
 ```bash
 # Test with verbose output
-go run ./cmd/websocket-demo -host 192.168.1.10 -verbose
+go run ./cmd/websocket-demo -host 192.0.2.10 -verbose
 
 # Test reconnection by temporarily disconnecting device
-go run ./cmd/websocket-demo -host 192.168.1.10 -verbose -duration 5m
+go run ./cmd/websocket-demo -host 192.0.2.10 -verbose -duration 5m
 ```
 
 ## Performance Considerations

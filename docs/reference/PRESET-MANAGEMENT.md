@@ -29,7 +29,7 @@ Bose SoundTouch devices support up to 6 presets that can store favorite music so
 
 ```bash
 # Get all configured presets
-soundtouch-cli -host 192.168.1.10 -presets
+soundtouch-cli -host 192.0.2.10 -presets
 ```
 
 **Example Output:**
@@ -66,7 +66,7 @@ import (
 
 func main() {
     // Create client
-    soundtouchClient := client.NewClientFromHost("192.168.1.10")
+    soundtouchClient := client.NewClientFromHost("192.0.2.10")
     
     // Get all presets
     presets, err := soundtouchClient.GetPresets()
@@ -204,8 +204,8 @@ While you cannot create presets via API, you can select existing presets:
 ### Via Key Commands
 ```bash
 # Select preset 1-6 using key commands
-soundtouch-cli -host 192.168.1.10 -preset 1
-soundtouch-cli -host 192.168.1.10 -key PRESET_3
+soundtouch-cli -host 192.0.2.10 -preset 1
+soundtouch-cli -host 192.0.2.10 -key PRESET_3
 ```
 
 ### Via Go Library

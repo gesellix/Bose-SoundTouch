@@ -15,13 +15,13 @@ The introspect functionality is available through three commands in the `source`
 ### 1. Basic Spotify Introspect
 
 ```bash
-$ soundtouch-cli --host 192.168.1.100 source introspect --source SPOTIFY
+$ soundtouch-cli --host 192.0.2.100 source introspect --source SPOTIFY
 ```
 
 **Expected Output:**
 ```
 ⠎⠕⠥⠝⠙⠤⠞⠕⠥⠉⠓ SoundTouch CLI v1.0.0
-🔗 Connecting to SoundTouch device at 192.168.1.100:8090
+🔗 Connecting to SoundTouch device at 192.0.2.100:8090
 
 Getting introspect data for SPOTIFY
 
@@ -58,13 +58,13 @@ Received Playback Request: ❌ No
 ### 2. Spotify Introspect with Account
 
 ```bash
-$ soundtouch-cli --host 192.168.1.100 source introspect --source SPOTIFY --account my_spotify_user
+$ soundtouch-cli --host 192.0.2.100 source introspect --source SPOTIFY --account my_spotify_user
 ```
 
 **Expected Output:**
 ```
 ⠎⠕⠥⠝⠙⠤⠞⠕⠥⠉⠓ SoundTouch CLI v1.0.0
-🔗 Connecting to SoundTouch device at 192.168.1.100:8090
+🔗 Connecting to SoundTouch device at 192.0.2.100:8090
 
 Getting introspect data for SPOTIFY
 Source Account: my_spotify_user
@@ -102,13 +102,13 @@ Received Playback Request: ✅ Yes
 ### 3. Spotify Convenience Command
 
 ```bash
-$ soundtouch-cli --host 192.168.1.100 source introspect-spotify
+$ soundtouch-cli --host 192.0.2.100 source introspect-spotify
 ```
 
 **Expected Output:**
 ```
 ⠎⠕⠥⠝⠙⠤⠞⠕⠥⠉⠓ SoundTouch CLI v1.0.0
-🔗 Connecting to SoundTouch device at 192.168.1.100:8090
+🔗 Connecting to SoundTouch device at 192.0.2.100:8090
 
 Getting Spotify introspect data
 
@@ -148,13 +148,13 @@ Received Playback Request: ✅ Yes
 ### 4. Inactive Service Example
 
 ```bash
-$ soundtouch-cli --host 192.168.1.100 source introspect-spotify
+$ soundtouch-cli --host 192.0.2.100 source introspect-spotify
 ```
 
 **Expected Output (when Spotify is not set up):**
 ```
 ⠎⠕⠥⠝⠙⠤⠞⠕⠥⠉⠓ SoundTouch CLI v1.0.0
-🔗 Connecting to SoundTouch device at 192.168.1.100:8090
+🔗 Connecting to SoundTouch device at 192.0.2.100:8090
 
 Getting Spotify introspect data
 
@@ -186,13 +186,13 @@ Subscription Type:
 ### 5. All Services Introspect
 
 ```bash
-$ soundtouch-cli --host 192.168.1.100 source introspect-all
+$ soundtouch-cli --host 192.0.2.100 source introspect-all
 ```
 
 **Expected Output:**
 ```
 ⠎⠕⠥⠝⠙⠤⠞⠕⠥⠉⠓ SoundTouch CLI v1.0.0
-🔗 Connecting to SoundTouch device at 192.168.1.100:8090
+🔗 Connecting to SoundTouch device at 192.0.2.100:8090
 
 Getting introspect data for all services
 
@@ -234,7 +234,7 @@ Getting introspect data for all services
 
 #### Missing Source Parameter
 ```bash
-$ soundtouch-cli --host 192.168.1.100 source introspect
+$ soundtouch-cli --host 192.0.2.100 source introspect
 ```
 
 **Output:**
@@ -265,13 +265,13 @@ host is required. Use --host flag or set SOUNDTOUCH_HOST environment variable
 
 #### Invalid Service
 ```bash
-$ soundtouch-cli --host 192.168.1.100 source introspect --source INVALID_SERVICE
+$ soundtouch-cli --host 192.0.2.100 source introspect --source INVALID_SERVICE
 ```
 
 **Expected Output:**
 ```
 ⠎⠕⠥⠝⠙⠤⠞⠕⠥⠉⠓ SoundTouch CLI v1.0.0
-🔗 Connecting to SoundTouch device at 192.168.1.100:8090
+🔗 Connecting to SoundTouch device at 192.0.2.100:8090
 
 ⚠️  Service INVALID_SERVICE may not be available, but continuing with introspect request...
 
@@ -287,28 +287,28 @@ The introspect commands work well with other CLI commands:
 ### 1. Check Availability First
 ```bash
 # Check what services are available
-$ soundtouch-cli --host 192.168.1.100 source availability
+$ soundtouch-cli --host 192.0.2.100 source availability
 
 # Then introspect specific services
-$ soundtouch-cli --host 192.168.1.100 source introspect --source SPOTIFY
+$ soundtouch-cli --host 192.0.2.100 source introspect --source SPOTIFY
 ```
 
 ### 2. Activate Service After Introspect
 ```bash
 # Check service status
-$ soundtouch-cli --host 192.168.1.100 source introspect-spotify
+$ soundtouch-cli --host 192.0.2.100 source introspect-spotify
 
 # If inactive, activate it
-$ soundtouch-cli --host 192.168.1.100 source select --source SPOTIFY
+$ soundtouch-cli --host 192.0.2.100 source select --source SPOTIFY
 ```
 
 ### 3. Compare Sources and Introspect Data
 ```bash
 # Compare configured sources vs available services
-$ soundtouch-cli --host 192.168.1.100 source compare
+$ soundtouch-cli --host 192.0.2.100 source compare
 
 # Get detailed introspect data for specific services
-$ soundtouch-cli --host 192.168.1.100 source introspect-all
+$ soundtouch-cli --host 192.0.2.100 source introspect-all
 ```
 
 ## Environment Variables
@@ -321,7 +321,7 @@ The introspect commands respect the same environment variables as other CLI comm
 
 **Example:**
 ```bash
-export SOUNDTOUCH_HOST=192.168.1.100
+export SOUNDTOUCH_HOST=192.0.2.100
 soundtouch-cli source introspect-spotify
 ```
 
@@ -379,7 +379,7 @@ soundtouch-cli --host $DEVICE source introspect --source SPOTIFY --account speci
 
 3. **Batch operations**: Use shell scripting to check multiple devices:
    ```bash
-   for device in 192.168.1.100 192.168.1.101; do
+   for device in 192.0.2.100 192.0.2.101; do
      echo "=== Device $device ==="
      soundtouch-cli --host $device source introspect-spotify
    done
@@ -387,7 +387,7 @@ soundtouch-cli --host $DEVICE source introspect --source SPOTIFY --account speci
 
 4. **Environment setup**: Set up your environment for easier usage:
    ```bash
-   export SOUNDTOUCH_HOST=192.168.1.100
+   export SOUNDTOUCH_HOST=192.0.2.100
    alias st='soundtouch-cli'
    st source introspect-spotify
    ```

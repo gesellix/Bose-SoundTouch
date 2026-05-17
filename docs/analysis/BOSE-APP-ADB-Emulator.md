@@ -26,7 +26,7 @@ Read on for the full manual walkthrough and the rationale behind each step.
 
 > **BLE limitation**: Android emulators do not expose Bluetooth hardware. The Bose app's default setup path (BLE Wi-Fi provisioning) therefore cannot be used to configure a factory-reset speaker from the emulator. Use **AP mode** instead: provision the speaker's Wi-Fi credentials via the Mac command line first (see [DEVICE-INITIAL-SETUP.md § 6](../guides/DEVICE-INITIAL-SETUP.md)), then the app can discover the already-networked speaker via mDNS/SSDP without BLE.
 
-> **Emulator ↔ local network**: The emulator routes all traffic through the Mac's active network interface. Once the speaker is on the same LAN as the Mac, the emulator can reach it at its normal LAN IP (e.g. `192.168.1.50`) — no extra routing is needed. Use `adb shell ping 192.168.1.50` to confirm reachability.
+> **Emulator ↔ local network**: The emulator routes all traffic through the Mac's active network interface. Once the speaker is on the same LAN as the Mac, the emulator can reach it at its normal LAN IP (e.g. `192.0.2.50`) — no extra routing is needed. Use `adb shell ping 192.0.2.50` to confirm reachability.
 
 Add Android SDK tools to your PATH (add to `~/.zshrc`):
 
@@ -149,13 +149,13 @@ Find your Mac's local IP:
 
 ```bash
 ipconfig getifaddr en0
-# e.g. 192.168.1.123
+# e.g. 192.0.2.123
 ```
 
 Set the proxy:
 
 ```bash
-adb -s emulator-5554 shell settings put global http_proxy 192.168.1.123:8080
+adb -s emulator-5554 shell settings put global http_proxy 192.0.2.123:8080
 ```
 
 ---
@@ -214,7 +214,7 @@ Edit `/tmp/config.js` and set:
 ```javascript
 const CERT_PEM = `<contents of ~/.mitmproxy/mitmproxy-ca-cert.pem>`;
 
-const PROXY_HOST = '192.168.1.123';  // your Mac IP
+const PROXY_HOST = '192.0.2.123';  // your Mac IP
 const PROXY_PORT = 8080;
 ```
 
@@ -251,8 +251,8 @@ Expected output in the Frida REPL:
 
 ```
 == System certificate trust injected ==
-== Proxy system configuration overridden to 192.168.1.123:8080 ==
-== Proxy configuration overridden to 192.168.1.123:8080 ==
+== Proxy system configuration overridden to 192.0.2.123:8080 ==
+== Proxy configuration overridden to 192.0.2.123:8080 ==
 == Certificate unpinning completed ==
 == Unpinning fallback auto-patcher installed ==
 ```

@@ -74,10 +74,10 @@ func (c *Client) StoreCurrentAsPreset(id int) error {
 
 ```bash
 # Store currently playing content as preset
-soundtouch-cli --host 192.168.1.100 preset store-current --slot 3
+soundtouch-cli --host 192.0.2.100 preset store-current --slot 3
 
 # Store specific content as preset
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 1 \
   --source SPOTIFY \
   --location "spotify:playlist:37i9dQZF1DX0XUsuxWHRQd" \
@@ -85,31 +85,31 @@ soundtouch-cli --host 192.168.1.100 preset store \
   --name "My Worship Mix"
 
 # Store radio station as preset
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 2 \
   --source TUNEIN \
   --location "/v1/playback/station/s33828" \
   --name "K-LOVE Radio"
 
 # Store radio station using TuneIn URL (Name and Artwork are automatically fetched)
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 6 \
   --location "https://tunein.com/radio/WDR-2-Rheinland-1004-s213886/"
 
 # Store Spotify album using URL (Name and Artwork are automatically fetched)
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 1 \
   --location "https://open.spotify.com/album/6rT8yer84xoh0t17poLsmn?si=XqxdZazpTLC1ceoC8EeCuA" \
   --source-account "yourusername"
 
 # Remove preset
-soundtouch-cli --host 192.168.1.100 preset remove --slot 3
+soundtouch-cli --host 192.0.2.100 preset remove --slot 3
 
 # Show current content details (including location URI for all sources)
-soundtouch-cli --host 192.168.1.100 play now
+soundtouch-cli --host 192.0.2.100 play now
 
 # Show detailed content information 
-soundtouch-cli --host 192.168.1.100 play now --verbose
+soundtouch-cli --host 192.0.2.100 play now --verbose
 ```
 
 ## Spotify Integration Examples
@@ -297,7 +297,7 @@ The CLI now automatically shows location details for **all sources** when using 
 ### Automatic Location Display
 ```bash
 # Location automatically shown for any source with location data
-go run ./cmd/soundtouch-cli --host 192.168.1.100 play now
+go run ./cmd/soundtouch-cli --host 192.0.2.100 play now
 ```
 
 **Example outputs:**
@@ -335,7 +335,7 @@ Content Details:
 
 ### Verbose Mode for Complete Details
 ```bash
-go run ./cmd/soundtouch-cli --host 192.168.1.100 play now --verbose
+go run ./cmd/soundtouch-cli --host 192.0.2.100 play now --verbose
 ```
 
 Shows additional information:

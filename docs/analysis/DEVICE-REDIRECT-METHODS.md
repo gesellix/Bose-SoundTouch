@@ -34,10 +34,10 @@ The most robust and granular method involves modifying the device's private conf
 Requires SSH access to the device.
 ```xml
 <SoundTouchSdkPrivateCfg>
-  <margeServerUrl>http://192.168.1.10:8000</margeServerUrl>
-  <statsServerUrl>http://192.168.1.10:8000</statsServerUrl>
-  <swUpdateUrl>http://192.168.1.10:8000/updates/soundtouch</swUpdateUrl>
-  <bmxRegistryUrl>http://192.168.1.10:8000/bmx/registry/v1/services</bmxRegistryUrl>
+  <margeServerUrl>http://192.0.2.10:8000</margeServerUrl>
+  <statsServerUrl>http://192.0.2.10:8000</statsServerUrl>
+  <swUpdateUrl>http://192.0.2.10:8000/updates/soundtouch</swUpdateUrl>
+  <bmxRegistryUrl>http://192.0.2.10:8000/bmx/registry/v1/services</bmxRegistryUrl>
 </SoundTouchSdkPrivateCfg>
 ```
 
@@ -45,7 +45,7 @@ Requires SSH access to the device.
 > at the **root** of port 8000, so the URL has no `/marge` suffix.
 > [`deborahgu/soundcork`](https://github.com/deborahgu/soundcork) routes marge
 > under a `/marge` sub-path, so users redirecting to soundcork must append it
-> (`http://192.168.1.10:8000/marge`).
+> (`http://192.0.2.10:8000/marge`).
 
 ### Pros & Cons
 | Pros                                                                                          | Cons                                                                           |
@@ -68,9 +68,9 @@ This method uses the standard Linux hosts file to redirect traffic at the networ
 ### Implementation
 Requires SSH access. Add entries for the target domains:
 ```text
-192.168.1.10  streaming.bose.com
-192.168.1.10  updates.bose.com
-192.168.1.10  stats.bose.com
+192.0.2.10  streaming.bose.com
+192.0.2.10  updates.bose.com
+192.0.2.10  stats.bose.com
 ```
 
 ### Pros & Cons
@@ -141,7 +141,7 @@ A common question is whether these methods can be used in isolation or if they m
 If your firmware does not strictly enforce the `IsItBose` check for the specific URLs you are changing, **Method 1 (XML)** is sufficient. This is the cleanest approach and is used by the `soundtouch-service` migration tool.
 
 ### Scenario B: XML Config + Binary Patching (The "Locked" Case)
-On some newer firmware versions, even if you change the `<margeServerUrl>` in the XML to `http://192.168.1.10`, the internal library (`libBmxAccountHsm.so`) will validate the string against the hardcoded Bose regex.
+On some newer firmware versions, even if you change the `<margeServerUrl>` in the XML to `http://192.0.2.10`, the internal library (`libBmxAccountHsm.so`) will validate the string against the hardcoded Bose regex.
 *   **Symptom**: The device ignores the XML setting or fails to connect despite the correct URL being present.
 *   **Solution**: You **must** apply the **Binary Patch (Method 3)** to neutralize the `IsItBose` check *in addition* to the XML change.
 

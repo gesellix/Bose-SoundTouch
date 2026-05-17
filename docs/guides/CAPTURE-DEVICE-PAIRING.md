@@ -200,7 +200,7 @@ echo "Proxy set to ${MAC_IP}:8080"
 Confirm emulator can reach the speaker:
 
 ```bash
-SPEAKER_IP=192.168.1.50   # adjust to your speaker's LAN IP
+SPEAKER_IP=192.0.2.50   # adjust to your speaker's LAN IP
 adb -s emulator-5554 shell ping -c 3 "$SPEAKER_IP"
 ```
 
@@ -394,7 +394,7 @@ Raw log of the first interactive run. To be cleaned up into the runbook above.
 ### Wi-Fi Provisioning (AP mode)
 - `airport` command not available on this macOS version (removed in recent releases)
 - Connect Mac to speaker AP via **System Settings → Wi-Fi** (SSID: "Bose SoundTouch XXXX")
-- Speaker AP gateway confirmed: `192.0.2.1` (client gets `192.0.2.2`), not `192.168.1.1` as previously assumed
+- Speaker AP gateway confirmed: `192.0.2.1` (client gets `192.0.2.2`), not `192.0.2.1` as previously assumed
 - `/gabbo_wifi` endpoint was hallucinated — actual endpoint verified from browser network capture (`_/device-reset/wifi-setup.txt`):
   - Site survey: `POST http://192.0.2.1:8090/performWirelessSiteSurvey` with `<PerformWirelessSiteSurvey timeout="5"/>`
   - Add profile: `POST http://192.0.2.1:8090/addWirelessProfile` with XML body, `securityType="wpa_or_wpa2"`

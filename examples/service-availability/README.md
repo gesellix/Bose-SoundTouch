@@ -12,15 +12,15 @@ This is different from the `/sources` endpoint, which shows currently configured
 
 ### Method 1: Command Line Argument
 ```bash
-go run main.go 192.168.1.100
+go run main.go 192.0.2.100
 ```
 
 ### Method 2: Environment Variable
 ```bash
-SOUNDTOUCH_HOST=192.168.1.100 go run main.go
+SOUNDTOUCH_HOST=192.0.2.100 go run main.go
 ```
 
-Replace `192.168.1.100` with your SoundTouch device's IP address.
+Replace `192.0.2.100` with your SoundTouch device's IP address.
 
 ## Example Output
 

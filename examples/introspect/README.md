@@ -18,19 +18,19 @@ The introspect endpoint provides detailed information about music services (like
 
 ```bash
 # Basic usage - check Spotify status
-go run main.go -host 192.168.1.100
+go run main.go -host 192.0.2.100
 
 # Check specific service with account
-go run main.go -host 192.168.1.100 -source SPOTIFY -account "your_spotify_username"
+go run main.go -host 192.0.2.100 -source SPOTIFY -account "your_spotify_username"
 
 # Check Pandora service
-go run main.go -host 192.168.1.100 -source PANDORA
+go run main.go -host 192.0.2.100 -source PANDORA
 
 # Check TuneIn radio
-go run main.go -host 192.168.1.100 -source TUNEIN
+go run main.go -host 192.0.2.100 -source TUNEIN
 
 # Custom timeout
-go run main.go -host 192.168.1.100 -timeout 5s
+go run main.go -host 192.0.2.100 -timeout 5s
 ```
 
 ## Command Line Options

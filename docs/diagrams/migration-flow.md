@@ -39,12 +39,12 @@ Shows the network layout with Raspberry Pi, router, and SoundTouch devices.
 ```
 Internet Cloud
     ↑↓ (Optional - during migration)
-Home Router (192.168.1.1)
-    ├── Raspberry Pi (192.168.1.10) [SoundTouch Service]
-    ├── Living Room Speaker (192.168.1.100)
-    ├── Kitchen Speaker (192.168.1.101)
-    ├── Bedroom Speaker (192.168.1.102)
-    └── Office Speaker (192.168.1.103)
+Home Router (192.0.2.1)
+    ├── Raspberry Pi (192.0.2.10) [SoundTouch Service]
+    ├── Living Room Speaker (192.0.2.100)
+    ├── Kitchen Speaker (192.0.2.101)
+    ├── Bedroom Speaker (192.0.2.102)
+    └── Office Speaker (192.0.2.103)
 ```
 
 ### Connections

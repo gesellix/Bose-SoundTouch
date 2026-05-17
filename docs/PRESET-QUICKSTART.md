@@ -10,20 +10,20 @@ SoundTouch devices support 6 preset slots that can store your favorite content f
 
 ### 1. See Current Presets
 ```bash
-soundtouch-cli --host 192.168.1.100 preset list
+soundtouch-cli --host 192.0.2.100 preset list
 ```
 
 ### 2. Store What's Currently Playing
 ```bash
 # Store current song/station as preset 1
-soundtouch-cli --host 192.168.1.100 preset store-current --slot 1
+soundtouch-cli --host 192.0.2.100 preset store-current --slot 1
 ```
 
 ### 3. Store Specific Content
 
 #### Spotify Playlist
 ```bash
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 2 \
   --source SPOTIFY \
   --location "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M" \
@@ -32,7 +32,7 @@ soundtouch-cli --host 192.168.1.100 preset store \
 
 #### Radio Station
 ```bash
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 3 \
   --source TUNEIN \
   --location "/v1/playback/station/s33828" \
@@ -42,16 +42,16 @@ soundtouch-cli --host 192.168.1.100 preset store \
 ### 4. Use Your Presets
 ```bash
 # Play preset 1
-soundtouch-cli --host 192.168.1.100 preset select --slot 1
+soundtouch-cli --host 192.0.2.100 preset select --slot 1
 
 # Play preset 2
-soundtouch-cli --host 192.168.1.100 preset select --slot 2
+soundtouch-cli --host 192.0.2.100 preset select --slot 2
 ```
 
 ### 5. Remove Presets
 ```bash
 # Remove preset 6
-soundtouch-cli --host 192.168.1.100 preset remove --slot 6
+soundtouch-cli --host 192.0.2.100 preset remove --slot 6
 ```
 
 ## Getting Content Locations
@@ -61,7 +61,7 @@ To store specific content, you need the `location` parameter. Here's how to get 
 ### Method 1: From Currently Playing Content
 ```bash
 # Play the content you want to save, then:
-soundtouch-cli --host 192.168.1.100 play now
+soundtouch-cli --host 192.0.2.100 play now
 ```
 
 **Example output:**
@@ -135,7 +135,7 @@ import (
 func main() {
     // Create client
     c := client.NewClient(&client.Config{
-        Host: "192.168.1.100",
+        Host: "192.0.2.100",
         Port: 8090,
     })
     
@@ -235,19 +235,19 @@ select {} // Run forever
 ### Family Setup
 ```bash
 # Dad's morning playlist
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 1 --source SPOTIFY \
   --location "spotify:playlist:morning-energy" \
   --name "Dad's Morning Mix"
 
 # Mom's cooking music
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 2 --source SPOTIFY \
   --location "spotify:playlist:cooking-vibes" \
   --name "Kitchen Tunes"
 
 # Kids' bedtime stories
-soundtouch-cli --host 192.168.1.100 preset store \
+soundtouch-cli --host 192.0.2.100 preset store \
   --slot 3 --source TUNEIN \
   --location "/v1/playback/station/bedtime-stories" \
   --name "Bedtime Stories"
@@ -256,22 +256,22 @@ soundtouch-cli --host 192.168.1.100 preset store \
 ### Party Mode
 ```bash
 # Upbeat party playlist
-soundtouch-cli --host 192.168.1.100 preset store-current --slot 1
+soundtouch-cli --host 192.0.2.100 preset store-current --slot 1
 
 # Chill background music  
-soundtouch-cli --host 192.168.1.100 preset store-current --slot 2
+soundtouch-cli --host 192.0.2.100 preset store-current --slot 2
 
 # Dance music
-soundtouch-cli --host 192.168.1.100 preset store-current --slot 3
+soundtouch-cli --host 192.0.2.100 preset store-current --slot 3
 ```
 
 ### Smart Home Integration
 ```bash
 # Morning routine (preset 1) - triggered by smart home at 7 AM
-soundtouch-cli --host 192.168.1.100 preset select --slot 1
+soundtouch-cli --host 192.0.2.100 preset select --slot 1
 
 # Evening routine (preset 2) - triggered at sunset
-soundtouch-cli --host 192.168.1.100 preset select --slot 2
+soundtouch-cli --host 192.0.2.100 preset select --slot 2
 ```
 
 ## Troubleshooting
@@ -286,26 +286,26 @@ Not all content can be saved as presets:
 ### "All preset slots are occupied"
 ```bash
 # See which presets you have
-soundtouch-cli --host 192.168.1.100 preset list
+soundtouch-cli --host 192.0.2.100 preset list
 
 # Remove one you don't need
-soundtouch-cli --host 192.168.1.100 preset remove --slot 6
+soundtouch-cli --host 192.0.2.100 preset remove --slot 6
 
 # Or overwrite an existing one
-soundtouch-cli --host 192.168.1.100 preset store-current --slot 6
+soundtouch-cli --host 192.0.2.100 preset store-current --slot 6
 ```
 
 ### Getting Spotify URIs
 If you can't find Spotify URIs:
 
 1. **Play the content** in Spotify on your SoundTouch
-2. **Check what's playing**: `soundtouch-cli --host 192.168.1.100 play now`
+2. **Check what's playing**: `soundtouch-cli --host 192.0.2.100 play now`
 3. **Copy the location** from the output
 
 ### Device Connection Issues
 ```bash
 # Test connection first
-soundtouch-cli --host 192.168.1.100 info
+soundtouch-cli --host 192.0.2.100 info
 
 # If that fails, check:
 # - Device IP address is correct

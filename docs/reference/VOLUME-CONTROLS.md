@@ -146,7 +146,7 @@ name := models.GetVolumeLevelName(25) // Returns "Quiet"
 
 ```bash
 # Get current volume information
-soundtouch-cli -host 192.168.1.100:8090 -volume
+soundtouch-cli -host 192.0.2.100:8090 -volume
 ```
 
 **Output:**
@@ -162,8 +162,8 @@ Current Volume:
 
 ```bash
 # Set volume to specific level (0-100)
-soundtouch-cli -host 192.168.1.100:8090 -set-volume 25
-soundtouch-cli -host 192.168.1.100:8090 -set-volume 0   # Mute
+soundtouch-cli -host 192.0.2.100:8090 -set-volume 25
+soundtouch-cli -host 192.0.2.100:8090 -set-volume 0   # Mute
 ```
 
 **Safety Features:**
@@ -174,12 +174,12 @@ soundtouch-cli -host 192.168.1.100:8090 -set-volume 0   # Mute
 
 ```bash
 # Increase volume by amount (1-10, default: 2)
-soundtouch-cli -host 192.168.1.100:8090 -inc-volume 3
-soundtouch-cli -host 192.168.1.100:8090 -inc-volume     # Uses default: 2
+soundtouch-cli -host 192.0.2.100:8090 -inc-volume 3
+soundtouch-cli -host 192.0.2.100:8090 -inc-volume     # Uses default: 2
 
 # Decrease volume by amount (1-20, default: 2)
-soundtouch-cli -host 192.168.1.100:8090 -dec-volume 5
-soundtouch-cli -host 192.168.1.100:8090 -dec-volume     # Uses default: 2
+soundtouch-cli -host 192.0.2.100:8090 -dec-volume 5
+soundtouch-cli -host 192.0.2.100:8090 -dec-volume     # Uses default: 2
 ```
 
 ### CLI Safety Features
@@ -211,8 +211,8 @@ go test ./pkg/models/volume*
 ### Integration Testing
 
 Tested with real SoundTouch devices:
-- **SoundTouch 10** (192.168.1.10:8090) ✅
-- **SoundTouch 20** (192.168.1.11:8090) ✅
+- **SoundTouch 10** (192.0.2.10:8090) ✅
+- **SoundTouch 20** (192.0.2.11:8090) ✅
 
 All volume operations successfully tested on both devices.
 
@@ -232,7 +232,7 @@ import (
 
 func main() {
     // Create client
-    soundtouchClient := client.NewClientFromHost("192.168.1.100")
+    soundtouchClient := client.NewClientFromHost("192.0.2.100")
     
     // Get current volume
     volume, err := soundtouchClient.GetVolume()

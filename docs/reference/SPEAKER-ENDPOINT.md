@@ -62,7 +62,7 @@ import (
 
 func main() {
     config := &client.Config{
-        Host: "192.168.1.100",
+        Host: "192.0.2.100",
         Port: 8090,
     }
     
@@ -87,7 +87,7 @@ func main() {
 ```go
 func main() {
     config := &client.Config{
-        Host: "192.168.1.100",
+        Host: "192.0.2.100",
         Port: 8090,
     }
     
@@ -150,7 +150,7 @@ func main() {
 
 ```bash
 # Basic TTS (English)
-soundtouch-cli speaker tts --text "Hello World" --app-key YOUR_KEY --host 192.168.1.100
+soundtouch-cli speaker tts --text "Hello World" --app-key YOUR_KEY --host 192.0.2.100
 
 # TTS with volume and language
 soundtouch-cli speaker tts \
@@ -158,7 +158,7 @@ soundtouch-cli speaker tts \
   --app-key YOUR_KEY \
   --volume 70 \
   --language FR \
-  --host 192.168.1.100
+  --host 192.0.2.100
 ```
 
 ### URL Content Playback
@@ -168,7 +168,7 @@ soundtouch-cli speaker tts \
 soundtouch-cli speaker url \
   --url "https://example.com/audio.mp3" \
   --app-key YOUR_KEY \
-  --host 192.168.1.100
+  --host 192.0.2.100
 
 # URL playback with custom metadata
 soundtouch-cli speaker url \
@@ -178,13 +178,13 @@ soundtouch-cli speaker url \
   --message "Beautiful Song" \
   --reason "Artist Name" \
   --volume 60 \
-  --host 192.168.1.100
+  --host 192.0.2.100
 ```
 
 ### Notification Beep
 
 ```bash
-soundtouch-cli speaker beep --host 192.168.1.100
+soundtouch-cli speaker beep --host 192.0.2.100
 ```
 
 ### Help
@@ -294,13 +294,13 @@ client.PlayURL(
 
 ```bash
 # Test connectivity
-soundtouch-cli speaker beep --host 192.168.1.100
+soundtouch-cli speaker beep --host 192.0.2.100
 
 # Test TTS functionality  
-soundtouch-cli speaker tts --text "Testing TTS functionality" --app-key test-key --host 192.168.1.100
+soundtouch-cli speaker tts --text "Testing TTS functionality" --app-key test-key --host 192.0.2.100
 
 # Test URL playback
-soundtouch-cli speaker url --url "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav" --app-key test-key --host 192.168.1.100
+soundtouch-cli speaker url --url "https://www.soundjay.com/misc/sounds/bell-ringing-05.wav" --app-key test-key --host 192.0.2.100
 ```
 
 ## Troubleshooting

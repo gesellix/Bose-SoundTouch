@@ -133,39 +133,39 @@ allKeys := models.GetAllValidKeys()
 
 ```bash
 # Media controls
-soundtouch-cli -host 192.168.1.100 -play
-soundtouch-cli -host 192.168.1.100 -pause
-soundtouch-cli -host 192.168.1.100 -stop
-soundtouch-cli -host 192.168.1.100 -next
-soundtouch-cli -host 192.168.1.100 -prev
+soundtouch-cli -host 192.0.2.100 -play
+soundtouch-cli -host 192.0.2.100 -pause
+soundtouch-cli -host 192.0.2.100 -stop
+soundtouch-cli -host 192.0.2.100 -next
+soundtouch-cli -host 192.0.2.100 -prev
 
 # Volume controls
-soundtouch-cli -host 192.168.1.100 -volume-up
-soundtouch-cli -host 192.168.1.100 -volume-down
+soundtouch-cli -host 192.0.2.100 -volume-up
+soundtouch-cli -host 192.0.2.100 -volume-down
 
 # Preset selection
-soundtouch-cli -host 192.168.1.100 -preset 1
-soundtouch-cli -host 192.168.1.100 -preset 6
+soundtouch-cli -host 192.0.2.100 -preset 1
+soundtouch-cli -host 192.0.2.100 -preset 6
 ```
 
 ### Generic Key Command
 
 ```bash
 # Send any valid key using the -key flag
-soundtouch-cli -host 192.168.1.100 -key PLAY
-soundtouch-cli -host 192.168.1.100 -key STOP
-soundtouch-cli -host 192.168.1.100 -key PRESET_3
+soundtouch-cli -host 192.0.2.100 -key PLAY
+soundtouch-cli -host 192.0.2.100 -key STOP
+soundtouch-cli -host 192.0.2.100 -key PRESET_3
 ```
 
 ### Error Handling
 
 ```bash
 # Invalid key validation
-$ soundtouch-cli -host 192.168.1.100 -key INVALID
+$ soundtouch-cli -host 192.0.2.100 -key INVALID
 Failed to send key command: invalid key value: INVALID
 
 # Multiple commands rejected
-$ soundtouch-cli -host 192.168.1.100 -play -pause
+$ soundtouch-cli -host 192.0.2.100 -play -pause
 Failed to send key command: only one key command can be sent at a time
 
 # Missing host
@@ -193,8 +193,8 @@ go test ./pkg/models/...
 ### Integration Testing
 
 Tested with real SoundTouch devices:
-- **SoundTouch 10** (192.168.1.10:8090) ✅
-- **SoundTouch 20** (192.168.1.11:8090) ✅
+- **SoundTouch 10** (192.0.2.10:8090) ✅
+- **SoundTouch 20** (192.0.2.11:8090) ✅
 
 All key commands successfully sent and executed on both devices.
 
@@ -213,7 +213,7 @@ import (
 
 func main() {
     // Create client
-    soundtouchClient := client.NewClientFromHost("192.168.1.100")
+    soundtouchClient := client.NewClientFromHost("192.0.2.100")
     
     // Play music
     if err := soundtouchClient.Play(); err != nil {

@@ -17,22 +17,22 @@ The recents endpoint provides access to the device's recently played content his
 
 ```bash
 # Basic usage - show last 10 items
-go run main.go -host 192.168.1.100
+go run main.go -host 192.0.2.100
 
 # Show detailed information for all items
-go run main.go -host 192.168.1.100 -detailed -limit 0
+go run main.go -host 192.0.2.100 -detailed -limit 0
 
 # Filter by source (show only Spotify items)
-go run main.go -host 192.168.1.100 -source SPOTIFY
+go run main.go -host 192.0.2.100 -source SPOTIFY
 
 # Filter by content type (show only tracks)
-go run main.go -host 192.168.1.100 -type track
+go run main.go -host 192.0.2.100 -type track
 
 # Show statistics only
-go run main.go -host 192.168.1.100 -stats
+go run main.go -host 192.0.2.100 -stats
 
 # Combined filters with custom limit
-go run main.go -host 192.168.1.100 -source LOCAL_MUSIC -type track -limit 5 -detailed
+go run main.go -host 192.0.2.100 -source LOCAL_MUSIC -type track -limit 5 -detailed
 ```
 
 ## Command Line Options
@@ -49,7 +49,7 @@ go run main.go -host 192.168.1.100 -source LOCAL_MUSIC -type track -limit 5 -det
 
 ### Basic Listing
 ```
-Getting recent items from 192.168.1.100
+Getting recent items from 192.0.2.100
 
 📊 Recent Items Summary:
    Showing: 5 items (of 15 total)
@@ -146,31 +146,31 @@ Overall Statistics:
 ### 1. Recently Played Music Discovery
 ```bash
 # Find recently played Spotify tracks
-go run main.go -host 192.168.1.100 -source SPOTIFY -type track -detailed
+go run main.go -host 192.0.2.100 -source SPOTIFY -type track -detailed
 ```
 
 ### 2. Radio Station History
 ```bash
 # See what radio stations were recently played
-go run main.go -host 192.168.1.100 -type station -detailed
+go run main.go -host 192.0.2.100 -type station -detailed
 ```
 
 ### 3. Content Analytics
 ```bash
 # Get detailed listening statistics
-go run main.go -host 192.168.1.100 -stats
+go run main.go -host 192.0.2.100 -stats
 ```
 
 ### 4. Preset Candidates
 ```bash
 # Find content that can be saved as presets
-go run main.go -host 192.168.1.100 -type presetable -limit 6
+go run main.go -host 192.0.2.100 -type presetable -limit 6
 ```
 
 ### 5. Local vs Streaming Analysis
 ```bash
 # Compare local vs streaming content usage
-go run main.go -host 192.168.1.100 -stats
+go run main.go -host 192.0.2.100 -stats
 ```
 
 ## API Integration
@@ -231,12 +231,12 @@ go run main.go -host 192.168.255.255
 # Output: Failed to get recent items: connection timeout
 
 # Test with unknown source
-go run main.go -host 192.168.1.100 -source UNKNOWN
+go run main.go -host 192.0.2.100 -source UNKNOWN
 # Output: 📭 No items found for source: UNKNOWN
 #         💡 Available sources: SPOTIFY, LOCAL_MUSIC, TUNEIN
 
 # Test with unknown type
-go run main.go -host 192.168.1.100 -type unknown
+go run main.go -host 192.0.2.100 -type unknown
 # Output: ❌ Unknown type filter: unknown
 #         💡 Available types: track, station, playlist, album, presetable
 ```
@@ -259,16 +259,16 @@ This recents data is useful for:
 
 ```bash
 # List recent items using CLI
-soundtouch-cli --host 192.168.1.100 recents list
+soundtouch-cli --host 192.0.2.100 recents list
 
 # Filter recent items by source
-soundtouch-cli --host 192.168.1.100 recents filter --source SPOTIFY
+soundtouch-cli --host 192.0.2.100 recents filter --source SPOTIFY
 
 # Get recent items statistics
-soundtouch-cli --host 192.168.1.100 recents stats
+soundtouch-cli --host 192.0.2.100 recents stats
 
 # Show most recent item only
-soundtouch-cli --host 192.168.1.100 recents latest
+soundtouch-cli --host 192.0.2.100 recents latest
 ```
 
 ## API Documentation

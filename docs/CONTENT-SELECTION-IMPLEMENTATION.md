@@ -197,12 +197,12 @@ err := client.SelectContentItem(contentItem)
 ### CLI Usage
 ```bash
 # streamUrl format
-soundtouch-cli --host 192.168.1.100 source internet-radio \
+soundtouch-cli --host 192.0.2.100 source internet-radio \
   --location "http://contentapi.gmuth.de/station.php?name=MyStation&streamUrl=https://stream.example.com/radio" \
   --name "My Station"
 
 # Direct stream
-soundtouch-cli --host 192.168.1.100 source internet-radio \
+soundtouch-cli --host 192.0.2.100 source internet-radio \
   --location "https://stream.example.com/radio" \
   --name "Direct Stream"
 ```

@@ -16,7 +16,7 @@ The SoundTouch device can store credentials for various music streaming services
 1. Update the device IP address in `main.go`:
    ```go
    config := &client.Config{
-       Host:    "192.168.1.100", // Replace with your device IP
+       Host:    "192.0.2.100", // Replace with your device IP
        Port:    8090,
        Timeout: 10 * time.Second,
    }
@@ -102,15 +102,15 @@ After setting up accounts programmatically, you can also manage them via the CLI
 
 ```bash
 # List configured accounts
-soundtouch-cli --host 192.168.1.10 account list
+soundtouch-cli --host 192.0.2.10 account list
 
 # Add accounts via CLI
-soundtouch-cli --host 192.168.1.10 account add-spotify --user user@spotify.com --password mypass
-soundtouch-cli --host 192.168.1.10 account add-pandora --user pandora_user --password pandora_pass
-soundtouch-cli --host 192.168.1.10 account add-nas --user "guid/0" --name "My NAS"
+soundtouch-cli --host 192.0.2.10 account add-spotify --user user@spotify.com --password mypass
+soundtouch-cli --host 192.0.2.10 account add-pandora --user pandora_user --password pandora_pass
+soundtouch-cli --host 192.0.2.10 account add-nas --user "guid/0" --name "My NAS"
 
 # Remove accounts
-soundtouch-cli --host 192.168.1.10 account remove-spotify --user user@spotify.com
+soundtouch-cli --host 192.0.2.10 account remove-spotify --user user@spotify.com
 ```
 
 ## Network Music Libraries

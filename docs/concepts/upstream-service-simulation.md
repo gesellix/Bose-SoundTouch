@@ -138,7 +138,7 @@ data/
     "serial_number": "I6332527703739342000020",
     "firmware_version": "4.8.1.25341.2677643.1597353330",
     "mac_address": "AA:BB:CC:DD:EE:FF",
-    "ip_address": "192.168.1.100",
+    "ip_address": "192.0.2.100",
     "last_seen": "2024-01-20T16:20:00Z",
     "is_legacy_id": false
   },
@@ -166,7 +166,7 @@ data/
 2024-01-20T16:15:30Z|volume_changed|websocket|{"volume":45,"muted":false}
 2024-01-20T16:16:00Z|preset_selected|websocket|{"preset":1,"source":"SPOTIFY","location":"spotify:track:123"}
 2024-01-20T16:18:00Z|disparity_detected|mirror|{"endpoint":"/v1/account/full","local_hash":"abc123","upstream_hash":"def456"}
-2024-01-20T16:20:00Z|device_online|discovery|{"ip":"192.168.1.100","method":"mdns"}
+2024-01-20T16:20:00Z|device_online|discovery|{"ip":"192.0.2.100","method":"mdns"}
 ```
 
 ### Disparity Log Format

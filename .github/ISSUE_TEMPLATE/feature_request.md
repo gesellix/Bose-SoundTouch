@@ -50,7 +50,7 @@ client.NewFeature(parameters)
 
 ```bash
 # CLI example
-soundtouch-cli --host 192.168.1.100 new-feature --param value
+soundtouch-cli --host 192.0.2.100 new-feature --param value
 ```
 
 **Priority**

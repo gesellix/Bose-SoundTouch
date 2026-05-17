@@ -177,8 +177,8 @@ server:
 
 soundtouch:
   device_hosts:
-    - "192.168.1.100"
-    - "192.168.1.101"
+    - "192.0.2.100"
+    - "192.0.2.101"
   discovery_timeout: "30s"
   request_timeout: "15s"
   max_retries: 3
@@ -820,7 +820,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DEVICE_HOSTS=192.168.1.100,192.168.1.101
+      - DEVICE_HOSTS=192.0.2.100,192.0.2.101
       - LOG_LEVEL=info
       - METRICS_ENABLED=true
     volumes:
@@ -927,7 +927,7 @@ kind: ConfigMap
 metadata:
   name: soundtouch-config
 data:
-  device_hosts: "192.168.1.100,192.168.1.101,192.168.1.102"
+  device_hosts: "192.0.2.100,192.0.2.101,192.0.2.102"
 ```
 
 #### Systemd Service

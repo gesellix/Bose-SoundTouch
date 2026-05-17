@@ -88,7 +88,7 @@ go build -o soundtouch-web
 ./soundtouch-web -port 8888
 
 # Connect to specific device
-./soundtouch-web -host 192.168.1.100
+./soundtouch-web -host 192.0.2.100
 ```
 
 ### Command Line Options

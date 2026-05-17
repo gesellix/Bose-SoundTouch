@@ -46,14 +46,14 @@ This example demonstrates the advanced content selection features of the Bose So
 go run main.go <device_ip>
 
 # Example
-go run main.go 192.168.1.100
+go run main.go 192.0.2.100
 ```
 
 ## Example Output
 
 ```
 🎵 SoundTouch Content Selection Example
-📱 Device: 192.168.1.100:8090
+📱 Device: 192.0.2.100:8090
 
 📻 Step 1: Demonstrating LOCAL_INTERNET_RADIO with streamUrl format...
   📡 Using streamUrl format with proxy server...
@@ -126,25 +126,25 @@ These API methods are also available via the CLI:
 
 ```bash
 # Internet radio with streamUrl format
-soundtouch-cli --host 192.168.1.100 source internet-radio \
+soundtouch-cli --host 192.0.2.100 source internet-radio \
   --location "http://contentapi.gmuth.de/station.php?name=MyStation&streamUrl=https://stream.example.com/radio" \
   --name "My Station" \
   --artwork "https://example.com/art.png"
 
 # Local music content
-soundtouch-cli --host 192.168.1.100 source local-music \
+soundtouch-cli --host 192.0.2.100 source local-music \
   --location "album:983" \
   --account "3f205110-4a57-4e91-810a-123456789012" \
   --name "Welcome to the New"
 
 # Stored music content
-soundtouch-cli --host 192.168.1.100 source stored-music \
+soundtouch-cli --host 192.0.2.100 source stored-music \
   --location "6_a2874b5d_4f83d999" \
   --account "d09708a1-5953-44bc-a413-123456789012/0" \
   --name "Christmas Album"
 
 # Generic content selection (advanced)
-soundtouch-cli --host 192.168.1.100 source content \
+soundtouch-cli --host 192.0.2.100 source content \
   --source LOCAL_INTERNET_RADIO \
   --location "https://stream.example.com/radio" \
   --name "My Stream" \

@@ -364,7 +364,7 @@ func main() {
 
 ```go
 func handleClientProxy(w http.ResponseWriter, r *http.Request) {
-    // Extract device IP from path: /api/client/192.168.1.100/now_playing
+    // Extract device IP from path: /api/client/192.0.2.100/now_playing
     pathParts := strings.Split(r.URL.Path, "/")
     if len(pathParts) < 5 {
         http.Error(w, "Invalid path", http.StatusBadRequest)

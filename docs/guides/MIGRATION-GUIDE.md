@@ -35,7 +35,7 @@ The repository ships a `docker-compose.yml` ready for this use case. Clone or do
 ```bash
 cp .env.example .env
 # Edit .env:
-#   SOUNDTOUCH_HOSTNAME=192.168.1.100   ← your server's address
+#   SOUNDTOUCH_HOSTNAME=192.0.2.100   ← your server's address
 #   SOUNDTOUCH_VERSION=v0.70.0          ← pin to a release tag instead of 'latest'
 docker compose up -d
 ```
@@ -82,7 +82,7 @@ Open `http://<server>:8000` and go to the **Settings** tab.
 
 ![AfterTouch Settings tab](../images/ui-settings.png)
 
-Set the **Target Domain** to the address your speakers can reach — for example `https://soundtouch.fritz.box` or `http://192.168.1.100:8000`. This must be the host's address on your local network, not `localhost`.
+Set the **Target Domain** to the address your speakers can reach — for example `https://soundtouch.fritz.box` or `http://192.0.2.100:8000`. This must be the host's address on your local network, not `localhost`.
 
 If you plan to use DNS/DHCP redirect, enable the **DNS Discovery Server** and set the **DNS Bind Address** to `:53`. The upstream DNS should be your router's IP, not the service's own address.
 
@@ -224,12 +224,12 @@ If you prefer scripting the migration, or the wizard isn't an option (headless s
 
 ```bash
 # 1. Plan what the reset+pair pipeline will write (dry run, no changes yet).
-soundtouch-cli --host 192.168.1.50 setup plan \
+soundtouch-cli --host 192.0.2.50 setup plan \
   --reset=true --include-pair=false \
   --service-url='https://soundtouch.local'
 
 # 2. Trigger the factory reset. The speaker reboots into AP mode.
-soundtouch-cli --host 192.168.1.50 setup factory-reset
+soundtouch-cli --host 192.0.2.50 setup factory-reset
 
 # --- Manual step: join the speaker's Wi-Fi AP (SSID "Bose SoundTouch ...") ---
 
@@ -252,7 +252,7 @@ soundtouch-cli setup wait-online --match=42CAFE
 #    --mode=full runs the canonical WebSocket SETUP sequence (matches the
 #    Bose app's flow); --account is the 7-digit account ID AfterTouch
 #    should attach the speaker to.
-soundtouch-cli --host 192.168.1.50 setup pair \
+soundtouch-cli --host 192.0.2.50 setup pair \
   --mode=full --account=1111111 \
   --service-url='https://soundtouch.local'
 ```

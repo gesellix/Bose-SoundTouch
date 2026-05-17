@@ -95,17 +95,17 @@ This Go implementation provides **complete coverage** of the Bose SoundTouch Web
 **Official Low-Level API:**
 ```go
 // Individual slave operations (exact official API implementation)
-client.AddZoneSlave("MASTER123", "SLAVE456", "192.168.1.101")
-client.RemoveZoneSlave("MASTER123", "SLAVE456", "192.168.1.101")
+client.AddZoneSlave("MASTER123", "SLAVE456", "192.0.2.101")
+client.RemoveZoneSlave("MASTER123", "SLAVE456", "192.0.2.101")
 ```
 
 **Enhanced High-Level API:**
 ```go
 // High-level fluent API (enhanced implementation)
-zone := client.CreateZoneWithIPs("192.168.1.100", []string{"192.168.1.101", "192.168.1.102"})
-client.AddToZone("192.168.1.100", "192.168.1.103")
-client.RemoveFromZone("192.168.1.100", "192.168.1.101")
-client.DissolveZone("192.168.1.100")
+zone := client.CreateZoneWithIPs("192.0.2.100", []string{"192.0.2.101", "192.0.2.102"})
+client.AddToZone("192.0.2.100", "192.0.2.103")
+client.RemoveFromZone("192.0.2.100", "192.0.2.101")
+client.DissolveZone("192.0.2.100")
 ```
 
 **Advantages:**
