@@ -2588,7 +2588,12 @@ func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
 	var servicePresets []models.ServicePreset
 
 	for _, p := range ps.Preset {
-		if p.ContentItem == nil {
+		// IsEmpty catches both placeholder shapes a SoundTouch device
+		// can emit: self-closing <preset/> (issue #308) and
+		// <ContentItem source="INVALID_SOURCE"/>. Neither carries
+		// real playable data and persisting them would surface as
+		// junk entries in the admin web UI.
+		if p.IsEmpty() {
 			continue
 		}
 

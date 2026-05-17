@@ -177,23 +177,36 @@ func getPresets(c *cli.Context) error {
 
 	fmt.Printf("Device Presets:\n")
 
-	if len(presets.Preset) == 0 {
+	// Filter out placeholder presets the firmware emits for unconfigured
+	// slots (issue #308): self-closing <preset/> after factory reset,
+	// or <ContentItem source="INVALID_SOURCE"/> on healthy devices.
+	// IsEmpty covers both shapes; accessing fields like ContentItem.Source
+	// directly on the first shape panics.
+	configured := make([]models.Preset, 0, len(presets.Preset))
+
+	for _, p := range presets.Preset {
+		if !p.IsEmpty() {
+			configured = append(configured, p)
+		}
+	}
+
+	if len(configured) == 0 {
 		fmt.Printf("  No presets configured\n")
 		return nil
 	}
 
 	fmt.Printf("  Configured Presets:\n")
 
-	for _, preset := range presets.Preset {
+	for _, preset := range configured {
 		fmt.Printf("    %d. %s\n", preset.ID, preset.GetDisplayName())
-		fmt.Printf("       Source: %s\n", preset.ContentItem.Source)
+		fmt.Printf("       Source: %s\n", preset.GetSource())
 
-		if preset.ContentItem.SourceAccount != "" && preset.ContentItem.SourceAccount != preset.ContentItem.Source {
-			fmt.Printf("       Account: %s\n", preset.ContentItem.SourceAccount)
+		if account := preset.GetSourceAccount(); account != "" && account != preset.GetSource() {
+			fmt.Printf("       Account: %s\n", account)
 		}
 
-		if preset.ContentItem.Location != "" {
-			fmt.Printf("       Location: %s\n", preset.ContentItem.Location)
+		if location := preset.GetLocation(); location != "" {
+			fmt.Printf("       Location: %s\n", location)
 		}
 
 		// Show preset creation time if available

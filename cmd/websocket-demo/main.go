@@ -355,9 +355,11 @@ func handlePreset(event *models.PresetUpdatedEvent, verbose bool) {
 	for _, preset := range presets.Preset {
 		fmt.Printf("  📻 Preset %d:", preset.ID)
 
-		if preset.ContentItem != nil {
-			fmt.Printf(" %s", preset.ContentItem.ItemName)
-			fmt.Printf(" (%s)", preset.ContentItem.Source)
+		// IsEmpty catches both <preset/> and INVALID_SOURCE
+		// placeholders; using the nil-safe helpers below means the
+		// inner Printf never dereferences a nil ContentItem.
+		if !preset.IsEmpty() {
+			fmt.Printf(" %s (%s)", preset.GetDisplayName(), preset.GetSource())
 		}
 
 		fmt.Println()

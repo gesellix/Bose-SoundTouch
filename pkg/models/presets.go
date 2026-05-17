@@ -71,9 +71,25 @@ func (p *Preset) IsSpotifyPreset() bool {
 	return p.ContentItem != nil && p.ContentItem.Source == "SPOTIFY"
 }
 
-// IsEmpty returns true if the preset has no content
+// IsEmpty returns true if the preset has no playable content. Two
+// placeholder shapes are observed in the wild and both count as empty:
+//
+//   - <preset/> (or <preset id="0"/>) — no ContentItem child at all.
+//     Emitted by some firmware after a factory reset (issue #308).
+//   - <preset id="0"><ContentItem source="INVALID_SOURCE" isPresetable="true"/></preset>
+//     — a placeholder ContentItem the firmware uses for unconfigured
+//     slots, observed on FW 27.0.6 even on devices that were never
+//     reset.
+//
+// Treating both as empty keeps GetEmptyPresetSlots, GetUsedPresetSlots
+// and HasPresets honest, and lets callers safely skip placeholders
+// before formatting a preset for display.
 func (p *Preset) IsEmpty() bool {
-	return p.ContentItem == nil
+	if p.ContentItem == nil {
+		return true
+	}
+
+	return p.ContentItem.Source == "" || p.ContentItem.Source == "INVALID_SOURCE"
 }
 
 // GetSource returns the source of the preset content

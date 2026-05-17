@@ -96,22 +96,38 @@ func showCurrentPresets(c *client.Client) error {
 		return err
 	}
 
-	if len(presets.Preset) == 0 {
+	// Filter out placeholder presets (issue #308): self-closing
+	// <preset/> entries from a factory-reset device and
+	// INVALID_SOURCE placeholders from healthy devices both panic if
+	// their fields are dereferenced directly.
+	configured := make([]models.Preset, 0, len(presets.Preset))
+
+	for _, p := range presets.Preset {
+		if !p.IsEmpty() {
+			configured = append(configured, p)
+		}
+	}
+
+	if len(configured) == 0 {
 		fmt.Println("  📭 No presets configured")
 		return nil
 	}
 
-	fmt.Printf("  📻 Found %d configured presets:\n", len(presets.Preset))
-	for _, preset := range presets.Preset {
+	fmt.Printf("  📻 Found %d configured presets:\n", len(configured))
+
+	for _, preset := range configured {
 		fmt.Printf("    %d. %s\n", preset.ID, preset.GetDisplayName())
-		fmt.Printf("       Source: %s\n", preset.ContentItem.Source)
-		if preset.ContentItem.Location != "" {
-			fmt.Printf("       Location: %s\n", preset.ContentItem.Location)
+		fmt.Printf("       Source: %s\n", preset.GetSource())
+
+		if location := preset.GetLocation(); location != "" {
+			fmt.Printf("       Location: %s\n", location)
 		}
+
 		if preset.CreatedOn != nil && *preset.CreatedOn != 0 {
 			createdTime := time.Unix(*preset.CreatedOn, 0)
 			fmt.Printf("       Created: %s\n", createdTime.Format("2006-01-02 15:04:05"))
 		}
+
 		fmt.Println()
 	}
 
