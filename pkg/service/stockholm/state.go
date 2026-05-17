@@ -65,9 +65,8 @@ func (s *NativeState) SeedFromEnv(cfg *Config) {
 		updates["margeAccountID"] = v
 	}
 
-	// Default constant
 	if s.Get("constant.kilo") == "" {
-		updates["constant.kilo"] = "a7928d7b43dcd49f0af31e5aeed26458"
+		updates["constant.kilo"] = kiloDefaultValue
 	}
 
 	// First-run defaults that require a persisted value

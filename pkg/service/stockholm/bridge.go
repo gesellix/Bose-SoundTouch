@@ -140,7 +140,7 @@ func (b *Bridge) dispatch(clientID string, req appSendRequest) {
 		val := b.state.Get("constant." + name)
 
 		if val == "" && name == "kilo" {
-			val = "a7928d7b43dcd49f0af31e5aeed26458"
+			val = kiloDefaultValue
 		}
 
 		b.enqueueResult(clientID, id, val, "")
