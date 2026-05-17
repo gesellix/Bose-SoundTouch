@@ -4,26 +4,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/gesellix/bose-soundtouch/pkg/client"
-	"github.com/gesellix/bose-soundtouch/pkg/config"
-	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
-	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 	"github.com/urfave/cli/v2"
 )
-
-// staticFS is sourced from the soundtouchweb package's embedded
-// filesystem. The static assets relocated alongside the handlers in
-// the relocation commit; the binary just consumes them.
-var staticFS = soundtouchweb.StaticFS
 
 func main() {
 	app := &cli.App{
@@ -82,22 +72,7 @@ func main() {
 			// Create web app without templates (SPA mode)
 			webApp := soundtouchweb.NewWebApp()
 
-			// Initialize discovery service
-			cfg, err := config.LoadFromEnv()
-			if err != nil {
-				log.Printf("Failed to load config: %v, using defaults", err)
-
-				cfg = config.DefaultConfig()
-			}
-
-			cfg.DiscoveryTimeout = 10 * time.Second
-			cfg.CacheEnabled = true
-
-			if ifaceName != "" {
-				cfg.DiscoveryInterface = ifaceName
-			}
-
-			discoveryService := discovery.NewUnifiedDiscoveryService(cfg)
+			discoveryService := soundtouchweb.NewDiscoveryService(ifaceName)
 
 			// Discover devices on startup
 			go func() {
@@ -107,16 +82,17 @@ func main() {
 				webApp.BroadcastDiscoveryStatus("starting", webApp.DeviceCount())
 
 				for _, host := range manualHosts {
-					addDevice(webApp, host, 8090, "manual")
+					webApp.AddDeviceByHost(host, 8090, "manual")
 				}
 
-				discoverDevices(ctx, webApp, discoveryService)
+				webApp.DiscoverDevices(ctx, discoveryService)
 
 				webApp.BroadcastDiscoveryStatus("completed", webApp.DeviceCount())
 				webApp.BroadcastDeviceList()
 			}()
 
-			r := setupRoutes(webApp, discoveryService)
+			r := chi.NewRouter()
+			webApp.Mount(r, discoveryService)
 
 			log.Printf("SoundTouch Web UI starting on http://%s", addr)
 
@@ -208,125 +184,5 @@ func resolveBindAddr(bindAddr string) (string, error) {
 		return "", fmt.Errorf("--bind %q: interface has multiple IPv6 addresses (%v); specify one directly", bindAddr, ipv6)
 	default:
 		return "", fmt.Errorf("--bind %q: interface has no usable IPv4 or IPv6 address", bindAddr)
-	}
-}
-
-// addDevice registers a SoundTouch device with the WebApp by fetching
-// its /info and creating a DeviceConnection. The source label
-// ("manual" or "discovered") appears in log lines so the operator can
-// tell apart entries that came from --devices from those found via
-// mDNS/UPnP. If the host is already known, the existing entry's
-// LastSeen is bumped and the function returns without re-fetching.
-func addDevice(app *soundtouchweb.WebApp, host string, port int, source string) {
-	// Fast path: skip the network call if we already know this host.
-	if app.TouchDevice(host) {
-		return
-	}
-
-	c := client.NewClient(&client.Config{
-		Host:    host,
-		Port:    port,
-		Timeout: 10 * time.Second,
-	})
-
-	info, err := c.GetDeviceInfo()
-	if err != nil {
-		log.Printf("Failed to fetch device info from %s (%s): %v", host, source, err)
-		return
-	}
-
-	conn := webtypes.NewDeviceConnection(c, info)
-	if !app.AddDevice(host, conn) {
-		// Lost a race — another goroutine inserted the same host
-		// between TouchDevice and AddDevice. AddDevice bumped LastSeen
-		// on the existing entry; discard our conn.
-		return
-	}
-
-	go app.UpdateDeviceStatus(host, conn)
-
-	log.Printf("Added %s device %s (%s) at %s:%d", source, info.Name, info.Type, host, port)
-}
-
-func setupRoutes(app *soundtouchweb.WebApp, discoveryService *discovery.UnifiedDiscoveryService) *chi.Mux {
-	r := chi.NewRouter()
-
-	// Static assets (embedded in binary)
-	subFS, _ := fs.Sub(staticFS, "static")
-	r.Get("/static/*", http.StripPrefix("/static", http.FileServer(http.FS(subFS))).ServeHTTP)
-
-	// Serve index.html for SPA routes
-	serveIndex := func(w http.ResponseWriter, _ *http.Request) {
-		data, _ := staticFS.ReadFile("static/index.html")
-
-		w.Header().Set("Content-Type", "text/html")
-		_, _ = w.Write(data)
-	}
-
-	// WebSocket endpoint
-	r.Get("/ws", app.HandleWebSocket)
-
-	// API endpoints
-	r.Get("/api/devices", app.HandleAPIDevices)
-	r.Get("/api/device/{id}", app.HandleAPIDevice)
-	r.Post("/api/discover", func(w http.ResponseWriter, r *http.Request) {
-		app.HandleAPIDiscover(w, r)
-		// Trigger discovery
-		//nolint:contextcheck // Context is created within goroutine
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			// Broadcast discovery start
-			app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
-
-			discoverDevices(ctx, app, discoveryService)
-
-			// Broadcast discovery completion and updated device list
-			app.BroadcastDiscoveryStatus("completed", app.DeviceCount())
-			app.BroadcastDeviceList()
-		}()
-	})
-
-	// Device control endpoints (GET for most actions, POST for volume/bass)
-	r.Get("/api/control/{id}/{action}", app.HandleAPIControl)
-	r.Post("/api/control/{id}/{action}", app.HandleAPIControl)
-
-	// TuneIn browse, search, and playback
-	r.Get("/api/tunein/search", app.HandleTuneInSearch)
-	r.Get("/api/tunein/navigate", app.HandleTuneInNavigate)
-	r.Get("/api/tunein/navigate/*", app.HandleTuneInNavigate)
-	r.Post("/api/tunein/play/{id}", app.HandlePlayTuneIn)
-
-	// Enhanced device control endpoints
-	r.Post("/api/device-key/{id}/{key}", app.HandleDeviceKey)
-	r.Post("/api/device-volume/{id}/{volume}", app.HandleDirectVolumeControl)
-	r.Post("/api/device-power/{id}", app.HandleDevicePower)
-	r.Get("/api/device-power-status/{id}", app.HandleDevicePowerStatus)
-	r.Get("/api/device-ws/{id}", app.HandleDeviceWebSocket)
-
-	// SPA routes - serve index.html for client-side routing
-	r.Get("/", serveIndex)
-	r.Get("/devices", serveIndex)
-	r.Get("/device/*", serveIndex)
-
-	return r
-}
-
-func discoverDevices(ctx context.Context, app *soundtouchweb.WebApp, discoveryService *discovery.UnifiedDiscoveryService) {
-	log.Println("Starting device discovery...")
-
-	devices, err := discoveryService.DiscoverDevices(ctx)
-	if err != nil {
-		log.Printf("Discovery failed: %v", err)
-		app.BroadcastDiscoveryStatus("failed", app.DeviceCount())
-
-		return
-	}
-
-	log.Printf("Found %d devices", len(devices))
-
-	for _, device := range devices {
-		addDevice(app, device.Host, device.Port, "discovered")
 	}
 }
