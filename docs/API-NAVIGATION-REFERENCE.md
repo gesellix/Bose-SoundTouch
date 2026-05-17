@@ -143,7 +143,7 @@ Browse stored/local music library.
 
 **Example:**
 ```go
-library, err := client.GetStoredMusicLibrary("A81B6A536A98/0")
+library, err := client.GetStoredMusicLibrary("AABBCCDDEEFF/0")
 ```
 
 **Validation:**
@@ -526,7 +526,7 @@ Search for stations and content.
 
 **Response Body:**
 ```xml
-<results deviceID="A81B6A536A98" source="PANDORA" sourceAccount="user123">
+<results deviceID="AABBCCDDEEFF" source="PANDORA" sourceAccount="user123">
   <songs>
     <searchResult source="PANDORA" sourceAccount="user123" token="S123">
       <name>Love Story</name>
@@ -707,7 +707,7 @@ Navigation and station operations generate WebSocket events:
 Generated when stations are added/removed that affect presets.
 
 ```xml
-<presetsUpdated deviceID="A81B6A536A98">
+<presetsUpdated deviceID="AABBCCDDEEFF">
   <presets>
     <!-- Updated preset list -->
   </presets>
@@ -719,7 +719,7 @@ Generated when stations are added/removed that affect presets.
 Generated when station operations affect current playback.
 
 ```xml
-<nowPlayingUpdated deviceID="A81B6A536A98">
+<nowPlayingUpdated deviceID="AABBCCDDEEFF">
   <nowPlaying source="PANDORA">
     <ContentItem source="PANDORA" location="R456" sourceAccount="user123" isPresetable="true">
       <itemName>Taylor Swift Radio</itemName>

@@ -94,7 +94,7 @@ go run . 192.168.1.100
   💾 Storing test preset 4 to trigger event...
   ⏳ Waiting 3 seconds for WebSocket event...
   📡 Preset Update Event Received!
-      Device: A81B6A536A98
+      Device: AABBCCDDEEFF
       Presets count: 4
       - Preset 1: Morning Jazz (SPOTIFY)
       - Preset 2: K-LOVE Radio (TUNEIN)

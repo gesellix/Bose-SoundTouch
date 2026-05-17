@@ -23,7 +23,7 @@ The `/power_on` endpoint provides rich device data that could eliminate network 
 ### Current /power_on Data
 ```xml
 <device-data>
-    <device id="A81B6A536A98">                          <!-- ✅ Device MAC -->
+    <device id="AABBCCDDEEFF">                          <!-- ✅ Device MAC -->
         <serialnumber>I6332527703739342000020</serialnumber>   <!-- ✅ Serial -->
         <firmware-version>27.0.6.46330.5043500...</firmware-version> <!-- ✅ FW -->
         <product product_code="SoundTouch 10 sm2" type="5">    <!-- ✅ Model -->
@@ -35,8 +35,8 @@ The `/power_on` endpoint provides rich device data that could eliminate network 
             <rssi>Excellent</rssi>                              <!-- ✅ Signal -->
             <gateway-ip-address>192.0.2.1</gateway-ip-address> <!-- ✅ Network -->
             <macaddresses>                                       <!-- ✅ All MACs -->
-                <macaddress>A81B6A536A98</macaddress>
-                <macaddress>A81B6A849D99</macaddress>
+                <macaddress>AABBCCDDEEFF</macaddress>
+                <macaddress>AABBCCDDEE01</macaddress>
             </macaddresses>
             <ip-address>192.0.2.10</ip-address>            <!-- ✅ Current IP -->
             <network-connection-type>Wireless</network-connection-type> <!-- ✅ Connection -->

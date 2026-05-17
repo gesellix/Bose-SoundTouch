@@ -6,7 +6,7 @@ This document provides a comprehensive analysis of the `/supportedURLs` endpoint
 
 **Test Devices:**
 - Device 1: `192.0.2.11:8090` (deviceID: `08DF1F0BA325`)
-- Device 2: `192.0.2.10:8090` (deviceID: `A81B6A536A98`)
+- Device 2: `192.0.2.10:8090` (deviceID: `AABBCCDDEEFF`)
 
 **Key Findings:**
 - Both devices return identical endpoint lists

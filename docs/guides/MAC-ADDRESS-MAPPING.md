@@ -8,7 +8,7 @@ This guide explains how the SoundTouch service handles device identification thr
 
 The SoundTouch service uses two different identifiers for devices:
 
-- **MAC Address** (`A81B6A536A98`) - Used in HTTP API requests and UPnP discovery
+- **MAC Address** (`AABBCCDDEEFF`) - Used in HTTP API requests and UPnP discovery
 - **Serial Number** (`I6332527703739342000020`) - Used for internal file storage
 
 The service automatically maps between these identifiers so that API requests using MAC addresses can access files stored using serial numbers.
@@ -17,8 +17,8 @@ The service automatically maps between these identifiers so that API requests us
 
 ### Request Flow
 ```
-1. HTTP Request: GET /streaming/account/3230304/device/A81B6A536A98/presets
-2. MAC Resolution: A81B6A536A98 → I6332527703739342000020
+1. HTTP Request: GET /streaming/account/3230304/device/AABBCCDDEEFF/presets
+2. MAC Resolution: AABBCCDDEEFF → I6332527703739342000020
 3. File Access: accounts/3230304/devices/I6332527703739342000020/Presets.xml
 ```
 
@@ -26,12 +26,12 @@ The service automatically maps between these identifiers so that API requests us
 The service extracts MAC addresses from UPnP device descriptions:
 
 ```xml
-<!-- From http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-A81B6A536A98.xml -->
+<!-- From http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml -->
 <root xmlns="urn:schemas-upnp-org:device-1-0">
     <device>
         <friendlyName>Sound Machinery</friendlyName>
         <modelName>SoundTouch 10</modelName>
-        <serialNumber>A81B6A536A98</serialNumber>  <!-- MAC address here -->
+        <serialNumber>AABBCCDDEEFF</serialNumber>  <!-- MAC address here -->
     </device>
 </root>
 ```
@@ -51,12 +51,12 @@ The service handles all common MAC address formats automatically:
 
 | Format      | Example             | Status      |
 |-------------|---------------------|-------------|
-| Standard    | `A81B6A536A98`      | ✅ Supported |
+| Standard    | `AABBCCDDEEFF`      | ✅ Supported |
 | Lowercase   | `a81b6a536a98`      | ✅ Supported |
-| With Colons | `A8:1B:6A:53:6A:98` | ✅ Supported |
+| With Colons | `AA:BB:CC:DD:EE:FF` | ✅ Supported |
 | With Dashes | `A8-1B-6A-53-6A-98` | ✅ Supported |
 | Mixed Case  | `a81B6a536A98`      | ✅ Supported |
-| With Spaces | ` A81B6A536A98 `    | ✅ Supported |
+| With Spaces | ` AABBCCDDEEFF `    | ✅ Supported |
 
 ## 🔧 **Troubleshooting**
 
@@ -64,9 +64,9 @@ The service handles all common MAC address formats automatically:
 
 **Symptoms:**
 ```
-GET /streaming/account/3230304/device/A81B6A536A98/presets
+GET /streaming/account/3230304/device/AABBCCDDEEFF/presets
 → 500 Internal Server Error
-→ Log: "open .../devices/A81B6A536A98/Presets.xml: no such file or directory"
+→ Log: "open .../devices/AABBCCDDEEFF/Presets.xml: no such file or directory"
 ```
 
 **Diagnosis:**
@@ -96,7 +96,7 @@ Ensure the MAC address is present:
 ```xml
 <info deviceID="I6332527703739342000020">
     <networkInfo type="SCM">
-        <macAddress>A81B6A536A98</macAddress>  <!-- Must be present -->
+        <macAddress>AABBCCDDEEFF</macAddress>  <!-- Must be present -->
         <ipAddress>192.0.2.10</ipAddress>
     </networkInfo>
 </info>
@@ -114,7 +114,7 @@ cat > data/accounts/3230304/devices/I6332527703739342000020/DeviceInfo.xml << EO
 <info deviceID="I6332527703739342000020">
     <name>My SoundTouch Device</name>
     <networkInfo type="SCM">
-        <macAddress>A81B6A536A98</macAddress>
+        <macAddress>AABBCCDDEEFF</macAddress>
         <ipAddress>192.168.1.100</ipAddress>
     </networkInfo>
 </info>
@@ -126,7 +126,7 @@ EOF
 **Check UPnP accessibility:**
 ```bash
 # Test UPnP endpoint directly
-curl http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-A81B6A536A98.xml
+curl http://192.168.1.100:8091/XD/BO5EBO5E-F00D-F00D-FEED-AABBCCDDEEFF.xml
 
 # Should return XML with <serialNumber> field
 ```
@@ -144,9 +144,9 @@ This should be handled automatically, but you can verify:
 **Test different formats:**
 ```bash
 # All of these should work the same:
-curl http://localhost:8000/streaming/account/3230304/device/A81B6A536A98/presets
+curl http://localhost:8000/streaming/account/3230304/device/AABBCCDDEEFF/presets
 curl http://localhost:8000/streaming/account/3230304/device/a81b6a536a98/presets
-curl http://localhost:8000/streaming/account/3230304/device/A8:1B:6A:53:6A:98/presets
+curl http://localhost:8000/streaming/account/3230304/device/AA:BB:CC:DD:EE:FF/presets
 ```
 
 ## 📊 **Monitoring and Diagnostics**
@@ -186,8 +186,8 @@ For developers interested in the technical details:
 // 1. Removing spaces, colons, and dashes
 // 2. Converting to uppercase
 // Examples:
-// "a8:1b:6a:53:6a:98" → "A81B6A536A98"
-// "A8-1B-6A-53-6A-98" → "A81B6A536A98"
+// "a8:1b:6a:53:6a:98" → "AABBCCDDEEFF"
+// "A8-1B-6A-53-6A-98" → "AABBCCDDEEFF"
 ```
 
 ### Lookup Process

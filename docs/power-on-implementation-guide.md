@@ -504,15 +504,15 @@ func TestHandleMargePowerOnEnhanced(t *testing.T) {
     }{
         {
             name: "new_device_registration",
-            requestBody: `<device-data><device id="A81B6A536A98">...</device></device-data>`,
+            requestBody: `<device-data><device id="AABBCCDDEEFF">...</device></device-data>`,
             existingDevice: nil,
             expectedStatus: "ok",
             expectMigration: false,
         },
         {
             name: "existing_device_update",
-            requestBody: `<device-data><device id="A81B6A536A98">...</device></device-data>`,
-            existingDevice: &models.ServiceDeviceInfo{DeviceID: "A81B6A536A98"},
+            requestBody: `<device-data><device id="AABBCCDDEEFF">...</device></device-data>`,
+            existingDevice: &models.ServiceDeviceInfo{DeviceID: "AABBCCDDEEFF"},
             expectedStatus: "ok",
             expectMigration: true,
         },

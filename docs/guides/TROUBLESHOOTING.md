@@ -1008,9 +1008,9 @@ Use this checklist to systematically troubleshoot issues:
 
 **Symptoms:**
 ```
-GET /streaming/account/3230304/device/A81B6A536A98/presets
+GET /streaming/account/3230304/device/AABBCCDDEEFF/presets
 → 500 Internal Server Error
-→ Log: "open .../devices/A81B6A536A98/Presets.xml: no such file or directory"
+→ Log: "open .../devices/AABBCCDDEEFF/Presets.xml: no such file or directory"
 ```
 
 **Cause:** The service uses MAC addresses in API requests but stores files using device serial numbers. A mapping system resolves MAC addresses to serial numbers automatically.
@@ -1026,7 +1026,7 @@ sudo systemctl restart soundtouch-service
 ```bash
 # Files should be stored by serial number, not MAC
 ls data/accounts/3230304/devices/
-# Should show: I6332527703739342000020/ (not A81B6A536A98/)
+# Should show: I6332527703739342000020/ (not AABBCCDDEEFF/)
 ```
 
 3. **Verify DeviceInfo.xml contains MAC address**:

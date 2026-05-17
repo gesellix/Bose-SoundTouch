@@ -111,7 +111,7 @@ data/
 
 ```json
 {
-  "device_id": "A81B6A536A98",
+  "device_id": "AABBCCDDEEFF",
   "account_id": "account-12345",
   "state": "active",
   "created_at": "2024-01-15T10:30:00Z",
@@ -137,7 +137,7 @@ data/
     "type": "SoundTouch 30",
     "serial_number": "I6332527703739342000020",
     "firmware_version": "4.8.1.25341.2677643.1597353330",
-    "mac_address": "A8:1B:6A:53:6A:98",
+    "mac_address": "AA:BB:CC:DD:EE:FF",
     "ip_address": "192.168.1.100",
     "last_seen": "2024-01-20T16:20:00Z",
     "is_legacy_id": false
@@ -159,7 +159,7 @@ data/
 ### Event Log Format
 
 ```
-# Device Events Log - A81B6A536A98
+# Device Events Log - AABBCCDDEEFF
 # Format: TIMESTAMP|EVENT_TYPE|SOURCE|DATA
 
 2024-01-20T16:15:00Z|now_playing|websocket|{"source":"SPOTIFY","track":"Song Name","artist":"Artist Name"}
@@ -175,9 +175,9 @@ data/
 # Parity Analysis Log
 # Format: TIMESTAMP|ENDPOINT|DEVICE|ACCOUNT|DISPARITY_TYPE|DETAILS
 
-2024-01-20T16:18:00Z|/v1/account/full|A81B6A536A98|account-12345|content_mismatch|preset_count:local=5,upstream=4
-2024-01-20T16:19:15Z|/v1/presets|A81B6A536A98|account-12345|xml_structure|missing_container_art_in_local
-2024-01-20T16:20:30Z|/v1/recents|A81B6A536A98|account-12345|timestamp_format|local=RFC3339,upstream=custom
+2024-01-20T16:18:00Z|/v1/account/full|AABBCCDDEEFF|account-12345|content_mismatch|preset_count:local=5,upstream=4
+2024-01-20T16:19:15Z|/v1/presets|AABBCCDDEEFF|account-12345|xml_structure|missing_container_art_in_local
+2024-01-20T16:20:30Z|/v1/recents|AABBCCDDEEFF|account-12345|timestamp_format|local=RFC3339,upstream=custom
 ```
 
 ## Implementation Strategy
@@ -268,7 +268,7 @@ POST /api/v1/accounts/{account-id}/devices
 Content-Type: application/json
 
 {
-  "device_id": "A81B6A536A98",
+  "device_id": "AABBCCDDEEFF",
   "name": "Living Room Speaker",
   "registration_type": "fresh"
 }

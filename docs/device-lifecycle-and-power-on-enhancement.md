@@ -169,7 +169,7 @@ The `/power_on` endpoint receives comprehensive device data that could replace m
 
 ```xml
 <device-data>
-    <device id="A81B6A536A98">
+    <device id="AABBCCDDEEFF">
         <serialnumber>I6332527703739342000020</serialnumber>
         <firmware-version>27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29</firmware-version>
         <product product_code="SoundTouch 10 sm2" type="5">
@@ -181,8 +181,8 @@ The `/power_on` endpoint receives comprehensive device data that could replace m
             <rssi>Excellent</rssi>
             <gateway-ip-address>192.0.2.1</gateway-ip-address>
             <macaddresses>
-                <macaddress>A81B6A536A98</macaddress>
-                <macaddress>A81B6A849D99</macaddress>
+                <macaddress>AABBCCDDEEFF</macaddress>
+                <macaddress>AABBCCDDEE01</macaddress>
             </macaddresses>
             <ip-address>192.0.2.10</ip-address>
             <network-connection-type>Wireless</network-connection-type>

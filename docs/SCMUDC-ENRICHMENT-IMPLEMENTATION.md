@@ -59,8 +59,8 @@ Based on analysis of recorded data:
 
 ### Before (Raw)
 ```http
-### POST /v1/scmudc/A81B6A536A98
-POST /v1/scmudc/A81B6A536A98
+### POST /v1/scmudc/AABBCCDDEEFF
+POST /v1/scmudc/AABBCCDDEEFF
 Host: events.api.bosecm.com
 ...
 
@@ -69,7 +69,7 @@ Host: events.api.bosecm.com
 
 ### After (Enriched)
 ```http
-### POST /v1/scmudc/A81B6A536A98
+### POST /v1/scmudc/AABBCCDDEEFF
 // Origin: Internal System (device)
 // Action: play-item
 // Command: Billie Eilish - bad guy (instrumental version)
@@ -87,7 +87,7 @@ Host: events.api.bosecm.com
 //     <itemName>Billie Eilish - bad guy (instrumental version)</itemName>
 //     <containerArt>https://i.scdn.co/image/ab67616d0000b273...</containerArt>
 // </ContentItem>
-POST /v1/scmudc/A81B6A536A98
+POST /v1/scmudc/AABBCCDDEEFF
 ...
 
 {% raw %}

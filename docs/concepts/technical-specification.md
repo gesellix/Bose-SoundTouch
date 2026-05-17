@@ -368,14 +368,14 @@ POST /api/v1/accounts/{account_id}/devices
 Content-Type: application/json
 
 {
-  "device_id": "A81B6A536A98",
+  "device_id": "AABBCCDDEEFF",
   "name": "Living Room Speaker",
   "registration_type": "fresh"
 }
 
 Response: 201 Created
 {
-  "device_id": "A81B6A536A98",
+  "device_id": "AABBCCDDEEFF",
   "account_id": "acc_12345",
   "state": "registering",
   "created_at": "2024-01-20T10:00:00Z"
@@ -388,7 +388,7 @@ GET /api/v1/accounts/{account_id}/devices/{device_id}/state
 
 Response: 200 OK
 {
-  "device_id": "A81B6A536A98",
+  "device_id": "AABBCCDDEEFF",
   "account_id": "acc_12345",
   "state": "active",
   "metadata": {
@@ -555,7 +555,7 @@ Response: 200 OK
 ```json
 {
   "version": "1.0",
-  "device_id": "A81B6A536A98",
+  "device_id": "AABBCCDDEEFF",
   "account_id": "acc_12345",
   "state": "active",
   "created_at": "2024-01-20T10:00:00Z",
@@ -585,7 +585,7 @@ Response: 200 OK
     "type": "SoundTouch 30",
     "serial_number": "I6332527703739342000020",
     "firmware_version": "4.8.1.25341.2677643.1597353330",
-    "mac_address": "A8:1B:6A:53:6A:98",
+    "mac_address": "AA:BB:CC:DD:EE:FF",
     "ip_address": "192.168.1.100",
     "last_seen": "2024-01-20T15:30:00Z",
     "is_legacy_id": false,
@@ -615,7 +615,7 @@ Response: 200 OK
 
 ### Event Log Format (events.log)
 ```
-# SoundTouch Service Event Log - Device A81B6A536A98
+# SoundTouch Service Event Log - Device AABBCCDDEEFF
 # Format: TIMESTAMP|EVENT_ID|EVENT_TYPE|SOURCE|DATA_JSON
 # Version: 1.0
 
@@ -632,8 +632,8 @@ Response: 200 OK
 # Format: TIMESTAMP|DISPARITY_ID|DEVICE_ID|ACCOUNT_ID|ENDPOINT|TYPE|SEVERITY|DETAILS_JSON
 # Version: 1.0
 
-2024-01-20T15:31:15.012Z|disp_12345|A81B6A536A98|acc_12345|/v1/presets|count_mismatch|medium|{"field_path":"preset_count","local_value":5,"upstream_value":4,"description":"Local has one additional preset"}
-2024-01-20T15:32:45.678Z|disp_12346|A81B6A536A98|acc_12345|/v1/recents|timestamp_format|low|{"field_path":"recent[0].utc_time","local_value":"2024-01-20T15:30:00Z","upstream_value":"1705761000","description":"Timestamp format difference"}
+2024-01-20T15:31:15.012Z|disp_12345|AABBCCDDEEFF|acc_12345|/v1/presets|count_mismatch|medium|{"field_path":"preset_count","local_value":5,"upstream_value":4,"description":"Local has one additional preset"}
+2024-01-20T15:32:45.678Z|disp_12346|AABBCCDDEEFF|acc_12345|/v1/recents|timestamp_format|low|{"field_path":"recent[0].utc_time","local_value":"2024-01-20T15:30:00Z","upstream_value":"1705761000","description":"Timestamp format difference"}
 2024-01-20T15:35:20.901Z|disp_12347|B92C7B647B09|acc_12345|/v1/account/full|structure_diff|high|{"field_path":"device[1].ip_address","local_value":"present","upstream_value":"missing","description":"IP address field missing in upstream response"}
 ```
 
@@ -925,12 +925,12 @@ type ServiceError struct {
 {
   "error": {
     "code": "DEVICE_NOT_FOUND",
-    "message": "Device with ID 'A81B6A536A98' not found in account 'acc_12345'",
+    "message": "Device with ID 'AABBCCDDEEFF' not found in account 'acc_12345'",
     "category": "validation",
     "timestamp": "2024-01-20T15:30:00Z",
     "context": {
       "account_id": "acc_12345",
-      "device_id": "A81B6A536A98",
+      "device_id": "AABBCCDDEEFF",
       "request_id": "req_67890"
     },
     "retryable": false,

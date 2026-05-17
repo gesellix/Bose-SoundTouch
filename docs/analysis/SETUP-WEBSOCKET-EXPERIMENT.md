@@ -178,7 +178,7 @@ One row per device tested. Once two devices on different firmware confirm the sa
 
 - Date: 2026-05-13
 - Firmware: 27.0.6.46330.5043500 (build epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29)
-- Model: SoundTouch 10 (deviceID A81B6A536A98)
+- Model: SoundTouch 10 (deviceID AABBCCDDEEFF)
 - Bare setMargeAccount accepted: **yes** — pre-/info margeAccountUUID="" → post-/info margeAccountUUID="1111111"
 - Persistence written: **yes** — device materialized 14-entry Sources.xml on its own
 - Survives reboot: **yes** — `setup inspect` after `setup reboot` shows margeAccountUUID still 1111111
