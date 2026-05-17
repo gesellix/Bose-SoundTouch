@@ -22,7 +22,7 @@ Content-Type: text/json; charset=utf-8
 Content-Length: 587
 Authorization: Bearer jGwEmFWr...
 
-{"envelope":{"monoTime":234906,"payloadProtocolVersion":"3.1","payloadType":"scmudc","protocolVersion":"1.0","time":"2026-02-25T23:03:14.976349+00:00","uniqueId":"AABBCCDDEEFF"},"payload":{"deviceInfo":{"boseID":"3230304","deviceID":"AABBCCDDEEFF","deviceType":"SoundTouch 10","serialNumber":"I6332527703739342000020","softwareVersion":"27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29","systemSerialNumber":"069231P63364828AE"},"events":[{"data":{"play-state":"PAUSE_STATE"},"monoTime":234904,"time":"2026-02-25T23:03:14.973466+00:00","type":"play-state-changed"}]}}
+{"envelope":{"monoTime":234906,"payloadProtocolVersion":"3.1","payloadType":"scmudc","protocolVersion":"1.0","time":"2026-02-25T23:03:14.976349+00:00","uniqueId":"AABBCCDDEEFF"},"payload":{"deviceInfo":{"boseID":"1000001","deviceID":"AABBCCDDEEFF","deviceType":"SoundTouch 10","serialNumber":"I6332527703739342000020","softwareVersion":"27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29","systemSerialNumber":"069231P63364828AE"},"events":[{"data":{"play-state":"PAUSE_STATE"},"monoTime":234904,"time":"2026-02-25T23:03:14.973466+00:00","type":"play-state-changed"}]}}
 
 {% raw %}
 > {%

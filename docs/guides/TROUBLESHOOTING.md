@@ -1008,7 +1008,7 @@ Use this checklist to systematically troubleshoot issues:
 
 **Symptoms:**
 ```
-GET /streaming/account/3230304/device/AABBCCDDEEFF/presets
+GET /streaming/account/1000001/device/AABBCCDDEEFF/presets
 → 500 Internal Server Error
 → Log: "open .../devices/AABBCCDDEEFF/Presets.xml: no such file or directory"
 ```
@@ -1025,13 +1025,13 @@ sudo systemctl restart soundtouch-service
 2. **Check device directory structure**:
 ```bash
 # Files should be stored by serial number, not MAC
-ls data/accounts/3230304/devices/
+ls data/accounts/1000001/devices/
 # Should show: I6332527703739342000020/ (not AABBCCDDEEFF/)
 ```
 
 3. **Verify DeviceInfo.xml contains MAC address**:
 ```bash
-cat data/accounts/3230304/devices/*/DeviceInfo.xml | grep macAddress
+cat data/accounts/1000001/devices/*/DeviceInfo.xml | grep macAddress
 ```
 
 **For detailed diagnosis and solutions**, see: [**MAC Address Mapping Guide**](MAC-ADDRESS-MAPPING.md)

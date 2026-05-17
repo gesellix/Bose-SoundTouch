@@ -39,7 +39,7 @@ The current system uses multiple data collection methods to build a complete dev
   <info deviceID="ABCD1234EFGH">
       <name>My SoundTouch Device</name>
       <type>SoundTouch 10</type>
-      <margeAccountUUID>3230304</margeAccountUUID>
+      <margeAccountUUID>1000001</margeAccountUUID>
       <components>
           <component>
               <componentCategory>SCM</componentCategory>

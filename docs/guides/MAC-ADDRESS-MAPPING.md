@@ -17,9 +17,9 @@ The service automatically maps between these identifiers so that API requests us
 
 ### Request Flow
 ```
-1. HTTP Request: GET /streaming/account/3230304/device/AABBCCDDEEFF/presets
+1. HTTP Request: GET /streaming/account/1000001/device/AABBCCDDEEFF/presets
 2. MAC Resolution: AABBCCDDEEFF → I6332527703739342000020
-3. File Access: accounts/3230304/devices/I6332527703739342000020/Presets.xml
+3. File Access: accounts/1000001/devices/I6332527703739342000020/Presets.xml
 ```
 
 ### UPnP Discovery Integration
@@ -64,7 +64,7 @@ The service handles all common MAC address formats automatically:
 
 **Symptoms:**
 ```
-GET /streaming/account/3230304/device/AABBCCDDEEFF/presets
+GET /streaming/account/1000001/device/AABBCCDDEEFF/presets
 → 500 Internal Server Error
 → Log: "open .../devices/AABBCCDDEEFF/Presets.xml: no such file or directory"
 ```
@@ -73,13 +73,13 @@ GET /streaming/account/3230304/device/AABBCCDDEEFF/presets
 1. Check if mapping exists:
    ```bash
    # Look for device directory
-   ls data/accounts/3230304/devices/
+   ls data/accounts/1000001/devices/
    # Should show serial numbers like: I6332527703739342000020
    ```
 
 2. Check DeviceInfo.xml:
    ```bash
-   cat data/accounts/3230304/devices/I6332527703739342000020/DeviceInfo.xml
+   cat data/accounts/1000001/devices/I6332527703739342000020/DeviceInfo.xml
    # Look for <macAddress> field
    ```
 
@@ -106,10 +106,10 @@ Ensure the MAC address is present:
 If the device was added manually, ensure proper structure:
 ```bash
 # Create device directory using serial number
-mkdir -p data/accounts/3230304/devices/I6332527703739342000020
+mkdir -p data/accounts/1000001/devices/I6332527703739342000020
 
 # Create DeviceInfo.xml with MAC address
-cat > data/accounts/3230304/devices/I6332527703739342000020/DeviceInfo.xml << EOF
+cat > data/accounts/1000001/devices/I6332527703739342000020/DeviceInfo.xml << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <info deviceID="I6332527703739342000020">
     <name>My SoundTouch Device</name>
@@ -144,9 +144,9 @@ This should be handled automatically, but you can verify:
 **Test different formats:**
 ```bash
 # All of these should work the same:
-curl http://localhost:8000/streaming/account/3230304/device/AABBCCDDEEFF/presets
-curl http://localhost:8000/streaming/account/3230304/device/a81b6a536a98/presets
-curl http://localhost:8000/streaming/account/3230304/device/AA:BB:CC:DD:EE:FF/presets
+curl http://localhost:8000/streaming/account/1000001/device/AABBCCDDEEFF/presets
+curl http://localhost:8000/streaming/account/1000001/device/a81b6a536a98/presets
+curl http://localhost:8000/streaming/account/1000001/device/AA:BB:CC:DD:EE:FF/presets
 ```
 
 ## 📊 **Monitoring and Diagnostics**
@@ -162,7 +162,7 @@ Ensure proper directory organization:
 ```
 data/
 └── accounts/
-    └── 3230304/
+    └── 1000001/
         └── devices/
             └── I6332527703739342000020/     # Serial number directory
                 ├── DeviceInfo.xml           # Contains MAC address

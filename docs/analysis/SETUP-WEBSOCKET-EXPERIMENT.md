@@ -192,13 +192,13 @@ One row per device tested. Once two devices on different firmware confirm the sa
 
 ### Appendix — SystemConfigurationDB.xml comparison
 
-Post-experiment we compared the device-written `/mnt/nv/BoseApp-Persistence/1/SystemConfigurationDB.xml` from the bare-paired speaker against two SSH backups taken from speakers originally paired by the official Bose app (account 3230304, devices `A_Sound_Machine` and `Sound_Machinechen`). The diff is much smaller than expected — only two fields differ, and neither is set by the pairing protocol itself:
+Post-experiment we compared the device-written `/mnt/nv/BoseApp-Persistence/1/SystemConfigurationDB.xml` from the bare-paired speaker against two SSH backups taken from speakers originally paired by the official Bose app (account 1000001, devices `A_Sound_Machine` and `Sound_Machinechen`). The diff is much smaller than expected — only two fields differ, and neither is set by the pairing protocol itself:
 
-| Field                    | Bare-paired (1111111)                      | Real-Bose-paired (3230304) | Set by                                                                                                    |
+| Field                    | Bare-paired (1111111)                      | Real-Bose-paired (1000001) | Set by                                                                                                    |
 |--------------------------|--------------------------------------------|----------------------------|-----------------------------------------------------------------------------------------------------------|
 | `DeviceName`             | `Bose SoundTouch 536A98` (factory default) | `Living Room SoundTouch`        | `name` WS message — only sent in `--mode=full`                                                            |
 | `AccountAssociatedEMail` | empty                                      | **empty**                  | Never populated, even by real Bose                                                                        |
-| `AccountUUID`            | `1111111`                                  | `3230304`                  | `setMargeAccount` — both paths set it                                                                     |
+| `AccountUUID`            | `1111111`                                  | `1000001`                  | `setMargeAccount` — both paths set it                                                                     |
 | `Locale`                 | empty                                      | **empty**                  | Never populated, even by real Bose                                                                        |
 | `acctMode`               | `global`                                   | `global`                   | Firmware-default; no protocol path observed to change it                                                  |
 | `isMultiDeviceAccount`   | `false`                                    | `true`                     | Derived from the cloud's `/streaming/account/{id}/full` response — count of `<devices>` > 1 flips it true |

@@ -86,7 +86,7 @@ All subsequent messages (except `selectLastWiFiSource`, see below) use this enve
 <info deviceID="{device_id}">
   <name>SoundTouch 10</name>
   <type>SoundTouch 10</type>
-  <margeAccountUUID>9569497</margeAccountUUID>   <!-- empty = unpaired -->
+  <margeAccountUUID>1000002</margeAccountUUID>   <!-- empty = unpaired -->
   <margeURL>https://streaming.bose.com</margeURL>
   ...
 </info>
@@ -165,7 +165,7 @@ The pairing flow uses a setup state machine on the device. States must be sent i
 
 The server also pushes several `sourcesUpdated` events after successful pairing.
 
-**`{accountId}`** — the numeric Bose account ID (e.g. `9569497`), obtainable from
+**`{accountId}`** — the numeric Bose account ID (e.g. `1000002`), obtainable from
 `GET /streaming/account/login` on soundtouch-service.
 
 **`{token}`** — a Bearer token issued by Bose authentication (or soundtouch-service).
@@ -515,7 +515,7 @@ running and authenticated):
 
 ## Source References
 
-- `bose-pairing-20260502-155542` — Session 1: initial pairing of SoundTouch 10 to account 9569497
+- `bose-pairing-20260502-155542` — Session 1: initial pairing of SoundTouch 10 to account 1000002
 - `bose-pairing-20260502-165549` — Session 2: re-pairing and full operation (TuneIn, Spotify, presets)
 - Raw WebSocket files: `scripts/android/mitm/{session}/mirror/{n}-websocket/*.txt`
 - Companion HTTP upgrade files: `scripts/android/mitm/{session}/mirror/{n}-*.http`
