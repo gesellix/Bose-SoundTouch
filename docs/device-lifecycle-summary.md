@@ -33,12 +33,12 @@ The `/power_on` endpoint provides rich device data that could eliminate network 
     <diagnostic-data>
         <device-landscape>
             <rssi>Excellent</rssi>                              <!-- ✅ Signal -->
-            <gateway-ip-address>192.168.178.1</gateway-ip-address> <!-- ✅ Network -->
+            <gateway-ip-address>192.0.2.1</gateway-ip-address> <!-- ✅ Network -->
             <macaddresses>                                       <!-- ✅ All MACs -->
                 <macaddress>A81B6A536A98</macaddress>
                 <macaddress>A81B6A849D99</macaddress>
             </macaddresses>
-            <ip-address>192.168.178.35</ip-address>            <!-- ✅ Current IP -->
+            <ip-address>192.0.2.10</ip-address>            <!-- ✅ Current IP -->
             <network-connection-type>Wireless</network-connection-type> <!-- ✅ Connection -->
         </device-landscape>
     </diagnostic-data>

@@ -107,10 +107,10 @@ Backs up each speaker over its HTTP API on port 8090. With `--ssh`, also capture
 soundtouch-backup local
 
 # Specific speaker
-soundtouch-backup local --host 192.168.178.28
+soundtouch-backup local --host 192.0.2.11
 
 # Multiple speakers
-soundtouch-backup local --host 192.168.178.28 --host 192.168.178.35
+soundtouch-backup local --host 192.0.2.11 --host 192.0.2.10
 
 # Include SSH filesystem backup
 soundtouch-backup local --ssh

@@ -12,7 +12,7 @@ The SoundTouch CLI now supports parsing host and port combinations in the `-host
 ```bash
 # Specify host and port together
 soundtouch-cli -host 192.168.1.100:8090 -info
-soundtouch-cli -host 192.168.178.35:8090 -play
+soundtouch-cli -host 192.0.2.10:8090 -play
 soundtouch-cli -host soundtouch.local:8090 -pause
 ```
 
@@ -20,7 +20,7 @@ soundtouch-cli -host soundtouch.local:8090 -pause
 ```bash
 # Traditional separate host and port flags
 soundtouch-cli -host 192.168.1.100 -port 8090 -info
-soundtouch-cli -host 192.168.178.35 -port 8090 -play
+soundtouch-cli -host 192.0.2.10 -port 8090 -play
 ```
 
 ### Precedence Rules
@@ -99,8 +99,8 @@ Comprehensive test coverage in `cmd/soundtouch-cli/main_test.go`:
 
 ### Integration Tests
 Tested with real SoundTouch devices:
-- ✅ SoundTouch 10 (192.168.178.28:8090)
-- ✅ SoundTouch 20 (192.168.178.35:8090)
+- ✅ SoundTouch 10 (192.0.2.11:8090)
+- ✅ SoundTouch 20 (192.0.2.10:8090)
 
 ## Benefits
 

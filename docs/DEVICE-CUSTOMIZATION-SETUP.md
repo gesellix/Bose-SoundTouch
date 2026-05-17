@@ -46,7 +46,7 @@ usb0      Link encap:Ethernet  HWaddr CA:FE:BA:BE:1E:47
 
 Sun Feb  1 20:35:24 CET 2026
 
-Device name: "A Sound Machine"
+Device name: "Kitchen SoundTouch"
 Country EU, Region (not set)
 Module type: scm
 root@spotty:~#
@@ -83,7 +83,7 @@ usb0      Link encap:Ethernet  HWaddr CA:FE:BA:BE:1E:47
 
 Sun Feb  1 19:12:47 CET 2026
 
-Device name: "A Sound Machine"
+Device name: "Kitchen SoundTouch"
 Country EU, Region (not set)
 Module type: scm
 root@spotty:~#

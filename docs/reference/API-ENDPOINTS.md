@@ -784,7 +784,7 @@ Retrieves all supported endpoints for the specific device with comprehensive fea
 
 **Notes on Endpoint Discovery:**
 - Total discovered endpoints: **103**
-- Both test devices (192.168.178.28 and 192.168.178.35) support identical endpoint lists
+- Both test devices (192.0.2.11 and 192.0.2.10) support identical endpoint lists
 - Many endpoints are undocumented in official API v1.0 but functional on real hardware
 - Some endpoints may require specific device types or firmware versions
 - Endpoints marked ✅ are currently implemented in this Go library

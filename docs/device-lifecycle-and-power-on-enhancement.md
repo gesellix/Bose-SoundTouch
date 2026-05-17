@@ -179,12 +179,12 @@ The `/power_on` endpoint receives comprehensive device data that could replace m
     <diagnostic-data>
         <device-landscape>
             <rssi>Excellent</rssi>
-            <gateway-ip-address>192.168.178.1</gateway-ip-address>
+            <gateway-ip-address>192.0.2.1</gateway-ip-address>
             <macaddresses>
                 <macaddress>A81B6A536A98</macaddress>
                 <macaddress>A81B6A849D99</macaddress>
             </macaddresses>
-            <ip-address>192.168.178.35</ip-address>
+            <ip-address>192.0.2.10</ip-address>
             <network-connection-type>Wireless</network-connection-type>
         </device-landscape>
         <network-landscape>

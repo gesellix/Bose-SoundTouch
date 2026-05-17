@@ -236,11 +236,11 @@ If you cannot see the `Bose-Lab` SSID on your phone:
     ```bash
     sudo nmcli device set wlan0 managed no
     ```
-7.  **Ghost IP Conflict:** If `ip addr show wlan0` shows both `192.168.10.1` and another IP (like `192.168.178.x`), `hostapd` will fail. This is usually caused by NetworkManager managing the interface. Ensure you've run:
+7.  **Ghost IP Conflict:** If `ip addr show wlan0` shows both `192.168.10.1` and another IP (like `192.0.2.x`), `hostapd` will fail. This is usually caused by NetworkManager managing the interface. Ensure you've run:
     ```bash
     sudo nmcli device set wlan0 managed no
     # If the ghost IP is still there, remove it manually:
-    sudo ip addr del 192.168.178.X/24 dev wlan0
+    sudo ip addr del 192.0.2.0/24 dev wlan0
     ```
 
 ---

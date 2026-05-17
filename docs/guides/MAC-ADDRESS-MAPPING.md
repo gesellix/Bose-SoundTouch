@@ -97,7 +97,7 @@ Ensure the MAC address is present:
 <info deviceID="I6332527703739342000020">
     <networkInfo type="SCM">
         <macAddress>A81B6A536A98</macAddress>  <!-- Must be present -->
-        <ipAddress>192.168.178.35</ipAddress>
+        <ipAddress>192.0.2.10</ipAddress>
     </networkInfo>
 </info>
 ```

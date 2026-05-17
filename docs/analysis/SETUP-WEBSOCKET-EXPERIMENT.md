@@ -196,7 +196,7 @@ Post-experiment we compared the device-written `/mnt/nv/BoseApp-Persistence/1/Sy
 
 | Field                    | Bare-paired (1111111)                      | Real-Bose-paired (3230304) | Set by                                                                                                    |
 |--------------------------|--------------------------------------------|----------------------------|-----------------------------------------------------------------------------------------------------------|
-| `DeviceName`             | `Bose SoundTouch 536A98` (factory default) | `Sound Machinechen`        | `name` WS message — only sent in `--mode=full`                                                            |
+| `DeviceName`             | `Bose SoundTouch 536A98` (factory default) | `Living Room SoundTouch`        | `name` WS message — only sent in `--mode=full`                                                            |
 | `AccountAssociatedEMail` | empty                                      | **empty**                  | Never populated, even by real Bose                                                                        |
 | `AccountUUID`            | `1111111`                                  | `3230304`                  | `setMargeAccount` — both paths set it                                                                     |
 | `Locale`                 | empty                                      | **empty**                  | Never populated, even by real Bose                                                                        |

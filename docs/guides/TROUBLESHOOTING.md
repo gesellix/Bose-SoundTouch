@@ -546,8 +546,8 @@ client.SetBalanceSafe(10)    // Falls back gracefully
 
 **Symptoms:**
 ```bash
-$ go run ./cmd/soundtouch-cli --host 192.168.178.35 sp beep
-Playing notification beep from 192.168.178.35:8090...
+$ go run ./cmd/soundtouch-cli --host 192.0.2.10 sp beep
+Playing notification beep from 192.0.2.10:8090...
 ✗ Failed to play notification beep: API request failed with status 400
 ```
 
@@ -569,10 +569,10 @@ func (c *Client) PlayNotificationBeep() error {
 Both commands should now work identically:
 ```bash
 # CLI command
-go run ./cmd/soundtouch-cli --host 192.168.178.35 sp beep
+go run ./cmd/soundtouch-cli --host 192.0.2.10 sp beep
 
 # Direct curl (for comparison)
-curl http://192.168.178.35:8090/playNotification
+curl http://192.0.2.10:8090/playNotification
 ```
 
 ### ❌ "speaker" commands not supported
