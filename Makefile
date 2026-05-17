@@ -233,6 +233,18 @@ dev-service-proxy: build-service
 	fi
 	PYTHON_BACKEND_URL=$(PROXY_URL) $(BUILD_DIR)/$(SERVICE_NAME)
 
+# Run the service with the Stockholm frontend enabled. Requires that
+# `make prepare-stockholm` has been run at least once (the check below
+# avoids re-running the Docker container on every dev launch).
+dev-service-stockholm: build-service
+	@if [ ! -f "$(STOCKHOLM_DIR)/index.html" ]; then \
+		echo "Error: Stockholm not prepared at $(STOCKHOLM_DIR)."; \
+		echo "Run 'make prepare-stockholm' first (needs stockholm_zip/stockholm.zip)."; \
+		exit 1; \
+	fi
+	@echo "Starting development service with Stockholm enabled from $(STOCKHOLM_DIR)..."
+	STOCKHOLM_DIR=$(STOCKHOLM_DIR) $(BUILD_DIR)/$(SERVICE_NAME)
+
 dev-discover: build-cli
 	@echo "Running device discovery..."
 	$(BUILD_DIR)/$(BINARY_NAME) -discover
@@ -440,6 +452,7 @@ help:
 	@echo "  dev           - Build and show CLI help"
 	@echo "  dev-service   - Build and run service locally"
 	@echo "  dev-service-proxy - Build and run service with proxy (PROXY_URL=url required)"
+	@echo "  dev-service-stockholm - Build and run service with Stockholm frontend (requires prior 'make prepare-stockholm')"
 	@echo "  screenshots   - Capture documentation screenshots (headless Chrome via chromedp)"
 	@echo "  dev-discover  - Build and run device discovery"
 	@echo "  dev-info      - Build and get device info (HOST=ip required)"
