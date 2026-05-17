@@ -12,6 +12,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -41,6 +43,60 @@ func (s *Server) HandleBMXRegistry(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) HandleBMXServicesAvailability(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(bmxServicesAvailabilityJSON)
+}
+
+// extractBMXService finds a single service entry in bmx_services.json by
+// its `id.name` (e.g. "SIRIUSXM_EVEREST", "TUNEIN"). Returns the raw JSON
+// segment for that service so callers can apply {BMX_SERVER} / {MEDIA_SERVER}
+// substitution and write it back to the wire.
+func extractBMXService(bmxJSON []byte, name string) (json.RawMessage, error) {
+	var wrapper struct {
+		BMXServices []json.RawMessage `json:"bmx_services"`
+	}
+
+	if err := json.Unmarshal(bmxJSON, &wrapper); err != nil {
+		return nil, fmt.Errorf("parse bmx_services.json: %w", err)
+	}
+
+	for _, raw := range wrapper.BMXServices {
+		var idOnly struct {
+			ID struct {
+				Name string `json:"name"`
+			} `json:"id"`
+		}
+
+		if err := json.Unmarshal(raw, &idOnly); err != nil {
+			continue
+		}
+
+		if idOnly.ID.Name == name {
+			return raw, nil
+		}
+	}
+
+	return nil, fmt.Errorf("service %q not found in bmx_services.json", name)
+}
+
+// applyBMXTemplate runs the same {BMX_SERVER} / {MEDIA_SERVER} substitution
+// HandleBMXRegistry uses, so service-descriptor responses produced from
+// sub-segments of bmx_services.json land at the same hostnames the
+// registry advertises.
+func (s *Server) applyBMXTemplate(content string) string {
+	baseURL := s.serverURL
+
+	s.mu.RLock()
+	dnsEnabled := s.dnsEnabled
+	s.mu.RUnlock()
+
+	bmxServer := baseURL
+	if dnsEnabled {
+		bmxServer = "https://content.api.bose.io"
+	}
+
+	content = strings.ReplaceAll(content, "{BMX_SERVER}", bmxServer)
+	content = strings.ReplaceAll(content, "{MEDIA_SERVER}", baseURL+"/media")
+
+	return content
 }
 
 // writeBMXUnauthorized writes the canonical 401 used by every BMX adapter

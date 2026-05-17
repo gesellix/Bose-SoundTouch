@@ -953,6 +953,16 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 	r.Post("/core02/svc-bmx-adapter-orion/prod/orion/token", server.HandleOrionToken)
 	r.Get("/core02/svc-bmx-adapter-orion/prod/orion/station", server.HandleOrionPlayback)
 
+	// SiriusXM lives at the top level by the same convention. bmx_services.json
+	// advertises baseUrl `{BMX_SERVER}/core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter`
+	// (no /bmx/ prefix), so speakers reach this exact path under either
+	// migration mode. The bare path returns the service descriptor (matches
+	// soundcork main.py:805); sub-paths advertised by the descriptor's _links
+	// (/availability, /navigate, /token, /logout) currently log + 404 so
+	// future implementation work has visibility into real speaker calls.
+	r.HandleFunc("/core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter", server.HandleSiriusXMLiveAdapter)
+	r.HandleFunc("/core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter/*", server.HandleSiriusXMLiveAdapterSubpath)
+
 	r.Get("/custom/v1/playback/{encodedURL}", server.HandleCustomPlayback)
 
 	r.Route("/streaming", func(r chi.Router) {
