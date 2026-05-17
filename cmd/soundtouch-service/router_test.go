@@ -128,7 +128,7 @@ func TestPUTRenameRoutesToLocalHandler(t *testing.T) {
 	_ = ds.Initialize()
 
 	server := handlers.NewServer(ds, nil, "http://localhost:8000", false, false, false)
-	r := setupRouter(server)
+	r := setupRouter(server, nil)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
