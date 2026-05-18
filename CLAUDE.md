@@ -52,6 +52,10 @@ make test           # Unit tests
 make test-coverage  # Coverage reports
 make check          # fmt + vet + test
 make lint           # golangci-lint
+make update-static-deps # Update frontend libraries (preact, htm) from node_modules
+
+# Automation
+A GitHub Action automatically runs `make update-static-deps` on Dependabot PRs that modify `package.json` to keep the vendored `.js` files in sync. Note: This requires `npm` to be installed.
 
 # Development
 make dev-service    # Run local service on port 8000

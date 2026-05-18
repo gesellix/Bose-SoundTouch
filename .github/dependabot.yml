@@ -98,3 +98,25 @@ updates:
       - "dependencies"
       - "docker"
     rebase-strategy: "auto"
+
+  # npm dependency updates
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "gesellix"
+    assignees:
+      - "gesellix"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "frontend"
+    rebase-strategy: "auto"

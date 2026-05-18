@@ -1,4 +1,4 @@
-.PHONY: all build build-cli test test-coverage test-http-client test-http-client-rotate check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm
+.PHONY: all build build-cli test test-coverage test-http-client test-http-client-rotate check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm update-static-deps
 
 # Load .env if present (simple KEY=VALUE format, no shell quoting)
 -include .env
@@ -353,6 +353,10 @@ install: build-cli build-service build-web build-backup
 	cp $(BUILD_DIR)/$(SERVICE_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(WEB_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(BACKUP_NAME) $(GOPATH)/bin/
+
+update-static-deps:
+	@echo "Updating static frontend dependencies..."
+	@./scripts/update-static-deps.sh
 
 clean:
 	@echo "Cleaning..."

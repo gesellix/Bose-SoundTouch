@@ -1,0 +1,15 @@
+{
+  "name": "@gesellix/bose-soundtouch",
+  "private": true,
+  "description": "Controlling and preserving Bose SoundTouch devices",
+  "repository": "https://github.com/gesellix/bose-soundtouch",
+  "license": "MIT",
+  "author": "Tobias Gesellchen",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "htm": "3.1.1",
+    "preact": "10.26.1"
+  }
+}

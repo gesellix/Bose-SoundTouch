@@ -43,6 +43,7 @@ go.work.sum
 
 # Dependency directories
 vendor/
+node_modules/
 
 # IDE and editor files
 .vscode/
