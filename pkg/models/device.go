@@ -7,33 +7,34 @@ import (
 
 // DeviceInfo represents the response from GET /info endpoint
 type DeviceInfo struct {
-	XMLName          xml.Name      `xml:"info"`
-	DeviceID         string        `xml:"deviceID,attr"`
-	Name             string        `xml:"name"`
-	Type             string        `xml:"type"`
-	MargeAccountUUID string        `xml:"margeAccountUUID"`
-	Components       []Component   `xml:"components>component"`
-	MargeURL         string        `xml:"margeURL"`
-	NetworkInfo      []NetworkInfo `xml:"networkInfo"`
-	ModuleType       string        `xml:"moduleType"`
-	Variant          string        `xml:"variant"`
-	VariantMode      string        `xml:"variantMode"`
-	CountryCode      string        `xml:"countryCode"`
-	RegionCode       string        `xml:"regionCode"`
+	XMLName          xml.Name      `xml:"info" json:"-"`
+	DeviceID         string        `xml:"deviceID,attr" json:"device_id"`
+	Name             string        `xml:"name" json:"name"`
+	Type             string        `xml:"type" json:"type"`
+	MargeAccountUUID string        `xml:"margeAccountUUID" json:"marge_account_uuid,omitempty"`
+	Components       []Component   `xml:"components>component" json:"components,omitempty"`
+	MargeURL         string        `xml:"margeURL" json:"marge_url,omitempty"`
+	NetworkInfo      []NetworkInfo `xml:"networkInfo" json:"network_info,omitempty"`
+	ModuleType       string        `xml:"moduleType" json:"module_type,omitempty"`
+	Variant          string        `xml:"variant" json:"variant,omitempty"`
+	VariantMode      string        `xml:"variantMode" json:"variant_mode,omitempty"`
+	CountryCode      string        `xml:"countryCode" json:"country_code,omitempty"`
+	RegionCode       string        `xml:"regionCode" json:"region_code,omitempty"`
+	IPAddress        string        `xml:"-" json:"ip_address,omitempty"`
 }
 
 // Component represents a device component
 type Component struct {
-	ComponentCategory string `xml:"componentCategory"`
-	SoftwareVersion   string `xml:"softwareVersion"`
-	SerialNumber      string `xml:"serialNumber"`
+	ComponentCategory string `xml:"componentCategory" json:"component_category"`
+	SoftwareVersion   string `xml:"softwareVersion" json:"software_version"`
+	SerialNumber      string `xml:"serialNumber" json:"serial_number"`
 }
 
 // NetworkInfo represents network information for the device
 type NetworkInfo struct {
-	Type       string `xml:"type,attr"`
-	MacAddress string `xml:"macAddress"`
-	IPAddress  string `xml:"ipAddress"`
+	Type       string `xml:"type,attr" json:"type"`
+	MacAddress string `xml:"macAddress" json:"mac_address"`
+	IPAddress  string `xml:"ipAddress" json:"ip_address"`
 }
 
 // SourcesUpdatedNotification represents the notification XML sent to the device

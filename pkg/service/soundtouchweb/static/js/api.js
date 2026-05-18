@@ -37,4 +37,10 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
+    radioBrowserSearch: (q) => req(`/api/radiobrowser/search?q=${encodeURIComponent(q)}`),
+    radioBrowserPlay: (deviceId, item) => req(`/api/radiobrowser/play/${deviceId}`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(item),
+    }),
 };

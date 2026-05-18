@@ -34,6 +34,17 @@ func (app *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	app.WSClients[conn] = true
 	app.WSMutex.Unlock()
 
+	// Send current discovery status
+	if ds, ok := app.discoveryStatus.Load().(*webtypes.DiscoveryStatus); ok {
+		if err := conn.WriteJSON(webtypes.WebSocketMessage{
+			Type: "discovery_status",
+			Data: ds,
+		}); err != nil {
+			log.Printf("Failed to send initial discovery status: %v", err)
+			return
+		}
+	}
+
 	// Send initial device list
 	snapshot := app.DeviceSnapshot()
 	devices := make(map[string]interface{}, len(snapshot))
@@ -115,7 +126,6 @@ func (app *WebApp) HandleAPIDiscover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Discovery will be triggered by the main app
 	w.Header().Set("Content-Type", "application/json")
 
 	response := webtypes.APIResponse{

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -33,6 +34,13 @@ type WebApp struct {
 	Upgrader  websocket.Upgrader
 	WSClients map[*websocket.Conn]bool
 	WSMutex   sync.RWMutex
+
+	Version string
+	Commit  string
+	Date    string
+	RepoURL string
+
+	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }
 
 // DeviceEntry pairs a device id with its connection. Used by
@@ -569,15 +577,26 @@ func (app *WebApp) BroadcastDeviceList() {
 
 // BroadcastDiscoveryStatus sends discovery progress updates to all connected WebSocket clients
 func (app *WebApp) BroadcastDiscoveryStatus(status string, deviceCount int) {
+	discoveryStatus := &webtypes.DiscoveryStatus{
+		Status:      status,
+		DeviceCount: deviceCount,
+	}
+
+	switch status {
+	case "starting":
+		discoveryStatus.IsDiscovering = true
+	case "completed", "failed":
+		discoveryStatus.IsDiscovering = false
+	}
+
+	app.discoveryStatus.Store(discoveryStatus)
+
 	app.WSMutex.RLock()
 	defer app.WSMutex.RUnlock()
 
 	message := webtypes.WebSocketMessage{
 		Type: "discovery_status",
-		Data: map[string]interface{}{
-			"status":      status,
-			"deviceCount": deviceCount,
-		},
+		Data: discoveryStatus,
 	}
 
 	// Send to all connected clients
@@ -1011,6 +1030,88 @@ func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data:    map[string]string{"message": "Playing " + req.ItemName},
 	}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleAPIVersion returns the current version of the application.
+func (app *WebApp) HandleAPIVersion(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	versionInfo := map[string]string{
+		"version":     app.Version,
+		"commit":      app.Commit,
+		"date":        app.Date,
+		"repo_url":    app.RepoURL,
+		"release_url": app.RepoURL + "/releases/tag/" + app.Version,
+		"commit_url":  app.RepoURL + "/commit/" + app.Commit,
+	}
+	if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: versionInfo}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleRadioBrowserSearch handles RadioBrowser search requests.
+func (app *WebApp) HandleRadioBrowserSearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		app.sendError(w, "query parameter 'q' is required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := bmxpkg.RadioBrowserSearch(query)
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: resp}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandlePlayRadioBrowser plays a RadioBrowser station on a specific device.
+func (app *WebApp) HandlePlayRadioBrowser(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+	if deviceID == "" {
+		app.sendError(w, "Device ID required", http.StatusBadRequest)
+		return
+	}
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		Location string `json:"location"`
+		Name     string `json:"name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		app.sendError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	contentItem := &models.ContentItem{
+		Source:       "URL",
+		Type:         "stationurl",
+		Location:     req.Location,
+		ItemName:     req.Name,
+		IsPresetable: true,
+	}
+
+	if err := device.Client.SelectContentItem(contentItem); err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]string{"message": "Playing " + req.Name}}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }

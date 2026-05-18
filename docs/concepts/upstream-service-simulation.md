@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the concept for simulating and replacing upstream Bose services with enhanced state management capabilities. The goal is to create a comprehensive local replacement that can handle device lifecycles, account management, and state synchronization while maintaining compatibility with existing SoundTouch devices.
+This document outlines the concept for simulating and replacing upstream Bose services with enhanced state management capabilities. The goal is to create a comprehensive replacement that can handle device lifecycles, account management, and state synchronization while maintaining compatibility with existing SoundTouch devices.
 
 ## Use Cases
 
@@ -331,7 +331,7 @@ GET /api/v1/accounts/{account-id}/export
 ### Quality Assurance
 
 - Complete test coverage for all new functionality
-- Comprehensive linting with `golangci-lint run --fix` 
+- Comprehensive linting with `golangci-lint run --fix`
 - Full test suite execution `go test ./...` for each milestone
 - Integration tests with existing functionality
 

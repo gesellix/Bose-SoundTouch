@@ -16,7 +16,7 @@ Key binaries:
 
 - `soundtouch-cli` — command-line control of one or more speakers
   (status, play, presets, groups, migration, …).
-- `soundtouch-service` — local replacement for `streaming.bose.com`
+- `soundtouch-service` — replacement for `streaming.bose.com`
   and the `bmx` services, default port `8000`.
 - `soundtouch-web` — Web UI for Radio browsing and device control.
 - `soundtouch-backup` — Helper for on-device backup and restore.

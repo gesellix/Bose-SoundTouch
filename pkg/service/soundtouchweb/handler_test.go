@@ -534,6 +534,52 @@ func TestHandleAPIControl_UnsupportedAction(t *testing.T) {
 	}
 }
 
+func TestHandleAPIVersion(t *testing.T) {
+	app := createTestApp()
+	app.Version = "1.2.3"
+	app.Commit = "abcdef123"
+	app.Date = "2023-01-01"
+	app.RepoURL = "https://github.com/example/repo"
+
+	req := httptest.NewRequest("GET", "/api/version", nil)
+	w := httptest.NewRecorder()
+
+	app.HandleAPIVersion(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var resp webtypes.APIResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("Expected success=true, got false")
+	}
+
+	data, ok := resp.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected data to be map[string]interface{}, got %T", resp.Data)
+	}
+
+	expected := map[string]string{
+		"version":     "1.2.3",
+		"commit":      "abcdef123",
+		"date":        "2023-01-01",
+		"repo_url":    "https://github.com/example/repo",
+		"release_url": "https://github.com/example/repo/releases/tag/1.2.3",
+		"commit_url":  "https://github.com/example/repo/commit/abcdef123",
+	}
+
+	for k, v := range expected {
+		if data[k] != v {
+			t.Errorf("Expected %s=%s, got %v", k, v, data[k])
+		}
+	}
+}
+
 // Benchmark tests
 func BenchmarkHandleAPIDevices(b *testing.B) {
 	app := createTestApp()

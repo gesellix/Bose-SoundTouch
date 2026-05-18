@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
@@ -15,7 +16,39 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+	repoURL = "https://github.com/gesellix/bose-soundtouch"
+)
+
+func updateBuildInfo() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Path != "" {
+			repoURL = "https://" + info.Main.Path
+		}
+
+		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
+
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				commit = setting.Value
+			case "vcs.time":
+				if t, err := time.Parse(time.RFC3339, setting.Value); err == nil {
+					date = t.Format("2006-01-02 15:04:05")
+				}
+			}
+		}
+	}
+}
+
 func main() {
+	updateBuildInfo()
+
 	app := &cli.App{
 		Name:  "soundtouch-web",
 		Usage: "Web UI for controlling Bose SoundTouch devices",
@@ -71,6 +104,10 @@ func main() {
 
 			// Create web app without templates (SPA mode)
 			webApp := soundtouchweb.NewWebApp()
+			webApp.Version = version
+			webApp.Commit = commit
+			webApp.Date = date
+			webApp.RepoURL = repoURL
 
 			discoveryService := soundtouchweb.NewDiscoveryService(ifaceName)
 
@@ -94,7 +131,7 @@ func main() {
 			r := chi.NewRouter()
 			webApp.Mount(r, discoveryService)
 
-			log.Printf("SoundTouch Web UI starting on http://%s", addr)
+			log.Printf("AfterTouch Web UI starting on http://%s", addr)
 
 			return http.ListenAndServe(addr, r)
 		},

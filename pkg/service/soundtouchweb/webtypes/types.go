@@ -139,3 +139,10 @@ type WebSocketMessage struct {
 	DeviceID string      `json:"deviceId,omitempty"`
 	Data     interface{} `json:"data,omitempty"`
 }
+
+// DiscoveryStatus represents the status of device discovery
+type DiscoveryStatus struct {
+	IsDiscovering bool   `json:"isDiscovering"`
+	Status        string `json:"status,omitempty"`
+	DeviceCount   int    `json:"deviceCount,omitempty"`
+}

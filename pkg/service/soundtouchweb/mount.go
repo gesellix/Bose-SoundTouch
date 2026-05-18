@@ -25,20 +25,20 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	// API endpoints
 	r.Get("/api/devices", app.HandleAPIDevices)
 	r.Get("/api/device/{id}", app.HandleAPIDevice)
+	r.Get("/api/version", app.HandleAPIVersion)
 	r.Post("/api/discover", func(w http.ResponseWriter, r *http.Request) {
 		app.HandleAPIDiscover(w, r)
+
 		// Trigger discovery
 		//nolint:contextcheck // Context is created within goroutine
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			// Broadcast discovery start
 			app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
 
 			app.DiscoverDevices(ctx, discoveryService)
 
-			// Broadcast discovery completion and updated device list
 			app.BroadcastDiscoveryStatus("completed", app.DeviceCount())
 			app.BroadcastDeviceList()
 		}()
@@ -68,10 +68,16 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	r.Post("/api/zone/{id}/leave", app.HandleZoneLeave)
 	r.Get("/api/device-ws/{id}", app.HandleDeviceWebSocket)
 
+	// RadioBrowser search
+	r.Get("/api/radiobrowser/search", app.HandleRadioBrowserSearch)
+	r.Post("/api/radiobrowser/play/{id}", app.HandlePlayRadioBrowser)
+
 	// SPA routes — serve index.html for client-side routing
 	r.Get("/", app.serveIndex)
 	r.Get("/devices", app.serveIndex)
 	r.Get("/device/*", app.serveIndex)
+	r.Get("/tunein", app.serveIndex)
+	r.Get("/radiobrowser", app.serveIndex)
 }
 
 func (app *WebApp) serveIndex(w http.ResponseWriter, _ *http.Request) {

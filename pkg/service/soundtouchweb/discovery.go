@@ -56,6 +56,11 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 		return
 	}
 
+	// Ensure IPAddress is set for the web UI
+	if info.IPAddress == "" {
+		info.IPAddress = host
+	}
+
 	conn := webtypes.NewDeviceConnection(c, info)
 	if !app.AddDevice(host, conn) {
 		// Lost a race — another goroutine inserted the same host

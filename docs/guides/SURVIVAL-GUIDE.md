@@ -12,7 +12,7 @@ What **continues to work** regardless:
 - Bluetooth, AUX, and AirPlay inputs
 - Multiroom zones (local, peer-to-peer)
 
-**AfterTouch** — the `soundtouch-service` — restores everything in the first list by running a local replacement for the Bose cloud on your own network.
+**AfterTouch** — the `soundtouch-service` — restores everything in the first list by running a replacement for the Bose cloud on your own network.
 
 ---
 

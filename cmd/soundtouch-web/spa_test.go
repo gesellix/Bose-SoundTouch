@@ -69,7 +69,7 @@ func TestSPARouting(t *testing.T) {
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>SoundTouch Control Center</title>
+    <title>AfterTouch Control Center</title>
 </head>
 <body>
     <div id="app">SPA Content</div>

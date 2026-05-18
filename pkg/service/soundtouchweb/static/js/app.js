@@ -9,6 +9,7 @@ import { Sources } from './components/Sources.js';
 import { Zone } from './components/Zone.js';
 import { Recents } from './components/Recents.js';
 import { TuneInBrowser } from './components/TuneInBrowser.js';
+import { RadioBrowser } from './components/RadioBrowser.js';
 import { api } from './api.js';
 
 const html = htm.bind(h);
@@ -29,7 +30,6 @@ function DeviceDetail({ deviceId, devices, onBack }) {
         <div class="device-detail">
             <div class="page-header">
                 <button class="back-btn" onClick=${onBack}>← Back</button>
-                <h2>${device.info?.Name || deviceId}</h2>
                 <button class="btn-icon" onClick=${() => api.power(deviceId)} title="Power">⏻</button>
             </div>
             <${NowPlaying} nowPlaying=${device.status?.nowPlaying} />
@@ -47,8 +47,40 @@ function App() {
     const [page, setPage] = useState('devices');
     const [selectedId, setSelectedId] = useState(null);
     const [toast, setToast] = useState(null);
+    const [version, setVersion] = useState(null);
+    const [isDiscovering, setIsDiscovering] = useState(false);
+
+    const getPageTitle = () => {
+        if (page === 'devices') return 'Devices';
+        if (page === 'device') {
+            const device = devices[selectedId];
+            const name = device?.info?.name || selectedId || 'Device Detail';
+            const ip = device?.info?.ip_address;
+            if (ip) {
+                return html`
+                    <div class="title-with-subtitle">
+                        <span class="main-title">${name}</span>
+                        <span class="sub-title">${ip}</span>
+                    </div>
+                `;
+            }
+            return name;
+        }
+        if (page === 'tunein') return 'TuneIn';
+        if (page === 'radiobrowser') return 'RadioBrowser';
+        return 'AfterTouch';
+    };
 
     useEffect(() => {
+        fetch('/api/version')
+            .then(res => res.json())
+            .then(resp => {
+                if (resp.success) {
+                    setVersion(resp.data);
+                }
+            })
+            .catch(err => console.error('Failed to fetch version:', err));
+
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${location.host}/ws`);
         let reconnectTimer;
@@ -58,14 +90,26 @@ function App() {
             if (msg.type === 'devices') {
                 setDevices(msg.data || {});
             } else if (msg.type === 'discovery_status') {
+                console.log('[DEBUG_LOG] discovery_status:', msg.data);
+                if (msg.data?.isDiscovering !== undefined) {
+                    setIsDiscovering(msg.data.isDiscovering);
+                } else if (msg.data?.status === 'starting') {
+                    setIsDiscovering(true);
+                } else if (msg.data?.status === 'completed') {
+                    setIsDiscovering(false);
+                }
+
                 if (msg.data?.status === 'completed') {
                     showToast(`Found ${msg.data.deviceCount} device(s)`);
                 }
             } else if (msg.type === 'status_update' && msg.deviceId) {
-                setDevices(prev => ({
-                    ...prev,
-                    [msg.deviceId]: { ...prev[msg.deviceId], status: msg.data },
-                }));
+                setDevices(prev => {
+                    if (!prev[msg.deviceId]) return prev;
+                    return {
+                        ...prev,
+                        [msg.deviceId]: { ...prev[msg.deviceId], status: msg.data },
+                    };
+                });
             }
         };
 
@@ -80,7 +124,8 @@ function App() {
     }, []);
 
     function showToast(msg) {
-        setToast(msg);
+        setToast(null);
+        setTimeout(() => setToast(msg), 10);
         setTimeout(() => setToast(null), 3000);
     }
 
@@ -98,42 +143,75 @@ function App() {
         <div class="app">
             <nav class="navbar">
                 <a class="brand" href="#" onClick=${(e) => { e.preventDefault(); navigate('devices'); }}>
-                    SoundTouch
+                    <img src="/static/img/logo.svg" alt="AfterTouch" class="nav-logo" />
+                    <div class="brand-text">
+                        <span class="brand-name">AfterTouch</span>
+                        <span class="brand-subtitle">Bose SoundTouch Toolkit</span>
+                    </div>
                 </a>
+                <div class="page-title">${getPageTitle()}</div>
                 <div class="nav-links">
                     <a href="#" class="${page === 'devices' || page === 'device' ? 'active' : ''}"
-                        onClick=${(e) => { e.preventDefault(); navigate('devices'); }}>
-                        Devices
+                        onClick=${(e) => { e.preventDefault(); navigate('devices'); }}
+                        title="Devices"
+                    >
+                        <img src="/static/img/speaker-mono.svg" alt="Devices" class="nav-device-icon" />
                     </a>
                     <a href="#" class="${page === 'tunein' ? 'active' : ''}"
-                        onClick=${(e) => { e.preventDefault(); navigate('tunein'); }}>
+                        onClick=${(e) => { e.preventDefault(); navigate('tunein'); }}
+                        title="TuneIn"
+                    >
                         <img src="/static/img/tunein-mono.svg" alt="TuneIn" class="nav-tunein-icon" />
                     </a>
-                    <button class="btn-icon" onClick=${discover} title="Discover">⟳</button>
+                    <a href="#" class="${page === 'radiobrowser' ? 'active' : ''}"
+                        onClick=${(e) => { e.preventDefault(); navigate('radiobrowser'); }}
+                        title="RadioBrowser"
+                    >
+                        <img src="/static/img/radiobrowser-mono.svg" alt="RadioBrowser" class="nav-rb-icon" />
+                    </a>
+                    <span class="nav-separator">|</span>
+                    <button class="btn-icon" onClick=${discover} title="Discover">
+                        <img src="/static/img/knob-mono.svg" alt="Discover" class="nav-discover-icon ${isDiscovering ? 'buzzing' : ''}" />
+                    </button>
                 </div>
             </nav>
 
             <main class="main-content">
-                ${page === 'devices' && html`
+                ${page === 'devices' ? html`
                     <${DeviceList}
+                        key="device-list"
                         devices=${devices}
+                        isDiscovering=${isDiscovering}
                         onSelect=${(id) => navigate('device', id)}
                         onDiscover=${discover}
                     />
-                `}
-                ${page === 'device' && html`
+                ` : page === 'device' ? html`
                     <${DeviceDetail}
+                        key="device-detail"
                         deviceId=${selectedId}
                         devices=${devices}
                         onBack=${() => navigate('devices')}
                     />
-                `}
-                ${page === 'tunein' && html`
-                    <${TuneInBrowser} devices=${devices} />
-                `}
+                ` : page === 'tunein' ? html`
+                    <${TuneInBrowser} key="tunein-browser" devices=${devices} />
+                ` : page === 'radiobrowser' ? html`
+                    <${RadioBrowser} key="radiobrowser-browser" devices=${devices} />
+                ` : null}
             </main>
 
-            ${toast && html`<div class="toast">${toast}</div>`}
+                ${version ? html`
+                    <footer id="footer" key="footer">
+                        <span>
+                            AfterTouch <a href="${version.release_url || version.repo_url}" target="_blank">${version.version}</a>
+                            ${version.commit && version.commit !== 'unknown' ? html`
+                                ${' ('}<a href="${version.commit_url}" target="_blank">${version.commit.substring(0, 7)}</a>${')'}
+                            ` : null}
+                            ${version.date && version.date !== 'unknown' ? html` • ${version.date}` : null}
+                        </span>
+                    </footer>
+                ` : null}
+
+            ${toast ? html`<div class="toast" key="toast">${toast}</div>` : null}
         </div>
     `;
 }
