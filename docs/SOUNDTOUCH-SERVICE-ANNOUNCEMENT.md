@@ -1,7 +1,7 @@
 # 🎉 Introducing SoundTouch Service: Local Cloud Service Emulation
 
-**Date**: January 2024  
-**Version**: v2.0.0+  
+**Date**: February 2026
+**Version**: v2.0.0+
 **Status**: Production Ready
 
 ## What's New?
@@ -68,7 +68,7 @@ Our implementation is heavily inspired by and based on [SoundCork](https://githu
 
 **Key contributions from SoundCork:**
 - Service emulation architecture
-- BMX/Marge endpoint discovery  
+- BMX/Marge endpoint discovery
 - Device migration strategies
 - Python implementation reference
 
@@ -137,7 +137,7 @@ LOG_PROXY_BODY=true soundtouch-service
 ## 🚀 Future Plans
 
 - **Docker Images**: Official container images for easy deployment
-- **Cluster Support**: Multi-instance deployment for high availability  
+- **Cluster Support**: Multi-instance deployment for high availability
 - **Advanced Analytics**: Machine learning-powered usage insights
 - **Extended Protocol Support**: Additional Bose protocol implementations
 - **Mobile App**: Companion mobile application for device management

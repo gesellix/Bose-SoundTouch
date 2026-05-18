@@ -1,7 +1,7 @@
 # Bose SoundTouch API Coverage Analysis
 
-**Last Updated:** January 2025  
-**API Version:** Official Bose SoundTouch Web API v1.0  
+**Last Updated:** February 2026
+**API Version:** Official Bose SoundTouch Web API v1.0
 **Implementation Status:** 100% Official Coverage + Extended Features
 
 ## Executive Summary
@@ -10,7 +10,7 @@ This Go implementation provides **complete coverage** of the Bose SoundTouch Web
 
 ### Key Findings
 - ✅ **All essential user functionality implemented**
-- ✅ **Complete zone management implementation** 
+- ✅ **Complete zone management implementation**
 - ✅ **Real-time WebSocket event system**
 - ✅ **Extended features beyond official specification**
 - ✅ **Complete advanced audio controls implementation**
@@ -22,42 +22,42 @@ This Go implementation provides **complete coverage** of the Bose SoundTouch Web
 
 ### Implemented Endpoints: 20/21 (95%)
 
-| Endpoint | Method | Status | Implementation | Notes |
-|----------|--------|--------|----------------|--------|
-| `/key` | POST | ✅ **Complete** | `SendKey()`, `SendKeyPress()`, `SendKeyRelease()` | Full key simulation with press/release states |
-| `/select` | POST | ✅ **Complete** | `SelectSource()`, `SelectSpotify()`, etc. | Source selection with validation |
-| `/sources` | GET | ✅ **Complete** | `GetSources()` | Available audio sources |
-| `/bassCapabilities` | GET | ✅ **Complete** | `GetBassCapabilities()` | Bass capability detection |
-| `/bass` | GET/POST | ✅ **Complete** | `GetBass()`, `SetBass()`, `SetBassSafe()` | Bass control (-9 to +9) with safety limits |
-| `/getZone` | GET | ✅ **Complete** | `GetZone()`, `GetZoneStatus()`, `GetZoneMembers()` | Multiroom zone information |
-| `/setZone` | POST | ✅ **Complete** | `SetZone()`, `CreateZone()`, `AddToZone()`, `RemoveFromZone()` | Zone configuration and management |
-| `/now_playing` | GET | ✅ **Complete** | `GetNowPlaying()` | Current playback status with full metadata |
-| `/trackInfo` | GET | ❌ **Non-functional** | `GetTrackInfo()` | Documented but times out on real devices |
-| `/volume` | GET/POST | ✅ **Complete** | `GetVolume()`, `SetVolume()`, `SetVolumeSafe()` | Volume and mute control with safety features |
-| `/presets` | GET | ✅ **Complete** | `GetPresets()`, `GetNextAvailablePresetSlot()` | Preset configurations (read-only per API spec) |
-| `/info` | GET | ✅ **Complete** | `GetDeviceInfo()` | Device information and capabilities |
-| `/name` | POST | ✅ **Complete** | `SetName()` | Device name modification |
-| `/capabilities` | GET | ✅ **Complete** | `GetCapabilities()` | Device feature capabilities |
-| `/addZoneSlave` | POST | ✅ **Complete** | `AddZoneSlave()`, `AddZoneSlaveByDeviceID()` | Individual device addition to zone |
-| `/removeZoneSlave` | POST | ✅ **Complete** | `RemoveZoneSlave()`, `RemoveZoneSlaveByDeviceID()` | Individual device removal from zone |
-| `/audiodspcontrols` | GET/POST | ✅ **Complete** | `GetAudioDSPControls()`, `SetAudioDSPControls()`, `SetAudioMode()`, `SetVideoSyncAudioDelay()` | DSP audio modes and video sync delay |
-| `/audioproducttonecontrols` | GET/POST | ✅ **Complete** | `GetAudioProductToneControls()`, `SetAudioProductToneControls()`, `SetAdvancedBass()`, `SetAdvancedTreble()` | Advanced bass/treble controls |
-| `/audioproductlevelcontrols` | GET/POST | ✅ **Complete** | `GetAudioProductLevelControls()`, `SetAudioProductLevelControls()`, `SetFrontCenterSpeakerLevel()`, `SetRearSurroundSpeakersLevel()` | Speaker level controls |
-| `/speaker` | POST | ✅ **Complete** | `PlayTTS()`, `PlayURL()`, `PlayCustom()` | TTS and URL content playback for notifications |
-| `/playNotification` | GET | ✅ **Complete** | `PlayNotificationBeep()` | Simple notification beep sound |
+| Endpoint                     | Method   | Status               | Implementation                                                                                                                       | Notes                                          |
+|------------------------------|----------|----------------------|--------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
+| `/key`                       | POST     | ✅ **Complete**       | `SendKey()`, `SendKeyPress()`, `SendKeyRelease()`                                                                                    | Full key simulation with press/release states  |
+| `/select`                    | POST     | ✅ **Complete**       | `SelectSource()`, `SelectSpotify()`, etc.                                                                                            | Source selection with validation               |
+| `/sources`                   | GET      | ✅ **Complete**       | `GetSources()`                                                                                                                       | Available audio sources                        |
+| `/bassCapabilities`          | GET      | ✅ **Complete**       | `GetBassCapabilities()`                                                                                                              | Bass capability detection                      |
+| `/bass`                      | GET/POST | ✅ **Complete**       | `GetBass()`, `SetBass()`, `SetBassSafe()`                                                                                            | Bass control (-9 to +9) with safety limits     |
+| `/getZone`                   | GET      | ✅ **Complete**       | `GetZone()`, `GetZoneStatus()`, `GetZoneMembers()`                                                                                   | Multiroom zone information                     |
+| `/setZone`                   | POST     | ✅ **Complete**       | `SetZone()`, `CreateZone()`, `AddToZone()`, `RemoveFromZone()`                                                                       | Zone configuration and management              |
+| `/now_playing`               | GET      | ✅ **Complete**       | `GetNowPlaying()`                                                                                                                    | Current playback status with full metadata     |
+| `/trackInfo`                 | GET      | ❌ **Non-functional** | `GetTrackInfo()`                                                                                                                     | Documented but times out on real devices       |
+| `/volume`                    | GET/POST | ✅ **Complete**       | `GetVolume()`, `SetVolume()`, `SetVolumeSafe()`                                                                                      | Volume and mute control with safety features   |
+| `/presets`                   | GET      | ✅ **Complete**       | `GetPresets()`, `GetNextAvailablePresetSlot()`                                                                                       | Preset configurations (read-only per API spec) |
+| `/info`                      | GET      | ✅ **Complete**       | `GetDeviceInfo()`                                                                                                                    | Device information and capabilities            |
+| `/name`                      | POST     | ✅ **Complete**       | `SetName()`                                                                                                                          | Device name modification                       |
+| `/capabilities`              | GET      | ✅ **Complete**       | `GetCapabilities()`                                                                                                                  | Device feature capabilities                    |
+| `/addZoneSlave`              | POST     | ✅ **Complete**       | `AddZoneSlave()`, `AddZoneSlaveByDeviceID()`                                                                                         | Individual device addition to zone             |
+| `/removeZoneSlave`           | POST     | ✅ **Complete**       | `RemoveZoneSlave()`, `RemoveZoneSlaveByDeviceID()`                                                                                   | Individual device removal from zone            |
+| `/audiodspcontrols`          | GET/POST | ✅ **Complete**       | `GetAudioDSPControls()`, `SetAudioDSPControls()`, `SetAudioMode()`, `SetVideoSyncAudioDelay()`                                       | DSP audio modes and video sync delay           |
+| `/audioproducttonecontrols`  | GET/POST | ✅ **Complete**       | `GetAudioProductToneControls()`, `SetAudioProductToneControls()`, `SetAdvancedBass()`, `SetAdvancedTreble()`                         | Advanced bass/treble controls                  |
+| `/audioproductlevelcontrols` | GET/POST | ✅ **Complete**       | `GetAudioProductLevelControls()`, `SetAudioProductLevelControls()`, `SetFrontCenterSpeakerLevel()`, `SetRearSurroundSpeakersLevel()` | Speaker level controls                         |
+| `/speaker`                   | POST     | ✅ **Complete**       | `PlayTTS()`, `PlayURL()`, `PlayCustom()`                                                                                             | TTS and URL content playback for notifications |
+| `/playNotification`          | GET      | ✅ **Complete**       | `PlayNotificationBeep()`                                                                                                             | Simple notification beep sound                 |
 
 ### Non-functional Endpoints: 1/21 (5%)
 
-| Endpoint | Method | Status | Reason | Impact |
-|----------|--------|--------|--------|---------|
-| `/trackInfo` | GET | ❌ **Non-functional** | Times out on real devices (AllegroWebserver timeout) | **None** - Use `/now_playing` instead |
+| Endpoint     | Method | Status               | Reason                                               | Impact                                |
+|--------------|--------|----------------------|------------------------------------------------------|---------------------------------------|
+| `/trackInfo` | GET    | ❌ **Non-functional** | Times out on real devices (AllegroWebserver timeout) | **None** - Use `/now_playing` instead |
 
 ### Official Endpoints Not Supported by API: 1
 
-| Endpoint | Method | Status | Official API Status |
-|----------|--------|--------|-------------------|
-| `/storePreset` | POST | ✅ **IMPLEMENTED** | Found via [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API) (official docs marked `/presets` POST as "N/A") |
-| `/removePreset` | POST | ✅ **IMPLEMENTED** | Found via [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API) |
+| Endpoint        | Method | Status            | Official API Status                                                                                                                                                                 |
+|-----------------|--------|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/storePreset`  | POST   | ✅ **IMPLEMENTED** | Found via [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API) (official docs marked `/presets` POST as "N/A") |
+| `/removePreset` | POST   | ✅ **IMPLEMENTED** | Found via [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)                                                 |
 
 ---
 
@@ -67,24 +67,24 @@ This Go implementation provides **complete coverage** of the Bose SoundTouch Web
 
 **Note**: The `/speaker` and `/playNotification` endpoints were discovered via the [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API) and are now part of the official coverage.
 
-| Endpoint | Method | Status | Notes |
-|----------|--------|--------|--------|
-| `/name` | GET | 🔍 **Extra** | Official API only documents POST, but GET works with real hardware |
-| `/balance` | GET/POST | 🔍 **Extra** | Stereo balance control (-50 to +50) - not in API v1.0 |
-| `/clockTime` | GET/POST | 🔍 **Extra** | Device time management - works with real devices |
-| `/clockDisplay` | GET/POST | 🔍 **Extra** | Clock display settings and brightness |
-| `/networkInfo` | GET | 🔍 **Extra** | Network connectivity information |
+| Endpoint        | Method   | Status       | Notes                                                              |
+|-----------------|----------|--------------|--------------------------------------------------------------------|
+| `/name`         | GET      | 🔍 **Extra** | Official API only documents POST, but GET works with real hardware |
+| `/balance`      | GET/POST | 🔍 **Extra** | Stereo balance control (-50 to +50) - not in API v1.0              |
+| `/clockTime`    | GET/POST | 🔍 **Extra** | Device time management - works with real devices                   |
+| `/clockDisplay` | GET/POST | 🔍 **Extra** | Clock display settings and brightness                              |
+| `/networkInfo`  | GET      | 🔍 **Extra** | Network connectivity information                                   |
 
 ### Advanced Implementation Features
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **WebSocket Events** | ✅ **Complete** | Real-time device state monitoring (`nowPlayingUpdated`, `volumeUpdated`, etc.) |
-| **Device Discovery** | ✅ **Complete** | UPnP/SSDP + mDNS/Bonjour automatic discovery |
-| **Safety Features** | ✅ **Enhanced** | Volume limiting, bass clamping, input validation |
-| **High-Level Zone API** | ✅ **Superior** | Fluent zone management API replacing low-level slave operations |
-| **Preset Management** | ✅ **Wiki Documented** | Full preset CRUD via `/storePreset` and `/removePreset` endpoints (found via SoundTouch Plus Wiki) |
-| **Content Navigation** | ✅ **Complete** | Browse and search content via `/navigate`, `/searchStation`, `/addStation` (via SoundTouch Plus Wiki) |
+| Feature                 | Status                | Description                                                                                           |
+|-------------------------|-----------------------|-------------------------------------------------------------------------------------------------------|
+| **WebSocket Events**    | ✅ **Complete**        | Real-time device state monitoring (`nowPlayingUpdated`, `volumeUpdated`, etc.)                        |
+| **Device Discovery**    | ✅ **Complete**        | UPnP/SSDP + mDNS/Bonjour automatic discovery                                                          |
+| **Safety Features**     | ✅ **Enhanced**        | Volume limiting, bass clamping, input validation                                                      |
+| **High-Level Zone API** | ✅ **Superior**        | Fluent zone management API replacing low-level slave operations                                       |
+| **Preset Management**   | ✅ **Wiki Documented** | Full preset CRUD via `/storePreset` and `/removePreset` endpoints (found via SoundTouch Plus Wiki)    |
+| **Content Navigation**  | ✅ **Complete**        | Browse and search content via `/navigate`, `/searchStation`, `/addStation` (via SoundTouch Plus Wiki) |
 
 ---
 
