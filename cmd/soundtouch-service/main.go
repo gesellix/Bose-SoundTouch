@@ -342,6 +342,11 @@ func main() {
 				Usage:   "Paths for internal requests (comma-separated or multiple flags)",
 				EnvVars: []string{"INTERNAL_PATHS"},
 			},
+			&cli.StringSliceFlag{
+				Name:    "tls-extra-host",
+				Usage:   "Additional DNS name or IP to include in the server TLS certificate SAN list (repeatable)",
+				EnvVars: []string{"TLS_EXTRA_HOST"},
+			},
 			&cli.BoolFlag{
 				Name:    "migration-enabled",
 				Usage:   "Enable device directory migration from serial to MAC-based structure",
@@ -382,7 +387,7 @@ func main() {
 				hostname = "localhost"
 			}
 
-			config.domains = getDomains(config.serverURL, config.httpsServerURL, hostname)
+			config.domains = getDomains(config.serverURL, config.httpsServerURL, hostname, config.tlsExtraHosts)
 
 			cm := initCertificateManager(config.dataDir, config.hostname)
 			sm := setup.NewManager(config.serverURL, ds, cm)
@@ -534,6 +539,7 @@ type serviceConfig struct {
 	dnsUpstream         string
 	dnsBind             string
 	internalPaths       []string
+	tlsExtraHosts       []string
 	discoveryEnabled    bool
 	discoveryInterval   time.Duration
 	domains             []string
@@ -590,7 +596,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 		httpsServerURL = "https://" + hostname + ":" + httpsPort
 	}
 
-	domains := getDomains(serverURL, httpsServerURL, hostname)
+	tlsExtraHosts := c.StringSlice("tls-extra-host")
+	domains := getDomains(serverURL, httpsServerURL, hostname, tlsExtraHosts)
 
 	redact := c.Bool("redact-logs")
 	logBody := c.Bool("log-bodies")
@@ -644,6 +651,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		dnsUpstream:         dnsUpstream,
 		dnsBind:             dnsBind,
 		internalPaths:       internalPaths,
+		tlsExtraHosts:       tlsExtraHosts,
 		discoveryEnabled:    discoveryEnabled,
 		discoveryInterval:   discoveryInterval,
 		domains:             domains,
@@ -666,7 +674,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 	}
 }
 
-func getDomains(serverURL, httpsServerURL, hostname string) []string {
+func getDomains(serverURL, httpsServerURL, hostname string, extraHosts []string) []string {
 	domainsMap := map[string]bool{
 		// RFC-compliant wildcards for API patterns
 		"*.api.bose.io":    true,
@@ -697,6 +705,15 @@ func getDomains(serverURL, httpsServerURL, hostname string) []string {
 
 	if u, err := url.Parse(httpsServerURL); err == nil && u.Hostname() != "" {
 		domainsMap[strings.ToLower(u.Hostname())] = true
+	}
+
+	// Explicit overrides / additions for multi-homed hosts, reverse proxies,
+	// or browsing the admin UI via a LAN IP that isn't part of serverURL.
+	for _, h := range extraHosts {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h != "" {
+			domainsMap[h] = true
+		}
 	}
 
 	domains := make([]string, 0, len(domainsMap))
