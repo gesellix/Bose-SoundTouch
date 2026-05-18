@@ -12,19 +12,19 @@ speakers usable without it.
 
 **Module:** `github.com/gesellix/bose-soundtouch`
 
-Two binaries:
+Key binaries:
 
 - `soundtouch-cli` — command-line control of one or more speakers
   (status, play, presets, groups, migration, …).
 - `soundtouch-service` — local replacement for `streaming.bose.com`
   and the `bmx` services, default port `8000`.
+- `soundtouch-web` — Web UI for Radio browsing and device control.
+- `soundtouch-backup` — Helper for on-device backup and restore.
 
-Per-session pickup notes live in two local files at the repo root:
+Per-session pickup notes live in two local files at the repo root (they are `.gitignore`d and only exist if created during a session):
 
 - `NEXT.md` — current "pick up here" log of open items.
 - `DONE.md` — archive of recently resolved items.
-
-Both are `.gitignore`d on purpose; they don't follow the repo.
 
 ## How a new session should start
 
@@ -40,7 +40,10 @@ Both are `.gitignore`d on purpose; they don't follow the repo.
 
 ```bash
 # Build
-make build          # CLI + service for current platform
+make build          # All binaries
+make build-cli      # Just CLI
+make build-service  # Just service
+make build-web      # Just web UI
 make build-all      # Cross-platform builds (Linux, macOS, Windows)
 make install        # Install to $GOPATH/bin
 
@@ -109,13 +112,14 @@ pkg/
   service/
     bmx/               # Bose Media eXchange service emulation
     marge/             # Device-management service emulation
-    handlers/          # HTTP request handlers
+    handlers/          # HTTP request handlers (pkg/service/handlers/)
     proxy/             # HTTP proxy with request recording
     datastore/         # Persistent device data storage
     certmanager/       # TLS certificate management
     setup/             # Device migration and configuration
     spotify/           # Spotify integration
     stockholm/         # Optional Stockholm frontend bridge
+    soundtouchweb/     # SoundTouch Web UI service logic
 examples/              # Feature demonstration programs
 docs/                  # Long-form analysis, guides, troubleshooting
 .junie/                # Communication-style guidelines (see below)
@@ -123,7 +127,7 @@ docs/                  # Long-form analysis, guides, troubleshooting
 
 ## Key technologies
 
-- **Go 1.26+**
+- **Go 1.26.3+**
 - **chi v5** — HTTP router
 - **gorilla/websocket** — WebSocket for real-time events
 - **hashicorp/mdns** — mDNS device discovery
