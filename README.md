@@ -1,4 +1,5 @@
-# Bose SoundTouch Toolkit
+# <img src="media/favicon-braille.svg" width="32" height="32" valign="middle"> AfterTouch
+<p style="margin-top: -10px; font-style: italic; color: #666;">Bose SoundTouch Toolkit</p>
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/gesellix/bose-soundtouch.svg)](https://pkg.go.dev/github.com/gesellix/bose-soundtouch)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gesellix/bose-soundtouch)](https://goreportcard.com/report/github.com/gesellix/bose-soundtouch)
