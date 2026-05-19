@@ -16,18 +16,37 @@ var dingDefaultCache struct {
 	data []byte
 }
 
-// HandleDing serves the AfterTouch "ding" signature audio.
-// Defaults are used when no query parameters are supplied;
-// callers can override any of the rendering knobs:
+// HandleDing serves the AfterTouch "ding" signature audio at
+// GET /media/aftertouch-ding.wav. All knobs are optional; the
+// default option set is used when no query parameters are
+// supplied. Unrecognised parameters and out-of-range values
+// (NaN, negatives where positive is required, etc.) silently
+// fall back to defaults — this is a "play around with it"
+// endpoint, not a strict API.
 //
-//	pitch-high, pitch-mid, pitch-low (Hz, float)
-//	chirp-ms, gap-ms, attack-ms, release-ms (milliseconds, int)
-//	sample-rate (Hz, int)
-//	peak (0..1, float)
+// Supported knobs (all optional; defaults apply per missing param):
 //
-// Unrecognised parameters and out-of-range values fall back to
-// defaults silently — this is a "play around with it" endpoint,
-// not a strict API.
+//	pitch-high                  Hz, float; default 880     (A5, top row)
+//	pitch-mid                   Hz, float; default 659.25  (E5, mid row)
+//	pitch-low                   Hz, float; default 440     (A4, bottom row)
+//	chirp-ms                    int milliseconds; default 250
+//	gap-ms                      int milliseconds; default 100
+//	attack-ms                   int milliseconds; default 20
+//	release-ms                  int milliseconds; default 60
+//	sample-rate                 Hz, int; default 22050
+//	peak                        0..1 float; default 0.85
+//
+// The default option set is rendered once via sync.Once and the
+// resulting bytes are reused across subsequent default requests —
+// first GET pays the synthesis cost (~ms), the rest serve from
+// memory. Requests with any override always re-synthesise.
+//
+// Example:
+//
+//	curl 'http://localhost:8000/media/aftertouch-ding.wav?pitch-high=1320&chirp-ms=150' > short.wav
+//
+// See pkg/service/ding for the renderer, scripts/gen-aftertouch-ding
+// for the offline-CLI equivalent that takes the same knobs as flags.
 func (s *Server) HandleDing(w http.ResponseWriter, r *http.Request) {
 	opts, isDefault := parseDingOptions(r)
 
