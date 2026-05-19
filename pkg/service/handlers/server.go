@@ -124,6 +124,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		},
 		s.loadOwnCACert,
 	)
+	health.RegisterCACertExpiryCheck(s.healthRegistry, s.loadOwnCACert, s.ownCACertPath)
 	health.RegisterTestPlaybackCheck(s.healthRegistry, ds, func() string {
 		serverURL, _ := s.GetSettings()
 		return serverURL
@@ -172,6 +173,18 @@ func (s *Server) ExpectedHosts() []string {
 	copy(out, s.expectedHosts)
 
 	return out
+}
+
+// ownCACertPath returns the on-disk path of AfterTouch's own CA
+// cert (PEM). Empty string when the certmanager isn't wired in.
+// Used by the Health-tab CA-expiry check to render an accurate
+// remediation command pointing at the actual file.
+func (s *Server) ownCACertPath() string {
+	if s.sm == nil || s.sm.Crypto == nil {
+		return ""
+	}
+
+	return s.sm.Crypto.GetCACertPath()
 }
 
 // loadOwnCACert parses AfterTouch's own CA leaf from disk. Used
