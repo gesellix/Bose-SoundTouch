@@ -507,6 +507,10 @@ function openTab(evt, tabId) {
         fetchAccountList();
     }
 
+    if (tabId === "tab-health") {
+        fetchHealth();
+    }
+
     if (evt) {
         evt.currentTarget.className += " active";
         let hash = tabId;
@@ -3976,3 +3980,183 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchSettings();
     triggerDiscovery();
 });
+
+// ---------------------------------------------------------------------------
+// Health tab
+// ---------------------------------------------------------------------------
+
+async function fetchHealth() {
+    const findingsEl = document.getElementById("health-findings");
+    const generatedAtEl = document.getElementById("health-generated-at");
+    if (!findingsEl) return;
+
+    findingsEl.textContent = "Loading…";
+    if (generatedAtEl) generatedAtEl.textContent = "";
+
+    try {
+        const resp = await fetch("/setup/health");
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        renderHealthChecks(data, findingsEl, generatedAtEl);
+    } catch (e) {
+        findingsEl.textContent = `Failed to load health checks: ${e.message || e}`;
+    }
+}
+
+function renderHealthChecks(data, findingsEl, generatedAtEl) {
+    if (generatedAtEl && data.generatedAt) {
+        generatedAtEl.textContent = `Last run: ${data.generatedAt}`;
+    }
+
+    const checks = data.checks || [];
+    if (checks.length === 0) {
+        findingsEl.textContent = "No checks are registered.";
+        return;
+    }
+
+    findingsEl.innerHTML = "";
+    for (const check of checks) {
+        findingsEl.appendChild(renderHealthCheck(check));
+    }
+}
+
+function renderHealthCheck(check) {
+    const box = document.createElement("div");
+    box.className = "summary-box";
+
+    const header = document.createElement("h3");
+    header.style.margin = "0 0 8px 0";
+    header.appendChild(severityBadge(check.severity));
+    header.appendChild(document.createTextNode(" " + check.title));
+    box.appendChild(header);
+
+    const idLine = document.createElement("div");
+    idLine.style.fontSize = "0.75em";
+    idLine.style.color = "#888";
+    idLine.style.marginBottom = "8px";
+    idLine.textContent = `id: ${check.id}`;
+    box.appendChild(idLine);
+
+    const findings = check.findings || [];
+    if (findings.length === 0) {
+        const ok = document.createElement("div");
+        ok.style.color = "#2e7d32";
+        ok.textContent = "✓ No issues detected.";
+        box.appendChild(ok);
+        return box;
+    }
+
+    for (const f of findings) {
+        box.appendChild(renderFinding(check.id, f));
+    }
+    return box;
+}
+
+function renderFinding(checkId, finding) {
+    const row = document.createElement("div");
+    row.style.borderTop = "1px solid #e0e0e0";
+    row.style.padding = "10px 0";
+
+    const title = document.createElement("div");
+    title.appendChild(severityBadge(finding.severity));
+    title.appendChild(document.createTextNode(" " + (finding.message || "")));
+    row.appendChild(title);
+
+    const target = finding.target || {};
+    if (target.account || target.device) {
+        const t = document.createElement("div");
+        t.style.fontSize = "0.8em";
+        t.style.color = "#666";
+        t.style.marginTop = "4px";
+        const parts = [];
+        if (target.account) parts.push(`account ${target.account}`);
+        if (target.device) parts.push(`device ${target.device}`);
+        t.textContent = parts.join(" · ");
+        row.appendChild(t);
+    }
+
+    if (finding.details) {
+        const d = document.createElement("div");
+        d.style.fontSize = "0.85em";
+        d.style.color = "#444";
+        d.style.marginTop = "6px";
+        d.textContent = finding.details;
+        row.appendChild(d);
+    }
+
+    const fixes = finding.quickFixes || [];
+    if (fixes.length > 0) {
+        const actions = document.createElement("div");
+        actions.style.marginTop = "8px";
+        actions.style.display = "flex";
+        actions.style.gap = "8px";
+        actions.style.flexWrap = "wrap";
+        for (const fix of fixes) {
+            const btn = document.createElement("button");
+            btn.textContent = fix.label || fix.id;
+            btn.onclick = () => runQuickFix(checkId, fix.id, target, fix.confirm, btn);
+            actions.appendChild(btn);
+        }
+        const status = document.createElement("span");
+        status.className = "health-fix-status";
+        status.style.fontSize = "0.85em";
+        status.style.alignSelf = "center";
+        actions.appendChild(status);
+        row.appendChild(actions);
+    }
+
+    return row;
+}
+
+function severityBadge(severity) {
+    const span = document.createElement("span");
+    span.style.fontSize = "0.75em";
+    span.style.padding = "2px 6px";
+    span.style.borderRadius = "10px";
+    span.style.fontWeight = "bold";
+    const palette = {
+        ok:      { bg: "#e8f5e9", fg: "#2e7d32", label: "OK" },
+        info:    { bg: "#e3f2fd", fg: "#1565c0", label: "INFO" },
+        warning: { bg: "#fff8e1", fg: "#a06800", label: "WARN" },
+        error:   { bg: "#ffebee", fg: "#c62828", label: "ERROR" },
+    };
+    const p = palette[severity] || palette.info;
+    span.style.background = p.bg;
+    span.style.color = p.fg;
+    span.textContent = p.label;
+    return span;
+}
+
+async function runQuickFix(checkId, fixId, target, confirmMsg, button) {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+
+    const status = button.parentElement.querySelector(".health-fix-status");
+    button.disabled = true;
+    if (status) {
+        status.textContent = "Applying…";
+        status.style.color = "#555";
+    }
+
+    try {
+        const resp = await fetch("/setup/health/fix", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ checkId, fixId, target }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || data.message || `HTTP ${resp.status}`);
+
+        if (status) {
+            status.textContent = data.message || "Done.";
+            status.style.color = "#2e7d32";
+        }
+        // Refresh to drop the resolved finding.
+        setTimeout(fetchHealth, 400);
+    } catch (e) {
+        if (status) {
+            status.textContent = `Failed: ${e.message || e}`;
+            status.style.color = "#c62828";
+        }
+        button.disabled = false;
+    }
+}

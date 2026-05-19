@@ -1154,6 +1154,9 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 
+		r.Get("/health", server.HandleHealthChecks)
+		r.Post("/health/fix", server.HandleHealthFix)
+
 		// Serve Stockholm setup wizard pages for paths not matched by the management API.
 		// The Stockholm frontend has a setup/ directory that must be accessible at /setup/*.
 		if stockholmHandler != nil {

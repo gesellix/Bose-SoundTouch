@@ -36,6 +36,9 @@
     <button class="tab-btn" onclick="openTab(event, 'tab-account')">
             6. Local Account
         </button>
+    <button class="tab-btn" onclick="openTab(event, 'tab-health')">
+        7. Health
+    </button>
     </div>
 
     <!-- Tab 0: Overview -->
@@ -1489,6 +1492,21 @@
             <h3>Connected Devices</h3>
             <div id="account-devices-list">Select an account to view devices.</div>
         </div>
+    </div>
+
+    <!-- Tab 7: Health -->
+    <div id="tab-health" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Service Health Checks</h2>
+            <button onclick="fetchHealth()">Refresh</button>
+        </div>
+        <p style="font-size: 0.9em; color: #555;">
+            Runs a set of checks against the local datastore and flags
+            findings that may need attention. Quick fixes are offered
+            for issues the service knows how to remediate.
+        </p>
+        <div id="health-generated-at" style="font-size: 0.8em; color: #888; margin-bottom: 10px;"></div>
+        <div id="health-findings">Loading…</div>
     </div>
 </div>
 

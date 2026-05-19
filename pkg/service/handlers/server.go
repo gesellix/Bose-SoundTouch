@@ -20,6 +20,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/health"
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
@@ -62,6 +63,7 @@ type Server struct {
 	amazonRedirectURI   string
 	amazonService       *amazon.Service
 	peerObserver        *peerObserver
+	healthRegistry      *health.Registry
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -97,7 +99,10 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		discoveryInterval: 5 * time.Minute,
 		discoveryEnabled:  true,
 		peerObserver:      newPeerObserver(),
+		healthRegistry:    health.NewRegistry(),
 	}
+
+	health.RegisterSourcesXMLPresent(s.healthRegistry, ds)
 
 	return s
 }

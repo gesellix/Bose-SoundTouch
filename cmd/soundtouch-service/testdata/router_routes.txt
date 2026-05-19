@@ -58,6 +58,7 @@ GET      /setup/devices/{deviceId}/events                             handlers.(
 GET      /setup/discovery-status                                      handlers.(*Server).HandleGetDiscoveryStatus-fm
 GET      /setup/dns-discoveries                                       handlers.(*Server).HandleGetDNSDiscoveries-fm
 GET      /setup/dns-discoveries/download                              handlers.(*Server).HandleDownloadDNSDiscoveries-fm
+GET      /setup/health                                                handlers.(*Server).HandleHealthChecks-fm
 GET      /setup/info/{deviceId}                                       handlers.(*Server).HandleGetDeviceInfo-fm
 GET      /setup/interaction-content                                   handlers.(*Server).HandleGetInteractionContent-fm
 GET      /setup/interaction-stats                                     handlers.(*Server).HandleGetInteractionStats-fm
@@ -127,6 +128,7 @@ POST     /setup/backup/{deviceId}                                     handlers.(
 POST     /setup/devices                                               handlers.(*Server).HandleAddManualDevice-fm
 POST     /setup/discover                                              handlers.(*Server).HandleTriggerDiscovery-fm
 POST     /setup/ensure-remote-services/{deviceId}                     handlers.(*Server).HandleEnsureRemoteServices-fm
+POST     /setup/health/fix                                            handlers.(*Server).HandleHealthFix-fm
 POST     /setup/logging-settings                                      handlers.(*Server).HandleUpdateLoggingSettings-fm
 POST     /setup/migrate/{deviceId}                                    handlers.(*Server).HandleMigrateDevice-fm
 POST     /setup/pair-account/{deviceId}                               handlers.(*Server).HandlePairAccount-fm
