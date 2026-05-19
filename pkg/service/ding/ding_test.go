@@ -77,6 +77,41 @@ func TestRender_OverrideSampleRateChangesByteRate(t *testing.T) {
 	}
 }
 
+func TestSafeSampleRate_ClampsOutOfRange(t *testing.T) {
+	cases := []struct {
+		in   int
+		want uint32
+	}{
+		{22050, 22050},
+		{44100, 44100},
+		{192000, 192000},
+		{0, 22050},       // zero → default
+		{-1, 22050},      // negative → default
+		{200000, 22050},  // above max → default
+		{1 << 31, 22050}, // way beyond uint32 → default (the original CodeQL concern)
+		{1 << 33, 22050}, // wraps to a different value on int→uint32; default protects us
+		{int(maxSampleRate) + 1, 22050},
+	}
+
+	for _, c := range cases {
+		if got := safeSampleRate(c.in); got != c.want {
+			t.Errorf("safeSampleRate(%d) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+func TestRender_HugeSampleRateDoesNotTruncateOrPanic(t *testing.T) {
+	// Regression for the int→uint32 truncation CodeQL flagged.
+	// A caller (test, future SDK user) bypassing the handler's
+	// sampleRateParam guard with an int well above uint32 used
+	// to silently wrap. The defensive clamp now substitutes the
+	// default sample rate instead.
+	data := Render(Options{SampleRate: 1 << 33}.WithDefaults())
+	if sr := binary.LittleEndian.Uint32(data[24:28]); sr != uint32(DefaultOptions().SampleRate) {
+		t.Errorf("expected clamp to default sample rate, got %d", sr)
+	}
+}
+
 func TestWithDefaults_FillsZeroFields(t *testing.T) {
 	got := Options{PitchHigh: 1000}.WithDefaults()
 	if got.PitchHigh != 1000 {

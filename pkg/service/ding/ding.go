@@ -79,7 +79,7 @@ func DefaultOptions() Options {
 func (o Options) WithDefaults() Options {
 	d := DefaultOptions()
 
-	if o.SampleRate <= 0 {
+	if o.SampleRate <= 0 || o.SampleRate > int(maxSampleRate) {
 		o.SampleRate = d.SampleRate
 	}
 
@@ -151,7 +151,13 @@ func Render(opts Options) []byte {
 
 	var buf bytes.Buffer
 
-	_ = writeWAV(&buf, left, right, opts.SampleRate)
+	// Defensive bound check: clamp before the conversion to
+	// uint32 so even a buggy caller (or one that bypassed the
+	// handler-side bound check on the query param) can't trigger
+	// integer truncation in the WAV header fields.
+	sampleRate32 := safeSampleRate(opts.SampleRate)
+
+	_ = writeWAV(&buf, left, right, sampleRate32)
 
 	return buf.Bytes()
 }
@@ -225,7 +231,28 @@ const (
 	wavBitsPer  = 16
 )
 
-func writeWAV(w io.Writer, left, right []float64, sampleRate int) error {
+// maxSampleRate is the largest sample rate writeWAV will accept
+// before clamping. Generous enough to allow studio-quality 192
+// kHz; well below the uint32 ceiling the WAV header field can
+// represent, and far below anything the byte-rate multiplication
+// downstream could overflow.
+const maxSampleRate uint32 = 192_000
+
+// safeSampleRate converts the operator-supplied int sample rate
+// into the uint32 the WAV header needs, clamping anything
+// out-of-range to the default. Defence-in-depth: the
+// handler-side sampleRateParam already rejects unreasonable
+// inputs, but Render is exported so other callers (tests,
+// scripts) could pass anything.
+func safeSampleRate(in int) uint32 {
+	if in <= 0 || in > int(maxSampleRate) {
+		return uint32(DefaultOptions().SampleRate)
+	}
+
+	return uint32(in)
+}
+
+func writeWAV(w io.Writer, left, right []float64, sampleRate uint32) error {
 	if len(left) != len(right) {
 		return fmt.Errorf("channel length mismatch: %d vs %d", len(left), len(right))
 	}
@@ -262,11 +289,11 @@ func writeWAV(w io.Writer, left, right []float64, sampleRate int) error {
 		return err
 	}
 
-	if err := binary.Write(w, binary.LittleEndian, uint32(sampleRate)); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, sampleRate); err != nil {
 		return err
 	}
 
-	byteRate := uint32(sampleRate * wavChannels * (wavBitsPer / 8))
+	byteRate := sampleRate * uint32(wavChannels) * uint32(wavBitsPer/8)
 	if err := binary.Write(w, binary.LittleEndian, byteRate); err != nil {
 		return err
 	}

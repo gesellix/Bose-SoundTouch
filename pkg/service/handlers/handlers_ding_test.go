@@ -90,6 +90,35 @@ func TestHandleDing_InvalidParamFallsBackToDefault(t *testing.T) {
 	}
 }
 
+func TestHandleDing_OutOfRangeSampleRateFallsBackToDefault(t *testing.T) {
+	// CodeQL flagged the int→uint32 truncation; reject values
+	// outside the sane audio range at the parser, so neither
+	// the WAV header nor the int→uint32 cast can be tricked.
+	cases := []string{
+		"1",          // below dingMinSampleRate
+		"7999",       // just under the floor
+		"500000",     // above dingMaxSampleRate
+		"4294967300", // > uint32 — the truncation source
+	}
+
+	ts := newDingTestServer(t)
+
+	for _, sr := range cases {
+		t.Run(sr, func(t *testing.T) {
+			res, err := http.Get(ts.URL + "/media/aftertouch-ding.wav?sample-rate=" + sr)
+			if err != nil {
+				t.Fatalf("GET: %v", err)
+			}
+			defer res.Body.Close()
+
+			body := readAll(t, res)
+			if got := binary.LittleEndian.Uint32(body[24:28]); got != 22050 {
+				t.Errorf("sample-rate=%s should clamp to default 22050, got %d", sr, got)
+			}
+		})
+	}
+}
+
 func TestHandleDing_DefaultIsCached(t *testing.T) {
 	// Reset the cache by simulating a fresh process.
 	dingDefaultCache.once = sync.Once{}

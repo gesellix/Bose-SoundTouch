@@ -114,7 +114,7 @@ func parseDingOptions(r *http.Request) (ding.Options, bool) {
 		touched = true
 	}
 
-	if v, ok := intParam(q.Get("sample-rate")); ok {
+	if v, ok := sampleRateParam(q.Get("sample-rate")); ok {
 		opts.SampleRate = v
 		touched = true
 	}
@@ -157,13 +157,23 @@ func millisecondsParam(raw string) (float64, bool) {
 	return float64(v) / 1000.0, true
 }
 
-func intParam(raw string) (int, bool) {
+// dingMinSampleRate / dingMaxSampleRate gate the operator-supplied
+// sample-rate against int→uint32 truncation and against values
+// outside any realistic audio range. The upper bound is generous
+// (192 kHz is studio-quality) but well below the uint32 ceiling
+// the WAV header field can hold.
+const (
+	dingMinSampleRate = 8000
+	dingMaxSampleRate = 192000
+)
+
+func sampleRateParam(raw string) (int, bool) {
 	if raw == "" {
 		return 0, false
 	}
 
 	v, err := strconv.Atoi(raw)
-	if err != nil || v <= 0 {
+	if err != nil || v < dingMinSampleRate || v > dingMaxSampleRate {
 		return 0, false
 	}
 
