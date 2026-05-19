@@ -54,6 +54,7 @@ GET      /mgmt/spotify/callback                                       handlers.(
 GET      /mgmt/spotify/token                                          handlers.(*Server).HandleMgmtSpotifyToken-fm
 GET      /setup/account-id-suggestions/{deviceId}                     handlers.(*Server).HandleAccountIDSuggestions-fm
 GET      /setup/ca.crt                                                handlers.(*Server).HandleGetCACert-fm
+GET      /setup/device-summary/{deviceId}                             handlers.(*Server).HandleDeviceSummary-fm
 GET      /setup/devices                                               handlers.(*Server).HandleListDiscoveredDevices-fm
 GET      /setup/devices/{deviceId}/events                             handlers.(*Server).HandleGetDeviceEvents-fm
 GET      /setup/discovery-status                                      handlers.(*Server).HandleGetDiscoveryStatus-fm

@@ -429,11 +429,15 @@ async function fetchDevices() {
                         <td class="col-fw-serial"><div class="col-firmware">${d.firmware_version || "0.0.0"}</div><div class="col-serial" style="font-size: 0.8em; color: #666;">${d.device_serial_number}</div></td>
                         <td class="col-method">${methodLabel}</td>
                         <td>
+                            <button onclick="toggleDeviceSummary('${d.device_id}')">Inspect</button>
                             <button onclick="prepareSync('${d.device_id}')">Sync Data</button>
                             <button onclick="prepareMigration('${d.device_id}')">Migrate</button>
                             <button id="prime-spotify-${d.device_id}" class="btn-spotify" style="display: none;" onclick="primeSpotify('${d.device_id}')">Prime Spotify</button>
                             <button class="btn-danger" onclick="removeDevice('${d.device_id}', '${d.name}')">Remove</button>
                         </td>
+                    </tr>
+                    <tr id="device-summary-${d.device_id}" style="display: none;">
+                        <td colspan="6" id="device-summary-cell-${d.device_id}" style="background: #fafafa; padding: 12px;"></td>
                     </tr>
                 `;
 
@@ -4365,4 +4369,250 @@ function renderLogs() {
 function scrollLogsToBottom() {
     const viewEl = document.getElementById("logs-view");
     if (viewEl) viewEl.scrollTop = viewEl.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Device summary (Devices tab — per-device "Inspect" panel)
+// ---------------------------------------------------------------------------
+
+async function toggleDeviceSummary(deviceId) {
+    const row = document.getElementById(`device-summary-${deviceId}`);
+    const cell = document.getElementById(`device-summary-cell-${deviceId}`);
+    if (!row || !cell) return;
+
+    if (row.style.display !== "none") {
+        row.style.display = "none";
+        return;
+    }
+
+    row.style.display = "";
+    cell.innerHTML = '<em style="color:#666;">Probing speaker…</em>';
+
+    try {
+        const resp = await fetch(`/setup/device-summary/${encodeURIComponent(deviceId)}`);
+        if (!resp.ok) {
+            const txt = await resp.text();
+            cell.innerHTML = `<span style="color:#c62828;">Summary failed: ${resp.status} ${escapeHTML(txt)}</span>`;
+            return;
+        }
+        const data = await resp.json();
+        cell.innerHTML = "";
+        cell.appendChild(renderDeviceSummary(data));
+    } catch (e) {
+        cell.innerHTML = `<span style="color:#c62828;">Summary failed: ${escapeHTML(e.message || String(e))}</span>`;
+    }
+}
+
+function renderDeviceSummary(data) {
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gridTemplateColumns = "repeat(auto-fit, minmax(280px, 1fr))";
+    wrap.style.gap = "12px";
+
+    wrap.appendChild(summaryCard("Speaker /info", renderSpeakerInfoBody(data.speaker.info)));
+    wrap.appendChild(summaryCard("Speaker /sources", renderSpeakerSourcesBody(data.speaker.sources, data.service)));
+    wrap.appendChild(summaryCard("Speaker /presets", renderSpeakerPresetsBody(data.speaker.presets, data.service)));
+    wrap.appendChild(summaryCard("Service-side state", renderServiceBody(data.service)));
+    wrap.appendChild(summaryCard("Pairing inference", renderPairingBody(data.pairing, data.service)));
+
+    const footer = document.createElement("div");
+    footer.style.gridColumn = "1 / -1";
+    footer.style.fontSize = "0.75em";
+    footer.style.color = "#888";
+    footer.textContent = `Generated at ${data.generated_at}`;
+    wrap.appendChild(footer);
+
+    return wrap;
+}
+
+function summaryCard(title, bodyNode) {
+    const card = document.createElement("div");
+    card.style.background = "#fff";
+    card.style.border = "1px solid #ddd";
+    card.style.borderRadius = "4px";
+    card.style.padding = "10px 12px";
+
+    const h = document.createElement("div");
+    h.style.fontWeight = "bold";
+    h.style.marginBottom = "8px";
+    h.style.fontSize = "0.9em";
+    h.textContent = title;
+    card.appendChild(h);
+
+    if (bodyNode) card.appendChild(bodyNode);
+    return card;
+}
+
+function renderSpeakerInfoBody(info) {
+    const body = document.createElement("div");
+    body.style.fontSize = "0.85em";
+
+    if (!info.reachable) {
+        body.appendChild(unreachableBlock(info));
+        return body;
+    }
+
+    body.appendChild(kv("name", info.name));
+    body.appendChild(kv("type", info.type));
+    body.appendChild(kv("margeAccountUUID", info.marge_account_uuid || "(empty)"));
+    body.appendChild(kv("margeURL", info.marge_url || "(empty)"));
+    return body;
+}
+
+function renderSpeakerSourcesBody(sources, service) {
+    const body = document.createElement("div");
+    body.style.fontSize = "0.85em";
+
+    if (!sources.reachable) {
+        body.appendChild(unreachableBlock(sources));
+        return body;
+    }
+
+    const types = sources.types || [];
+    body.appendChild(kv("count", String(types.length)));
+    body.appendChild(kv("types", types.length ? types.join(", ") : "(none)"));
+
+    const svcTypes = (service && service.service_source_types) || [];
+    const missingOnSpeaker = svcTypes.filter(t => types.indexOf(t) < 0);
+    const extraOnSpeaker = types.filter(t => svcTypes.indexOf(t) < 0);
+
+    if (missingOnSpeaker.length > 0) {
+        body.appendChild(kv("missing on speaker", missingOnSpeaker.join(", "), "#a06800"));
+    }
+    if (extraOnSpeaker.length > 0) {
+        body.appendChild(kv("extra on speaker", extraOnSpeaker.join(", "), "#666"));
+    }
+    return body;
+}
+
+function renderSpeakerPresetsBody(presets, service) {
+    const body = document.createElement("div");
+    body.style.fontSize = "0.85em";
+
+    if (!presets.reachable) {
+        body.appendChild(unreachableBlock(presets));
+        return body;
+    }
+
+    const ids = presets.ids || [];
+    body.appendChild(kv("count", String(ids.length)));
+    body.appendChild(kv("slots", ids.length ? ids.join(", ") : "(none)"));
+
+    if (service && typeof service.service_preset_count === "number") {
+        if (service.service_preset_count !== ids.length) {
+            body.appendChild(kv("service count", String(service.service_preset_count), "#a06800"));
+        }
+    }
+    return body;
+}
+
+function renderServiceBody(service) {
+    const body = document.createElement("div");
+    body.style.fontSize = "0.85em";
+
+    body.appendChild(kv("server URL", service.server_url || "(unset)"));
+
+    const hosts = service.expected_hosts || [];
+    body.appendChild(kv("expected hosts", hosts.length ? hosts.join(", ") : "(none)"));
+
+    body.appendChild(kv("Sources.xml", service.sources_xml_present ? "present" : "MISSING", service.sources_xml_present ? null : "#c62828"));
+    body.appendChild(kv("Presets.xml", service.presets_xml_present ? `${service.service_preset_count} preset(s)` : "(empty)"));
+    return body;
+}
+
+function renderPairingBody(pairing, service) {
+    const body = document.createElement("div");
+    body.style.fontSize = "0.85em";
+
+    body.appendChild(kv("paired", pairing.paired ? "yes" : "NO", pairing.paired ? null : "#c62828"));
+    body.appendChild(kv("speaker marge host", pairing.speaker_marge_host || "(unknown)"));
+
+    const matches = pairing.marge_url_matches_service;
+    body.appendChild(kv("matches service?", matches ? "yes" : "NO", matches ? null : "#a06800"));
+    return body;
+}
+
+function kv(label, value, valueColor) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.gap = "8px";
+    row.style.marginBottom = "2px";
+    row.style.alignItems = "baseline";
+
+    const l = document.createElement("span");
+    l.style.color = "#666";
+    l.style.minWidth = "120px";
+    l.style.flexShrink = "0";
+    l.textContent = label;
+    row.appendChild(l);
+
+    const v = document.createElement("span");
+    v.style.wordBreak = "break-all";
+    if (valueColor) v.style.color = valueColor;
+    v.textContent = value;
+    row.appendChild(v);
+    return row;
+}
+
+function unreachableBlock(probe) {
+    const wrap = document.createElement("div");
+
+    const msg = document.createElement("div");
+    msg.style.color = "#a06800";
+    msg.style.marginBottom = "6px";
+    msg.textContent = probe.error ? `Unreachable: ${probe.error}` : "Unreachable from this service host.";
+    wrap.appendChild(msg);
+
+    if (probe.curl_command) {
+        const hint = document.createElement("div");
+        hint.style.fontSize = "0.85em";
+        hint.style.color = "#444";
+        hint.style.marginBottom = "4px";
+        hint.textContent = "Run from your LAN:";
+        wrap.appendChild(hint);
+
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.gap = "8px";
+        row.style.alignItems = "stretch";
+
+        const code = document.createElement("code");
+        code.style.flex = "1";
+        code.style.padding = "4px 6px";
+        code.style.background = "#f4f4f4";
+        code.style.border = "1px solid #ddd";
+        code.style.borderRadius = "3px";
+        code.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, monospace";
+        code.style.fontSize = "0.8em";
+        code.style.whiteSpace = "pre-wrap";
+        code.style.wordBreak = "break-all";
+        code.textContent = probe.curl_command;
+        row.appendChild(code);
+
+        const btn = document.createElement("button");
+        btn.textContent = "Copy";
+        btn.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(probe.curl_command);
+                const orig = btn.textContent;
+                btn.textContent = "Copied";
+                setTimeout(() => { btn.textContent = orig; }, 1200);
+            } catch (e) {
+                btn.textContent = "Copy failed";
+            }
+        };
+        row.appendChild(btn);
+        wrap.appendChild(row);
+    }
+
+    return wrap;
+}
+
+function escapeHTML(s) {
+    return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 }

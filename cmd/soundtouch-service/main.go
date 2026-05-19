@@ -1194,6 +1194,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Delete("/dns-discoveries", server.HandleClearDNSDiscoveries)
 
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
+		r.Get("/device-summary/{deviceId}", server.HandleDeviceSummary)
 
 		r.Get("/health", server.HandleHealthChecks)
 		r.Post("/health/fix", server.HandleHealthFix)
