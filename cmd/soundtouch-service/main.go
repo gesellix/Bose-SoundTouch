@@ -933,6 +933,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		server.HandleWeb()(w, r)
 	})
 
+	r.Get("/media/aftertouch-ding.wav", server.HandleDing)
 	r.Get("/media/*", server.HandleMedia())
 	r.Get("/bmx-icons/*", server.HandleBmxIcons())
 	r.Get("/ced/*", server.HandleCedStatic())

@@ -41,6 +41,7 @@ GET      /docs/*                                                      handlers.(
 GET      /favicon.ico                                                 setupRouter
 GET      /health                                                      handlers.(*Server).HandleHealth-fm
 GET      /media/*                                                     handlers.(*Server).HandleMedia
+GET      /media/aftertouch-ding.wav                                   handlers.(*Server).HandleDing-fm
 GET      /mgmt/accounts/                                              handlers.(*Server).HandleMgmtListAccounts-fm
 GET      /mgmt/accounts/{accountId}                                   handlers.(*Server).HandleMgmtAccountDetails-fm
 GET      /mgmt/accounts/{accountId}/speakers                          handlers.(*Server).HandleMgmtListSpeakers-fm
