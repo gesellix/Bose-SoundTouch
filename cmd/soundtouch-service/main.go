@@ -435,6 +435,7 @@ func main() {
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetLogBuffer(logBuf)
 			server.SetHTTPServerURL(config.httpsServerURL)
+			server.SetExpectedHosts(config.domains)
 			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)

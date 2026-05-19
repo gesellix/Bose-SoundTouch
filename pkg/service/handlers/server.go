@@ -66,6 +66,7 @@ type Server struct {
 	peerObserver        *peerObserver
 	healthRegistry      *health.Registry
 	logBuf              *logbuf.Buffer
+	expectedHosts       []string
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -107,8 +108,34 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterSourcesXMLPresent(s.healthRegistry, ds)
 	health.RegisterSpeakerInfoReachable(s.healthRegistry, ds)
 	health.RegisterSourcesXMLDiff(s.healthRegistry, ds)
+	health.RegisterSpeakerMargeURLCheck(s.healthRegistry, ds, s.ExpectedHosts)
 
 	return s
+}
+
+// SetExpectedHosts records the hostnames the service considers its
+// own (serverURL host + httpsServerURL host + --tls-extra-host
+// values). The Health tab's Marge-URL check reads this list at
+// run time to decide whether a speaker's <margeURL> points at us.
+func (s *Server) SetExpectedHosts(hosts []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]string, len(hosts))
+	copy(out, hosts)
+
+	s.expectedHosts = out
+}
+
+// ExpectedHosts returns a copy of the recorded expected-hosts list.
+func (s *Server) ExpectedHosts() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make([]string, len(s.expectedHosts))
+	copy(out, s.expectedHosts)
+
+	return out
 }
 
 // TrustedRealIPMiddleware returns a chi middleware that rewrites
