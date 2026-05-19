@@ -53,18 +53,32 @@ type QuickFix struct {
 	Confirm string `json:"confirm,omitempty"`
 }
 
+// ManualCommand is a shell command the UI offers as a copy-paste
+// affordance, typically when a probe couldn't reach a LAN target
+// from the service host. Label is shown next to the copy button;
+// Command is the verbatim string the operator should run. Hint is
+// optional UI guidance ("run this on a machine on the speaker's
+// network").
+type ManualCommand struct {
+	Label   string `json:"label"`
+	Command string `json:"command"`
+	Hint    string `json:"hint,omitempty"`
+}
+
 // Finding is the unit of output from a check. Severity should be
 // SeverityWarning or SeverityError for findings that need
 // attention; SeverityInfo is for things the operator might want to
 // notice but doesn't need to act on. Target locates the finding
-// (per-device / per-account / service-wide). QuickFixes is
-// optional.
+// (per-device / per-account / service-wide). QuickFixes and
+// ManualCommands are both optional; the former drive
+// /setup/health/fix calls, the latter render as copy-paste blocks.
 type Finding struct {
-	Severity   Severity   `json:"severity"`
-	Target     Target     `json:"target"`
-	Message    string     `json:"message"`
-	Details    string     `json:"details,omitempty"`
-	QuickFixes []QuickFix `json:"quickFixes,omitempty"`
+	Severity       Severity        `json:"severity"`
+	Target         Target          `json:"target"`
+	Message        string          `json:"message"`
+	Details        string          `json:"details,omitempty"`
+	QuickFixes     []QuickFix      `json:"quickFixes,omitempty"`
+	ManualCommands []ManualCommand `json:"manualCommands,omitempty"`
 }
 
 // RunFunc executes a check and returns its Findings. Returning a

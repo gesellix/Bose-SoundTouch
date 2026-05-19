@@ -4111,7 +4111,74 @@ function renderFinding(checkId, finding) {
         row.appendChild(actions);
     }
 
+    const manualCommands = finding.manualCommands || [];
+    for (const cmd of manualCommands) {
+        row.appendChild(renderManualCommand(cmd));
+    }
+
     return row;
+}
+
+function renderManualCommand(cmd) {
+    const wrap = document.createElement("div");
+    wrap.style.marginTop = "8px";
+    wrap.style.padding = "8px";
+    wrap.style.background = "#f4f4f4";
+    wrap.style.borderRadius = "4px";
+    wrap.style.fontSize = "0.85em";
+
+    if (cmd.label) {
+        const label = document.createElement("div");
+        label.style.color = "#444";
+        label.style.marginBottom = "4px";
+        label.textContent = cmd.label;
+        wrap.appendChild(label);
+    }
+
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "stretch";
+    row.style.gap = "8px";
+
+    const code = document.createElement("code");
+    code.style.flex = "1";
+    code.style.padding = "6px 8px";
+    code.style.background = "#fff";
+    code.style.border = "1px solid #ddd";
+    code.style.borderRadius = "3px";
+    code.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, monospace";
+    code.style.whiteSpace = "pre-wrap";
+    code.style.wordBreak = "break-all";
+    code.textContent = cmd.command;
+    row.appendChild(code);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.textContent = "Copy";
+    copyBtn.style.alignSelf = "flex-start";
+    copyBtn.onclick = async () => {
+        try {
+            await navigator.clipboard.writeText(cmd.command);
+            const orig = copyBtn.textContent;
+            copyBtn.textContent = "Copied";
+            setTimeout(() => { copyBtn.textContent = orig; }, 1200);
+        } catch (e) {
+            copyBtn.textContent = "Copy failed";
+        }
+    };
+    row.appendChild(copyBtn);
+
+    wrap.appendChild(row);
+
+    if (cmd.hint) {
+        const hint = document.createElement("div");
+        hint.style.fontSize = "0.8em";
+        hint.style.color = "#666";
+        hint.style.marginTop = "4px";
+        hint.textContent = cmd.hint;
+        wrap.appendChild(hint);
+    }
+
+    return wrap;
 }
 
 function severityBadge(severity) {
