@@ -3,6 +3,7 @@ package health
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -72,31 +73,21 @@ func runCertChainCheck(httpsURL string, caCertFn func() *x509.Certificate) []Fin
 		return nil // validates against system roots
 	}
 
-	// Phase 2: re-dial with InsecureSkipVerify so we can read the
-	// chain and report what was actually served.
-	insecureConn, insecureErr := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
-		ServerName:         host,
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS12,
-	})
-	if insecureErr != nil {
+	// Phase 2: extract the leaf cert from Phase 1's verification
+	// error. crypto/x509 attaches the offending certificate to the
+	// three verification-failure error types, which lets us inspect
+	// what the server actually served without ever opening a second
+	// connection with InsecureSkipVerify. If the error is something
+	// else (timeout, TCP reset, protocol mismatch), report it as a
+	// reachability problem.
+	leaf := leafFromVerifyError(err)
+	if leaf == nil {
 		return []Finding{{
 			Severity: SeverityError,
-			Message:  fmt.Sprintf("Could not connect to %s: %v", addr, insecureErr),
-			Details:  "AfterTouch's HTTPS endpoint isn't reachable from inside the service. Check that the listener is bound and the URL host:port resolves correctly.",
+			Message:  fmt.Sprintf("Could not connect to %s: %v", addr, err),
+			Details:  "AfterTouch's HTTPS endpoint isn't reachable from inside the service, or the peer dropped the handshake before presenting a certificate. Check that the listener is bound and the URL host:port resolves correctly.",
 		}}
 	}
-	defer func() { _ = insecureConn.Close() }()
-
-	peers := insecureConn.ConnectionState().PeerCertificates
-	if len(peers) == 0 {
-		return []Finding{{
-			Severity: SeverityWarning,
-			Message:  "HTTPS endpoint connected but presented no certificates.",
-		}}
-	}
-
-	leaf := peers[0]
 
 	dnsNames := strings.Join(leaf.DNSNames, ", ")
 	if dnsNames == "" {
@@ -171,6 +162,47 @@ func splitHTTPSHostPort(raw string) (string, string) {
 	}
 
 	return host, port
+}
+
+// leafFromVerifyError extracts the offending certificate that
+// crypto/tls attaches to a verification-failure error. Returns
+// nil for non-verification errors (network unreachable, timeout,
+// TLS-level handshake failure before any cert was presented).
+//
+// This is the substitute for an InsecureSkipVerify re-dial: the
+// same leaf is reachable from the failed strict-dial error
+// without ever standing up a connection that disables cert
+// validation.
+//
+// tls.CertificateVerificationError carries
+// UnverifiedCertificates across platforms (the underlying error
+// is platform-specific — on darwin it comes from
+// Security.framework, on linux from crypto/x509 — but the
+// wrapping type is the same). The x509.* unwraps are a
+// defensive fallback for the case where a caller hands us a
+// verification error that bypassed the tls layer.
+func leafFromVerifyError(err error) *x509.Certificate {
+	var certErr *tls.CertificateVerificationError
+	if errors.As(err, &certErr) && len(certErr.UnverifiedCertificates) > 0 {
+		return certErr.UnverifiedCertificates[0]
+	}
+
+	var unkAuth x509.UnknownAuthorityError
+	if errors.As(err, &unkAuth) {
+		return unkAuth.Cert
+	}
+
+	var hostnameErr x509.HostnameError
+	if errors.As(err, &hostnameErr) {
+		return hostnameErr.Certificate
+	}
+
+	var invalidErr x509.CertificateInvalidError
+	if errors.As(err, &invalidErr) {
+		return invalidErr.Cert
+	}
+
+	return nil
 }
 
 // leafClassification labels how the leaf relates to AfterTouch's
