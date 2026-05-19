@@ -65,6 +65,7 @@ GET      /setup/interaction-stats                                     handlers.(
 GET      /setup/interactions                                          handlers.(*Server).HandleListInteractions-fm
 GET      /setup/interactions/sessions/{session}/download              handlers.(*Server).HandleDownloadSession-fm
 GET      /setup/logging-settings                                      handlers.(*Server).HandleGetLoggingSettings-fm
+GET      /setup/logs                                                  handlers.(*Server).HandleGetLogs-fm
 GET      /setup/settings                                              handlers.(*Server).HandleGetSettings-fm
 GET      /setup/summary/{deviceId}                                    handlers.(*Server).HandleGetMigrationSummary-fm
 GET      /setup/version                                               handlers.(*Server).HandleGetVersionInfo-fm

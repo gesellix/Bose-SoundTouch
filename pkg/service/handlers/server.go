@@ -21,6 +21,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/health"
+	"github.com/gesellix/bose-soundtouch/pkg/service/logbuf"
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
@@ -64,6 +65,7 @@ type Server struct {
 	amazonService       *amazon.Service
 	peerObserver        *peerObserver
 	healthRegistry      *health.Registry
+	logBuf              *logbuf.Buffer
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -145,6 +147,26 @@ func (s *Server) SetVersionInfo(version, commit, date, repoURL string) {
 	s.Commit = commit
 	s.Date = date
 	s.RepoURL = repoURL
+}
+
+// SetLogBuffer attaches a logbuf.Buffer to the server. When set,
+// HandleGetLogs returns its contents; when nil, the endpoint
+// reports an empty snapshot. Optional so that tests and
+// alternative composers (the standalone web binary, etc.) don't
+// have to construct a buffer they don't need.
+func (s *Server) SetLogBuffer(buf *logbuf.Buffer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.logBuf = buf
+}
+
+// LogBuffer returns the attached log buffer, or nil if none.
+func (s *Server) LogBuffer() *logbuf.Buffer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.logBuf
 }
 
 // SetDiscoverySettings sets the discovery settings for the server.

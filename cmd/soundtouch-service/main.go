@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
+	"github.com/gesellix/bose-soundtouch/pkg/service/logbuf"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
@@ -173,8 +176,43 @@ func initMusicServices(config serviceConfig, server *handlers.Server) {
 	}
 }
 
+// logBufferCapacityFromEnv reads SOUNDTOUCH_LOG_BUFFER_LINES and
+// returns a positive capacity. Invalid or unset values fall back
+// to the default; a value of 0 or negative is treated as "disable"
+// and returns 0 so the caller can skip wiring the buffer.
+func logBufferCapacityFromEnv(defaultCap int) int {
+	raw := os.Getenv("SOUNDTOUCH_LOG_BUFFER_LINES")
+	if raw == "" {
+		return defaultCap
+	}
+
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		log.Printf("[Logs] Invalid SOUNDTOUCH_LOG_BUFFER_LINES=%q, using default %d", raw, defaultCap)
+		return defaultCap
+	}
+
+	if v < 0 {
+		return 0
+	}
+
+	return v
+}
+
 func main() {
 	updateBuildInfo()
+
+	// Mirror log output to an in-memory ring buffer so the admin
+	// UI can show a live trace. Stderr keeps receiving every line
+	// verbatim — the buffer is a second sink, not a replacement.
+	// Installing this before the cli.Action runs means every
+	// log.Printf from initialisation onwards is captured.
+	var logBuf *logbuf.Buffer
+
+	if bufCap := logBufferCapacityFromEnv(2000); bufCap > 0 {
+		logBuf = logbuf.New(bufCap)
+		log.SetOutput(io.MultiWriter(os.Stderr, logBuf))
+	}
 
 	app := &cli.App{
 		Name:  "soundtouch-service",
@@ -395,6 +433,7 @@ func main() {
 			sm.MgmtPassword = config.mgmtPassword
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 			sm.GetDNSRunning = server.GetDNSRunning
+			server.SetLogBuffer(logBuf)
 			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
@@ -1156,6 +1195,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 
 		r.Get("/health", server.HandleHealthChecks)
 		r.Post("/health/fix", server.HandleHealthFix)
+		r.Get("/logs", server.HandleGetLogs)
 
 		// Serve Stockholm setup wizard pages for paths not matched by the management API.
 		// The Stockholm frontend has a setup/ directory that must be accessible at /setup/*.

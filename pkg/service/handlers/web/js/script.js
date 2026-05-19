@@ -511,6 +511,12 @@ function openTab(evt, tabId) {
         fetchHealth();
     }
 
+    if (tabId === "tab-logs") {
+        startLogsPolling();
+    } else {
+        stopLogsPolling();
+    }
+
     if (evt) {
         evt.currentTarget.className += " active";
         let hash = tabId;
@@ -4159,4 +4165,137 @@ async function runQuickFix(checkId, fixId, target, confirmMsg, button) {
         }
         button.disabled = false;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Logs tab
+// ---------------------------------------------------------------------------
+
+const logsState = {
+    timerId: null,
+    nextSince: 0,
+    entries: [],
+    maxEntries: 5000,         // client-side cap; UI lag is the bottleneck
+    droppedTotal: 0,
+    pollIntervalMs: 1500,
+    followTail: true,
+    initialised: false,
+};
+
+function startLogsPolling() {
+    initLogsTabOnce();
+    // Reset window each time the tab opens so the user gets a
+    // fresh snapshot rather than picking up stale state.
+    logsState.entries = [];
+    logsState.nextSince = 0;
+    logsState.droppedTotal = 0;
+    renderLogs();
+    pollLogsOnce();
+    if (logsState.timerId !== null) clearInterval(logsState.timerId);
+    logsState.timerId = setInterval(pollLogsOnce, logsState.pollIntervalMs);
+}
+
+function stopLogsPolling() {
+    if (logsState.timerId !== null) {
+        clearInterval(logsState.timerId);
+        logsState.timerId = null;
+    }
+}
+
+function initLogsTabOnce() {
+    if (logsState.initialised) return;
+    logsState.initialised = true;
+
+    const filterEl = document.getElementById("logs-filter");
+    if (filterEl) {
+        filterEl.addEventListener("input", () => renderLogs());
+    }
+
+    const followEl = document.getElementById("logs-follow");
+    if (followEl) {
+        followEl.addEventListener("change", () => {
+            logsState.followTail = followEl.checked;
+            if (logsState.followTail) scrollLogsToBottom();
+        });
+    }
+
+    const viewEl = document.getElementById("logs-view");
+    if (viewEl) {
+        // Disengage follow-tail when the user scrolls up; re-engage
+        // when they're back at the bottom. tail -f muscle memory.
+        viewEl.addEventListener("scroll", () => {
+            const distanceFromBottom = viewEl.scrollHeight - viewEl.scrollTop - viewEl.clientHeight;
+            const atBottom = distanceFromBottom < 8;
+            if (atBottom !== logsState.followTail) {
+                logsState.followTail = atBottom;
+                const followEl = document.getElementById("logs-follow");
+                if (followEl) followEl.checked = atBottom;
+            }
+        });
+    }
+}
+
+async function pollLogsOnce() {
+    if (typeof document !== "undefined" && document.hidden) return;
+
+    const statusEl = document.getElementById("logs-status");
+    try {
+        const url = `/setup/logs?since=${encodeURIComponent(logsState.nextSince)}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (Array.isArray(data.entries) && data.entries.length > 0) {
+            logsState.entries.push(...data.entries);
+            // Trim from the front when we exceed the client cap.
+            if (logsState.entries.length > logsState.maxEntries) {
+                logsState.entries.splice(0, logsState.entries.length - logsState.maxEntries);
+            }
+        }
+
+        if (typeof data.nextSince === "number") {
+            logsState.nextSince = data.nextSince;
+        }
+
+        if (typeof data.dropped === "number" && data.dropped > 0) {
+            logsState.droppedTotal += data.dropped;
+        }
+
+        renderLogs();
+        if (statusEl) {
+            const now = new Date().toLocaleTimeString();
+            const droppedNote = logsState.droppedTotal > 0
+                ? ` · ${logsState.droppedTotal} dropped`
+                : "";
+            statusEl.textContent = `${logsState.entries.length} buffered${droppedNote} · last update ${now}`;
+        }
+    } catch (e) {
+        if (statusEl) statusEl.textContent = `Polling failed: ${e.message || e}`;
+    }
+}
+
+function renderLogs() {
+    const viewEl = document.getElementById("logs-view");
+    if (!viewEl) return;
+
+    const filterEl = document.getElementById("logs-filter");
+    const filter = filterEl ? filterEl.value.trim().toLowerCase() : "";
+
+    const lines = [];
+    for (const entry of logsState.entries) {
+        if (filter && entry.message.toLowerCase().indexOf(filter) === -1) continue;
+        const ts = entry.time ? entry.time.replace("T", " ").replace("Z", "") : "";
+        lines.push(`${ts}  ${entry.message}`);
+    }
+
+    viewEl.textContent = lines.join("\n");
+
+    if (logsState.followTail) {
+        scrollLogsToBottom();
+    }
+}
+
+function scrollLogsToBottom() {
+    const viewEl = document.getElementById("logs-view");
+    if (viewEl) viewEl.scrollTop = viewEl.scrollHeight;
 }

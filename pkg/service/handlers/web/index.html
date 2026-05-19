@@ -39,6 +39,9 @@
     <button class="tab-btn" onclick="openTab(event, 'tab-health')">
         7. Health
     </button>
+    <button class="tab-btn" onclick="openTab(event, 'tab-logs')">
+        8. Logs
+    </button>
     </div>
 
     <!-- Tab 0: Overview -->
@@ -1507,6 +1510,26 @@
         </p>
         <div id="health-generated-at" style="font-size: 0.8em; color: #888; margin-bottom: 10px;"></div>
         <div id="health-findings">Loading…</div>
+    </div>
+
+    <!-- Tab 8: Logs -->
+    <div id="tab-logs" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <h2 style="margin: 0;">Service Logs</h2>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="text" id="logs-filter" placeholder="Filter (substring, case-insensitive)" style="padding: 4px 8px; min-width: 260px;"/>
+                <label style="font-size: 0.9em;">
+                    <input type="checkbox" id="logs-follow" checked/> Follow tail
+                </label>
+            </div>
+        </div>
+        <p style="font-size: 0.9em; color: #555;">
+            Live mirror of the service's stderr log. Stderr still
+            receives every line — this is a read-only view for
+            convenience.
+        </p>
+        <div id="logs-status" style="font-size: 0.8em; color: #888; margin-bottom: 6px;">Idle.</div>
+        <pre id="logs-view" style="background: #111; color: #ddd; padding: 10px; border-radius: 4px; max-height: 60vh; overflow-y: auto; font-size: 0.8em; line-height: 1.35; margin: 0; white-space: pre-wrap; word-break: break-all;"></pre>
     </div>
 </div>
 
