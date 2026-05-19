@@ -20,25 +20,31 @@ const CheckIDCertChain = "service_cert_chain"
 //   - validates against system roots → no finding (the
 //     speaker's firmware ships with the major roots, so a public-
 //     CA chain such as Let's Encrypt is usable directly).
-//   - chain doesn't validate → warning, with a note that
-//     `install-ca` is the fix when AfterTouch is using its own
-//     self-signed CA, or "review the proxy / ingress cert" when
-//     the chain looks foreign.
+//   - chain doesn't validate but the served leaf was issued by
+//     our own AfterTouch CA → warning with an `install-ca`
+//     suggestion (definitive: we checked the signature against
+//     our CA, not a Subject==Issuer heuristic).
+//   - chain doesn't validate and the served leaf was issued by
+//     something else → warning with an `openssl s_client`
+//     investigation prompt (foreign chain / reverse proxy /
+//     ingress cert).
 //   - HTTPS URL not configured → skip silently.
 //
-// httpsURLFn is a closure so config changes are picked up at run
-// time (today only at restart, but cheap to keep flexible).
-func RegisterCertChainCheck(r *Registry, httpsURLFn func() string) {
+// caCertFn returns AfterTouch's own CA leaf certificate (nil if
+// unavailable). It's called per check run; the handler-side
+// implementation caches the parse via sync.Once so we don't
+// re-read the PEM on every poll.
+func RegisterCertChainCheck(r *Registry, httpsURLFn func() string, caCertFn func() *x509.Certificate) {
 	r.Register(Check{
 		ID:    CheckIDCertChain,
 		Title: "HTTPS endpoint certificate validates",
 		Run: func() []Finding {
-			return runCertChainCheck(httpsURLFn())
+			return runCertChainCheck(httpsURLFn(), caCertFn)
 		},
 	})
 }
 
-func runCertChainCheck(httpsURL string) []Finding {
+func runCertChainCheck(httpsURL string, caCertFn func() *x509.Certificate) []Finding {
 	if strings.TrimSpace(httpsURL) == "" {
 		return nil
 	}
@@ -108,17 +114,25 @@ func runCertChainCheck(httpsURL string) []Finding {
 
 	var hints []ManualCommand
 
-	if leafLooksSelfSigned(leaf) {
+	classification := classifyLeaf(leaf, caCertFn)
+	switch classification {
+	case leafFromOwnCA:
 		hints = append(hints, ManualCommand{
-			Label:   "If this is AfterTouch's built-in CA, install it on each speaker:",
+			Label:   "Install AfterTouch's CA on each speaker:",
 			Command: "soundtouch-cli --host=<speaker-ip> setup install-ca --service-url=" + httpsURL,
-			Hint:    "Requires SSH on the speaker. After install, re-run this check.",
+			Hint:    "The served leaf was issued by AfterTouch's own CA (verified by signature). Requires SSH on the speaker. After install, re-run this check.",
 		})
-	} else {
+	case leafSubjectEqualsIssuer:
+		hints = append(hints, ManualCommand{
+			Label:   "If this is a self-signed cert from AfterTouch, install its CA on each speaker:",
+			Command: "soundtouch-cli --host=<speaker-ip> setup install-ca --service-url=" + httpsURL,
+			Hint:    "Heuristic match (Subject == Issuer) — AfterTouch's own CA wasn't loadable, so this is a best guess. If wrong, treat the chain as foreign.",
+		})
+	default:
 		hints = append(hints, ManualCommand{
 			Label:   "Investigate the chain manually:",
 			Command: fmt.Sprintf("openssl s_client -connect %s -servername %s -showcerts </dev/null", addr, host),
-			Hint:    "Run from the same host as the service. Shows the full chain the peer is serving.",
+			Hint:    "Run from the same host as the service. Shows the full chain the peer is serving — likely a reverse proxy or ingress cert.",
 		})
 	}
 
@@ -146,14 +160,36 @@ func splitHTTPSHostPort(raw string) (string, string) {
 	return host, port
 }
 
-// leafLooksSelfSigned reports whether the leaf certificate's
-// Subject and Issuer match — a strong hint that we're looking at
-// AfterTouch's own self-signed CA-issued cert rather than a public
-// CA chain. This is intentionally a heuristic, not a guarantee.
-func leafLooksSelfSigned(leaf *x509.Certificate) bool {
+// leafClassification labels how the leaf relates to AfterTouch's
+// own CA. Drives the install-ca-vs-openssl suggestion branch.
+type leafClassification int
+
+const (
+	leafForeign             leafClassification = iota // chain we don't recognise
+	leafFromOwnCA                                     // signature verified by AfterTouch's CA
+	leafSubjectEqualsIssuer                           // fallback heuristic when CA isn't loadable
+)
+
+// classifyLeaf returns leafFromOwnCA when caCertFn returns a CA
+// cert that signed `leaf` (verified by CheckSignatureFrom). When
+// the CA cert isn't available, falls back to the
+// Subject==Issuer heuristic. Anything else is leafForeign.
+func classifyLeaf(leaf *x509.Certificate, caCertFn func() *x509.Certificate) leafClassification {
 	if leaf == nil {
-		return false
+		return leafForeign
 	}
 
-	return leaf.Subject.String() == leaf.Issuer.String()
+	if caCertFn != nil {
+		if ca := caCertFn(); ca != nil {
+			if err := leaf.CheckSignatureFrom(ca); err == nil {
+				return leafFromOwnCA
+			}
+		}
+	}
+
+	if leaf.Subject.String() == leaf.Issuer.String() {
+		return leafSubjectEqualsIssuer
+	}
+
+	return leafForeign
 }

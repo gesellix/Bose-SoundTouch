@@ -16,14 +16,14 @@ import (
 )
 
 func TestCertChain_EmptyURLSkips(t *testing.T) {
-	got := runCertChainCheck("")
+	got := runCertChainCheck("", nil)
 	if len(got) != 0 {
 		t.Errorf("expected no findings for empty URL, got %+v", got)
 	}
 }
 
 func TestCertChain_UnparseableURLWarns(t *testing.T) {
-	got := runCertChainCheck("://nope")
+	got := runCertChainCheck("://nope", nil)
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning, got %+v", got)
 	}
@@ -31,20 +31,18 @@ func TestCertChain_UnparseableURLWarns(t *testing.T) {
 
 func TestCertChain_UnreachableEndpoint(t *testing.T) {
 	// 127.0.0.1:1 refuses; using https:// to force TLS path.
-	got := runCertChainCheck("https://127.0.0.1:1/")
+	got := runCertChainCheck("https://127.0.0.1:1/", nil)
 	if len(got) != 1 || got[0].Severity != SeverityError {
 		t.Fatalf("expected one error for unreachable endpoint, got %+v", got)
 	}
 }
 
-func TestCertChain_SelfSignedFlagsAndSuggestsInstallCA(t *testing.T) {
+func TestCertChain_SelfSigned_SubjectEqualsIssuerFallback(t *testing.T) {
 	srv := newSelfSignedTLSServer(t)
 	defer srv.Close()
 
-	// httptest's TLS URL uses 127.0.0.1; the test cert below uses
-	// "127.0.0.1" as SAN, so SNI matches but the chain is
-	// self-signed and won't validate against system roots.
-	got := runCertChainCheck(srv.URL)
+	// No CA provided → fallback to Subject==Issuer heuristic.
+	got := runCertChainCheck(srv.URL, nil)
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning for self-signed cert, got %+v", got)
 	}
@@ -54,12 +52,79 @@ func TestCertChain_SelfSignedFlagsAndSuggestsInstallCA(t *testing.T) {
 	}
 
 	if len(got[0].ManualCommands) == 0 {
-		t.Fatalf("expected at least one manual command, got none")
+		t.Fatalf("expected at least one manual command")
 	}
 
 	cmd := got[0].ManualCommands[0].Command
 	if !strings.Contains(cmd, "install-ca") {
-		t.Errorf("expected install-ca suggestion for self-signed cert, got %q", cmd)
+		t.Errorf("expected install-ca suggestion via Subject==Issuer heuristic, got %q", cmd)
+	}
+
+	hint := got[0].ManualCommands[0].Hint
+	if !strings.Contains(hint, "Heuristic") {
+		t.Errorf("expected hint to disclose the heuristic match, got %q", hint)
+	}
+}
+
+func TestCertChain_LeafSignedByOwnCA_PrefersInstallCA(t *testing.T) {
+	// Construct a CA + leaf signed by it. Leaf has SAN 127.0.0.1
+	// so SNI works; Subject != Issuer (different CommonNames),
+	// which would have fooled the old heuristic.
+	caTLS, ca := generateInternalCA(t)
+	leafTLS := generateLeafSignedBy(t, ca, caTLS.PrivateKey)
+
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+	}))
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{leafTLS}}
+	srv.StartTLS()
+	defer srv.Close()
+
+	got := runCertChainCheck(srv.URL, func() *x509.Certificate { return ca })
+	if len(got) != 1 || got[0].Severity != SeverityWarning {
+		t.Fatalf("expected one warning, got %+v", got)
+	}
+
+	if len(got[0].ManualCommands) == 0 {
+		t.Fatalf("expected a manual command")
+	}
+
+	cmd := got[0].ManualCommands[0]
+	if !strings.Contains(cmd.Command, "install-ca") {
+		t.Errorf("expected install-ca, got %q", cmd.Command)
+	}
+
+	if !strings.Contains(cmd.Hint, "verified by signature") {
+		t.Errorf("expected signature-verified hint, got %q", cmd.Hint)
+	}
+}
+
+func TestCertChain_ForeignChain_SuggestsOpenSSL(t *testing.T) {
+	// Build an "external" CA + leaf, then provide a *different*
+	// CA via caCertFn. Signature check fails → classifier returns
+	// leafForeign → openssl suggestion (since Subject==Issuer
+	// would also fail for a properly chained leaf).
+	externalCATLS, externalCA := generateInternalCA(t)
+	leafTLS := generateLeafSignedBy(t, externalCA, externalCATLS.PrivateKey)
+
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+	}))
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{leafTLS}}
+	srv.StartTLS()
+	defer srv.Close()
+
+	// Different CA — pretend it's "our" AfterTouch CA.
+	_, ourCA := generateInternalCA(t)
+
+	got := runCertChainCheck(srv.URL, func() *x509.Certificate { return ourCA })
+	if len(got) != 1 || got[0].Severity != SeverityWarning {
+		t.Fatalf("expected one warning, got %+v", got)
+	}
+
+	cmd := got[0].ManualCommands[0]
+	if !strings.Contains(cmd.Command, "openssl s_client") {
+		t.Errorf("expected openssl suggestion for foreign chain, got %q", cmd.Command)
 	}
 }
 
@@ -104,10 +169,6 @@ func newSelfSignedTLSServer(t *testing.T) *httptest.Server {
 func generateSelfSignedCert(t *testing.T) tls.Certificate {
 	t.Helper()
 
-	// Use ecdsa via x509 helpers — but keep it simple with a tiny
-	// RSA key from the test. Actually use crypto/rand + ed25519
-	// would be cleaner; for parity with stdlib examples, use the
-	// built-in helper path.
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "aftertouch-test"},
@@ -134,4 +195,71 @@ func generateSelfSignedCert(t *testing.T) tls.Certificate {
 		Certificate: [][]byte{derBytes},
 		PrivateKey:  key,
 	}
+}
+
+// generateInternalCA returns a self-signed CA suitable for
+// signing leaves. The returned tls.Certificate carries the CA
+// key (needed to sign leaves below); the *x509.Certificate is
+// the parsed CA leaf.
+func generateInternalCA(t *testing.T) (tls.Certificate, *x509.Certificate) {
+	t.Helper()
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(2026),
+		Subject:               pkix.Name{CommonName: "AfterTouch Test CA", Organization: []string{"AfterTouch Test"}},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+	}
+	template.Issuer = template.Subject
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa key: %v", err)
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("create CA cert: %v", err)
+	}
+
+	caParsed, err := x509.ParseCertificate(derBytes)
+	if err != nil {
+		t.Fatalf("parse CA cert: %v", err)
+	}
+
+	return tls.Certificate{Certificate: [][]byte{derBytes}, PrivateKey: key}, caParsed
+}
+
+// generateLeafSignedBy issues a TLS leaf cert (CN=leaf) signed
+// by ca/caKey, with SAN 127.0.0.1 so httptest's loopback SNI
+// matches. Subject != Issuer by construction — the case that
+// caught my old heuristic.
+func generateLeafSignedBy(t *testing.T, ca *x509.Certificate, caKey any) tls.Certificate {
+	t.Helper()
+
+	leafKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("leaf rsa key: %v", err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(42),
+		Subject:      pkix.Name{CommonName: "soundtouch", Organization: []string{"AfterTouch"}},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:     []string{"127.0.0.1"},
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, ca, &leafKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("create leaf cert: %v", err)
+	}
+
+	return tls.Certificate{Certificate: [][]byte{derBytes}, PrivateKey: leafKey}
 }

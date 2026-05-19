@@ -3,12 +3,15 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +70,10 @@ type Server struct {
 	healthRegistry      *health.Registry
 	logBuf              *logbuf.Buffer
 	expectedHosts       []string
+	ownCACache          struct {
+		once sync.Once
+		cert *x509.Certificate
+	}
 }
 
 // RequestSnapshot represents an immutable snapshot of an HTTP request.
@@ -109,10 +116,14 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterSpeakerInfoReachable(s.healthRegistry, ds)
 	health.RegisterSourcesXMLDiff(s.healthRegistry, ds)
 	health.RegisterSpeakerMargeURLCheck(s.healthRegistry, ds, s.ExpectedHosts)
-	health.RegisterCertChainCheck(s.healthRegistry, func() string {
-		_, httpsURL := s.GetSettings()
-		return httpsURL
-	})
+	health.RegisterCertChainCheck(
+		s.healthRegistry,
+		func() string {
+			_, httpsURL := s.GetSettings()
+			return httpsURL
+		},
+		s.loadOwnCACert,
+	)
 	health.RegisterTestPlaybackCheck(s.healthRegistry, ds, func() string {
 		serverURL, _ := s.GetSettings()
 		return serverURL
@@ -161,6 +172,49 @@ func (s *Server) ExpectedHosts() []string {
 	copy(out, s.expectedHosts)
 
 	return out
+}
+
+// loadOwnCACert parses AfterTouch's own CA leaf from disk. Used
+// by the Health-tab cert-chain check to definitively classify
+// whether the HTTPS endpoint is serving a cert issued by this
+// service's built-in CA (as opposed to a public CA or a foreign
+// chain from a reverse proxy). Returns nil when the CA isn't
+// configured or fails to parse — the caller falls back to a
+// Subject==Issuer heuristic in that case.
+//
+// The parse is cached in ownCACache so repeated Health polls
+// don't re-read the PEM. Restart-based config changes are
+// picked up because Server itself is reconstructed.
+func (s *Server) loadOwnCACert() *x509.Certificate {
+	s.ownCACache.once.Do(func() {
+		if s.sm == nil || s.sm.Crypto == nil {
+			return
+		}
+
+		path := s.sm.Crypto.GetCACertPath()
+		if path == "" {
+			return
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return
+		}
+
+		block, _ := pem.Decode(data)
+		if block == nil {
+			return
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return
+		}
+
+		s.ownCACache.cert = cert
+	})
+
+	return s.ownCACache.cert
 }
 
 // TrustedRealIPMiddleware returns a chi middleware that rewrites
