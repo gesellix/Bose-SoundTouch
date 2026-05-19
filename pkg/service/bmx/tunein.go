@@ -277,7 +277,7 @@ func tuneInNavigatePlayItem(item map[string]interface{}) models.BmxNavItem {
 		Subtitle: subtitle,
 		Links: &models.Links{
 			BmxPlayback: &models.Link{
-				Href: TuneInStream(stationID, ""),
+				Href: fmt.Sprintf("/v1/playback/station/%s", stationID),
 				Type: "stationurl",
 			},
 		},
@@ -373,10 +373,11 @@ func tuneInSearchSection(item map[string]interface{}, idx int, query, layout str
 		}
 
 		switch typeStr {
-		case "Station", "PlayItem":
+		case "Station", "PlayItem", "Topic":
+			// Topics are single podcast episodes (t<N>) — Tune.ashx
+			// accepts them just like station IDs, so the same play-link
+			// shape works.
 			section.Items = append(section.Items, tuneInSearchPlayItem(cm))
-		case "Topic":
-			section.Items = append(section.Items, tuneInSearchTopic(cm))
 		case "Program", "Profile":
 			section.Items = append(section.Items, tuneInSearchProfile(cm, name))
 		}
@@ -412,38 +413,8 @@ func tuneInSearchPlayItem(item map[string]interface{}) models.BmxNavItem {
 		Subtitle: subtitle,
 		Links: &models.Links{
 			BmxPlayback: &models.Link{
-				Href: TuneInStream(stationID, ""),
+				Href: fmt.Sprintf("/v1/playback/station/%s", stationID),
 				Type: "stationurl",
-			},
-		},
-	}
-}
-
-func tuneInSearchTopic(item map[string]interface{}) models.BmxNavItem {
-	name, _ := item["Title"].(string)
-	if name == "" {
-		name, _ = item["text"].(string)
-	}
-
-	image, _ := item["Image"].(string)
-	if image == "" {
-		image, _ = item["image"].(string)
-	}
-
-	subtitle, _ := item["Subtitle"].(string)
-	if subtitle == "" {
-		subtitle, _ = item["subtext"].(string)
-	}
-
-	href, _ := item["URL"].(string)
-
-	return models.BmxNavItem{
-		Name:     name,
-		ImageUrl: image,
-		Subtitle: subtitle,
-		Links: &models.Links{
-			BmxNavigate: &models.Link{
-				Href: "/v1/navigate/" + base64.RawURLEncoding.EncodeToString([]byte(tuneInRenderJSONURI(href))),
 			},
 		},
 	}
@@ -481,13 +452,16 @@ func tuneInSearchProfile(item map[string]interface{}, _ string) models.BmxNavIte
 	// Artists/Stations/etc are typically navigated first.
 	if typeStr, _ := item["Type"].(string); typeStr == "Program" {
 		if guideID, _ := item["GuideId"].(string); guideID != "" {
+			encodedName := base64.URLEncoding.EncodeToString([]byte(profileName))
+			playbackHref := fmt.Sprintf("/v1/playback/episodes/%s?encoded_name=%s", guideID, encodedName)
+
 			return models.BmxNavItem{
 				Name:     profileName,
 				ImageUrl: image,
 				Subtitle: subtitle,
 				Links: &models.Links{
 					BmxPlayback: &models.Link{
-						Href: TuneInStream(guideID, "") + "&encoded_name=" + url.QueryEscape(profileName),
+						Href: playbackHref,
 						Type: "tracklisturl",
 					},
 					BmxNavigate: &models.Link{
