@@ -114,3 +114,8 @@ stockholm_zip/*.zip
 # resolved items (DONE). Both are session-local scratch, not project docs.
 NEXT.md
 DONE.md
+
+# Plan/tracking note for the Health-tab debug-utility programme.
+# Living document; commit history of the checks themselves is the
+# source of truth for what shipped.
+SERVICE-HEALTH.md
