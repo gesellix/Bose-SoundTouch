@@ -113,6 +113,10 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		_, httpsURL := s.GetSettings()
 		return httpsURL
 	})
+	health.RegisterTestPlaybackCheck(s.healthRegistry, ds, func() string {
+		serverURL, _ := s.GetSettings()
+		return serverURL
+	})
 
 	return s
 }
