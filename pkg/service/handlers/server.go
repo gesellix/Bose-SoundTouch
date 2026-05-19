@@ -119,6 +119,20 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	})
 	health.RegisterOrionPathsCheck(s.healthRegistry, ds)
 	health.RegisterPresetsCountCheck(s.healthRegistry, ds)
+	health.RegisterDNSSanityCheck(
+		s.healthRegistry,
+		s.GetDNSRunning,
+		func() string {
+			serverURL, _ := s.GetSettings()
+
+			ip, err := s.ResolveServerURLIPForPreflight(serverURL)
+			if err != nil {
+				return ""
+			}
+
+			return ip
+		},
+	)
 
 	return s
 }

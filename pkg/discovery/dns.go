@@ -153,28 +153,31 @@ func (d *DNSDiscovery) recordQuery(hostname string, isIntercepted bool, remoteAd
 	}
 }
 
-func (d *DNSDiscovery) shouldIntercept(hostname string) bool {
-	// Intercept known Bose cloud services
-	interceptList := []string{
-		"api.bose.com",
-		"marge.bose.com",
-		"bmx.bose.com",
-		"streaming.bose.com",
-		"streamingoauth.bose.com",
-		"updates.bose.com",
-		"stats.bose.com",
-		"content.api.bose.io",
-		"events.api.bosecm.com",
-		"bose-prod.apigee.net",
-		"bose-test.apigee.net",
-		"worldwide.bose.com",
-		"music.api.bose.com",
-		"bosecm.com",
-		"bose.io",
-		"downloads.bose.com",
-	}
+// InterceptedBoseHosts is the canonical list of Bose cloud service
+// hostnames the DNS server hijacks. Exposed so other packages
+// (e.g. the Health tab's DNS sanity check) can iterate the list
+// without duplicating it.
+var InterceptedBoseHosts = []string{
+	"api.bose.com",
+	"marge.bose.com",
+	"bmx.bose.com",
+	"streaming.bose.com",
+	"streamingoauth.bose.com",
+	"updates.bose.com",
+	"stats.bose.com",
+	"content.api.bose.io",
+	"events.api.bosecm.com",
+	"bose-prod.apigee.net",
+	"bose-test.apigee.net",
+	"worldwide.bose.com",
+	"music.api.bose.com",
+	"bosecm.com",
+	"bose.io",
+	"downloads.bose.com",
+}
 
-	for _, service := range interceptList {
+func (d *DNSDiscovery) shouldIntercept(hostname string) bool {
+	for _, service := range InterceptedBoseHosts {
 		if strings.Contains(hostname, service) {
 			return true
 		}
