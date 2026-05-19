@@ -118,6 +118,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		return serverURL
 	})
 	health.RegisterOrionPathsCheck(s.healthRegistry, ds)
+	health.RegisterPresetsCountCheck(s.healthRegistry, ds)
 
 	return s
 }
