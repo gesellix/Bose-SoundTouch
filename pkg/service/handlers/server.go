@@ -106,6 +106,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 
 	health.RegisterSourcesXMLPresent(s.healthRegistry, ds)
 	health.RegisterSpeakerInfoReachable(s.healthRegistry, ds)
+	health.RegisterSourcesXMLDiff(s.healthRegistry, ds)
 
 	return s
 }
