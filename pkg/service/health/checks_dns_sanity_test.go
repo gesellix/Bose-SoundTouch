@@ -106,6 +106,51 @@ func TestDNSSanity_UnansweredHostnames(t *testing.T) {
 	}
 }
 
+func TestResolveDNSQueryTarget(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", "127.0.0.1:53"},
+		{":53", "127.0.0.1:53"},
+		{"0.0.0.0:53", "127.0.0.1:53"},
+		{"[::]:53", "127.0.0.1:53"},
+		{"127.0.0.1:53", "127.0.0.1:53"},
+		{"192.0.2.10:5353", "192.0.2.10:5353"},
+		{"53", "127.0.0.1:53"},            // bare port
+		{"example.com", "example.com:53"}, // bare host
+	}
+
+	for _, c := range cases {
+		if got := resolveDNSQueryTarget(c.in); got != c.want {
+			t.Errorf("resolveDNSQueryTarget(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestDNSSanity_EmptyBindAddrTriesLoopback(t *testing.T) {
+	// Spin up a stub DNS server on 127.0.0.1:0 and lie about the
+	// bindAddr: report "" as if the upstream listener didn't
+	// expose its address. resolveDNSQueryTarget should default
+	// to 127.0.0.1:53 — which won't match the test server's
+	// random port, so the queries will fail. The point of this
+	// test is that the *failure* surfaces a non-empty
+	// query-target string in the details, not "Queried .".
+	got := runDNSSanityCheck(
+		func() (bool, string) { return true, "" },
+		func() string { return "192.0.2.10" },
+	)
+
+	for _, f := range got {
+		if strings.Contains(f.Details, "Queried: 127.0.0.1:53") {
+			return // expected
+		}
+
+		if strings.Contains(f.Details, "Queried: .") {
+			t.Errorf("regression: empty bindAddr leaked into details as 'Queried: .', got %q", f.Details)
+		}
+	}
+}
+
 func TestExtractHost(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"127.0.0.1:53", "127.0.0.1"},

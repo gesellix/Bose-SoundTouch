@@ -2,6 +2,7 @@ package health
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 	"time"
@@ -64,6 +65,20 @@ func runDNSSanityCheck(statusFn DNSStatusFunc, expectedIPFn ExpectedIPFunc) []Fi
 		}}
 	}
 
+	// bindAddr may be "" / ":53" / "0.0.0.0:53" / "[::]:53" —
+	// the DNS lib is bound to the wildcard address. Translate
+	// that into something we can actually dial from inside the
+	// service host. queryTarget is what we send queries to;
+	// displayAddr is what we surface to the operator (the
+	// originally configured value, which is what they'd see in
+	// netstat).
+	queryTarget := resolveDNSQueryTarget(bindAddr)
+
+	displayAddr := bindAddr
+	if displayAddr == "" {
+		displayAddr = "(default)"
+	}
+
 	// Query our DNS server for the canonical intercept list and
 	// classify the results.
 	hostnames := append([]string(nil), discovery.InterceptedBoseHosts...)
@@ -73,7 +88,7 @@ func runDNSSanityCheck(statusFn DNSStatusFunc, expectedIPFn ExpectedIPFunc) []Fi
 	unanswered := make([]string, 0)
 
 	for _, host := range hostnames {
-		ip, err := queryOwnDNS(bindAddr, host)
+		ip, err := queryOwnDNS(queryTarget, host)
 		if err != nil {
 			unanswered = append(unanswered, host)
 			continue
@@ -93,7 +108,7 @@ func runDNSSanityCheck(statusFn DNSStatusFunc, expectedIPFn ExpectedIPFunc) []Fi
 				"%d intercepted hostname(s) didn't get an answer from the local DNS server: %s.",
 				len(unanswered), strings.Join(unanswered, ", "),
 			),
-			Details: fmt.Sprintf("Queried %s. Expected: %s. Check the dns server logs in the Logs tab for shouldIntercept misses.", bindAddr, expectedIP),
+			Details: fmt.Sprintf("Bind: %s. Queried: %s. Expected answer: %s. If the DNS server is actually running, the queries above probably failed because the bind interface isn't reachable from inside the service container — check that DNS_BIND_ADDR is dialable from here.", displayAddr, queryTarget, expectedIP),
 		})
 	}
 
@@ -107,7 +122,7 @@ func runDNSSanityCheck(statusFn DNSStatusFunc, expectedIPFn ExpectedIPFunc) []Fi
 			Details: strings.Join(mismatches, "; "),
 			ManualCommands: []ManualCommand{{
 				Label:   "Verify from the speaker's network:",
-				Command: "nslookup " + hostnames[0] + " " + extractHost(bindAddr),
+				Command: "nslookup " + hostnames[0] + " " + extractHost(queryTarget),
 				Hint:    "Run on a host that uses this service as its DNS resolver. Replace the hostname with any other intercepted name to spot-check.",
 			}},
 		})
@@ -116,27 +131,76 @@ func runDNSSanityCheck(statusFn DNSStatusFunc, expectedIPFn ExpectedIPFunc) []Fi
 	return findings
 }
 
-// queryOwnDNS issues an A query against bindAddr (host:port). The
-// service's DNS listener is UDP-only at the listener layer, so we
-// always dial UDP here.
-func queryOwnDNS(bindAddr, hostname string) (string, error) {
+// resolveDNSQueryTarget translates a server-side bind address
+// into a host:port we can actually dial from inside the service
+// host. Empty / wildcard / port-only forms all collapse to a
+// loopback target on the same port (default 53).
+func resolveDNSQueryTarget(bindAddr string) string {
+	if bindAddr == "" {
+		return "127.0.0.1:53"
+	}
+
+	host, port, err := net.SplitHostPort(bindAddr)
+	if err != nil {
+		// Doesn't parse as host:port. Could be ":53" with stray
+		// formatting, a bare port, or a bare host.
+		switch {
+		case strings.HasPrefix(bindAddr, ":"):
+			return "127.0.0.1" + bindAddr
+		case !strings.ContainsAny(bindAddr, ":."):
+			// looks like a bare port number
+			if _, atoiErr := dnsPortAtoi(bindAddr); atoiErr == nil {
+				return "127.0.0.1:" + bindAddr
+			}
+
+			fallthrough
+		default:
+			return net.JoinHostPort(bindAddr, "53")
+		}
+	}
+
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return net.JoinHostPort("127.0.0.1", port)
+	}
+
+	return bindAddr
+}
+
+// dnsPortAtoi is a tiny strconv.Atoi wrapper that also rejects
+// values outside 1..65535. Lets resolveDNSQueryTarget tell apart
+// "bare port" from "bare hostname containing no colon".
+func dnsPortAtoi(s string) (int, error) {
+	v := 0
+
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("non-digit in port")
+		}
+
+		v = v*10 + int(c-'0')
+		if v > 65535 {
+			return 0, fmt.Errorf("port out of range")
+		}
+	}
+
+	if v == 0 {
+		return 0, fmt.Errorf("empty or zero")
+	}
+
+	return v, nil
+}
+
+// queryOwnDNS issues an A query against the resolved query
+// target (host:port). The service's DNS listener handles UDP,
+// so we always dial UDP here.
+func queryOwnDNS(queryTarget, hostname string) (string, error) {
 	c := dns.Client{Timeout: 1 * time.Second}
 
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(hostname), dns.TypeA)
 	m.RecursionDesired = true
 
-	// Loopback substitution: a bind of 0.0.0.0:53 means "all
-	// interfaces" — we can't dial that, so resolve to 127.0.0.1
-	// instead.
-	addr := bindAddr
-	if strings.HasPrefix(addr, "0.0.0.0:") {
-		addr = "127.0.0.1:" + strings.TrimPrefix(addr, "0.0.0.0:")
-	} else if strings.HasPrefix(addr, "[::]:") {
-		addr = "[::1]:" + strings.TrimPrefix(addr, "[::]:")
-	}
-
-	r, _, err := c.Exchange(m, addr)
+	r, _, err := c.Exchange(m, queryTarget)
 	if err != nil {
 		return "", err
 	}
