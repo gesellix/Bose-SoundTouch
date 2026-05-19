@@ -37,7 +37,7 @@ const CheckIDCertChain = "service_cert_chain"
 func RegisterCertChainCheck(r *Registry, httpsURLFn func() string, caCertFn func() *x509.Certificate) {
 	r.Register(Check{
 		ID:    CheckIDCertChain,
-		Title: "HTTPS endpoint certificate validates",
+		Title: "HTTPS endpoint TLS configuration",
 		Run: func() []Finding {
 			return runCertChainCheck(httpsURLFn(), caCertFn)
 		},
@@ -98,50 +98,63 @@ func runCertChainCheck(httpsURL string, caCertFn func() *x509.Certificate) []Fin
 
 	leaf := peers[0]
 
-	subject := leaf.Subject.String()
-	issuer := leaf.Issuer.String()
-	notAfter := leaf.NotAfter.Format("2006-01-02")
-
 	dnsNames := strings.Join(leaf.DNSNames, ", ")
 	if dnsNames == "" {
 		dnsNames = "(none)"
 	}
 
-	details := fmt.Sprintf(
-		"Verification error: %v. Leaf subject: %s. Issuer: %s. SANs: %s. Expires: %s.",
-		err, subject, issuer, dnsNames, notAfter,
+	chainContext := fmt.Sprintf(
+		"Leaf subject: %s. Issuer: %s. SANs: %s. Expires: %s.",
+		leaf.Subject.String(), leaf.Issuer.String(), dnsNames, leaf.NotAfter.Format("2006-01-02"),
 	)
 
-	var hints []ManualCommand
-
-	classification := classifyLeaf(leaf, caCertFn)
-	switch classification {
+	switch classifyLeaf(leaf, caCertFn) {
 	case leafFromOwnCA:
-		hints = append(hints, ManualCommand{
-			Label:   "Install AfterTouch's CA on each speaker:",
-			Command: "soundtouch-cli --host=<speaker-ip> setup install-ca --service-url=" + httpsURL,
-			Hint:    "The served leaf was issued by AfterTouch's own CA (verified by signature). Requires SSH on the speaker. After install, re-run this check.",
-		})
-	case leafSubjectEqualsIssuer:
-		hints = append(hints, ManualCommand{
-			Label:   "If this is a self-signed cert from AfterTouch, install its CA on each speaker:",
-			Command: "soundtouch-cli --host=<speaker-ip> setup install-ca --service-url=" + httpsURL,
-			Hint:    "Heuristic match (Subject == Issuer) — AfterTouch's own CA wasn't loadable, so this is a best guess. If wrong, treat the chain as foreign.",
-		})
-	default:
-		hints = append(hints, ManualCommand{
-			Label:   "Investigate the chain manually:",
-			Command: fmt.Sprintf("openssl s_client -connect %s -servername %s -showcerts </dev/null", addr, host),
-			Hint:    "Run from the same host as the service. Shows the full chain the peer is serving — likely a reverse proxy or ingress cert.",
-		})
-	}
+		return []Finding{{
+			Severity: SeverityInfo,
+			Message:  fmt.Sprintf("AfterTouch is serving its own self-signed CA chain on %s (expected).", addr),
+			Details: "The service host's system trust store doesn't include AfterTouch's CA — by design. Speakers establish trust via `setup install-ca`, not via system roots. This finding is informational; nothing is wrong with the service. " +
+				chainContext,
+			ManualCommands: []ManualCommand{{
+				Label:   "Reminder — each speaker still needs AfterTouch's CA installed once:",
+				Command: "soundtouch-cli --host=<speaker-ip> setup install-ca --service-url=" + httpsURL,
+				Hint:    "Verified by signature: the leaf was issued by AfterTouch's own CA. Only run install-ca for speakers that haven't been migrated yet.",
+			}},
+		}}
 
-	return []Finding{{
-		Severity:       SeverityWarning,
-		Message:        fmt.Sprintf("HTTPS certificate at %s does not validate against system roots.", addr),
-		Details:        details,
-		ManualCommands: hints,
-	}}
+	case leafSubjectEqualsIssuer:
+		return []Finding{{
+			Severity: SeverityInfo,
+			Message:  fmt.Sprintf("HTTPS endpoint on %s is serving a self-signed certificate.", addr),
+			Details: "AfterTouch's own CA couldn't be loaded to verify the leaf's signature, so this is a heuristic match (Subject == Issuer). If this *is* AfterTouch's self-signed chain, the situation is normal and speakers trust it via `setup install-ca`. If it's some other self-signed cert (custom proxy, etc.), treat the openssl investigation command below as the primary action. " +
+				chainContext,
+			ManualCommands: []ManualCommand{
+				{
+					Label:   "If this is AfterTouch's CA, install it on each speaker:",
+					Command: "soundtouch-cli --host=<speaker-ip> setup install-ca --service-url=" + httpsURL,
+					Hint:    "Heuristic match — verify the served Issuer matches AfterTouch's CA before running.",
+				},
+				{
+					Label:   "Or inspect the served chain manually:",
+					Command: fmt.Sprintf("openssl s_client -connect %s -servername %s -showcerts </dev/null", addr, host),
+					Hint:    "Run from the same host as the service.",
+				},
+			},
+		}}
+
+	default:
+		return []Finding{{
+			Severity: SeverityWarning,
+			Message:  fmt.Sprintf("HTTPS endpoint on %s serves a chain that doesn't validate against system roots and wasn't issued by AfterTouch's CA.", addr),
+			Details: fmt.Sprintf("Unexpected chain — likely a reverse proxy or ingress cert. Verification error: %v. ", err) +
+				chainContext,
+			ManualCommands: []ManualCommand{{
+				Label:   "Inspect the chain manually:",
+				Command: fmt.Sprintf("openssl s_client -connect %s -servername %s -showcerts </dev/null", addr, host),
+				Hint:    "Run from the same host as the service. Shows the full chain the peer is serving.",
+			}},
+		}}
+	}
 }
 
 func splitHTTPSHostPort(raw string) (string, string) {

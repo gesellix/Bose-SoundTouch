@@ -42,34 +42,49 @@ func TestCertChain_SelfSigned_SubjectEqualsIssuerFallback(t *testing.T) {
 	defer srv.Close()
 
 	// No CA provided → fallback to Subject==Issuer heuristic.
+	// This is informational, not a warning — a self-signed
+	// AfterTouch chain is the expected default deployment shape.
 	got := runCertChainCheck(srv.URL, nil)
-	if len(got) != 1 || got[0].Severity != SeverityWarning {
-		t.Fatalf("expected one warning for self-signed cert, got %+v", got)
+	if len(got) != 1 || got[0].Severity != SeverityInfo {
+		t.Fatalf("expected one info finding for self-signed cert, got %+v", got)
 	}
 
 	if !strings.Contains(got[0].Details, "Issuer") {
 		t.Errorf("expected issuer detail, got %q", got[0].Details)
 	}
 
-	if len(got[0].ManualCommands) == 0 {
-		t.Fatalf("expected at least one manual command")
+	if !strings.Contains(got[0].Details, "heuristic") {
+		t.Errorf("expected heuristic disclosure in details, got %q", got[0].Details)
 	}
 
-	cmd := got[0].ManualCommands[0].Command
-	if !strings.Contains(cmd, "install-ca") {
-		t.Errorf("expected install-ca suggestion via Subject==Issuer heuristic, got %q", cmd)
+	if len(got[0].ManualCommands) < 2 {
+		t.Fatalf("expected at least install-ca + openssl commands, got %+v", got[0].ManualCommands)
 	}
 
-	hint := got[0].ManualCommands[0].Hint
-	if !strings.Contains(hint, "Heuristic") {
-		t.Errorf("expected hint to disclose the heuristic match, got %q", hint)
+	var sawInstallCA, sawOpenssl bool
+	for _, c := range got[0].ManualCommands {
+		if strings.Contains(c.Command, "install-ca") {
+			sawInstallCA = true
+		}
+		if strings.Contains(c.Command, "openssl s_client") {
+			sawOpenssl = true
+		}
+	}
+
+	if !sawInstallCA {
+		t.Errorf("expected install-ca suggestion among manual commands")
+	}
+	if !sawOpenssl {
+		t.Errorf("expected openssl investigation command among manual commands")
 	}
 }
 
-func TestCertChain_LeafSignedByOwnCA_PrefersInstallCA(t *testing.T) {
-	// Construct a CA + leaf signed by it. Leaf has SAN 127.0.0.1
-	// so SNI works; Subject != Issuer (different CommonNames),
-	// which would have fooled the old heuristic.
+func TestCertChain_LeafSignedByOwnCA_IsInformationalNotAWarning(t *testing.T) {
+	// AfterTouch's own CA is the *default* deployment shape.
+	// Calling that a warning would mislead non-technical users.
+	// The check should report INFO, explain the situation, and
+	// remind to install-ca on speakers — but not present the
+	// service host's lack of trust as a defect.
 	caTLS, ca := generateInternalCA(t)
 	leafTLS := generateLeafSignedBy(t, ca, caTLS.PrivateKey)
 
@@ -81,20 +96,32 @@ func TestCertChain_LeafSignedByOwnCA_PrefersInstallCA(t *testing.T) {
 	defer srv.Close()
 
 	got := runCertChainCheck(srv.URL, func() *x509.Certificate { return ca })
-	if len(got) != 1 || got[0].Severity != SeverityWarning {
-		t.Fatalf("expected one warning, got %+v", got)
+	if len(got) != 1 {
+		t.Fatalf("expected one finding, got %+v", got)
+	}
+
+	if got[0].Severity != SeverityInfo {
+		t.Errorf("expected SeverityInfo for AfterTouch's own CA chain, got %q", got[0].Severity)
+	}
+
+	if !strings.Contains(got[0].Message, "expected") {
+		t.Errorf("expected message to call this state 'expected', got %q", got[0].Message)
+	}
+
+	if !strings.Contains(got[0].Details, "by design") {
+		t.Errorf("expected details to explain it's by design, got %q", got[0].Details)
 	}
 
 	if len(got[0].ManualCommands) == 0 {
-		t.Fatalf("expected a manual command")
+		t.Fatalf("expected install-ca reminder among manual commands")
 	}
 
 	cmd := got[0].ManualCommands[0]
 	if !strings.Contains(cmd.Command, "install-ca") {
-		t.Errorf("expected install-ca, got %q", cmd.Command)
+		t.Errorf("expected install-ca reminder, got %q", cmd.Command)
 	}
 
-	if !strings.Contains(cmd.Hint, "verified by signature") {
+	if !strings.Contains(cmd.Hint, "Verified by signature") {
 		t.Errorf("expected signature-verified hint, got %q", cmd.Hint)
 	}
 }
