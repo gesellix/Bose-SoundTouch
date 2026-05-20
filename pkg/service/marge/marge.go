@@ -793,6 +793,26 @@ func canonicalProviderIDByID(id string) string {
 	return ""
 }
 
+// canonicalSourceKeyTypeByProviderID is the inverse of the canonical
+// sourceproviderid mapping used in /full responses (25 = TuneIn, 11 =
+// LocalInternetRadio, …). Used by syncPresets/syncRecents to project the
+// upstream cloud /full perspective ("Audio" + providerid=25) back onto
+// the speaker's perspective ("TUNEIN") at persist time, so the on-disk
+// ServicePreset/ServiceRecent.Source matches what the speaker itself
+// would write via setup.syncPresets (which is the source of truth).
+//
+// Returns "" for unknown / non-canonical provider IDs; the caller is
+// expected to fall back to whatever upstream gave us.
+func canonicalSourceKeyTypeByProviderID(providerID string) string {
+	for i := range constants.StaticProviders {
+		if strconv.Itoa(constants.StaticProviders[i].ID) == providerID {
+			return constants.StaticProviders[i].Name
+		}
+	}
+
+	return ""
+}
+
 // canonicalDefaultsByType returns the canonical (built-in) source ID and
 // SourceProviderID for a well-known provider key type. Used to synthesise a
 // minimum-viable <source> block when a preset references a source we no

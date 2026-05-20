@@ -185,7 +185,7 @@ func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSou
 				ContentItemType: p.ContentItemType,
 				Location:        p.Location,
 				Name:            p.Name,
-				Source:          p.Source.Type,
+				Source:          sourceKeyTypeFromFullSource(p.Source),
 				SourceID:        p.Source.ID,
 				SourceAccount:   p.Source.Username,
 				Type:            p.ContentItemType,
@@ -215,7 +215,7 @@ func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSou
 				ContentItemType: r.ContentItemType,
 				Location:        r.Location,
 				Name:            r.Name,
-				Source:          r.Source.Type,
+				Source:          sourceKeyTypeFromFullSource(r.Source),
 				SourceID:        r.Source.ID,
 				SourceAccount:   r.Source.Username,
 				Type:            r.ContentItemType,
@@ -230,6 +230,23 @@ func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSou
 	if err := ds.SaveRecents(accountID, deviceID, recents); err != nil {
 		log.Printf("[SYNC_ERR] Failed to save recents for %s: %v", deviceID, err)
 	}
+}
+
+// sourceKeyTypeFromFullSource derives the speaker-perspective SourceKeyType
+// ("TUNEIN", "INTERNET_RADIO", …) from an upstream FullResponseSource.
+// The upstream <source type="Audio"> attribute is a protocol-level
+// classification, not the symbolic name the speaker stores locally —
+// persisting "Audio" into ServicePreset.Source means the on-disk shape
+// doesn't match what the speaker would write via its own /presets
+// (which is the source of truth). Falls back to whatever upstream gave
+// us when the providerid isn't one of the canonical built-ins; that
+// keeps the legacy/poisoned-data path no-worse-than-before.
+func sourceKeyTypeFromFullSource(s models.FullResponseSource) string {
+	if t := canonicalSourceKeyTypeByProviderID(s.SourceProviderID); t != "" {
+		return t
+	}
+
+	return s.Type
 }
 
 func mapFullSourceToConfiguredSource(s models.FullResponseSource) models.ConfiguredSource {
