@@ -832,15 +832,27 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		}
 
 		var matchedSource *models.ConfiguredSource
-		// 1. Try exact ID match first
+		// 1. Exact ID match — but only if the source's type is
+		// compatible with what the preset claims. GH-343: a numeric
+		// SourceID collision between e.g. a TuneIn preset and a
+		// RADIOPLAYER source in the configured-sources list used to
+		// silently rewrite the preset's source attribute to
+		// RADIOPLAYER on the next /full sync. Strict-match refuses
+		// the bind when the types disagree; the fallback below then
+		// finds the right source (or synthesise/skip kicks in).
 		if p.SourceID != "" {
 			for j := range sources {
-				if sources[j].ID == p.SourceID {
+				if sources[j].ID == p.SourceID && sourceTypeCompatible(p.Source, sources[j].SourceKeyType) {
 					copySource := sources[j]
 					PrepareConfiguredSource(&copySource)
 					matchedSource = &copySource
 
 					break
+				}
+
+				if sources[j].ID == p.SourceID && !sourceTypeCompatible(p.Source, sources[j].SourceKeyType) {
+					log.Printf("[Marge] /full: refusing cross-type bind for preset %s — preset.Source=%q but configured source id=%s has type %q; falling through to type-based match",
+						p.ButtonNumber, p.Source, sources[j].ID, sources[j].SourceKeyType)
 				}
 			}
 		}
@@ -953,16 +965,23 @@ func synthesiseDefaultSourceByType(sourceKeyType string) (models.FullResponseSou
 }
 
 // findMatchingSourceForRecent resolves the configured source a recent
-// references. Tries exact SourceID match first, then SourceKeyType+account.
-// Returns nil when nothing matches — caller falls back to synthesise/skip.
+// references. Tries exact SourceID match (but only if the matched source's
+// type is compatible with the recent's claimed Source — see GH-343), then
+// SourceKeyType+account. Returns nil when nothing matches; caller falls
+// back to synthesise/skip.
 func findMatchingSourceForRecent(r *models.ServiceRecent, sources []models.ConfiguredSource) *models.ConfiguredSource {
 	if r.SourceID != "" {
 		for j := range sources {
-			if sources[j].ID == r.SourceID {
+			if sources[j].ID == r.SourceID && sourceTypeCompatible(r.Source, sources[j].SourceKeyType) {
 				copySource := sources[j]
 				PrepareConfiguredSource(&copySource)
 
 				return &copySource
+			}
+
+			if sources[j].ID == r.SourceID && !sourceTypeCompatible(r.Source, sources[j].SourceKeyType) {
+				log.Printf("[Marge] /full: refusing cross-type bind for recent id=%s — recent.Source=%q but configured source id=%s has type %q; falling through to type-based match",
+					r.ID, r.Source, sources[j].ID, sources[j].SourceKeyType)
 			}
 		}
 	}
@@ -978,6 +997,20 @@ func findMatchingSourceForRecent(r *models.ServiceRecent, sources []models.Confi
 	}
 
 	return nil
+}
+
+// sourceTypeCompatible decides whether a preset/recent whose original
+// source is `claimed` can be bound to a configured source of type
+// `configured`. Strict-match policy: identical types compatible; either
+// side empty is treated as "no info, allow" (matches pre-fix behaviour for
+// records that lost their Source attribute). Refuse when both are set and
+// disagree — that's the GH-343 cross-type rewrite the speaker reflects.
+func sourceTypeCompatible(claimed, configured string) bool {
+	if claimed == "" || configured == "" {
+		return true
+	}
+
+	return claimed == configured
 }
 
 func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.ConfiguredSource) []models.FullResponseRecent {

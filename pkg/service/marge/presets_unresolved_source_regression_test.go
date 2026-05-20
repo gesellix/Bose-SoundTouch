@@ -258,6 +258,85 @@ func TestMapRecentsToFullResponse_UnresolvedSource(t *testing.T) {
 	}
 }
 
+// TestMapPresetsToFullResponse_StrictTypeMatch_GH343 is the regression for
+// GH-343: a preset stored with Source=TUNEIN used to come back from /full
+// rebound to RADIOPLAYER because the numeric SourceID collided with a
+// RADIOPLAYER source in the configured-sources list. The speaker, trusting
+// /full as ground truth, then locally re-attributed the preset's source.
+//
+// Strict-match refuses to bind a TUNEIN preset to a RADIOPLAYER source,
+// even when the IDs match. The fallback type-search then finds the right
+// TUNEIN source.
+func TestMapPresetsToFullResponse_StrictTypeMatch_GH343(t *testing.T) {
+	// Two configured sources with the same numeric ID. In real life they'd
+	// be from different devices/accounts; the bug surfaced when a stale
+	// migration left a RADIOPLAYER source with the same ID a TUNEIN preset
+	// referenced. Order matters here — RADIOPLAYER comes first so the
+	// strict-match has to actively skip it to reach the TUNEIN entry.
+	configured := []models.ConfiguredSource{
+		{
+			ID:               "10004",
+			Type:             "Audio",
+			SourceKeyType:    "RADIOPLAYER",
+			SourceProviderID: "35",
+		},
+		{
+			ID:               "10004",
+			Type:             "Audio",
+			SourceKeyType:    constants.ProviderTunein,
+			SourceProviderID: "25",
+		},
+	}
+
+	presets := []models.ServicePreset{
+		{
+			ServiceContentItem: models.ServiceContentItem{
+				Name:            "MDR JUMP",
+				Source:          constants.ProviderTunein,
+				SourceID:        "10004",
+				Location:        "/v1/playback/station/s6634",
+				ContentItemType: "stationurl",
+			},
+			ButtonNumber: "1",
+		},
+	}
+
+	got := mapPresetsToFullResponse(presets, configured)
+
+	if len(got) != 1 {
+		t.Fatalf("expected 1 emitted preset, got %d", len(got))
+	}
+
+	if got[0].Source.SourceProviderID != "25" {
+		t.Errorf("strict-match should have bound to TuneIn (sourceproviderid=25), got %q — cross-type bind not refused?", got[0].Source.SourceProviderID)
+	}
+}
+
+// TestSourceTypeCompatible pins the strict-match policy:
+//   - identical types compatible
+//   - either side empty treated as "no info, allow"
+//   - both set and different — refused
+func TestSourceTypeCompatible(t *testing.T) {
+	cases := []struct {
+		claimed, configured string
+		want                bool
+	}{
+		{"TUNEIN", "TUNEIN", true},
+		{"TUNEIN", "RADIOPLAYER", false},
+		{"", "TUNEIN", true},
+		{"TUNEIN", "", true},
+		{"", "", true},
+		{"SPOTIFY", "SPOTIFY", true},
+		{"SPOTIFY", "AMAZON", false},
+	}
+
+	for _, tc := range cases {
+		if got := sourceTypeCompatible(tc.claimed, tc.configured); got != tc.want {
+			t.Errorf("sourceTypeCompatible(%q, %q) = %v, want %v", tc.claimed, tc.configured, got, tc.want)
+		}
+	}
+}
+
 // TestCanonicalDefaultsByType pins the type → (id, providerid) mapping
 // against the canonical IDs the speaker firmware ships with.
 // canonicalProviderIDByID (the inverse) is already tested implicitly via
