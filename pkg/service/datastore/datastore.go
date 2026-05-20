@@ -618,19 +618,47 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 	}
 
 	devices := []models.ServiceDeviceInfo{}
-	seenIDs := make(map[string]bool)
+
+	type seenEntry struct {
+		index   int
+		account string
+	}
+
+	seenIDs := make(map[string]seenEntry)
 
 	for _, dir := range dirs {
-		accounts, err := os.ReadDir(dir)
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			continue
 		}
 
-		for _, acc := range accounts {
-			if !acc.IsDir() {
-				continue
+		// Sort "default" to the back so a real-account entry always
+		// wins the first-seen race. "default" exists as a pre-pair
+		// placeholder; once the speaker pairs with a real account it
+		// becomes orphan state. Sort returns the same list for tests
+		// because os.ReadDir is already sorted, and digits sort before
+		// "default" in ASCII — but be defensive.
+		accounts := make([]os.DirEntry, 0, len(entries))
+		for _, e := range entries {
+			if e.IsDir() {
+				accounts = append(accounts, e)
+			}
+		}
+
+		sort.SliceStable(accounts, func(i, j int) bool {
+			ai, aj := accounts[i].Name(), accounts[j].Name()
+			if ai == accountIDDefault && aj != accountIDDefault {
+				return false
 			}
 
+			if aj == accountIDDefault && ai != accountIDDefault {
+				return true
+			}
+
+			return ai < aj
+		})
+
+		for _, acc := range accounts {
 			accDevices := ds.listDevicesInAccount(dir, acc.Name())
 			for i := range accDevices {
 				info := accDevices[i]
@@ -641,21 +669,28 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 					key = info.IPAddress
 				}
 
-				if !seenIDs[key] || info.Name != "" {
-					if seenIDs[key] && info.Name != "" {
-						// Replace previous empty-named entry with one that has a name
-						for j := range devices {
-							existing := &devices[j]
-							if (existing.DeviceID != "" && existing.DeviceID == info.DeviceID) ||
-								(existing.IPAddress != "" && existing.IPAddress == info.IPAddress) {
-								devices[j] = info
-								break
-							}
-						}
-					} else if !seenIDs[key] {
-						devices = append(devices, info)
-						seenIDs[key] = true
-					}
+				entry, alreadySeen := seenIDs[key]
+				if !alreadySeen {
+					devices = append(devices, info)
+					seenIDs[key] = seenEntry{index: len(devices) - 1, account: info.AccountID}
+
+					continue
+				}
+
+				// Don't let a "default" entry replace a real-account
+				// one. The speaker pairs to a real account; any
+				// remaining "default" record is orphan state from
+				// before pairing.
+				if info.AccountID == accountIDDefault {
+					continue
+				}
+
+				// Allow real-account → real-account replacement only
+				// when the prior was the placeholder "default" or had
+				// no name (less authoritative).
+				if entry.account == accountIDDefault || (devices[entry.index].Name == "" && info.Name != "") {
+					devices[entry.index] = info
+					seenIDs[key] = seenEntry{index: entry.index, account: info.AccountID}
 				}
 			}
 		}
@@ -663,6 +698,13 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 
 	return devices, nil
 }
+
+// accountIDDefault is the placeholder account id assigned to records
+// that exist before a speaker has been paired with a real Marge
+// account. Treated as fallback in ListAllDevices and skipped in
+// consistency checks when a real-account entry exists for the same
+// device.
+const accountIDDefault = "default"
 
 func (ds *DataStore) getPossibleDataDirs() []string {
 	dirs := []string{}

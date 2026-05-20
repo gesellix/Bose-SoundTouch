@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -84,6 +85,12 @@ func runPresetsConsistencyCheck(ds *datastore.DataStore) []Finding {
 
 	var findings []Finding
 
+	// Surface orphan "default"-account entries for devices that are
+	// also paired under a real account. The speaker pairs to one
+	// account at a time; the leftover "default" record from the
+	// pre-pair phase is stale state the operator can safely remove.
+	findings = append(findings, detectOrphanDefaultEntries(ds, devices)...)
+
 	for i := range devices {
 		dev := &devices[i]
 		if dev.AccountID == "" || dev.DeviceID == "" {
@@ -91,6 +98,48 @@ func runPresetsConsistencyCheck(ds *datastore.DataStore) []Finding {
 		}
 
 		findings = append(findings, checkOneDeviceConsistency(ds, dev.AccountID, dev.DeviceID, dev.IPAddress)...)
+	}
+
+	return findings
+}
+
+// detectOrphanDefaultEntries walks the on-disk account directories
+// directly (not through ListAllDevices, which already dedupes "default"
+// out) and flags any device that exists under "default" *and* under a
+// real account. The fix is to delete accounts/default/devices/<id>/ —
+// we don't do it automatically because filesystem deletions need
+// explicit operator consent (CLAUDE.md "destructive actions" rule).
+func detectOrphanDefaultEntries(ds *datastore.DataStore, paired []models.ServiceDeviceInfo) []Finding {
+	pairedReal := map[string]string{} // deviceID -> real accountID
+
+	for i := range paired {
+		if paired[i].AccountID != "" && paired[i].AccountID != "default" && paired[i].DeviceID != "" {
+			pairedReal[paired[i].DeviceID] = paired[i].AccountID
+		}
+	}
+
+	defaultDevicesDir := ds.AccountDevicesDir("default")
+
+	entries, err := os.ReadDir(defaultDevicesDir)
+	if err != nil {
+		return nil
+	}
+
+	var findings []Finding
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+
+		deviceID := e.Name()
+		if realAccount, ok := pairedReal[deviceID]; ok {
+			findings = append(findings, Finding{
+				Severity: SeverityWarning,
+				Target:   Target{Account: "default", Device: deviceID},
+				Message:  "Orphan \"default\" account entry: device " + deviceID + " is also paired under account " + realAccount + ". The default entry is leftover state from before pairing and is masked from consistency checks. Safe to delete: rm -rf <data-dir>/accounts/default/devices/" + deviceID,
+			})
+		}
 	}
 
 	return findings
