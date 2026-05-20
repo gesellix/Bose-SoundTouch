@@ -793,6 +793,32 @@ func canonicalProviderIDByID(id string) string {
 	return ""
 }
 
+// inferSourceKeyTypeFromLocation makes a best-effort guess at the source
+// type from a preset/recent's location URL. Used *only* for diagnostic
+// logs — never to decide which source to bind to. URL-pattern matching
+// is fragile (a location format can be reused across providers; tests
+// can't enumerate every shape Bose's firmware ever emits), so the
+// inference is one-way visibility: when it disagrees with the actually-
+// bound source, surface a log line so an operator can investigate.
+// When it can't make a confident inference, returns "" and the caller
+// silently accepts the bound source as-is.
+func inferSourceKeyTypeFromLocation(location string) string {
+	switch {
+	case location == "":
+		return ""
+	case strings.HasPrefix(location, "/v1/playback/station/s"),
+		strings.HasPrefix(location, "/v1/playback/episodes/t"):
+		return constants.ProviderTunein
+	case strings.HasPrefix(location, "/playback/container/"),
+		strings.HasPrefix(location, "/playback/track/"):
+		return constants.ProviderSpotify
+	case strings.Contains(location, "/custom/v1/playback/"):
+		return constants.ProviderLocalInternetRadio
+	}
+
+	return ""
+}
+
 // canonicalSourceKeyTypeByProviderID is the inverse of the canonical
 // sourceproviderid mapping used in /full responses (25 = TuneIn, 11 =
 // LocalInternetRadio, …). Used by syncPresets/syncRecents to project the
@@ -1471,6 +1497,21 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 			presetNumber, newPresetElem.SourceID)
 
 		return nil, fmt.Errorf("invalid account/source")
+	}
+
+	// Visibility-only: the speaker's PUT carries only <sourceid> — no
+	// symbolic source name — so we can't strict-match at write time.
+	// But if the preset's location URL has a recognisable pattern
+	// (TuneIn /v1/playback/station/, Spotify /playback/container/,
+	// LocalInternetRadio /custom/v1/playback/, …) and that pattern
+	// disagrees with the matched source's SourceKeyType, the operator
+	// is probably looking at the GH-343 footprint: a stale Sources.xml
+	// entry shadowing the speaker's actual intent. Log so the operator
+	// can re-trigger setup.syncSources without us guessing on their
+	// behalf — the binding still happens as the speaker requested.
+	if inferred := inferSourceKeyTypeFromLocation(newPresetElem.Location); inferred != "" && matchingSrc.SourceKeyType != "" && inferred != matchingSrc.SourceKeyType {
+		log.Printf("[Marge] UpdatePreset(preset=%d): location URL %q suggests %s but matched source id=%s has SourceKeyType=%s — proceeding as the speaker requested, but the Sources.xml entry may be stale; consider re-running setup.syncSources from the speaker to refresh",
+			presetNumber, newPresetElem.Location, inferred, matchingSrc.ID, matchingSrc.SourceKeyType)
 	}
 
 	nowStr := strconv.FormatInt(time.Now().Unix(), 10)
