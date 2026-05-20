@@ -15,18 +15,30 @@ func TestLastPlayedAtParity(t *testing.T) {
 	utcTimeStr := strconv.FormatInt(now, 10)
 	expectedLastPlayedAt := time.Unix(now, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
 
+	// The recent needs a resolvable source so mapRecentsToFullResponse
+	// emits it — empty <source/> blocks are now filtered to avoid
+	// protobuf-required-field aborts on the speaker (GH-269).
 	recents := []models.ServiceRecent{
 		{
 			ServiceContentItem: models.ServiceContentItem{
-				ID:   "1",
-				Name: "Recent 1",
+				ID:       "1",
+				Name:     "Recent 1",
+				Source:   "TUNEIN",
+				SourceID: "10004",
 			},
 			UtcTime:      utcTimeStr,
 			LastPlayedAt: "", // Empty in datastore
 		},
 	}
 
-	sources := []models.ConfiguredSource{}
+	sources := []models.ConfiguredSource{
+		{
+			ID:               "10004",
+			Type:             "Audio",
+			SourceKeyType:    "TUNEIN",
+			SourceProviderID: "25",
+		},
+	}
 
 	fullRecents := mapRecentsToFullResponse(recents, sources)
 

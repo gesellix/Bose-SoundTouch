@@ -175,6 +175,89 @@ func requireNonEmptySourceBlock(t *testing.T, label string, p models.FullRespons
 	}
 }
 
+// TestMapRecentsToFullResponse_UnresolvedSource is the recent-side twin of
+// the preset regression above. Same protobuf invariant applies to the
+// inner <source> of <recent>; an empty block aborts the whole /full sync
+// — the older AccountFullToXML_RecentWithPoisonedSourceProviderID case
+// caught one form of this via post-marshal stripping. The skip/synthesise
+// path here closes the other form: orphan recent whose source is no
+// longer configured at all.
+func TestMapRecentsToFullResponse_UnresolvedSource(t *testing.T) {
+	configured := []models.ConfiguredSource{
+		{
+			ID:               "14774275",
+			Type:             "Audio",
+			SourceKeyType:    constants.ProviderTunein,
+			SourceProviderID: "25",
+			CreatedOn:        "2017-07-20T16:43:48.000+00:00",
+			UpdatedOn:        "2017-07-20T16:43:48.000+00:00",
+		},
+	}
+
+	recents := []models.ServiceRecent{
+		// 1. Resolved by exact SourceID match.
+		{
+			ServiceContentItem: models.ServiceContentItem{
+				ID:       "rec-1",
+				Name:     "Resolved TuneIn",
+				Source:   constants.ProviderTunein,
+				SourceID: "14774275",
+				Location: "/v1/playback/station/s166521",
+			},
+			LastPlayedAt: "2026-04-04T21:25:33.000+00:00",
+		},
+		// 2. Synthesise: LOCAL_INTERNET_RADIO no longer configured.
+		{
+			ServiceContentItem: models.ServiceContentItem{
+				ID:       "rec-2",
+				Name:     "Orphaned laut.fm",
+				Source:   constants.ProviderLocalInternetRadio,
+				SourceID: "77777777",
+				Location: "http://example.invalid/custom/v1/playback/abc",
+			},
+			LastPlayedAt: "2026-04-04T21:25:33.000+00:00",
+		},
+		// 3. Skip: Spotify is account-bound.
+		{
+			ServiceContentItem: models.ServiceContentItem{
+				ID:       "rec-3",
+				Name:     "Orphaned Spotify",
+				Source:   constants.ProviderSpotify,
+				SourceID: "100004",
+				Location: "/playback/container/abc",
+			},
+			LastPlayedAt: "2026-04-04T21:25:33.000+00:00",
+		},
+	}
+
+	got := mapRecentsToFullResponse(recents, configured)
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 emitted recents (1 resolved + 1 synthesised, Spotify skipped), got %d", len(got))
+	}
+
+	byID := map[string]models.FullResponseRecent{}
+	for _, r := range got {
+		byID[r.ID] = r
+	}
+
+	if _, ok := byID["rec-3"]; ok {
+		t.Errorf("expected rec-3 (orphaned Spotify) to be skipped, but it was emitted")
+	}
+
+	if byID["rec-1"].Source.SourceProviderID != "25" {
+		t.Errorf("rec-1: expected sourceproviderid=25 (TuneIn), got %q", byID["rec-1"].Source.SourceProviderID)
+	}
+
+	if byID["rec-2"].Source.ID != "10003" {
+		t.Errorf("rec-2: expected synthesised LocalInternetRadio id=10003, got %q", byID["rec-2"].Source.ID)
+	}
+
+	if byID["rec-2"].Source.SourceProviderID != "11" {
+		t.Errorf("rec-2: expected synthesised LocalInternetRadio providerid=11, got %q", byID["rec-2"].Source.SourceProviderID)
+	}
+}
+
 // TestCanonicalDefaultsByType pins the type → (id, providerid) mapping
 // against the canonical IDs the speaker firmware ships with.
 // canonicalProviderIDByID (the inverse) is already tested implicitly via

@@ -920,7 +920,21 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 // provider type isn't one we can safely synthesise (e.g. Spotify, Amazon,
 // where the ID and credential are account-bound).
 func synthesiseDefaultSourceForPreset(p *models.ServicePreset) (models.FullResponseSource, bool) {
-	id, providerID := canonicalDefaultsByType(p.Source)
+	return synthesiseDefaultSourceByType(p.Source)
+}
+
+// synthesiseDefaultSourceForRecent is the recent-side twin of
+// synthesiseDefaultSourceForPreset. Same protobuf-required-field invariants
+// apply to recents>recent>source.
+func synthesiseDefaultSourceForRecent(r *models.ServiceRecent) (models.FullResponseSource, bool) {
+	return synthesiseDefaultSourceByType(r.Source)
+}
+
+// synthesiseDefaultSourceByType is the shared helper behind the preset/recent
+// synthesisers. Keep them as separate wrappers so callers stay readable and
+// the call site signals which container we're patching up.
+func synthesiseDefaultSourceByType(sourceKeyType string) (models.FullResponseSource, bool) {
+	id, providerID := canonicalDefaultsByType(sourceKeyType)
 	if id == "" || providerID == "" {
 		return models.FullResponseSource{}, false
 	}
@@ -931,11 +945,39 @@ func synthesiseDefaultSourceForPreset(p *models.ServicePreset) (models.FullRespo
 		CreatedOn:        constants.DateStr,
 		UpdatedOn:        constants.DateStr,
 		SourceProviderID: providerID,
-		Name:             p.Source,
+		Name:             sourceKeyType,
 	}
 	synth.Credential.Type = constants.CredentialTypeToken
 
 	return synth, true
+}
+
+// findMatchingSourceForRecent resolves the configured source a recent
+// references. Tries exact SourceID match first, then SourceKeyType+account.
+// Returns nil when nothing matches — caller falls back to synthesise/skip.
+func findMatchingSourceForRecent(r *models.ServiceRecent, sources []models.ConfiguredSource) *models.ConfiguredSource {
+	if r.SourceID != "" {
+		for j := range sources {
+			if sources[j].ID == r.SourceID {
+				copySource := sources[j]
+				PrepareConfiguredSource(&copySource)
+
+				return &copySource
+			}
+		}
+	}
+
+	for j := range sources {
+		s := sources[j]
+		if s.SourceKeyType == r.Source && (r.SourceAccount == "" || s.SourceKeyAccount == r.SourceAccount) {
+			copySource := s
+			PrepareConfiguredSource(&copySource)
+
+			return &copySource
+		}
+	}
+
+	return nil
 }
 
 func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.ConfiguredSource) []models.FullResponseRecent {
@@ -951,33 +993,7 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 			r.UpdatedOn = constants.DateStr
 		}
 
-		var matchedSource *models.ConfiguredSource
-		// 1. Try exact ID match first
-		if r.SourceID != "" {
-			for j := range sources {
-				if sources[j].ID == r.SourceID {
-					copySource := sources[j]
-					PrepareConfiguredSource(&copySource)
-					matchedSource = &copySource
-
-					break
-				}
-			}
-		}
-
-		// 2. Fallback to type/account match if ID didn't match or was empty
-		if matchedSource == nil {
-			for j := range sources {
-				s := sources[j]
-				if s.SourceKeyType == r.Source && (r.SourceAccount == "" || s.SourceKeyAccount == r.SourceAccount) {
-					copySource := s
-					PrepareConfiguredSource(&copySource)
-					matchedSource = &copySource
-
-					break
-				}
-			}
-		}
+		matchedSource := findMatchingSourceForRecent(r, sources)
 
 		fullRecent := models.FullResponseRecent{
 			ID:              r.ID,
@@ -1009,9 +1025,34 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 			if fullRecent.SourceID == "" {
 				fullRecent.SourceID = fullRecent.Source.ID
 			}
+
+			fullRecents = append(fullRecents, fullRecent)
+
+			continue
 		}
 
-		fullRecents = append(fullRecents, fullRecent)
+		// Same protobuf-required-field hazard as presets: emitting a
+		// recent with an empty <source/> block makes the speaker abort
+		// the whole /full sync. Mirror the preset behaviour — synthesise
+		// for well-known radio providers, skip otherwise. Recents are
+		// less load-bearing than presets, but a single broken recent can
+		// still take the sync down.
+		if synth, ok := synthesiseDefaultSourceForRecent(r); ok {
+			log.Printf("[Marge] /full: synthesising canonical %s source (id=%s, providerid=%s) for recent id=%s — original source %q not in configured sources",
+				r.Source, synth.ID, synth.SourceProviderID, r.ID, r.SourceID)
+
+			fullRecent.Source = synth
+			if fullRecent.SourceID == "" {
+				fullRecent.SourceID = synth.ID
+			}
+
+			fullRecents = append(fullRecents, fullRecent)
+
+			continue
+		}
+
+		log.Printf("[Marge] /full: skipping recent id=%s — source %q (id=%q, account=%q) not in configured sources and not synthesisable",
+			r.ID, r.Source, r.SourceID, r.SourceAccount)
 	}
 
 	return fullRecents
