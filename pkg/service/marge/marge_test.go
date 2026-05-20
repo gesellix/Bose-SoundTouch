@@ -748,15 +748,20 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 		t.Errorf("Expected <name>Living Room SoundTouch</name> under device, got %s", xmlStr)
 	}
 
-	// 2. Verify ButtonNumber and ContentItemType mapping
+	// 2. Verify ButtonNumber and ContentItemType mapping. Uses TUNEIN
+	// because that's one of the default configured sources every device
+	// gets at pair time — a SPOTIFY preset with no matching configured
+	// source would now correctly be skipped per the GH-269 fix, which
+	// would defeat this test's structural assertion.
 	presetsDir := filepath.Join(deviceDir)
 	_ = os.MkdirAll(presetsDir, 0755)
 	presetsXML := `<?xml version="1.0" encoding="UTF-8"?>
 <presets>
     <preset id="1" createdOn="1719128436" updatedOn="1728740382">
-        <contentItem source="SPOTIFY" type="tracklisturl" location="/playback/container/c3BvdGlmeTpwbGF5bGlzdDo1Mm5QaVJrbWVmSkZPeHh1M1ZTd1hh" itemName="test-playlist" isPresetable="true" contentItemType="tracklisturl">
-            <containerArt>https://i.scdn.co/image/art</containerArt>
+        <contentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s166521" itemName="SMOOTH JAZZ" isPresetable="true" contentItemType="stationurl">
+            <containerArt>https://cdn-profiles.tunein.com/s166521/images/logod.png</containerArt>
         </contentItem>
+        <sourceid>10004</sourceid>
     </preset>
 </presets>`
 	_ = os.WriteFile(filepath.Join(presetsDir, "Presets.xml"), []byte(presetsXML), 0644)
@@ -767,8 +772,8 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	if !strings.Contains(xmlStr2, `buttonNumber="1"`) {
 		t.Errorf("Expected buttonNumber=\"1\", got %s", xmlStr2)
 	}
-	if !strings.Contains(xmlStr2, `<contentItemType>tracklisturl</contentItemType>`) {
-		t.Errorf("Expected <contentItemType>tracklisturl</contentItemType>, got %s", xmlStr2)
+	if !strings.Contains(xmlStr2, `<contentItemType>stationurl</contentItemType>`) {
+		t.Errorf("Expected <contentItemType>stationurl</contentItemType>, got %s", xmlStr2)
 	}
 
 	// 3. Test with empty name

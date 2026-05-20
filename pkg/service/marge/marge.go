@@ -700,6 +700,8 @@ func resolveSourceName(s models.ConfiguredSource) string {
 			name = constants.ProviderLocalInternetRadio
 		case constants.ProviderTunein:
 			name = constants.ProviderTunein
+		case constants.ProviderRadioBrowser:
+			name = constants.ProviderRadioBrowser
 		case constants.ProviderAux:
 			name = constants.ProviderAux
 		}
@@ -791,6 +793,30 @@ func canonicalProviderIDByID(id string) string {
 	return ""
 }
 
+// canonicalDefaultsByType returns the canonical (built-in) source ID and
+// SourceProviderID for a well-known provider key type. Used to synthesise a
+// minimum-viable <source> block when a preset references a source we no
+// longer have in the configured-sources list (e.g. after a factory reset
+// that hasn't repopulated the device's sources yet).
+//
+// Returns ("", "") for provider types whose IDs are account-specific
+// (Spotify, Amazon) — those cannot be synthesised without losing
+// per-account state, so callers must skip the preset instead.
+func canonicalDefaultsByType(sourceKeyType string) (id, providerID string) {
+	switch sourceKeyType {
+	case constants.ProviderInternetRadio:
+		return "10002", strconv.Itoa(constants.InternetRadioProviderID)
+	case constants.ProviderLocalInternetRadio:
+		return "10003", strconv.Itoa(constants.LocalInternetRadioProviderID)
+	case constants.ProviderTunein:
+		return "10004", strconv.Itoa(constants.TuneinProviderID)
+	case constants.ProviderRadioBrowser:
+		return "10005", strconv.Itoa(constants.RadioBrowserProviderID)
+	}
+
+	return "", ""
+}
+
 func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.ConfiguredSource) []models.FullResponsePreset {
 	var fullPresets []models.FullResponsePreset
 
@@ -853,12 +879,61 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 
 		if matchedSource != nil {
 			fullPreset.Source = mapToFullResponseSource(*matchedSource)
+			fullPresets = append(fullPresets, fullPreset)
+
+			continue
 		}
 
-		fullPresets = append(fullPresets, fullPreset)
+		// No configured source matches this preset. Emitting the preset
+		// with an empty <source/> block produces a /full response whose
+		// inner protobuf is missing required fields (sourceproviderid,
+		// id, type, credential), which makes the speaker abort the whole
+		// account sync and wipe its local presets. See GH-269.
+		//
+		// For the well-known built-in providers we can synthesise a
+		// minimum-viable source block from canonical defaults; the
+		// credential will be empty so play-time will fail loudly, but
+		// the sync survives and other presets stay intact. For
+		// account-bound providers (Spotify, Amazon) we can't synthesise
+		// without losing state, so we skip the preset entirely — its
+		// slot reverts to "Select a preset" until the source is
+		// repopulated, which is recoverable; a wiped /presets is not.
+		if synth, ok := synthesiseDefaultSourceForPreset(p); ok {
+			fullPreset.Source = synth
+			fullPresets = append(fullPresets, fullPreset)
+
+			continue
+		}
+
+		log.Printf("[Marge] /full: skipping preset %s — source %q (id=%q, account=%q) not in configured sources",
+			p.ButtonNumber, p.Source, p.SourceID, p.SourceAccount)
 	}
 
 	return fullPresets
+}
+
+// synthesiseDefaultSourceForPreset builds a minimum-viable FullResponseSource
+// for a preset whose source is no longer in the configured-sources list,
+// using canonical built-in defaults. Returns (zero, false) when the preset's
+// provider type isn't one we can safely synthesise (e.g. Spotify, Amazon,
+// where the ID and credential are account-bound).
+func synthesiseDefaultSourceForPreset(p *models.ServicePreset) (models.FullResponseSource, bool) {
+	id, providerID := canonicalDefaultsByType(p.Source)
+	if id == "" || providerID == "" {
+		return models.FullResponseSource{}, false
+	}
+
+	synth := models.FullResponseSource{
+		ID:               id,
+		Type:             "Audio",
+		CreatedOn:        constants.DateStr,
+		UpdatedOn:        constants.DateStr,
+		SourceProviderID: providerID,
+		Name:             p.Source,
+	}
+	synth.Credential.Type = constants.CredentialTypeToken
+
+	return synth, true
 }
 
 func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.ConfiguredSource) []models.FullResponseRecent {
