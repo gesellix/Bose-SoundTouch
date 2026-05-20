@@ -681,7 +681,14 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 				}
 
 				// "default" never replaces a real-account entry.
+				// But when two "default" entries collide across data dirs,
+				// prefer the one with a non-empty name (more information).
 				if info.AccountID == accountIDDefault {
+					if entry.account == accountIDDefault && devices[entry.index].Name == "" && info.Name != "" {
+						devices[entry.index] = info
+						seenIDs[key] = seenEntry{index: entry.index, account: info.AccountID}
+					}
+
 					continue
 				}
 
