@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"os"
+	"strconv"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -103,46 +103,79 @@ func runPresetsConsistencyCheck(ds *datastore.DataStore) []Finding {
 	return findings
 }
 
-// detectOrphanDefaultEntries walks the on-disk account directories
-// directly (not through ListAllDevices, which already dedupes "default"
-// out) and flags any device that exists under "default" *and* under a
-// real account. The fix is to delete accounts/default/devices/<id>/ —
-// we don't do it automatically because filesystem deletions need
-// explicit operator consent (CLAUDE.md "destructive actions" rule).
+// detectOrphanDefaultEntries flags devices that exist under multiple
+// account directories. The speaker decides which account it belongs to
+// via the URL of every PUT it sends; any other account entry on disk
+// is leftover state from a previous pairing. The active account is
+// the one ListAllDevices' dedup currently exposes (with "default"
+// already deprioritised); the stale ones get one finding each so the
+// operator can see and clean them up. We don't delete automatically
+// because filesystem deletions need explicit operator consent
+// (CLAUDE.md "destructive actions" rule).
 func detectOrphanDefaultEntries(ds *datastore.DataStore, paired []models.ServiceDeviceInfo) []Finding {
-	pairedReal := map[string]string{} // deviceID -> real accountID
+	activeAccount := map[string]string{} // deviceID -> the account ListAllDevices picked
 
 	for i := range paired {
-		if paired[i].AccountID != "" && paired[i].AccountID != "default" && paired[i].DeviceID != "" {
-			pairedReal[paired[i].DeviceID] = paired[i].AccountID
+		if paired[i].DeviceID == "" {
+			continue
 		}
-	}
 
-	defaultDevicesDir := ds.AccountDevicesDir("default")
-
-	entries, err := os.ReadDir(defaultDevicesDir)
-	if err != nil {
-		return nil
+		activeAccount[paired[i].DeviceID] = paired[i].AccountID
 	}
 
 	var findings []Finding
 
-	for _, e := range entries {
-		if !e.IsDir() {
+	for deviceID, active := range activeAccount {
+		allAccounts := ds.AllAccountsForDevice(deviceID)
+		if len(allAccounts) <= 1 {
 			continue
 		}
 
-		deviceID := e.Name()
-		if realAccount, ok := pairedReal[deviceID]; ok {
-			findings = append(findings, Finding{
-				Severity: SeverityWarning,
-				Target:   Target{Account: "default", Device: deviceID},
-				Message:  "Orphan \"default\" account entry: device " + deviceID + " is also paired under account " + realAccount + ". The default entry is leftover state from before pairing and is masked from consistency checks. Safe to delete: rm -rf <data-dir>/accounts/default/devices/" + deviceID,
-			})
+		stale := make([]string, 0, len(allAccounts)-1)
+
+		for _, acc := range allAccounts {
+			if acc != active {
+				stale = append(stale, acc)
+			}
 		}
+
+		if len(stale) == 0 {
+			continue
+		}
+
+		findings = append(findings, Finding{
+			Severity: SeverityWarning,
+			Target:   Target{Device: deviceID},
+			Message: "Device " + deviceID + " has state under " + strconv.Itoa(len(allAccounts)) +
+				" account directories — likely leftover from earlier pairings. The active one (per ListAllDevices' dedup) is " + safeQuoteFinding(active) +
+				"; stale entries: " + joinAccounts(stale) +
+				". Confirm which one the speaker currently PUTs to (check service log for /streaming/account/<X>/device/" + deviceID + "/...) and remove the others. Each stale dir lives at <data-dir>/accounts/<account-id>/devices/" + deviceID + "/.",
+		})
 	}
 
 	return findings
+}
+
+func safeQuoteFinding(s string) string {
+	if s == "" {
+		return `""`
+	}
+
+	return `"` + s + `"`
+}
+
+func joinAccounts(accounts []string) string {
+	out := ""
+
+	for i, a := range accounts {
+		if i > 0 {
+			out += ", "
+		}
+
+		out += `"` + a + `"`
+	}
+
+	return out
 }
 
 func checkOneDeviceConsistency(ds *datastore.DataStore, account, deviceID, ipAddress string) []Finding {

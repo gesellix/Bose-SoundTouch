@@ -635,9 +635,12 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 		// Sort "default" to the back so a real-account entry always
 		// wins the first-seen race. "default" exists as a pre-pair
 		// placeholder; once the speaker pairs with a real account it
-		// becomes orphan state. Sort returns the same list for tests
-		// because os.ReadDir is already sorted, and digits sort before
-		// "default" in ASCII — but be defensive.
+		// becomes orphan state. We don't try to pick a winner among
+		// multiple real accounts via mtime or other proxies — the
+		// authoritative signal is the URL of the speaker's incoming
+		// PUT, which only the live handler sees. Stale real-account
+		// entries are flagged as findings by the consistency check
+		// instead.
 		accounts := make([]os.DirEntry, 0, len(entries))
 		for _, e := range entries {
 			if e.IsDir() {
@@ -677,18 +680,18 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 					continue
 				}
 
-				// Don't let a "default" entry replace a real-account
-				// one. The speaker pairs to a real account; any
-				// remaining "default" record is orphan state from
-				// before pairing.
+				// "default" never replaces a real-account entry.
 				if info.AccountID == accountIDDefault {
 					continue
 				}
 
-				// Allow real-account → real-account replacement only
-				// when the prior was the placeholder "default" or had
-				// no name (less authoritative).
-				if entry.account == accountIDDefault || (devices[entry.index].Name == "" && info.Name != "") {
+				// First real-account encountered wins (sort is
+				// stable + alphabetical so the result is
+				// deterministic across runs). Don't pick a different
+				// winner here — the consistency check enumerates all
+				// the duplicate account dirs for the operator to
+				// clean up.
+				if entry.account == accountIDDefault {
 					devices[entry.index] = info
 					seenIDs[key] = seenEntry{index: entry.index, account: info.AccountID}
 				}
@@ -697,6 +700,45 @@ func (ds *DataStore) ListAllDevices() ([]models.ServiceDeviceInfo, error) {
 	}
 
 	return devices, nil
+}
+
+// AllAccountsForDevice returns every account directory that contains a
+// device with the given deviceID, in their on-disk order. Used by the
+// consistency check to enumerate stale account entries left behind
+// when the speaker was re-paired to a different account.
+func (ds *DataStore) AllAccountsForDevice(deviceID string) []string {
+	if deviceID == "" {
+		return nil
+	}
+
+	var hits []string
+
+	seen := map[string]bool{}
+
+	for _, dir := range ds.getPossibleDataDirs() {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+
+		for _, acc := range entries {
+			if !acc.IsDir() {
+				continue
+			}
+
+			devicePath := filepath.Join(dir, acc.Name(), "devices", deviceID)
+			if _, err := os.Stat(devicePath); err != nil {
+				continue
+			}
+
+			if !seen[acc.Name()] {
+				seen[acc.Name()] = true
+				hits = append(hits, acc.Name())
+			}
+		}
+	}
+
+	return hits
 }
 
 // accountIDDefault is the placeholder account id assigned to records
