@@ -20,6 +20,13 @@ const CheckIDPresetsConsistency = "presets_recents_sources_consistency"
 // speaker isn't currently targeting it.
 const FixIDDeleteOrphanAccountEntry = "delete_orphan_account_entry"
 
+// FixIDReclassifyCanonicalSourceIDs is the QuickFix that rewrites
+// non-canonical IDs on built-in radio sources back to their canonical
+// values (TUNEIN→10004, INTERNET_RADIO→10002, …), and updates any
+// preset/recent <sourceid> references to match. Offline-only — no
+// speaker access required.
+const FixIDReclassifyCanonicalSourceIDs = "reclassify_canonical_source_ids"
+
 // speakerPresetsConsistencyXML mirrors enough of :8090/presets to extract
 // slot id, source/location and itemName for cross-side comparison.
 type speakerPresetsConsistencyXML struct {
@@ -77,6 +84,10 @@ func RegisterPresetsConsistencyCheck(r *Registry, ds *datastore.DataStore) {
 
 	r.RegisterFix(CheckIDPresetsConsistency, FixIDDeleteOrphanAccountEntry, func(target Target) (string, error) {
 		return deleteOrphanAccountEntry(ds, target)
+	})
+
+	r.RegisterFix(CheckIDPresetsConsistency, FixIDReclassifyCanonicalSourceIDs, func(target Target) (string, error) {
+		return reclassifyCanonicalSourceIDs(ds, target)
 	})
 }
 
@@ -211,6 +222,225 @@ func deleteOrphanAccountEntry(ds *datastore.DataStore, target Target) (string, e
 // package's exported surface.
 const accountIDDefaultPlaceholder = "default"
 
+// reclassifiableSource captures a single built-in radio source whose
+// on-disk ID drifted from the canonical value. Built up by
+// findReclassifiableSources and consumed by reclassifyCanonicalSourceIDs.
+type reclassifiableSource struct {
+	OldID   string
+	NewID   string
+	KeyType string // TUNEIN / INTERNET_RADIO / …
+	ProvID  string // canonical sourceproviderid (e.g. "25")
+}
+
+// canonicalIDByKeyType returns the canonical built-in source ID for one
+// of the four well-known radio provider key types, or ("", "") for any
+// other type. Mirrors datastore.getDefaultSources() and
+// canonicalDefaultsByType in pkg/service/marge.
+func canonicalIDByKeyType(keyType string) (id, providerID string) {
+	switch keyType {
+	case "INTERNET_RADIO":
+		return "10002", "2"
+	case "LOCAL_INTERNET_RADIO":
+		return "10003", "11"
+	case "TUNEIN":
+		return "10004", "25"
+	case "RADIO_BROWSER":
+		return "10005", "39"
+	}
+
+	return "", ""
+}
+
+// findReclassifiableSources walks a ConsistencyView's sources and
+// returns the entries that:
+//   - have a SourceKeyType matching one of the four built-in radio
+//     providers (the ones with a canonical ID),
+//   - currently sit on a non-canonical ID, and
+//   - would not collide with another source already at that canonical
+//     ID.
+//
+// The collision check is intentionally strict — when two entries claim
+// the same SourceKeyType, leaving them in place is safer than guessing
+// which one is the "real" one and leaving the other broken.
+func findReclassifiableSources(v ConsistencyView) []reclassifiableSource {
+	usedIDs := map[string]bool{}
+
+	for _, s := range v.Sources {
+		if s.ID != "" {
+			usedIDs[s.ID] = true
+		}
+	}
+
+	var out []reclassifiableSource
+
+	for _, s := range v.Sources {
+		newID, providerID := canonicalIDByKeyType(s.Type)
+		if newID == "" || s.ID == newID {
+			continue
+		}
+
+		// Don't try to re-classify if the canonical ID is already
+		// occupied by a different source — would create a collision
+		// the rest of the codebase isn't prepared to handle.
+		if usedIDs[newID] {
+			continue
+		}
+
+		out = append(out, reclassifiableSource{
+			OldID:   s.ID,
+			NewID:   newID,
+			KeyType: s.Type,
+			ProvID:  providerID,
+		})
+	}
+
+	return out
+}
+
+func reclassifyDetailMessage(in []reclassifiableSource) string {
+	out := "Each preset binding by ID may end up bound to the wrong source after re-pair churn — exactly the GH-343 footprint. Re-classifying restores canonical IDs:\n"
+
+	for _, r := range in {
+		out += "  • " + r.KeyType + ": " + r.OldID + " → " + r.NewID + " (sourceproviderid " + r.ProvID + ")\n"
+	}
+
+	return out
+}
+
+func reclassifyConfirmDetail(in []reclassifiableSource) string {
+	out := "Changes:"
+
+	for _, r := range in {
+		out += " " + r.KeyType + " " + r.OldID + "→" + r.NewID + ";"
+	}
+
+	return out
+}
+
+// reclassifyCanonicalSourceIDs is the QuickFix body for
+// FixIDReclassifyCanonicalSourceIDs. Re-reads Sources.xml / Presets.xml
+// / Recents.xml for the device, builds the old-ID → new-ID mapping for
+// each eligible built-in radio source, rewrites the source IDs in
+// Sources.xml plus any matching <sourceid> references in
+// Presets.xml/Recents.xml, and persists all three. The datastore's
+// SaveX helpers each use atomic-rename internally; a failure mid-way
+// leaves earlier files updated but the operation as a whole is
+// idempotent — re-running it produces the same result.
+func reclassifyCanonicalSourceIDs(ds *datastore.DataStore, target Target) (string, error) {
+	if target.Account == "" || target.Device == "" {
+		return "", fmt.Errorf("account and device are both required")
+	}
+
+	view, err := loadServiceView(ds, target.Account, target.Device)
+	if err != nil {
+		return "", fmt.Errorf("load service state: %w", err)
+	}
+
+	plans := findReclassifiableSources(view)
+	if len(plans) == 0 {
+		return "Nothing to do — all built-in radio sources already on canonical IDs.", nil
+	}
+
+	rename := map[string]string{}
+	canonicalProviderID := map[string]string{}
+
+	for _, p := range plans {
+		rename[p.OldID] = p.NewID
+		canonicalProviderID[p.OldID] = p.ProvID
+	}
+
+	sources, err := ds.GetConfiguredSources(target.Account, target.Device)
+	if err != nil {
+		return "", fmt.Errorf("read Sources.xml: %w", err)
+	}
+
+	for i := range sources {
+		if newID, ok := rename[sources[i].ID]; ok {
+			log.Printf("[Health] Re-classify %s: id %s → %s (account=%s device=%s)",
+				sources[i].SourceKeyType, sources[i].ID, newID, target.Account, target.Device)
+
+			sources[i].ID = newID
+
+			if provID := canonicalProviderID[sources[i].ID]; provID != "" {
+				sources[i].SourceProviderID = provID
+			}
+		}
+	}
+
+	if saveErr := ds.SaveConfiguredSources(target.Account, target.Device, sources); saveErr != nil {
+		return "", fmt.Errorf("save Sources.xml: %w", saveErr)
+	}
+
+	if err := rewritePresetSourceIDs(ds, target, rename); err != nil {
+		return "", err
+	}
+
+	if err := rewriteRecentSourceIDs(ds, target, rename); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("Re-classified %d source ID(s) for device %s (account %s). Presets/Recents references updated accordingly. The speaker will pick up the new IDs on its next /full fetch.",
+		len(plans), target.Device, target.Account), nil
+}
+
+// rewritePresetSourceIDs walks Presets.xml and updates any <sourceid>
+// that appears as a key in rename to the mapped value. Persists only
+// when at least one preset changed. Silent on read errors (missing
+// Presets.xml is a valid state — the operator just doesn't have any
+// presets to update).
+func rewritePresetSourceIDs(ds *datastore.DataStore, target Target, rename map[string]string) error {
+	presets, err := ds.GetPresets(target.Account, target.Device)
+	if err != nil {
+		return fmt.Errorf("read Presets.xml: %w", err)
+	}
+
+	dirty := false
+
+	for i := range presets {
+		if newID, ok := rename[presets[i].SourceID]; ok {
+			presets[i].SourceID = newID
+			dirty = true
+		}
+	}
+
+	if !dirty {
+		return nil
+	}
+
+	if err := ds.SavePresets(target.Account, target.Device, presets); err != nil {
+		return fmt.Errorf("save Presets.xml: %w", err)
+	}
+
+	return nil
+}
+
+// rewriteRecentSourceIDs is the recents-side twin of rewritePresetSourceIDs.
+func rewriteRecentSourceIDs(ds *datastore.DataStore, target Target, rename map[string]string) error {
+	recents, err := ds.GetRecents(target.Account, target.Device)
+	if err != nil {
+		return fmt.Errorf("read Recents.xml: %w", err)
+	}
+
+	dirty := false
+
+	for i := range recents {
+		if newID, ok := rename[recents[i].SourceID]; ok {
+			recents[i].SourceID = newID
+			dirty = true
+		}
+	}
+
+	if !dirty {
+		return nil
+	}
+
+	if err := ds.SaveRecents(target.Account, target.Device, recents); err != nil {
+		return fmt.Errorf("save Recents.xml: %w", err)
+	}
+
+	return nil
+}
+
 func checkOneDeviceConsistency(ds *datastore.DataStore, account, deviceID, ipAddress string) []Finding {
 	target := Target{Account: account, Device: deviceID}
 
@@ -231,6 +461,25 @@ func checkOneDeviceConsistency(ds *datastore.DataStore, account, deviceID, ipAdd
 	// and its /sources list deliberately omits streaming sources
 	// (which would always trigger spurious "dangling" findings).
 	findings = append(findings, issuesToFindings(target, CheckInternalConsistency(serviceView), SeverityWarning)...)
+
+	// GH-343-style detection: built-in radio sources sitting on
+	// non-canonical IDs (the 2000001+i fallback that GetConfiguredSources
+	// hands out when on-disk sources don't carry canonical IDs). Surface
+	// as a finding with an offline QuickFix that rewrites both the
+	// source IDs and the preset/recent <sourceid> references atomically.
+	if reclassifiable := findReclassifiableSources(serviceView); len(reclassifiable) > 0 {
+		findings = append(findings, Finding{
+			Severity: SeverityWarning,
+			Target:   target,
+			Message:  "Sources.xml has " + plural(len(reclassifiable), "built-in radio source", "built-in radio sources") + " on non-canonical IDs (GH-343 trigger).",
+			Details:  reclassifyDetailMessage(reclassifiable),
+			QuickFixes: []QuickFix{{
+				ID:      FixIDReclassifyCanonicalSourceIDs,
+				Label:   "Re-assign canonical IDs",
+				Confirm: "Rewrite " + plural(len(reclassifiable), "source ID", "source IDs") + " in Sources.xml and matching <sourceid> references in Presets.xml/Recents.xml? " + reclassifyConfirmDetail(reclassifiable) + " Offline operation — no speaker contact needed; the speaker will re-fetch /full on its own.",
+			}},
+		})
+	}
 
 	if ipAddress == "" {
 		findings = append(findings, Finding{
