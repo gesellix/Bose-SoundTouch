@@ -881,7 +881,7 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 		presets = append(presets, models.ServicePreset{
 			ServiceContentItem: models.ServiceContentItem{
 				Name:            p.ContentItem.ItemName,
-				Source:          p.ContentItem.Source,
+				Source:          repairLeakedSource(account, device, "preset "+p.ID, p.ContentItem.Source, p.SourceID, ds),
 				Type:            p.ContentItem.Type,
 				ContentItemType: p.ContentItem.Type,
 				Location:        p.ContentItem.Location,
@@ -898,6 +898,101 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 	}
 
 	return presets, nil
+}
+
+// repairLeakedSource quietly substitutes the speaker-perspective
+// SourceKeyType for a persisted Source that has the protocol-level
+// "Audio" leak signature from the legacy syncPresets/syncRecents path.
+// Critically it only repairs the *leak* — when persisted Source carries
+// a non-leak symbolic value, even one that disagrees with the current
+// Sources.xml mapping for the same SourceID, we leave it alone. That's
+// what protects the GH-343 case: a TUNEIN preset whose SourceID was
+// re-classified to RADIOPLAYER in Sources.xml must stay TUNEIN here,
+// otherwise the speaker's previously-stored intent gets silently
+// overwritten by the stale source-list entry.
+//
+// Speaker is the source of truth: this only un-rots data that was
+// never the speaker's perspective to begin with.
+func repairLeakedSource(account, device, label, persistedSource, sourceID string, ds *DataStore) string {
+	if !isLeakedSourceValue(persistedSource) {
+		return persistedSource
+	}
+
+	if sourceID == "" {
+		return persistedSource
+	}
+
+	sources, err := ds.getConfiguredSourcesLocked(account, device)
+	if err != nil {
+		return persistedSource
+	}
+
+	for i := range sources {
+		if sources[i].ID == sourceID && sources[i].SourceKeyType != "" {
+			log.Printf("[Datastore] %s: repaired leaked source %q -> %q via sourceid=%s (account=%s device=%s) — likely written by the pre-fix marge.syncPresets/syncRecents path; speaker's perspective is now restored on read",
+				label, persistedSource, sources[i].SourceKeyType, sourceID, account, device)
+
+			return sources[i].SourceKeyType
+		}
+	}
+
+	return persistedSource
+}
+
+// isLeakedSourceValue identifies the known protocol-level leak signature
+// (the upstream <source type="Audio"> attribute that the old
+// marge.syncPresets persisted into ServicePreset.Source). Empty Source
+// is also treated as a leak so the resolve fires for legacy entries
+// missing the attribute entirely.
+func isLeakedSourceValue(s string) bool {
+	return s == "" || s == "Audio"
+}
+
+// getConfiguredSourcesLocked is GetConfiguredSources without the
+// fileMutex.RLock() — callers must already hold it. Used by
+// repairLeakedSource from within GetPresets/GetRecents which already
+// hold the lock.
+func (ds *DataStore) getConfiguredSourcesLocked(account, device string) ([]models.ConfiguredSource, error) {
+	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
+
+	data, err := ds.rootReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ds.getDefaultSources(), nil
+		}
+
+		return nil, err
+	}
+
+	type persistentSource struct {
+		ID            string `xml:"id,attr,omitempty"`
+		Type          string `xml:"type,attr,omitempty"`
+		SourceKeyType string `xml:"-"`
+		SourceKey     struct {
+			Type    string `xml:"type,attr"`
+			Account string `xml:"account,attr"`
+		} `xml:"sourceKey"`
+	}
+
+	var sourcesWrap struct {
+		Sources []persistentSource `xml:"source"`
+	}
+
+	if err := xml.Unmarshal(data, &sourcesWrap); err != nil {
+		return nil, err
+	}
+
+	out := make([]models.ConfiguredSource, 0, len(sourcesWrap.Sources))
+	for i := range sourcesWrap.Sources {
+		ps := sourcesWrap.Sources[i]
+		out = append(out, models.ConfiguredSource{
+			ID:            ps.ID,
+			Type:          ps.Type,
+			SourceKeyType: ps.SourceKey.Type,
+		})
+	}
+
+	return out, nil
 }
 
 // SavePresets saves the preset list for the specified account and device.
@@ -1086,6 +1181,8 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 			maxID++
 			recents[i].ID = strconv.Itoa(maxID)
 		}
+
+		r.Source = repairLeakedSource(account, device, "recent "+r.ID, r.Source, r.SourceID, ds)
 	}
 
 	return recents, nil

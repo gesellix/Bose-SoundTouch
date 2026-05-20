@@ -202,35 +202,14 @@ func loadServiceView(ds *datastore.DataStore, account, deviceID string) (Consist
 
 	view := ConsistencyView{Label: "service"}
 
-	// Build sourceID -> SourceKeyType index up front so we can resolve
-	// the *effective* source for each preset/recent. syncPresets and
-	// syncRecents in sync.go currently persist the upstream
-	// FullResponseSource.Type ("Audio") into ServicePreset.Source,
-	// which is meaningless next to the speaker's actual source name.
-	// Resolve via SourceID so the cross-side diff compares like with
-	// like; fall back to the persisted Source string when the SourceID
-	// is empty or doesn't resolve.
-	sourceByID := make(map[string]string, len(sources))
-	for i := range sources {
-		if sources[i].ID != "" && sources[i].SourceKeyType != "" {
-			sourceByID[sources[i].ID] = sources[i].SourceKeyType
-		}
-	}
-
-	resolveSource := func(persisted, sourceID string) string {
-		if sourceID != "" {
-			if resolved := sourceByID[sourceID]; resolved != "" {
-				return resolved
-			}
-		}
-
-		return persisted
-	}
-
+	// No special resolution here anymore — datastore.GetPresets /
+	// GetRecents self-heal the protocol-level "Audio" leak via
+	// repairLeakedSource at load time. The persisted Source we read
+	// already reflects the speaker's perspective.
 	for i := range presets {
 		view.Presets = append(view.Presets, ConsistencyPreset{
 			Slot:     presets[i].ButtonNumber,
-			Source:   resolveSource(presets[i].Source, presets[i].SourceID),
+			Source:   presets[i].Source,
 			SourceID: presets[i].SourceID,
 			Location: presets[i].Location,
 			Name:     presets[i].Name,
@@ -240,7 +219,7 @@ func loadServiceView(ds *datastore.DataStore, account, deviceID string) (Consist
 	for i := range recents {
 		view.Recents = append(view.Recents, ConsistencyRecent{
 			ID:       recents[i].ID,
-			Source:   resolveSource(recents[i].Source, recents[i].SourceID),
+			Source:   recents[i].Source,
 			SourceID: recents[i].SourceID,
 			Location: recents[i].Location,
 			Name:     recents[i].Name,

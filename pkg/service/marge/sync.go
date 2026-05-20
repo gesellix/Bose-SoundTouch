@@ -239,12 +239,16 @@ func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSou
 // persisting "Audio" into ServicePreset.Source means the on-disk shape
 // doesn't match what the speaker would write via its own /presets
 // (which is the source of truth). Falls back to whatever upstream gave
-// us when the providerid isn't one of the canonical built-ins; that
-// keeps the legacy/poisoned-data path no-worse-than-before.
+// us when the providerid isn't one of the canonical built-ins, with a
+// log line so the fallback is visible to operators rather than silently
+// re-introducing the same protocol-level leak we just fixed.
 func sourceKeyTypeFromFullSource(s models.FullResponseSource) string {
 	if t := canonicalSourceKeyTypeByProviderID(s.SourceProviderID); t != "" {
 		return t
 	}
+
+	log.Printf("[SYNC] sourceKeyTypeFromFullSource: no canonical SourceKeyType for providerid=%q (source id=%q name=%q) — persisting upstream Type=%q verbatim; downstream consumers will read repairLeakedSource fallback or display %q as-is",
+		s.SourceProviderID, s.ID, s.Name, s.Type, s.Type)
 
 	return s.Type
 }
