@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -948,7 +949,25 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 		pxml.ContentItem.Type = p.Type
 		pxml.ContentItem.Location = p.Location
 		pxml.ContentItem.SourceAccount = p.SourceAccount
-		pxml.ContentItem.IsPresetable = "true"
+
+		// Preserve the speaker's IsPresetable verdict instead of forcing
+		// "true". The speaker firmware sets isPresetable="false" for
+		// content it can't independently recall later (e.g. Spotify Connect
+		// pushes from a phone — see GH-235). Hard-coding "true" makes the
+		// on-disk XML look valid while the speaker still refuses to play
+		// the preset, which leaves users debugging a phantom "stored but
+		// won't play" state. Default to "true" only when the caller
+		// supplied nothing.
+		pxml.ContentItem.IsPresetable = p.IsPresetable
+		if pxml.ContentItem.IsPresetable == "" {
+			pxml.ContentItem.IsPresetable = "true"
+		}
+
+		if pxml.ContentItem.IsPresetable == "false" {
+			log.Printf("[Datastore] SavePresets: storing preset %s as isPresetable=false (account=%s device=%s source=%s) — speaker firmware marked this content non-recallable; preset will appear on the speaker but pressing it will not play",
+				pxml.ID, account, device, p.Source)
+		}
+
 		pxml.ContentItem.ItemName = p.Name
 		pxml.ContentItem.ContainerArt = p.ContainerArt
 		pxml.SourceID = p.SourceID
