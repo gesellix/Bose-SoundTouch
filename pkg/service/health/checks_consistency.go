@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"strconv"
+	"log"
+	"os"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -13,6 +14,11 @@ import (
 
 // CheckIDPresetsConsistency is the registry id of the consistency check.
 const CheckIDPresetsConsistency = "presets_recents_sources_consistency"
+
+// FixIDDeleteOrphanAccountEntry is the QuickFix that removes a stale
+// account directory for a device after the operator has confirmed the
+// speaker isn't currently targeting it.
+const FixIDDeleteOrphanAccountEntry = "delete_orphan_account_entry"
 
 // speakerPresetsConsistencyXML mirrors enough of :8090/presets to extract
 // slot id, source/location and itemName for cross-side comparison.
@@ -68,6 +74,10 @@ func RegisterPresetsConsistencyCheck(r *Registry, ds *datastore.DataStore) {
 			return runPresetsConsistencyCheck(ds)
 		},
 	})
+
+	r.RegisterFix(CheckIDPresetsConsistency, FixIDDeleteOrphanAccountEntry, func(target Target) (string, error) {
+		return deleteOrphanAccountEntry(ds, target)
+	})
 }
 
 func runPresetsConsistencyCheck(ds *datastore.DataStore) []Finding {
@@ -108,10 +118,10 @@ func runPresetsConsistencyCheck(ds *datastore.DataStore) []Finding {
 // via the URL of every PUT it sends; any other account entry on disk
 // is leftover state from a previous pairing. The active account is
 // the one ListAllDevices' dedup currently exposes (with "default"
-// already deprioritised); the stale ones get one finding each so the
-// operator can see and clean them up. We don't delete automatically
-// because filesystem deletions need explicit operator consent
-// (CLAUDE.md "destructive actions" rule).
+// already deprioritised); the stale ones each get a finding with a
+// confirm-gated QuickFix so the operator can delete them one at a
+// time after verifying via the service log which account the speaker
+// is actually targeting.
 func detectOrphanDefaultEntries(ds *datastore.DataStore, paired []models.ServiceDeviceInfo) []Finding {
 	activeAccount := map[string]string{} // deviceID -> the account ListAllDevices picked
 
@@ -131,26 +141,28 @@ func detectOrphanDefaultEntries(ds *datastore.DataStore, paired []models.Service
 			continue
 		}
 
-		stale := make([]string, 0, len(allAccounts)-1)
-
 		for _, acc := range allAccounts {
-			if acc != active {
-				stale = append(stale, acc)
+			if acc == active {
+				continue
 			}
-		}
 
-		if len(stale) == 0 {
-			continue
+			findings = append(findings, Finding{
+				Severity: SeverityWarning,
+				Target:   Target{Account: acc, Device: deviceID},
+				Message:  "Stale account entry: device " + deviceID + " also has state under account " + safeQuoteFinding(acc) + " — likely leftover from a previous pairing. The currently-active account is " + safeQuoteFinding(active) + ".",
+				Details:  "Before deleting, verify the speaker isn't currently PUTting to account " + acc + " by checking the service log for /streaming/account/" + acc + "/device/" + deviceID + "/... entries.",
+				QuickFixes: []QuickFix{{
+					ID:      FixIDDeleteOrphanAccountEntry,
+					Label:   "Delete stale entry",
+					Confirm: "Permanently delete <data-dir>/accounts/" + acc + "/devices/" + deviceID + "/? This removes Presets.xml, Recents.xml, Sources.xml and DeviceInfo.xml for this stale pairing. The active account " + active + " is not touched.",
+				}},
+				ManualCommands: []ManualCommand{{
+					Label:   "Or remove from a shell:",
+					Command: "rm -rf <data-dir>/accounts/" + acc + "/devices/" + deviceID,
+					Hint:    "Substitute <data-dir> with the service's actual data directory (typically /var/lib/soundtouch-service).",
+				}},
+			})
 		}
-
-		findings = append(findings, Finding{
-			Severity: SeverityWarning,
-			Target:   Target{Device: deviceID},
-			Message: "Device " + deviceID + " has state under " + strconv.Itoa(len(allAccounts)) +
-				" account directories — likely leftover from earlier pairings. The active one (per ListAllDevices' dedup) is " + safeQuoteFinding(active) +
-				"; stale entries: " + joinAccounts(stale) +
-				". Confirm which one the speaker currently PUTs to (check service log for /streaming/account/<X>/device/" + deviceID + "/...) and remove the others. Each stale dir lives at <data-dir>/accounts/<account-id>/devices/" + deviceID + "/.",
-		})
 	}
 
 	return findings
@@ -164,19 +176,40 @@ func safeQuoteFinding(s string) string {
 	return `"` + s + `"`
 }
 
-func joinAccounts(accounts []string) string {
-	out := ""
-
-	for i, a := range accounts {
-		if i > 0 {
-			out += ", "
-		}
-
-		out += `"` + a + `"`
+// deleteOrphanAccountEntry removes accounts/<target.Account>/devices/<target.Device>/.
+// Called only after the operator has clicked through the Confirm dialog
+// that the QuickFix surfaces; the framework is the gatekeeper, so this
+// just executes. Logs the action for auditability.
+func deleteOrphanAccountEntry(ds *datastore.DataStore, target Target) (string, error) {
+	if target.Account == "" || target.Device == "" {
+		return "", fmt.Errorf("account and device are both required")
 	}
 
-	return out
+	if target.Account == accountIDDefaultPlaceholder {
+		// Allowed — "default" is a frequent orphan source — but log
+		// the explicit case so misuse stands out.
+		log.Printf("[Health] deleteOrphanAccountEntry: deleting the \"default\" placeholder entry for device %s; this is normal after pairing completed", target.Device)
+	}
+
+	path := ds.AccountDeviceDir(target.Account, target.Device)
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("orphan directory %s no longer exists; nothing to do", path)
+	}
+
+	if err := os.RemoveAll(path); err != nil {
+		return "", fmt.Errorf("delete %s: %w", path, err)
+	}
+
+	log.Printf("[Health] Removed orphan account entry %s (account=%s device=%s) at operator request",
+		path, target.Account, target.Device)
+
+	return fmt.Sprintf("Removed stale account entry %s for device %s.", target.Account, target.Device), nil
 }
+
+// accountIDDefaultPlaceholder mirrors datastore.accountIDDefault for
+// the health package; kept here to avoid widening the datastore
+// package's exported surface.
+const accountIDDefaultPlaceholder = "default"
 
 func checkOneDeviceConsistency(ds *datastore.DataStore, account, deviceID, ipAddress string) []Finding {
 	target := Target{Account: account, Device: deviceID}
