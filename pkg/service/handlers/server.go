@@ -851,6 +851,10 @@ func (s *Server) registerSpotifySourceForDevice(deviceIP string, accounts []spot
 		registered = true
 	}
 
+	// Note: firmware-internal placeholder sources (SPOTIFY/SpotifyConnectUserName, …)
+	// are seeded at device-discovery time by handleDiscoveredDevice — they live
+	// independently of whether any music service is OAuth-linked.
+
 	// Tell the speaker its sources list changed so it re-fetches from marge.
 	// Without this its on-device Sources.xml stays stale until something else
 	// triggers a sync — which leaves storePreset failing with
@@ -1048,6 +1052,14 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 		}
 	}
 
+	// 9. Seed firmware-internal placeholder sources (e.g. SPOTIFY/SpotifyConnectUserName)
+	// so storePreset payloads carrying speaker-managed sourceAccounts bind to the
+	// right placeholder. Spotify-agnostic — runs even when no music service is
+	// linked yet, since Spotify Connect from a phone doesn't need our OAuth setup.
+	if err := marge.EnsurePlaceholderSources(s.ds, accountID, deviceID); err != nil {
+		log.Printf("Failed to seed placeholder sources for %s/%s: %v", accountID, deviceID, err)
+	}
+
 	log.Printf("Successfully saved device %s (%s) with MAC-based deviceID: %s", info.Name, d.Host, deviceID)
 }
 
@@ -1099,6 +1111,11 @@ func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
 				log.Printf("Failed to save default sources for %s: %v", deviceID, err)
 			}
 		}
+	}
+
+	// Seed firmware-internal placeholder sources — same as the live-info path.
+	if err := marge.EnsurePlaceholderSources(s.ds, accountID, deviceID); err != nil {
+		log.Printf("Failed to seed placeholder sources for %s/%s: %v", accountID, deviceID, err)
 	}
 
 	log.Printf("Successfully saved device %s (%s) with fallback deviceID: %s", info.Name, d.Host, deviceID)
