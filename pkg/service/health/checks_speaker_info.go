@@ -9,9 +9,103 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
+// suggestAccountForPairing picks an account ID to pre-fill into the
+// "Complete pairing" QuickFix's Target.Account. Returns the first
+// real-looking (7-digit) account directory that already contains the
+// device's deviceID on disk — typical scenario: AfterTouch and the
+// speaker were partially paired earlier, the speaker forgot but our
+// datastore remembers. Returns "" when no such account exists, in
+// which case the executor generates a fresh ID at click time.
+func suggestAccountForPairing(ds *datastore.DataStore, deviceID string) string {
+	if ds == nil {
+		return ""
+	}
+
+	for _, acc := range ds.AllAccountsForDevice(deviceID) {
+		if isSevenDigitAccountID(acc) {
+			return acc
+		}
+	}
+
+	return ""
+}
+
+// isSevenDigitAccountID mirrors setup.IsValidAccountID without
+// importing the setup package (which would pull in SSH/telnet/certmgr
+// transitively — see the boundary comment near speakerInfoXML).
+func isSevenDigitAccountID(s string) bool {
+	if len(s) != 7 {
+		return false
+	}
+
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
+// buildEmptyMargeFinding constructs the "Speaker reports an empty
+// <margeAccountUUID>" finding with a QuickFix that completes pairing
+// in-place plus a ManualCommand fallback the operator can run from a
+// shell on the speaker's LAN. The executor is registered separately by
+// the caller that has setup.Manager access.
+//
+// Target.Account intentionally carries the *pair-with* account
+// (whichever we picked from disk), not the current binding — that's
+// what the fix executor needs at click time, and the framework passes
+// Finding.Target through to the FixFunc verbatim. The UI grouping
+// follows Target.Account too; that's a minor side effect we accept.
+func buildEmptyMargeFinding(ds *datastore.DataStore, _ Target, deviceID, ipAddress string) Finding {
+	suggested := suggestAccountForPairing(ds, deviceID)
+
+	confirm := "Pair this speaker with a Marge account so playback selection stops failing with INVALID_SOURCE? "
+
+	if suggested != "" {
+		confirm += "AfterTouch will reuse the existing account " + suggested + " (already on disk for this device)."
+	} else {
+		confirm += "AfterTouch will generate a fresh 7-digit account ID for this speaker (private deployment — the ID is opaque)."
+	}
+
+	cliAccount := suggested
+	if cliAccount == "" {
+		cliAccount = "<7-digit-account-id>"
+	}
+
+	return Finding{
+		Severity: SeverityWarning,
+		Target:   Target{Account: suggested, Device: deviceID},
+		Message:  "Speaker reports an empty <margeAccountUUID>.",
+		Details:  "The speaker is reachable but isn't bound to any Marge account. Playback selection will fail with INVALID_SOURCE until pairing completes. See discussion #223 and issue #329.",
+		QuickFixes: []QuickFix{{
+			ID:      FixIDCompleteSpeakerPairing,
+			Label:   "Complete pairing",
+			Confirm: confirm,
+		}},
+		ManualCommands: []ManualCommand{{
+			Label:   "Or pair from a host on the speaker's LAN:",
+			Command: fmt.Sprintf("soundtouch-cli setup pair --host=%s --mode=bare --account=%s", ipAddress, cliAccount),
+			Hint:    "The --mode=bare path sends just setMargeAccount without the full state machine; sufficient on FW 27.0.6.",
+		}},
+	}
+}
+
 // CheckIDSpeakerInfoReachable is the registry id of the speaker
 // reachability check.
 const CheckIDSpeakerInfoReachable = "speaker_info_reachable"
+
+// FixIDCompleteSpeakerPairing is the QuickFix that completes pairing
+// on a speaker that reports an empty <margeAccountUUID> — i.e. the
+// speaker is reachable and configured to point at AfterTouch but
+// hasn't been bound to a Marge account, so every playback selection
+// fails with INVALID_SOURCE (see #329, discussion #223).
+//
+// The executor lives in pkg/service/handlers/server.go (where
+// setup.Manager is available); the constant is defined here so the
+// check that emits the finding stays self-contained.
+const FixIDCompleteSpeakerPairing = "complete_speaker_pairing"
 
 // speakerInfoXML mirrors only the fields we need from the
 // speaker's :8090/info XML response. Duplicated here (rather than
@@ -63,22 +157,24 @@ func runSpeakerInfoReachable(ds *datastore.DataStore) []Finding {
 			continue
 		}
 
-		findings = append(findings, probeAndAssessSpeaker(dev.AccountID, dev.DeviceID, dev.IPAddress)...)
+		findings = append(findings, probeAndAssessSpeaker(ds, dev.AccountID, dev.DeviceID, dev.IPAddress)...)
 	}
 
 	return findings
 }
 
-func probeAndAssessSpeaker(account, deviceID, ipAddress string) []Finding {
+func probeAndAssessSpeaker(ds *datastore.DataStore, account, deviceID, ipAddress string) []Finding {
 	probeURL := fmt.Sprintf("http://%s:8090/info", ipAddress)
-	return probeAndAssessSpeakerWithURL(account, deviceID, probeURL)
+	return probeAndAssessSpeakerWithURL(ds, account, deviceID, ipAddress, probeURL)
 }
 
 // probeAndAssessSpeakerWithURL is the same as probeAndAssessSpeaker
 // but takes the full URL directly. Used by tests that need to point
 // at an httptest.Server, since those bind to random ports rather
-// than :8090.
-func probeAndAssessSpeakerWithURL(account, deviceID, probeURL string) []Finding {
+// than :8090. ds and ipAddress feed the QuickFix attached to the
+// empty-margeAccountUUID finding (suggestion for an existing
+// account-on-disk, and the CLI ManualCommand fallback).
+func probeAndAssessSpeakerWithURL(ds *datastore.DataStore, account, deviceID, ipAddress, probeURL string) []Finding {
 	target := Target{Account: account, Device: deviceID}
 
 	res := ProbeGet(context.Background(), probeURL, 2*time.Second)
@@ -119,12 +215,7 @@ func probeAndAssessSpeakerWithURL(account, deviceID, probeURL string) []Finding 
 	var out []Finding
 
 	if parsed.MargeAccountUUID == "" {
-		out = append(out, Finding{
-			Severity: SeverityWarning,
-			Target:   target,
-			Message:  "Speaker reports an empty <margeAccountUUID>.",
-			Details:  "The speaker is reachable but isn't bound to any Marge account. Playback selection will fail with INVALID_SOURCE until pairing completes. See discussion #223 for the full symptom chain.",
-		})
+		out = append(out, buildEmptyMargeFinding(ds, target, deviceID, ipAddress))
 	}
 
 	if parsed.MargeURL == "" {

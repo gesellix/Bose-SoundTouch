@@ -106,14 +106,14 @@ func TestSpeakerInfoReachable_FlagsEmptyMargeAccountUUID(t *testing.T) {
 		ID:    CheckIDSpeakerInfoReachable,
 		Title: "Speakers respond on :8090/info",
 		Run: func() []Finding {
-			return probeAndAssessSpeaker("1000001", "DEVICEID01", hostport+"_skip_port_append")
+			return probeAndAssessSpeaker(ds, "1000001", "DEVICEID01", hostport+"_skip_port_append")
 		},
 	})
 
 	// Probe directly with the actual hostport to bypass the
 	// ":8090" formatting in production code (since httptest
 	// servers can't bind to 8090 in tests).
-	got := probeAndAssessSpeakerWithURL("1000001", "DEVICEID01", "http://"+hostport+"/info")
+	got := probeAndAssessSpeakerWithURL(nil, "1000001", "DEVICEID01", hostport, "http://"+hostport+"/info")
 
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning, got %+v", got)
@@ -136,7 +136,7 @@ func TestSpeakerInfoReachable_NoFindingsWhenHealthy(t *testing.T) {
 
 	_, hostport := stubSpeakerServer(t, body)
 
-	got := probeAndAssessSpeakerWithURL("1000001", "DEVICEID01", "http://"+hostport+"/info")
+	got := probeAndAssessSpeakerWithURL(nil, "1000001", "DEVICEID01", hostport, "http://"+hostport+"/info")
 	if len(got) != 0 {
 		t.Errorf("expected no findings, got %+v", got)
 	}
@@ -149,7 +149,7 @@ func TestSpeakerInfoReachable_FlagsHTTPError(t *testing.T) {
 	defer srv.Close()
 
 	u, _ := url.Parse(srv.URL)
-	got := probeAndAssessSpeakerWithURL("1000001", "DEVICEID01", "http://"+u.Host+"/info")
+	got := probeAndAssessSpeakerWithURL(nil, "1000001", "DEVICEID01", u.Host, "http://"+u.Host+"/info")
 
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning for HTTP 500, got %+v", got)
@@ -167,7 +167,7 @@ func TestSpeakerInfoReachable_FlagsMalformedXML(t *testing.T) {
 	defer srv.Close()
 
 	u, _ := url.Parse(srv.URL)
-	got := probeAndAssessSpeakerWithURL("1000001", "DEVICEID01", "http://"+u.Host+"/info")
+	got := probeAndAssessSpeakerWithURL(nil, "1000001", "DEVICEID01", u.Host, "http://"+u.Host+"/info")
 
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning for malformed XML, got %+v", got)

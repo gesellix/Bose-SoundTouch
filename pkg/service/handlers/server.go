@@ -133,6 +133,18 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterPresetsCountCheck(s.healthRegistry, ds)
 	health.RegisterPresetsConsistencyCheck(s.healthRegistry, ds)
 	health.RegisterRefreshSourcesCheck(s.healthRegistry, ds)
+
+	// Health QuickFix executor for the empty-margeAccountUUID
+	// finding from RegisterSpeakerInfoReachable. Lives here (not in
+	// the health package) because the executor needs setup.Manager
+	// to drive PairAccount — and the health package deliberately
+	// avoids importing setup to keep its transitive dep surface
+	// small (see the boundary comment near speakerInfoXML).
+	s.healthRegistry.RegisterFix(
+		health.CheckIDSpeakerInfoReachable,
+		health.FixIDCompleteSpeakerPairing,
+		s.completeSpeakerPairingFix,
+	)
 	health.RegisterDNSSanityCheck(
 		s.healthRegistry,
 		s.GetDNSRunning,

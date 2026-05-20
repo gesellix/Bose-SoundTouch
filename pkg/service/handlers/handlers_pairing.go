@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/gesellix/bose-soundtouch/pkg/service/health"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
 )
@@ -115,6 +118,66 @@ func (s *Server) HandlePairAccount(w http.ResponseWriter, r *http.Request) {
 	if encErr := json.NewEncoder(w).Encode(body); encErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+// completeSpeakerPairingFix is the FixFunc registered for
+// (CheckIDSpeakerInfoReachable, FixIDCompleteSpeakerPairing). It
+// completes pairing on a speaker whose /info reports an empty
+// <margeAccountUUID> by:
+//
+//  1. Looking up the device's current IP via ListAllDevices.
+//  2. Choosing the pair-with account: target.Account when the
+//     detection-side suggestion populated it, else generating a fresh
+//     7-digit ID with setup.GenerateAccountID.
+//  3. Dispatching through setup.Manager.PairAccount, which tries
+//     /setMargeAccount over HTTP first and falls back to telnet.
+//
+// Returns a user-facing success message that names the chosen account
+// and the method that succeeded; the framework forwards it to the UI.
+func (s *Server) completeSpeakerPairingFix(target health.Target) (string, error) {
+	if target.Device == "" {
+		return "", fmt.Errorf("device is required")
+	}
+
+	deviceIP, err := s.resolveDeviceIDToIP(target.Device)
+	if err != nil {
+		return "", fmt.Errorf("locate device %s: %w", target.Device, err)
+	}
+
+	accountID := target.Account
+	if !setup.IsValidAccountID(accountID) {
+		known, _ := s.ds.ListAccounts()
+
+		generated, genErr := setup.GenerateAccountID(known)
+		if genErr != nil {
+			return "", fmt.Errorf("generate account ID: %w", genErr)
+		}
+
+		accountID = generated
+	}
+
+	var t setup.TelnetClient
+	if s.sm.NewTelnet != nil {
+		t = s.sm.NewTelnet(deviceIP)
+		if dialErr := t.Dial(); dialErr != nil {
+			t = nil
+		} else {
+			defer func() { _ = t.Close() }()
+		}
+	}
+
+	result, output, err := s.sm.PairAccount(deviceIP, accountID, t)
+	if err != nil {
+		return "", fmt.Errorf("pair speaker %s with account %s: %w (path output: %s)", target.Device, accountID, err, strings.TrimSpace(output))
+	}
+
+	method := result.Method
+	if method == "" {
+		method = "unknown"
+	}
+
+	return fmt.Sprintf("Paired speaker %s with account %s via %s. The speaker will re-fetch /full on its own; playback selection should start working within seconds.",
+		target.Device, accountID, method), nil
 }
 
 // jsonErrorBody is the static shape of error responses from this file.
