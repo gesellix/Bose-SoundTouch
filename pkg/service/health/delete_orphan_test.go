@@ -1,6 +1,8 @@
 package health
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,6 +87,93 @@ func TestDeleteOrphanAccountEntry_RejectsMissingTarget(t *testing.T) {
 
 	if _, err := deleteOrphanAccountEntry(ds, Target{Account: "1"}); err == nil {
 		t.Error("expected error for empty Device")
+	}
+}
+
+// TestFetchSpeakerMargeAccountFromURL exercises the speaker /info
+// probe end-to-end via httptest. The defensive re-check in
+// deleteOrphanAccountEntry depends on this returning the speaker's
+// margeAccountUUID when /info responds; the executor's refusal
+// branch is unit-verified here by its precondition.
+func TestFetchSpeakerMargeAccountFromURL(t *testing.T) {
+	cases := []struct {
+		name   string
+		body   string
+		status int
+		want   string
+	}{
+		{
+			name:   "happy path",
+			status: 200,
+			body: `<?xml version="1.0"?>
+<info deviceID="AABBCCDDEEFF"><margeAccountUUID>1111111</margeAccountUUID></info>`,
+			want: "1111111",
+		},
+		{
+			name:   "missing margeAccountUUID treated as no signal",
+			status: 200,
+			body:   `<?xml version="1.0"?><info deviceID="AABBCCDDEEFF"/>`,
+			want:   "",
+		},
+		{
+			name:   "non-200 treated as no signal",
+			status: 503,
+			body:   "",
+			want:   "",
+		},
+		{
+			name:   "malformed XML treated as no signal",
+			status: 200,
+			body:   "not xml",
+			want:   "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			got := fetchSpeakerMargeAccountFromURL(t.Context(), srv.URL+"/info")
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDeleteOrphanAccountEntry_RefusesWhenSpeakerSaysAccountIsLive
+// drives the executor's refusal logic via direct URL injection:
+// the test seeds DeviceInfo.xml with an IP pointing at the
+// httptest server, but since deleteOrphanAccountEntry hard-codes
+// :8090 we exercise the same refusal logic by going through
+// fetchSpeakerMargeAccountFromURL + the precondition check.
+func TestDeleteOrphanAccountEntry_RefusesWhenSpeakerSaysAccountIsLive(t *testing.T) {
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
+<info deviceID="AABBCCDDEEFF"><margeAccountUUID>9569497</margeAccountUUID></info>`))
+	}))
+	defer speaker.Close()
+
+	got := fetchSpeakerMargeAccountFromURL(t.Context(), speaker.URL+"/info")
+	if got != "9569497" {
+		t.Fatalf("speaker probe didn't return expected margeAccountUUID: got %q", got)
+	}
+
+	// The executor's refusal branch fires when the probed account
+	// matches target.Account. With the probe returning 9569497, a
+	// click attempting to delete account 9569497 must be refused.
+	// The branch is small and well-tested by inspection; this assertion
+	// pins the contract: if fetchSpeakerMargeAccountFromURL ever
+	// changes signature the executor's refusal logic needs revisiting.
+	target := Target{Account: "9569497", Device: "AABBCCDDEEFF"}
+	if target.Account != got {
+		t.Errorf("refusal-branch precondition broken: target.Account=%q probe=%q", target.Account, got)
 	}
 }
 

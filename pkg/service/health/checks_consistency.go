@@ -67,6 +67,44 @@ type speakerSourcesConsistencyXML struct {
 	} `xml:"sourceItem"`
 }
 
+// speakerInfoMargeXML mirrors just the <margeAccountUUID> element of
+// :8090/info — the speaker's own statement of which Marge account it's
+// currently paired with. Used to confirm orphan-dir deletions against
+// the authoritative speaker-side answer.
+type speakerInfoMargeXML struct {
+	XMLName          xml.Name `xml:"info"`
+	MargeAccountUUID string   `xml:"margeAccountUUID"`
+}
+
+// fetchSpeakerMargeAccount asks the speaker which account it thinks it
+// belongs to. Returns "" when the speaker is unreachable, returned a
+// non-200, or didn't include margeAccountUUID in /info — callers
+// treat empty as "no signal" rather than as a deletion blocker.
+func fetchSpeakerMargeAccount(ctx context.Context, ip string) string {
+	if ip == "" {
+		return ""
+	}
+
+	return fetchSpeakerMargeAccountFromURL(ctx, fmt.Sprintf("http://%s:8090/info", ip))
+}
+
+// fetchSpeakerMargeAccountFromURL is the URL-injectable variant used
+// by tests that need to point the probe at an httptest server. The
+// production caller goes through fetchSpeakerMargeAccount above.
+func fetchSpeakerMargeAccountFromURL(ctx context.Context, infoURL string) string {
+	res := ProbeGet(ctx, infoURL, 2*time.Second)
+	if !res.Reachable || res.Status != 200 {
+		return ""
+	}
+
+	var parsed speakerInfoMargeXML
+	if err := xml.Unmarshal(res.Body, &parsed); err != nil {
+		return ""
+	}
+
+	return parsed.MargeAccountUUID
+}
+
 // RegisterPresetsConsistencyCheck registers the cross-reference check.
 // For every paired device with a known IP, it builds two ConsistencyViews
 // (speaker, service), runs the internal-consistency pass on each, then
@@ -134,49 +172,88 @@ func runPresetsConsistencyCheck(ds *datastore.DataStore) []Finding {
 // time after verifying via the service log which account the speaker
 // is actually targeting.
 func detectOrphanDefaultEntries(ds *datastore.DataStore, paired []models.ServiceDeviceInfo) []Finding {
-	activeAccount := map[string]string{} // deviceID -> the account ListAllDevices picked
+	type deviceInfo struct {
+		account string
+		ip      string
+	}
+
+	activeAccount := map[string]deviceInfo{}
 
 	for i := range paired {
 		if paired[i].DeviceID == "" {
 			continue
 		}
 
-		activeAccount[paired[i].DeviceID] = paired[i].AccountID
+		activeAccount[paired[i].DeviceID] = deviceInfo{
+			account: paired[i].AccountID,
+			ip:      paired[i].IPAddress,
+		}
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	var findings []Finding
 
-	for deviceID, active := range activeAccount {
+	for deviceID, info := range activeAccount {
 		allAccounts := ds.AllAccountsForDevice(deviceID)
 		if len(allAccounts) <= 1 {
 			continue
 		}
 
+		// Speaker's own answer to "which account do I belong to?".
+		// Empty when unreachable; treated as "no signal" — we fall
+		// back to the on-disk ListAllDevices guess.
+		speakerAccount := fetchSpeakerMargeAccount(ctx, info.ip)
+
+		authoritative := info.account
+		signalSource := "on-disk activity (ListAllDevices)"
+
+		if speakerAccount != "" {
+			authoritative = speakerAccount
+			signalSource = "the speaker itself, via :8090/info"
+
+			if speakerAccount != info.account {
+				log.Printf("[Health] consistency: speaker %s reports margeAccountUUID=%s but ListAllDevices picked %s — preferring the speaker's answer for orphan-deletion suggestions",
+					deviceID, speakerAccount, info.account)
+			}
+		}
+
 		for _, acc := range allAccounts {
-			if acc == active {
+			if acc == authoritative {
 				continue
 			}
 
 			findings = append(findings, Finding{
-				Severity: SeverityWarning,
-				Target:   Target{Account: acc, Device: deviceID},
-				Message:  "Stale account entry: device " + deviceID + " also has state under account " + safeQuoteFinding(acc) + " — likely leftover from a previous pairing. The currently-active account is " + safeQuoteFinding(active) + ".",
-				Details:  "Before deleting, verify the speaker isn't currently PUTting to account " + acc + " by checking the service log for /streaming/account/" + acc + "/device/" + deviceID + "/... entries.",
-				QuickFixes: []QuickFix{{
-					ID:      FixIDDeleteOrphanAccountEntry,
-					Label:   "Delete stale entry",
-					Confirm: "Permanently delete <data-dir>/accounts/" + acc + "/devices/" + deviceID + "/? This removes Presets.xml, Recents.xml, Sources.xml and DeviceInfo.xml for this stale pairing. The active account " + active + " is not touched.",
-				}},
-				ManualCommands: []ManualCommand{{
-					Label:   "Or remove from a shell:",
-					Command: "rm -rf <data-dir>/accounts/" + acc + "/devices/" + deviceID,
-					Hint:    "Substitute <data-dir> with the service's actual data directory (typically /var/lib/soundtouch-service).",
-				}},
+				Severity:       SeverityWarning,
+				Target:         Target{Account: acc, Device: deviceID},
+				Message:        "Stale account entry: device " + deviceID + " also has state under account " + safeQuoteFinding(acc) + " — likely leftover from a previous pairing. The currently-active account is " + safeQuoteFinding(authoritative) + " (per " + signalSource + ").",
+				Details:        orphanFindingDetails(acc, deviceID, speakerAccount),
+				QuickFixes:     []QuickFix{{ID: FixIDDeleteOrphanAccountEntry, Label: "Delete stale entry", Confirm: orphanFindingConfirm(acc, deviceID, authoritative, speakerAccount)}},
+				ManualCommands: []ManualCommand{{Label: "Or remove from a shell:", Command: "rm -rf <data-dir>/accounts/" + acc + "/devices/" + deviceID, Hint: "Substitute <data-dir> with the service's actual data directory (typically /var/lib/soundtouch-service)."}},
 			})
 		}
 	}
 
 	return findings
+}
+
+func orphanFindingDetails(acc, deviceID, speakerAccount string) string {
+	if speakerAccount == "" {
+		return "Couldn't reach the speaker on :8090/info to confirm its current account. Before deleting, verify via service log entries for /streaming/account/" + acc + "/device/" + deviceID + "/...; the Delete QuickFix will retry the speaker probe and refuse if the speaker reports this account as live."
+	}
+
+	return "Speaker /info reports margeAccountUUID=" + speakerAccount + "; this directory (account " + acc + ") is stale because the speaker has stopped targeting it."
+}
+
+func orphanFindingConfirm(acc, deviceID, authoritative, speakerAccount string) string {
+	base := "Permanently delete <data-dir>/accounts/" + acc + "/devices/" + deviceID + "/? Removes Presets.xml, Recents.xml, Sources.xml and DeviceInfo.xml for this stale pairing. The active account " + authoritative + " is not touched."
+
+	if speakerAccount != "" {
+		return base + " (Confirmed by the speaker itself: /info reports margeAccountUUID=" + speakerAccount + ".)"
+	}
+
+	return base + " The speaker was not reachable to confirm; the QuickFix will re-probe before deleting and refuse if the speaker now reports this account as live."
 }
 
 func safeQuoteFinding(s string) string {
@@ -189,16 +266,43 @@ func safeQuoteFinding(s string) string {
 
 // deleteOrphanAccountEntry removes accounts/<target.Account>/devices/<target.Device>/.
 // Called only after the operator has clicked through the Confirm dialog
-// that the QuickFix surfaces; the framework is the gatekeeper, so this
-// just executes. Logs the action for auditability.
+// that the QuickFix surfaces. Before the destructive step, asks the
+// speaker (via :8090/info) which account it currently considers its
+// own and refuses to proceed when the answer matches the deletion
+// target — even an operator-confirmed click can be wrong if the
+// speaker re-paired between scan and click. Logs the action for
+// auditability.
 func deleteOrphanAccountEntry(ds *datastore.DataStore, target Target) (string, error) {
 	if target.Account == "" || target.Device == "" {
 		return "", fmt.Errorf("account and device are both required")
 	}
 
+	// Find a known IP for this device by walking the active devices.
+	// Speaker re-probe needs the IP; if we can't find one we proceed
+	// without the safety net but log the gap so it shows up in audit.
+	speakerIP := lookupActiveDeviceIP(ds, target.Device)
+
+	if speakerIP != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		if speakerAccount := fetchSpeakerMargeAccount(ctx, speakerIP); speakerAccount != "" {
+			if speakerAccount == target.Account {
+				return "", fmt.Errorf("speaker %s reports margeAccountUUID=%s — refusing to delete <data-dir>/accounts/%s/devices/%s because it's the speaker's currently-active binding (re-paired since the consistency check ran?)",
+					target.Device, speakerAccount, target.Account, target.Device)
+			}
+
+			log.Printf("[Health] deleteOrphanAccountEntry: speaker %s confirmed margeAccountUUID=%s; target account %s is stale, proceeding with delete",
+				target.Device, speakerAccount, target.Account)
+		} else {
+			log.Printf("[Health] deleteOrphanAccountEntry: speaker %s at %s not reachable for re-confirmation; relying on operator's Confirm click",
+				target.Device, speakerIP)
+		}
+	} else {
+		log.Printf("[Health] deleteOrphanAccountEntry: no IP recorded for device %s — skipping speaker re-probe", target.Device)
+	}
+
 	if target.Account == accountIDDefaultPlaceholder {
-		// Allowed — "default" is a frequent orphan source — but log
-		// the explicit case so misuse stands out.
 		log.Printf("[Health] deleteOrphanAccountEntry: deleting the \"default\" placeholder entry for device %s; this is normal after pairing completed", target.Device)
 	}
 
@@ -215,6 +319,24 @@ func deleteOrphanAccountEntry(ds *datastore.DataStore, target Target) (string, e
 		path, target.Account, target.Device)
 
 	return fmt.Sprintf("Removed stale account entry %s for device %s.", target.Account, target.Device), nil
+}
+
+// lookupActiveDeviceIP returns the IP recorded for the device under
+// whichever account ListAllDevices currently treats as active. Empty
+// when the device isn't found or has no IP recorded.
+func lookupActiveDeviceIP(ds *datastore.DataStore, deviceID string) string {
+	devices, err := ds.ListAllDevices()
+	if err != nil {
+		return ""
+	}
+
+	for i := range devices {
+		if devices[i].DeviceID == deviceID && devices[i].IPAddress != "" {
+			return devices[i].IPAddress
+		}
+	}
+
+	return ""
 }
 
 // accountIDDefaultPlaceholder mirrors datastore.accountIDDefault for
