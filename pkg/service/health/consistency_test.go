@@ -68,6 +68,7 @@ func TestCheckInternalConsistency_DuplicateSourceType(t *testing.T) {
 	view := ConsistencyView{
 		Label: "service",
 		Sources: []ConsistencySource{
+			// Same type + same (empty) account — true shadow duplicate.
 			{ID: "10004", Type: "TUNEIN"},
 			{ID: "14774275", Type: "TUNEIN"},
 		},
@@ -85,6 +86,29 @@ func TestCheckInternalConsistency_DuplicateSourceType(t *testing.T) {
 
 	if !sawDup {
 		t.Errorf("expected duplicate-source finding, got: %+v", got)
+	}
+}
+
+// TestCheckInternalConsistency_MultipleAccountsAreNotDuplicates locks in
+// the dedup-by-type+account policy: two Spotify entries with different
+// sourceAccount (Connect, Alexa) are legitimate, not shadow duplicates.
+func TestCheckInternalConsistency_MultipleAccountsAreNotDuplicates(t *testing.T) {
+	view := ConsistencyView{
+		Label: "speaker",
+		Sources: []ConsistencySource{
+			{Type: "SPOTIFY", Account: "SpotifyConnectUserName"},
+			{Type: "SPOTIFY", Account: "SpotifyAlexaUserName"},
+			{Type: "QPLAY", Account: "QPlay1UserName"},
+			{Type: "QPLAY", Account: "QPlay2UserName"},
+		},
+	}
+
+	got := CheckInternalConsistency(view)
+
+	for _, iss := range got {
+		if iss.Kind == IssueDuplicateSource {
+			t.Errorf("did not expect duplicate-source finding for distinct accounts; got: %s", iss.Detail)
+		}
 	}
 }
 

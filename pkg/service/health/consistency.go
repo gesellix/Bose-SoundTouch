@@ -71,13 +71,11 @@ type ConsistencyIssueKind string
 
 // Recognised ConsistencyIssueKind values.
 const (
-	IssuePresetMismatch     ConsistencyIssueKind = "preset_mismatch"
-	IssueRecentMismatch     ConsistencyIssueKind = "recent_mismatch"
-	IssueSourceMismatch     ConsistencyIssueKind = "source_mismatch"
-	IssueDanglingPreset     ConsistencyIssueKind = "dangling_preset"
-	IssueDanglingRecent     ConsistencyIssueKind = "dangling_recent"
-	IssueDuplicateSource    ConsistencyIssueKind = "duplicate_source"
-	IssueMissingSpeakerSide ConsistencyIssueKind = "missing_speaker_side"
+	IssuePresetMismatch  ConsistencyIssueKind = "preset_mismatch"
+	IssueRecentMismatch  ConsistencyIssueKind = "recent_mismatch"
+	IssueDanglingPreset  ConsistencyIssueKind = "dangling_preset"
+	IssueDanglingRecent  ConsistencyIssueKind = "dangling_recent"
+	IssueDuplicateSource ConsistencyIssueKind = "duplicate_source"
 )
 
 // CheckCrossSide compares speaker and service views for the same device
@@ -155,38 +153,33 @@ func CheckCrossSide(speaker, service ConsistencyView) []ConsistencyIssue {
 		}
 	}
 
-	for id, sv := range serviceRecents {
-		if _, ok := speakerRecents[id]; !ok {
-			// Service-only recents are common (the speaker drops old
-			// entries faster than we do), so only flag if there are
-			// disproportionately many.
-			_ = sv
+	speakerOnly := 0
+
+	for id := range speakerRecents {
+		if _, ok := serviceRecents[id]; !ok {
+			speakerOnly++
 		}
 	}
 
-	// Sources: compare by type (speaker lists by type, not by numeric ID).
-	speakerSourceTypes := sourceTypesFromView(speaker)
-	serviceSourceTypes := sourceTypesFromView(service)
-
-	for t := range speakerSourceTypes {
-		if !serviceSourceTypes[t] {
-			issues = append(issues, ConsistencyIssue{
-				Kind:   IssueSourceMismatch,
-				Side:   "speaker",
-				Detail: "source type " + safeQuote(t) + " present on speaker but not in service Sources.xml — service /full will not include presets referencing this source",
-			})
-		}
+	// Speaker-only recents are normal: the speaker keeps a longer
+	// history than the service ingests. Surface a single summary line
+	// when the gap is large enough to look like a missed sync, instead
+	// of one finding per missing id (which used to drown the report).
+	if speakerOnly >= 5 {
+		issues = append(issues, ConsistencyIssue{
+			Kind:   IssueRecentMismatch,
+			Side:   "speaker",
+			Detail: strconv.Itoa(speakerOnly) + " recent(s) present on speaker but missing from service — usually means service hasn't ingested the latest /recents notification; harmless unless the gap keeps growing",
+		})
 	}
 
-	for t := range serviceSourceTypes {
-		if !speakerSourceTypes[t] {
-			issues = append(issues, ConsistencyIssue{
-				Kind:   IssueSourceMismatch,
-				Side:   "service",
-				Detail: "source type " + safeQuote(t) + " in service Sources.xml but not advertised by speaker /sources — preset references to this source may fail at play time",
-			})
-		}
-	}
+	// Note: we deliberately do *not* compare speaker /sources types
+	// against service Sources.xml. Those two lists answer different
+	// questions: speaker /sources enumerates local I/O sources (AUX,
+	// BLUETOOTH, AIRPLAY, QPLAY, …) plus active-account ones (SPOTIFY),
+	// while service Sources.xml tracks credentialed streaming sources
+	// (TUNEIN, INTERNET_RADIO, …). They legitimately don't overlap on
+	// most types, so flagging the asymmetry was pure noise.
 
 	sort.SliceStable(issues, func(i, j int) bool {
 		return issues[i].Detail < issues[j].Detail
@@ -201,6 +194,16 @@ func CheckCrossSide(speaker, service ConsistencyView) []ConsistencyIssue {
 // 10004" class (GH-269 NorbertBauer's restore case after a partial backup
 // import).
 //
+// Only meaningful on the service side. The speaker's /sources lists local
+// I/O sources (AUX, BLUETOOTH, AIRPLAY, ALEXA, QPLAY, UPNP, …) plus
+// active-account ones; it does *not* enumerate streaming sources
+// (TUNEIN, INTERNET_RADIO, …) — those are proxied through BMX. So a
+// preset with source="TUNEIN" on the speaker side legitimately has no
+// matching entry in speaker /sources, and flagging it as "dangling"
+// would be a false positive. Callers should pass a service-side view
+// here; speaker-side internal consistency is enforced by the firmware
+// itself.
+//
 // The side string is "speaker" or "service" — included verbatim in each
 // finding so the operator can tell which side is internally inconsistent.
 func CheckInternalConsistency(view ConsistencyView) []ConsistencyIssue {
@@ -208,7 +211,8 @@ func CheckInternalConsistency(view ConsistencyView) []ConsistencyIssue {
 
 	sourceIDs := map[string]bool{}
 	sourceTypes := map[string]bool{}
-	dupCount := map[string]int{}
+	dupKey := map[string]int{}
+	dupLabel := map[string]string{}
 
 	for _, s := range view.Sources {
 		if s.ID != "" {
@@ -217,16 +221,24 @@ func CheckInternalConsistency(view ConsistencyView) []ConsistencyIssue {
 
 		if s.Type != "" {
 			sourceTypes[s.Type] = true
-			dupCount[s.Type]++
+
+			// Multiple <sourceItem> entries with the same source type
+			// but different sourceAccount are normal (e.g. Spotify
+			// Connect + Spotify Alexa, QPlay1 + QPlay2). Key dedup by
+			// type+account so we only flag *true* duplicates that
+			// would shadow each other in mapPresetsToFullResponse.
+			key := s.Type + "\x00" + s.Account
+			dupKey[key]++
+			dupLabel[key] = s.Type + accountSuffix(s.Account)
 		}
 	}
 
-	for t, n := range dupCount {
+	for key, n := range dupKey {
 		if n > 1 {
 			issues = append(issues, ConsistencyIssue{
 				Kind:   IssueDuplicateSource,
 				Side:   view.Label,
-				Detail: view.Label + ": source type " + safeQuote(t) + " has " + plural(n, "entry", "entries") + " in Sources.xml — mapPresetsToFullResponse picks the first match, the rest are inert",
+				Detail: view.Label + ": source " + safeQuote(dupLabel[key]) + " has " + plural(n, "entry", "entries") + " in Sources.xml — mapPresetsToFullResponse picks the first match, the rest are inert",
 			})
 		}
 	}
@@ -268,6 +280,14 @@ func CheckInternalConsistency(view ConsistencyView) []ConsistencyIssue {
 	return issues
 }
 
+func accountSuffix(account string) string {
+	if account == "" {
+		return ""
+	}
+
+	return " (account " + account + ")"
+}
+
 func indexPresetsBySlot(in []ConsistencyPreset) map[string]ConsistencyPreset {
 	out := make(map[string]ConsistencyPreset, len(in))
 	for i := range in {
@@ -284,18 +304,6 @@ func indexRecentsByID(in []ConsistencyRecent) map[string]ConsistencyRecent {
 	for i := range in {
 		if in[i].ID != "" {
 			out[in[i].ID] = in[i]
-		}
-	}
-
-	return out
-}
-
-func sourceTypesFromView(v ConsistencyView) map[string]bool {
-	out := map[string]bool{}
-
-	for _, s := range v.Sources {
-		if s.Type != "" {
-			out[s.Type] = true
 		}
 	}
 

@@ -111,6 +111,10 @@ func checkOneDeviceConsistency(ds *datastore.DataStore, account, deviceID, ipAdd
 
 	var findings []Finding
 
+	// Internal consistency is meaningful only on the service side —
+	// the speaker manages its own preset/source coherence locally,
+	// and its /sources list deliberately omits streaming sources
+	// (which would always trigger spurious "dangling" findings).
 	findings = append(findings, issuesToFindings(target, CheckInternalConsistency(serviceView), SeverityWarning)...)
 
 	if ipAddress == "" {
@@ -136,10 +140,31 @@ func checkOneDeviceConsistency(ds *datastore.DataStore, account, deviceID, ipAdd
 		return findings
 	}
 
-	findings = append(findings, issuesToFindings(target, CheckInternalConsistency(speakerView), SeverityWarning)...)
+	// "Unsynced device" short-circuit: when the service has no
+	// presets / recents / sources for a device that the speaker
+	// clearly does have all three for, emit one consolidated
+	// finding instead of a torrent of per-slot mismatches.
+	if isServiceUnsynced(serviceView) && !isSpeakerEmpty(speakerView) {
+		findings = append(findings, Finding{
+			Severity: SeverityWarning,
+			Target:   target,
+			Message:  "Device has speaker state (presets, recents, sources) but service has nothing for it — looks like a missed pair/sync. Click \"Sync\" in the device tab or factory-reset and re-pair.",
+		})
+
+		return findings
+	}
+
 	findings = append(findings, issuesToFindings(target, CheckCrossSide(speakerView, serviceView), SeverityWarning)...)
 
 	return findings
+}
+
+func isServiceUnsynced(v ConsistencyView) bool {
+	return len(v.Presets) == 0 && len(v.Recents) == 0 && len(v.Sources) == 0
+}
+
+func isSpeakerEmpty(v ConsistencyView) bool {
+	return len(v.Presets) == 0 && len(v.Recents) == 0 && len(v.Sources) == 0
 }
 
 func issuesToFindings(target Target, issues []ConsistencyIssue, severity Severity) []Finding {
@@ -177,10 +202,35 @@ func loadServiceView(ds *datastore.DataStore, account, deviceID string) (Consist
 
 	view := ConsistencyView{Label: "service"}
 
+	// Build sourceID -> SourceKeyType index up front so we can resolve
+	// the *effective* source for each preset/recent. syncPresets and
+	// syncRecents in sync.go currently persist the upstream
+	// FullResponseSource.Type ("Audio") into ServicePreset.Source,
+	// which is meaningless next to the speaker's actual source name.
+	// Resolve via SourceID so the cross-side diff compares like with
+	// like; fall back to the persisted Source string when the SourceID
+	// is empty or doesn't resolve.
+	sourceByID := make(map[string]string, len(sources))
+	for i := range sources {
+		if sources[i].ID != "" && sources[i].SourceKeyType != "" {
+			sourceByID[sources[i].ID] = sources[i].SourceKeyType
+		}
+	}
+
+	resolveSource := func(persisted, sourceID string) string {
+		if sourceID != "" {
+			if resolved := sourceByID[sourceID]; resolved != "" {
+				return resolved
+			}
+		}
+
+		return persisted
+	}
+
 	for i := range presets {
 		view.Presets = append(view.Presets, ConsistencyPreset{
 			Slot:     presets[i].ButtonNumber,
-			Source:   presets[i].Source,
+			Source:   resolveSource(presets[i].Source, presets[i].SourceID),
 			SourceID: presets[i].SourceID,
 			Location: presets[i].Location,
 			Name:     presets[i].Name,
@@ -190,7 +240,7 @@ func loadServiceView(ds *datastore.DataStore, account, deviceID string) (Consist
 	for i := range recents {
 		view.Recents = append(view.Recents, ConsistencyRecent{
 			ID:       recents[i].ID,
-			Source:   recents[i].Source,
+			Source:   resolveSource(recents[i].Source, recents[i].SourceID),
 			SourceID: recents[i].SourceID,
 			Location: recents[i].Location,
 			Name:     recents[i].Name,
