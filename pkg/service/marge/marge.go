@@ -899,13 +899,15 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		// slot reverts to "Select a preset" until the source is
 		// repopulated, which is recoverable; a wiped /presets is not.
 		if synth, ok := synthesiseDefaultSourceForPreset(p); ok {
+			log.Printf("[Marge] /full: synthesising canonical %s source (id=%s, providerid=%s) for preset %s — original source %q not in configured sources; preset will appear on the speaker but play-time may fail until the source is repopulated",
+				p.Source, synth.ID, synth.SourceProviderID, p.ButtonNumber, p.SourceID)
 			fullPreset.Source = synth
 			fullPresets = append(fullPresets, fullPreset)
 
 			continue
 		}
 
-		log.Printf("[Marge] /full: skipping preset %s — source %q (id=%q, account=%q) not in configured sources",
+		log.Printf("[Marge] /full: skipping preset %s — source %q (id=%q, account=%q) not in configured sources and not synthesisable; the speaker's preset slot will revert to empty until the source is repopulated",
 			p.ButtonNumber, p.Source, p.SourceID, p.SourceAccount)
 	}
 
@@ -1286,6 +1288,54 @@ func RemovePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	return ds.SavePresets(account, device, presets)
 }
 
+// resolvePresetSource resolves the source a preset PUT is referencing,
+// auto-adding a canonical built-in source when AfterTouch's per-device
+// configured-sources list doesn't include it yet (GH-314 / GH-253). It
+// returns the matched source plus the possibly-extended sources slice
+// (since auto-add appends). Returns (nil, sources) when no match could be
+// resolved — UpdatePreset turns that into a 500 with a diagnostic log line.
+func resolvePresetSource(ds *datastore.DataStore, account, device string, sources []models.ConfiguredSource, sourceID string, presetNumber int) (*models.ConfiguredSource, []models.ConfiguredSource) {
+	log.Printf("[Marge] Searching for source matching ID=%s in %d sources", sourceID, len(sources))
+
+	for i := range sources {
+		log.Printf("[Marge]   Source[%d]: ID=%s, Type=%s, SourceKeyType=%s, SourceKeyAccount=%s", i, sources[i].ID, sources[i].Type, sources[i].SourceKeyType, sources[i].SourceKeyAccount)
+
+		if sources[i].ID == sourceID {
+			return &sources[i], sources
+		}
+	}
+
+	// Fallback: SourceID is the symbolic provider name (the speaker
+	// sometimes sends e.g. <sourceid>TUNEIN</sourceid> instead of a
+	// numeric ID); match by SourceKeyType.
+	if sourceID == constants.ProviderInternetRadio || sourceID == constants.ProviderTunein || sourceID == constants.ProviderSpotify || sourceID == constants.ProviderAmazon {
+		for i := range sources {
+			if sources[i].SourceKeyType == sourceID {
+				return &sources[i], sources
+			}
+		}
+	}
+
+	// Auto-add a canonical built-in source the speaker referenced but
+	// AfterTouch hasn't been told about (post-factory-reset state). For
+	// account-bound sources (Spotify, Amazon) we can't synthesise
+	// credentials, so the caller will reject the PUT instead.
+	if canonical, ok := ds.CanonicalSourceByID(sourceID); ok {
+		log.Printf("[Marge] UpdatePreset(preset=%d): auto-adding canonical source id=%s type=%s providerid=%s — speaker referenced a built-in source not yet in AfterTouch's configured-sources list; saving so the preset can land",
+			presetNumber, canonical.ID, canonical.SourceKeyType, canonical.SourceProviderID)
+
+		sources = append(sources, canonical)
+		if saveErr := ds.SaveConfiguredSources(account, device, sources); saveErr != nil {
+			log.Printf("[Marge] UpdatePreset(preset=%d): SaveConfiguredSources after auto-add failed: %v — the preset will land but the source may not survive a service restart",
+				presetNumber, saveErr)
+		}
+
+		return &sources[len(sources)-1], sources
+	}
+
+	return nil, sources
+}
+
 // UpdatePreset updates or creates a preset for the specified account and device.
 func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber int, sourceXML []byte) ([]byte, error) {
 	sources, err := ds.GetConfiguredSources(account, device)
@@ -1300,6 +1350,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 
 	var newPresetElem struct {
 		Name            string `xml:"name"`
+		Username        string `xml:"username"`
 		SourceID        string `xml:"sourceid"`
 		Location        string `xml:"location"`
 		ContentItemType string `xml:"contentItemType"`
@@ -1309,32 +1360,22 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 		return nil, err
 	}
 
-	var matchingSrc *models.ConfiguredSource
+	// The PUT body field carrying the human-readable name varies by client:
+	// the speaker firmware sends it as <name>, the Stockholm mobile app sends
+	// it as <username>. soundcork documents this divergence too. Prefer
+	// <name>; fall back to <username> so app-initiated stores don't end up
+	// with an empty preset name.
+	if newPresetElem.Name == "" && newPresetElem.Username != "" {
+		log.Printf("[Marge] UpdatePreset(preset=%d): using Stockholm <username> as preset name; speaker firmware would have sent <name>", presetNumber)
 
-	log.Printf("[Marge] Searching for source matching ID=%s in %d sources", newPresetElem.SourceID, len(sources))
-
-	for i := range sources {
-		log.Printf("[Marge]   Source[%d]: ID=%s, Type=%s, SourceKeyType=%s, SourceKeyAccount=%s", i, sources[i].ID, sources[i].Type, sources[i].SourceKeyType, sources[i].SourceKeyAccount)
-
-		if sources[i].ID == newPresetElem.SourceID {
-			matchingSrc = &sources[i]
-			break
-		}
+		newPresetElem.Name = newPresetElem.Username
 	}
 
+	matchingSrc, sources := resolvePresetSource(ds, account, device, sources, newPresetElem.SourceID, presetNumber)
 	if matchingSrc == nil {
-		if newPresetElem.SourceID == constants.ProviderInternetRadio || newPresetElem.SourceID == constants.ProviderTunein || newPresetElem.SourceID == constants.ProviderSpotify || newPresetElem.SourceID == constants.ProviderAmazon {
-			// Find by SourceKeyType instead of ID if it's a default source
-			for i := range sources {
-				if sources[i].SourceKeyType == newPresetElem.SourceID {
-					matchingSrc = &sources[i]
-					break
-				}
-			}
-		}
-	}
+		log.Printf("[Marge] UpdatePreset(preset=%d): rejecting — source id=%q is neither in configured sources nor a canonical built-in we can auto-add. The speaker's long-press will appear to succeed locally but the preset will not survive a /full sync",
+			presetNumber, newPresetElem.SourceID)
 
-	if matchingSrc == nil {
 		return nil, fmt.Errorf("invalid account/source")
 	}
 

@@ -1861,6 +1861,27 @@ func (ds *DataStore) GetDefaultSources() []models.ConfiguredSource {
 	return ds.getDefaultSources()
 }
 
+// CanonicalSourceByID returns the canonical default ConfiguredSource for one
+// of the well-known built-in source IDs (10001..10005). The returned source
+// has its SourceKey.Type / SourceKey.Account mirrored from
+// SourceKeyType / SourceKeyAccount so it round-trips through SaveConfiguredSources
+// without losing the embedded struct fields. Returns (zero, false) when the
+// ID isn't one we can synthesise.
+//
+// Callers that auto-add missing sources (e.g. UpdatePreset when a speaker
+// PUTs a preset referencing a canonical source AfterTouch hasn't been told
+// about yet) should use this to keep parity with the post-pair defaults.
+func (ds *DataStore) CanonicalSourceByID(id string) (models.ConfiguredSource, bool) {
+	defaults := ds.getDefaultSources()
+	for i := range defaults {
+		if defaults[i].ID == id {
+			return defaults[i], true
+		}
+	}
+
+	return models.ConfiguredSource{}, false
+}
+
 func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 	sources := []models.ConfiguredSource{
 		{
