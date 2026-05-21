@@ -60,6 +60,7 @@ GET      /setup/devices/{deviceId}/events                             handlers.(
 GET      /setup/discovery-status                                      handlers.(*Server).HandleGetDiscoveryStatus-fm
 GET      /setup/dns-discoveries                                       handlers.(*Server).HandleGetDNSDiscoveries-fm
 GET      /setup/dns-discoveries/download                              handlers.(*Server).HandleDownloadDNSDiscoveries-fm
+GET      /setup/export/diagnostic                                     handlers.(*Server).HandleExportDiagnostic-fm
 GET      /setup/health                                                handlers.(*Server).HandleHealthChecks-fm
 GET      /setup/info/{deviceId}                                       handlers.(*Server).HandleGetDeviceInfo-fm
 GET      /setup/interaction-content                                   handlers.(*Server).HandleGetInteractionContent-fm

@@ -3,6 +3,7 @@ module github.com/gesellix/bose-soundtouch
 go 1.26.3
 
 require (
+	filippo.io/age v1.3.1
 	github.com/chromedp/chromedp v0.15.1
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/gopacket v1.1.19
@@ -20,6 +21,8 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.2.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20260427013145-5737772c319b // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect

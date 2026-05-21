@@ -1198,6 +1198,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 
 		r.Get("/health", server.HandleHealthChecks)
 		r.Post("/health/fix", server.HandleHealthFix)
+		r.Get("/export/diagnostic", server.HandleExportDiagnostic)
 		r.Get("/logs", server.HandleGetLogs)
 
 		// Serve Stockholm setup wizard pages for paths not matched by the management API.

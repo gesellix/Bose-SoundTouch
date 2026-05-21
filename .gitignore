@@ -119,3 +119,6 @@ DONE.md
 # Living document; commit history of the checks themselves is the
 # source of truth for what shipped.
 SERVICE-HEALTH.md
+
+# Diagnostic encryption keys — private key stays local with the maintainer
+keys/private/

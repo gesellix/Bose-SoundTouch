@@ -4013,6 +4013,37 @@ async function fetchHealth() {
     }
 }
 
+async function downloadDiagnostic() {
+    const statusEl = document.getElementById("health-diagnostic-status");
+    if (statusEl) statusEl.textContent = "Building diagnostic report…";
+
+    try {
+        const resp = await fetch("/setup/export/diagnostic");
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => resp.statusText);
+            throw new Error(`HTTP ${resp.status}: ${text}`);
+        }
+
+        const disposition = resp.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename[^;=\n]*=(?:"([^"]+)"|([^;\n]+))/);
+        const filename = (match && (match[1] || match[2])) || "aftertouch-diagnostic.age";
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        if (statusEl) statusEl.textContent = `Downloaded: ${filename}`;
+    } catch (e) {
+        if (statusEl) statusEl.textContent = `Failed to download diagnostic: ${e.message || e}`;
+    }
+}
+
 function renderHealthChecks(data, findingsEl, generatedAtEl) {
     if (generatedAtEl && data.generatedAt) {
         generatedAtEl.textContent = `Last run: ${data.generatedAt}`;

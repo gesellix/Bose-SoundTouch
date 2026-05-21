@@ -3,6 +3,7 @@
 * [Introduction](README.md)
 
 ## User Guides
+* [Device-Local Install Journeys](DEVICE-LOCAL-INSTALL.md)
 * [Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md)
 * [Self-Hosting AfterTouch](guides/SELF-HOSTING.md)
 * [Connecting Music Services](guides/MUSIC-SERVICES.md)
@@ -54,6 +55,8 @@
 * [Request Recording](REQUEST_RECORDING_CONCEPT.md)
 * [Spotify Priming Strategy](concepts/spotify-priming-strategy.md)
 * [Spotify OAuth](concepts/spotify-oauth.md)
+* [Encrypted Export](concepts/ENCRYPTED-EXPORT.md)
+* [Diagnostic Export (Maintainer Setup)](DIAGNOSTIC-EXPORT.md)
 * [soundtouch-web Roadmap](soundtouch-web-roadmap.md)
 
 ## Analysis & Research
