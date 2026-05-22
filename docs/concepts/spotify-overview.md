@@ -79,8 +79,22 @@ token refresh will silently die while the speaker still pulls sources.
 Symptom: the speaker briefly streams Spotify after priming, then stops at the
 first token refresh ~1 hour later.
 
-If you self-host AfterTouch at e.g. `aftertouch.local`, you would equivalently
-need `aftertouchoauth.local` for the OAuth interception path.
+If you self-host AfterTouch at e.g. `aftertouch.lan`, the speaker derives
+`aftertouchoauth.lan` and queries that hostname for token refresh. AfterTouch's
+DNS server **auto-derives this alias** from the configured `--server-url` and
+adds it to the hijack list automatically — the operator does not have to
+configure it as long as speakers resolve names via AfterTouch's DNS server
+(via DHCP, the `setup migrate --method=resolv` flow, or an external LAN DNS
+that delegates to AfterTouch for these names). The implementation lives in
+`pkg/discovery/dns.go` `DeriveOAuthHostnames`.
+
+> **IP-based `--server-url` is incompatible with OAuth (both Spotify and Amazon
+> Music).** The speaker's hostname construction appends `oauth` to the first
+> label only, so `192.168.0.30` would produce `192oauth.168.0.30` — malformed,
+> no DNS resolver will answer for it, and there is no clean workaround on the
+> AfterTouch side. **Use a real LAN hostname** before configuring Spotify or
+> Amazon Music. The Health-tab `oauth_target_reachable` check warns when this
+> trap is wired up.
 
 ## End-to-end token lifecycle
 

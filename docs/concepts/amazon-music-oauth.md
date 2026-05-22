@@ -67,7 +67,7 @@ The service must respond with a fresh Amazon access token. The speaker then uses
 
 The `cs1` suffix (credential schema 1) is Amazon-specific; Spotify uses `cs3`. This route is already registered.
 
-> **DNS note:** The speaker constructs the OAuth hostname by appending `oauth` to the streaming service subdomain. If the service is reachable at `myhost.local`, the speaker will call `myhostoauth.local`. A DNS alias pointing `myhostoauth.<domain>` to the same IP as the service is required.
+> **DNS note:** The speaker constructs the OAuth hostname by appending `oauth` to the **first label** of the configured streaming hostname. If the service is reachable at `myhost.local`, the speaker calls `myhostoauth.local`. That alias must resolve to AfterTouch's IP — see the [DNS requirement](#dns-requirement) section below for the available mechanisms. **IP-based `--server-url` is incompatible with OAuth**: the construction produces a malformed hostname (`192oauth.168.0.30`) that no DNS resolver can answer. Use a real LAN hostname.
 
 ---
 
@@ -317,7 +317,17 @@ The service looks up the account by refresh token, refreshes it via LWA, and ret
 
 ### DNS requirement
 
-The speaker derives the OAuth hostname by appending `oauth` to its configured streaming subdomain. If the service is at `myhost.local`, the speaker calls `myhostoauth.local`. A DNS alias pointing `myhostoauth.<domain>` to the same IP is required — the built-in DNS discovery server handles this automatically when `--dns-discovery` is enabled.
+The speaker derives the OAuth hostname by appending `oauth` to the **first label** of its configured streaming hostname. If the service is at `myhost.lan`, the speaker calls `myhostoauth.lan`. A DNS alias pointing `myhostoauth.<rest>` to the same IP as AfterTouch is required.
+
+**The configured `--server-url` must be a real LAN hostname.** An IP-based target produces a malformed OAuth hostname (e.g. `192oauth.168.0.30`) that no DNS resolver can answer, so OAuth never reaches AfterTouch. Switch to something like `https://aftertouch.lan:8443` before configuring Spotify or Amazon Music.
+
+Three ways to make the OAuth alias resolvable, in increasing order of operator effort:
+
+1. **AfterTouch's own DNS server** (auto-derived). When `--dns-discovery` is enabled, AfterTouch parses the configured `--server-url`, derives `<first-label>oauth.<rest>` automatically, and hijacks it to its own IP. The speaker must be using AfterTouch as a DNS resolver for this to take effect — set AfterTouch's IP as the primary DNS in your LAN's DHCP, or run the `setup migrate --method=resolv` flow to write each speaker's `/etc/resolv.conf` directly.
+2. **External LAN DNS** (Pi-hole, OPNsense, …). Add a static A record `<host>oauth.<rest> → <AfterTouch IP>` alongside the existing one for the AfterTouch hostname. AfterTouch's own DNS server doesn't need to be running.
+3. **Per-speaker `/etc/hosts`** (last resort). SSH into each speaker and append `<AfterTouch-IP> <host>oauth.<rest>`. Tedious; doesn't survive a factory reset.
+
+The implementation lives in `pkg/discovery/dns.go` `DeriveOAuthHostnames`.
 
 ### Open question: `site_id`
 

@@ -13,7 +13,7 @@ import (
 func TestDNSDiscovery_Interception(t *testing.T) {
 	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"8.8.8.8"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	// Test intercepting Bose service
 	m := new(dns.Msg)
@@ -67,7 +67,7 @@ func TestDNSDiscovery_Forwarding(t *testing.T) {
 	// For now, let's just test that it calls forward and record.
 	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"127.0.0.1:5353"} // Use a port that is likely closed or we can mock
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	m := new(dns.Msg)
 	m.SetQuestion("google.com.", dns.TypeA)
@@ -108,7 +108,7 @@ func TestDNSDiscovery_Forwarding(t *testing.T) {
 func TestDNSDiscovery_StartTCP(t *testing.T) {
 	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"8.8.8.8"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	addr := "127.0.0.1:5354"
 	go func() {
@@ -157,7 +157,7 @@ func TestDNSDiscovery_StartTCP(t *testing.T) {
 func TestDNSDiscovery_SelfForwarding(t *testing.T) {
 	serviceIP := "soundtouch.local"
 	upstreamDNS := []string{"127.0.0.1:5357"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	// Mock upstream DNS server for soundtouch.local
 	mux := dns.NewServeMux()
@@ -216,7 +216,7 @@ func TestDNSDiscovery_SelfForwarding(t *testing.T) {
 func TestDNSDiscovery_ForwardLocal(t *testing.T) {
 	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"127.0.0.1:5356"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	m := new(dns.Msg)
 	m.SetQuestion("someone-else.local.", dns.TypeA)
@@ -257,7 +257,7 @@ func TestDNSDiscovery_ForwardLocal(t *testing.T) {
 func TestDNSDiscovery_IsRunning(t *testing.T) {
 	serviceIP := "192.0.2.100"
 	upstreamDNS := []string{"8.8.8.8"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	addr := "127.0.0.1:5355"
 
@@ -301,7 +301,7 @@ func (m *mockResponseWriter) TsigTimersOnly(bool)         {}
 func (m *mockResponseWriter) Hijack()                     {}
 
 func TestDNSDiscovery_LogThrottling(t *testing.T) {
-	d := NewDNSDiscovery([]string{"8.8.8.8"}, "192.0.2.100")
+	d := NewDNSDiscovery([]string{"8.8.8.8"}, "192.0.2.100", "")
 
 	// Capture log output
 	var logBuf strings.Builder
@@ -335,7 +335,7 @@ func TestDNSDiscovery_LoopPrevention(t *testing.T) {
 	serviceIP := "192.0.2.100"
 	bindAddr := "127.0.0.1:53"
 	upstreamDNS := []string{"127.0.0.1:53"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 	d.bindAddr = bindAddr
 
 	// Capture log output to avoid panic if it's being throttled/logged
@@ -362,7 +362,7 @@ func TestDNSDiscovery_LoopPrevention(t *testing.T) {
 func TestDNSDiscovery_EmptyUpstream(t *testing.T) {
 	serviceIP := "192.0.2.100"
 	var upstreamDNS []string // Empty upstream
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 	d.bindAddr = ":53"
 
 	m := new(dns.Msg)
@@ -402,7 +402,7 @@ func TestDNSDiscovery_ForwardTimeout(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	upstreamDNS := []string{"127.0.0.1:5358"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 	d.timeout = 100 * time.Millisecond
 
 	m := new(dns.Msg)
@@ -458,7 +458,7 @@ func TestDNSDiscovery_MultipleUpstreams(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	upstreamDNS := []string{"127.0.0.1:5356", "127.0.0.1:5357"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	m := new(dns.Msg)
 	m.SetQuestion("test.com.", dns.TypeA)
@@ -484,7 +484,7 @@ func TestDNSDiscovery_HostnameServiceIP(t *testing.T) {
 	// Use localhost which should resolve to 127.0.0.1
 	serviceIP := "localhost"
 	upstreamDNS := []string{"8.8.8.8"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	m := new(dns.Msg)
 	m.SetQuestion("api.bose.com.", dns.TypeA)
@@ -520,7 +520,7 @@ func TestDNSDiscovery_UnresolvableHostname(t *testing.T) {
 	// Use a likely unresolvable hostname
 	serviceIP := "this.hostname.does.not.exist.at.all.invalid"
 	upstreamDNS := []string{"8.8.8.8"}
-	d := NewDNSDiscovery(upstreamDNS, serviceIP)
+	d := NewDNSDiscovery(upstreamDNS, serviceIP, "")
 
 	m := new(dns.Msg)
 	m.SetQuestion("api.bose.com.", dns.TypeA)

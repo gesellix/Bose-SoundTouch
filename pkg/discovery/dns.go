@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,15 @@ type DNSDiscovery struct {
 	// Configuration
 	upstreamDNS []string
 	serviceIP   string
+
+	// derivedHosts is the auto-derived list of additional hostnames the
+	// interceptor should hijack alongside the Bose cloud list. Populated
+	// from the operator's configured serverURL at construction time —
+	// today this means `<first-label>oauth.<rest>`, the hostname the
+	// speaker firmware constructs for the Spotify / Amazon Music OAuth
+	// flow. Empty when serverURL is IP-based, missing, or has no domain
+	// part to derive from.
+	derivedHosts []string
 
 	// State
 	discovered map[string]*DiscoveredHost
@@ -51,15 +61,75 @@ type DiscoveredHost struct {
 	RemoteAddr    string    `json:"remote_addr,omitempty"`
 }
 
-// NewDNSDiscovery creates a new DNSDiscovery instance.
-func NewDNSDiscovery(upstreamDNS []string, serviceIP string) *DNSDiscovery {
-	return &DNSDiscovery{
-		upstreamDNS: upstreamDNS,
-		serviceIP:   serviceIP,
-		discovered:  make(map[string]*DiscoveredHost),
-		timeout:     2 * time.Second,
-		lastLog:     make(map[string]time.Time),
+// NewDNSDiscovery creates a new DNSDiscovery instance. serverURL is the
+// operator's configured streaming endpoint; its hostname is used to
+// derive the OAuth-subdomain alias the speaker constructs (see
+// DeriveOAuthHostnames). Pass an empty string when no serverURL is
+// available (the derivation is a no-op in that case).
+func NewDNSDiscovery(upstreamDNS []string, serviceIP, serverURL string) *DNSDiscovery {
+	derived := DeriveOAuthHostnames(serverURL)
+	if len(derived) > 0 {
+		log.Printf("[DNS] Auto-hijacking OAuth subdomains derived from serverURL %q: %s", serverURL, strings.Join(derived, ", "))
 	}
+
+	return &DNSDiscovery{
+		upstreamDNS:  upstreamDNS,
+		serviceIP:    serviceIP,
+		derivedHosts: derived,
+		discovered:   make(map[string]*DiscoveredHost),
+		timeout:      2 * time.Second,
+		lastLog:      make(map[string]time.Time),
+	}
+}
+
+// DeriveOAuthHostnames returns the list of additional hostnames the DNS
+// interceptor should hijack to support Spotify / Amazon Music OAuth on a
+// non-Bose target. SoundTouch firmware constructs the OAuth endpoint by
+// appending `oauth` to the first label of the configured streaming
+// hostname (e.g. `aftertouch.lan` → `aftertouchoauth.lan`). When the
+// target is an IP address the derivation produces a malformed hostname
+// no resolver will answer for, so we deliberately return an empty
+// slice — the caller's behaviour stays unchanged, but the operator
+// (and the health-tab check) can detect the misconfiguration via the
+// missing entry.
+//
+// Returned hostnames are lower-cased. An empty serverURL, a URL that
+// fails to parse, or a hostname without a domain part (single-label
+// "aftertouch") all yield an empty slice.
+func DeriveOAuthHostnames(serverURL string) []string {
+	if serverURL == "" {
+		return nil
+	}
+
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return nil
+	}
+
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return nil
+	}
+
+	if net.ParseIP(host) != nil {
+		// IP-based deployment — the speaker's `<first-label>oauth.<rest>`
+		// construction is meaningless (e.g. `192oauth.168.0.30`) and no
+		// DNS server can resolve it. Operators in this situation need to
+		// switch to a real LAN hostname; see docs/concepts/amazon-music-oauth.md.
+		return nil
+	}
+
+	idx := strings.IndexByte(host, '.')
+	if idx <= 0 {
+		// Single-label hostname (e.g. "aftertouch") — no domain part to
+		// append after the inserted "oauth". The speaker firmware does
+		// the same: it appends "oauth" inside the first label, so a
+		// single-label name would produce "aftertouchoauth", which most
+		// DNS resolvers won't answer for either.
+		return nil
+	}
+
+	return []string{host[:idx] + "oauth" + host[idx:]}
 }
 
 // ServeDNS implements the dns.Handler interface.
@@ -179,6 +249,13 @@ var InterceptedBoseHosts = []string{
 func (d *DNSDiscovery) shouldIntercept(hostname string) bool {
 	for _, service := range InterceptedBoseHosts {
 		if strings.Contains(hostname, service) {
+			return true
+		}
+	}
+
+	lower := strings.ToLower(hostname)
+	for _, h := range d.derivedHosts {
+		if lower == h {
 			return true
 		}
 	}

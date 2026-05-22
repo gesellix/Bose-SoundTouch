@@ -134,6 +134,14 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterPresetsConsistencyCheck(s.healthRegistry, ds)
 	health.RegisterRefreshSourcesCheck(s.healthRegistry, ds)
 	health.RegisterDefaultAccountNonBoseDevicesCheck(s.healthRegistry, ds)
+	health.RegisterOAuthTargetReachableCheck(
+		s.healthRegistry,
+		func() string {
+			serverURL, _ := s.GetSettings()
+			return serverURL
+		},
+		s.GetDNSRunning,
+	)
 
 	// Health QuickFix executor for the empty-margeAccountUUID
 	// finding from RegisterSpeakerInfoReachable. Lives here (not in
@@ -499,7 +507,7 @@ func (s *Server) startDNSDiscovery(bind string, upstreamList []string) {
 		return
 	}
 
-	s.dnsDiscovery = discovery.NewDNSDiscovery(upstreamList, serviceIP)
+	s.dnsDiscovery = discovery.NewDNSDiscovery(upstreamList, serviceIP, s.serverURL)
 	go func(d *discovery.DNSDiscovery, addr string) {
 		if err := d.Start(addr); err != nil {
 			log.Printf("Warning: DNS discovery server error: %v", err)
