@@ -66,14 +66,15 @@ The documentation is organized into three main categories:
 
 ## 🏗 Concept Documentation
 
-### Enhanced Service Architecture
-- **[Concept Overview](concepts/README.md)** - High-level architecture vision
-- [Upstream Service Simulation](concepts/upstream-service-simulation.md) - Complete concept design
-- [Implementation Plan](concepts/implementation-plan.md) - Development roadmap
-- [Technical Specification](concepts/technical-specification.md) - Detailed specifications
+Current concept docs are listed under the **Concepts** section of [SUMMARY.md](SUMMARY.md#concepts). Highlights:
 
-### Development Planning
-- [Implementation Roadmap](concepts/implementation-roadmap.md) - Project phases and milestones
+- [Spotify Overview](concepts/spotify-overview.md) — mental model, Spotify Connect vs OAuth-intercept, DNS rewrite gotcha
+- [Spotify OAuth](concepts/spotify-oauth.md) — flows and management endpoints
+- [Amazon Music OAuth](concepts/amazon-music-oauth.md) — companion to Spotify OAuth; same protocol shape, different scopes
+- [Encrypted Export](concepts/ENCRYPTED-EXPORT.md) — `.age`-encrypted diagnostic bundles
+- [Request Recording](REQUEST_RECORDING_CONCEPT.md) — how the proxy captures live device traffic for parity testing
+
+Older planning artefacts ("Enhanced State Management System", "Upstream Service Simulation") live under [docs/archive/](archive/) — kept for the record, no longer current.
 
 ## 💡 Quick Reference
 
