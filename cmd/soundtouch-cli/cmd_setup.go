@@ -708,11 +708,12 @@ func setupMigrateCmd() *cli.Command {
 				return err
 			}
 
-			// For DNS-redirect methods, prove AfterTouch's DNS listener
-			// is alive by sending it a real query — that's the truth,
-			// regardless of what its settings claim.
+			m := setup.NewManager(serviceURL, nil, nil)
+
+			// For DNS-redirect methods check that AfterTouch's DNS listener
+			// is reachable — both from this machine and from the speaker.
 			if !c.Bool("skip-preflight") && (method == setup.MigrationMethodResolvConf || method == setup.MigrationMethodHosts) {
-				if err := requireAfterTouchDNSReachable(serviceURL); err != nil {
+				if err := runDNSPreflight(cfg.Host, serviceURL, m.NewSSH); err != nil {
 					PrintError(err.Error())
 					return err
 				}
@@ -729,8 +730,6 @@ func setupMigrateCmd() *cli.Command {
 			}
 
 			fmt.Printf("Migrating %s → %s using method=%s\n", cfg.Host, serviceURL, method)
-
-			m := setup.NewManager(serviceURL, nil, nil)
 
 			logs, err := m.MigrateSpeaker(cfg.Host, serviceURL, c.String("proxy-url"), nil, method)
 			if logs != "" {
@@ -793,49 +792,111 @@ func validateServiceURL(serviceURL string) error {
 	return nil
 }
 
-// requireAfterTouchDNSReachable sends a real DNS query to AfterTouch's
-// port-53 listener and confirms it responds. This is the ground-truth
-// preflight for DNS-redirect migration methods — config inspection (the
-// previous approach via GET /setup/settings) can lag the actual listener
-// state and can't tell us whether queries succeed end-to-end.
-//
-// We query a known-intercepted hostname (streaming.bose.com). Any IP in
-// the response proves AfterTouch's DNS is alive on :53; if the listener
-// is down the custom Dial just times out and the user gets a clear error.
-func requireAfterTouchDNSReachable(serviceURL string) error {
-	parsed, err := url.Parse(serviceURL)
-	if err != nil {
-		return fmt.Errorf("preflight: parse service URL %q: %w", serviceURL, err)
-	}
+// dnsCheckResult holds the outcome of one DNS reachability probe.
+type dnsCheckResult struct {
+	ok      bool
+	unknown bool   // SSH unavailable or nslookup not present — result indeterminate
+	detail  string // "works" on success, error reason otherwise
+}
 
-	host := parsed.Hostname()
-	if host == "" {
-		return fmt.Errorf("preflight: service URL %q has no hostname", serviceURL)
+func (r dnsCheckResult) label() string {
+	switch {
+	case r.ok:
+		return "✓ works"
+	case r.unknown:
+		return "? " + r.detail
+	default:
+		return "✗ " + r.detail
 	}
+}
 
+// cliDNSCheck sends a real DNS query for streaming.bose.com through the
+// AfterTouch DNS listener to verify it is alive from this machine.
+func cliDNSCheck(dnsHost string) dnsCheckResult {
 	resolver := &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			d := net.Dialer{Timeout: 3 * time.Second}
-			return d.DialContext(ctx, "udp", net.JoinHostPort(host, "53"))
+			return d.DialContext(ctx, "udp", net.JoinHostPort(dnsHost, "53"))
 		},
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	ips, err := resolver.LookupHost(ctx, "streaming.bose.com")
 	if err != nil {
-		return fmt.Errorf(
-			"preflight: DNS query to %s:53 failed: %w. AfterTouch's DNS listener is unreachable or not bound to port 53. Use --skip-preflight to bypass once you've verified DNS some other way",
-			host, err,
-		)
+		return dnsCheckResult{detail: err.Error()}
 	}
-
 	if len(ips) == 0 {
-		return fmt.Errorf("preflight: %s:53 returned no answers for streaming.bose.com — listener may be misconfigured", host)
+		return dnsCheckResult{detail: "no answers for streaming.bose.com — listener may be misconfigured"}
+	}
+	return dnsCheckResult{ok: true, detail: "works"}
+}
+
+// speakerDNSCheck SSHes into the speaker and runs nslookup streaming.bose.com
+// against the AfterTouch DNS server to verify reachability from the device.
+func speakerDNSCheck(deviceIP, dnsHost string, newSSH func(string) setup.SSHClient) dnsCheckResult {
+	addrs, err := net.LookupHost(dnsHost)
+	if err != nil || len(addrs) == 0 {
+		return dnsCheckResult{unknown: true, detail: fmt.Sprintf("cannot resolve %s locally to run speaker-side check", dnsHost)}
+	}
+	dnsIP := addrs[0]
+
+	client := newSSH(deviceIP)
+	out, sshErr := client.Run(fmt.Sprintf("nslookup streaming.bose.com %s", dnsIP))
+	if sshErr != nil {
+		if strings.Contains(out, "not found") || strings.Contains(out, "No such file") {
+			return dnsCheckResult{unknown: true, detail: "nslookup not available on speaker"}
+		}
+		if strings.Contains(sshErr.Error(), "dial") || strings.Contains(sshErr.Error(), "connect") {
+			return dnsCheckResult{unknown: true, detail: fmt.Sprintf("SSH unavailable: %s", sshErr)}
+		}
+		msg := strings.TrimSpace(out)
+		if msg == "" {
+			msg = sshErr.Error()
+		}
+		return dnsCheckResult{detail: msg}
+	}
+	return dnsCheckResult{ok: true, detail: "works"}
+}
+
+// runDNSPreflight checks AfterTouch DNS reachability from both the CLI machine
+// and the speaker, prints a table, and returns an error only when the speaker
+// side definitively cannot reach the DNS listener (CLI-only failures are
+// informational — the speaker's perspective is authoritative).
+func runDNSPreflight(deviceIP, serviceURL string, newSSH func(string) setup.SSHClient) error {
+	parsed, _ := url.Parse(serviceURL)
+	dnsHost := parsed.Hostname()
+
+	type result struct {
+		cli     dnsCheckResult
+		speaker dnsCheckResult
+	}
+	ch := make(chan result, 1)
+	go func() {
+		cliCh := make(chan dnsCheckResult, 1)
+		speakerCh := make(chan dnsCheckResult, 1)
+		go func() { cliCh <- cliDNSCheck(dnsHost) }()
+		go func() { speakerCh <- speakerDNSCheck(deviceIP, dnsHost, newSSH) }()
+		ch <- result{cli: <-cliCh, speaker: <-speakerCh}
+	}()
+	r := <-ch
+
+	if r.cli.ok && r.speaker.ok {
+		fmt.Printf("DNS preflight (%s:53)   ✓ works\n", dnsHost)
+		return nil
 	}
 
+	fmt.Printf("DNS preflight (%s:53)\n", dnsHost)
+	fmt.Printf("  CLI host  %s\n", r.cli.label())
+	fmt.Printf("  Speaker   %s\n", r.speaker.label())
+	fmt.Println()
+
+	if !r.speaker.ok && !r.speaker.unknown {
+		return fmt.Errorf("AfterTouch DNS unreachable from speaker — %s migration would fail", serviceURL)
+	}
+	if r.speaker.unknown && !r.cli.ok {
+		return fmt.Errorf("cannot confirm DNS reachability (SSH unavailable from speaker, CLI probe also failed) — use --skip-preflight to bypass")
+	}
 	return nil
 }
 
