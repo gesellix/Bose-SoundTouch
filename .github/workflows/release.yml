@@ -544,7 +544,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
 
       - name: Build and push soundtouch-service Docker image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           target: soundtouch-service
@@ -566,7 +566,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
 
       - name: Build and push soundtouch-web Docker image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           target: soundtouch-web
