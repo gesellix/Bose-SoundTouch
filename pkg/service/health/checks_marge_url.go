@@ -11,6 +11,15 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
+// FixIDAddMargeHostToTLS is the QuickFix that re-probes the speaker
+// at the target device's known IP, extracts the host portion of its
+// <margeURL>, and appends it to the persisted TLSExtraHosts in
+// settings.json. A service restart is then required for the TLS cert
+// to be regenerated. The fix lives in the handlers package because
+// it needs the datastore writer; the constant lives here so check
+// and fix share the same identifier.
+const FixIDAddMargeHostToTLS = "add_marge_host_to_tls"
+
 // CheckIDSpeakerMargeURL is the registry id of the Marge-URL
 // consistency check.
 const CheckIDSpeakerMargeURL = "speaker_marge_url"
@@ -112,11 +121,16 @@ func assessMargeURLForDeviceWithURL(account, deviceID, probeURL string, expected
 			parsed.MargeURL,
 		),
 		Details: fmt.Sprintf(
-			"Configured hosts: %s. If the speaker should reach this service via %q, restart with `--tls-extra-host=%s` so the served TLS cert covers it. Otherwise, re-migrate the speaker to the correct URL.",
+			"Configured hosts: %s. If the speaker should reach this service via %q, click the QuickFix below (or restart with `--tls-extra-host=%s`) so the served TLS cert covers it. Otherwise, re-migrate the speaker to the correct URL.",
 			joinHosts(expected), margeHost, margeHost,
 		),
+		QuickFixes: []QuickFix{{
+			ID:      FixIDAddMargeHostToTLS,
+			Label:   fmt.Sprintf("Add %s to TLS hosts", margeHost),
+			Confirm: fmt.Sprintf("This will append %s to settings.json (tls_extra_hosts) and persist it. A service restart is required afterwards for the TLS certificate to be regenerated.", margeHost),
+		}},
 		ManualCommands: []ManualCommand{{
-			Label:   "Add the speaker's expected hostname to AfterTouch's TLS cert:",
+			Label:   "Or set via CLI/env and restart:",
 			Command: fmt.Sprintf("soundtouch-service --tls-extra-host=%s …", margeHost),
 			Hint:    "Append to your existing service command-line / env (TLS_EXTRA_HOST). Requires a restart.",
 		}},

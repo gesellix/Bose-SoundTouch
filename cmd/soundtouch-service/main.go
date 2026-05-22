@@ -810,7 +810,42 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	// CLI/env args take precedence; only apply persisted credentials when not set via CLI.
 	applyPersistedMusicServiceCredentials(config, persisted)
 
+	config.tlsExtraHosts = mergeTLSExtraHosts(config.tlsExtraHosts, persisted.TLSExtraHosts)
+
 	return persisted
+}
+
+// mergeTLSExtraHosts merges the CLI/env-supplied hosts with the persisted
+// list. CLI/env wins (so an operator who pinned a host via systemd unit
+// always sees it applied); persisted values are additive. Returns a
+// deduplicated, order-preserving slice with CLI/env entries first.
+func mergeTLSExtraHosts(cli, persisted []string) []string {
+	seen := make(map[string]bool, len(cli)+len(persisted))
+	out := make([]string, 0, len(cli)+len(persisted))
+
+	for _, h := range cli {
+		h = strings.TrimSpace(h)
+		if h == "" || seen[h] {
+			continue
+		}
+
+		seen[h] = true
+
+		out = append(out, h)
+	}
+
+	for _, h := range persisted {
+		h = strings.TrimSpace(h)
+		if h == "" || seen[h] {
+			continue
+		}
+
+		seen[h] = true
+
+		out = append(out, h)
+	}
+
+	return out
 }
 
 // applyPersistedMusicServiceCredentials fills in music service credentials from persisted

@@ -197,6 +197,8 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"https_443_check_skipped":       probe443.Skipped,
 		"https_443_not_applicable":      probe443.NotApplicable,
 		"https_443_reason":              probe443.Reason,
+		"tls_extra_hosts":               s.persistedTLSExtraHosts(),
+		"tls_san_hosts":                 s.ExpectedHosts(),
 		"https_443_localhost_reachable": probe443.Localhost.Reachable,
 		"https_443_localhost_error":     probe443.Localhost.Error,
 		"https_443_lan_reachable":       probe443.LAN.Reachable,
@@ -245,6 +247,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		AmazonClientID      string         `json:"amazon_client_id"`
 		AmazonClientSecret  string         `json:"amazon_client_secret"`
 		AmazonRedirectURI   string         `json:"amazon_redirect_uri"`
+		TLSExtraHosts       *[]string      `json:"tls_extra_hosts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -324,6 +327,13 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	currentRecord := s.recordEnabled
 	currentHTTPS := s.httpsServerURL
 
+	// Resolve TLS extra hosts: nil pointer means "field omitted, preserve existing";
+	// non-nil (even empty) means "replace with this list".
+	resolvedTLSExtraHosts := s.persistedTLSExtraHosts()
+	if settings.TLSExtraHosts != nil {
+		resolvedTLSExtraHosts = normaliseTLSExtraHosts(*settings.TLSExtraHosts)
+	}
+
 	log.Printf("Saving updated settings to %s/settings.json", s.ds.DataDir)
 	err = s.ds.SaveSettings(datastore.Settings{
 		ServerURL:           s.serverURL,
@@ -344,6 +354,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		AmazonClientID:      s.amazonClientID,
 		AmazonClientSecret:  s.amazonClientSecret,
 		AmazonRedirectURI:   s.amazonRedirectURI,
+		TLSExtraHosts:       resolvedTLSExtraHosts,
 	})
 
 	dnsEnabled := s.dnsEnabled
@@ -375,6 +386,28 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+// normaliseTLSExtraHosts trims whitespace from each entry, drops empty
+// values, and deduplicates while preserving the first occurrence's
+// position. The settings endpoint applies this before persisting so the
+// stored list is always canonical.
+func normaliseTLSExtraHosts(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := make(map[string]bool, len(in))
+
+	for _, h := range in {
+		h = strings.TrimSpace(h)
+		if h == "" || seen[h] {
+			continue
+		}
+
+		seen[h] = true
+
+		out = append(out, h)
+	}
+
+	return out
 }
 
 // HandleGetDeviceInfo returns live information for a device.

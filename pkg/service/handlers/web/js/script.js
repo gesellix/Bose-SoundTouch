@@ -283,6 +283,18 @@ async function fetchSettings() {
             document.getElementById("internal-paths").value = settings.internal_paths.join("\n");
         }
 
+        if (Array.isArray(settings.tls_extra_hosts)) {
+            document.getElementById("tls-extra-hosts").value = settings.tls_extra_hosts.join("\n");
+        }
+        const effective = document.getElementById("tls-san-effective");
+        if (effective) {
+            if (Array.isArray(settings.tls_san_hosts) && settings.tls_san_hosts.length) {
+                effective.innerText = "Currently covered by TLS cert: " + settings.tls_san_hosts.join(", ");
+            } else {
+                effective.innerText = "";
+            }
+        }
+
         // Spotify credential fields
         if (settings.spotify_client_id !== undefined) {
             document.getElementById("spotify-client-id").value = settings.spotify_client_id || "";
@@ -376,6 +388,11 @@ async function updateSettings() {
         amazon_client_id: document.getElementById("amazon-client-id").value,
         amazon_client_secret: document.getElementById("amazon-client-secret").value,
         amazon_redirect_uri: document.getElementById("amazon-redirect-uri").value,
+        tls_extra_hosts: document
+            .getElementById("tls-extra-hosts")
+            .value.split("\n")
+            .map((s) => s.trim())
+            .filter((s) => s !== ""),
     };
     const status = document.getElementById("settings-status");
     status.innerText = "Saving...";

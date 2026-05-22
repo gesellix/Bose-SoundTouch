@@ -166,6 +166,36 @@
             <div id="https-443-status" style="font-size: 0.85em; margin-top: 4px; min-height: 1.2em"></div>
         </div>
         <div style="margin-bottom: 20px">
+            <strong>TLS extra hosts:</strong>
+            <span class="info-toggle" onclick="toggleInfo('tls-extra-hosts-info')">ⓘ</span>
+            <div id="tls-extra-hosts-info" class="info-details">
+                Additional DNS names or IPs the served TLS certificate
+                should cover. Speakers that talk to AfterTouch via a
+                hostname or IP not already in the cert's SAN list
+                reject the TLS handshake — typically symptom:
+                <code>CURLE_SSL_CACERT (60)</code> in the speaker
+                syslog. The
+                <code>speaker_marge_url</code> health check on the
+                Health tab detects this and offers a one-click
+                QuickFix that appends the missing host here.<br/>
+                <strong>Applying changes requires a service restart.</strong>
+                The TLS certificate is regenerated at startup from
+                the merged list of <code>--server-url</code> host,
+                <code>--https-server-url</code> host, the system
+                hostname, any <code>--tls-extra-host</code> /
+                <code>TLS_EXTRA_HOST</code> CLI/env values, and the
+                hosts persisted below.
+            </div>
+            <div style="margin-top: 5px">
+                <textarea
+                    id="tls-extra-hosts"
+                    placeholder="One host per line, e.g. 192.0.2.10 or aftertouch.lan"
+                    style="width: 360px; height: 84px; font-family: monospace; font-size: 0.9em;"
+                ></textarea>
+            </div>
+            <div id="tls-san-effective" style="font-size: 0.8em; color: #666; margin-top: 4px;"></div>
+        </div>
+        <div style="margin-bottom: 20px">
             <strong>Device Discovery:</strong>
             <div style="margin-top: 5px">
                 <label style="display: block; margin-bottom: 5px">

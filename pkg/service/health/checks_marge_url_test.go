@@ -64,6 +64,18 @@ func TestMargeURL_FlagsMismatch(t *testing.T) {
 	if !strings.Contains(cmd, "tls-extra-host=other-host.example") {
 		t.Errorf("expected --tls-extra-host suggestion, got %q", cmd)
 	}
+
+	if len(got[0].QuickFixes) != 1 || got[0].QuickFixes[0].ID != FixIDAddMargeHostToTLS {
+		t.Fatalf("expected QuickFix with ID=%s, got %+v", FixIDAddMargeHostToTLS, got[0].QuickFixes)
+	}
+
+	if !strings.Contains(got[0].QuickFixes[0].Label, "other-host.example") {
+		t.Errorf("expected QuickFix label to name the missing host, got %q", got[0].QuickFixes[0].Label)
+	}
+
+	if got[0].QuickFixes[0].Confirm == "" {
+		t.Errorf("expected QuickFix to carry a Confirm message (operator needs to know a restart is required)")
+	}
 }
 
 func TestMargeURL_SkipsWhenMargeURLEmpty(t *testing.T) {

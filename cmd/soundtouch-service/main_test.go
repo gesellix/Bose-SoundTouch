@@ -90,3 +90,64 @@ func TestApplyPersistedSettings(t *testing.T) {
 		}
 	})
 }
+
+func TestMergeTLSExtraHosts(t *testing.T) {
+	cases := []struct {
+		name      string
+		cli       []string
+		persisted []string
+		want      []string
+	}{
+		{
+			name:      "CLI only",
+			cli:       []string{"a.example"},
+			persisted: nil,
+			want:      []string{"a.example"},
+		},
+		{
+			name:      "Persisted only",
+			cli:       nil,
+			persisted: []string{"b.example"},
+			want:      []string{"b.example"},
+		},
+		{
+			name:      "CLI wins ordering, persisted appended",
+			cli:       []string{"a.example"},
+			persisted: []string{"b.example"},
+			want:      []string{"a.example", "b.example"},
+		},
+		{
+			name:      "Dedupes overlap",
+			cli:       []string{"a.example", "b.example"},
+			persisted: []string{"b.example", "c.example"},
+			want:      []string{"a.example", "b.example", "c.example"},
+		},
+		{
+			name:      "Drops empty + whitespace",
+			cli:       []string{"  ", "a.example", ""},
+			persisted: []string{"", "  b.example  "},
+			want:      []string{"a.example", "b.example"},
+		},
+		{
+			name:      "Both empty",
+			cli:       nil,
+			persisted: nil,
+			want:      []string{},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mergeTLSExtraHosts(tc.cli, tc.persisted)
+			if len(got) != len(tc.want) {
+				t.Fatalf("len mismatch: got %v, want %v", got, tc.want)
+			}
+
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("index %d: got %q, want %q (full: %v vs %v)", i, got[i], tc.want[i], got, tc.want)
+				}
+			}
+		})
+	}
+}

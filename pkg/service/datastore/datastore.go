@@ -2346,6 +2346,14 @@ type Settings struct {
 	// different host within a known-good private subnet.
 	TrustedProxyCIDRs []string `json:"trusted_proxy_cidrs,omitempty"`
 
+	// TLSExtraHosts is the persisted list of additional DNS names or IPs
+	// to include in the TLS certificate SAN list. Merged with the
+	// CLI/env --tls-extra-host values at startup (CLI/env wins; persisted
+	// values are additive and deduplicated). Applying a change requires a
+	// service restart so the TLS cert can be regenerated. Used by the
+	// `speaker_marge_url` health check's QuickFix and the Settings tab UI.
+	TLSExtraHosts []string `json:"tls_extra_hosts,omitempty"`
+
 	// TuneInStreamFormats overrides the comma-separated format list
 	// AfterTouch sends to TuneIn's Tune.ashx (formats=…). Empty value
 	// uses bmx.DefaultTuneInStreamFormats ("mp3,aac,ogg"), which

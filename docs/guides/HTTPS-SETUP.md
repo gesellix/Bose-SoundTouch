@@ -88,6 +88,15 @@ The `:443` indicator is only displayed when **AfterTouch's DNS interception is e
 
 When AfterTouch's configured `--server-url` is `http://…`, the pre-flight short-circuits to an `ℹ️ :443 reachability check not applicable` info line. Speakers that were migrated to that HTTP URL never connect to `:443`, so the iptables / setcap / reverse-proxy work is only needed if you also expect unmigrated speakers to fall back to `streaming.bose.com:443` via DNS hijack. If that's not your situation, the iptables rules above are optional.
 
+#### Adding extra hosts to the TLS certificate
+
+If speakers reach AfterTouch via a hostname or IP that isn't already covered by the served certificate, the speaker rejects the TLS handshake (typical syslog: `CURLE_SSL_CACERT (60)`). Two paths to fix this:
+
+* **One-click QuickFix on the Health tab.** The `speaker_marge_url` check detects the mismatch and offers an `Add <host> to TLS hosts` button. Clicking it appends the missing host to `settings.json` (`tls_extra_hosts`). A subsequent service restart regenerates the certificate.
+* **Settings tab → "TLS extra hosts" textarea.** Add one host per line and click Save. Same persistence path; restart required to apply. The textarea is pre-filled with the persisted list; the read-only "Currently covered by TLS cert" line below it shows the full effective SAN list (including the values from `--server-url`, `--https-server-url`, the system hostname, and any `--tls-extra-host` / `TLS_EXTRA_HOST` CLI/env entries).
+
+CLI/env values still win over persisted ones, so an operator who pinned a host via systemd unit doesn't have to migrate it into `settings.json` — the merge in `applyPersistedSettings` deduplicates while preserving order.
+
 If you intercept Bose hostnames **outside** AfterTouch (Pi-hole, router DNS rule, `/etc/hosts` on a gateway), the UI gate above will hide the indicator. The data is still in the `GET /setup/settings` JSON response (`https_443_localhost_reachable`, `https_443_lan_reachable`, `https_443_lan_host`, `https_443_not_applicable`, `https_443_reason`) if you want to inspect it directly, or you can briefly enable AfterTouch's DNS server to see the indicator render.
 
 ---

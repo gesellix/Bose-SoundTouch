@@ -145,6 +145,15 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		health.FixIDCompleteSpeakerPairing,
 		s.completeSpeakerPairingFix,
 	)
+
+	// QuickFix executor for the speaker_marge_url mismatch finding.
+	// Adds the speaker's actual margeURL host to settings.TLSExtraHosts
+	// so a subsequent restart picks it up via applyPersistedSettings.
+	s.healthRegistry.RegisterFix(
+		health.CheckIDSpeakerMargeURL,
+		health.FixIDAddMargeHostToTLS,
+		s.addMargeHostToTLSFix,
+	)
 	health.RegisterDNSSanityCheck(
 		s.healthRegistry,
 		s.GetDNSRunning,
@@ -184,6 +193,25 @@ func (s *Server) ExpectedHosts() []string {
 
 	out := make([]string, len(s.expectedHosts))
 	copy(out, s.expectedHosts)
+
+	return out
+}
+
+// persistedTLSExtraHosts returns the slice of TLS extra hosts that
+// live in settings.json. Used by HandleGetSettings to render the
+// "edit list" UI separately from the full effective SAN list
+// (ExpectedHosts also contains serverURL host, httpsServerURL host,
+// hostname, and CLI/env-pinned extras). Returns an empty slice if
+// the settings file is missing or unreadable — the caller should
+// treat that the same as "operator hasn't added anything yet".
+func (s *Server) persistedTLSExtraHosts() []string {
+	persisted, err := s.ds.GetSettings()
+	if err != nil {
+		return []string{}
+	}
+
+	out := make([]string, len(persisted.TLSExtraHosts))
+	copy(out, persisted.TLSExtraHosts)
 
 	return out
 }
