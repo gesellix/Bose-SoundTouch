@@ -169,22 +169,39 @@
             <strong>TLS extra hosts:</strong>
             <span class="info-toggle" onclick="toggleInfo('tls-extra-hosts-info')">ⓘ</span>
             <div id="tls-extra-hosts-info" class="info-details">
-                Additional DNS names or IPs the served TLS certificate
-                should cover. Speakers that talk to AfterTouch via a
-                hostname or IP not already in the cert's SAN list
-                reject the TLS handshake — typically symptom:
+                <strong>When you need this:</strong> rarely. The TLS
+                certificate already covers AfterTouch's configured
+                server URL, HTTPS URL, and the host's own name. Add
+                entries here only when a speaker can't reach
+                AfterTouch over TLS — typical symptoms include
+                presets resetting on reboot, the BoseApp showing
+                the speaker as offline, or
                 <code>CURLE_SSL_CACERT (60)</code> in the speaker
-                syslog. The
-                <code>speaker_marge_url</code> health check on the
-                Health tab detects this and offers a one-click
-                QuickFix that appends the missing host here.<br/>
-                <strong>Applying changes requires a service restart.</strong>
-                The TLS certificate is regenerated at startup from
-                the merged list of <code>--server-url</code> host,
+                syslog.<br/>
+                <strong>How to tell:</strong> open the
+                <strong>Health tab</strong> and look for
+                <code>speaker_marge_url</code> warnings. Each
+                warning names the host a speaker is pointing at;
+                clicking the <em>Add &lt;host&gt; to TLS hosts</em>
+                QuickFix fills this list for you. If that check is
+                clean, this list can stay empty.<br/>
+                <strong>Manual path:</strong> add one host per line
+                and save. The TLS certificate is regenerated at
+                startup from the merged list of
+                <code>--server-url</code> host,
                 <code>--https-server-url</code> host, the system
                 hostname, any <code>--tls-extra-host</code> /
                 <code>TLS_EXTRA_HOST</code> CLI/env values, and the
-                hosts persisted below.
+                hosts persisted here. CLI/env wins over persisted
+                on overlap.<br/>
+                <strong>Applying changes requires a service
+                restart.</strong>
+            </div>
+            <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                Usually empty. Add a host here only if the
+                <a href="#" onclick="openTab(null, 'tab-health'); return false;">Health tab</a>
+                flags a <code>speaker_marge_url</code> warning — or use
+                the one-click QuickFix on that warning to fill it for you.
             </div>
             <div style="margin-top: 5px">
                 <textarea
