@@ -4038,7 +4038,16 @@ async function downloadDiagnostic() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        if (statusEl) statusEl.textContent = `Downloaded: ${filename}`;
+        if (statusEl) {
+            const safe = filename.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            statusEl.innerHTML =
+                `Downloaded: <strong>${safe}</strong><br>` +
+                `To share it, please <strong>prefer email</strong>: ` +
+                `<a href="mailto:aftertouch-support@gesellix.net?subject=Diagnostic%20report&body=Please%20attach%20${encodeURIComponent(safe)}%20to%20this%20email.">aftertouch-support@gesellix.net</a>. ` +
+                `Alternatively, open a <a href="https://github.com/gesellix/Bose-SoundTouch/issues" target="_blank" rel="noopener">GitHub issue</a> ` +
+                `and attach the file renamed to <code>${safe}.txt</code> ` +
+                `(GitHub blocks <code>.age</code> uploads; adding <code>.txt</code> works around that).`;
+        }
     } catch (e) {
         if (statusEl) statusEl.textContent = `Failed to download diagnostic: ${e.message || e}`;
     }

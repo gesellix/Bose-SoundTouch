@@ -1511,6 +1511,19 @@
             findings that may need attention. Quick fixes are offered
             for issues the service knows how to remediate.
         </p>
+        <details style="font-size: 0.85em; color: #555; margin-bottom: 10px;">
+            <summary style="cursor: pointer;">What does the diagnostic report contain?</summary>
+            <ul style="margin: 6px 0 0 0; padding-left: 1.4em;">
+                <li>Health check results and current device state</li>
+                <li>Device XML files from the datastore (no passwords)</li>
+                <li>HTTP response samples from speaker endpoints</li>
+                <li>System files: CA bundle, DNS resolver config</li>
+                <li>Speaker CA bundle and kernel log (via SSH, if reachable)</li>
+                <li>Service log tail</li>
+                <li>Settings file with secrets redacted</li>
+            </ul>
+            <p style="margin: 6px 0 0 0;">The archive is encrypted with the project maintainer's public key — only they can open it.</p>
+        </details>
         <div id="health-generated-at" style="font-size: 0.8em; color: #888; margin-bottom: 10px;"></div>
         <div id="health-diagnostic-status" style="font-size: 0.85em; margin-bottom: 8px;"></div>
         <div id="health-findings">Loading…</div>
