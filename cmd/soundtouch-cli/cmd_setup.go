@@ -780,13 +780,16 @@ func validateServiceURL(serviceURL string) error {
 	if err != nil {
 		return fmt.Errorf("invalid --service-url %q: %w", serviceURL, err)
 	}
+
 	if parsed.Hostname() == "" {
 		hint := ""
 		if parsed.Scheme != "" && parsed.Opaque != "" {
 			hint = fmt.Sprintf(" (did you mean %s://%s?)", parsed.Scheme, strings.TrimPrefix(parsed.Opaque, "/"))
 		}
+
 		return fmt.Errorf("invalid --service-url %q: no hostname found%s", serviceURL, hint)
 	}
+
 	return nil
 }
 
@@ -1359,6 +1362,7 @@ func renderPlanSteps(steps []planStep, includePair bool) {
 		} else {
 			PrintSuccess("Speaker is already migrated. No action required.")
 		}
+
 		return
 	}
 

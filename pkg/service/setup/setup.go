@@ -601,6 +601,7 @@ func (m *Manager) isResolvConfMigrated(client SSHClient, summary *MigrationSumma
 	if targetHost == "" {
 		return false
 	}
+
 	if strings.Contains(summary.CurrentResolvConf, targetHost) && summary.CACertTrusted {
 		return true
 	}
