@@ -225,7 +225,7 @@ func (d *Service) setupUDPListener() (*net.UDPConn, error) {
 		}
 	}
 
-	log.Printf("UPnP: Created UDP listener on %s", localAddr.String())
+	logVerbose("UPnP: Created UDP listener on %s", localAddr.String())
 
 	return listener, nil
 }
@@ -274,7 +274,7 @@ func (d *Service) resolveListenInterface() (net.IP, *net.Interface, error) {
 
 func (d *Service) sendMSearch(listener *net.UDPConn, multicastAddr *net.UDPAddr) error {
 	msearchRequest := d.buildMSearchRequest()
-	log.Printf("UPnP: Sending M-SEARCH request to %s:\n%s", ssdpAddr, strings.TrimSpace(msearchRequest))
+	logVerbose("UPnP: Sending M-SEARCH request to %s:\n%s", ssdpAddr, strings.TrimSpace(msearchRequest))
 
 	bytesWritten, err := listener.WriteToUDP([]byte(msearchRequest), multicastAddr)
 	if err != nil {
@@ -282,7 +282,7 @@ func (d *Service) sendMSearch(listener *net.UDPConn, multicastAddr *net.UDPAddr)
 		return fmt.Errorf("failed to send M-SEARCH: %w", err)
 	}
 
-	log.Printf("UPnP: Successfully sent M-SEARCH request (%d bytes)", bytesWritten)
+	logVerbose("UPnP: Successfully sent M-SEARCH request (%d bytes)", bytesWritten)
 
 	return nil
 }
@@ -297,21 +297,21 @@ func (d *Service) listenForResponses(ctx context.Context, listener *net.UDPConn,
 		return 0, fmt.Errorf("failed to set read deadline: %w", err)
 	}
 
-	log.Printf("UPnP: Set read deadline to %v, now listening for responses...", deadline.Format("15:04:05.000"))
+	logVerbose("UPnP: Set read deadline to %v, now listening for responses...", deadline.Format("15:04:05.000"))
 
 	buffer := make([]byte, 4096)
 
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
-			log.Printf("UPnP: Discovery cancelled by context")
+			logVerbose("UPnP: Discovery cancelled by context")
 			return responseCount, ctx.Err()
 		default:
 			n, remoteAddr, err := listener.ReadFromUDP(buffer)
 			if err != nil {
 				var netErr net.Error
 				if errors.As(err, &netErr) && netErr.Timeout() {
-					log.Printf("UPnP: Read timeout reached after %v, stopping discovery", d.timeout)
+					logVerbose("UPnP: Read timeout reached after %v, stopping discovery", d.timeout)
 					return responseCount, nil
 				}
 
@@ -322,7 +322,7 @@ func (d *Service) listenForResponses(ctx context.Context, listener *net.UDPConn,
 
 			responseCount++
 			responseText := string(buffer[:n])
-			log.Printf("UPnP: Received response #%d (%d bytes) from %s:\n%s", responseCount, n, remoteAddr.String(), strings.TrimSpace(responseText))
+			logVerbose("UPnP: Received response #%d (%d bytes) from %s:\n%s", responseCount, n, remoteAddr.String(), strings.TrimSpace(responseText))
 
 			device, err := d.parseResponse(responseText)
 			if err != nil {
@@ -331,10 +331,10 @@ func (d *Service) listenForResponses(ctx context.Context, listener *net.UDPConn,
 			}
 
 			if device != nil {
-				log.Printf("UPnP: Successfully parsed device from response #%d: %s at %s:%d", responseCount, device.Name, device.Host, device.Port)
+				logVerbose("UPnP: Successfully parsed device from response #%d: %s at %s:%d", responseCount, device.Name, device.Host, device.Port)
 				devices[device.Host] = device
 			} else {
-				log.Printf("UPnP: Response #%d from %s did not contain a valid SoundTouch device", responseCount, remoteAddr.String())
+				logVerbose("UPnP: Response #%d from %s did not contain a valid SoundTouch device", responseCount, remoteAddr.String())
 			}
 		}
 	}
@@ -368,7 +368,7 @@ func (d *Service) buildMSearchRequest() string {
 
 // parseResponse parses UPnP SSDP response and extracts device information
 func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, error) {
-	log.Printf("UPnP: Parsing response (%d chars): %.100s...", len(response), strings.ReplaceAll(response, "\r\n", "\\r\\n"))
+	logVerbose("UPnP: Parsing response (%d chars): %.100s...", len(response), strings.ReplaceAll(response, "\r\n", "\\r\\n"))
 
 	// Try both \r\n and \n line endings
 	var lines []string
@@ -384,7 +384,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 		return nil, fmt.Errorf("invalid HTTP response")
 	}
 
-	log.Printf("UPnP: Valid HTTP response detected")
+	logVerbose("UPnP: Valid HTTP response detected")
 
 	headers := make(map[string]string)
 
@@ -402,10 +402,10 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 		}
 	}
 
-	log.Printf("UPnP: Parsed %d headers from response", len(headers))
+	logVerbose("UPnP: Parsed %d headers from response", len(headers))
 
 	for key, value := range headers {
-		log.Printf("UPnP: Header: %s = %s", key, value)
+		logVerbose("UPnP: Header: %s = %s", key, value)
 	}
 
 	// Check if it's a SoundTouch device
@@ -415,7 +415,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 		return nil, fmt.Errorf("no ST header found")
 	}
 
-	log.Printf("UPnP: Found ST header: %s", st)
+	logVerbose("UPnP: Found ST header: %s", st)
 
 	// Accept both MediaRenderer and any device type for now - we'll validate it's a SoundTouch later
 	if !strings.Contains(strings.ToLower(st), "mediarenderer") && !strings.Contains(strings.ToLower(st), "upnp:rootdevice") {
@@ -423,7 +423,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 		return nil, fmt.Errorf("not a MediaRenderer device")
 	}
 
-	log.Printf("UPnP: Device type '%s' is acceptable", st)
+	logVerbose("UPnP: Device type '%s' is acceptable", st)
 
 	location, exists := headers["location"]
 	if !exists {
@@ -431,7 +431,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 		return nil, fmt.Errorf("no location header found")
 	}
 
-	log.Printf("UPnP: Found Location header: %s", location)
+	logVerbose("UPnP: Found Location header: %s", location)
 
 	// Extract device information from location URL
 	device, err := d.parseLocationURL(location, headers["usn"])
@@ -440,19 +440,19 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 		return nil, fmt.Errorf("failed to parse location URL: %w", err)
 	}
 
-	log.Printf("UPnP: Successfully parsed device from location: %s at %s:%d", device.Name, device.Host, device.Port)
+	logVerbose("UPnP: Successfully parsed device from location: %s at %s:%d", device.Name, device.Host, device.Port)
 
 	// Try to get more device info from the location URL. Crucially this
 	// also lets us reject non-Bose UPnP MediaRenderers (LG TVs, Onkyo /
 	// Yamaha receivers, Dreambox tuners, etc.) that responded to our
 	// generic `ST: …MediaRenderer:1` M-SEARCH. See issues #269 / #359.
 	if err := d.EnrichDeviceInfo(device, location); err != nil {
-		log.Printf("UPnP: Could not enrich device info from location '%s': %v — accepting tentatively (will be re-verified by /info probe)", location, err)
+		logVerbose("UPnP: Could not enrich device info from location '%s': %v — accepting tentatively (will be re-verified by /info probe)", location, err)
 	} else if !isBoseUPnPDevice(device) {
 		log.Printf("UPnP: Rejecting non-Bose device: model=%q (manufacturer not Bose / model not SoundTouch)", device.ModelID)
 		return nil, fmt.Errorf("non-Bose UPnP device: %s", device.ModelID)
 	} else {
-		log.Printf("UPnP: Successfully enriched device info for %s (model=%q)", device.Name, device.ModelID)
+		logVerbose("UPnP: Successfully enriched device info for %s (model=%q)", device.Name, device.ModelID)
 	}
 
 	return device, nil
@@ -488,7 +488,7 @@ func isBoseUPnPDevice(device *models.DiscoveredDevice) bool {
 
 // parseLocationURL extracts basic device info from the location URL
 func (d *Service) parseLocationURL(location, usn string) (*models.DiscoveredDevice, error) {
-	log.Printf("UPnP: Parsing location URL: %s", location)
+	logVerbose("UPnP: Parsing location URL: %s", location)
 
 	// Parse the URL to extract host and port
 	re := regexp.MustCompile(`http://([^:]+):(\d+)`)
@@ -501,7 +501,7 @@ func (d *Service) parseLocationURL(location, usn string) (*models.DiscoveredDevi
 
 	host := matches[1]
 	port := 8090 // Default SoundTouch port
-	log.Printf("UPnP: Extracted host='%s', using default port=%d", host, port)
+	logVerbose("UPnP: Extracted host='%s', using default port=%d", host, port)
 
 	device := &models.DiscoveredDevice{
 		Host:            host,
@@ -520,7 +520,7 @@ func (d *Service) parseLocationURL(location, usn string) (*models.DiscoveredDevi
 
 // EnrichDeviceInfo tries to get additional device information from the device description
 func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location string) error {
-	log.Printf("UPnP: Attempting to enrich device info by fetching %s", location)
+	logVerbose("UPnP: Attempting to enrich device info by fetching %s", location)
 
 	resp, err := d.httpClient.Get(location)
 	if err != nil {
@@ -532,7 +532,7 @@ func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location str
 		_ = resp.Body.Close()
 	}()
 
-	log.Printf("UPnP: Successfully fetched device description from %s (Status: %s)", location, resp.Status)
+	logVerbose("UPnP: Successfully fetched device description from %s (Status: %s)", location, resp.Status)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -574,7 +574,7 @@ func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location str
 		device.UPnPSerial = upnpRoot.Device.SerialNumber
 	}
 
-	log.Printf("UPnP: Enriched device info: Name='%s', Manufacturer='%s', Model='%s', UPnPSerial='%s'",
+	logVerbose("UPnP: Enriched device info: Name='%s', Manufacturer='%s', Model='%s', UPnPSerial='%s'",
 		device.Name, device.Manufacturer, device.ModelID, device.UPnPSerial)
 
 	return nil

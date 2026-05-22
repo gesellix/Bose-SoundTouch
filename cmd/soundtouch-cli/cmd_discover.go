@@ -15,6 +15,11 @@ import (
 func discoverDevices(c *cli.Context) error {
 	fmt.Printf("Discovering SoundTouch devices...\n")
 
+	// CLI discovery is interactive — flip on verbose protocol logging
+	// so operators can see per-packet / per-header detail. The service
+	// binary leaves this off so its log stays terse.
+	discovery.SetVerbose(c.Bool("verbose"))
+
 	// Load configuration
 	cfg, err := config.LoadFromEnv()
 	if err != nil {

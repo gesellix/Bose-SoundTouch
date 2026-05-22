@@ -73,7 +73,7 @@ func (m *MDNSDiscoveryService) DiscoverDevices(ctx context.Context) ([]*models.D
 		}
 
 		wg.Wait()
-		log.Printf("mDNS: All %d service-type queries finished", len(soundTouchServiceTypes))
+		logVerbose("mDNS: All %d service-type queries finished", len(soundTouchServiceTypes))
 	}()
 
 	// Collect discovered devices, deduplicating by host:port since a single
@@ -93,12 +93,12 @@ func (m *MDNSDiscoveryService) DiscoverDevices(ctx context.Context) ([]*models.D
 				return devices, nil
 			}
 
-			log.Printf("mDNS: Received service entry: Name='%s', Host='%s', Port=%d, AddrV4=%v, AddrV6=%v",
+			logVerbose("mDNS: Received service entry: Name='%s', Host='%s', Port=%d, AddrV4=%v, AddrV6=%v",
 				entry.Name, entry.Host, entry.Port, entry.AddrV4, entry.AddrV6)
 
 			// Only process SoundTouch-family services.
 			if !isSoundTouchServiceName(entry.Name) {
-				log.Printf("mDNS: Skipping non-SoundTouch service: %s", entry.Name)
+				logVerbose("mDNS: Skipping non-SoundTouch service: %s", entry.Name)
 				continue
 			}
 
@@ -110,13 +110,13 @@ func (m *MDNSDiscoveryService) DiscoverDevices(ctx context.Context) ([]*models.D
 
 			key := fmt.Sprintf("%s:%d", device.Host, device.Port)
 			if seen[key] {
-				log.Printf("mDNS: Skipping duplicate device %s (already seen via another service-type query)", key)
+				logVerbose("mDNS: Skipping duplicate device %s (already seen via another service-type query)", key)
 				continue
 			}
 
 			seen[key] = true
 
-			log.Printf("mDNS: Successfully converted to device: %s at %s:%d", device.Name, device.Host, device.Port)
+			logVerbose("mDNS: Successfully converted to device: %s at %s:%d", device.Name, device.Host, device.Port)
 			devices = append(devices, device)
 		}
 	}
@@ -128,7 +128,7 @@ func (m *MDNSDiscoveryService) DiscoverDevices(ctx context.Context) ([]*models.D
 // All results stream into the shared entries channel; the caller is
 // responsible for fan-in deduplication.
 func (m *MDNSDiscoveryService) queryService(service string, entries chan<- *mdns.ServiceEntry) {
-	log.Printf("mDNS: Query '%s.%s' starting", service, soundTouchDomain)
+	logVerbose("mDNS: Query '%s.%s' starting", service, soundTouchDomain)
 
 	err := mdns.Query(&mdns.QueryParam{
 		Service:     service,
@@ -139,7 +139,7 @@ func (m *MDNSDiscoveryService) queryService(service string, entries chan<- *mdns
 		Interface:   m.getIPv4Interface(),
 	})
 	if err == nil {
-		log.Printf("mDNS: Query '%s' (IPv4) completed successfully", service)
+		logVerbose("mDNS: Query '%s' (IPv4) completed successfully", service)
 		return
 	}
 
@@ -154,14 +154,14 @@ func (m *MDNSDiscoveryService) queryService(service string, entries chan<- *mdns
 	if err != nil {
 		log.Printf("mDNS: Query '%s' (dual-stack) failed: %v", service, err)
 	} else {
-		log.Printf("mDNS: Query '%s' (dual-stack) completed successfully", service)
+		logVerbose("mDNS: Query '%s' (dual-stack) completed successfully", service)
 	}
 }
 
 // serviceEntryToDevice converts an mdns ServiceEntry to a DiscoveredDevice
 func (m *MDNSDiscoveryService) serviceEntryToDevice(entry *mdns.ServiceEntry) *models.DiscoveredDevice {
 	if entry == nil {
-		log.Printf("mDNS: Received nil service entry")
+		logVerbose("mDNS: Received nil service entry")
 		return nil
 	}
 
@@ -176,15 +176,15 @@ func (m *MDNSDiscoveryService) serviceEntryToDevice(entry *mdns.ServiceEntry) *m
 		host = entry.AddrV4.String()
 		ipSource = "IPv4"
 
-		log.Printf("mDNS: Using IPv4 address: %s", host)
+		logVerbose("mDNS: Using IPv4 address: %s", host)
 	case entry.AddrV6 != nil:
 		host = entry.AddrV6.String()
 		ipSource = "IPv6"
 
-		log.Printf("mDNS: Using IPv6 address: %s", host)
+		logVerbose("mDNS: Using IPv6 address: %s", host)
 	default:
 		// Try to resolve from hostname
-		log.Printf("mDNS: No direct IP address, trying to resolve hostname: %s", entry.Host)
+		logVerbose("mDNS: No direct IP address, trying to resolve hostname: %s", entry.Host)
 
 		ips, err := net.LookupIP(entry.Host)
 		if err != nil || len(ips) == 0 {
@@ -198,7 +198,7 @@ func (m *MDNSDiscoveryService) serviceEntryToDevice(entry *mdns.ServiceEntry) *m
 				host = ip.String()
 				ipSource = "resolved IPv4"
 
-				log.Printf("mDNS: Resolved to IPv4 address: %s", host)
+				logVerbose("mDNS: Resolved to IPv4 address: %s", host)
 
 				break
 			}
@@ -213,7 +213,7 @@ func (m *MDNSDiscoveryService) serviceEntryToDevice(entry *mdns.ServiceEntry) *m
 				ipSource = "resolved IPv6 (fallback)"
 			}
 
-			log.Printf("mDNS: Using fallback address (%s): %s", ipSource, host)
+			logVerbose("mDNS: Using fallback address (%s): %s", ipSource, host)
 		}
 	}
 
@@ -256,7 +256,7 @@ func (m *MDNSDiscoveryService) serviceEntryToDevice(entry *mdns.ServiceEntry) *m
 		MDNSService:     entry.Name,
 	}
 
-	log.Printf("mDNS: Created device '%s' at %s:%d (IP source: %s)", name, host, port, ipSource)
+	logVerbose("mDNS: Created device '%s' at %s:%d (IP source: %s)", name, host, port, ipSource)
 
 	return device
 }
@@ -277,7 +277,7 @@ func (m *MDNSDiscoveryService) getIPv4Interface() *net.Interface {
 			return nil
 		}
 
-		log.Printf("mDNS: Using configured IPv4 interface: %s", iface.Name)
+		logVerbose("mDNS: Using configured IPv4 interface: %s", iface.Name)
 
 		return iface
 	}
@@ -300,12 +300,12 @@ func (m *MDNSDiscoveryService) getIPv4Interface() *net.Interface {
 			continue
 		}
 
-		log.Printf("mDNS: Using IPv4 interface: %s", iface.Name)
+		logVerbose("mDNS: Using IPv4 interface: %s", iface.Name)
 
 		return &iface
 	}
 
-	log.Printf("mDNS: No suitable IPv4 interface found")
+	logVerbose("mDNS: No suitable IPv4 interface found")
 
 	return nil
 }

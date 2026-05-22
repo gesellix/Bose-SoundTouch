@@ -132,6 +132,11 @@ func main() {
 								Aliases: []string{"a"},
 								Usage:   "Show detailed information for all devices",
 							},
+							&cli.BoolFlag{
+								Name:    "verbose",
+								Aliases: []string{"v"},
+								Usage:   "Print per-packet/per-header SSDP and mDNS trace logs",
+							},
 						},
 					},
 				},
