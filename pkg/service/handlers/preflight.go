@@ -5,17 +5,26 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Probe443Result captures the outcome of probing a host on :443.
 // Skipped is true when the running HTTPS listener is already on :443
 // (in which case the listener itself is the proof of reachability).
+// NotApplicable is true when the operator has chosen an HTTP-only
+// deployment (configured serverURL is http://...) — speakers migrated
+// to that URL never connect to :443, so the iptables/setcap dance
+// would only matter for unmigrated speakers falling back to
+// streaming.bose.com via DNS hijack. Reason carries a short
+// human-readable explanation rendered in the UI.
 type Probe443Result struct {
-	Skipped   bool
-	Localhost ProbeOutcome
-	LAN       ProbeOutcome
-	LANHost   string
+	Skipped       bool
+	NotApplicable bool
+	Reason        string
+	Localhost     ProbeOutcome
+	LAN           ProbeOutcome
+	LANHost       string
 }
 
 // ProbeOutcome describes a single TCP-connect probe. Exactly one of
@@ -72,6 +81,14 @@ func Check443Reachability(
 		return Probe443Result{Skipped: true}
 	}
 
+	if scheme := schemeOf(serverURL); scheme == "http" {
+		return Probe443Result{
+			NotApplicable: true,
+			Reason: "AfterTouch's configured serverURL is HTTP, so migrated speakers connect over plain HTTP and never use :443. " +
+				"The iptables / setcap / reverse-proxy dance is only needed if you also expect unmigrated speakers to fall back to streaming.bose.com via DNS hijack.",
+		}
+	}
+
 	res := Probe443Result{}
 
 	if err := ProbeTCP("127.0.0.1", 443, timeout); err != nil {
@@ -95,6 +112,22 @@ func Check443Reachability(
 	}
 
 	return res
+}
+
+// schemeOf returns the lowercased URL scheme of s, or "" if s is empty or
+// unparseable. Used to decide whether the :443 reachability check is even
+// applicable to the deployment.
+func schemeOf(s string) string {
+	if s == "" {
+		return ""
+	}
+
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
+
+	return strings.ToLower(u.Scheme)
 }
 
 // PortFromHTTPSServerURL extracts the numeric port from httpsServerURL. It
@@ -129,7 +162,7 @@ func PortFromHTTPSServerURL(httpsServerURL string) int {
 // returned string ends without a trailing newline so callers may use it
 // with log.Print or log.Printf as they prefer.
 func FormatPreflightGuidance(httpsListenerPort int, res Probe443Result) string {
-	if res.Skipped {
+	if res.Skipped || res.NotApplicable {
 		return ""
 	}
 
@@ -161,6 +194,7 @@ func FormatPreflightGuidance(httpsListenerPort int, res Probe443Result) string {
 		"    1. iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port "+strconv.Itoa(httpsListenerPort),
 		"    2. setcap cap_net_bind_service=+ep <binary> and pass --https-port=443",
 		"    3. reverse proxy (nginx/caddy) terminating TLS on :443",
+		"  Caveat: do NOT add the same REDIRECT rule on the OUTPUT chain. That would catch this host's own outbound :443 traffic (browsers, `go install`, `apt-get`) and route it to AfterTouch.",
 		"  See docs/guides/HTTPS-SETUP.md for details.",
 	)
 

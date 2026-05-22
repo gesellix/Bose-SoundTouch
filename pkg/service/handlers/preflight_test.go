@@ -48,7 +48,8 @@ func TestCheck443Reachability_SkipsWhenListenerOn443(t *testing.T) {
 }
 
 func TestCheck443Reachability_ReportsResolverError(t *testing.T) {
-	res := Check443Reachability(8443, "http://broken", func(string) (string, error) {
+	// Use an HTTPS server URL so the NotApplicable short-circuit doesn't fire.
+	res := Check443Reachability(8443, "https://broken", func(string) (string, error) {
 		return "", errResolve("no DNS")
 	}, 100*time.Millisecond)
 
@@ -62,6 +63,57 @@ func TestCheck443Reachability_ReportsResolverError(t *testing.T) {
 
 	if !strings.Contains(res.LAN.Error, "cannot resolve LAN target") {
 		t.Errorf("expected LAN.Error to wrap resolver failure, got %q", res.LAN.Error)
+	}
+}
+
+func TestCheck443Reachability_NotApplicableWhenServerURLIsHTTP(t *testing.T) {
+	res := Check443Reachability(8443, "http://aftertouch.local:8000", func(string) (string, error) {
+		t.Errorf("resolver should not be called when serverURL scheme is HTTP")
+		return "", nil
+	}, 100*time.Millisecond)
+
+	if !res.NotApplicable {
+		t.Errorf("expected NotApplicable=true when serverURL is HTTP, got %+v", res)
+	}
+
+	if res.Reason == "" {
+		t.Errorf("expected NotApplicable verdict to carry a human-readable Reason, got empty")
+	}
+
+	if res.Skipped {
+		t.Errorf("Skipped should only be set when the listener is already on :443; got Skipped=true for HTTP serverURL")
+	}
+}
+
+func TestCheck443Reachability_NotApplicableTakesPrecedenceOverProbe(t *testing.T) {
+	// Even if the listener isn't on :443 and probes would fail, an HTTP
+	// serverURL should short-circuit to NotApplicable.
+	res := Check443Reachability(8443, "http://1.2.3.4:8000", func(string) (string, error) {
+		return "1.2.3.4", nil
+	}, 100*time.Millisecond)
+
+	if !res.NotApplicable {
+		t.Errorf("expected NotApplicable=true, got %+v", res)
+	}
+
+	if res.LAN.Error != "" || res.Localhost.Error != "" {
+		t.Errorf("expected no probe errors when NotApplicable short-circuits, got %+v", res)
+	}
+}
+
+func TestCheck443Reachability_HTTPSServerURLStillProbes(t *testing.T) {
+	resolverCalled := false
+	res := Check443Reachability(8443, "https://aftertouch.local:8443", func(string) (string, error) {
+		resolverCalled = true
+		return "127.0.0.1", nil
+	}, 100*time.Millisecond)
+
+	if !resolverCalled {
+		t.Errorf("resolver should be called for HTTPS serverURL")
+	}
+
+	if res.NotApplicable {
+		t.Errorf("HTTPS serverURL should not produce NotApplicable, got %+v", res)
 	}
 }
 
@@ -98,6 +150,10 @@ func TestFormatPreflightGuidance_SkippedAndAllOK(t *testing.T) {
 	if FormatPreflightGuidance(8443, bothOK) != "" {
 		t.Errorf("expected empty guidance when both probes succeed")
 	}
+
+	if FormatPreflightGuidance(8443, Probe443Result{NotApplicable: true, Reason: "HTTP only"}) != "" {
+		t.Errorf("expected empty guidance when NotApplicable (UI renders the reason separately)")
+	}
 }
 
 func TestFormatPreflightGuidance_BothFailMentionsRedirectPort(t *testing.T) {
@@ -121,6 +177,19 @@ func TestFormatPreflightGuidance_BothFailMentionsRedirectPort(t *testing.T) {
 	}
 }
 
+func TestFormatPreflightGuidance_IncludesOutputChainCaveat(t *testing.T) {
+	res := Probe443Result{
+		Localhost: ProbeOutcome{Error: "connection refused"},
+		LAN:       ProbeOutcome{Error: "connection refused"},
+		LANHost:   "192.0.2.151",
+	}
+
+	out := FormatPreflightGuidance(8443, res)
+	if !strings.Contains(out, "OUTPUT") {
+		t.Errorf("guidance must warn about the iptables OUTPUT chain side-effect, got: %s", out)
+	}
+}
+
 type errResolve string
 
 func (e errResolve) Error() string { return string(e) }
@@ -131,8 +200,9 @@ func TestCheck443Reachability_LANProbeMatchesListenerOutcome(t *testing.T) {
 	// nothing answers on :443 in test environments. The point of this test
 	// is to lock in the result-shape: when localhost:443 is closed (the
 	// default in CI), the function still returns a well-formed result and
-	// reports the resolved LAN host.
-	res := Check443Reachability(8443, "http://1.2.3.4:8000", func(string) (string, error) {
+	// reports the resolved LAN host. Uses HTTPS so the NotApplicable
+	// short-circuit doesn't fire.
+	res := Check443Reachability(8443, "https://1.2.3.4:8443", func(string) (string, error) {
 		return "1.2.3.4", nil
 	}, 200*time.Millisecond)
 

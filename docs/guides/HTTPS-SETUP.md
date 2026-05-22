@@ -58,6 +58,8 @@ Speakers expect HTTPS on the default port 443. Since binding to port 443 require
 
     The first rule covers traffic arriving from speakers; the second covers loopback connections from the host itself (useful for the in-built pre-flight probe).
 
+    > **Caveat — OUTPUT chain.** The second rule catches **all** outbound `:443` traffic from this host, including the AfterTouch host's own connections to the wider internet (browsers, `go install` against `proxy.golang.org`, `apt-get`, `git clone https://...`, etc.). Speakers reaching AfterTouch from the LAN only ever pass through `PREROUTING`. If you don't run the in-built pre-flight probe from this host, or if you've seen other software break with TLS errors after adding both rules, add only the `PREROUTING` rule and skip `OUTPUT`. The pre-flight's "localhost:443" probe will then report unreachable — that's expected and harmless.
+
 2. **Capabilities**: Grant the binary permission to bind low ports and start the listener directly on `:443`:
 
     ```bash
@@ -82,7 +84,11 @@ The same check runs once at service startup and prints a `[WARN]` log line if `:
 
 The `:443` indicator is only displayed when **AfterTouch's DNS interception is enabled** (Settings → "Enable DNS Discovery Server"). The check is only meaningful for the **DNS migration method**, where speakers reach AfterTouch via intercepted Bose hostnames and therefore on the implicit `:443`. The other migration method — writing direct `https://<host>:8443/...` URLs into the speaker's private config via SSH — uses the port that's literally in the URL, so `:443` is irrelevant and the check would only add noise.
 
-If you intercept Bose hostnames **outside** AfterTouch (Pi-hole, router DNS rule, `/etc/hosts` on a gateway), the UI gate above will hide the indicator. The data is still in the `GET /setup/settings` JSON response (`https_443_localhost_reachable`, `https_443_lan_reachable`, `https_443_lan_host`) if you want to inspect it directly, or you can briefly enable AfterTouch's DNS server to see the indicator render.
+#### Not applicable in HTTP-only deployments
+
+When AfterTouch's configured `--server-url` is `http://…`, the pre-flight short-circuits to an `ℹ️ :443 reachability check not applicable` info line. Speakers that were migrated to that HTTP URL never connect to `:443`, so the iptables / setcap / reverse-proxy work is only needed if you also expect unmigrated speakers to fall back to `streaming.bose.com:443` via DNS hijack. If that's not your situation, the iptables rules above are optional.
+
+If you intercept Bose hostnames **outside** AfterTouch (Pi-hole, router DNS rule, `/etc/hosts` on a gateway), the UI gate above will hide the indicator. The data is still in the `GET /setup/settings` JSON response (`https_443_localhost_reachable`, `https_443_lan_reachable`, `https_443_lan_host`, `https_443_not_applicable`, `https_443_reason`) if you want to inspect it directly, or you can briefly enable AfterTouch's DNS server to see the indicator render.
 
 ---
 

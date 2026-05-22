@@ -1304,7 +1304,12 @@ func runHTTPSPreflight(httpsServerURL, serverURL string, dnsEnabled bool, resolv
 
 	guidance := handlers.FormatPreflightGuidance(port, res)
 	if guidance == "" {
-		if !res.Skipped {
+		switch {
+		case res.Skipped:
+			// Listener already on :443 — nothing to say.
+		case res.NotApplicable:
+			log.Printf("HTTPS pre-flight: :443 check skipped — %s", res.Reason)
+		default:
 			log.Printf("HTTPS pre-flight: :443 reachable at localhost and %s ✓", res.LANHost)
 		}
 

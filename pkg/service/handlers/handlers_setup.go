@@ -195,6 +195,8 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"https_server_url":              httpsServerURL,
 		"https_listener_port":           httpsListenerPort,
 		"https_443_check_skipped":       probe443.Skipped,
+		"https_443_not_applicable":      probe443.NotApplicable,
+		"https_443_reason":              probe443.Reason,
 		"https_443_localhost_reachable": probe443.Localhost.Reachable,
 		"https_443_localhost_error":     probe443.Localhost.Error,
 		"https_443_lan_reachable":       probe443.LAN.Reachable,

@@ -216,6 +216,10 @@ async function fetchSettings() {
             } else if (settings.https_443_check_skipped) {
                 port443.style.color = "#2e7d32";
                 port443.innerHTML = "✅ HTTPS listener bound directly to <code>:443</code> — speakers can connect.";
+            } else if (settings.https_443_not_applicable) {
+                port443.style.color = "#1565c0";
+                port443.innerHTML = "ℹ️ <code>:443</code> reachability check not applicable. " +
+                    (settings.https_443_reason || "");
             } else {
                 const localhostOK = settings.https_443_localhost_reachable;
                 const lanOK = settings.https_443_lan_reachable;
