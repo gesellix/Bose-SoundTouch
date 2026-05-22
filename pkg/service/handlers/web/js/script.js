@@ -7,6 +7,51 @@
 // to the user — they'd be misleading without context.
 const FAST_ERROR_MS = 150;
 
+// copyTextToClipboard attempts navigator.clipboard.writeText first (modern
+// async API, requires a secure context — HTTPS or localhost). On insecure
+// contexts (plain HTTP at a LAN IP), the Clipboard API is unavailable, so
+// we fall back to the legacy document.execCommand("copy") path using a
+// throwaway off-screen textarea. Returns true on success, false on
+// failure. Both paths preserve the page's current focus.
+async function copyTextToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (e) {
+            // Fall through to the legacy path — some browsers still reject
+            // even when isSecureContext claims true (e.g. iframes without
+            // the clipboard-write permission).
+        }
+    }
+
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "absolute";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+
+    const previousActive = document.activeElement;
+    ta.select();
+
+    let ok = false;
+    try {
+        ok = document.execCommand("copy");
+    } catch (e) {
+        ok = false;
+    }
+
+    document.body.removeChild(ta);
+
+    if (previousActive && typeof previousActive.focus === "function") {
+        previousActive.focus();
+    }
+
+    return ok;
+}
+
 async function probeBrowser443(lanHost, listenerPort, statusEl, serverLocalhostOK, serverLanOK) {
     const line = document.createElement("div");
     line.style.fontSize = "0.85em";
@@ -4221,13 +4266,10 @@ function renderManualCommand(cmd) {
     copyBtn.textContent = "Copy";
     copyBtn.style.alignSelf = "flex-start";
     copyBtn.onclick = async () => {
-        try {
-            await navigator.clipboard.writeText(cmd.command);
-            const orig = copyBtn.textContent;
-            copyBtn.textContent = "Copied";
-            setTimeout(() => { copyBtn.textContent = orig; }, 1200);
-        } catch (e) {
-            copyBtn.textContent = "Copy failed";
+        const ok = await copyTextToClipboard(cmd.command);
+        copyBtn.textContent = ok ? "Copied" : "Copy failed";
+        if (ok) {
+            setTimeout(() => { copyBtn.textContent = "Copy"; }, 1200);
         }
     };
     row.appendChild(copyBtn);
@@ -4653,13 +4695,10 @@ function unreachableBlock(probe) {
         const btn = document.createElement("button");
         btn.textContent = "Copy";
         btn.onclick = async () => {
-            try {
-                await navigator.clipboard.writeText(probe.curl_command);
-                const orig = btn.textContent;
-                btn.textContent = "Copied";
-                setTimeout(() => { btn.textContent = orig; }, 1200);
-            } catch (e) {
-                btn.textContent = "Copy failed";
+            const ok = await copyTextToClipboard(probe.curl_command);
+            btn.textContent = ok ? "Copied" : "Copy failed";
+            if (ok) {
+                setTimeout(() => { btn.textContent = "Copy"; }, 1200);
             }
         };
         row.appendChild(btn);

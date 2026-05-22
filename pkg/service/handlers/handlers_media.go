@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"io/fs"
 	"net/http"
@@ -13,6 +15,58 @@ var indexHTML []byte
 
 //go:embed web/css/* web/js/* web/img/favicon-braille* web/img/favicon*
 var webFS embed.FS
+
+// indexHTMLVersioned is the HTML the root handler serves: identical to
+// indexHTML except the script.js and style.css references carry a
+// ?v=<hash> query string so the browser cache invalidates whenever
+// the asset content changes. Computed once at package init and reused
+// per-request. webAssetHash is the truncated SHA-256 over the asset
+// bodies; it's exposed for /setup/settings consumers that want to
+// build versioned URLs against /web/* from their own DOM constructors.
+var (
+	indexHTMLVersioned []byte
+	webAssetHash       string
+)
+
+func init() {
+	webAssetHash = computeWebAssetHash()
+	indexHTMLVersioned = applyAssetVersionToHTML(indexHTML, webAssetHash)
+}
+
+// computeWebAssetHash hashes the embedded script.js and style.css
+// bodies into a short stable identifier. SHA-256 truncated to 12
+// hex chars is more than enough to detect content changes across
+// release builds without bloating the URL.
+func computeWebAssetHash() string {
+	h := sha256.New()
+
+	for _, path := range []string{"web/js/script.js", "web/css/style.css"} {
+		data, err := webFS.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		_, _ = h.Write(data)
+	}
+
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
+// applyAssetVersionToHTML rewrites the script and stylesheet src/href
+// attributes in the embedded HTML to carry a ?v=<hash> query string.
+// Operates on the byte slice once at startup; HandleRoot then serves
+// the cached output verbatim per request.
+func applyAssetVersionToHTML(html []byte, hash string) []byte {
+	if hash == "" {
+		return html
+	}
+
+	out := string(html)
+	out = strings.Replace(out, `href="/web/css/style.css"`, `href="/web/css/style.css?v=`+hash+`"`, 1)
+	out = strings.Replace(out, `src="/web/js/script.js"`, `src="/web/js/script.js?v=`+hash+`"`, 1)
+
+	return []byte(out)
+}
 
 //go:embed static/media/*
 var mediaFS embed.FS
@@ -60,7 +114,7 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html")
-	_, _ = w.Write(indexHTML)
+	_, _ = w.Write(indexHTMLVersioned)
 }
 
 // HandleWeb returns a handler for serving web resources.

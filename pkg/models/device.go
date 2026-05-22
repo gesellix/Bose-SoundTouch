@@ -111,6 +111,7 @@ type DiscoveredDevice struct {
 	UPnPLocation string `json:"upnp_location,omitempty"` // UPnP device description XML URL
 	UPnPUSN      string `json:"upnp_usn,omitempty"`      // UPnP Unique Service Name
 	UPnPSerial   string `json:"upnp_serial,omitempty"`   // Serial number from UPnP (MAC address)
+	Manufacturer string `json:"manufacturer,omitempty"`  // Manufacturer from UPnP device description (used to reject non-Bose devices)
 	MDNSHostname string `json:"mdns_hostname,omitempty"` // mDNS hostname (e.g., "device.local.")
 	MDNSService  string `json:"mdns_service,omitempty"`  // mDNS service name
 	ConfigName   string `json:"config_name,omitempty"`   // Original name from config

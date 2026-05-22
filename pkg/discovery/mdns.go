@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -49,49 +50,37 @@ func (m *MDNSDiscoveryService) DiscoverDevices(ctx context.Context) ([]*models.D
 	timeoutCtx, cancel := context.WithTimeout(ctx, m.timeout)
 	defer cancel()
 
-	// Start mDNS query in a goroutine
+	// Fan out one query per SoundTouch service-type variant; mDNS has no
+	// wildcard service-type query, so we issue them in parallel and merge
+	// into a single entries channel. close(entries) only once all queries
+	// are done (or the timeout fires).
 	go func() {
 		defer close(entries)
 
-		log.Printf("mDNS: Starting discovery for service '%s.%s' with timeout %v",
-			soundTouchServiceType, soundTouchDomain, m.timeout)
+		log.Printf("mDNS: Starting discovery for %d service-type variant(s) with timeout %v",
+			len(soundTouchServiceTypes), m.timeout)
 
-		// IPv4-only query to fix "no route to host" errors on IPv6
-		// This addresses the issue where hashicorp/mdns fails with:
-		// "write udp6 [::]:port->[ff02::fb]:5353: sendto: no route to host"
-		// The trailing dot in service names is handled correctly by separating
-		// service and domain parameters as expected by the library.
-		err := mdns.Query(&mdns.QueryParam{
-			Service:     "_soundtouch._tcp",
-			Domain:      "local.",
-			Timeout:     m.timeout,
-			Entries:     entries,
-			DisableIPv6: true,                 // Force IPv4 only to avoid routing issues
-			Interface:   m.getIPv4Interface(), // Use specific interface if available
-		})
-		if err != nil {
-			log.Printf("mDNS IPv4 query failed: %v", err)
+		var wg sync.WaitGroup
 
-			// Fallback to standard query (both IPv4 and IPv6)
-			log.Printf("mDNS: Falling back to standard query...")
+		for _, service := range soundTouchServiceTypes {
+			wg.Add(1)
 
-			err = mdns.Query(&mdns.QueryParam{
-				Service: "_soundtouch._tcp",
-				Domain:  "local.",
-				Timeout: m.timeout,
-				Entries: entries,
-			})
-			if err != nil {
-				log.Printf("mDNS query completed with error: %v", err)
-			} else {
-				log.Printf("mDNS query completed successfully")
-			}
-		} else {
-			log.Printf("mDNS IPv4 query completed successfully")
+			go func(service string) {
+				defer wg.Done()
+
+				m.queryService(service, entries)
+			}(service)
 		}
+
+		wg.Wait()
+		log.Printf("mDNS: All %d service-type queries finished", len(soundTouchServiceTypes))
 	}()
 
-	// Collect discovered devices
+	// Collect discovered devices, deduplicating by host:port since a single
+	// speaker may answer multiple service types (older firmware advertises
+	// both `_soundtouch._tcp` and `_bose-soundtouch._tcp` simultaneously).
+	seen := make(map[string]bool)
+
 	for {
 		select {
 		case <-timeoutCtx.Done():
@@ -107,20 +96,65 @@ func (m *MDNSDiscoveryService) DiscoverDevices(ctx context.Context) ([]*models.D
 			log.Printf("mDNS: Received service entry: Name='%s', Host='%s', Port=%d, AddrV4=%v, AddrV6=%v",
 				entry.Name, entry.Host, entry.Port, entry.AddrV4, entry.AddrV6)
 
-			// Only process SoundTouch devices
-			if !strings.Contains(entry.Name, "_soundtouch._tcp") {
+			// Only process SoundTouch-family services.
+			if !isSoundTouchServiceName(entry.Name) {
 				log.Printf("mDNS: Skipping non-SoundTouch service: %s", entry.Name)
 				continue
 			}
 
 			device := m.serviceEntryToDevice(entry)
-			if device != nil {
-				log.Printf("mDNS: Successfully converted to device: %s at %s:%d", device.Name, device.Host, device.Port)
-				devices = append(devices, device)
-			} else {
+			if device == nil {
 				log.Printf("mDNS: Failed to convert service entry to device (no valid IP address)")
+				continue
 			}
+
+			key := fmt.Sprintf("%s:%d", device.Host, device.Port)
+			if seen[key] {
+				log.Printf("mDNS: Skipping duplicate device %s (already seen via another service-type query)", key)
+				continue
+			}
+
+			seen[key] = true
+
+			log.Printf("mDNS: Successfully converted to device: %s at %s:%d", device.Name, device.Host, device.Port)
+			devices = append(devices, device)
 		}
+	}
+}
+
+// queryService issues a single mDNS Query for the given service type
+// against the IPv4 interface first, with a graceful fallback to the
+// library's default (IPv4+IPv6) behaviour if the IPv4-only path fails.
+// All results stream into the shared entries channel; the caller is
+// responsible for fan-in deduplication.
+func (m *MDNSDiscoveryService) queryService(service string, entries chan<- *mdns.ServiceEntry) {
+	log.Printf("mDNS: Query '%s.%s' starting", service, soundTouchDomain)
+
+	err := mdns.Query(&mdns.QueryParam{
+		Service:     service,
+		Domain:      "local.",
+		Timeout:     m.timeout,
+		Entries:     entries,
+		DisableIPv6: true,
+		Interface:   m.getIPv4Interface(),
+	})
+	if err == nil {
+		log.Printf("mDNS: Query '%s' (IPv4) completed successfully", service)
+		return
+	}
+
+	log.Printf("mDNS: Query '%s' (IPv4) failed: %v — falling back to dual-stack", service, err)
+
+	err = mdns.Query(&mdns.QueryParam{
+		Service: service,
+		Domain:  "local.",
+		Timeout: m.timeout,
+		Entries: entries,
+	})
+	if err != nil {
+		log.Printf("mDNS: Query '%s' (dual-stack) failed: %v", service, err)
+	} else {
+		log.Printf("mDNS: Query '%s' (dual-stack) completed successfully", service)
 	}
 }
 

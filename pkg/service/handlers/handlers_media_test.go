@@ -185,3 +185,57 @@ func TestStaticWeb(t *testing.T) {
 		t.Errorf("Web Root Favicon: Expected status NotFound, got %v", res.Status)
 	}
 }
+
+func TestComputeWebAssetHash_StableAndShort(t *testing.T) {
+	got := computeWebAssetHash()
+	if len(got) != 12 {
+		t.Errorf("expected 12-char hash, got %d (%q)", len(got), got)
+	}
+
+	if got != computeWebAssetHash() {
+		t.Errorf("hash should be stable across calls — same embedded FS")
+	}
+
+	for _, c := range got {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			t.Errorf("hash must be lowercase hex, got %q", got)
+			break
+		}
+	}
+}
+
+func TestApplyAssetVersionToHTML_InjectsQueryString(t *testing.T) {
+	const html = `<link rel="stylesheet" href="/web/css/style.css"/>` +
+		`<script src="/web/js/script.js"></script>`
+
+	out := string(applyAssetVersionToHTML([]byte(html), "abc123"))
+
+	if !strings.Contains(out, `/web/css/style.css?v=abc123`) {
+		t.Errorf("expected style.css to carry ?v=abc123, got: %s", out)
+	}
+
+	if !strings.Contains(out, `/web/js/script.js?v=abc123`) {
+		t.Errorf("expected script.js to carry ?v=abc123, got: %s", out)
+	}
+}
+
+func TestApplyAssetVersionToHTML_EmptyHashPassthrough(t *testing.T) {
+	const html = `<script src="/web/js/script.js"></script>`
+
+	out := applyAssetVersionToHTML([]byte(html), "")
+	if string(out) != html {
+		t.Errorf("expected unchanged HTML for empty hash, got: %s", out)
+	}
+}
+
+func TestIndexHTMLVersioned_CarriesHash(t *testing.T) {
+	body := string(indexHTMLVersioned)
+
+	if !strings.Contains(body, "/web/js/script.js?v=") {
+		t.Errorf("indexHTMLVersioned must carry ?v= on script.js reference")
+	}
+
+	if !strings.Contains(body, "/web/css/style.css?v=") {
+		t.Errorf("indexHTMLVersioned must carry ?v= on style.css reference")
+	}
+}

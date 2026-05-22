@@ -133,6 +133,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterPresetsCountCheck(s.healthRegistry, ds)
 	health.RegisterPresetsConsistencyCheck(s.healthRegistry, ds)
 	health.RegisterRefreshSourcesCheck(s.healthRegistry, ds)
+	health.RegisterDefaultAccountNonBoseDevicesCheck(s.healthRegistry, ds)
 
 	// Health QuickFix executor for the empty-margeAccountUUID
 	// finding from RegisterSpeakerInfoReachable. Lives here (not in

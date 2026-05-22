@@ -442,16 +442,48 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 
 	log.Printf("UPnP: Successfully parsed device from location: %s at %s:%d", device.Name, device.Host, device.Port)
 
-	// Try to get more device info from the location URL
+	// Try to get more device info from the location URL. Crucially this
+	// also lets us reject non-Bose UPnP MediaRenderers (LG TVs, Onkyo /
+	// Yamaha receivers, Dreambox tuners, etc.) that responded to our
+	// generic `ST: …MediaRenderer:1` M-SEARCH. See issues #269 / #359.
 	if err := d.EnrichDeviceInfo(device, location); err != nil {
-		log.Printf("UPnP: Could not enrich device info from location '%s': %v", location, err)
-		// Don't fail if we can't get additional info
-		// The basic info from URL parsing should be sufficient
+		log.Printf("UPnP: Could not enrich device info from location '%s': %v — accepting tentatively (will be re-verified by /info probe)", location, err)
+	} else if !isBoseUPnPDevice(device) {
+		log.Printf("UPnP: Rejecting non-Bose device: model=%q (manufacturer not Bose / model not SoundTouch)", device.ModelID)
+		return nil, fmt.Errorf("non-Bose UPnP device: %s", device.ModelID)
 	} else {
-		log.Printf("UPnP: Successfully enriched device info for %s", device.Name)
+		log.Printf("UPnP: Successfully enriched device info for %s (model=%q)", device.Name, device.ModelID)
 	}
 
 	return device, nil
+}
+
+// isBoseUPnPDevice classifies an enriched UPnP device as Bose vs. not.
+// Returns true when either the manufacturer string contains "bose" or
+// the model name carries a SoundTouch-family marker. Case-insensitive.
+//
+// This is the discrimination point that keeps non-Bose UPnP
+// MediaRenderers (LG TVs, Onkyo receivers, Dreambox tuners) from
+// landing in the `default` account on the service side — they all
+// reply to our generic MediaRenderer:1 M-SEARCH because that URN is
+// not Bose-specific.
+func isBoseUPnPDevice(device *models.DiscoveredDevice) bool {
+	if device == nil {
+		return false
+	}
+
+	manuf := strings.ToLower(device.Manufacturer)
+	model := strings.ToLower(device.ModelID)
+
+	if strings.Contains(manuf, "bose") {
+		return true
+	}
+
+	if strings.Contains(model, "soundtouch") {
+		return true
+	}
+
+	return false
 }
 
 // parseLocationURL extracts basic device info from the location URL
@@ -515,6 +547,7 @@ func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location str
 		XMLName xml.Name `xml:"root"`
 		Device  struct {
 			FriendlyName string `xml:"friendlyName"`
+			Manufacturer string `xml:"manufacturer"`
 			ModelName    string `xml:"modelName"`
 			SerialNumber string `xml:"serialNumber"`
 		} `xml:"device"`
@@ -529,6 +562,10 @@ func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location str
 		device.Name = upnpRoot.Device.FriendlyName
 	}
 
+	if upnpRoot.Device.Manufacturer != "" {
+		device.Manufacturer = upnpRoot.Device.Manufacturer
+	}
+
 	if upnpRoot.Device.ModelName != "" {
 		device.ModelID = upnpRoot.Device.ModelName
 	}
@@ -537,8 +574,8 @@ func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location str
 		device.UPnPSerial = upnpRoot.Device.SerialNumber
 	}
 
-	log.Printf("UPnP: Enriched device info: Name='%s', Model='%s', UPnPSerial='%s'",
-		device.Name, device.ModelID, device.UPnPSerial)
+	log.Printf("UPnP: Enriched device info: Name='%s', Manufacturer='%s', Model='%s', UPnPSerial='%s'",
+		device.Name, device.Manufacturer, device.ModelID, device.UPnPSerial)
 
 	return nil
 }
