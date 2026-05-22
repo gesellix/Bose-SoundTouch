@@ -747,6 +747,22 @@ func getDomains(serverURL, httpsServerURL, hostname string, extraHosts []string)
 		domainsMap[strings.ToLower(u.Hostname())] = true
 	}
 
+	// The speaker firmware constructs the OAuth host by appending `oauth`
+	// to the first label of the streaming hostname (see issue #337 and
+	// pkg/discovery/dns.go DeriveOAuthHostnames). The DNS hijack catches
+	// it; the TLS cert must also cover it, otherwise the speaker rejects
+	// the handshake and Spotify / Amazon Music OAuth dies before reaching
+	// AfterTouch. Derive once from each of serverURL and httpsServerURL —
+	// they typically share a hostname but a multi-homed deployment may
+	// differ.
+	for _, h := range discovery.DeriveOAuthHostnames(serverURL) {
+		domainsMap[h] = true
+	}
+
+	for _, h := range discovery.DeriveOAuthHostnames(httpsServerURL) {
+		domainsMap[h] = true
+	}
+
 	// Explicit overrides / additions for multi-homed hosts, reverse proxies,
 	// or browsing the admin UI via a LAN IP that isn't part of serverURL.
 	for _, h := range extraHosts {

@@ -151,3 +151,39 @@ func TestMergeTLSExtraHosts(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDomains_IncludesOAuthDerivation(t *testing.T) {
+	// Hostname-based serverURL: the derived OAuth variant must end up
+	// in the served TLS cert SAN list, otherwise the speaker rejects
+	// the TLS handshake on Spotify / Amazon Music token refresh.
+	got := getDomains("http://mac.fritz.box:8000", "https://mac.fritz.box:8443", "mac.fritz.box", nil)
+
+	want := "macoauth.fritz.box"
+	if !contains(got, want) {
+		t.Errorf("expected SAN list to include %q (derived from serverURL), got: %v", want, got)
+	}
+}
+
+func TestGetDomains_IPServerURLProducesNoOAuthDerivation(t *testing.T) {
+	// IP-based serverURL deliberately yields no derivation (the speaker's
+	// `<first-label>oauth.<rest>` construction would be malformed for an
+	// IP and no DNS resolver can answer for it). The cert SAN list must
+	// not pretend to cover something that can never be queried.
+	got := getDomains("http://192.168.0.30:8000", "https://192.168.0.30:8443", "192.168.0.30", nil)
+
+	for _, h := range got {
+		if h == "192oauth.168.0.30" {
+			t.Errorf("SAN list must not include malformed IP-derived OAuth name, got: %v", got)
+		}
+	}
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if h == needle {
+			return true
+		}
+	}
+
+	return false
+}
