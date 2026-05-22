@@ -1548,32 +1548,36 @@
     <div id="tab-health" class="tab-content">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <h2 style="margin: 0;">Service Health Checks</h2>
-            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <button onclick="fetchHealth()">Refresh</button>
-                <button onclick="downloadDiagnostic()" title="Download an encrypted diagnostic report to share with the project maintainer">Download diagnostic report</button>
-            </div>
+            <button onclick="fetchHealth()">Refresh</button>
         </div>
         <p style="font-size: 0.9em; color: #555;">
             Runs a set of checks against the local datastore and flags
             findings that may need attention. Quick fixes are offered
             for issues the service knows how to remediate.
         </p>
-        <details style="font-size: 0.85em; color: #555; margin-bottom: 10px;">
-            <summary style="cursor: pointer;">What does the diagnostic report contain?</summary>
-            <ul style="margin: 6px 0 0 0; padding-left: 1.4em;">
-                <li>Health check results and current device state</li>
-                <li>Device XML files from the datastore (no passwords)</li>
-                <li>HTTP response samples from speaker endpoints</li>
-                <li>System files: CA bundle, DNS resolver config</li>
-                <li>Speaker CA bundle and kernel log (via SSH, if reachable)</li>
-                <li>Service log tail</li>
-                <li>Settings file with secrets redacted</li>
-            </ul>
-            <p style="margin: 6px 0 0 0;">The archive is encrypted with the project maintainer's public key — only they can open it.</p>
-        </details>
         <div id="health-generated-at" style="font-size: 0.8em; color: #888; margin-bottom: 10px;"></div>
-        <div id="health-diagnostic-status" style="font-size: 0.85em; margin-bottom: 8px;"></div>
         <div id="health-findings">Loading…</div>
+
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <button onclick="downloadDiagnostic()" title="Download an encrypted diagnostic report to share with the project maintainer">Download diagnostic report</button>
+                <span style="font-size: 0.9em; color: #555;">Share a diagnostic snapshot with the project maintainer.</span>
+            </div>
+            <details style="font-size: 0.85em; color: #555; margin-top: 8px;">
+                <summary style="cursor: pointer;">What does the diagnostic report contain?</summary>
+                <ul style="margin: 6px 0 0 0; padding-left: 1.4em;">
+                    <li>Health check results and current device state</li>
+                    <li>Device XML files from the datastore (no passwords)</li>
+                    <li>HTTP response samples from speaker endpoints</li>
+                    <li>System files: CA bundle, DNS resolver config</li>
+                    <li>Speaker CA bundle and kernel log (via SSH, if reachable)</li>
+                    <li>Service log tail</li>
+                    <li>Settings file with secrets redacted</li>
+                </ul>
+                <p style="margin: 6px 0 0 0;">The archive is encrypted with the project maintainer's public key — only they can open it.</p>
+            </details>
+            <div id="health-diagnostic-status" style="font-size: 0.85em; margin-top: 8px;"></div>
+        </div>
     </div>
 
     <!-- Tab 8: Logs -->
