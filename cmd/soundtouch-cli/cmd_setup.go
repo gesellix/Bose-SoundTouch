@@ -48,6 +48,7 @@ func setupCommand() *cli.Command {
 			setupWaitAPCmd(),
 			setupWaitOnlineCmd(),
 			setupSSHCheckCmd(),
+			setupRemoteServicesCmd(),
 			setupInstallCACmd(),
 			setupMigrateCmd(),
 			setupRebootCmd(),
@@ -530,6 +531,51 @@ func setupSSHCheckCmd() *cli.Command {
 			_ = conn.Close()
 
 			PrintSuccess("Port 22 is open — SSH is reachable.")
+
+			return nil
+		},
+	}
+}
+
+func setupRemoteServicesCmd() *cli.Command {
+	return &cli.Command{
+		Name:   "remote-services",
+		Usage:  "Enable (default) or disable the remote_services SSH-enablement marker on the speaker",
+		Before: RequireHost,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "remove",
+				Usage: "Remove all remote_services marker files (disables SSH after next reboot)",
+			},
+		},
+		Action: func(c *cli.Context) error {
+			cfg := GetClientConfig(c)
+			m := setup.NewManager("", nil, nil)
+
+			var (
+				logs string
+				err  error
+			)
+			if c.Bool("remove") {
+				logs, err = m.RemoveRemoteServices(cfg.Host)
+			} else {
+				logs, err = m.EnsureRemoteServices(cfg.Host)
+			}
+
+			if logs != "" {
+				fmt.Print(logs)
+			}
+
+			if err != nil {
+				PrintError(err.Error())
+				return err
+			}
+
+			if c.Bool("remove") {
+				PrintSuccess("remote_services removed — SSH will no longer be enabled after next reboot")
+			} else {
+				PrintSuccess("remote_services enabled at a persistent location")
+			}
 
 			return nil
 		},
@@ -1211,6 +1257,10 @@ func renderPlanState(deviceIP string, inspect *setup.InspectReport, summary *set
 		check(summary.IsPaired), check(summary.IsMigrated),
 		yesNo(summary.TelnetMigrated), yesNo(summary.XMLMigrated),
 		yesNo(summary.HostsMigrated), yesNo(summary.ResolvMigrated))
+
+	if summary.RemoteServicesEnabled && !summary.RemoteServicesPersistent {
+		fmt.Println("  [⚠] remote_services   enabled but not persistent (will be lost on reboot)")
+	}
 }
 
 func firmwareOf(info *setup.DeviceInfoXML) string {
@@ -1253,7 +1303,19 @@ func buildPlanSteps(
 		host = "<NEW_IP>" // subsequent commands target the discovered IP
 	}
 
-	if !reset && summary != nil && summary.IsMigrated && (!includePair || summary.IsPaired) {
+	// Persist remote_services before anything else when it's only in /tmp.
+	// SSH is reachable now, but the marker would be lost on the next reboot —
+	// which could happen mid-migration if power is cut or the reboot step runs
+	// before persistence is confirmed.
+	if !reset && summary != nil && summary.RemoteServicesEnabled && !summary.RemoteServicesPersistent {
+		steps = append(steps, planStep{
+			title:  "Persist remote_services so SSH survives a reboot",
+			cmd:    fmt.Sprintf("soundtouch-cli --host=%s setup remote-services", host),
+			reason: "Marker is currently in /tmp only — lost on next reboot, which would break SSH mid-migration.",
+		})
+	}
+
+	if !reset && summary != nil && summary.IsMigrated && (!includePair || summary.IsPaired) && len(steps) == 0 {
 		return steps
 	}
 
