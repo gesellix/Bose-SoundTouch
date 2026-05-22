@@ -39,6 +39,50 @@ func TestIsTelnetMigrated_EmptyVerifiedConfig(t *testing.T) {
 	}
 }
 
+// TestIsXMLMigrated_MalformedServiceURL guards against the false-positive that
+// occurs when --service-url is a malformed URL with an empty hostname (e.g.
+// "https:/host" instead of "https://host"). url.Parse succeeds but Hostname()
+// returns "", and strings.Contains(anything, "") is always true in Go.
+func TestIsXMLMigrated_MalformedServiceURL(t *testing.T) {
+	m := &Manager{ServerURL: "https:/soundtouch.fritz.box"} // single slash — malformed
+
+	summary := &MigrationSummary{
+		ParsedCurrentConfig: &PrivateCfg{
+			MargeServerUrl: "https://streaming.bose.com",
+		},
+	}
+
+	if m.isXMLMigrated(summary) {
+		t.Error("isXMLMigrated = true, want false when ServerURL has no resolvable hostname")
+	}
+}
+
+// TestCheckIsMigrated_MalformedServiceURL ensures a malformed --service-url
+// does not produce IsMigrated=true on an unmigrated speaker.
+func TestCheckIsMigrated_MalformedServiceURL(t *testing.T) {
+	m := &Manager{
+		ServerURL: "https:/soundtouch.fritz.box", // single slash — malformed
+		NewSSH: func(string) SSHClient {
+			return &mockSSH{runFunc: func(string) (string, error) { return "", errors.New("unused") }}
+		},
+	}
+
+	summary := &MigrationSummary{
+		SSHSuccess:           true,
+		TelnetVerifiedConfig: "", // empty — not migrated via telnet either
+		ParsedCurrentConfig: &PrivateCfg{
+			MargeServerUrl: "https://streaming.bose.com",
+		},
+		CurrentResolvConf: "nameserver 8.8.8.8\n",
+	}
+
+	m.checkIsMigrated(summary, "192.0.2.1")
+
+	if summary.IsMigrated {
+		t.Error("IsMigrated = true, want false when service URL is malformed and speaker still points at streaming.bose.com")
+	}
+}
+
 // TestCheckIsMigrated_TelnetOnlyMigratedDevice covers the gap that motivated
 // this iteration: SSH is unreachable, but the speaker has been pointed at
 // our service via telnet (e.g. a firmware that refuses USB unlock). The

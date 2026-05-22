@@ -549,6 +549,11 @@ func setupInstallCACmd() *cli.Command {
 			cfg := GetClientConfig(c)
 			serviceURL := strings.TrimRight(c.String("service-url"), "/")
 
+			if err := validateServiceURL(serviceURL); err != nil {
+				PrintError(err.Error())
+				return err
+			}
+
 			certPEM, err := fetchCACert(serviceURL, c.String("auth"))
 			if err != nil {
 				PrintError(err.Error())
@@ -698,6 +703,11 @@ func setupMigrateCmd() *cli.Command {
 			method := setup.MigrationMethod(c.String("method"))
 			serviceURL := c.String("service-url")
 
+			if err := validateServiceURL(serviceURL); err != nil {
+				PrintError(err.Error())
+				return err
+			}
+
 			// For DNS-redirect methods, prove AfterTouch's DNS listener
 			// is alive by sending it a real query — that's the truth,
 			// regardless of what its settings claim.
@@ -762,6 +772,24 @@ func preInstallCAForCLI(deviceIP, serviceURL string) error {
 	return nil
 }
 
+// validateServiceURL returns an error if serviceURL cannot be parsed or has no
+// hostname. A common mistake is a single-slash scheme (https:/host instead of
+// https://host); the error message hints at the correction in that case.
+func validateServiceURL(serviceURL string) error {
+	parsed, err := url.Parse(serviceURL)
+	if err != nil {
+		return fmt.Errorf("invalid --service-url %q: %w", serviceURL, err)
+	}
+	if parsed.Hostname() == "" {
+		hint := ""
+		if parsed.Scheme != "" && parsed.Opaque != "" {
+			hint = fmt.Sprintf(" (did you mean %s://%s?)", parsed.Scheme, strings.TrimPrefix(parsed.Opaque, "/"))
+		}
+		return fmt.Errorf("invalid --service-url %q: no hostname found%s", serviceURL, hint)
+	}
+	return nil
+}
+
 // requireAfterTouchDNSReachable sends a real DNS query to AfterTouch's
 // port-53 listener and confirms it responds. This is the ground-truth
 // preflight for DNS-redirect migration methods — config inspection (the
@@ -821,6 +849,11 @@ func setupVerifyCmd() *cli.Command {
 		Action: func(c *cli.Context) error {
 			cfg := GetClientConfig(c)
 			serviceURL := c.String("service-url")
+
+			if err := validateServiceURL(serviceURL); err != nil {
+				PrintError(err.Error())
+				return err
+			}
 
 			m := setup.NewManager(serviceURL, nil, nil)
 
@@ -1013,6 +1046,11 @@ func setupPlanCmd() *cli.Command {
 			wifiSSID := c.String("wifi-ssid")
 			includePair := c.Bool("include-pair")
 
+			if err := validateServiceURL(serviceURL); err != nil {
+				PrintError(err.Error())
+				return err
+			}
+
 			m := setup.NewManager(serviceURL, nil, nil)
 
 			fmt.Printf("Probing %s …\n\n", cfg.Host)
@@ -1036,7 +1074,7 @@ func setupPlanCmd() *cli.Command {
 				renderPreResetNote()
 			}
 
-			renderPlanSteps(steps)
+			renderPlanSteps(steps, includePair)
 
 			return nil
 		},
@@ -1146,7 +1184,7 @@ func buildPlanSteps(
 	if includePair && (reset || (summary != nil && !summary.IsPaired)) {
 		steps = append(steps, planStep{
 			title:  "Pair the device with an AfterTouch account",
-			cmd:    fmt.Sprintf("soundtouch-cli setup pair --host=%s --service-url=%s", host, serviceURL),
+			cmd:    fmt.Sprintf("soundtouch-cli --host=%s setup pair --service-url=%s", host, serviceURL),
 			reason: "Required for preset persistence, streaming services, multi-room zones.",
 		})
 	}
@@ -1178,7 +1216,7 @@ func resetSteps(host, wifiSSID string, inspect *setup.InspectReport) []planStep 
 	return []planStep{
 		{
 			title:  "Factory-reset the speaker",
-			cmd:    fmt.Sprintf("soundtouch-cli setup factory-reset --host=%s", host),
+			cmd:    fmt.Sprintf("soundtouch-cli --host=%s setup factory-reset", host),
 			reason: "Wipes account pairing, presets, Wi-Fi — gives a clean baseline for the SETUP state machine.",
 		},
 		{
@@ -1236,20 +1274,20 @@ func migrationSteps(host, serviceURL string, summary *setup.MigrationSummary, re
 	if dnsRedirect && summary != nil && !summary.CACertTrusted {
 		steps = append(steps, planStep{
 			title:  "Install AfterTouch's CA cert on the speaker",
-			cmd:    fmt.Sprintf("soundtouch-cli setup install-ca --host=%s --service-url=%s", host, serviceURL),
+			cmd:    fmt.Sprintf("soundtouch-cli --host=%s setup install-ca --service-url=%s", host, serviceURL),
 			reason: "DNS-redirect methods keep using https://*.bose.com URLs — the device needs to trust AfterTouch's cert.",
 		})
 	}
 
 	steps = append(steps, planStep{
 		title:  fmt.Sprintf("Apply URL migration using method=%s", method),
-		cmd:    fmt.Sprintf("soundtouch-cli setup migrate --host=%s --service-url=%s --method=%s", host, serviceURL, method),
+		cmd:    fmt.Sprintf("soundtouch-cli --host=%s setup migrate --service-url=%s --method=%s", host, serviceURL, method),
 		reason: methodReason,
 	})
 
 	steps = append(steps, planStep{
 		title:  "Reboot the speaker",
-		cmd:    fmt.Sprintf("soundtouch-cli setup reboot --host=%s", host),
+		cmd:    fmt.Sprintf("soundtouch-cli --host=%s setup reboot", host),
 		reason: "The envswitch parallel-persistence layer only fully wins on next boot; reboot now to lock the new URLs in before pairing.",
 	})
 
@@ -1314,9 +1352,13 @@ func renderPreResetNote() {
 	fmt.Println()
 }
 
-func renderPlanSteps(steps []planStep) {
+func renderPlanSteps(steps []planStep, includePair bool) {
 	if len(steps) == 0 {
-		PrintSuccess("Speaker is already migrated and paired. No action required.")
+		if includePair {
+			PrintSuccess("Speaker is already migrated and paired. No action required.")
+		} else {
+			PrintSuccess("Speaker is already migrated. No action required.")
+		}
 		return
 	}
 

@@ -543,6 +543,9 @@ func (m *Manager) isXMLMigrated(summary *MigrationSummary) bool {
 	}
 
 	targetHost := parsedTarget.Hostname()
+	if targetHost == "" {
+		return false
+	}
 
 	return strings.Contains(summary.ParsedCurrentConfig.MargeServerUrl, targetHost) ||
 		strings.Contains(summary.ParsedCurrentConfig.StatsServerUrl, targetHost) ||
@@ -595,6 +598,9 @@ func (m *Manager) isResolvConfMigrated(client SSHClient, summary *MigrationSumma
 	}
 
 	targetHost := parsedTarget.Hostname()
+	if targetHost == "" {
+		return false
+	}
 	if strings.Contains(summary.CurrentResolvConf, targetHost) && summary.CACertTrusted {
 		return true
 	}
