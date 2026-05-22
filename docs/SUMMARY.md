@@ -53,8 +53,10 @@
 
 ## Concepts
 * [Request Recording](REQUEST_RECORDING_CONCEPT.md)
+* [Spotify Overview](concepts/spotify-overview.md)
 * [Spotify Priming Strategy](concepts/spotify-priming-strategy.md)
 * [Spotify OAuth](concepts/spotify-oauth.md)
+* [Amazon Music OAuth](concepts/amazon-music-oauth.md)
 * [Encrypted Export](concepts/ENCRYPTED-EXPORT.md)
 * [Diagnostic Export (Maintainer Setup)](DIAGNOSTIC-EXPORT.md)
 * [soundtouch-web Roadmap](soundtouch-web-roadmap.md)
