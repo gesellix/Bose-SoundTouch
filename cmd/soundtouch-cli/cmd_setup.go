@@ -820,15 +820,19 @@ func cliDNSCheck(dnsHost string) dnsCheckResult {
 			return d.DialContext(ctx, "udp", net.JoinHostPort(dnsHost, "53"))
 		},
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	ips, err := resolver.LookupHost(ctx, "streaming.bose.com")
 	if err != nil {
 		return dnsCheckResult{detail: err.Error()}
 	}
+
 	if len(ips) == 0 {
 		return dnsCheckResult{detail: "no answers for streaming.bose.com — listener may be misconfigured"}
 	}
+
 	return dnsCheckResult{ok: true, detail: "works"}
 }
 
@@ -839,23 +843,29 @@ func speakerDNSCheck(deviceIP, dnsHost string, newSSH func(string) setup.SSHClie
 	if err != nil || len(addrs) == 0 {
 		return dnsCheckResult{unknown: true, detail: fmt.Sprintf("cannot resolve %s locally to run speaker-side check", dnsHost)}
 	}
+
 	dnsIP := addrs[0]
 
 	client := newSSH(deviceIP)
+
 	out, sshErr := client.Run(fmt.Sprintf("nslookup streaming.bose.com %s", dnsIP))
 	if sshErr != nil {
 		if strings.Contains(out, "not found") || strings.Contains(out, "No such file") {
 			return dnsCheckResult{unknown: true, detail: "nslookup not available on speaker"}
 		}
+
 		if strings.Contains(sshErr.Error(), "dial") || strings.Contains(sshErr.Error(), "connect") {
 			return dnsCheckResult{unknown: true, detail: fmt.Sprintf("SSH unavailable: %s", sshErr)}
 		}
+
 		msg := strings.TrimSpace(out)
 		if msg == "" {
 			msg = sshErr.Error()
 		}
+
 		return dnsCheckResult{detail: msg}
 	}
+
 	return dnsCheckResult{ok: true, detail: "works"}
 }
 
@@ -871,14 +881,18 @@ func runDNSPreflight(deviceIP, serviceURL string, newSSH func(string) setup.SSHC
 		cli     dnsCheckResult
 		speaker dnsCheckResult
 	}
+
 	ch := make(chan result, 1)
 	go func() {
 		cliCh := make(chan dnsCheckResult, 1)
 		speakerCh := make(chan dnsCheckResult, 1)
+
 		go func() { cliCh <- cliDNSCheck(dnsHost) }()
 		go func() { speakerCh <- speakerDNSCheck(deviceIP, dnsHost, newSSH) }()
+
 		ch <- result{cli: <-cliCh, speaker: <-speakerCh}
 	}()
+
 	r := <-ch
 
 	if r.cli.ok && r.speaker.ok {
@@ -894,9 +908,11 @@ func runDNSPreflight(deviceIP, serviceURL string, newSSH func(string) setup.SSHC
 	if !r.speaker.ok && !r.speaker.unknown {
 		return fmt.Errorf("AfterTouch DNS unreachable from speaker — %s migration would fail", serviceURL)
 	}
+
 	if r.speaker.unknown && !r.cli.ok {
 		return fmt.Errorf("cannot confirm DNS reachability (SSH unavailable from speaker, CLI probe also failed) — use --skip-preflight to bypass")
 	}
+
 	return nil
 }
 
