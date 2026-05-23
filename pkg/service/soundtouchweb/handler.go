@@ -1038,6 +1038,11 @@ func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
 		ContainerArt: req.ContainerArt,
 		IsPresetable: req.IsPresetable,
 	}
+	// Only pass SourceAccount when it's a real credential, not the placeholder
+	// value that speakers echo back (source name == source account, e.g. "TUNEIN").
+	if req.SourceAccount != "" && req.SourceAccount != req.Source {
+		contentItem.SourceAccount = req.SourceAccount
+	}
 
 	if err := device.Client.SelectContentItem(contentItem); err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
