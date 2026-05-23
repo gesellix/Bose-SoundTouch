@@ -581,6 +581,8 @@ img { display: block; max-width: 100%; }
     transition: background .15s, border-color .15s;
 }
 .tunein-play-btn:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.tunein-section-name { font-size: .85rem; font-weight: 600; color: var(--text-dim); padding: 8px 0 2px; margin: 0; }
+.tunein-load-more { margin: 4px 0 12px; }
 
 /* ── Device picker overlay ───────────────────────────────────────────────── */
 .overlay {

@@ -361,6 +361,24 @@ func tuneInSearchSection(item map[string]interface{}, idx int, query, layout str
 		}
 	}
 
+	// Pivots.More.Url is the "load more" cursor from the TuneIn profiles API.
+	// It is only present when there are more results beyond the first page.
+	if pivots, ok := item["Pivots"].(map[string]interface{}); ok {
+		if more, ok := pivots["More"].(map[string]interface{}); ok {
+			if containerURL, _ := more["Url"].(string); strings.Contains(containerURL, "itemToken") {
+				if u, err := url.Parse(containerURL); err == nil && allowedTuneInHosts[u.Hostname()] {
+					encoded := base64.RawURLEncoding.EncodeToString([]byte(containerURL))
+
+					if section.Links == nil {
+						section.Links = &models.Links{}
+					}
+
+					section.Links.BmxNext = &models.Link{Href: "/v1/search/next?cursor=" + encoded}
+				}
+			}
+		}
+	}
+
 	for _, child := range children {
 		cm, ok := child.(map[string]interface{})
 		if !ok {
@@ -384,6 +402,58 @@ func tuneInSearchSection(item map[string]interface{}, idx int, query, layout str
 	}
 
 	return section
+}
+
+// TuneInSearchNext fetches the remaining results for a section using the opaque
+// cursor produced by TuneInSearch. The cursor URL returns a flat Items[] list
+// (not nested containers), so we parse items directly rather than via
+// tuneInSearchSection. TuneIn typically returns all remaining results in one
+// shot; Paging is empty and no further cursor is generated.
+func TuneInSearchNext(encodedCursor string) (*models.BmxNavResponse, error) {
+	cursorBytes, err := base64.RawURLEncoding.DecodeString(encodedCursor)
+	if err != nil {
+		return nil, fmt.Errorf("invalid cursor: %w", err)
+	}
+
+	cursorURL := string(cursorBytes)
+
+	u, err := url.Parse(cursorURL)
+	if err != nil || !allowedTuneInHosts[u.Hostname()] {
+		return nil, fmt.Errorf("cursor URL not allowed")
+	}
+
+	data, err := fetchJSON(cursorURL)
+	if err != nil {
+		return nil, err
+	}
+
+	rawItems, ok := data["Items"].([]interface{})
+	if !ok {
+		rawItems, _ = data["body"].([]interface{})
+	}
+
+	navItems := make([]models.BmxNavItem, 0, len(rawItems))
+	for _, raw := range rawItems {
+		m, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		typeStr, _ := m["Type"].(string)
+		switch typeStr {
+		case "Station", "PlayItem", "Topic":
+			navItems = append(navItems, tuneInSearchPlayItem(m))
+		case "Program", "Profile":
+			navItems = append(navItems, tuneInSearchProfile(m, ""))
+		}
+	}
+
+	return &models.BmxNavResponse{
+		Layout: "classic",
+		BmxSections: []models.BmxNavSection{
+			{Items: navItems, Layout: "grid"},
+		},
+	}, nil
 }
 
 func tuneInSearchPlayItem(item map[string]interface{}) models.BmxNavItem {

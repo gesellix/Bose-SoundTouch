@@ -50,6 +50,7 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 
 	// TuneIn browse, search, and playback
 	r.Get("/api/tunein/search", app.HandleTuneInSearch)
+	r.Get("/api/tunein/search/next", app.HandleTuneInSearchNext)
 	r.Get("/api/tunein/navigate", app.HandleTuneInNavigate)
 	r.Get("/api/tunein/navigate/*", app.HandleTuneInNavigate)
 	r.Post("/api/tunein/play/{id}", app.HandlePlayTuneIn)

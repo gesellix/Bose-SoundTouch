@@ -290,6 +290,33 @@ func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleTuneInSearchNext returns the next page of TuneIn search results using
+// an opaque cursor produced by HandleTuneInSearch.
+func (s *Server) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
+			r.URL.Path, r.UserAgent())
+	}
+
+	cursor := r.URL.Query().Get("cursor")
+	if cursor == "" {
+		http.Error(w, "cursor parameter required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := bmx.TuneInSearchNext(cursor)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 // HandleTuneInFavorite handles POST /bmx/tunein/v1/favorite/{stationID}.
 func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
 	stationID := chi.URLParam(r, "stationID")

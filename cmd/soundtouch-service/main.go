@@ -1005,6 +1005,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 			r.Get("/v1/navigate", server.HandleTuneInNavigate)
 			r.Get("/v1/navigate/*", server.HandleTuneInNavigate)
 			r.Get("/v1/search", server.HandleTuneInSearch)
+			r.Get("/v1/search/next", server.HandleTuneInSearchNext)
 			r.Post("/v1/favorite/{stationID}", server.HandleTuneInFavorite)
 			r.Delete("/v1/favorite/{stationID}", server.HandleTuneInDeleteFavorite)
 		})

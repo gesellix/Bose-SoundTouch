@@ -36,6 +36,7 @@ type Links struct {
 	BmxSearch               *Link `json:"bmx_search,omitempty" xml:"-"`
 	BmxPlayback             *Link `json:"bmx_playback,omitempty" xml:"-"`
 	BmxPreset               *Link `json:"bmx_preset,omitempty" xml:"-"`
+	BmxNext                 *Link `json:"bmx_next,omitempty" xml:"-"`
 }
 
 // BmxNavItem represents a single item in a TuneIn browse or search result.

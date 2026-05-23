@@ -638,6 +638,27 @@ func (app *WebApp) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleTuneInSearchNext returns the next page of TuneIn search results using an opaque cursor.
+func (app *WebApp) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request) {
+	cursor := r.URL.Query().Get("cursor")
+	if cursor == "" {
+		app.sendError(w, "cursor parameter required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := bmxpkg.TuneInSearchNext(cursor)
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: resp}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 // HandleTuneInNavigate handles TuneIn browse/navigate requests, proxying directly to the bmx package.
 // Supported path suffixes (relative to /api/tunein/navigate):
 //   - (empty)                             → top-level browse

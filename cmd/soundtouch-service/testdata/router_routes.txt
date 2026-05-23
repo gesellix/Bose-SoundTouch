@@ -31,6 +31,7 @@ GET      /bmx/tunein/v1/playback/episode/{podcastID}                  handlers.(
 GET      /bmx/tunein/v1/playback/episodes/{podcastID}                 handlers.(*Server).HandleTuneInPodcastInfo-fm
 GET      /bmx/tunein/v1/playback/station/{stationID}                  handlers.(*Server).HandleTuneInPlayback-fm
 GET      /bmx/tunein/v1/search                                        handlers.(*Server).HandleTuneInSearch-fm
+GET      /bmx/tunein/v1/search/next                                   handlers.(*Server).HandleTuneInSearchNext-fm
 GET      /ced/*                                                       handlers.(*Server).HandleCedStatic
 GET      /core02/svc-bmx-adapter-orion/prod/orion/station             handlers.(*Server).HandleOrionPlayback-fm
 GET      /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter handlers.(*Server).HandleSiriusXMLiveAdapter-fm

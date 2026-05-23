@@ -30,6 +30,7 @@ export const api = {
     }),
     tuneInBrowse: (path) => req(path ? `/api/tunein/navigate/${path}` : '/api/tunein/navigate'),
     tuneInSearch: (q) => req(`/api/tunein/search?q=${encodeURIComponent(q)}`),
+    tuneInSearchNext: (cursor) => req(`/api/tunein/search/next?cursor=${encodeURIComponent(cursor)}`),
     control: (id, action, presetId) => req(`/api/control/${id}/${action}?id=${presetId}`),
     selectSource: (id, source, account) => req(`/api/control/${id}/source?name=${encodeURIComponent(source)}&account=${encodeURIComponent(account || '')}`),
     tuneInPlay: (deviceId, item) => req(`/api/tunein/play/${deviceId}`, {
