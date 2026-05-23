@@ -382,6 +382,7 @@ async function fetchSettings() {
 
         fetchLoggingSettings();
         fetchSpotifyStatus();
+        return settings;
     } catch (error) {
         console.error("Failed to fetch settings", error);
     }
@@ -1665,8 +1666,10 @@ function formatXML(xml) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    fetchSettings();
-    triggerDiscovery();
+    const cfg = await fetchSettings();
+    if (cfg?.discovery_enabled !== false) {
+        triggerDiscovery();
+    }
     fetchVersion();
     await fetchDevices();
 
@@ -4051,10 +4054,12 @@ async function applyCustomPlan() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     fetchDevices();
-    fetchSettings();
-    triggerDiscovery();
+    const cfg = await fetchSettings();
+    if (cfg?.discovery_enabled !== false) {
+        triggerDiscovery();
+    }
 });
 
 // ---------------------------------------------------------------------------
