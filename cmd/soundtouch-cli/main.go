@@ -1146,6 +1146,12 @@ func main() {
 						Action: introspectAllServices,
 						Before: RequireHost,
 					},
+					{
+						Name:   "notify-updated",
+						Usage:  "Tell the speaker to re-fetch its source list from AfterTouch",
+						Action: notifySourcesUpdated,
+						Before: RequireHost,
+					},
 				},
 			},
 			// Bass commands
@@ -2237,6 +2243,10 @@ func main() {
 	// Speaker provisioning (factory-reset, Wi-Fi, URL rewrite, pairing).
 	// Defined in cmd_setup.go to keep the top-level command list readable.
 	app.Commands = append(app.Commands, setupCommand())
+
+	// AfterTouch service management (sources, accounts, devices).
+	// Defined in cmd_cloud.go.
+	app.Commands = append(app.Commands, cloudCommand())
 
 	// Sort commands alphabetically (including subcommands and flags recursively)
 	sortCommands(app.Commands)

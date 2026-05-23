@@ -2032,6 +2032,65 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 	return ds.atomicWriteFile(path, append(header, data...))
 }
 
+// DeleteSourceByID removes the source with the given ID from the device's
+// Sources.xml. It is a no-op if the source is not present.
+func (ds *DataStore) DeleteSourceByID(account, device, sourceID string) error {
+	sources, err := ds.GetConfiguredSources(account, device)
+	if err != nil {
+		return err
+	}
+
+	filtered := make([]models.ConfiguredSource, 0, len(sources))
+
+	for i := range sources {
+		if sources[i].ID != sourceID {
+			filtered = append(filtered, sources[i])
+		}
+	}
+
+	if len(filtered) == len(sources) {
+		return nil
+	}
+
+	return ds.SaveConfiguredSources(account, device, filtered)
+}
+
+// DeleteSourceByType removes the source with the given SourceKeyType from
+// the device's Sources.xml. Returns an error if more than one source matches
+// (to prevent accidental bulk deletion). No-op if no match is found.
+func (ds *DataStore) DeleteSourceByType(account, device, sourceKeyType string) error {
+	sources, err := ds.GetConfiguredSources(account, device)
+	if err != nil {
+		return err
+	}
+
+	var matches int
+
+	for i := range sources {
+		if sources[i].SourceKeyType == sourceKeyType {
+			matches++
+		}
+	}
+
+	if matches > 1 {
+		return fmt.Errorf("found %d sources with type %q; use an ID-based deletion for precision", matches, sourceKeyType)
+	}
+
+	if matches == 0 {
+		return nil
+	}
+
+	filtered := make([]models.ConfiguredSource, 0, len(sources))
+
+	for i := range sources {
+		if sources[i].SourceKeyType != sourceKeyType {
+			filtered = append(filtered, sources[i])
+		}
+	}
+
+	return ds.SaveConfiguredSources(account, device, filtered)
+}
+
 // updateDeviceMappings creates bidirectional mappings for device resolution
 func (ds *DataStore) updateDeviceMappings(info models.ServiceDeviceInfo) {
 	ds.idMutex.Lock()

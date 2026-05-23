@@ -1244,6 +1244,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Get("/dns-discoveries", server.HandleGetDNSDiscoveries)
 		r.Get("/dns-discoveries/download", server.HandleDownloadDNSDiscoveries)
 		r.Delete("/dns-discoveries", server.HandleClearDNSDiscoveries)
+		r.Delete("/sources/{account}/{device}/{sourceID}", server.HandleDeleteSource)
 
 		r.Get("/devices/{deviceId}/events", server.HandleGetDeviceEvents)
 		r.Get("/device-summary/{deviceId}", server.HandleDeviceSummary)

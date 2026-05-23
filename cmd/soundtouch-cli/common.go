@@ -19,6 +19,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// CloudCommonFlags defines flags for commands that talk to the AfterTouch service.
+var CloudCommonFlags = []cli.Flag{
+	&cli.StringFlag{
+		Name:    "service-url",
+		Usage:   "AfterTouch service URL",
+		Value:   "http://aftertouch.local:8000",
+		EnvVars: []string{"AFTERTOUCH_URL"},
+	},
+}
+
 // CommonFlags defines flags that are shared across multiple commands
 var CommonFlags = []cli.Flag{
 	&cli.StringFlag{

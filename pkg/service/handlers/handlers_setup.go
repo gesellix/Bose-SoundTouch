@@ -1348,3 +1348,25 @@ func (s *Server) HandleDownloadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// HandleDeleteSource removes a source from a device's Sources.xml.
+// DELETE /setup/sources/{account}/{device}/{sourceID}
+func (s *Server) HandleDeleteSource(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	device := chi.URLParam(r, "device")
+	sourceID := chi.URLParam(r, "sourceID")
+
+	if account == "" || device == "" || sourceID == "" {
+		http.Error(w, "account, device, and sourceID are required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := s.ds.DeleteSourceByID(account, device, sourceID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

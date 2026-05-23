@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -684,4 +686,52 @@ func boolToStatus(b bool) string {
 	}
 
 	return "❌ No"
+}
+
+// notifySourcesUpdated POSTs a sourcesUpdated notification directly to the
+// speaker's :8090/notification endpoint. The speaker re-fetches its source
+// list from AfterTouch immediately. Requires network access to the speaker.
+func notifySourcesUpdated(c *cli.Context) error {
+	if err := RequireHost(c); err != nil {
+		return err
+	}
+
+	clientConfig := GetClientConfig(c)
+
+	client, err := CreateSoundTouchClient(clientConfig)
+	if err != nil {
+		return err
+	}
+
+	info, err := client.GetDeviceInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get device info from %s: %w", clientConfig.Host, err)
+	}
+
+	body := fmt.Sprintf(`<updates deviceID="%s"><sourcesUpdated/></updates>`, info.DeviceID)
+	notifyURL := fmt.Sprintf("http://%s:8090/notification", clientConfig.Host)
+
+	req, err := http.NewRequest(http.MethodPost, notifyURL, strings.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/xml")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("post to speaker: %w", err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10))
+
+		return fmt.Errorf("speaker returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	PrintSuccess(fmt.Sprintf("Sent sourcesUpdated to %s (%s)", info.DeviceID, clientConfig.Host))
+
+	return nil
 }

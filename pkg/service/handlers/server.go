@@ -133,6 +133,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterPresetsCountCheck(s.healthRegistry, ds)
 	health.RegisterPresetsConsistencyCheck(s.healthRegistry, ds)
 	health.RegisterRefreshSourcesCheck(s.healthRegistry, ds)
+	health.RegisterStaleInternetRadioCheck(s.healthRegistry, ds)
 	health.RegisterDefaultAccountNonBoseDevicesCheck(s.healthRegistry, ds)
 	health.RegisterOAuthTargetReachableCheck(
 		s.healthRegistry,
