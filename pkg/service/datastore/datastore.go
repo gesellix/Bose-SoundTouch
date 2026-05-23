@@ -928,6 +928,26 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 
 // GetPresets retrieves all presets for the specified account and device.
 func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset, error) {
+	presets, needsRewrite, err := ds.readPresetsLocked(account, device)
+	if err != nil {
+		return nil, err
+	}
+
+	if needsRewrite {
+		log.Printf("[Datastore] Presets.xml for device %s used legacy <ContentItem> format; rewriting in canonical form", device)
+
+		if werr := ds.SavePresets(account, device, presets); werr != nil {
+			log.Printf("[Datastore] failed to rewrite normalised Presets.xml for device %s: %v", device, werr)
+		}
+	}
+
+	return presets, nil
+}
+
+// readPresetsLocked is the locked read half of GetPresets. It returns the
+// parsed presets and a flag indicating whether the on-disk file used the
+// legacy <ContentItem> (capital C) format that needs rewriting.
+func (ds *DataStore) readPresetsLocked(account, device string) ([]models.ServicePreset, bool, error) {
 	ds.fileMutex.RLock()
 	defer ds.fileMutex.RUnlock()
 
@@ -936,10 +956,10 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []models.ServicePreset{}, nil
+			return []models.ServicePreset{}, false, nil
 		}
 
-		return nil, err
+		return nil, false, err
 	}
 
 	var presetsWrap struct {
@@ -960,8 +980,16 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 		} `xml:"preset"`
 	}
 
-	if err := xml.Unmarshal(data, &presetsWrap); err != nil {
-		return nil, fmt.Errorf("malformed presets XML at %s: %w", path, err)
+	// encoding/xml is case-sensitive. Older AfterTouch versions (and raw
+	// speaker XML) used <ContentItem> (capital C); normalise to lowercase
+	// before unmarshaling so legacy files are parsed correctly.
+	normalized := bytes.ReplaceAll(data, []byte("<ContentItem"), []byte("<contentItem"))
+	normalized = bytes.ReplaceAll(normalized, []byte("</ContentItem>"), []byte("</contentItem>"))
+
+	needsRewrite := !bytes.Equal(normalized, data)
+
+	if err := xml.Unmarshal(normalized, &presetsWrap); err != nil {
+		return nil, false, fmt.Errorf("malformed presets XML at %s: %w", path, err)
 	}
 
 	presets := []models.ServicePreset{}
@@ -988,7 +1016,7 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 		})
 	}
 
-	return presets, nil
+	return presets, needsRewrite, nil
 }
 
 // repairLeakedSource quietly substitutes the speaker-perspective
