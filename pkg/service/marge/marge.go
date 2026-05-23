@@ -1259,25 +1259,48 @@ func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []
 	return fullSources
 }
 
-// mergeDefaultSources adds any default sources missing from stored that are not already present
-// (matched by SourceKeyType). It does not persist — initializeDefaultSources handles persistence at startup.
+// mergeDefaultSources returns sources in canonical order: defaults first (using
+// the stored entry's credentials when a match is found), followed by any stored
+// sources that have no matching default (e.g. Spotify, Amazon). This ensures
+// that default sources always appear in a predictable order regardless of what
+// is present in the device's on-disk Sources.xml.
+// It does not persist — initializeDefaultSources handles persistence at startup.
 func mergeDefaultSources(stored, defaults []models.ConfiguredSource) []models.ConfiguredSource {
+	result := make([]models.ConfiguredSource, 0, len(stored)+len(defaults))
+
 	for i := range defaults {
-		found := false
+		found := -1
 
 		for j := range stored {
 			if stored[j].SourceKeyType == defaults[i].SourceKeyType {
-				found = true
+				found = j
 				break
 			}
 		}
 
-		if !found {
-			stored = append(stored, defaults[i])
+		if found >= 0 {
+			result = append(result, stored[found])
+		} else {
+			result = append(result, defaults[i])
 		}
 	}
 
-	return stored
+	for i := range stored {
+		isDefault := false
+
+		for j := range defaults {
+			if stored[i].SourceKeyType == defaults[j].SourceKeyType {
+				isDefault = true
+				break
+			}
+		}
+
+		if !isDefault {
+			result = append(result, stored[i])
+		}
+	}
+
+	return result
 }
 
 // AccountSourcesToXML generates the account sources XML.
@@ -1415,11 +1438,7 @@ func RemovePreset(ds *datastore.DataStore, account, device string, presetNumber 
 // (since auto-add appends). Returns (nil, sources) when no match could be
 // resolved — UpdatePreset turns that into a 500 with a diagnostic log line.
 func resolvePresetSource(ds *datastore.DataStore, account, device string, sources []models.ConfiguredSource, sourceID string, presetNumber int) (*models.ConfiguredSource, []models.ConfiguredSource) {
-	log.Printf("[Marge] Searching for source matching ID=%s in %d sources", sourceID, len(sources))
-
 	for i := range sources {
-		log.Printf("[Marge]   Source[%d]: ID=%s, Type=%s, SourceKeyType=%s, SourceKeyAccount=%s", i, sources[i].ID, sources[i].Type, sources[i].SourceKeyType, sources[i].SourceKeyAccount)
-
 		if sources[i].ID == sourceID {
 			return &sources[i], sources
 		}

@@ -638,7 +638,11 @@ func TestDefaultSources(t *testing.T) {
 		t.Fatalf("Failed to get sources: %v", err)
 	}
 
-	expectedCount := 5
+	// INTERNET_RADIO (ID 10002) is excluded from initial sources — it is a legacy
+	// provider no longer served by AfterTouch. The cloud-level account sources
+	// (getAccountSources via GetDefaultSources) still include it for backward
+	// compatibility with existing speaker firmware.
+	expectedCount := 4
 	if len(sources) != expectedCount {
 		t.Errorf("Expected %d sources, got %d", expectedCount, len(sources))
 	}
@@ -664,10 +668,7 @@ func TestDefaultSources(t *testing.T) {
 				t.Error("LOCAL_INTERNET_RADIO should have a secret")
 			}
 		case "INTERNET_RADIO":
-			foundIR = true
-			if s.SecretType != "token" {
-				t.Errorf("Expected INTERNET_RADIO secretType token, got %s", s.SecretType)
-			}
+			t.Errorf("INTERNET_RADIO must not appear in initial sources — it is excluded from getInitialSources()")
 		case "RADIO_BROWSER":
 			foundIR = true
 			if s.SecretType != "token" {
@@ -695,7 +696,7 @@ func TestDefaultSources(t *testing.T) {
 	}
 
 	if !foundTuneIn || !foundLocalIR || !foundIR || !foundAux {
-		t.Errorf("Missing expected sources: TuneIn=%v, LocalIR=%v, IR=%v, Aux=%v", foundTuneIn, foundLocalIR, foundIR, foundAux)
+		t.Errorf("Missing expected sources: TuneIn=%v, LocalIR=%v, RadioBrowser=%v, Aux=%v", foundTuneIn, foundLocalIR, foundIR, foundAux)
 	}
 }
 

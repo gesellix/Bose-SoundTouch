@@ -1779,7 +1779,7 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			sources := ds.getDefaultSources()
+			sources := ds.getInitialSources()
 			ds.DeduceSourceIDs(account, device, sources)
 
 			return sources, nil
@@ -2187,6 +2187,27 @@ func (ds *DataStore) getDefaultSources() []models.ConfiguredSource {
 	}
 
 	return sources
+}
+
+// getInitialSources returns the default sources for a brand-new device.
+// INTERNET_RADIO (ID 10002) is excluded — it is a legacy provider no longer
+// actively served by AfterTouch; omitting it prevents speakers from
+// receiving a stale entry in their initial Sources.xml. The full list
+// (including 10002) is kept in getDefaultSources() for canonicalisation
+// of existing devices that already reference INTERNET_RADIO.
+func (ds *DataStore) getInitialSources() []models.ConfiguredSource {
+	all := ds.getDefaultSources()
+
+	out := make([]models.ConfiguredSource, 0, len(all))
+	for i := range all {
+		if all[i].SourceKeyType == constants.ProviderInternetRadio {
+			continue
+		}
+
+		out = append(out, all[i])
+	}
+
+	return out
 }
 
 // isMACAddressFormat checks if a string looks like a MAC address
