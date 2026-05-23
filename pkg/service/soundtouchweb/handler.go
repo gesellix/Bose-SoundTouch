@@ -1031,13 +1031,12 @@ func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentItem := &models.ContentItem{
-		Source:        req.Source,
-		Type:          req.Type,
-		Location:      req.Location,
-		SourceAccount: req.SourceAccount,
-		ItemName:      req.ItemName,
-		ContainerArt:  req.ContainerArt,
-		IsPresetable:  req.IsPresetable,
+		Source:       req.Source,
+		Type:         req.Type,
+		Location:     req.Location,
+		ItemName:     req.ItemName,
+		ContainerArt: req.ContainerArt,
+		IsPresetable: req.IsPresetable,
 	}
 
 	if err := device.Client.SelectContentItem(contentItem); err != nil {
@@ -1123,6 +1122,11 @@ func (app *WebApp) HandlePlayRadioBrowser(w http.ResponseWriter, r *http.Request
 		Location:     req.Location,
 		ItemName:     req.Name,
 		IsPresetable: true,
+	}
+	// Only pass SourceAccount when it's a real credential, not the placeholder
+	// value that speakers echo back (source name == source account, e.g. "TUNEIN").
+	if req.SourceAccount != "" && req.SourceAccount != req.Source {
+		contentItem.SourceAccount = req.SourceAccount
 	}
 
 	if err := device.Client.SelectContentItem(contentItem); err != nil {

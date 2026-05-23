@@ -4,6 +4,7 @@ package soundtouchweb
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -620,5 +621,86 @@ func BenchmarkSendError(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
 		app.sendError(w, "Test error", http.StatusBadRequest)
+	}
+}
+
+// TestHandleDevicePlay_SourceAccountFiltering verifies that a SourceAccount
+// equal to Source (the placeholder speakers echo back, e.g. "TUNEIN") is
+// stripped before the ContentItem XML is sent to the speaker, while a real
+// credential (SourceAccount != Source) is preserved.
+func TestHandleDevicePlay_SourceAccountFiltering(t *testing.T) {
+	tests := []struct {
+		name              string
+		source            string
+		sourceAccount     string
+		wantSourceAccount string // empty means the XML attr must be absent
+	}{
+		{
+			name:              "placeholder echoed back — stripped",
+			source:            "TUNEIN",
+			sourceAccount:     "TUNEIN",
+			wantSourceAccount: "",
+		},
+		{
+			name:              "real credential — preserved",
+			source:            "TUNEIN",
+			sourceAccount:     "real-account-id",
+			wantSourceAccount: "real-account-id",
+		},
+		{
+			name:              "empty account — stays empty",
+			source:            "TUNEIN",
+			sourceAccount:     "",
+			wantSourceAccount: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody string
+
+			// Fake speaker that captures the /select POST body.
+			speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/select" {
+					b, _ := io.ReadAll(r.Body)
+					capturedBody = string(b)
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer speaker.Close()
+
+			speakerClient := client.NewClient(&client.Config{Host: speaker.URL})
+
+			app := NewWebApp()
+			deviceInfo := &models.DeviceInfo{Name: "Test Speaker"}
+			conn := webtypes.NewDeviceConnection(speakerClient, deviceInfo)
+			conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
+			app.AddDevice("play-device", conn)
+
+			body := strings.NewReader(`{
+				"source":"` + tt.source + `",
+				"type":"stationurl",
+				"location":"/v1/playback/station/s6634",
+				"sourceAccount":"` + tt.sourceAccount + `",
+				"itemName":"Venice Classic Radio"
+			}`)
+			req := httptest.NewRequest("POST", "/api/device-play/play-device", body)
+			req.Header.Set("Content-Type", "application/json")
+			req = withChiParams(req, map[string]string{"id": "play-device"})
+			w := httptest.NewRecorder()
+
+			app.HandleDevicePlay(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			// SourceAccount XML attribute is always emitted (no omitempty on the struct
+			// tag), so check its value rather than its presence/absence.
+			want := `sourceAccount="` + tt.wantSourceAccount + `"`
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("XML should contain %q, got: %s", want, capturedBody)
+			}
+		})
 	}
 }
