@@ -23,7 +23,7 @@ See the [Survival Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SURVI
 
 A local server that replaces the Bose cloud ("AfterTouch"). Once your speaker is redirected to it, you have full control without any Bose cloud dependency. The built-in web UI at `http://localhost:8000` handles all setup — no config files needed to get started.
 
-Not sure which approach fits your situation? See the [Deployment Overview](./docs/guides/DEPLOYMENT-OVERVIEW.md) — it compares running AfterTouch on a Raspberry Pi or other always-on host against running it directly on the SoundTouch speaker, with links to step-by-step walkthroughs for each path.
+Not sure which approach fits your situation? See the [Deployment Overview](./docs/content/docs/guides/DEPLOYMENT-OVERVIEW.md) — it compares running AfterTouch on a Raspberry Pi or other always-on host against running it directly on the SoundTouch speaker, with links to step-by-step walkthroughs for each path.
 
 **Getting started:**
 

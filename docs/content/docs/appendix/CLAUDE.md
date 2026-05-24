@@ -10,10 +10,9 @@ sidebar:
 
 This document contains important development guidelines for working on the Bose SoundTouch project. Please also read the following documentation:
 
-- **[PLAN.md](archive/PLAN.md)** - Project planning and roadmap
+- **[PLAN.md](../../../archive/PLAN.md)** - Project planning and roadmap
 - **[PROJECT-PATTERNS.md](PROJECT-PATTERNS.md)** - Project structure and design patterns
-- **[API-ENDPOINTS.md](reference/API-ENDPOINTS.md)** - API endpoints overview
-- **[SoundTouch Web API.pdf](2025.12.18%20SoundTouch%20Web%20API.pdf)** - Official API documentation
+- **[API-ENDPOINTS.md](../reference/API-ENDPOINTS.md)** - API endpoints overview
 
 ## Development Guidelines
 

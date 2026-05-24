@@ -88,7 +88,7 @@ When filing a bug report, include:
 Feature requests are welcome! Please:
 
 1. **Check if the feature already exists** in documentation
-2. **Verify it's supported by the SoundTouch API** (see [official API docs](docs/reference/API-ENDPOINTS.md))
+2. **Verify it's supported by the SoundTouch API** (see [official API docs](docs/content/docs/reference/API-ENDPOINTS.md))
 3. **Explain the use case** and how it benefits users
 
 ### 🔧 Contributing Code
@@ -489,8 +489,8 @@ Sponsorship is entirely optional. Code, docs, and bug reports remain the most us
 
 - [Go Documentation](https://golang.org/doc/)
 - [Effective Go](https://golang.org/doc/effective_go.html)
-- [Bose SoundTouch API Documentation](docs/reference/API-ENDPOINTS.md)
-- [Project Architecture](docs/PROJECT-PATTERNS.md)
+- [Bose SoundTouch API Documentation](docs/content/docs/reference/API-ENDPOINTS.md)
+- [Project Architecture](docs/content/docs/appendix/PROJECT-PATTERNS.md)
 - [Development Status](docs/archive/STATUS.md)
 
 ---

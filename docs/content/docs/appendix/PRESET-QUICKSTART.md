@@ -338,11 +338,11 @@ soundtouch-cli --host 192.0.2.100 info
 
 ## Next Steps
 
-- 📖 [Complete CLI Reference](guides/CLI-REFERENCE.md)
-- 🔧 [Full Implementation Guide](reference/PRESET-MANAGEMENT.md)
-- 📡 [WebSocket Events Documentation](reference/WEBSOCKET-EVENTS.md)
-- 💻 [Preset Management Example](../examples/preset-management/)
-- 📚 [API Endpoints Overview](reference/API-ENDPOINTS.md)
+- 📖 [Complete CLI Reference](../guides/CLI-REFERENCE.md)
+- 🔧 [Full Implementation Guide](../reference/PRESET-MANAGEMENT.md)
+- 📡 [WebSocket Events Documentation](../reference/WEBSOCKET-EVENTS.md)
+- 💻 [Preset Management Example](https://github.com/gesellix/Bose-SoundTouch/tree/main/examples/preset-management)
+- 📚 [API Endpoints Overview](../reference/API-ENDPOINTS.md)
 
 ## Need Help?
 

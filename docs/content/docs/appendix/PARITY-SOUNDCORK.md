@@ -60,4 +60,4 @@ Group support and ZeroConf Spotify priming are now feature-complete in AfterTouc
 - **BMX service extensibility**: the `bmx_services.json` registry makes it trivial to add or mock new streaming providers without code changes (step C above).
 - **Group pairing logic**: master/slave relationship management for SoundTouch 10 stereo pairs goes beyond the CRUD AfterTouch implements.
 
-For the broader ecosystem context (feature matrix across all community projects, AfterTouch open tasks, and cross-project observations) see [docs/analysis/bose-soundtouch-community-tools.md](analysis/bose-soundtouch-community-tools.md).
+For the broader ecosystem context (feature matrix across all community projects, AfterTouch open tasks, and cross-project observations) see [docs/analysis/bose-soundtouch-community-tools.md](../analysis/bose-soundtouch-community-tools.md).

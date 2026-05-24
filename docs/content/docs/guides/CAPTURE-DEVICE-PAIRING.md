@@ -372,7 +372,7 @@ Frida artefacts live in `scripts/android/` (gitignored) and persist between sess
 
 - [BOSE-APP-ADB-Emulator.md](../analysis/BOSE-APP-ADB-Emulator.md) — full MITM + Frida setup
 - [DEVICE-INITIAL-SETUP.md](DEVICE-INITIAL-SETUP.md) — factory reset sequences + AP mode detail
-- [DEVICE-SETUP.md](../DEVICE-SETUP.md) — WebSocket and cloud pairing protocol reference
+- [DEVICE-SETUP.md](../appendix/DEVICE-SETUP.md) — WebSocket and cloud pairing protocol reference
 
 ---
 

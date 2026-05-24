@@ -351,8 +351,8 @@ The implementation follows the official SoundTouch API:
 ## Related Documentation
 
 - **[API Endpoints Overview](API-ENDPOINTS.md)** - Complete API reference
-- **[Sources](../../pkg/models/sources.go)** - Source model implementation  
-- **[Now Playing](../../pkg/models/nowplaying.go)** - ContentItem model
+- **[Sources](https://github.com/gesellix/Bose-SoundTouch/blob/main/pkg/models/sources.go)** - Source model implementation  
+- **[Now Playing](https://github.com/gesellix/Bose-SoundTouch/blob/main/pkg/models/nowplaying.go)** - ContentItem model
 - **[Client Usage Examples](https://github.com/gesellix/Bose-SoundTouch/blob/main/cmd/soundtouch-cli/main.go)** - CLI implementation reference
 
 ---

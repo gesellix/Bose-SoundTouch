@@ -75,4 +75,4 @@ sudo systemctl restart soundtouch-service
 
 Configuration is stored in `/etc/soundtouch-service/soundtouch-service.env`. Note that settings saved via the Web UI (in `settings.json`) will take precedence over these environment variables once the service is running.
 
-For more details, see the [scripts/raspberry-pi/README.md](../https://github.com/gesellix/Bose-SoundTouch/blob/main/scripts/raspberry-pi/README.md) in the repository.
+For more details, see the [scripts/raspberry-pi/README.md](https://github.com/gesellix/Bose-SoundTouch/blob/main/scripts/raspberry-pi/README.md) in the repository.

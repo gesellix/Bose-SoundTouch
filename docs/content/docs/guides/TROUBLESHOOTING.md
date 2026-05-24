@@ -141,7 +141,7 @@ The Devices list also shows a `⚠ Not paired — re-pair` badge. To resolve, **
 
 #### 3. What does `logread` say while you trigger a failing source?
 
-SSH into the speaker (see [DEVICE-LOGGING.md](../DEVICE-LOGGING.md#1-accessing-system-logs-requires-root)) and capture:
+SSH into the speaker (see [DEVICE-LOGGING.md](../appendix/DEVICE-LOGGING.md#1-accessing-system-logs-requires-root)) and capture:
 
 ```bash
 logread -f | grep -v '127.0.0.1:'
@@ -161,7 +161,7 @@ logread -f | grep -v '127.0.0.1:'
 
 **Symptoms:**
 
-In the speaker's log (see [DEVICE-LOGGING.md](../DEVICE-LOGGING.md#1-accessing-system-logs-requires-root) for the SSH/`logread` setup — the filtered command `logread -f | grep -v '127.0.0.1'` is what you want here):
+In the speaker's log (see [DEVICE-LOGGING.md](../appendix/DEVICE-LOGGING.md#1-accessing-system-logs-requires-root) for the SSH/`logread` setup — the filtered command `logread -f | grep -v '127.0.0.1'` is what you want here):
 
 ```
 SimpleURLFetcher: retry needed, Curl 7, http 0
@@ -211,7 +211,7 @@ A factory reset wipes `/mnt/nv/BoseApp-Persistence/1/Marge.xml` — the file tha
 
 5. Press a preset. It should play normally.
 
-If presets still won't play after step 5, capture `logread -f | grep -v '127.0.0.1:'` on the speaker (see [DEVICE-LOGGING.md](../DEVICE-LOGGING.md#1-accessing-system-logs-requires-root)) while pressing the preset and file an issue with the snippet — the lines around the failed playback name the deeper cause.
+If presets still won't play after step 5, capture `logread -f | grep -v '127.0.0.1:'` on the speaker (see [DEVICE-LOGGING.md](../appendix/DEVICE-LOGGING.md#1-accessing-system-logs-requires-root)) while pressing the preset and file an issue with the snippet — the lines around the failed playback name the deeper cause.
 
 ### ❌ "Connection refused"
 
