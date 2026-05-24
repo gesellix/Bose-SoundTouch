@@ -73,3 +73,12 @@ disablePathToLower = true
   [menu.main.params]
     type = "icon"
     icon = "github"
+
+[[menu.main]]
+  identifier = "sponsor"
+  name = "Sponsor"
+  url = "/sponsor"
+  weight = 4
+  [menu.main.params]
+    type = "icon"
+    icon = "heart"

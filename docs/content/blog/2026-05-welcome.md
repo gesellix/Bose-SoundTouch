@@ -27,7 +27,7 @@ If your speaker was registered with Bose before the shutdown, AfterTouch can **m
 your existing account and presets** in a single step — no reconfiguration on the
 speaker side. If you are setting up a factory-reset or brand-new speaker, AfterTouch
 handles that path too, guiding you through Wi-Fi pairing and account creation locally.
-See the [Migration Guide](/docs/guides/MIGRATION-GUIDE/) for step-by-step instructions.
+See the [Migration Guide](../docs/guides/MIGRATION-GUIDE.md) for step-by-step instructions.
 
 ### Internet radio — TuneIn and RadioBrowser
 
@@ -89,7 +89,7 @@ AfterTouch runs on any machine your speakers can reach:
    home network. AfterTouch handles TLS certificate generation and DNS configuration
    for this scenario.
 
-All three paths are documented in the [Deployment guides](/docs/guides/).
+All three paths are documented in the [Deployment Overview](../docs/guides/DEPLOYMENT-OVERVIEW.md).
 
 ## Current release
 
