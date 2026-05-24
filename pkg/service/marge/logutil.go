@@ -1,4 +1,4 @@
-package handlers
+package marge
 
 import "strings"
 

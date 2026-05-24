@@ -934,10 +934,10 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 	}
 
 	if needsRewrite {
-		log.Printf("[Datastore] Presets.xml for device %s used legacy <ContentItem> format; rewriting in canonical form", device)
+		log.Printf("[Datastore] Presets.xml for device %s used legacy <ContentItem> format; rewriting in canonical form", sanitizeLog(device))
 
 		if werr := ds.SavePresets(account, device, presets); werr != nil {
-			log.Printf("[Datastore] failed to rewrite normalised Presets.xml for device %s: %v", device, werr)
+			log.Printf("[Datastore] failed to rewrite normalised Presets.xml for device %s: %v", sanitizeLog(device), werr)
 		}
 	}
 
@@ -1049,7 +1049,7 @@ func repairLeakedSource(account, device, label, persistedSource, sourceID string
 	for i := range sources {
 		if sources[i].ID == sourceID && sources[i].SourceKeyType != "" {
 			log.Printf("[Datastore] %s: repaired leaked source %q -> %q via sourceid=%s (account=%s device=%s) — likely written by the pre-fix marge.syncPresets/syncRecents path; speaker's perspective is now restored on read",
-				label, persistedSource, sources[i].SourceKeyType, sourceID, account, device)
+				sanitizeLog(label), sanitizeLog(persistedSource), sanitizeLog(sources[i].SourceKeyType), sanitizeLog(sourceID), sanitizeLog(account), sanitizeLog(device))
 
 			return sources[i].SourceKeyType
 		}
@@ -1179,7 +1179,7 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 
 		if pxml.ContentItem.IsPresetable == "false" {
 			log.Printf("[Datastore] SavePresets: storing preset %s as isPresetable=false (account=%s device=%s source=%s) — speaker firmware marked this content non-recallable; preset will appear on the speaker but pressing it will not play",
-				pxml.ID, account, device, p.Source)
+				sanitizeLog(pxml.ID), sanitizeLog(account), sanitizeLog(device), sanitizeLog(p.Source))
 		}
 
 		pxml.ContentItem.ItemName = p.Name

@@ -16,7 +16,7 @@ func SyncFromAccountFull(ds *datastore.DataStore, resp *models.AccountFullRespon
 		return fmt.Errorf("account ID is missing in response")
 	}
 
-	log.Printf("[SYNC] Starting synchronization for account %s", accountID)
+	log.Printf("[SYNC] Starting synchronization for account %s", sanitizeLog(accountID))
 	// 0. Update Account Metadata
 	syncAccountInfo(ds, accountID, resp)
 
@@ -28,7 +28,7 @@ func SyncFromAccountFull(ds *datastore.DataStore, resp *models.AccountFullRespon
 			continue
 		}
 
-		log.Printf("[SYNC] Synchronizing device %s (Account: %s)", deviceID, accountID)
+		log.Printf("[SYNC] Synchronizing device %s (Account: %s)", sanitizeLog(deviceID), sanitizeLog(accountID))
 
 		// 1. Update Device Info
 		syncDeviceInfo(ds, accountID, dev)
@@ -43,7 +43,7 @@ func SyncFromAccountFull(ds *datastore.DataStore, resp *models.AccountFullRespon
 		syncConfiguredSources(ds, accountID, deviceID, resp.Sources, dev)
 	}
 
-	log.Printf("[SYNC] Synchronization completed for account %s", accountID)
+	log.Printf("[SYNC] Synchronization completed for account %s", sanitizeLog(accountID))
 
 	return nil
 }
@@ -56,7 +56,7 @@ func syncAccountInfo(ds *datastore.DataStore, accountID string, resp *models.Acc
 	}
 
 	if err := ds.SaveAccountInfo(accountID, info); err != nil {
-		log.Printf("[SYNC_ERR] Failed to save account info for %s: %v", accountID, err)
+		log.Printf("[SYNC_ERR] Failed to save account info for %s: %v", sanitizeLog(accountID), err)
 	}
 }
 
@@ -97,12 +97,12 @@ func syncDeviceInfo(ds *datastore.DataStore, accountID string, dev *models.Accou
 	if info.Name == "" {
 		if existingInfo != nil && existingInfo.Name != "" {
 			info.Name = existingInfo.Name
-			log.Printf("[SYNC_DEBUG] Preserved local name '%s' for device %s", info.Name, deviceID)
+			log.Printf("[SYNC_DEBUG] Preserved local name '%s' for device %s", sanitizeLog(info.Name), sanitizeLog(deviceID))
 		} else {
-			log.Printf("[SYNC_DEBUG] Name is empty for device %s in upstream and no local name found", deviceID)
+			log.Printf("[SYNC_DEBUG] Name is empty for device %s in upstream and no local name found", sanitizeLog(deviceID))
 		}
 	} else {
-		log.Printf("[SYNC_DEBUG] Upstream name for device %s is '%s'", deviceID, info.Name)
+		log.Printf("[SYNC_DEBUG] Upstream name for device %s is '%s'", sanitizeLog(deviceID), sanitizeLog(info.Name))
 	}
 
 	// If the name is still empty, try to find a name from other devices in the same account or globally
@@ -112,7 +112,7 @@ func syncDeviceInfo(ds *datastore.DataStore, accountID string, dev *models.Accou
 			d := &allDevices[i]
 			if d.DeviceID == deviceID && d.Name != "" {
 				info.Name = d.Name
-				log.Printf("[SYNC_DEBUG] Recovered name '%s' for device %s from global search", info.Name, deviceID)
+				log.Printf("[SYNC_DEBUG] Recovered name '%s' for device %s from global search", sanitizeLog(info.Name), sanitizeLog(deviceID))
 
 				break
 			}
@@ -120,7 +120,7 @@ func syncDeviceInfo(ds *datastore.DataStore, accountID string, dev *models.Accou
 	}
 
 	if err := ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
-		log.Printf("[SYNC_ERR] Failed to save device info for %s: %v", deviceID, err)
+		log.Printf("[SYNC_ERR] Failed to save device info for %s: %v", sanitizeLog(deviceID), err)
 	}
 }
 
@@ -170,7 +170,7 @@ func syncConfiguredSources(ds *datastore.DataStore, accountID, deviceID string, 
 	ds.DeduceSourceIDs(accountID, deviceID, deviceSources)
 
 	if err := ds.SaveConfiguredSources(accountID, deviceID, deviceSources); err != nil {
-		log.Printf("[SYNC_ERR] Failed to save sources for %s: %v", deviceID, err)
+		log.Printf("[SYNC_ERR] Failed to save sources for %s: %v", sanitizeLog(deviceID), err)
 	}
 }
 
@@ -200,7 +200,7 @@ func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSou
 	}
 
 	if err := ds.SavePresets(accountID, deviceID, presets); err != nil {
-		log.Printf("[SYNC_ERR] Failed to save presets for %s: %v", deviceID, err)
+		log.Printf("[SYNC_ERR] Failed to save presets for %s: %v", sanitizeLog(deviceID), err)
 	}
 }
 
@@ -228,7 +228,7 @@ func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSou
 	}
 
 	if err := ds.SaveRecents(accountID, deviceID, recents); err != nil {
-		log.Printf("[SYNC_ERR] Failed to save recents for %s: %v", deviceID, err)
+		log.Printf("[SYNC_ERR] Failed to save recents for %s: %v", sanitizeLog(deviceID), err)
 	}
 }
 
@@ -248,7 +248,7 @@ func sourceKeyTypeFromFullSource(s models.FullResponseSource) string {
 	}
 
 	log.Printf("[SYNC] sourceKeyTypeFromFullSource: no canonical SourceKeyType for providerid=%q (source id=%q name=%q) — persisting upstream Type=%q verbatim; downstream consumers will read repairLeakedSource fallback or display %q as-is",
-		s.SourceProviderID, s.ID, s.Name, s.Type, s.Type)
+		sanitizeLog(s.SourceProviderID), sanitizeLog(s.ID), sanitizeLog(s.Name), sanitizeLog(s.Type), sanitizeLog(s.Type))
 
 	return s.Type
 }
@@ -293,7 +293,7 @@ func LogSyncDiff(ds *datastore.DataStore, resp *models.AccountFullResponse) {
 		localPresets, _ := ds.GetPresets(accountID, deviceID)
 
 		if len(localPresets) != len(dev.Presets) {
-			log.Printf("[SYNC_DIFF] Preset count mismatch for %s: local=%d, upstream=%d", deviceID, len(localPresets), len(dev.Presets))
+			log.Printf("[SYNC_DIFF] Preset count mismatch for %s: local=%d, upstream=%d", sanitizeLog(deviceID), len(localPresets), len(dev.Presets))
 		}
 
 		// Compare presets by button number
@@ -308,7 +308,7 @@ func LogSyncDiff(ds *datastore.DataStore, resp *models.AccountFullResponse) {
 					found = true
 
 					if lp.Location != up.Location {
-						log.Printf("[SYNC_DIFF] Preset %s location mismatch for %s: local=%s, upstream=%s", up.ButtonNumber, deviceID, lp.Location, up.Location)
+						log.Printf("[SYNC_DIFF] Preset %s location mismatch for %s: local=%s, upstream=%s", sanitizeLog(up.ButtonNumber), sanitizeLog(deviceID), sanitizeLog(lp.Location), sanitizeLog(up.Location))
 					}
 
 					break
@@ -316,7 +316,7 @@ func LogSyncDiff(ds *datastore.DataStore, resp *models.AccountFullResponse) {
 			}
 
 			if !found {
-				log.Printf("[SYNC_DIFF] Preset %s missing locally for %s", up.ButtonNumber, deviceID)
+				log.Printf("[SYNC_DIFF] Preset %s missing locally for %s", sanitizeLog(up.ButtonNumber), sanitizeLog(deviceID))
 			}
 		}
 	}

@@ -898,7 +898,7 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 
 				if sources[j].ID == p.SourceID && !sourceTypeCompatible(p.Source, sources[j].SourceKeyType) {
 					log.Printf("[Marge] /full: refusing cross-type bind for preset %s — preset.Source=%q but configured source id=%s has type %q; falling through to type-based match",
-						p.ButtonNumber, p.Source, sources[j].ID, sources[j].SourceKeyType)
+						sanitizeLog(p.ButtonNumber), sanitizeLog(p.Source), sanitizeLog(sources[j].ID), sanitizeLog(sources[j].SourceKeyType))
 				}
 			}
 		}
@@ -958,7 +958,7 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		// repopulated, which is recoverable; a wiped /presets is not.
 		if synth, ok := synthesiseDefaultSourceForPreset(p); ok {
 			log.Printf("[Marge] /full: synthesising canonical %s source (id=%s, providerid=%s) for preset %s — original source %q not in configured sources; preset will appear on the speaker but play-time may fail until the source is repopulated",
-				p.Source, synth.ID, synth.SourceProviderID, p.ButtonNumber, p.SourceID)
+				sanitizeLog(p.Source), sanitizeLog(synth.ID), sanitizeLog(synth.SourceProviderID), sanitizeLog(p.ButtonNumber), sanitizeLog(p.SourceID))
 			fullPreset.Source = synth
 			fullPresets = append(fullPresets, fullPreset)
 
@@ -966,7 +966,7 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		}
 
 		log.Printf("[Marge] /full: skipping preset %s — source %q (id=%q, account=%q) not in configured sources and not synthesisable; the speaker's preset slot will revert to empty until the source is repopulated",
-			p.ButtonNumber, p.Source, p.SourceID, p.SourceAccount)
+			sanitizeLog(p.ButtonNumber), sanitizeLog(p.Source), sanitizeLog(p.SourceID), sanitizeLog(p.SourceAccount))
 	}
 
 	return fullPresets
@@ -1027,7 +1027,7 @@ func findMatchingSourceForRecent(r *models.ServiceRecent, sources []models.Confi
 
 			if sources[j].ID == r.SourceID && !sourceTypeCompatible(r.Source, sources[j].SourceKeyType) {
 				log.Printf("[Marge] /full: refusing cross-type bind for recent id=%s — recent.Source=%q but configured source id=%s has type %q; falling through to type-based match",
-					r.ID, r.Source, sources[j].ID, sources[j].SourceKeyType)
+					sanitizeLog(r.ID), sanitizeLog(r.Source), sanitizeLog(sources[j].ID), sanitizeLog(sources[j].SourceKeyType))
 			}
 		}
 	}
@@ -1118,7 +1118,7 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 		// still take the sync down.
 		if synth, ok := synthesiseDefaultSourceForRecent(r); ok {
 			log.Printf("[Marge] /full: synthesising canonical %s source (id=%s, providerid=%s) for recent id=%s — original source %q not in configured sources",
-				r.Source, synth.ID, synth.SourceProviderID, r.ID, r.SourceID)
+				sanitizeLog(r.Source), sanitizeLog(synth.ID), sanitizeLog(synth.SourceProviderID), sanitizeLog(r.ID), sanitizeLog(r.SourceID))
 
 			fullRecent.Source = synth
 			if fullRecent.SourceID == "" {
@@ -1131,7 +1131,7 @@ func mapRecentsToFullResponse(recents []models.ServiceRecent, sources []models.C
 		}
 
 		log.Printf("[Marge] /full: skipping recent id=%s — source %q (id=%q, account=%q) not in configured sources and not synthesisable",
-			r.ID, r.Source, r.SourceID, r.SourceAccount)
+			sanitizeLog(r.ID), sanitizeLog(r.Source), sanitizeLog(r.SourceID), sanitizeLog(r.SourceAccount))
 	}
 
 	return fullRecents
@@ -1461,7 +1461,7 @@ func resolvePresetSource(ds *datastore.DataStore, account, device string, source
 	// credentials, so the caller will reject the PUT instead.
 	if canonical, ok := ds.CanonicalSourceByID(sourceID); ok {
 		log.Printf("[Marge] UpdatePreset(preset=%d): auto-adding canonical source id=%s type=%s providerid=%s — speaker referenced a built-in source not yet in AfterTouch's configured-sources list; saving so the preset can land",
-			presetNumber, canonical.ID, canonical.SourceKeyType, canonical.SourceProviderID)
+			presetNumber, sanitizeLog(canonical.ID), sanitizeLog(canonical.SourceKeyType), sanitizeLog(canonical.SourceProviderID))
 
 		sources = append(sources, canonical)
 		if saveErr := ds.SaveConfiguredSources(account, device, sources); saveErr != nil {
@@ -1513,7 +1513,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	matchingSrc, sources := resolvePresetSource(ds, account, device, sources, newPresetElem.SourceID, presetNumber)
 	if matchingSrc == nil {
 		log.Printf("[Marge] UpdatePreset(preset=%d): rejecting — source id=%q is neither in configured sources nor a canonical built-in we can auto-add. The speaker's long-press will appear to succeed locally but the preset will not survive a /full sync",
-			presetNumber, newPresetElem.SourceID)
+			presetNumber, sanitizeLog(newPresetElem.SourceID))
 
 		return nil, fmt.Errorf("invalid account/source")
 	}
@@ -1530,7 +1530,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	// behalf — the binding still happens as the speaker requested.
 	if inferred := inferSourceKeyTypeFromLocation(newPresetElem.Location); inferred != "" && matchingSrc.SourceKeyType != "" && inferred != matchingSrc.SourceKeyType {
 		log.Printf("[Marge] UpdatePreset(preset=%d): location URL %q suggests %s but matched source id=%s has SourceKeyType=%s — proceeding as the speaker requested, but the Sources.xml entry may be stale; consider re-running setup.syncSources from the speaker to refresh",
-			presetNumber, newPresetElem.Location, inferred, matchingSrc.ID, matchingSrc.SourceKeyType)
+			presetNumber, sanitizeLog(newPresetElem.Location), sanitizeLog(inferred), sanitizeLog(matchingSrc.ID), sanitizeLog(matchingSrc.SourceKeyType))
 	}
 
 	nowStr := strconv.FormatInt(time.Now().Unix(), 10)
@@ -1920,7 +1920,7 @@ func persistLearnedSource(ds *datastore.DataStore, account, device string, sourc
 	}
 
 	if err := ds.SaveConfiguredSources(account, device, updatedSources); err != nil {
-		log.Printf("[MARGE_ERR] Failed to persist learned source for %s: %v", device, err)
+		log.Printf("[MARGE_ERR] Failed to persist learned source for %s: %v", sanitizeLog(device), err)
 	}
 }
 
@@ -2282,7 +2282,7 @@ func AddSource(ds *datastore.DataStore, account, username, providerID, secret, s
 			newSrc.SourceKey.Type = providerID
 		}
 
-		log.Printf("[Marge] Adding source %s (%s) for device %s", newSrc.SourceKey.Type, username, devID)
+		log.Printf("[Marge] Adding source %s (%s) for device %s", sanitizeLog(newSrc.SourceKey.Type), sanitizeLog(username), sanitizeLog(devID))
 
 		PrepareConfiguredSource(&newSrc)
 
