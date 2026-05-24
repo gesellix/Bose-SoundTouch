@@ -400,7 +400,7 @@ func (r *Recorder) save(task recordingTask) {
 	}
 
 	if err := r.rootWriteFile(task.path, buf.Bytes(), 0644); err != nil {
-		log.Printf("failed to write recording to %s: %v", task.path, err)
+		log.Printf("failed to write recording to %s: %v", sanitizeLog(task.path), err)
 	}
 
 	_ = r.updateEnvFile(task.replacements)

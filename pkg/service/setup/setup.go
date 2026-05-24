@@ -2499,18 +2499,18 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 	}
 
 	log.Printf("Starting sync for device at %s: Name='%s', DeviceID='%s', SerialNumber='%s'",
-		deviceIP, info.Name, info.DeviceID, info.SerialNumber)
+		sanitizeLog(deviceIP), sanitizeLog(info.Name), sanitizeLog(info.DeviceID), sanitizeLog(info.SerialNumber))
 
 	accountID := ""
 
 	// Use deviceID from /info as canonical identifier (MAC address)
 	deviceID := info.DeviceID
 	if deviceID == "" {
-		log.Printf("No deviceID found in /info response for device '%s' at %s", info.Name, deviceIP)
+		log.Printf("No deviceID found in /info response for device '%s' at %s", sanitizeLog(info.Name), sanitizeLog(deviceIP))
 		return fmt.Errorf("no deviceID found in /info response for device at %s - cannot sync without canonical device identifier", deviceIP)
 	}
 
-	log.Printf("Using deviceID '%s' for sync operations (MAC address from /info)", deviceID)
+	log.Printf("Using deviceID '%s' for sync operations (MAC address from /info)", sanitizeLog(deviceID))
 
 	if info.MargeAccountUUID != "" {
 		accountID = info.MargeAccountUUID
@@ -2561,11 +2561,11 @@ func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
 		presetsURL = fmt.Sprintf("http://%s/presets", deviceIP)
 	}
 
-	log.Printf("[SYNC] Syncing presets for %s", deviceIP)
+	log.Printf("[SYNC] Syncing presets for %s", sanitizeLog(deviceIP))
 
 	resp, err := m.HTTPGet(presetsURL)
 	if err != nil {
-		log.Printf("[SYNC_ERR] Failed to fetch presets for %s: %v", deviceIP, err)
+		log.Printf("[SYNC_ERR] Failed to fetch presets for %s: %v", sanitizeLog(deviceIP), err)
 		return
 	}
 
@@ -2754,9 +2754,9 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 func (m *Manager) notifySpeakerSourcesUpdated(deviceIP, deviceID string) {
 	c := client.NewClientFromHost(deviceIP)
 	if err := c.NotifySourcesUpdated(deviceID); err != nil {
-		log.Printf("[SYNC] notify %s: %v", deviceIP, err)
+		log.Printf("[SYNC] notify %s: %v", sanitizeLog(deviceIP), err)
 		return
 	}
 
-	log.Printf("[SYNC] notify %s sourcesUpdated -> ok", deviceIP)
+	log.Printf("[SYNC] notify %s sourcesUpdated -> ok", sanitizeLog(deviceIP))
 }

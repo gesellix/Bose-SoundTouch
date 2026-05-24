@@ -84,7 +84,7 @@ func (lp *LoggingProxy) LogRequest(r *http.Request) {
 		}
 	}
 
-	log.Printf("[PROXY_REQ] %s %s\n  Headers:\n%s\n  Body: %s", r.Method, r.URL.String(), headers, bodyStr)
+	log.Printf("[PROXY_REQ] %s %s\n  Headers:\n%s\n  Body: %s", r.Method, sanitizeLog(r.URL.String()), headers, sanitizeLog(bodyStr))
 }
 
 // LogResponse prints an abbreviated response with optional header/body redaction.
@@ -108,7 +108,7 @@ func (lp *LoggingProxy) LogResponse(r *http.Response) {
 		}
 	}
 
-	log.Printf("[PROXY_RES] %d %s\n  Headers:\n%s\n  Body: %s", r.StatusCode, r.Request.URL.String(), headers, bodyStr)
+	log.Printf("[PROXY_RES] %d %s\n  Headers:\n%s\n  Body: %s", r.StatusCode, sanitizeLog(r.Request.URL.String()), headers, sanitizeLog(bodyStr))
 
 	if lp.Recorder != nil && lp.RecordEnabled {
 		_ = lp.Recorder.Record("upstream", r.Request, r)
