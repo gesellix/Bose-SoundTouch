@@ -44,8 +44,39 @@ curl \
   --fail \
   "$BINARY_URL"
 
+# Back up the current binary before overwriting so a one-step rollback
+# is always available.  The version string comes from the binary itself;
+# if it is absent (very old build or corrupted) we fall back to a timestamp.
+BACKUP_FILE=""
+if [ -f "$INSTALL_DIR/aftertouch-service" ]; then
+  current_version=$("$INSTALL_DIR/aftertouch-service" --version 2>/dev/null \
+    | awk '{print $NF}') || true
+  if [ -z "$current_version" ] || [ "$current_version" = "dev" ]; then
+    current_version=$(date +%Y%m%d-%H%M%S)
+  fi
+  BACKUP_FILE="$INSTALL_DIR/aftertouch-service.${current_version}.backup"
+  cp -p "$INSTALL_DIR/aftertouch-service" "$BACKUP_FILE"
+  echo "Backed up current binary ($current_version) → $BACKUP_FILE"
+fi
+
 mv "$UPDATE_TMP_DIR/binary" "$INSTALL_DIR/aftertouch-service"
 chmod +x "$INSTALL_DIR/aftertouch-service"
+
+# Keep only the backup we just created; prune all older *.backup, *.old, and
+# *.new artefacts left by earlier installs.  /mnt/nv is small (tens of MB),
+# so accumulation quickly causes "no space left on device" during downloads.
+if [ -n "$BACKUP_FILE" ]; then
+  echo "Disk usage before GC:"; df -h "$INSTALL_DIR"
+  for f in "$INSTALL_DIR/aftertouch-service".*.backup \
+            "$INSTALL_DIR/aftertouch-service".*.old \
+            "$INSTALL_DIR/aftertouch-service.new"; do
+    [ -f "$f" ] || continue
+    [ "$f" = "$BACKUP_FILE" ] && continue
+    rm -f "$f"
+    echo "Removed stale artefact: $f"
+  done
+  echo "Disk usage after GC:"; df -h "$INSTALL_DIR"
+fi
 
 echo "Creating init script..."
 curl \
