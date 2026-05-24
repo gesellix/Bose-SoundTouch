@@ -237,7 +237,7 @@ A design document exists (`docs/guides/MQTT-INTEGRATION-DESIGN.md`) but no code 
 
 ## soundcork ↔ AfterTouch
 
-soundcork and AfterTouch share the most functional overlap of any two projects in the ecosystem. For the implementation-level parity analysis and remaining tasks see [docs/PARITY-SOUNDCORK.md](../PARITY-SOUNDCORK.md).
+soundcork and AfterTouch share the most functional overlap of any two projects in the ecosystem. For the implementation-level parity analysis and remaining tasks see [docs/PARITY-SOUNDCORK.md](../appendix/PARITY-SOUNDCORK.md).
 
 ### Architectural differences (not gaps)
 

@@ -67,20 +67,18 @@ The documentation is organized into three main categories:
 - [IoT Config Summary](analysis/IOT-CONFIG-SUMMARY.md) - Configuration summaries
 
 ### Device Lifecycle & Network Independence
-- **[Device Lifecycle and /power_on Enhancement](device-lifecycle-and-power-on-enhancement.md)** - Complete analysis of device registration and network independence improvements
-- [/power_on Implementation Guide](power-on-implementation-guide.md) - Technical implementation details for enhanced device management
+- **[Device Lifecycle and /power_on Enhancement](appendix/device-lifecycle-and-power-on-enhancement.md)** - Complete analysis of device registration and network independence improvements
+- [/power_on Implementation Guide](appendix/power-on-implementation-guide.md) - Technical implementation details for enhanced device management
 
 ## 🏗 Concept Documentation
-
-Current concept docs are listed under the **Concepts** section of [SUMMARY.md](SUMMARY.md#concepts). Highlights:
 
 - [Spotify Overview](concepts/spotify-overview.md) — mental model, Spotify Connect vs OAuth-intercept, DNS rewrite gotcha
 - [Spotify OAuth](concepts/spotify-oauth.md) — flows and management endpoints
 - [Amazon Music OAuth](concepts/amazon-music-oauth.md) — companion to Spotify OAuth; same protocol shape, different scopes
 - [Encrypted Export](concepts/ENCRYPTED-EXPORT.md) — `.age`-encrypted diagnostic bundles
-- [Request Recording](REQUEST_RECORDING_CONCEPT.md) — how the proxy captures live device traffic for parity testing
+- [Request Recording](appendix/REQUEST_RECORDING_CONCEPT.md) — how the proxy captures live device traffic for parity testing
 
-Older planning artefacts ("Enhanced State Management System", "Upstream Service Simulation") live under [docs/archive/](archive/) — kept for the record, no longer current.
+Older planning artefacts ("Enhanced State Management System", "Upstream Service Simulation") live under [docs/archive/](../../archive/) — kept for the record, no longer current.
 
 ## 💡 Quick Reference
 
@@ -96,4 +94,4 @@ Older planning artefacts ("Enhanced State Management System", "Upstream Service 
 - **Documentation**: Check troubleshooting guides first
 - **Community**: Share experiences and help others
 
-For a complete list of all documents, see the [Summary](SUMMARY.md).
+For a complete list of all documents, browse the sections in the sidebar.
