@@ -223,6 +223,7 @@ func TestMacMappingIntegration_HTTPHandler(t *testing.T) {
 		// Extract ETag from response headers (direct access needed for httptest.ResponseRecorder)
 		etag := ""
 		//nolint:staticcheck // SA1008: ETag header name must be case-sensitive for test
+		//lint:ignore SA1008 ETag header key is intentionally non-canonical; Bose speakers reject the canonicalized form
 		if vals, ok := rr1.Header()["ETag"]; ok && len(vals) > 0 {
 			etag = vals[0]
 		}

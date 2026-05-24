@@ -105,7 +105,7 @@ func (s *Server) applyBMXTemplate(content string) string {
 // disabled (log-only); kept as the future-restore point — when we re-add
 // the gate, callers will use this helper.
 //
-//nolint:unused // intentional: future-restore point for the disabled auth gate.
+//lint:ignore U1000 intentional: future-restore point for the disabled BMX auth gate
 func (s *Server) writeBMXUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)

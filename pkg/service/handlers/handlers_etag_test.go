@@ -225,6 +225,7 @@ func TestMargeETags(t *testing.T) {
 		_ = pyProxy.ModifyResponse(resp)
 
 		//nolint:canonicalheader
+		//lint:ignore SA1008 ETag header key is intentionally non-canonical; Bose speakers reject the canonicalized form
 		if _, ok := resp.Header[caseSensitiveETag]; !ok {
 			t.Errorf("ModifyResponse did not normalize ETag casing. Headers: %v", resp.Header)
 		}
@@ -267,6 +268,7 @@ func TestMargeETags(t *testing.T) {
 		}
 
 		//nolint:canonicalheader
+		//lint:ignore SA1008 ETag header key is intentionally non-canonical; Bose speakers reject the canonicalized form
 		if _, ok := h[caseSensitiveETag]; ok {
 			// In Go's map, "ETag" and "Etag" are different keys.
 			// Set() uses CanonicalHeaderKey which produces "Etag" (lowercase 't').
