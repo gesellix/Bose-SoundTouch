@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"os"
@@ -180,22 +181,32 @@ func (cm *CertificateManager) GenerateCA() error {
 		return err
 	}
 
-	if encodeErr := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); encodeErr != nil {
-		return encodeErr
+	certEncodeErr := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certCloseErr := certOut.Close()
+
+	if certEncodeErr != nil {
+		return certEncodeErr
 	}
 
-	certOut.Close()
+	if certCloseErr != nil {
+		return fmt.Errorf("close certificate file: %w", certCloseErr)
+	}
 
 	keyOut, err := os.OpenFile(cm.GetCAKeyPath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
 
-	if err := pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)}); err != nil {
-		return err
+	keyEncodeErr := pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	keyCloseErr := keyOut.Close()
+
+	if keyEncodeErr != nil {
+		return keyEncodeErr
 	}
 
-	keyOut.Close()
+	if keyCloseErr != nil {
+		return fmt.Errorf("close key file: %w", keyCloseErr)
+	}
 
 	return nil
 }

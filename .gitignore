@@ -115,6 +115,10 @@ stockholm_zip/*.zip
 NEXT.md
 DONE.md
 
+# Code-scanning working notes — snapshot + remediation plan; not committed
+# until the sweep is complete and the notes are stable.
+CODE-SCANNING-NOTES.md
+
 # Plan/tracking note for the Health-tab debug-utility programme.
 # Living document; commit history of the checks themselves is the
 # source of truth for what shipped.

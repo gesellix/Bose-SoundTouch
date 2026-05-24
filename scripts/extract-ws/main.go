@@ -97,7 +97,7 @@ func extractSSDP(packet gopacket.Packet, udp *layers.UDP, ssdpFilename string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	srcIP := packet.NetworkLayer().NetworkFlow().Src().String()
 	dstIP := packet.NetworkLayer().NetworkFlow().Dst().String()
