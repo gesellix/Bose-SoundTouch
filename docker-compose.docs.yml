@@ -15,8 +15,10 @@ services:
   hugo:
     image: hugomods/hugo:exts
     # --source docs/ because docs/ is the Hugo root inside the repo.
+    # --baseURL / overrides the production subpath (/Bose-SoundTouch/) so
+    # absolute links work at http://localhost:1313/ during local development.
     # The full repo is mounted so enableGitInfo can read git history.
-    command: server --source docs/ --bind 0.0.0.0 --buildDrafts --navigateToChanged
+    command: server --source docs/ --baseURL / --bind 0.0.0.0 --buildDrafts --navigateToChanged
     ports:
       - "1313:1313"
     volumes:

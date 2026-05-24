@@ -122,3 +122,9 @@ SERVICE-HEALTH.md
 
 # Diagnostic encryption keys — private key stays local with the maintainer
 keys/private/
+
+# Hugo (docs site)
+# Hugo build artifacts (docs site)
+docs/.hugo_build.lock
+docs/public/
+docs/resources/

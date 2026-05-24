@@ -4,6 +4,7 @@ title = "AfterTouch"
 
 enableRobotsTXT = true
 enableGitInfo = true
+disablePathToLower = true
 
 [module]
   [module.hugoVersion]
@@ -23,6 +24,14 @@ enableGitInfo = true
   description = "Keep your Bose SoundTouch speakers alive after the cloud shutdown"
   displayUpdatedDate = true
   dateFormat = "January 2, 2006"
+
+  [params.search]
+    enable = true
+    type = "flexsearch"
+
+  [params.search.flexsearch]
+    index = "content"
+    tokenize = "forward"
 
   [params.navbar]
     displayTitle = true

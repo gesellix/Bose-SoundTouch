@@ -1,0 +1,18 @@
+{{- /*
+  Render hook: strip .md extension from internal links so that links
+  written as [foo](OTHER-PAGE.md) in Markdown source resolve to the
+  Hugo page URL instead of a raw .md path (which returns 404).
+
+  This replaces the jekyll-relative-links behaviour from the old Jekyll
+  site without requiring changes to any content files.
+*/ -}}
+{{- $dest := .Destination -}}
+{{- $isAbs := or (strings.HasPrefix $dest "http://") (strings.HasPrefix $dest "https://") (strings.HasPrefix $dest "//") -}}
+{{- if and (not $isAbs) (strings.HasSuffix $dest ".md") -}}
+  {{- $dest = strings.TrimSuffix ".md" $dest -}}
+{{- end -}}
+<a href="{{ $dest }}"
+  {{- with .Title }} title="{{ . }}"{{ end -}}
+  {{- if $isAbs }} target="_blank" rel="noopener noreferrer"{{ end -}}
+>{{ .Text | safeHTML }}</a>
+{{- /* Whitespace trimmed intentionally */ -}}
