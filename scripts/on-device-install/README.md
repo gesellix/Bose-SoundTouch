@@ -2,6 +2,9 @@
 
 Allows to run AfterTouch on SoundTouch devices directly, eliminating the need to run and maintain a separate server on the local network.
 
+For a complete step-by-step walkthrough — from first SSH connection through verified radio preset playback — see
+[docs/guides/ON-DEVICE-INSTALL-WALKTHROUGH.md](../../docs/guides/ON-DEVICE-INSTALL-WALKTHROUGH.md).
+
 ## Disclaimer
 
 ### Invasiveness
@@ -82,7 +85,31 @@ The init script's `status` now distinguishes "running with listener up" from "PI
 
 ## Updating AfterTouch
 
-To update AfterTouch, simply run the installation command again. The installer will check if there's a new version available and update it if necessary.
+Run the installer again with the version you want to install. The script backs up the currently-running binary (named after its version), installs the new one, and prunes older leftover artefacts to keep `/mnt/nv` free.
+
+**Install (or upgrade to) a specific version** — three equivalent ways:
+
+```bash
+# 1. Environment variable (works when piping into sh)
+VERSION=0.92.0 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
+
+# 2. Command-line flag (pass args after `sh -s --`)
+rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.92.0
+
+# 3. Download first, then run with a flag
+curl -sSLo install.sh https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh
+sh install.sh --version 0.92.0
+```
+
+Running **without** a version override installs the version hard-coded in the script (the latest release at the time the script was published). That default is updated with each release; if you're running from `main`, it reflects the most recent tagged version.
+
+> **Tip — rollback:** if the new binary misbehaves, the installer left a `.backup` file alongside it:
+> ```bash
+> ls /mnt/nv/aftertouch/aftertouch-service*.backup
+> cp /mnt/nv/aftertouch/aftertouch-service.<old-version>.backup \
+>    /mnt/nv/aftertouch/aftertouch-service
+> /etc/init.d/aftertouch restart
+> ```
 
 ## Uninstallation
 

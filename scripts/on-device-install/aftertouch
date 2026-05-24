@@ -81,10 +81,24 @@ case "$1" in
   stop)
     echo "Stopping $DESC..."
     if [ -f "$PIDFILE" ]; then
+      PID=$(cat "$PIDFILE")
       start-stop-daemon --stop \
         --quiet \
         --oknodo \
         --pidfile "$PIDFILE"
+      # Wait up to 15 s for SIGTERM to take effect before escalating.
+      # The Go HTTP server exits promptly on SIGTERM in normal conditions;
+      # the loop handles the rare case where it is stuck in a blocking syscall.
+      tries=0
+      while [ $tries -lt 15 ] && kill -0 "$PID" 2>/dev/null; do
+        sleep 1
+        tries=$((tries + 1))
+      done
+      if kill -0 "$PID" 2>/dev/null; then
+        echo "Warning: $NAME (PID $PID) still alive after ${tries}s; sending SIGKILL..." >&2
+        kill -9 "$PID" 2>/dev/null || true
+        sleep 1
+      fi
       rm -f "$PIDFILE"
     else
       echo "No $NAME running (no PID file)." >&2

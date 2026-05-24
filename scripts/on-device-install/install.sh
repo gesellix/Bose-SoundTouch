@@ -1,7 +1,31 @@
 #!/bin/bash
 set -eo pipefail
 
+# Default version installed when no override is provided.  Update this value
+# each time a new release is cut so that running the canonical one-liner
+#   curl -sSL .../install.sh | sh
+# picks up the latest binary without extra arguments.
+#
+# Override via environment variable or the --version/-v flag:
+#   VERSION=0.92.0 curl -sSL .../install.sh | sh
+#   curl -sSL .../install.sh | sh -s -- --version 0.92.0
 VERSION=${VERSION:-0.91.0}
+
+# Parse optional command-line arguments so the script can be invoked as:
+#   install.sh --version 0.92.0
+#   install.sh -v 0.92.0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --version|-v)
+      if [ -z "$2" ]; then
+        echo "ERROR: --version requires an argument." >&2; exit 1
+      fi
+      VERSION="$2"; shift 2;;
+    --) shift; break;;
+    *) echo "Unknown argument: $1" >&2; exit 1;;
+  esac
+done
+
 GH_REPO=${GH_REPO:-gesellix/Bose-SoundTouch}
 BINARY_URL=${BINARY_URL:-https://github.com/$GH_REPO/releases/download/v$VERSION/soundtouch-service-v$VERSION-linux-armv7}
 INIT_SCRIPT_URL=${INIT_SCRIPT_URL:-https://raw.githubusercontent.com/$GH_REPO/v$VERSION/scripts/on-device-install/aftertouch}
