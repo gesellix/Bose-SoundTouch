@@ -188,24 +188,94 @@ source list — you'll see error `1005` (UNKNOWN_SOURCE_ERROR) when trying to
 play a TuneIn station.
 
 **Why this happens:** The speaker materialises its source list from what
-AfterTouch serves via `/streaming/account/<id>/full`. If the device's
-`Sources.xml` on the server doesn't include a TUNEIN entry, the speaker
-never registers TuneIn as a source.
+AfterTouch serves via `/streaming/account/<id>/full`. If no `Sources.xml`
+exists yet for the device on the server (which happens when the device
+first checks in after service startup), AfterTouch never writes the default
+sources and TuneIn is never registered.
 
-**Check whether TuneIn is missing:**
+> **Note:** "Data Sync" from the AfterTouch web UI will not work here — it
+> requires AfterTouch to reach the speaker outbound, which is not possible
+> from a cloud server. The fix is entirely server-side.
+
+**Check whether TuneIn is missing** (run from your local machine):
 
 ```bash
 curl -s http://192.0.2.1:8090/sources
 ```
 
-If the XML does not contain `source="TUNEIN"`, run the Health QuickFix for
-missing sources (the health check reports it as a warning). If no QuickFix
-appears, trigger a data sync from the AfterTouch web UI:
+If the output does not contain `source="TUNEIN"`, fix it in three steps:
 
-1. Click your speaker → **Data Sync** tab (or **Migration** tab).
-2. Click **Sync** to push the default source set to the speaker.
-3. Reboot the speaker.
-4. Re-check `/sources` — `TUNEIN` should now be present.
+### 1. Create `Sources.xml` on the server
+
+Find the device's data directory on your server. With Docker it is inside
+the volume, e.g. `/app/data/accounts/<accountID>/devices/<deviceID>/`.
+Create `Sources.xml` there with the default source set:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<sources>
+  <source id="10001" displayName="AUX IN" secret="" secretType="" type="Audio"
+          createdOn="2015-03-11T19:12:38.000+00:00"
+          updatedOn="2015-03-11T19:12:38.000+00:00">
+    <sourceKey type="AUX" account="AUX"/>
+  </source>
+  <source id="10003" secret="" secretType="token" type="Audio"
+          sourceproviderid="11"
+          createdOn="2019-01-24T08:18:37.000+00:00"
+          updatedOn="2019-02-03T18:35:45.000+00:00">
+    <sourceKey type="LOCAL_INTERNET_RADIO" account=""/>
+  </source>
+  <source id="10004" secret="" secretType="token" type="Audio"
+          sourceproviderid="25"
+          createdOn="2017-07-20T16:43:48.000+00:00"
+          updatedOn="2017-07-20T16:43:48.000+00:00">
+    <sourceKey type="TUNEIN" account=""/>
+  </source>
+  <source id="10005" secret="" secretType="token" type="Audio"
+          sourceproviderid="39"
+          createdOn="2026-02-16T01:01:01.000+00:00"
+          updatedOn="2026-02-16T01:01:01.000+00:00">
+    <sourceKey type="RADIO_BROWSER" account=""/>
+  </source>
+</sources>
+```
+
+The empty `secret=""` fields are intentional — AfterTouch generates TuneIn
+tokens on the fly from `pkg/service/marge/marge.go`.
+
+With Docker you can copy the file in:
+
+```bash
+docker cp Sources.xml aftertouch:/app/data/accounts/<accountID>/devices/<deviceID>/Sources.xml
+```
+
+### 2. Notify the speaker (from your local machine)
+
+Send a `sourcesUpdated` push to the speaker so it re-fetches `/full`:
+
+```bash
+curl -X POST http://192.0.2.1:8090/notification \
+  -H "Content-Type: application/xml" \
+  -d '<updates deviceID="<deviceID>"><sourcesUpdated/></updates>'
+```
+
+Replace `<deviceID>` with the speaker's device ID (visible in the AfterTouch
+Devices tab or in the `Sources.xml` path above).
+
+### 3. Power-cycle the speaker
+
+This is the load-bearing step. The firmware only activates new source *types*
+at boot — the runtime sync writes on-device state but does not complete
+activation. The CLI `setup reboot` command is not sufficient; physically
+unplug the speaker, wait 10 seconds, and plug it back in.
+
+After the reboot, re-check:
+
+```bash
+curl -s http://192.0.2.1:8090/sources
+```
+
+`TUNEIN` should now appear as `READY`.
 
 After TuneIn appears:
 
