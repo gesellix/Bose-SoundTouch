@@ -197,7 +197,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		})
 
 		if err := wsClient.Connect(); err != nil {
-			log.Printf("Failed to connect WebSocket for device %s: %v (retrying in %s)", deviceID, err, backoff)
+			log.Printf("Failed to connect WebSocket for device %s: %v (retrying in %s)", sanitizeLog(deviceID), err, backoff)
 			time.Sleep(backoff)
 
 			backoff *= 2
@@ -214,7 +214,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			s.IsConnected = true
 		})
 
-		log.Printf("WebSocket connected for device %s", deviceID)
+		log.Printf("WebSocket connected for device %s", sanitizeLog(deviceID))
 
 		// Reset backoff after a successful connect so the next failure
 		// starts at the lowest cadence again.
@@ -227,7 +227,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			s.IsConnected = false
 		})
 
-		log.Printf("WebSocket disconnected for device %s — reconnecting in %s", deviceID, backoff)
+		log.Printf("WebSocket disconnected for device %s — reconnecting in %s", sanitizeLog(deviceID), backoff)
 		time.Sleep(backoff)
 
 		backoff *= 2
@@ -313,12 +313,12 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 
 	conn, err := app.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("Device WebSocket upgrade failed for %s: %v", deviceID, err)
+		log.Printf("Device WebSocket upgrade failed for %s: %v", sanitizeLog(deviceID), err)
 		return
 	}
 	defer conn.Close()
 
-	log.Printf("Device WebSocket connected for %s", deviceID)
+	log.Printf("Device WebSocket connected for %s", sanitizeLog(deviceID))
 
 	// Send initial device status
 	initialMessage := webtypes.WebSocketMessage{
@@ -350,7 +350,7 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 
 		for {
 			if _, _, err := conn.NextReader(); err != nil {
-				log.Printf("Device WebSocket read error for %s: %v", deviceID, err)
+				log.Printf("Device WebSocket read error for %s: %v", sanitizeLog(deviceID), err)
 				return
 			}
 		}
@@ -363,7 +363,7 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 	for range ticker.C {
 		// Send ping to check if client is still connected
 		if err := conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-			log.Printf("Failed to send ping to device WebSocket %s: %v", deviceID, err)
+			log.Printf("Failed to send ping to device WebSocket %s: %v", sanitizeLog(deviceID), err)
 			return
 		}
 
@@ -379,7 +379,7 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 		}
 
 		if err := conn.WriteJSON(statusMessage); err != nil {
-			log.Printf("Failed to send device status update for %s: %v", deviceID, err)
+			log.Printf("Failed to send device status update for %s: %v", sanitizeLog(deviceID), err)
 			return
 		}
 
@@ -397,7 +397,7 @@ func (app *WebApp) HandleDeviceWebSocket(w http.ResponseWriter, r *http.Request)
 			}
 
 			if err := conn.WriteJSON(realtimeMessage); err != nil {
-				log.Printf("Failed to send realtime update for %s: %v", deviceID, err)
+				log.Printf("Failed to send realtime update for %s: %v", sanitizeLog(deviceID), err)
 				return
 			}
 		}

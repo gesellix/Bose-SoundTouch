@@ -53,7 +53,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request, stockholmDir string, ba
 
 	file, rel, err := resolveStaticFile(r.URL.Path, stockholmDir)
 	if err != nil {
-		log.Printf("[Stockholm static] Path traversal rejected: %s", r.URL.Path)
+		log.Printf("[Stockholm static] Path traversal rejected: %s", sanitizeLog(r.URL.Path))
 		http.Error(w, "Forbidden", http.StatusForbidden)
 
 		return

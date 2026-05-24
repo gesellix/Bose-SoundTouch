@@ -52,7 +52,7 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 
 	info, err := c.GetDeviceInfo()
 	if err != nil {
-		log.Printf("Failed to fetch device info from %s (%s): %v", host, source, err)
+		log.Printf("Failed to fetch device info from %s (%s): %v", sanitizeLog(host), sanitizeLog(source), err)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 
 	go app.UpdateDeviceStatus(host, conn)
 
-	log.Printf("Added %s device %s (%s) at %s:%d", source, info.Name, info.Type, host, port)
+	log.Printf("Added %s device %s (%s) at %s:%d", sanitizeLog(source), sanitizeLog(info.Name), sanitizeLog(info.Type), sanitizeLog(host), port)
 }
 
 // DiscoverDevices runs an mDNS/UPnP sweep and registers any found

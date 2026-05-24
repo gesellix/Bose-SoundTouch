@@ -371,7 +371,7 @@ func isAddUserNoOp(status int, body []byte) bool {
 // runs, but worded so it's clearly not a failure.
 func logAddUserNoOp(path string, base *url.URL, username string, resp *http.Response) {
 	log.Printf("[ZeroConf] addUser produced expected no-op via %s path (speaker already has activeUser=%q or equivalent state): url=%s status=%d body=<empty> — marge source registration is authoritative for preset/playback",
-		path, username, withAction(base, "addUser"), resp.StatusCode)
+		path, sanitizeLog(username), withAction(base, "addUser"), resp.StatusCode)
 }
 
 // logAddUserFailure emits a single diagnostic line capturing what the speaker
@@ -391,7 +391,7 @@ func logAddUserFailure(path string, base *url.URL, username string, resp *http.R
 	}
 
 	log.Printf("[ZeroConf] addUser rejected via %s path: url=%s userName=%q status=%d server=%q content-type=%q content-length=%q body=%q",
-		path, withAction(base, "addUser"), username, resp.StatusCode, server, ct, cl, bodySummary)
+		path, withAction(base, "addUser"), sanitizeLog(username), resp.StatusCode, sanitizeLog(server), sanitizeLog(ct), sanitizeLog(cl), sanitizeLog(bodySummary))
 }
 
 // pushSimplifiedToken is the fallback for firmware that does not support DH

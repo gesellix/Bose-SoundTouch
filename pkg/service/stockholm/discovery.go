@@ -61,12 +61,12 @@ func DiscoverRenderers(expectedAccountID string, onDevice func(RendererDevice)) 
 
 		info, err := fetchSpeakerInfo(host)
 		if err != nil {
-			log.Printf("[Stockholm SSDP] Failed to fetch /info from %s: %v", host, err)
+			log.Printf("[Stockholm SSDP] Failed to fetch /info from %s: %v", sanitizeLog(host), err)
 			continue
 		}
 
 		if expectedAccountID != "" && info.MargeAccountUUID != expectedAccountID {
-			log.Printf("[Stockholm SSDP] Skipping %s: account %q != %q", host, info.MargeAccountUUID, expectedAccountID)
+			log.Printf("[Stockholm SSDP] Skipping %s: account %q != %q", sanitizeLog(host), sanitizeLog(info.MargeAccountUUID), sanitizeLog(expectedAccountID))
 			continue
 		}
 

@@ -101,7 +101,7 @@ func (b *Bridge) dispatch(clientID string, req appSendRequest) {
 
 	id := req.ID
 
-	log.Printf("[Stockholm bridge] method=%q client=%q", method, clientID)
+	log.Printf("[Stockholm bridge] method=%q client=%q", sanitizeLog(method), sanitizeLog(clientID))
 
 	switch method {
 	case "locale", "htmlReady", "stopHrmsUpdates":
@@ -109,7 +109,7 @@ func (b *Bridge) dispatch(clientID string, req appSendRequest) {
 
 	case "log":
 		if msg, _ := params["msg"].(string); msg != "" {
-			log.Printf("[Stockholm:%s] %s", clientID, msg)
+			log.Printf("[Stockholm:%s] %s", sanitizeLog(clientID), sanitizeLog(msg))
 		}
 
 	case "setData":
