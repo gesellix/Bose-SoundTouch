@@ -3,7 +3,10 @@
 * [Introduction](README.md)
 
 ## User Guides
-* [Device-Local Install Journeys](DEVICE-LOCAL-INSTALL.md)
+* [Deployment Overview](guides/DEPLOYMENT-OVERVIEW.md)
+  * [Local Network Host Walkthrough](guides/EXTERNAL-HOST-WALKTHROUGH.md)
+  * [Cloud / VPS Walkthrough](guides/CLOUD-DEPLOY-WALKTHROUGH.md)
+  * [On-Device Install Walkthrough](guides/ON-DEVICE-INSTALL-WALKTHROUGH.md)
 * [Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md)
 * [Self-Hosting AfterTouch](guides/SELF-HOSTING.md)
 * [Connecting Music Services](guides/MUSIC-SERVICES.md)
@@ -60,6 +63,9 @@
 * [Encrypted Export](concepts/ENCRYPTED-EXPORT.md)
 * [Diagnostic Export (Maintainer Setup)](DIAGNOSTIC-EXPORT.md)
 * [soundtouch-web Roadmap](soundtouch-web-roadmap.md)
+
+## Architecture
+* [Device-Local Install Journeys](architecture/DEVICE-LOCAL-INSTALL.md)
 
 ## Analysis & Research
 * [API Coverage Analysis](analysis/API-COVERAGE.md)
