@@ -463,6 +463,107 @@ func TestHandleDiscoveredDevice_CrossAccountMigration(t *testing.T) {
 	}
 }
 
+// TestHandleDiscoveredDevice_CrossAccountMigration_TargetExists covers the case
+// where both the old and the new account directories already have data for the
+// device before discovery fires. os.Rename fails because the target dir exists,
+// so MoveDevice cannot atomically relocate the directory. The stale source entry
+// must still be removed via the unconditional RemoveDevice fallback, and
+// ListAllDevices must return exactly one entry after the cycle.
+func TestHandleDiscoveredDevice_CrossAccountMigration_TargetExists(t *testing.T) {
+	tempDir := t.TempDir()
+	ds := datastore.NewDataStore(tempDir)
+
+	const (
+		deviceID = "F4E11E930BEB"
+		// oldAccount sorts alphabetically BEFORE newAccount so that
+		// ListAllDevices (which sorts accounts alphabetically, pushing "default"
+		// to the back) picks it first. That means findExistingDeviceInfoByDeviceID
+		// returns oldAccount as storedAccount, the MargeAccountUUID mismatch
+		// condition fires, MoveDevice fails because newAccount already has a
+		// device dir, and the RemoveDevice fallback must clean up the stale entry.
+		oldAccount = "account-aaa-stale"
+		newAccount = "account-zzz-live"
+	)
+
+	// Seed the device under both accounts (simulates a pre-existing duplicate).
+	for _, acc := range []string{oldAccount, newAccount} {
+		info := &models.ServiceDeviceInfo{
+			DeviceID:  deviceID,
+			AccountID: acc,
+			Name:      "Stale Name",
+			IPAddress: "192.0.2.42",
+		}
+		if err := ds.SaveDeviceInfo(acc, deviceID, info); err != nil {
+			t.Fatalf("SaveDeviceInfo under %s: %v", acc, err)
+		}
+	}
+
+	// Confirm both exist before discovery.
+	all, err := ds.ListAllDevices()
+	if err != nil {
+		t.Fatalf("ListAllDevices (before): %v", err)
+	}
+	// ListAllDevices deduplicates; both real accounts → alphabetically-first wins.
+	if len(all) != 1 {
+		t.Logf("ListAllDevices before discovery: %d entries (expected 1 due to dedup): %+v", len(all), all)
+	}
+
+	// Mock /info — reports newAccount as the canonical MargeAccountUUID.
+	deviceInfoXML := fmt.Sprintf(`<info deviceID="%s">
+<name>Updated Name</name>
+<type>SoundTouch 10</type>
+<margeAccountUUID>%s</margeAccountUUID>
+<networkInfo type="SCM">
+<macAddress>%s</macAddress>
+<ipAddress>192.0.2.42</ipAddress>
+</networkInfo>
+<moduleType>sm2</moduleType>
+</info>`, deviceID, newAccount, deviceID)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/info" {
+			w.Header().Set("Content-Type", "application/xml")
+			fmt.Fprint(w, deviceInfoXML)
+		} else {
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	deviceIP := server.URL[len("http://"):]
+	sm := setup.NewManager(server.URL, ds, nil)
+	srv := NewServer(ds, sm, "http://localhost", false, false, false)
+
+	srv.handleDiscoveredDevice(models.DiscoveredDevice{
+		Host:            deviceIP,
+		Name:            "Discovery Name",
+		DiscoveryMethod: "mDNS",
+	})
+
+	// New account must have fresh data.
+	info, err := ds.GetDeviceInfo(newAccount, deviceID)
+	if err != nil {
+		t.Fatalf("GetDeviceInfo under %s: %v", newAccount, err)
+	}
+	if info.Name != "Updated Name" {
+		t.Errorf("Name: want %q, got %q", "Updated Name", info.Name)
+	}
+
+	// Old account stale entry must be gone.
+	if _, err := ds.GetDeviceInfo(oldAccount, deviceID); err == nil {
+		t.Errorf("stale entry still present under old account %s", oldAccount)
+	}
+
+	// No duplicates in ListAllDevices.
+	all, err = ds.ListAllDevices()
+	if err != nil {
+		t.Fatalf("ListAllDevices (after): %v", err)
+	}
+	if len(all) != 1 {
+		t.Errorf("ListAllDevices: want 1 device, got %d: %+v", len(all), all)
+	}
+}
+
 func TestMACBasedDeviceDiscovery_FallbackScenario(t *testing.T) {
 	// Test scenario where /info endpoint is not available
 	tempDir, err := os.MkdirTemp("", "mac-fallback-test-*")

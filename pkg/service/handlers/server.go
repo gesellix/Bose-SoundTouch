@@ -1099,6 +1099,19 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 		return
 	}
 
+	// If the device was (or needed to be) relocated to a different account, ensure the
+	// stale source entry is gone. MoveDevice's rename is a no-op if the target already
+	// existed (e.g. partial duplicate state), leaving the source dir behind; removing it
+	// here is safe because SaveDeviceInfo above has already written fresh data to
+	// accountID. RemoveDevice returns nil when the path does not exist, so this is also
+	// a harmless no-op when MoveDevice already renamed the directory successfully.
+	if storedAccount != "" && storedAccount != accountID {
+		if err := s.ds.RemoveDevice(storedAccount, deviceID); err != nil {
+			log.Printf("Failed to remove stale device entry for %s in %s: %v",
+				deviceID, storedAccount, err)
+		}
+	}
+
 	// 8. Create default Sources.xml only when no sources file exists yet
 	if !s.ds.HasConfiguredSources(accountID, deviceID) {
 		if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
