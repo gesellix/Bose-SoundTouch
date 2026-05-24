@@ -35,12 +35,23 @@ disablePathToLower = true
 
   [params.navbar]
     displayTitle = true
-    displayLogo = false
+    displayLogo = true
+
+    [params.navbar.logo]
+      path   = "images/logo.svg"
+      width  = "24"
+      height = "24"
 
   [params.footer]
     enable = true
-    displayCopyright = true
+    displayCopyright = false
     displayPoweredBy = false
+
+  [params.blog]
+    [params.blog.list]
+      displayTags = true
+      sortBy      = "date"
+      sortOrder   = "desc"
 
 [[menu.main]]
   identifier = "docs"
