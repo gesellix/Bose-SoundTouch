@@ -215,8 +215,8 @@ jobs:
           )
 
           for img in "${IMAGES[@]}"; do
-            if [ ! -f "docs/images/$img" ]; then
-              echo "::warning file=docs/guides/MIGRATION-GUIDE.md::Pending image '$img' is missing from docs/images/"
+            if [ ! -f "docs/static/images/$img" ]; then
+              echo "::warning file=docs/content/docs/guides/MIGRATION-GUIDE.md::Pending image '$img' is missing from docs/static/images/"
             fi
           done
 
@@ -226,7 +226,7 @@ jobs:
           echo "Validating API documentation consistency..."
 
           # Check API cookbook
-          if [ -f "docs/reference/API-COOKBOOK.md" ]; then
+          if [ -f "docs/content/docs/reference/API-COOKBOOK.md" ]; then
             echo "✓ API Cookbook exists"
           else
             echo "✗ API Cookbook missing"
@@ -234,7 +234,7 @@ jobs:
           fi
 
           # Check getting started guide
-          if [ -f "docs/guides/GETTING-STARTED.md" ]; then
+          if [ -f "docs/content/docs/guides/GETTING-STARTED.md" ]; then
             echo "✓ Getting Started guide exists"
           else
             echo "✗ Getting Started guide missing"

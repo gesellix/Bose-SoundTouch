@@ -1,0 +1,55 @@
+baseURL = "https://gesellix.github.io/Bose-SoundTouch/"
+languageCode = "en-us"
+title = "AfterTouch"
+
+enableRobotsTXT = true
+enableGitInfo = true
+
+[module]
+  [module.hugoVersion]
+    extended = true
+    min = "0.112.0"
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    noClasses = false
+
+[params]
+  description = "Keep your Bose SoundTouch speakers alive after the cloud shutdown"
+  displayUpdatedDate = true
+  dateFormat = "January 2, 2006"
+
+  [params.navbar]
+    displayTitle = true
+    displayLogo = false
+
+  [params.footer]
+    enable = true
+    displayCopyright = true
+    displayPoweredBy = false
+
+[[menu.main]]
+  identifier = "docs"
+  name = "Docs"
+  pageRef = "/docs"
+  weight = 1
+
+[[menu.main]]
+  identifier = "blog"
+  name = "Blog"
+  pageRef = "/blog"
+  weight = 2
+
+[[menu.main]]
+  identifier = "github"
+  name = "GitHub"
+  url = "https://github.com/gesellix/Bose-SoundTouch"
+  weight = 3
+  [menu.main.params]
+    type = "icon"
+    icon = "github"

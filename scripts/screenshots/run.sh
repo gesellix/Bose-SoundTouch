@@ -3,14 +3,14 @@
 # soundtouch-service + dummy-speaker, drives the web UI in headless
 # Chrome via the chromedp runner, then tears everything down.
 #
-# Outputs to docs/images/ by default. Override with OUT_DIR=/some/path.
+# Outputs to docs/static/images/ by default. Override with OUT_DIR=/some/path.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-OUT_DIR="${OUT_DIR:-docs/images}"
+OUT_DIR="${OUT_DIR:-docs/static/images}"
 SERVICE_PORT="${SERVICE_PORT:-8000}"
 SPEAKER_PORT="${SPEAKER_PORT:-8090}"
 DATA_DIR="$(mktemp -d -t soundtouch-screenshots-XXXXXX)"

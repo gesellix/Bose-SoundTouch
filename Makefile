@@ -1,4 +1,4 @@
-.PHONY: all build build-cli test test-coverage test-http-client test-http-client-rotate check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm update-static-deps
+.PHONY: all build build-cli test test-coverage test-http-client test-http-client-rotate check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm update-static-deps dev-docs dev-docs-tidy hugo
 
 # Load .env if present (simple KEY=VALUE format, no shell quoting)
 -include .env
@@ -454,6 +454,22 @@ screenshots:
 	@echo "Capturing documentation screenshots..."
 	@bash scripts/screenshots/run.sh
 
+# Documentation site (Hugo + Hextra via Docker)
+# First run: make dev-docs-tidy  (downloads Hextra, writes docs/go.sum)
+# Then:      make dev-docs        (http://localhost:1313, live reload)
+dev-docs:
+	docker compose -f docker-compose.docs.yml up
+
+dev-docs-tidy:
+	docker compose -f docker-compose.docs.yml run --rm hugo mod tidy --source docs/
+
+# Run any hugo CLI command inside the docs container:
+#   make hugo ARGS="version"
+#   make hugo ARGS="new content/docs/guides/my-guide.md"
+ARGS ?=
+hugo:
+	docker compose -f docker-compose.docs.yml run --rm hugo --source docs/ $(ARGS)
+
 help:
 	@echo "Available targets:"
 	@echo "  build         - Build the CLI tool, service, and examples"
@@ -478,6 +494,9 @@ help:
 	@echo "  dev-service-proxy - Build and run service with proxy (PROXY_URL=url required)"
 	@echo "  dev-service-stockholm - Build and run service with Stockholm frontend (requires prior 'make prepare-stockholm')"
 	@echo "  screenshots   - Capture documentation screenshots (headless Chrome via chromedp)"
+	@echo "  dev-docs      - Serve documentation site locally via Docker (http://localhost:1313)"
+	@echo "  dev-docs-tidy - Run hugo mod tidy (first run, or after hugo.toml module changes)"
+	@echo "  hugo ARGS=... - Run any hugo CLI command via Docker (e.g. make hugo ARGS=version)"
 	@echo "  dev-discover  - Build and run device discovery"
 	@echo "  dev-info      - Build and get device info (HOST=ip required)"
 	@echo "  dev-mdns      - Build and run mDNS discovery example"

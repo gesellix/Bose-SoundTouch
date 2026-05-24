@@ -1,0 +1,30 @@
+# Local Hugo/Hextra documentation server.
+#
+# Usage:
+#   make dev-docs          # start the live-reload server (http://localhost:1313)
+#   make dev-docs-tidy     # run hugo mod tidy (required on first run, or after
+#                          # changing hugo.toml module imports)
+#   make hugo ARGS="..."   # run any other hugo CLI command, e.g.
+#                          #   make hugo ARGS="version"
+#                          #   make hugo ARGS="new content/blog/my-post.md"
+#
+# The hugomods/hugo:exts image bundles Hugo extended + Go so Hugo modules
+# (Hextra) work without any extra tooling on the host.
+
+services:
+  hugo:
+    image: hugomods/hugo:exts
+    # --source docs/ because docs/ is the Hugo root inside the repo.
+    # The full repo is mounted so enableGitInfo can read git history.
+    command: server --source docs/ --bind 0.0.0.0 --buildDrafts --navigateToChanged
+    ports:
+      - "1313:1313"
+    volumes:
+      - .:/src
+      # Persist the Hugo module cache across runs so 'hugo mod tidy' only
+      # downloads Hextra once.
+      - hugo-mod-cache:/root/.cache/hugo_cache
+    working_dir: /src
+
+volumes:
+  hugo-mod-cache:
