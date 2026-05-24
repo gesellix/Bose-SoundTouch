@@ -9,9 +9,9 @@
 > by, or otherwise connected to Bose Corporation.** See
 > [Disclaimer](#disclaimer) for the full statement.
 
-## Context: Cloud Shutdown
+## The Bose Cloud Has Shut Down
 
-Bose is shutting down SoundTouch cloud services on **May 6, 2026**. After that, music service browsing, preset sync, and the official SoundTouch app stop working. This toolkit lets you keep your speakers fully functional.
+Bose shut down SoundTouch cloud services on **May 6, 2026**. Presets, music service browsing, and stereo pairing no longer work through Bose's infrastructure. AfterTouch restores all of these — no Bose infrastructure required.
 
 See the [Survival Guide](https://gesellix.github.io/Bose-SoundTouch/guides/SURVIVAL-GUIDE.html) for the full picture.
 
@@ -25,13 +25,11 @@ A local server that replaces the Bose cloud ("AfterTouch"). Once your speaker is
 
 Not sure which approach fits your situation? See the [Deployment Overview](./docs/guides/DEPLOYMENT-OVERVIEW.md) — it compares running AfterTouch on a Raspberry Pi or other always-on host against running it directly on the SoundTouch speaker, with links to step-by-step walkthroughs for each path.
 
-**Two scenarios:**
+**Getting started:**
 
-**Before shutdown — migrate your existing setup**
-While the Bose cloud is still running, use `soundtouch-backup` to save your account data. The local service web UI then helps with the migration so your speaker keeps its presets and credentials.
+**Already migrated before May 6** — your presets and credentials are preserved. AfterTouch picks up where the Bose cloud left off.
 
-**After shutdown or factory reset — start fresh**
-Create a local account, configure your speakers, and start using them immediately. No Bose infrastructure required.
+**Starting fresh (or after a factory reset)** — create a local account, configure your speakers, and start using them immediately.
 
 **Redirecting your speaker**
 

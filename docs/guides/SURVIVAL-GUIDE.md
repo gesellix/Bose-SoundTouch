@@ -1,18 +1,26 @@
-# Bose Cloud Shutdown: Survival Guide
+# Keeping Your Speakers Alive After the Bose Cloud Shutdown
 
-Bose is shutting down SoundTouch cloud services on **May 6, 2026**. After that date, the following stop working:
+Bose shut down SoundTouch cloud services on **May 6, 2026**. Per the [official end-of-life page](https://www.bose.com/soundtouch-end-of-life), the following no longer work:
 
-- Music service browsing (TuneIn, Spotify connect via app, etc.)
-- Preset and recently-played sync
-- The official SoundTouch app
+- **Presets** — preset buttons on the product and in the app
+- **Music service browsing and playback** from the SoundTouch app (TuneIn, Spotify, etc.)
+- **Stereo pairing** for SoundTouch 10
+- **Alexa voice commands**
 - Software update checks
 
 What **continues to work** regardless:
+- The official SoundTouch app for local control (play/pause/volume/source selection)
 - Local playback controls via `soundtouch-cli`, `soundtouch-web`, or any app that uses the local Web API
 - Bluetooth, AUX, and AirPlay inputs
 - Multiroom zones (local, peer-to-peer)
 
-**AfterTouch** — the `soundtouch-service` — restores everything in the first list by running a replacement for the Bose cloud on your own network.
+**AfterTouch** — the `soundtouch-service` — restores the first three:
+
+- **Presets** — full preset management including long-press assignment and recently-played sync; music service presets (Spotify, TuneIn, etc.) work once the service is linked (see [Connecting Music Services](MUSIC-SERVICES.md))
+- **Music browsing and playback** — TuneIn, Internet Radio, and RadioBrowser via `soundtouch-web`; direct station/URL playback via `soundtouch-cli`; Spotify via Spotify Connect (speaker-native) or AfterTouch's OAuth integration; Amazon Music OAuth infrastructure is in place but streaming is not yet verified
+- **Stereo pairing** — via `soundtouch-cli`
+
+Alexa voice commands are not currently supported.
 
 ---
 
@@ -42,35 +50,22 @@ You can leave SSH enabled for future maintenance, or disable it once migration i
 
 ---
 
-## Scenario A: Migrate before the shutdown
+## Scenario A: You migrated before May 6 (or have a backup)
 
-Do this while the Bose cloud is still running. Your existing presets and listening history are preserved.
+If you ran `soundtouch-backup` and pointed your speakers at AfterTouch before the shutdown, your presets and listening history are already preserved in AfterTouch's datastore. You're done — just keep AfterTouch running.
 
-**Step 1 — Back up your data.**
-Run `soundtouch-backup all` to save your Bose account data (presets, paired devices, music sources) and each speaker's local state. See the [soundtouch-backup README](../../cmd/soundtouch-backup/README.md) for usage.
+If you have a backup but haven't migrated yet, start AfterTouch and restore the backup before following the steps below.
 
-**Step 2 — Start the service and open the web UI** at `http://<server>:8000`.
+**Step 1 — Start the service and open the web UI** at `http://<server>:8000`.
 
-**Step 3 — Configure the server URL.**
+**Step 2 — Configure the server URL.**
 In the Settings tab, set the server URL to the address your speakers can reach (e.g. `http://soundtouch.fritz.box:8000`). If you plan to use DNS/DHCP redirect, also configure the HTTPS server URL.
 
-**Step 4 — Add your speaker.**
+**Step 3 — Add your speaker.**
 The service discovers devices on your network automatically. If a speaker doesn't appear, add it manually by IP address.
 
-**Step 5 — Sync device data.**
-Click "Sync" on the device to pull its current presets, recents, and sources from the Bose cloud into the local service's datastore.
-
-**Step 6 — Migrate.**
-The web UI offers two redirect methods and walks you through each step:
-
-| Method       | How it works                                           | When to use                                              |
-|--------------|--------------------------------------------------------|----------------------------------------------------------|
-| XML redirect | Uploads a config file to the speaker via the Web API   | Testing; simpler setup; covers only registered endpoints |
-| DNS/DHCP     | Custom DNS resolves Bose hostnames to the local server | All devices at once; full coverage                       |
-
-Both methods require TLS when the speaker uses HTTPS to contact the service. The web UI guides you through installing the service's CA certificate on the speaker (requires SSH).
-
-**Step 7 — Reboot the speaker.**
+**Step 4 — Migrate.**
+**Step 5 — Reboot the speaker.**
 Power-cycle the speaker to apply the changes. After reboot it contacts the local service instead of Bose's cloud.
 
 ---

@@ -128,7 +128,7 @@ Once the speaker appears, click **Sync Data**. This connects to the speaker and 
 
 ![Data Sync tab showing a successful sync](../images/ui-sync.png)
 
-If the Bose cloud is still running, Sync also fetches your account data from Bose's servers. This is your preservation step — do it before the cloud shuts down.
+Sync pulls the speaker's local state into AfterTouch's datastore, creating an off-device backup of its configuration. If you ran this before May 6, 2026, your account data from Bose's servers was also captured at that time.
 
 ---
 
@@ -297,4 +297,4 @@ If you need to undo a migration:
 
 Once all speakers are migrated, the `data/` directory is the source of truth for your presets, recents, and device state. Back it up periodically. The web UI at `http://<server>:8000` is your management interface from this point on.
 
-For the Bose cloud backup you created in Step 4, keep the `.tar.gz` archive in case you need to restore credentials or presets later.
+If you ran `soundtouch-backup` before the cloud shutdown, keep that archive in case you need to restore credentials or presets later.
