@@ -2,6 +2,11 @@
 
 This guide explains how to install the `soundtouch-service` as a persistent systemd service on a Raspberry Pi (tested on Raspberry Pi Zero 2W, 3, and 4).
 
+For a complete walkthrough — from install through speaker migration and preset setup — see
+[EXTERNAL-HOST-WALKTHROUGH.md](EXTERNAL-HOST-WALKTHROUGH.md).
+Not sure whether to use a Pi or run AfterTouch on the speaker itself? See
+[DEPLOYMENT-OVERVIEW.md](DEPLOYMENT-OVERVIEW.md).
+
 ## Automated Installer
 
 We provide a specialized installer script located in the `scripts/raspberry-pi/` directory of the repository.
@@ -30,7 +35,7 @@ You can customize the installation using environment variables:
 
 ```bash
 sudo \
-  VERSION=v0.17.0 \
+  VERSION=v0.92.0 \
   HOSTNAME_FQDN=soundtouch.local \
   HTTP_PORT=80 \
   HTTPS_PORT=443 \
@@ -42,7 +47,7 @@ sudo \
 To update the service to a specific version, run the installer with the version as an argument:
 
 ```bash
-sudo bash install.sh v0.18.1
+sudo bash install.sh v0.92.0
 ```
 
 The installer will automatically fetch the latest version of itself for that release and then update the service binary and restart it.

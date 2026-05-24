@@ -1,5 +1,15 @@
 # Device-Local Install: Four User Journeys
 
+> **Looking for how to actually install AfterTouch?**
+> See the [Deployment Overview](../guides/DEPLOYMENT-OVERVIEW.md) for user-friendly
+> step-by-step guides for both deployment scenarios (external host and on-device).
+>
+> This document is an **architectural analysis** — user journeys, install patterns,
+> technology tradeoffs, and future directions. It is aimed at contributors and
+> project planning, not at end users.
+
+---
+
 A user-journey-shaped view of where AfterTouch sits today and where it could go. The same speaker, the same constraints, but four different audiences with non-overlapping needs:
 
 1. **Initial setup / install** — getting AfterTouch onto a fresh or freshly-orphaned speaker.
