@@ -185,7 +185,7 @@ func (d *Service) PerformDiscovery(ctx context.Context) ([]*models.DiscoveredDev
 	log.Printf("UPnP: Discovery completed. Processed %d responses, found %d unique devices", responseCount, len(result))
 
 	for i, device := range result {
-		log.Printf("UPnP: Device #%d: %s at %s:%d (UPnP Location: %s)", i+1, device.Name, device.Host, device.Port, device.UPnPLocation)
+		log.Printf("UPnP: Device #%d: %s at %s:%d (UPnP Location: %s)", i+1, sanitizeLog(device.Name), sanitizeLog(device.Host), device.Port, sanitizeLog(device.UPnPLocation))
 	}
 
 	return result, nil
@@ -220,7 +220,7 @@ func (d *Service) setupUDPListener() (*net.UDPConn, error) {
 	// M-SEARCH leaves through the right NIC on multi-homed hosts.
 	if iface != nil {
 		if err := ipv4.NewPacketConn(listener).SetMulticastInterface(iface); err != nil {
-			log.Printf("UPnP: Failed to set multicast interface to %q: %v", iface.Name, err)
+			log.Printf("UPnP: Failed to set multicast interface to %q: %v", sanitizeLog(iface.Name), err)
 			// Continue regardless — the kernel will fall back to its own routing decision.
 		}
 	}
@@ -241,13 +241,13 @@ func (d *Service) resolveListenInterface() (net.IP, *net.Interface, error) {
 
 	iface, err := net.InterfaceByName(d.ifaceName)
 	if err != nil {
-		log.Printf("UPnP: Configured interface %q not found: %v", d.ifaceName, err)
+		log.Printf("UPnP: Configured interface %q not found: %v", sanitizeLog(d.ifaceName), err)
 		return nil, nil, fmt.Errorf("configured interface %q not found: %w", d.ifaceName, err)
 	}
 
 	addrs, err := iface.Addrs()
 	if err != nil {
-		log.Printf("UPnP: Failed to read addresses for interface %q: %v", d.ifaceName, err)
+		log.Printf("UPnP: Failed to read addresses for interface %q: %v", sanitizeLog(d.ifaceName), err)
 		return nil, nil, fmt.Errorf("read addresses for interface %q: %w", d.ifaceName, err)
 	}
 
@@ -262,12 +262,12 @@ func (d *Service) resolveListenInterface() (net.IP, *net.Interface, error) {
 			continue
 		}
 
-		log.Printf("UPnP: Binding UDP listener to interface %q (%s)", iface.Name, ipv4Addr)
+		log.Printf("UPnP: Binding UDP listener to interface %q (%s)", sanitizeLog(iface.Name), sanitizeLog(ipv4Addr.String()))
 
 		return ipv4Addr, iface, nil
 	}
 
-	log.Printf("UPnP: Configured interface %q has no usable IPv4 address", d.ifaceName)
+	log.Printf("UPnP: Configured interface %q has no usable IPv4 address", sanitizeLog(d.ifaceName))
 
 	return nil, nil, fmt.Errorf("interface %q has no usable IPv4 address", d.ifaceName)
 }
@@ -326,7 +326,7 @@ func (d *Service) listenForResponses(ctx context.Context, listener *net.UDPConn,
 
 			device, err := d.parseResponse(responseText)
 			if err != nil {
-				log.Printf("UPnP: Failed to parse response #%d from %s: %v", responseCount, remoteAddr.String(), err)
+				log.Printf("UPnP: Failed to parse response #%d from %s: %v", responseCount, sanitizeLog(remoteAddr.String()), err)
 				continue // Skip invalid responses
 			}
 
@@ -380,7 +380,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 
 	// Check if it's a valid HTTP response
 	if len(lines) < 1 || !strings.HasPrefix(lines[0], "HTTP/1.1 200") {
-		log.Printf("UPnP: Invalid HTTP response, first line: '%s'", lines[0])
+		log.Printf("UPnP: Invalid HTTP response, first line: '%s'", sanitizeLog(lines[0]))
 		return nil, fmt.Errorf("invalid HTTP response")
 	}
 
@@ -419,7 +419,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 
 	// Accept both MediaRenderer and any device type for now - we'll validate it's a SoundTouch later
 	if !strings.Contains(strings.ToLower(st), "mediarenderer") && !strings.Contains(strings.ToLower(st), "upnp:rootdevice") {
-		log.Printf("UPnP: Device type '%s' is not a MediaRenderer, skipping", st)
+		log.Printf("UPnP: Device type '%s' is not a MediaRenderer, skipping", sanitizeLog(st))
 		return nil, fmt.Errorf("not a MediaRenderer device")
 	}
 
@@ -436,7 +436,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 	// Extract device information from location URL
 	device, err := d.parseLocationURL(location, headers["usn"])
 	if err != nil {
-		log.Printf("UPnP: Failed to parse location URL '%s': %v", location, err)
+		log.Printf("UPnP: Failed to parse location URL '%s': %v", sanitizeLog(location), err)
 		return nil, fmt.Errorf("failed to parse location URL: %w", err)
 	}
 
@@ -449,7 +449,7 @@ func (d *Service) parseResponse(response string) (*models.DiscoveredDevice, erro
 	if err := d.EnrichDeviceInfo(device, location); err != nil {
 		logVerbose("UPnP: Could not enrich device info from location '%s': %v — accepting tentatively (will be re-verified by /info probe)", location, err)
 	} else if !isBoseUPnPDevice(device) {
-		log.Printf("UPnP: Rejecting non-Bose device: model=%q (manufacturer not Bose / model not SoundTouch)", device.ModelID)
+		log.Printf("UPnP: Rejecting non-Bose device: model=%q (manufacturer not Bose / model not SoundTouch)", sanitizeLog(device.ModelID))
 		return nil, fmt.Errorf("non-Bose UPnP device: %s", device.ModelID)
 	} else {
 		logVerbose("UPnP: Successfully enriched device info for %s (model=%q)", device.Name, device.ModelID)
@@ -495,7 +495,7 @@ func (d *Service) parseLocationURL(location, usn string) (*models.DiscoveredDevi
 	matches := re.FindStringSubmatch(location)
 
 	if len(matches) < 2 {
-		log.Printf("UPnP: Location URL '%s' does not match expected format http://host:port", location)
+		log.Printf("UPnP: Location URL '%s' does not match expected format http://host:port", sanitizeLog(location))
 		return nil, fmt.Errorf("invalid location URL format")
 	}
 
@@ -524,7 +524,7 @@ func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location str
 
 	resp, err := d.httpClient.Get(location)
 	if err != nil {
-		log.Printf("UPnP: Failed to fetch device description from %s: %v", location, err)
+		log.Printf("UPnP: Failed to fetch device description from %s: %v", sanitizeLog(location), err)
 		return err
 	}
 
@@ -554,7 +554,7 @@ func (d *Service) EnrichDeviceInfo(device *models.DiscoveredDevice, location str
 	}
 
 	if err := xml.Unmarshal(data, &upnpRoot); err != nil {
-		log.Printf("UPnP: Failed to parse device description from %s: %v", location, err)
+		log.Printf("UPnP: Failed to parse device description from %s: %v", sanitizeLog(location), err)
 		return err
 	}
 

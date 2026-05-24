@@ -86,7 +86,7 @@ func main() {
 			}
 
 			if rawBind != "" && bindAddr != rawBind {
-				log.Printf("Resolved --bind %q to %s", rawBind, bindAddr)
+				log.Printf("Resolved --bind %q to %s", sanitizeLog(rawBind), sanitizeLog(bindAddr))
 			}
 
 			rawIface := c.String("interface")
@@ -94,7 +94,7 @@ func main() {
 
 			ifaceName := defaultDiscoveryInterface(rawIface, rawBind, bindAddr)
 			if rawIface == "" && ifaceName != "" {
-				log.Printf("Defaulting --interface to %q from --bind", ifaceName)
+				log.Printf("Defaulting --interface to %q from --bind", sanitizeLog(ifaceName))
 			}
 
 			addr := ":" + port
@@ -131,7 +131,7 @@ func main() {
 			r := chi.NewRouter()
 			webApp.Mount(r, discoveryService)
 
-			log.Printf("AfterTouch Web UI starting on http://%s", addr)
+			log.Printf("AfterTouch Web UI starting on http://%s", sanitizeLog(addr))
 
 			return http.ListenAndServe(addr, r)
 		},

@@ -71,7 +71,7 @@ func initializeDefaultSources(ds *datastore.DataStore) {
 	for i := range allDevices {
 		dev := &allDevices[i]
 		if sources, errGet := ds.GetConfiguredSources(dev.AccountID, dev.DeviceID); errGet == nil {
-			log.Printf("Initializing default Sources.xml for existing device %s", dev.DeviceID)
+			log.Printf("Initializing default Sources.xml for existing device %s", sanitizeLog(dev.DeviceID))
 
 			// Find default sources and merge them if missing or outdated tokens.
 			// claimed tracks which stored sources have already been matched by a default,
@@ -103,13 +103,13 @@ func initializeDefaultSources(ds *datastore.DataStore) {
 					claimed[foundIdx] = true
 
 					if sources[foundIdx].Secret == "" && def.Secret != "" {
-						log.Printf("Initializing missing token for source %s on device %s", def.SourceKeyType, dev.DeviceID)
+						log.Printf("Initializing missing token for source %s on device %s", sanitizeLog(def.SourceKeyType), sanitizeLog(dev.DeviceID))
 						sources[foundIdx].Secret = def.Secret
 						sources[foundIdx].SecretType = def.SecretType
 						modified = true
 					}
 				} else {
-					log.Printf("Adding missing default source %s (providerID=%s) to device %s", def.SourceKeyType, def.SourceProviderID, dev.DeviceID)
+					log.Printf("Adding missing default source %s (providerID=%s) to device %s", sanitizeLog(def.SourceKeyType), sanitizeLog(def.SourceProviderID), sanitizeLog(dev.DeviceID))
 					sources = append(sources, def)
 					modified = true
 				}
@@ -117,7 +117,7 @@ func initializeDefaultSources(ds *datastore.DataStore) {
 
 			if modified {
 				if errSave := ds.SaveConfiguredSources(dev.AccountID, dev.DeviceID, sources); errSave != nil {
-					log.Printf("Failed to save updated sources for %s: %v", dev.DeviceID, errSave)
+					log.Printf("Failed to save updated sources for %s: %v", sanitizeLog(dev.DeviceID), errSave)
 				}
 			}
 		}
@@ -147,7 +147,7 @@ func initMusicServices(config serviceConfig, server *handlers.Server) {
 			clientIDPrefix = clientIDPrefix[:8]
 		}
 
-		log.Printf("Spotify service initialized (client ID: %s...)", clientIDPrefix)
+		log.Printf("Spotify service initialized (client ID: %s...)", sanitizeLog(clientIDPrefix))
 	}
 
 	if config.amazonClientID != "" {
@@ -172,7 +172,7 @@ func initMusicServices(config serviceConfig, server *handlers.Server) {
 			clientIDPrefix = clientIDPrefix[:8]
 		}
 
-		log.Printf("Amazon Music service initialized (client ID: %s...)", clientIDPrefix)
+		log.Printf("Amazon Music service initialized (client ID: %s...)", sanitizeLog(clientIDPrefix))
 	}
 }
 
@@ -188,7 +188,7 @@ func logBufferCapacityFromEnv(defaultCap int) int {
 
 	v, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("[Logs] Invalid SOUNDTOUCH_LOG_BUFFER_LINES=%q, using default %d", raw, defaultCap)
+		log.Printf("[Logs] Invalid SOUNDTOUCH_LOG_BUFFER_LINES=%q, using default %d", sanitizeLog(raw), defaultCap)
 		return defaultCap
 	}
 
@@ -415,7 +415,7 @@ func main() {
 			persisted := applyPersistedSettings(ds, &config)
 
 			if persisted.ServerURL == "" {
-				log.Printf("Creating default settings.json in %s", config.dataDir)
+				log.Printf("Creating default settings.json in %s", sanitizeLog(config.dataDir))
 				persisted = createDefaultSettings(ds, config)
 			}
 
@@ -468,7 +468,7 @@ func main() {
 			server.SetShortcuts(persisted.Shortcuts)
 
 			for path, status := range persisted.Shortcuts {
-				log.Printf("Warning: configured shortcut: %s -> %d", path, status)
+				log.Printf("Warning: configured shortcut: %s -> %d", sanitizeLog(path), status)
 			}
 
 			recorder := proxy.NewRecorder(config.dataDir)
@@ -477,11 +477,11 @@ func main() {
 
 			patterns, err := proxy.LoadPatterns(patternsPath)
 			if err != nil {
-				log.Printf("Warning: Failed to load patterns from %s: %v", patternsPath, err)
+				log.Printf("Warning: Failed to load patterns from %s: %v", sanitizeLog(patternsPath), err)
 			}
 
 			if len(patterns) == 0 {
-				log.Printf("Creating default patterns at %s", patternsPath)
+				log.Printf("Creating default patterns at %s", sanitizeLog(patternsPath))
 
 				patterns = proxy.DefaultPatterns()
 
@@ -512,17 +512,17 @@ func main() {
 				} else {
 					stockholmHandler = sh
 
-					log.Printf("Stockholm frontend enabled from %s", config.stockholmDir)
+					log.Printf("Stockholm frontend enabled from %s", sanitizeLog(config.stockholmDir))
 				}
 			}
 
 			r := setupRouter(server, stockholmHandler)
 
-			log.Printf("Go service starting on %s", config.serverURL)
+			log.Printf("Go service starting on %s", sanitizeLog(config.serverURL))
 
 			// TLS cert generation can be slow on constrained hardware; run it in the
 			// background so the HTTP server is available immediately.
-			log.Printf("HTTPS setup running in background; %s will be available shortly", config.httpsServerURL)
+			log.Printf("HTTPS setup running in background; %s will be available shortly", sanitizeLog(config.httpsServerURL))
 
 			go func() {
 				tlsConfig, err := cm.GetServerTLSConfig(config.domains)
@@ -652,7 +652,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 
 	discoveryInterval, err := time.ParseDuration(discoveryIntervalStr)
 	if err != nil {
-		log.Printf("Warning: Failed to parse discovery interval %s, using default 5m: %v", discoveryIntervalStr, err)
+		log.Printf("Warning: Failed to parse discovery interval %s, using default 5m: %v", sanitizeLog(discoveryIntervalStr), err)
 
 		discoveryInterval = 5 * time.Minute
 	}
@@ -1294,7 +1294,7 @@ func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, h
 			return &tlsConfig.Certificates[0], nil
 		}
 
-		log.Printf("[TLS] ❌ No certificate available for %s", clientHello.ServerName)
+		log.Printf("[TLS] ❌ No certificate available for %s", sanitizeLog(clientHello.ServerName))
 
 		return nil, fmt.Errorf("no certificate available for %s", clientHello.ServerName)
 	}
@@ -1306,7 +1306,7 @@ func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, h
 		ErrorLog:  log.Default(), // Ensure error logging is enabled
 	}
 
-	log.Printf("Go service starting HTTPS on %s", httpsServerURL)
+	log.Printf("Go service starting HTTPS on %s", sanitizeLog(httpsServerURL))
 
 	go func() {
 		listener, err := net.Listen("tcp", httpsAddr)
@@ -1361,9 +1361,9 @@ func runHTTPSPreflight(httpsServerURL, serverURL string, dnsEnabled bool, resolv
 		case res.Skipped:
 			// Listener already on :443 — nothing to say.
 		case res.NotApplicable:
-			log.Printf("HTTPS pre-flight: :443 check skipped — %s", res.Reason)
+			log.Printf("HTTPS pre-flight: :443 check skipped — %s", sanitizeLog(res.Reason))
 		default:
-			log.Printf("HTTPS pre-flight: :443 reachable at localhost and %s ✓", res.LANHost)
+			log.Printf("HTTPS pre-flight: :443 reachable at localhost and %s ✓", sanitizeLog(res.LANHost))
 		}
 
 		return
@@ -1438,7 +1438,7 @@ func (c *loggingTLSConn) Read(b []byte) (n int, err error) {
 			if strings.Contains(err.Error(), "tls:") ||
 				strings.Contains(err.Error(), "handshake") ||
 				strings.Contains(err.Error(), "certificate") {
-				log.Printf("[TLS] ❌ Handshake failed from %s: %v", c.addr, err)
+				log.Printf("[TLS] ❌ Handshake failed from %s: %v", sanitizeLog(c.addr.String()), err)
 			}
 		}
 	}

@@ -43,10 +43,10 @@ func main() {
 		log.Fatalf("start fake speaker: %v", err)
 	}
 
-	log.Printf("fake speaker HTTP listening on http://%s", s.HTTPAddr())
+	log.Printf("fake speaker HTTP listening on http://%s", sanitizeLog(s.HTTPAddr()))
 
 	if addr := s.TelnetAddr(); addr != "" {
-		log.Printf("fake speaker telnet listening on tcp://%s", addr)
+		log.Printf("fake speaker telnet listening on tcp://%s", sanitizeLog(addr))
 	}
 
 	if *register != "" {
@@ -58,7 +58,7 @@ func main() {
 		if err := registerWithService(*register, target); err != nil {
 			log.Printf("self-register failed: %v (continuing anyway)", err)
 		} else {
-			log.Printf("registered %s with service at %s", target, *register)
+			log.Printf("registered %s with service at %s", sanitizeLog(target), sanitizeLog(*register))
 		}
 	}
 

@@ -69,7 +69,7 @@ type DiscoveredHost struct {
 func NewDNSDiscovery(upstreamDNS []string, serviceIP, serverURL string) *DNSDiscovery {
 	derived := DeriveOAuthHostnames(serverURL)
 	if len(derived) > 0 {
-		log.Printf("[DNS] Auto-hijacking OAuth subdomains derived from serverURL %q: %s", serverURL, strings.Join(derived, ", "))
+		log.Printf("[DNS] Auto-hijacking OAuth subdomains derived from serverURL %q: %s", sanitizeLog(serverURL), strings.Join(derived, ", "))
 	}
 
 	return &DNSDiscovery{
@@ -207,7 +207,7 @@ func (d *DNSDiscovery) recordQuery(hostname string, isIntercepted bool, remoteAd
 		d.discovered[hostname] = host
 
 		log.Printf("[NEW DISCOVERY] %s (Bose: %v, Intercepted: %v)",
-			hostname, host.IsBoseService, host.IsIntercepted)
+			sanitizeLog(hostname), host.IsBoseService, host.IsIntercepted)
 
 		if d.onNewDiscovery != nil {
 			go d.onNewDiscovery(hostname)
@@ -276,7 +276,7 @@ func (d *DNSDiscovery) respondWithIP(w dns.ResponseWriter, r *dns.Msg, ip string
 	m.RecursionAvailable = true
 
 	q := r.Question[0]
-	log.Printf("[DNS] Intercepted query for %s (type %d) from %s", q.Name, q.Qtype, w.RemoteAddr())
+	log.Printf("[DNS] Intercepted query for %s (type %d) from %s", sanitizeLog(q.Name), q.Qtype, sanitizeLog(remoteAddrString(w)))
 
 	resolvedIP := ip
 	if net.ParseIP(ip) == nil {
@@ -312,9 +312,9 @@ func (d *DNSDiscovery) respondWithIP(w dns.ResponseWriter, r *dns.Msg, ip string
 				if err == nil {
 					m.Answer = append(m.Answer, rr)
 
-					log.Printf("[DNS] Returning CNAME record %s -> %s", q.Name, target)
+					log.Printf("[DNS] Returning CNAME record %s -> %s", sanitizeLog(q.Name), sanitizeLog(target))
 				} else {
-					log.Printf("[DNS] Error creating CNAME fallback for %s: %v", target, err)
+					log.Printf("[DNS] Error creating CNAME fallback for %s: %v", sanitizeLog(target), err)
 
 					m.Rcode = dns.RcodeServerFailure
 				}
@@ -326,9 +326,9 @@ func (d *DNSDiscovery) respondWithIP(w dns.ResponseWriter, r *dns.Msg, ip string
 			if err == nil {
 				m.Answer = append(m.Answer, rr)
 
-				log.Printf("[DNS] Returning A record %s -> %s", q.Name, resolvedIP)
+				log.Printf("[DNS] Returning A record %s -> %s", sanitizeLog(q.Name), sanitizeLog(resolvedIP))
 			} else {
-				log.Printf("[DNS] Error creating A record for %s: %v", resolvedIP, err)
+				log.Printf("[DNS] Error creating A record for %s: %v", sanitizeLog(resolvedIP), err)
 
 				m.Rcode = dns.RcodeServerFailure
 			}
@@ -340,15 +340,15 @@ func (d *DNSDiscovery) respondWithIP(w dns.ResponseWriter, r *dns.Msg, ip string
 			if err == nil {
 				m.Answer = append(m.Answer, rr)
 
-				log.Printf("[DNS] Returning AAAA record %s -> %s", q.Name, resolvedIP)
+				log.Printf("[DNS] Returning AAAA record %s -> %s", sanitizeLog(q.Name), sanitizeLog(resolvedIP))
 			} else {
-				log.Printf("[DNS] Error creating AAAA record for %s: %v", resolvedIP, err)
+				log.Printf("[DNS] Error creating AAAA record for %s: %v", sanitizeLog(resolvedIP), err)
 
 				m.Rcode = dns.RcodeServerFailure
 			}
 		} else {
 			// Explicitly return SUCCESS with no data for AAAA to prevent fallback issues if no IPv6
-			log.Printf("[DNS] Returning empty AAAA success (NODATA) for %s", q.Name)
+			log.Printf("[DNS] Returning empty AAAA success (NODATA) for %s", sanitizeLog(q.Name))
 		}
 	default:
 		log.Printf("[DNS] Returning empty success for type %d", q.Qtype)
@@ -398,7 +398,7 @@ func (d *DNSDiscovery) forward(w dns.ResponseWriter, r *dns.Msg) {
 		if err == nil {
 			if in.Rcode == dns.RcodeSuccess {
 				if writeErr := w.WriteMsg(in); writeErr != nil {
-					log.Printf("[DNS ERROR] Failed to write forwarded response from %s: %v", upstream, writeErr)
+					log.Printf("[DNS ERROR] Failed to write forwarded response from %s: %v", sanitizeLog(upstream), writeErr)
 				}
 
 				return
@@ -485,7 +485,7 @@ func (d *DNSDiscovery) Start(addr string) error {
 	errChan := make(chan error, 2)
 
 	go func() {
-		log.Printf("[DNS] UDP Discovery server starting on %s", addr)
+		log.Printf("[DNS] UDP Discovery server starting on %s", sanitizeLog(addr))
 
 		if err := udpServer.ListenAndServe(); err != nil {
 			errChan <- fmt.Errorf("UDP server failed: %w", err)
@@ -493,14 +493,14 @@ func (d *DNSDiscovery) Start(addr string) error {
 	}()
 
 	go func() {
-		log.Printf("[DNS] TCP Discovery server starting on %s", addr)
+		log.Printf("[DNS] TCP Discovery server starting on %s", sanitizeLog(addr))
 
 		if err := tcpServer.ListenAndServe(); err != nil {
 			errChan <- fmt.Errorf("TCP server failed: %w", err)
 		}
 	}()
 
-	log.Printf("[DNS] Discovery servers starting on %s (upstream: %s, intercept IP: %s)", addr, d.upstreamDNS, d.serviceIP)
+	log.Printf("[DNS] Discovery servers starting on %s (upstream: %s, intercept IP: %s)", sanitizeLog(addr), d.upstreamDNS, sanitizeLog(d.serviceIP))
 
 	// Wait for first error
 	return <-errChan

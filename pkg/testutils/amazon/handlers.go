@@ -23,7 +23,7 @@ func NewAmazonHandler() http.Handler {
 // HandleToken simulates the Amazon LWA token endpoint.
 // Amazon requires client_id and client_secret as POST body fields, not HTTP Basic Auth.
 func HandleToken(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Amazon Mock] Token request: %s", r.Method)
+	log.Printf("[Amazon Mock] Token request: %s", sanitizeLog(r.Method))
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -36,7 +36,7 @@ func HandleToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	grantType := r.FormValue("grant_type")
-	log.Printf("[Amazon Mock] Grant type: %s", grantType)
+	log.Printf("[Amazon Mock] Grant type: %s", sanitizeLog(grantType))
 
 	resp := map[string]interface{}{
 		"access_token":  "Atza|amazon-access-token",
@@ -71,7 +71,7 @@ func HandleToken(w http.ResponseWriter, r *http.Request) {
 // HandleProfile simulates the Amazon LWA user profile endpoint.
 // LWA returns "user_id" and "name" (not "id" / "display_name" like Spotify).
 func HandleProfile(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Amazon Mock] Profile request: %s", r.Method)
+	log.Printf("[Amazon Mock] Profile request: %s", sanitizeLog(r.Method))
 
 	auth := r.Header.Get("Authorization")
 	if auth != "Bearer Atza|amazon-access-token" {

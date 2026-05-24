@@ -143,7 +143,7 @@ func (m *MDNSDiscoveryService) queryService(service string, entries chan<- *mdns
 		return
 	}
 
-	log.Printf("mDNS: Query '%s' (IPv4) failed: %v — falling back to dual-stack", service, err)
+	log.Printf("mDNS: Query '%s' (IPv4) failed: %v — falling back to dual-stack", sanitizeLog(service), err)
 
 	err = mdns.Query(&mdns.QueryParam{
 		Service: service,
@@ -152,7 +152,7 @@ func (m *MDNSDiscoveryService) queryService(service string, entries chan<- *mdns
 		Entries: entries,
 	})
 	if err != nil {
-		log.Printf("mDNS: Query '%s' (dual-stack) failed: %v", service, err)
+		log.Printf("mDNS: Query '%s' (dual-stack) failed: %v", sanitizeLog(service), err)
 	} else {
 		logVerbose("mDNS: Query '%s' (dual-stack) completed successfully", service)
 	}
@@ -188,7 +188,7 @@ func (m *MDNSDiscoveryService) serviceEntryToDevice(entry *mdns.ServiceEntry) *m
 
 		ips, err := net.LookupIP(entry.Host)
 		if err != nil || len(ips) == 0 {
-			log.Printf("mDNS: Failed to resolve hostname '%s': %v", entry.Host, err)
+			log.Printf("mDNS: Failed to resolve hostname '%s': %v", sanitizeLog(entry.Host), err)
 			return nil
 		}
 
@@ -268,12 +268,12 @@ func (m *MDNSDiscoveryService) getIPv4Interface() *net.Interface {
 	if m.ifaceName != "" {
 		iface, err := net.InterfaceByName(m.ifaceName)
 		if err != nil {
-			log.Printf("mDNS: Configured interface %q not found: %v", m.ifaceName, err)
+			log.Printf("mDNS: Configured interface %q not found: %v", sanitizeLog(m.ifaceName), err)
 			return nil
 		}
 
 		if !interfaceHasIPv4(iface) {
-			log.Printf("mDNS: Configured interface %q has no usable IPv4 address", m.ifaceName)
+			log.Printf("mDNS: Configured interface %q has no usable IPv4 address", sanitizeLog(m.ifaceName))
 			return nil
 		}
 

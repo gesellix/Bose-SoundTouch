@@ -23,7 +23,7 @@ func NewSpotifyHandler() http.Handler {
 
 // HandleToken simulates the Spotify OAuth token endpoint.
 func HandleToken(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Spotify Mock] Token request: %s", r.Method)
+	log.Printf("[Spotify Mock] Token request: %s", sanitizeLog(r.Method))
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -36,7 +36,7 @@ func HandleToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	grantType := r.FormValue("grant_type")
-	log.Printf("[Spotify Mock] Grant type: %s", grantType)
+	log.Printf("[Spotify Mock] Grant type: %s", sanitizeLog(grantType))
 
 	resp := map[string]interface{}{
 		"access_token":  "spotify-access-token",
@@ -73,7 +73,7 @@ func HandleToken(w http.ResponseWriter, r *http.Request) {
 
 // HandleMe simulates the Spotify user profile endpoint.
 func HandleMe(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Spotify Mock] Profile request: %s", r.Method)
+	log.Printf("[Spotify Mock] Profile request: %s", sanitizeLog(r.Method))
 
 	auth := r.Header.Get("Authorization")
 	if auth != "Bearer spotify-access-token" {

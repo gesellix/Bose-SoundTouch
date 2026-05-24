@@ -116,7 +116,7 @@ func main() {
 		defer close(entries)
 
 		if *verbose {
-			log.Printf("mDNS: Starting scan for service '%s' with timeout %v", *service, *timeout)
+			log.Printf("mDNS: Starting scan for service '%s' with timeout %v", sanitizeLog(*service), *timeout)
 		}
 
 		// Query for services
@@ -196,7 +196,7 @@ func parseServiceEntry(entry *mdns.ServiceEntry, verbose bool) *ServiceInfo {
 
 	if verbose {
 		log.Printf("mDNS: Received service entry: Name='%s', Host='%s', Port=%d, AddrV4=%v, AddrV6=%v",
-			entry.Name, entry.Host, entry.Port, entry.AddrV4, entry.AddrV6)
+			sanitizeLog(entry.Name), sanitizeLog(entry.Host), entry.Port, entry.AddrV4, entry.AddrV6)
 	}
 
 	service := &ServiceInfo{

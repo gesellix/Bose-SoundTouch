@@ -218,7 +218,7 @@ func (ws *WebSocketClient) connectWithConfig(config *WebSocketConfig) error {
 		Path:   "/",
 	}
 
-	ws.logger.Printf("Connecting to %s", wsURL.String())
+	ws.logger.Printf("Connecting to %s", sanitizeLog(wsURL.String()))
 
 	// Create dialer with custom buffer sizes and "gabbo" protocol
 	dialer := websocket.Dialer{
@@ -245,7 +245,7 @@ func (ws *WebSocketClient) connectWithConfig(config *WebSocketConfig) error {
 	go ws.readLoop(config)
 	go ws.pingLoop(config)
 
-	ws.logger.Printf("Connected to %s", wsURL.String())
+	ws.logger.Printf("Connected to %s", sanitizeLog(wsURL.String()))
 
 	return nil
 }
@@ -443,7 +443,7 @@ func (ws *WebSocketClient) handleSpecialMessage(data []byte) {
 
 	if err != nil {
 		ws.logger.Printf("Unknown special message type: %v", err)
-		ws.logger.Printf("Raw message: %s", string(data))
+		ws.logger.Printf("Raw message: %s", sanitizeLog(string(data)))
 
 		return
 	}
@@ -589,7 +589,7 @@ func (ws *WebSocketClient) PairWithAccount(accountID, userAuthToken string) erro
 		return fmt.Errorf("failed to marshal pairing request: %w", err)
 	}
 
-	ws.logger.Printf("Sending PairDeviceWithAccount for account %s", accountID)
+	ws.logger.Printf("Sending PairDeviceWithAccount for account %s", sanitizeLog(accountID))
 
 	return ws.SendMessage(data)
 }
