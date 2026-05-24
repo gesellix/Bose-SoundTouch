@@ -130,11 +130,11 @@ turn green in the Devices tab.
 2. Click **Run health checks** (or wait for them to run automatically).
 3. Look for any warnings. The most common after a fresh migration:
 
-   | Warning | QuickFix action |
-   |---------|----------------|
-   | *Speaker reports an empty `<margeAccountUUID>`* | Click **Pair account** / **Apply QuickFix** and confirm. The speaker will reboot. |
-   | *INTERNET_RADIO source is a stale stub* | Click **Remove INTERNET_RADIO source**. |
-   | *TuneIn / Radio Browser missing from sources* | These appear automatically once the speaker has paired; if still missing after a QuickFix reboot, trigger discovery again. |
+   | Warning                                         | QuickFix action                                                                                                            |
+   |-------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+   | *Speaker reports an empty `<margeAccountUUID>`* | Click **Pair account** / **Apply QuickFix** and confirm. The speaker will reboot.                                          |
+   | *INTERNET_RADIO source is a stale stub*         | Click **Remove INTERNET_RADIO source**.                                                                                    |
+   | *TuneIn / Radio Browser missing from sources*   | These appear automatically once the speaker has paired; if still missing after a QuickFix reboot, trigger discovery again. |
 
 4. After any QuickFix that reboots the speaker, re-run the health checks to
    confirm the warning is gone.
@@ -232,14 +232,14 @@ curl -s http://<host-ip>:8000/health | grep version
 
 ## Troubleshooting
 
-| Symptom | First check |
-|---------|------------|
-| Speaker not appearing in Devices | Click **Trigger Discovery**; try adding the IP manually |
-| Migration fails | Confirm the speaker can reach `http://<host-ip>:8000` — try `curl http://<host-ip>:8000` from the speaker's SSH shell |
-| `margeAccountUUID` still empty after QuickFix + reboot | Re-run Health QuickFix, reboot again |
-| Radio source error 1005 | `margeAccountUUID` is empty — complete Step 5 first |
-| Speaker reverts to Bose cloud after router restart | Your router's DNS is overriding AfterTouch's server URL — see [MIGRATION-GUIDE.md](MIGRATION-GUIDE.md) for DNS-interception setup |
-| Admin UI not reachable | Check `systemctl status soundtouch-service` and firewall rules for port 8000 |
+| Symptom                                                | First check                                                                                                                       |
+|--------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| Speaker not appearing in Devices                       | Click **Trigger Discovery**; try adding the IP manually                                                                           |
+| Migration fails                                        | Confirm the speaker can reach `http://<host-ip>:8000` — try `curl http://<host-ip>:8000` from the speaker's SSH shell             |
+| `margeAccountUUID` still empty after QuickFix + reboot | Re-run Health QuickFix, reboot again                                                                                              |
+| Radio source error 1005                                | `margeAccountUUID` is empty — complete Step 5 first                                                                               |
+| Speaker reverts to Bose cloud after router restart     | Your router's DNS is overriding AfterTouch's server URL — see [MIGRATION-GUIDE.md](MIGRATION-GUIDE.md) for DNS-interception setup |
+| Admin UI not reachable                                 | Check `systemctl status soundtouch-service` and firewall rules for port 8000                                                      |
 
 For more detail see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) and
 [MIGRATION-GUIDE.md](MIGRATION-GUIDE.md).

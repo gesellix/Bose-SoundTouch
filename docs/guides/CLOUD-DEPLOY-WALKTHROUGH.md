@@ -7,7 +7,7 @@ This scenario is useful when you don't have an always-on machine at home but
 you already have a cloud server (Hetzner, DigitalOcean, Coolify, etc.).
 
 For local deployments (Raspberry Pi, NAS, home server) see
-[EXTERNAL-HOST-WALKTHROUGH.md](EXTERNAL-HOST-WALKTHROUGH.md).  
+[EXTERNAL-HOST-WALKTHROUGH.md](EXTERNAL-HOST-WALKTHROUGH.md).
 For a comparison of all deployment options see
 [DEPLOYMENT-OVERVIEW.md](DEPLOYMENT-OVERVIEW.md).
 
@@ -15,12 +15,12 @@ For a comparison of all deployment options see
 
 ## How cloud deployment differs from a local host
 
-| | Local host | Cloud host |
-|--|-----------|-----------|
-| Speaker discovery | Automatic (mDNS on the LAN) | **Disabled** — cloud can't reach your LAN |
-| Speaker migration | Via the AfterTouch web UI | **Via `soundtouch-cli` on your local machine** |
-| URL scheme | `http://` is fine on a LAN | **HTTPS required** — speakers validate the certificate |
-| Audio routing | Stays on the LAN (AfterTouch only proxies metadata) | Stays on the LAN — audio never transits the cloud server |
+|                   | Local host                                          | Cloud host                                               |
+|-------------------|-----------------------------------------------------|----------------------------------------------------------|
+| Speaker discovery | Automatic (mDNS on the LAN)                         | **Disabled** — cloud can't reach your LAN                |
+| Speaker migration | Via the AfterTouch web UI                           | **Via `soundtouch-cli` on your local machine**           |
+| URL scheme        | `http://` is fine on a LAN                          | **HTTPS required** — speakers validate the certificate   |
+| Audio routing     | Stays on the LAN (AfterTouch only proxies metadata) | Stays on the LAN — audio never transits the cloud server |
 
 > **Audio does not flow through AfterTouch.** The cloud server only handles
 > authentication tokens and URL discovery. Music data goes directly between
@@ -172,10 +172,10 @@ The speaker should appear in the list.
 2. Run or refresh the health checks.
 3. Apply any QuickFixes shown, especially:
 
-   | Warning | Action |
-   |---------|--------|
+   | Warning                                         | Action                                      |
+   |-------------------------------------------------|---------------------------------------------|
    | *Speaker reports an empty `<margeAccountUUID>`* | Click **Pair account** / **Apply QuickFix** |
-   | *INTERNET_RADIO source is a stale stub* | Click **Remove INTERNET_RADIO source** |
+   | *INTERNET_RADIO source is a stale stub*         | Click **Remove INTERNET_RADIO source**      |
 
 4. Reboot the speaker after any QuickFix that requires it, then re-run health checks.
 
@@ -260,14 +260,14 @@ To minimise downtime, use your cloud provider's restart policy
 
 ## Troubleshooting
 
-| Symptom | First check |
-|---------|------------|
-| Speaker shows certificate error | HTTPS certificate is not trusted — ensure your reverse proxy serves a valid Let's Encrypt cert |
-| Migration fails with "connection refused" | Speaker can't reach `soundtouch.example.com:443` — check your server's firewall |
-| Source TuneIn 1005 error | TuneIn not in speaker's source list — follow Step 6 |
-| AfterTouch logs "discovery timeout" every 5 min | Set `DISCOVERY_ENABLED=false` |
-| Devices tab empty after migration | Add the speaker manually by IP (Step 4) |
-| `margeAccountUUID` still empty after QuickFix | Re-run Health QuickFix and reboot again |
+| Symptom                                         | First check                                                                                    |
+|-------------------------------------------------|------------------------------------------------------------------------------------------------|
+| Speaker shows certificate error                 | HTTPS certificate is not trusted — ensure your reverse proxy serves a valid Let's Encrypt cert |
+| Migration fails with "connection refused"       | Speaker can't reach `soundtouch.example.com:443` — check your server's firewall                |
+| Source TuneIn 1005 error                        | TuneIn not in speaker's source list — follow Step 6                                            |
+| AfterTouch logs "discovery timeout" every 5 min | Set `DISCOVERY_ENABLED=false`                                                                  |
+| Devices tab empty after migration               | Add the speaker manually by IP (Step 4)                                                        |
+| `margeAccountUUID` still empty after QuickFix   | Re-run Health QuickFix and reboot again                                                        |
 
 For more detail see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) and
 [MIGRATION-GUIDE.md](MIGRATION-GUIDE.md).

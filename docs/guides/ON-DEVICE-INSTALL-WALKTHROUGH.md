@@ -282,14 +282,14 @@ should start playing the corresponding stream.
 
 ## Troubleshooting
 
-| Symptom | First check |
-|---------|------------|
-| SSH "no matching host key type" | Add `-oHostKeyAlgorithms=+ssh-rsa` |
-| Port 8000 not reachable from LAN | Use the SSH tunnel (Step 5) |
-| `margeAccountUUID` still empty after reboot | Re-run Health QuickFix, reboot again |
-| Radio source error 1005 | `margeAccountUUID` is empty — complete Step 6 first |
-| `http://localhost:8000` not responding after install | `logread \| grep aftertouch \| tail -20` |
-| No space left on device during install | Run the cleanup in Step 2; check `df -h /mnt/nv` |
+| Symptom                                              | First check                                         |
+|------------------------------------------------------|-----------------------------------------------------|
+| SSH "no matching host key type"                      | Add `-oHostKeyAlgorithms=+ssh-rsa`                  |
+| Port 8000 not reachable from LAN                     | Use the SSH tunnel (Step 5)                         |
+| `margeAccountUUID` still empty after reboot          | Re-run Health QuickFix, reboot again                |
+| Radio source error 1005                              | `margeAccountUUID` is empty — complete Step 6 first |
+| `http://localhost:8000` not responding after install | `logread \| grep aftertouch \| tail -20`            |
+| No space left on device during install               | Run the cleanup in Step 2; check `df -h /mnt/nv`    |
 
 For more detail on any of these, see
 [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) and the
