@@ -103,7 +103,7 @@ Verify the installed version:
 wget -qO- http://localhost:8000/health
 ```
 
-The JSON response should include `"version":"v0.92.0"` (or whichever
+The JSON response should include `"version":"v0.93.1"` (or whichever
 version you installed).
 
 ---
@@ -191,13 +191,13 @@ next reboot — which is fine for a one-time setup run):
 cd /tmp
 
 curl -L --fail -o soundtouch-cli \
-  https://github.com/gesellix/Bose-SoundTouch/releases/download/v0.92.0/soundtouch-cli-v0.92.0-linux-armv7
+  https://github.com/gesellix/Bose-SoundTouch/releases/download/v0.93.1/soundtouch-cli-v0.93.1-linux-armv7
 chmod +x soundtouch-cli
 
 /tmp/soundtouch-cli --version
 ```
 
-Replace `v0.92.0` with the version you installed.
+Replace `v0.93.1` with the version you installed.
 
 ---
 

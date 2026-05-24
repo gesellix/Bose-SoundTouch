@@ -39,7 +39,7 @@ You can customize the installation using environment variables:
 
 ```bash
 sudo \
-  VERSION=v0.92.0 \
+  VERSION=v0.93.1 \
   HOSTNAME_FQDN=soundtouch.local \
   HTTP_PORT=80 \
   HTTPS_PORT=443 \
@@ -51,7 +51,7 @@ sudo \
 To update the service to a specific version, run the installer with the version as an argument:
 
 ```bash
-sudo bash install.sh v0.92.0
+sudo bash install.sh v0.93.1
 ```
 
 The installer will automatically fetch the latest version of itself for that release and then update the service binary and restart it.

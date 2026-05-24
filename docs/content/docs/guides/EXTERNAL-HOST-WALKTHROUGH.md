@@ -43,7 +43,7 @@ starts on boot.
 To install a specific version:
 
 ```bash
-sudo bash install.sh v0.92.0
+sudo bash install.sh v0.93.1
 ```
 
 Check that the service is running:
@@ -219,7 +219,7 @@ curl -s http://192.0.2.1:8090/presets
 
 ```bash
 sudo bash install.sh              # updates to latest release
-sudo bash install.sh v0.93.0     # updates to a specific version
+sudo bash install.sh v0.93.1     # updates to a specific version
 ```
 
 The installer stops the service, downloads the new binary, and restarts
