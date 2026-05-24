@@ -22,6 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup Pages
+        id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
@@ -29,7 +30,7 @@ jobs:
           hugo-version: 'latest'
           extended: true
       - name: Build with Hugo
-        run: hugo --source docs/ --minify --destination ../_site
+        run: hugo --source docs/ --minify --destination ../_site --baseURL "${{ steps.pages.outputs.base_url }}"
         env:
           HUGO_ENVIRONMENT: production
       - name: Upload artifact
