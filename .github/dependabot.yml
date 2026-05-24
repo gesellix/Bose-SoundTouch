@@ -38,6 +38,69 @@ updates:
         patterns:
           - "golang.org/*"
 
+  # Hugo module dependency updates (docs site)
+  - package-ecosystem: "gomod"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "gesellix"
+    assignees:
+      - "gesellix"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "go"
+      - "docs"
+    rebase-strategy: "auto"
+
+  # Example module dependency updates
+  - package-ecosystem: "gomod"
+    directory: "/examples/navigation-station-demo"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "gesellix"
+    assignees:
+      - "gesellix"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "go"
+    rebase-strategy: "auto"
+
+  - package-ecosystem: "gomod"
+    directory: "/examples/preset-management"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "gesellix"
+    assignees:
+      - "gesellix"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "go"
+    rebase-strategy: "auto"
+
   # GitHub Actions workflow dependency updates
   - package-ecosystem: "github-actions"
     directory: "/"
