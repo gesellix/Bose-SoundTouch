@@ -362,6 +362,107 @@ func TestMACBasedDeviceDiscovery_MigrationScenario(t *testing.T) {
 	t.Logf("\n✅ MAC-based device migration test completed!")
 }
 
+// TestHandleDiscoveredDevice_CrossAccountMigration verifies the branch in
+// handleDiscoveredDevice that fires when a device's live MargeAccountUUID
+// differs from its stored account. The device directory must be moved to the
+// new account and the old entry must not appear in ListAllDevices.
+func TestHandleDiscoveredDevice_CrossAccountMigration(t *testing.T) {
+	tempDir := t.TempDir()
+	ds := datastore.NewDataStore(tempDir)
+
+	const (
+		deviceID   = "F4E11E930BEB"
+		oldAccount = "default"
+		newAccount = "8637922"
+	)
+
+	// 1. Seed device under the old account with presets so we can verify
+	//    they survive the move.
+	oldInfo := &models.ServiceDeviceInfo{
+		DeviceID:  deviceID,
+		AccountID: oldAccount,
+		Name:      "Stale Name",
+		IPAddress: "192.0.2.42",
+	}
+	if err := ds.SaveDeviceInfo(oldAccount, deviceID, oldInfo); err != nil {
+		t.Fatalf("SaveDeviceInfo under %s: %v", oldAccount, err)
+	}
+	presets := []models.ServicePreset{
+		{ID: "1", ServiceContentItem: models.ServiceContentItem{Name: "My Station", ContentItemType: "stationurl"}},
+	}
+	if err := ds.SavePresets(oldAccount, deviceID, presets); err != nil {
+		t.Fatalf("SavePresets under %s: %v", oldAccount, err)
+	}
+
+	// 2. Mock the speaker's /info endpoint — reports the new margeAccountUUID.
+	deviceInfoXML := fmt.Sprintf(`<info deviceID="%s">
+<name>Updated Name</name>
+<type>SoundTouch 10</type>
+<margeAccountUUID>%s</margeAccountUUID>
+<networkInfo type="SCM">
+<macAddress>%s</macAddress>
+<ipAddress>192.0.2.42</ipAddress>
+</networkInfo>
+<moduleType>sm2</moduleType>
+</info>`, deviceID, newAccount, deviceID)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/info" {
+			w.Header().Set("Content-Type", "application/xml")
+			fmt.Fprint(w, deviceInfoXML)
+		} else {
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	deviceIP := server.URL[len("http://"):]
+	sm := setup.NewManager(server.URL, ds, nil)
+	srv := NewServer(ds, sm, "http://localhost", false, false, false)
+
+	// 3. Trigger discovery — the live MargeAccountUUID differs from storedAccount.
+	srv.handleDiscoveredDevice(models.DiscoveredDevice{
+		Host:            deviceIP,
+		Name:            "Discovery Name",
+		DiscoveryMethod: "mDNS",
+	})
+
+	// 4. Device must now be stored under the new account with the live name.
+	info, err := ds.GetDeviceInfo(newAccount, deviceID)
+	if err != nil {
+		t.Fatalf("GetDeviceInfo under new account %s: %v", newAccount, err)
+	}
+	if info.AccountID != newAccount {
+		t.Errorf("AccountID: want %s, got %s", newAccount, info.AccountID)
+	}
+	if info.Name != "Updated Name" {
+		t.Errorf("Name: want %q, got %q", "Updated Name", info.Name)
+	}
+
+	// 5. Old account entry must be gone.
+	if _, err := ds.GetDeviceInfo(oldAccount, deviceID); err == nil {
+		t.Errorf("stale entry still present under old account %s after MoveDevice", oldAccount)
+	}
+
+	// 6. Presets must have survived the move.
+	moved, err := ds.GetPresets(newAccount, deviceID)
+	if err != nil {
+		t.Fatalf("GetPresets under new account %s: %v", newAccount, err)
+	}
+	if len(moved) != 1 || moved[0].Name != "My Station" {
+		t.Errorf("presets not preserved after move: got %+v", moved)
+	}
+
+	// 7. ListAllDevices must return exactly one entry — no duplicates.
+	all, err := ds.ListAllDevices()
+	if err != nil {
+		t.Fatalf("ListAllDevices: %v", err)
+	}
+	if len(all) != 1 {
+		t.Errorf("ListAllDevices: want 1 device, got %d: %+v", len(all), all)
+	}
+}
+
 func TestMACBasedDeviceDiscovery_FallbackScenario(t *testing.T) {
 	// Test scenario where /info endpoint is not available
 	tempDir, err := os.MkdirTemp("", "mac-fallback-test-*")
