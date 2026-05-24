@@ -1,40 +1,57 @@
 # AfterTouch Deployment Overview
 
-AfterTouch replaces the Bose SoundTouch cloud, which shut down on 2026-05-06. There are two
-ways to run it — pick the one that fits your situation.
+AfterTouch replaces the Bose SoundTouch cloud, which shut down on 2026-05-06. There are
+three ways to run it — pick the one that fits your situation.
 
 ---
 
 ## Which deployment is right for me?
 
-|  | External host | On-device |
-|--|---------------|-----------|
-| **What it means** | AfterTouch runs on a separate computer (Raspberry Pi, NAS, PC) on your LAN. Speakers are pointed at that host. | AfterTouch runs directly on the SoundTouch speaker itself. No extra hardware. |
-| **Extra hardware needed** | Yes — a Raspberry Pi or any always-on machine | No |
-| **Multiple speakers** | Easy — one instance serves all speakers on the LAN | Each speaker needs its own install |
-| **Invasiveness** | Low — only the speaker's server-URL config changes | Slightly higher — writes to the speaker's persistent storage |
-| **Updates** | Update the host; speakers pick it up automatically | SSH into each speaker to update |
-| **Good for** | Households with several speakers; users who want a central dashboard | Single-speaker households; users who don't have an always-on computer |
+|                          | Local external host | Cloud / VPS | On-device |
+|--------------------------|---------------------|-------------|-----------|
+| **What it means**        | AfterTouch runs on a Raspberry Pi, NAS, or PC on your home LAN. | AfterTouch runs on a remote server you own (Hetzner, DigitalOcean, Coolify, …). | AfterTouch runs directly on the SoundTouch speaker itself. |
+| **Extra hardware**       | Yes — an always-on machine at home | No — uses a server you already have | No |
+| **Multiple speakers**    | Easy — one instance for all LAN speakers | Yes — one instance, managed remotely | Each speaker needs its own install |
+| **Speaker migration**    | Via the AfterTouch web UI | Via `soundtouch-cli` on your local machine | Via SSH into the speaker |
+| **HTTPS needed**         | No — HTTP on the LAN is fine | **Yes** — speakers require a valid certificate | No |
+| **Updates**              | Update the host once | Update the server once | SSH into each speaker |
+| **Good for**             | Most households; want a central dashboard | No always-on home machine; already have a VPS | Single-speaker; no extra hardware at all |
 
 ---
 
-## Option A — External host (Raspberry Pi, NAS, PC)
+## Option A — Local external host (Raspberry Pi, NAS, PC)
 
-The speaker stays unmodified. You run AfterTouch on a machine you already have
-on your home network, then tell the speaker to use it instead of the Bose cloud.
+Run AfterTouch on a machine already on your home network. The speaker is pointed at it
+via a simple URL change — nothing else on the speaker is modified.
 
 | | Link |
 |--|------|
-| **User-friendly walkthrough** | [External Host Walkthrough](EXTERNAL-HOST-WALKTHROUGH.md) — step-by-step from install through preset setup |
+| **User-friendly walkthrough** | [External Host Walkthrough](EXTERNAL-HOST-WALKTHROUGH.md) — install → discover → migrate → presets |
 | **Raspberry Pi quick-install** | [Raspberry Pi Guide](RASPBERRY-PI.md) — one-command installer, systemd integration |
 | **Technical reference** | [Deployment Guide](DEPLOYMENT.md) — Docker, Kubernetes, systemd unit, configuration |
 
 ---
 
-## Option B — On-device (AfterTouch on the speaker)
+## Option B — Cloud / VPS
 
-AfterTouch runs on the SoundTouch speaker itself. Requires one SSH session to
-install; after that, the speaker self-hosts its own AfterTouch.
+Run AfterTouch on a public server. Because the server can't reach your LAN via mDNS,
+speaker migration is done with `soundtouch-cli` from your local machine, and HTTPS with
+a real certificate is required. Read the security notes in the walkthrough before
+exposing AfterTouch to the internet.
+
+| | Link |
+|--|------|
+| **User-friendly walkthrough** | [Cloud Deploy Walkthrough](CLOUD-DEPLOY-WALKTHROUGH.md) — VPS setup, CLI migration, TuneIn gotcha |
+| **Technical reference** | [Deployment Guide](DEPLOYMENT.md) — Docker Compose, environment variables, reverse proxy |
+| **Community field report** | [discussion #295](https://github.com/gesellix/Bose-SoundTouch/discussions/295) — Hetzner + Coolify setup by wimdeblauwe |
+
+---
+
+## Option C — On-device (AfterTouch on the speaker)
+
+AfterTouch runs on the SoundTouch speaker itself. Requires one SSH session to install;
+after that, the speaker self-hosts its own AfterTouch. Delivers the **complete AfterTouch
+feature set** without any extra hardware.
 
 | | Link |
 |--|------|
@@ -55,7 +72,7 @@ same regardless of which deployment you chose:
 - **Presets** — use the AfterTouch web UI or `soundtouch-cli preset store-current`
   to program the physical preset buttons.
 
-For troubleshooting either deployment see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+For troubleshooting any deployment see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
 
