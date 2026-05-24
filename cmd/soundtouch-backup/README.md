@@ -207,6 +207,6 @@ Running `cloud` and `local` separately produces two archives. To combine them, u
 
 ## See also
 
-- [Cloud Shutdown Survival Guide](../../docs/guides/SURVIVAL-GUIDE.md) — full migration context
+- [Cloud Shutdown Survival Guide](../../docs/content/docs/guides/SURVIVAL-GUIDE.md) — full migration context
 - [`soundtouch-cli`](../soundtouch-cli/) — live device control
 - [`soundtouch-service`](../soundtouch-service/) — local cloud replacement

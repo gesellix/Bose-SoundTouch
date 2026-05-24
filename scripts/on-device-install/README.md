@@ -3,7 +3,7 @@
 Allows to run AfterTouch on SoundTouch devices directly, eliminating the need to run and maintain a separate server on the local network.
 
 For a complete step-by-step walkthrough — from first SSH connection through verified radio preset playback — see
-[docs/guides/ON-DEVICE-INSTALL-WALKTHROUGH.md](../../docs/guides/ON-DEVICE-INSTALL-WALKTHROUGH.md).
+[docs/guides/ON-DEVICE-INSTALL-WALKTHROUGH.md](../../docs/content/docs/guides/ON-DEVICE-INSTALL-WALKTHROUGH.md).
 
 ## Disclaimer
 

@@ -176,5 +176,5 @@ The example gracefully handles missing services:
 ## Related Documentation
 
 - [SoundTouch WebServices API Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)
-- [CLI Reference](../../docs/guides/CLI-REFERENCE.md)
-- [Navigation Guide](../../docs/guides/SURVIVAL-GUIDE.md)
+- [CLI Reference](../../docs/content/docs/guides/CLI-REFERENCE.md)
+- [Navigation Guide](../../docs/content/docs/guides/SURVIVAL-GUIDE.md)
