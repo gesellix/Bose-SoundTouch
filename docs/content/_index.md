@@ -22,8 +22,8 @@ layout: hextra-home
 </div>
 
 <div class="hx-mb-6">
-{{< hextra/hero-button text="Get Started" link="/docs/guides/GETTING-STARTED" >}}
-{{< hextra/hero-button text="Survival Guide" link="/docs/guides/SURVIVAL-GUIDE" style="outline" >}}
+{{< hextra/hero-button text="Get Started" link="docs/guides/GETTING-STARTED" >}}
+{{< hextra/hero-button text="Survival Guide" link="docs/guides/SURVIVAL-GUIDE" style="outline" >}}
 </div>
 
 <div class="hx-mt-6">
@@ -47,13 +47,13 @@ layout: hextra-home
     title="Three Deployment Options"
     subtitle="Run on a Raspberry Pi, a VPS, or directly on the speaker itself."
     icon="server"
-    link="/docs/guides/DEPLOYMENT-OVERVIEW"
+    link="docs/guides/DEPLOYMENT-OVERVIEW"
   >}}
   {{< hextra/feature-card
     title="CLI Control"
     subtitle="soundtouch-cli for scripting, home automation, and direct device control."
     icon="terminal"
-    link="/docs/guides/CLI-REFERENCE"
+    link="docs/guides/CLI-REFERENCE"
   >}}
   {{< hextra/feature-card
     title="Open Source"
