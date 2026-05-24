@@ -841,11 +841,11 @@ func (s *Server) PrimeDeviceWithSpotify(deviceIP string) {
 	// pick or map accounts to speakers, but for now, we follow the "One linked account" model.
 	accessToken, username, err := svc.GetFreshToken()
 	if err != nil {
-		log.Printf("[Spotify Watchdog] Failed to get fresh token for %s: %v", deviceIP, err)
+		log.Printf("[Spotify Watchdog] Failed to get fresh token for %s: %v", sanitizeLog(deviceIP), err)
 		return
 	}
 
-	log.Printf("[Spotify Watchdog] Proactively priming %s with Spotify user %s", deviceIP, username)
+	log.Printf("[Spotify Watchdog] Proactively priming %s with Spotify user %s", sanitizeLog(deviceIP), sanitizeLog(username))
 
 	// Register the SPOTIFY source in our marge datastore before pushing credentials.
 	// Without this, storePreset later fails with "AddPreset - failed due to invalid SourceID"
@@ -858,12 +858,12 @@ func (s *Server) PrimeDeviceWithSpotify(deviceIP string) {
 		// recorded the specifics; here we just upgrade the watchdog's view to
 		// "primed" since marge holds the authoritative SPOTIFY source.
 		if errors.Is(err, spotify.ErrAddUserNoOp) {
-			log.Printf("[Spotify Watchdog] Successfully primed %s (ZeroConf addUser was an expected no-op)", deviceIP)
+			log.Printf("[Spotify Watchdog] Successfully primed %s (ZeroConf addUser was an expected no-op)", sanitizeLog(deviceIP))
 		} else {
-			log.Printf("[Spotify Watchdog] Failed to prime %s: %v", deviceIP, err)
+			log.Printf("[Spotify Watchdog] Failed to prime %s: %v", sanitizeLog(deviceIP), err)
 		}
 	} else {
-		log.Printf("[Spotify Watchdog] Successfully primed %s", deviceIP)
+		log.Printf("[Spotify Watchdog] Successfully primed %s", sanitizeLog(deviceIP))
 	}
 }
 
@@ -880,7 +880,7 @@ func (s *Server) registerSpotifySourceForDevice(deviceIP string, accounts []spot
 
 	accountID, deviceID := s.resolvePairedAccount(deviceIP, host)
 	if accountID == "" {
-		log.Printf("[Spotify Watchdog] No paired account for %s yet — skipping marge source registration", deviceIP)
+		log.Printf("[Spotify Watchdog] No paired account for %s yet — skipping marge source registration", sanitizeLog(deviceIP))
 		return
 	}
 
@@ -893,11 +893,11 @@ func (s *Server) registerSpotifySourceForDevice(deviceIP string, accounts []spot
 		}
 
 		if _, err := marge.AddSource(s.ds, accountID, acc.UserID, strconv.Itoa(constants.SpotifyProviderID), credential, "token_version_3", acc.DisplayName); err != nil {
-			log.Printf("[Spotify Watchdog] Failed to register Spotify source for account %s: %v", accountID, err)
+			log.Printf("[Spotify Watchdog] Failed to register Spotify source for account %s: %v", sanitizeLog(accountID), err)
 			continue
 		}
 
-		log.Printf("[Spotify Watchdog] Registered Spotify source %s for account %s (device %s)", acc.UserID, accountID, deviceID)
+		log.Printf("[Spotify Watchdog] Registered Spotify source %s for account %s (device %s)", sanitizeLog(acc.UserID), sanitizeLog(accountID), sanitizeLog(deviceID))
 
 		registered = true
 	}
@@ -910,9 +910,9 @@ func (s *Server) registerSpotifySourceForDevice(deviceIP string, accounts []spot
 	if registered && deviceID != "" {
 		c := client.NewClientFromHost(deviceIP)
 		if err := c.NotifySourcesUpdated(deviceID); err != nil {
-			log.Printf("[Spotify Watchdog] sourcesUpdated notification for %s failed: %v", deviceIP, err)
+			log.Printf("[Spotify Watchdog] sourcesUpdated notification for %s failed: %v", sanitizeLog(deviceIP), err)
 		} else {
-			log.Printf("[Spotify Watchdog] Notified %s to re-sync sources (deviceID=%s)", deviceIP, deviceID)
+			log.Printf("[Spotify Watchdog] Notified %s to re-sync sources (deviceID=%s)", sanitizeLog(deviceIP), sanitizeLog(deviceID))
 		}
 	}
 }
@@ -941,7 +941,7 @@ func (s *Server) resolvePairedAccount(deviceIP, host string) (accountID, deviceI
 				deviceID = info.DeviceID
 			}
 		} else {
-			log.Printf("[Spotify Watchdog] live /info lookup for %s failed: %v (falling back to datastore account=%q)", deviceIP, err, accountID)
+			log.Printf("[Spotify Watchdog] live /info lookup for %s failed: %v (falling back to datastore account=%q)", sanitizeLog(deviceIP), err, sanitizeLog(accountID))
 		}
 	}
 
@@ -992,20 +992,20 @@ func (s *Server) PrimeDeviceWithAmazon(deviceIP string) {
 
 	accessToken, username, err := svc.GetFreshToken()
 	if err != nil {
-		log.Printf("[Amazon Watchdog] Failed to get fresh token for %s: %v", deviceIP, err)
+		log.Printf("[Amazon Watchdog] Failed to get fresh token for %s: %v", sanitizeLog(deviceIP), err)
 		return
 	}
 
-	log.Printf("[Amazon Watchdog] Proactively priming %s with Amazon user %s", deviceIP, username)
+	log.Printf("[Amazon Watchdog] Proactively priming %s with Amazon user %s", sanitizeLog(deviceIP), sanitizeLog(username))
 
 	if err := s.pushAmazonTokenToDevice(deviceIP, username, accessToken); err != nil {
 		if errors.Is(err, amazon.ErrAddUserNoOp) {
-			log.Printf("[Amazon Watchdog] Successfully primed %s (ZeroConf addUser was an expected no-op)", deviceIP)
+			log.Printf("[Amazon Watchdog] Successfully primed %s (ZeroConf addUser was an expected no-op)", sanitizeLog(deviceIP))
 		} else {
-			log.Printf("[Amazon Watchdog] Failed to prime %s: %v", deviceIP, err)
+			log.Printf("[Amazon Watchdog] Failed to prime %s: %v", sanitizeLog(deviceIP), err)
 		}
 	} else {
-		log.Printf("[Amazon Watchdog] Successfully primed %s", deviceIP)
+		log.Printf("[Amazon Watchdog] Successfully primed %s", sanitizeLog(deviceIP))
 	}
 }
 
@@ -1021,12 +1021,12 @@ func (s *Server) pushAmazonTokenToDevice(deviceIP, username, accessToken string)
 }
 
 func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
-	log.Printf("Discovered Bose device: %s at %s (Serial: %s)", d.Name, d.Host, d.SerialNo)
+	log.Printf("Discovered Bose device: %s at %s (Serial: %s)", sanitizeLog(d.Name), sanitizeLog(d.Host), sanitizeLog(d.SerialNo))
 
 	// 1. Always fetch live device info from /info endpoint as the authoritative source
 	liveInfo, err := s.sm.GetLiveDeviceInfo(d.Host)
 	if err != nil {
-		log.Printf("Failed to fetch live device info for %s at %s: %v", d.Name, d.Host, err)
+		log.Printf("Failed to fetch live device info for %s at %s: %v", sanitizeLog(d.Name), sanitizeLog(d.Host), err)
 		// Fallback to discovery info if /info is not available
 		s.handleDiscoveredDeviceFallback(d)
 
@@ -1036,13 +1036,13 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	// 2. Use deviceID from /info as the canonical device identifier
 	deviceID := liveInfo.DeviceID
 	if deviceID == "" {
-		log.Printf("No deviceID found in /info response for %s at %s, using fallback", d.Name, d.Host)
+		log.Printf("No deviceID found in /info response for %s at %s, using fallback", sanitizeLog(d.Name), sanitizeLog(d.Host))
 		s.handleDiscoveredDeviceFallback(d)
 
 		return
 	}
 
-	log.Printf("Using deviceID '%s' from /info for device %s at %s", deviceID, d.Name, d.Host)
+	log.Printf("Using deviceID '%s' from /info for device %s at %s", sanitizeLog(deviceID), sanitizeLog(d.Name), sanitizeLog(d.Host))
 
 	// 3. Get account ID from live info or fallback to existing/default
 	storedAccount := ""
@@ -1064,7 +1064,7 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	if liveInfo.MargeAccountUUID != "" && storedAccount != "" && liveInfo.MargeAccountUUID != storedAccount {
 		if err := s.ds.MoveDevice(storedAccount, accountID, deviceID); err != nil {
 			log.Printf("Failed to migrate device %s from %s to %s: %v",
-				deviceID, storedAccount, accountID, err)
+				sanitizeLog(deviceID), sanitizeLog(storedAccount), sanitizeLog(accountID), err)
 		}
 	}
 
@@ -1095,7 +1095,7 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 
 	// 7. Save the updated device info
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
-		log.Printf("Failed to save device info for %s: %v", deviceID, err)
+		log.Printf("Failed to save device info for %s: %v", sanitizeLog(deviceID), err)
 		return
 	}
 
@@ -1108,27 +1108,27 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	if storedAccount != "" && storedAccount != accountID {
 		if err := s.ds.RemoveDevice(storedAccount, deviceID); err != nil {
 			log.Printf("Failed to remove stale device entry for %s in %s: %v",
-				deviceID, storedAccount, err)
+				sanitizeLog(deviceID), sanitizeLog(storedAccount), err)
 		}
 	}
 
 	// 8. Create default Sources.xml only when no sources file exists yet
 	if !s.ds.HasConfiguredSources(accountID, deviceID) {
 		if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
-			log.Printf("Creating default Sources.xml for device %s", deviceID)
+			log.Printf("Creating default Sources.xml for device %s", sanitizeLog(deviceID))
 
 			if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
-				log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+				log.Printf("Failed to save default sources for %s: %v", sanitizeLog(deviceID), err)
 			}
 		}
 	}
 
-	log.Printf("Successfully saved device %s (%s) with MAC-based deviceID: %s", info.Name, d.Host, deviceID)
+	log.Printf("Successfully saved device %s (%s) with MAC-based deviceID: %s", sanitizeLog(info.Name), sanitizeLog(d.Host), sanitizeLog(deviceID))
 }
 
 // handleDiscoveredDeviceFallback handles device discovery when /info endpoint is not available
 func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
-	log.Printf("Using fallback discovery method for device: %s at %s", d.Name, d.Host)
+	log.Printf("Using fallback discovery method for device: %s at %s", sanitizeLog(d.Name), sanitizeLog(d.Host))
 
 	// Use discovery data as-is with the old logic
 	existingID := s.findExistingDeviceID(d)
@@ -1156,27 +1156,27 @@ func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
 
 	// If we had an IP-based entry and now have a Serial, clean up the IP-based entry
 	if d.SerialNo != "" && existingID != "" && existingID != d.SerialNo {
-		log.Printf("Device %s previously known as %s, migrating to serial-based ID %s", d.Name, existingID, d.SerialNo)
+		log.Printf("Device %s previously known as %s, migrating to serial-based ID %s", sanitizeLog(d.Name), sanitizeLog(existingID), sanitizeLog(d.SerialNo))
 		_ = s.ds.RemoveDevice(accountID, existingID)
 	}
 
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
-		log.Printf("Failed to save device info for %s: %v", deviceID, err)
+		log.Printf("Failed to save device info for %s: %v", sanitizeLog(deviceID), err)
 		return
 	}
 
 	// Create default Sources.xml only when no sources file exists yet
 	if !s.ds.HasConfiguredSources(accountID, deviceID) {
 		if sources, err := s.ds.GetConfiguredSources(accountID, deviceID); err == nil {
-			log.Printf("Creating default Sources.xml for device %s (fallback)", deviceID)
+			log.Printf("Creating default Sources.xml for device %s (fallback)", sanitizeLog(deviceID))
 
 			if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
-				log.Printf("Failed to save default sources for %s: %v", deviceID, err)
+				log.Printf("Failed to save default sources for %s: %v", sanitizeLog(deviceID), err)
 			}
 		}
 	}
 
-	log.Printf("Successfully saved device %s (%s) with fallback deviceID: %s", info.Name, d.Host, deviceID)
+	log.Printf("Successfully saved device %s (%s) with fallback deviceID: %s", sanitizeLog(info.Name), sanitizeLog(d.Host), sanitizeLog(deviceID))
 }
 
 func (s *Server) mergeOverlappingDevices() {
@@ -1240,7 +1240,7 @@ func (s *Server) mergeOverlappingDevices() {
 			}
 
 			if devID != masterID && dev.IPAddress == ip {
-				log.Printf("Merging overlapping device entry %s into %s (IP: %s)", devID, masterID, ip)
+				log.Printf("Merging overlapping device entry %s into %s (IP: %s)", sanitizeLog(devID), sanitizeLog(masterID), sanitizeLog(ip))
 				_ = s.ds.RemoveDevice(dev.AccountID, devID)
 			}
 		}

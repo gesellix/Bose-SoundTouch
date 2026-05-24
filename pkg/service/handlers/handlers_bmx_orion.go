@@ -58,7 +58,7 @@ func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
 	// callers that would have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	data := r.URL.Query().Get("data")

@@ -22,6 +22,6 @@ func (s *Server) OriginMiddleware(next http.Handler) http.Handler {
 			origin = "upstream"
 		}
 
-		log.Printf("[LOG] %s %s | %d | %s | %v", r.Method, r.URL.Path, ww.Status(), origin, time.Since(start))
+		log.Printf("[LOG] %s %s | %d | %s | %v", r.Method, sanitizeLog(r.URL.Path), ww.Status(), origin, time.Since(start))
 	})
 }

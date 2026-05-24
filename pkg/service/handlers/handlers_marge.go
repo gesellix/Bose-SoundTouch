@@ -256,7 +256,7 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 	deviceID := req.Device.ID
 	deviceIP := req.DiagnosticData.DeviceLandscape.IPAddress
 
-	log.Printf("[Marge] Device %s powered on (IP: %s)", deviceID, deviceIP)
+	log.Printf("[Marge] Device %s powered on (IP: %s)", sanitizeLog(deviceID), sanitizeLog(deviceIP))
 
 	// Persist device details provided in the power_on request
 	if deviceID != "" && s.ds != nil {
@@ -285,7 +285,7 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
-			log.Printf("[Marge] Failed to save device info for %s: %v", deviceID, err)
+			log.Printf("[Marge] Failed to save device info for %s: %v", sanitizeLog(deviceID), err)
 		}
 	}
 
@@ -303,7 +303,7 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 
 	if deviceIP != "" && remoteHost != "" && deviceIP != remoteHost {
 		log.Printf("[Marge] power_on body IP %q differs from TCP source %q for device %s — using TCP source for credential push",
-			deviceIP, remoteHost, deviceID)
+			sanitizeLog(deviceIP), sanitizeLog(remoteHost), sanitizeLog(deviceID))
 	}
 
 	target := remoteHost
@@ -491,7 +491,7 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 
 	presetNumber, err := strconv.Atoi(presetNumberStr)
 	if err != nil {
-		log.Printf("[Marge] Invalid preset number: %s", presetNumberStr)
+		log.Printf("[Marge] Invalid preset number: %s", sanitizeLog(presetNumberStr))
 		http.Error(w, "Invalid preset number", http.StatusBadRequest)
 
 		return
@@ -507,7 +507,7 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 
 	data, err := marge.UpdatePreset(s.ds, account, device, presetNumber, body)
 	if err != nil {
-		log.Printf("[Marge] UpdatePreset failed for account=%s, device=%s, preset=%d: %v", account, device, presetNumber, err)
+		log.Printf("[Marge] UpdatePreset failed for account=%s, device=%s, preset=%d: %v", sanitizeLog(account), sanitizeLog(device), presetNumber, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 
 		return

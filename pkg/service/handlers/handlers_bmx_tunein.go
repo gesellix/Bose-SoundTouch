@@ -44,7 +44,7 @@ func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	stationID := chi.URLParam(r, "stationID")
@@ -71,7 +71,7 @@ func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request)
 	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	podcastID := chi.URLParam(r, "podcastID")
@@ -99,7 +99,7 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	podcastID := chi.URLParam(r, "podcastID")
@@ -153,7 +153,7 @@ func (s *Server) HandleTuneInReport(w http.ResponseWriter, r *http.Request) {
 	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	var req struct {
@@ -201,7 +201,7 @@ func (s *Server) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
 	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	wildcard := chi.URLParam(r, "*")
@@ -268,7 +268,7 @@ func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 	// have been rejected; do NOT 401.
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	query := r.URL.Query().Get("q")
@@ -295,7 +295,7 @@ func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") == "" {
 		log.Printf("[BMX] Authorization missing (gate temporarily disabled, see handlers_bmx.go); path=%q ua=%q",
-			r.URL.Path, r.UserAgent())
+			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
 	cursor := r.URL.Query().Get("cursor")
@@ -321,7 +321,7 @@ func (s *Server) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request) 
 func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
 	stationID := chi.URLParam(r, "stationID")
 	if err := s.ds.SaveTuneInFavorite(stationID); err != nil {
-		log.Printf("Failed to persist TuneIn favorite %s: %v", stationID, err)
+		log.Printf("Failed to persist TuneIn favorite %s: %v", sanitizeLog(stationID), err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -333,7 +333,7 @@ func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleTuneInDeleteFavorite(w http.ResponseWriter, r *http.Request) {
 	stationID := chi.URLParam(r, "stationID")
 	if err := s.ds.DeleteTuneInFavorite(stationID); err != nil {
-		log.Printf("Failed to delete TuneIn favorite %s: %v", stationID, err)
+		log.Printf("Failed to delete TuneIn favorite %s: %v", sanitizeLog(stationID), err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -23,9 +23,9 @@ func (s *Server) HandleNotFound(w http.ResponseWriter, r *http.Request) {
 			truncated = "…"
 		}
 
-		log.Printf("[UNHANDLED] %s %s body(%d bytes): %s%s", r.Method, r.URL.Path, len(body), preview, truncated)
+		log.Printf("[UNHANDLED] %s %s body(%d bytes): %s%s", r.Method, sanitizeLog(r.URL.Path), len(body), sanitizeLog(string(preview)), truncated)
 	} else {
-		log.Printf("[UNHANDLED] %s %s", r.Method, r.URL.Path)
+		log.Printf("[UNHANDLED] %s %s", r.Method, sanitizeLog(r.URL.Path))
 	}
 
 	http.NotFound(w, r)

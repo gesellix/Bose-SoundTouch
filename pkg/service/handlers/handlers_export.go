@@ -130,7 +130,7 @@ func (s *Server) buildDiagnosticArchive() ([]byte, error) {
 
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			log.Printf("[Export] read dir %s: %v", dir, err)
+			log.Printf("[Export] read dir %s: %v", sanitizeLog(dir), err)
 
 			continue
 		}
@@ -142,14 +142,14 @@ func (s *Server) buildDiagnosticArchive() ([]byte, error) {
 
 			data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 			if err != nil {
-				log.Printf("[Export] read %s: %v", entry.Name(), err)
+				log.Printf("[Export] read %s: %v", sanitizeLog(entry.Name()), err)
 
 				continue
 			}
 
 			archivePath := "datastore/accounts/" + dev.AccountID + "/devices/" + dev.DeviceID + "/" + entry.Name()
 			if err := addTarBytes(tw, archivePath, data); err != nil {
-				log.Printf("[Export] add %s: %v", archivePath, err)
+				log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), err)
 			}
 		}
 	}
@@ -205,13 +205,13 @@ func (s *Server) addServiceHTTP(tw *tar.Writer, client *http.Client, devices []m
 	tryAdd := func(archivePath, url string) {
 		data, err := diagFetch(client, url)
 		if err != nil {
-			log.Printf("[Export] fetch %s: %v", url, err)
+			log.Printf("[Export] fetch %s: %v", sanitizeLog(url), err)
 
 			return
 		}
 
 		if err := addTarBytes(tw, archivePath, data); err != nil {
-			log.Printf("[Export] add %s: %v", archivePath, err)
+			log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), err)
 		}
 	}
 
@@ -265,14 +265,14 @@ func (s *Server) addSpeakerHTTP(tw *tar.Writer, client *http.Client, devices []m
 		for _, ep := range endpoints {
 			data, err := diagFetch(client, speakerBase+"/"+ep)
 			if err != nil {
-				log.Printf("[Export] speaker %s /%s: %v", id, ep, err)
+				log.Printf("[Export] speaker %s /%s: %v", sanitizeLog(id), ep, err)
 
 				continue
 			}
 
 			archivePath := "http/speaker/" + id + "/" + ep + ".xml"
 			if err := addTarBytes(tw, archivePath, data); err != nil {
-				log.Printf("[Export] add %s: %v", archivePath, err)
+				log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), err)
 			}
 		}
 	}
@@ -372,14 +372,14 @@ func addSpeakerSSH(tw *tar.Writer, devices []models.ServiceDeviceInfo) {
 		for _, remotePath := range speakerSSHPaths {
 			data, err := sc.ReadFile(remotePath)
 			if err != nil {
-				log.Printf("[Export] SSH %s %s: %v", id, remotePath, err)
+				log.Printf("[Export] SSH %s %s: %v", sanitizeLog(id), remotePath, err)
 
 				continue
 			}
 
 			archivePath := "ssh/speaker/" + id + remotePath
 			if err := addTarBytes(tw, archivePath, data); err != nil {
-				log.Printf("[Export] add %s: %v", archivePath, err)
+				log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), err)
 			}
 		}
 
@@ -387,27 +387,27 @@ func addSpeakerSSH(tw *tar.Writer, devices []models.ServiceDeviceInfo) {
 		for filename, cmd := range map[string]string{"dmesg.txt": "dmesg"} {
 			out, err := sc.Run(cmd)
 			if err != nil && strings.TrimSpace(out) == "" {
-				log.Printf("[Export] SSH %s %q: %v", id, cmd, err)
+				log.Printf("[Export] SSH %s %q: %v", sanitizeLog(id), cmd, err)
 
 				continue
 			}
 
 			archivePath := "ssh/speaker/" + id + "/" + filename
 			if err := addTarBytes(tw, archivePath, []byte(out)); err != nil {
-				log.Printf("[Export] add %s: %v", archivePath, err)
+				log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), err)
 			}
 		}
 
 		// Syslog: fetch raw, strip 127.0.0.1 noise, then keep only the last speakerLogWindow.
 		rawLog, logErr := sc.Run("logread 2>/dev/null | grep -v '127.0.0.1'")
 		if logErr != nil && strings.TrimSpace(rawLog) == "" {
-			log.Printf("[Export] SSH %s logread: %v", id, logErr)
+			log.Printf("[Export] SSH %s logread: %v", sanitizeLog(id), logErr)
 		} else {
 			filtered := filterSpeakerLog(rawLog, speakerLogWindow)
 			archivePath := "ssh/speaker/" + id + "/logread.txt"
 
 			if addErr := addTarBytes(tw, archivePath, []byte(filtered)); addErr != nil {
-				log.Printf("[Export] add %s: %v", archivePath, addErr)
+				log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), addErr)
 			}
 		}
 	}

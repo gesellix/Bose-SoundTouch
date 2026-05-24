@@ -41,7 +41,7 @@ func (s *Server) HandleMgmtAccountDetails(w http.ResponseWriter, r *http.Request
 	// 1. Get account info
 	accountInfo, err := s.ds.GetAccountInfo(accountID)
 	if err != nil {
-		log.Printf("[Mgmt] Failed to get account info for %s: %v", accountID, err)
+		log.Printf("[Mgmt] Failed to get account info for %s: %v", sanitizeLog(accountID), err)
 		accountInfo = &models.ServiceAccountInfo{AccountID: accountID}
 	}
 
@@ -227,7 +227,7 @@ func (s *Server) getDeviceDetail(accountID string, d *models.ServiceDeviceInfo) 
 		for j := range sources {
 			fs := mapToFullResponseSource(&sources[j])
 			if fs.Type == "" && fs.Name == "" && fs.DisplayName == "" {
-				log.Printf("[Mgmt] Skipping empty source for device %s", d.DeviceID)
+				log.Printf("[Mgmt] Skipping empty source for device %s", sanitizeLog(d.DeviceID))
 				continue
 			}
 

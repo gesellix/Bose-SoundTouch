@@ -35,7 +35,7 @@ func (s *Server) HandleBoseToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Printf("[OAuth] Unknown music provider: %s", sourceID)
+	log.Printf("[OAuth] Unknown music provider: %s", sanitizeLog(sourceID))
 	http.Error(w, "Unknown music provider", http.StatusNotFound)
 }
 
@@ -105,7 +105,7 @@ func (s *Server) HandleBoseAccountToken(w http.ResponseWriter, r *http.Request) 
 // The speaker sends the bare refresh token extracted from the stored AmazonSecret JSON.
 func (s *Server) HandleBoseAmazonToken(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceID")
-	log.Printf("[Amazon] Token request for device %s", deviceID)
+	log.Printf("[Amazon] Token request for device %s", sanitizeLog(deviceID))
 
 	s.mu.RLock()
 	svc := s.amazonService
@@ -152,13 +152,13 @@ func (s *Server) HandleBoseAmazonToken(w http.ResponseWriter, r *http.Request) {
 	if secret != "" {
 		if acc, ok := svc.GetAccountByRefreshToken(secret); ok {
 			account = acc
-			log.Printf("[Amazon] Found account for refresh token: %s", acc.UserID)
+			log.Printf("[Amazon] Found account for refresh token: %s", sanitizeLog(acc.UserID))
 		}
 	}
 
 	if account != nil {
 		if err := svc.RefreshAccessToken(account); err != nil {
-			log.Printf("[Amazon] Failed to refresh token for %s: %v. Returning 502", account.UserID, err)
+			log.Printf("[Amazon] Failed to refresh token for %s: %v. Returning 502", sanitizeLog(account.UserID), err)
 			http.Error(w, "Token refresh failed", http.StatusBadGateway)
 
 			return
@@ -176,7 +176,7 @@ func (s *Server) HandleBoseAmazonToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Printf("[Amazon] Using default account %s", userID)
+		log.Printf("[Amazon] Using default account %s", sanitizeLog(userID))
 	}
 
 	// Omit "scope" — Amazon Music scopes are undocumented; sending invented values
@@ -200,7 +200,7 @@ func (s *Server) HandleBoseAmazonToken(w http.ResponseWriter, r *http.Request) {
 // POST /oauth/device/{deviceID}/music/musicprovider/15/token/cs3
 func (s *Server) HandleBoseSpotifyToken(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceID")
-	log.Printf("[Spotify Proxy] Intercepted token request for device %s", deviceID)
+	log.Printf("[Spotify Proxy] Intercepted token request for device %s", sanitizeLog(deviceID))
 
 	s.mu.RLock()
 	svc := s.spotifyService
@@ -251,13 +251,13 @@ func (s *Server) HandleBoseSpotifyToken(w http.ResponseWriter, r *http.Request) 
 	if secret != "" {
 		if acc, ok := svc.GetAccountBySecret(secret); ok {
 			account = acc
-			log.Printf("[Spotify Proxy] Found account for secret %s: %s", secret, acc.UserID)
+			log.Printf("[Spotify Proxy] Found account for secret %s: %s", sanitizeLog(secret), sanitizeLog(acc.UserID))
 		}
 	}
 
 	if account != nil {
 		if err := svc.RefreshAccessToken(account); err != nil {
-			log.Printf("[Spotify Proxy] Failed to refresh token for %s: %v. Returning 502", account.UserID, err)
+			log.Printf("[Spotify Proxy] Failed to refresh token for %s: %v. Returning 502", sanitizeLog(account.UserID), err)
 			http.Error(w, "Token refresh failed", http.StatusBadGateway)
 
 			return
@@ -276,7 +276,7 @@ func (s *Server) HandleBoseSpotifyToken(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		log.Printf("[Spotify Proxy] Using default account %s", userID)
+		log.Printf("[Spotify Proxy] Using default account %s", sanitizeLog(userID))
 	}
 
 	// Format response as expected by Bose firmware.

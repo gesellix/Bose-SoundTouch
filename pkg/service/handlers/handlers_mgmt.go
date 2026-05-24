@@ -242,7 +242,7 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 	// For now, we use the first account found or match by ID if possible.
 	// In this bridge, we'll ensure all linked Spotify accounts are registered in Marge.
 	for _, acc := range accounts {
-		log.Printf("[Spotify Bridge] Registering Spotify user %s in Marge for account %s", acc.UserID, accountID)
+		log.Printf("[Spotify Bridge] Registering Spotify user %s in Marge for account %s", sanitizeLog(acc.UserID), sanitizeLog(accountID))
 
 		// 1. Register in Marge (updates configuredsources.xml for all devices in the account)
 		// We use the BoseSecret as the credential instead of the AccessToken
@@ -276,13 +276,13 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 			}
 
 			go func(d models.ServiceDeviceInfo) {
-				log.Printf("[Spotify Bridge] Notifying speaker %s (%s) about new Spotify account", d.Name, d.IPAddress)
+				log.Printf("[Spotify Bridge] Notifying speaker %s (%s) about new Spotify account", sanitizeLog(d.Name), sanitizeLog(d.IPAddress))
 
 				c := client.NewClientFromHost(d.IPAddress)
 				creds := models.NewSpotifyOAuthCredentials(acc.UserID, credential, acc.DisplayName)
 
 				if err := c.SetMusicServiceOAuthAccount(creds); err != nil {
-					log.Printf("[Spotify Bridge] Failed to notify speaker %s via OAuth: %v", d.Name, err)
+					log.Printf("[Spotify Bridge] Failed to notify speaker %s via OAuth: %v", sanitizeLog(d.Name), err)
 
 					// Fallback if OAuth is not supported (Error 1029)
 					errs := &models.ErrorsResponse{}
@@ -297,31 +297,31 @@ func (s *Server) bridgeSpotifyToMarge(accountID string) {
 						}
 
 						if isUnsupported {
-							log.Printf("[Spotify Bridge] Speaker %s doesn't support OAuth, falling back to Marge sync notification", d.Name)
+							log.Printf("[Spotify Bridge] Speaker %s doesn't support OAuth, falling back to Marge sync notification", sanitizeLog(d.Name))
 
 							// Some speakers (especially Stockholm-based) don't support /setMusicServiceOAuthAccount
 							// via LISA but will pick up the new source from Marge if notified.
 							if err := c.NotifySourcesUpdated(d.DeviceID); err != nil {
-								log.Printf("[Spotify Bridge] Sync notification failed for speaker %s: %v", d.Name, err)
+								log.Printf("[Spotify Bridge] Sync notification failed for speaker %s: %v", sanitizeLog(d.Name), err)
 
 								// Final fallback to legacy account creation
-								log.Printf("[Spotify Bridge] Falling back to legacy account creation for speaker %s", d.Name)
+								log.Printf("[Spotify Bridge] Falling back to legacy account creation for speaker %s", sanitizeLog(d.Name))
 
 								legacyCreds := models.NewSpotifyCredentials(acc.UserID, credential)
 								if err := c.SetMusicServiceAccount(legacyCreds); err != nil {
-									log.Printf("[Spotify Bridge] Legacy fallback failed for speaker %s: %v", d.Name, err)
+									log.Printf("[Spotify Bridge] Legacy fallback failed for speaker %s: %v", sanitizeLog(d.Name), err)
 								} else {
-									log.Printf("[Spotify Bridge] Legacy fallback successful for speaker %s", d.Name)
+									log.Printf("[Spotify Bridge] Legacy fallback successful for speaker %s", sanitizeLog(d.Name))
 								}
 							} else {
-								log.Printf("[Spotify Bridge] Sync notification successful for speaker %s", d.Name)
+								log.Printf("[Spotify Bridge] Sync notification successful for speaker %s", sanitizeLog(d.Name))
 							}
 
 							return
 						}
 					}
 				} else {
-					log.Printf("[Spotify Bridge] Successfully notified speaker %s", d.Name)
+					log.Printf("[Spotify Bridge] Successfully notified speaker %s", sanitizeLog(d.Name))
 				}
 			}(*dev)
 		}
@@ -583,7 +583,7 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 	}
 
 	for _, acc := range accounts {
-		log.Printf("[Amazon Bridge] Registering Amazon user %s in Marge for account %s", acc.Email, accountID)
+		log.Printf("[Amazon Bridge] Registering Amazon user %s in Marge for account %s", sanitizeLog(acc.Email), sanitizeLog(accountID))
 
 		// Build the AmazonSecret credential envelope expected by the speaker firmware.
 		credMap := map[string]interface{}{
@@ -622,7 +622,7 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 			}
 
 			go func(d models.ServiceDeviceInfo) {
-				log.Printf("[Amazon Bridge] Notifying speaker %s (%s) about new Amazon account", d.Name, d.IPAddress)
+				log.Printf("[Amazon Bridge] Notifying speaker %s (%s) about new Amazon account", sanitizeLog(d.Name), sanitizeLog(d.IPAddress))
 
 				cfg := client.DefaultConfig()
 				cfg.Host = d.IPAddress
@@ -631,24 +631,24 @@ func (s *Server) bridgeAmazonToMarge(accountID string) {
 				creds := models.NewAmazonOAuthCredentials(acc.Email, string(credJSON), acc.DisplayName)
 
 				if err := c.SetMusicServiceOAuthAccount(creds); err != nil {
-					log.Printf("[Amazon Bridge] Failed to notify speaker %s via OAuth: %v", d.Name, err)
-					log.Printf("[Amazon Bridge] Speaker %s doesn't support OAuth or is unreachable, falling back to Marge sync notification", d.Name)
+					log.Printf("[Amazon Bridge] Failed to notify speaker %s via OAuth: %v", sanitizeLog(d.Name), err)
+					log.Printf("[Amazon Bridge] Speaker %s doesn't support OAuth or is unreachable, falling back to Marge sync notification", sanitizeLog(d.Name))
 
 					if err := c.NotifySourcesUpdated(d.DeviceID); err != nil {
-						log.Printf("[Amazon Bridge] Sync notification failed for speaker %s: %v", d.Name, err)
-						log.Printf("[Amazon Bridge] Falling back to legacy account creation for speaker %s", d.Name)
+						log.Printf("[Amazon Bridge] Sync notification failed for speaker %s: %v", sanitizeLog(d.Name), err)
+						log.Printf("[Amazon Bridge] Falling back to legacy account creation for speaker %s", sanitizeLog(d.Name))
 
 						legacyCreds := models.NewAmazonMusicCredentials(acc.Email, string(credJSON))
 						if err := c.SetMusicServiceAccount(legacyCreds); err != nil {
-							log.Printf("[Amazon Bridge] Legacy fallback failed for speaker %s: %v", d.Name, err)
+							log.Printf("[Amazon Bridge] Legacy fallback failed for speaker %s: %v", sanitizeLog(d.Name), err)
 						} else {
-							log.Printf("[Amazon Bridge] Legacy fallback successful for speaker %s", d.Name)
+							log.Printf("[Amazon Bridge] Legacy fallback successful for speaker %s", sanitizeLog(d.Name))
 						}
 					} else {
-						log.Printf("[Amazon Bridge] Sync notification successful for speaker %s", d.Name)
+						log.Printf("[Amazon Bridge] Sync notification successful for speaker %s", sanitizeLog(d.Name))
 					}
 				} else {
-					log.Printf("[Amazon Bridge] Successfully notified speaker %s", d.Name)
+					log.Printf("[Amazon Bridge] Successfully notified speaker %s", sanitizeLog(d.Name))
 				}
 			}(*dev)
 		}

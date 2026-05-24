@@ -28,8 +28,8 @@ import (
 // go/clear-text-logging caught the original `auth=%q` shape.
 func (s *Server) HandleSiriusXMLiveAdapter(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[BMX SiriusXM] %s %s ua=%q authPresent=%t query=%q",
-		r.Method, r.URL.Path, r.UserAgent(),
-		r.Header.Get("Authorization") != "", r.URL.RawQuery)
+		r.Method, sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()),
+		r.Header.Get("Authorization") != "", sanitizeLog(r.URL.RawQuery))
 
 	svc, err := extractBMXService(bmxServicesJSON, "SIRIUSXM_EVEREST")
 	if err != nil {
@@ -51,8 +51,8 @@ func (s *Server) HandleSiriusXMLiveAdapter(w http.ResponseWriter, r *http.Reques
 // /navigate, /logout; playback URLs come dynamically from navigate.
 func (s *Server) HandleSiriusXMLiveAdapterSubpath(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[BMX SiriusXM] UNIMPLEMENTED %s %s ua=%q authPresent=%t query=%q",
-		r.Method, r.URL.Path, r.UserAgent(),
-		r.Header.Get("Authorization") != "", r.URL.RawQuery)
+		r.Method, sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()),
+		r.Header.Get("Authorization") != "", sanitizeLog(r.URL.RawQuery))
 
 	http.Error(w, "not implemented", http.StatusNotFound)
 }

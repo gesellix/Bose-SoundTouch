@@ -34,7 +34,7 @@ func (s *Server) HandleAlexaCertificate(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	log.Printf("[alexa] certificate provisioning not implemented (device=%s); Alexa voice control requires AWS IoT integration", device)
+	log.Printf("[alexa] certificate provisioning not implemented (device=%s); Alexa voice control requires AWS IoT integration", sanitizeLog(device))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotImplemented)
