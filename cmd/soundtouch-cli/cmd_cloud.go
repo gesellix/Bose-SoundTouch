@@ -65,6 +65,7 @@ func cloudSourceRemoveCmd() *cli.Command {
 
 // canonicalSourceID maps well-known SourceKeyType values to their canonical IDs.
 // Used to resolve --type to an ID without requiring a round-trip GET.
+// TODO We need to ensure that ids here are consistent with the ones used in the AfterTouch service.
 var canonicalSourceID = map[string]string{
 	"AUX":                  "10001",
 	"INTERNET_RADIO":       "10002",
