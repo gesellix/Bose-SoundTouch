@@ -7,7 +7,7 @@ three ways to run it — pick the one that fits your situation.
 
 ## Which deployment is right for me?
 
-|                       | Local external host                                             | Cloud / VPS                                                                     | On-device                                                                                                                         |
+|                       | Local network host                                              | Cloud / VPS                                                                     | On-device                                                                                                                         |
 |-----------------------|-----------------------------------------------------------------|---------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | **What it means**     | AfterTouch runs on a Raspberry Pi, NAS, or PC on your home LAN. | AfterTouch runs on a remote server you own (Hetzner, DigitalOcean, Coolify, …). | AfterTouch runs directly on the SoundTouch speaker itself.                                                                        |
 | **Extra hardware**    | Yes — an always-on machine at home                              | No — uses a server you already have                                             | No                                                                                                                                |
@@ -19,7 +19,7 @@ three ways to run it — pick the one that fits your situation.
 
 ---
 
-## Option A — Local external host (Raspberry Pi, NAS, PC)
+## Option A — Local network host (Raspberry Pi, NAS, PC)
 
 Run AfterTouch on a machine already on your home network. The speaker is pointed at it
 via a simple URL change — nothing else on the speaker is modified.
