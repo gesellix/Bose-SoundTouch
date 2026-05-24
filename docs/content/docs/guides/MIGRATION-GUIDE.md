@@ -23,14 +23,27 @@ For a shorter overview, see the [Survival Guide](SURVIVAL-GUIDE.md). For safety 
 
 Choose the option that fits your setup.
 
-### Binary (go install)
+### Download a pre-built binary (no Go required)
+
+Download the latest release for your platform from the
+[GitHub releases page](https://github.com/gesellix/Bose-SoundTouch/releases).
+Unzip, make executable, and run:
 
 ```bash
-go install github.com/gesellix/bose-soundtouch/cmd/soundtouch-service@latest
-soundtouch-service
+# Linux / macOS example
+chmod +x soundtouch-service
+./soundtouch-service
 ```
 
 The service starts on port 8000. Open `http://localhost:8000` in your browser.
+
+### Install script (Raspberry Pi or on-device)
+
+A one-line installer handles download, installation as a system service, and
+auto-start on boot. See the
+[On-Device Install Walkthrough](ON-DEVICE-INSTALL-WALKTHROUGH.md) and
+[External Host Walkthrough](EXTERNAL-HOST-WALKTHROUGH.md) for the exact
+commands for each platform.
 
 ### Docker Compose (recommended for home servers and VMs)
 
@@ -76,7 +89,16 @@ docker run -d \
 
 On macOS/Windows, device discovery via mDNS won't work inside the container — you'll add devices by IP address in Step 4.
 
+### go install (if you have Go installed)
+
+```bash
+go install github.com/gesellix/bose-soundtouch/cmd/soundtouch-service@latest
+soundtouch-service
+```
+
 See [Raspberry Pi Setup](RASPBERRY-PI.md) and the [SoundTouch Service Guide](SOUNDTOUCH-SERVICE.md) for more deployment options.
+
+> **Data directory**: all methods store device state, presets, and settings in a `data/` directory next to the binary (or mounted at `/app/data` in Docker). This directory is the single thing you need to back up — copying it is enough to restore a complete AfterTouch installation on a new machine.
 
 ---
 

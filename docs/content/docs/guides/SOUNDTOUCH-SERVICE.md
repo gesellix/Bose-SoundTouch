@@ -28,9 +28,12 @@ The service consists of several key components:
 
 ### BMX Services (Bose Media eXchange)
 - **TuneIn Integration**: Direct playback of radio stations and podcasts
+- **RadioBrowser Integration**: Open community radio directory alongside TuneIn
 - **Custom Streams**: Flexible playback of any internet radio URL via dynamic proxy
 - **Service Registry**: Media service discovery and configuration
 - **Playback Control**: Stream URL resolution and audio metadata
+
+![soundtouch-web TuneIn search — browsing smooth jazz stations](/images/soundtouch-web-tunein.png)
 
 ### Marge Services (Account & Device Management)
 - **Account Management**: User account simulation and device association
