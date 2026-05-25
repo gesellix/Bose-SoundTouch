@@ -365,17 +365,56 @@ func TestValidateZcHost(t *testing.T) {
 	}
 }
 
+func TestValidateZcPort(t *testing.T) {
+	cases := []struct {
+		input   string
+		wantOut string
+		wantErr bool
+	}{
+		{"8200", "8200", false},
+		{"1", "1", false},
+		{"65535", "65535", false},
+		{"", "", false},     // empty → scheme default, not an error
+		{"0", "", true},     // below range
+		{"-1", "", true},    // negative
+		{"65536", "", true}, // above range
+		{"foo", "", true},   // non-numeric
+		{"8200x", "", true}, // trailing garbage
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := validateZcPort(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("validateZcPort(%q) succeeded with %q, want error", tc.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validateZcPort(%q) returned error %v, want success", tc.input, err)
+			}
+			if got != tc.wantOut {
+				t.Errorf("validateZcPort(%q) = %q, want %q", tc.input, got, tc.wantOut)
+			}
+		})
+	}
+}
+
 func TestBuildZcBase(t *testing.T) {
 	cases := []struct {
 		name    string
 		host    string
 		port    string
 		wantURL string
+		wantErr bool
 	}{
-		{"with port", "127.0.0.1", "8200", "http://127.0.0.1:8200/zc"},
-		{"without port", "192.168.1.1", "", "http://192.168.1.1/zc"},
-		{"ipv6 with port", "::1", "8200", "http://[::1]:8200/zc"},
-		{"ipv6 without port", "::1", "", "http://[::1]/zc"},
+		{"with port", "127.0.0.1", "8200", "http://127.0.0.1:8200/zc", false},
+		{"without port", "192.168.1.1", "", "http://192.168.1.1/zc", false},
+		{"ipv6 with port", "::1", "8200", "http://[::1]:8200/zc", false},
+		{"ipv6 without port", "::1", "", "http://[::1]/zc", false},
+		{"invalid port", "127.0.0.1", "foo", "", true},
+		{"port out of range", "127.0.0.1", "99999", "", true},
 	}
 
 	for _, tc := range cases {
@@ -384,7 +423,16 @@ func TestBuildZcBase(t *testing.T) {
 			if ip == nil {
 				t.Fatalf("test setup: net.ParseIP(%q) returned nil", tc.host)
 			}
-			got := buildZcBase(ip, tc.port)
+			got, err := buildZcBase(ip, tc.port)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("buildZcBase(%q, %q) succeeded, want error", tc.host, tc.port)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("buildZcBase(%q, %q) returned error %v, want success", tc.host, tc.port, err)
+			}
 			if got.String() != tc.wantURL {
 				t.Errorf("buildZcBase(%q, %q) = %q, want %q", tc.host, tc.port, got.String(), tc.wantURL)
 			}

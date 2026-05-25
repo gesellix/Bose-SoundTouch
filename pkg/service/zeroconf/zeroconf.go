@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -212,17 +213,41 @@ func validateZcHost(host string) (net.IP, error) {
 	return ip, nil
 }
 
+// validateZcPort checks that port is a decimal integer in [1, 65535] and
+// returns the canonical decimal string produced by strconv.Itoa. The
+// round-trip through an integer breaks static-analysis taint chains while
+// also rejecting strings like "0", "-1", or "foo" that would silently
+// produce a broken URL.
+// An empty port string is allowed and returned unchanged — callers that omit
+// the port rely on the scheme default.
+func validateZcPort(port string) (string, error) {
+	if port == "" {
+		return "", nil
+	}
+
+	p, err := strconv.Atoi(port)
+	if err != nil || p < 1 || p > 65535 {
+		return "", fmt.Errorf("zeroconf port %q must be a decimal integer in [1, 65535]", port)
+	}
+
+	return strconv.Itoa(p), nil
+}
+
 // buildZcBase constructs the ZeroConf base URL from a validated IP and port.
 // The path is always the literal "/zc" — no user-supplied path component ever
 // flows here, which is what satisfies CodeQL's go/request-forgery model.
 // port may be empty, in which case the scheme default applies.
-func buildZcBase(ip net.IP, port string) *url.URL {
+func buildZcBase(ip net.IP, port string) (*url.URL, error) {
 	var host string
 
 	switch {
 	case port != "":
+		safePort, err := validateZcPort(port)
+		if err != nil {
+			return nil, err
+		}
 		// net.JoinHostPort brackets IPv6 addresses automatically.
-		host = net.JoinHostPort(ip.String(), port)
+		host = net.JoinHostPort(ip.String(), safePort)
 	case ip.To4() == nil:
 		// IPv6 address without a port must be bracketed in a URL host field.
 		host = "[" + ip.String() + "]"
@@ -234,7 +259,7 @@ func buildZcBase(ip net.IP, port string) *url.URL {
 		Scheme: "http",
 		Host:   host,
 		Path:   "/zc",
-	}
+	}, nil
 }
 
 // withAction returns the validated base URL with ?action=<action> appended.
@@ -256,7 +281,10 @@ func GetInfo(host, port string) ([]byte, error) {
 		return nil, fmt.Errorf("getInfo: %w", err)
 	}
 
-	base := buildZcBase(ip, port)
+	base, err := buildZcBase(ip, port)
+	if err != nil {
+		return nil, fmt.Errorf("getInfo: %w", err)
+	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
@@ -303,7 +331,10 @@ func PushCredentials(host, port, username, accessToken string) error {
 		return fmt.Errorf("pushCredentials: %w", err)
 	}
 
-	base := buildZcBase(ip, port)
+	base, err := buildZcBase(ip, port)
+	if err != nil {
+		return fmt.Errorf("pushCredentials: %w", err)
+	}
 
 	speakerPublicKey, err := GetInfo(host, port)
 	if err != nil {
@@ -400,7 +431,10 @@ func pushSimplifiedToken(host, port, username, accessToken string) error {
 		return fmt.Errorf("pushSimplifiedToken: %w", err)
 	}
 
-	base := buildZcBase(ip, port)
+	base, err := buildZcBase(ip, port)
+	if err != nil {
+		return fmt.Errorf("pushSimplifiedToken: %w", err)
+	}
 
 	data := url.Values{}
 	data.Set("userName", username)
