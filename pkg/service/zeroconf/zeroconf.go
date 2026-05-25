@@ -309,7 +309,7 @@ func PushCredentials(zcBaseURL, username, accessToken string) error {
 
 	speakerPublicKey, err := GetInfo(zcBaseURL)
 	if err != nil {
-		log.Printf("[ZeroConf] getInfo failed (%v), falling back to simplified token push", err)
+		log.Printf("[ZeroConf] getInfo failed (%s), falling back to simplified token push", sanitizeErr(err))
 		return pushSimplifiedToken(zcBaseURL, username, accessToken)
 	}
 

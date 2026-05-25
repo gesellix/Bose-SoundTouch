@@ -1414,7 +1414,7 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 
 	logs += "Verified /etc/hosts on device\n"
 
-	fmt.Printf("Updated /etc/hosts on %s:\n%s\n", deviceIP, hostsContent)
+	fmt.Printf("Updated /etc/hosts on %s:\n%s\n", sanitizeLog(deviceIP), sanitizeLog(hostsContent))
 
 	// 5. Inject CA Certificate
 	summary := &MigrationSummary{}
@@ -2313,7 +2313,7 @@ func (m *Manager) addTemporaryHostEntry(client SSHClient, deviceIP, testDomain, 
 		return fmt.Errorf("failed to add test entry to /etc/hosts: %w", uploadErr)
 	}
 
-	fmt.Printf("Updated /etc/hosts on %s with test entry:\n%s\n", deviceIP, newHostsContent)
+	fmt.Printf("Updated /etc/hosts on %s with test entry:\n%s\n", sanitizeLog(deviceIP), sanitizeLog(newHostsContent))
 
 	return nil
 }
@@ -2459,7 +2459,7 @@ func (m *Manager) resolveIP(host string, client SSHClient) (string, error) {
 			if start != -1 && end > start {
 				ip := output[start+1 : end]
 				if net.ParseIP(ip) != nil {
-					fmt.Printf("Resolved %s to %s from device\n", host, ip)
+					fmt.Printf("Resolved %s to %s from device\n", sanitizeLog(host), sanitizeLog(ip))
 					return ip, nil
 				}
 			}

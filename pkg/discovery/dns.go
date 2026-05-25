@@ -69,7 +69,7 @@ type DiscoveredHost struct {
 func NewDNSDiscovery(upstreamDNS []string, serviceIP, serverURL string) *DNSDiscovery {
 	derived := DeriveOAuthHostnames(serverURL)
 	if len(derived) > 0 {
-		log.Printf("[DNS] Auto-hijacking OAuth subdomains derived from serverURL %q: %s", sanitizeLog(serverURL), strings.Join(derived, ", "))
+		log.Printf("[DNS] Auto-hijacking OAuth subdomains derived from serverURL %q: %s", sanitizeLog(serverURL), sanitizeLog(strings.Join(derived, ", ")))
 	}
 
 	return &DNSDiscovery{
@@ -500,7 +500,7 @@ func (d *DNSDiscovery) Start(addr string) error {
 		}
 	}()
 
-	log.Printf("[DNS] Discovery servers starting on %s (upstream: %s, intercept IP: %s)", sanitizeLog(addr), d.upstreamDNS, sanitizeLog(d.serviceIP))
+	log.Printf("[DNS] Discovery servers starting on %s (upstream: %s, intercept IP: %s)", sanitizeLog(addr), sanitizeLog(fmt.Sprint(d.upstreamDNS)), sanitizeLog(d.serviceIP))
 
 	// Wait for first error
 	return <-errChan

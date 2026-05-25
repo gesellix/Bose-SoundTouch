@@ -76,7 +76,7 @@ func main() {
 		// Record the interaction
 		err = recorder.Record(req.category, httpReq, httpRes)
 		if err != nil {
-			log.Printf("Failed to record interaction: %v", err)
+			log.Printf("Failed to record interaction: %s", sanitizeErr(err))
 			continue
 		}
 

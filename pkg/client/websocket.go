@@ -39,7 +39,7 @@ type DefaultLogger struct{}
 
 // Printf implements the Logger interface by printing formatted messages with a WebSocket prefix.
 func (d DefaultLogger) Printf(format string, v ...interface{}) {
-	log.Printf("[WebSocket] "+format, v...)
+	log.Printf("[WebSocket] %s", sanitizeLog(fmt.Sprintf(format, v...)))
 }
 
 // WebSocketConfig holds configuration for WebSocket client
@@ -442,7 +442,7 @@ func (ws *WebSocketClient) handleSpecialMessage(data []byte) {
 	ws.fireRawMessage(data, err)
 
 	if err != nil {
-		ws.logger.Printf("Unknown special message type: %v", err)
+		ws.logger.Printf("Unknown special message type: %s", sanitizeErr(err))
 		ws.logger.Printf("Raw message: %s", sanitizeLog(string(data)))
 
 		return

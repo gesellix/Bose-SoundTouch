@@ -1,4 +1,4 @@
-package stockholm
+package main
 
 import "strings"
 

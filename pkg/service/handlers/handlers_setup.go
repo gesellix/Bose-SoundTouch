@@ -1342,7 +1342,7 @@ func (s *Server) HandleDownloadSession(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar.gz\"", session))
 
 	if err := s.recorder.ArchiveSession(session, w); err != nil {
-		log.Printf("Error archiving session %s: %v", session, err)
+		log.Printf("Error archiving session %s: %s", sanitizeLog(session), sanitizeErr(err))
 		// Since we already set headers, if we have an error here it might be partially written.
 		// But for now, simple error handling.
 		return

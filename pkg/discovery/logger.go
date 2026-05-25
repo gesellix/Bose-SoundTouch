@@ -61,3 +61,14 @@ func remoteAddrString(w interface{ RemoteAddr() net.Addr }) string {
 
 	return ""
 }
+
+// sanitizeErr returns err.Error() with newlines stripped to prevent log
+// injection when error messages contain user-controlled values. Use in
+// place of bare "%v, err" in log calls where err may wrap external data.
+func sanitizeErr(err error) string {
+	if err == nil {
+		return "<nil>"
+	}
+
+	return sanitizeLog(err.Error())
+}

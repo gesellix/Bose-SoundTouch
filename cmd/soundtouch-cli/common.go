@@ -332,7 +332,7 @@ func PrintSuccess(message string) {
 
 // PrintError prints a standard error message
 func PrintError(message string) {
-	fmt.Printf("✗ %s\n", message)
+	fmt.Printf("✗ %s\n", sanitizeLog(message))
 }
 
 // PrintWarning prints a standard warning message

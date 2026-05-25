@@ -114,7 +114,7 @@ func HandleProxy(w http.ResponseWriter, r *http.Request, cfg *Config, state *Nat
 
 	resp, err := executeProxyRequest(r, effectiveTarget, body, cfg, state)
 	if err != nil {
-		log.Printf("[Stockholm proxy] %s %s failed: %v", r.Method, effectiveTarget, err)
+		log.Printf("[Stockholm proxy] %s %s failed: %s", r.Method, sanitizeLog(effectiveTarget.String()), sanitizeErr(err))
 		http.Error(w, "Proxy request failed", http.StatusBadGateway)
 
 		return

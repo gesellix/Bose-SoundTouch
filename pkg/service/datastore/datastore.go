@@ -937,7 +937,7 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 		log.Printf("[Datastore] Presets.xml for device %s used legacy <ContentItem> format; rewriting in canonical form", sanitizeLog(device))
 
 		if werr := ds.SavePresets(account, device, presets); werr != nil {
-			log.Printf("[Datastore] failed to rewrite normalised Presets.xml for device %s: %v", sanitizeLog(device), werr)
+			log.Printf("[Datastore] failed to rewrite normalised Presets.xml for device %s: %s", sanitizeLog(device), sanitizeErr(werr))
 		}
 	}
 

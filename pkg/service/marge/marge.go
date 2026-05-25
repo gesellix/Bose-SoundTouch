@@ -1465,8 +1465,8 @@ func resolvePresetSource(ds *datastore.DataStore, account, device string, source
 
 		sources = append(sources, canonical)
 		if saveErr := ds.SaveConfiguredSources(account, device, sources); saveErr != nil {
-			log.Printf("[Marge] UpdatePreset(preset=%d): SaveConfiguredSources after auto-add failed: %v — the preset will land but the source may not survive a service restart",
-				presetNumber, saveErr)
+			log.Printf("[Marge] UpdatePreset(preset=%d): SaveConfiguredSources after auto-add failed: %s — the preset will land but the source may not survive a service restart",
+				presetNumber, sanitizeErr(saveErr))
 		}
 
 		return &sources[len(sources)-1], sources
@@ -1920,7 +1920,7 @@ func persistLearnedSource(ds *datastore.DataStore, account, device string, sourc
 	}
 
 	if err := ds.SaveConfiguredSources(account, device, updatedSources); err != nil {
-		log.Printf("[MARGE_ERR] Failed to persist learned source for %s: %v", sanitizeLog(device), err)
+		log.Printf("[MARGE_ERR] Failed to persist learned source for %s: %s", sanitizeLog(device), sanitizeErr(err))
 	}
 }
 

@@ -11,3 +11,14 @@ func sanitizeLog(s string) string {
 
 	return s
 }
+
+// sanitizeErr returns err.Error() with newlines stripped to prevent log
+// injection when error messages contain user-controlled values. Use in
+// place of bare "%v, err" in log calls where err may wrap external data.
+func sanitizeErr(err error) string {
+	if err == nil {
+		return "<nil>"
+	}
+
+	return sanitizeLog(err.Error())
+}

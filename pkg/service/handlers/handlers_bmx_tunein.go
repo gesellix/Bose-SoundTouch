@@ -321,7 +321,7 @@ func (s *Server) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request) 
 func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
 	stationID := chi.URLParam(r, "stationID")
 	if err := s.ds.SaveTuneInFavorite(stationID); err != nil {
-		log.Printf("Failed to persist TuneIn favorite %s: %v", sanitizeLog(stationID), err)
+		log.Printf("Failed to persist TuneIn favorite %s: %s", sanitizeLog(stationID), sanitizeErr(err))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -333,7 +333,7 @@ func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleTuneInDeleteFavorite(w http.ResponseWriter, r *http.Request) {
 	stationID := chi.URLParam(r, "stationID")
 	if err := s.ds.DeleteTuneInFavorite(stationID); err != nil {
-		log.Printf("Failed to delete TuneIn favorite %s: %v", sanitizeLog(stationID), err)
+		log.Printf("Failed to delete TuneIn favorite %s: %s", sanitizeLog(stationID), sanitizeErr(err))
 	}
 
 	w.Header().Set("Content-Type", "application/json")

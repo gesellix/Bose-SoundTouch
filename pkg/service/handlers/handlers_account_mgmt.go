@@ -41,7 +41,7 @@ func (s *Server) HandleMgmtAccountDetails(w http.ResponseWriter, r *http.Request
 	// 1. Get account info
 	accountInfo, err := s.ds.GetAccountInfo(accountID)
 	if err != nil {
-		log.Printf("[Mgmt] Failed to get account info for %s: %v", sanitizeLog(accountID), err)
+		log.Printf("[Mgmt] Failed to get account info for %s: %s", sanitizeLog(accountID), sanitizeErr(err))
 		accountInfo = &models.ServiceAccountInfo{AccountID: accountID}
 	}
 

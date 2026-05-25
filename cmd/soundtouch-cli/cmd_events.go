@@ -568,7 +568,7 @@ type VerboseLogger struct{}
 
 func (v *VerboseLogger) Printf(format string, args ...interface{}) {
 	timestamp := time.Now().Format("15:04:05")
-	fmt.Printf("[%s] [WebSocket] %s\n", timestamp, fmt.Sprintf(format, args...))
+	fmt.Printf("[%s] [WebSocket] %s\n", timestamp, sanitizeLog(fmt.Sprintf(format, args...)))
 }
 
 type SilentLogger struct{}

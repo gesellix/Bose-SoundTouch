@@ -406,7 +406,7 @@ func (s *Server) HandleMgmtSpotifyEntity(w http.ResponseWriter, r *http.Request)
 
 	name, imageURL, err := svc.ResolveEntity(request.URI)
 	if err != nil {
-		log.Printf("[Mgmt] Spotify entity resolve error: %v", err)
+		log.Printf("[Mgmt] Spotify entity resolve error: %s", sanitizeErr(err))
 		http.Error(w, `{"error":"entity resolution failed"}`, http.StatusInternalServerError)
 
 		return
@@ -433,7 +433,7 @@ func (s *Server) HandleMgmtPrimeDevice(w http.ResponseWriter, r *http.Request) {
 
 	deviceIP, err := s.resolveDeviceIDToIP(deviceID)
 	if err != nil {
-		log.Printf("[Mgmt] Prime failed: %v", err)
+		log.Printf("[Mgmt] Prime failed: %s", sanitizeErr(err))
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusNotFound)
 
 		return
@@ -717,7 +717,7 @@ func (s *Server) HandleMgmtPrimeDeviceAmazon(w http.ResponseWriter, r *http.Requ
 
 	deviceIP, err := s.resolveDeviceIDToIP(deviceID)
 	if err != nil {
-		log.Printf("[Mgmt] Amazon prime failed: %v", err)
+		log.Printf("[Mgmt] Amazon prime failed: %s", sanitizeErr(err))
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusNotFound)
 
 		return

@@ -497,11 +497,11 @@ func (s *Server) resolveServerURLIP(serverURL string) (string, error) {
 }
 
 func (s *Server) startDNSDiscovery(bind string, upstreamList []string) {
-	log.Printf("[DNS] Starting DNS discovery server on %s", bind)
+	log.Printf("[DNS] Starting DNS discovery server on %s", sanitizeLog(bind))
 
 	serviceIP, err := s.resolveServerURLIP(s.serverURL)
 	if err != nil {
-		log.Printf("[DNS] Cannot start DNS discovery server: %v", err)
+		log.Printf("[DNS] Cannot start DNS discovery server: %s", sanitizeErr(err))
 
 		s.dnsEnabled = false
 
@@ -860,7 +860,7 @@ func (s *Server) PrimeDeviceWithSpotify(deviceIP string) {
 		if errors.Is(err, spotify.ErrAddUserNoOp) {
 			log.Printf("[Spotify Watchdog] Successfully primed %s (ZeroConf addUser was an expected no-op)", sanitizeLog(deviceIP))
 		} else {
-			log.Printf("[Spotify Watchdog] Failed to prime %s: %v", sanitizeLog(deviceIP), err)
+			log.Printf("[Spotify Watchdog] Failed to prime %s: %s", sanitizeLog(deviceIP), sanitizeErr(err))
 		}
 	} else {
 		log.Printf("[Spotify Watchdog] Successfully primed %s", sanitizeLog(deviceIP))
@@ -941,7 +941,7 @@ func (s *Server) resolvePairedAccount(deviceIP, host string) (accountID, deviceI
 				deviceID = info.DeviceID
 			}
 		} else {
-			log.Printf("[Spotify Watchdog] live /info lookup for %s failed: %v (falling back to datastore account=%q)", sanitizeLog(deviceIP), err, sanitizeLog(accountID))
+			log.Printf("[Spotify Watchdog] live /info lookup for %s failed: %s (falling back to datastore account=%q)", sanitizeLog(deviceIP), sanitizeErr(err), sanitizeLog(accountID))
 		}
 	}
 
@@ -1026,7 +1026,7 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 	// 1. Always fetch live device info from /info endpoint as the authoritative source
 	liveInfo, err := s.sm.GetLiveDeviceInfo(d.Host)
 	if err != nil {
-		log.Printf("Failed to fetch live device info for %s at %s: %v", sanitizeLog(d.Name), sanitizeLog(d.Host), err)
+		log.Printf("Failed to fetch live device info for %s at %s: %s", sanitizeLog(d.Name), sanitizeLog(d.Host), sanitizeErr(err))
 		// Fallback to discovery info if /info is not available
 		s.handleDiscoveredDeviceFallback(d)
 
@@ -1095,7 +1095,7 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 
 	// 7. Save the updated device info
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
-		log.Printf("Failed to save device info for %s: %v", sanitizeLog(deviceID), err)
+		log.Printf("Failed to save device info for %s: %s", sanitizeLog(deviceID), sanitizeErr(err))
 		return
 	}
 
@@ -1118,7 +1118,7 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 			log.Printf("Creating default Sources.xml for device %s", sanitizeLog(deviceID))
 
 			if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
-				log.Printf("Failed to save default sources for %s: %v", sanitizeLog(deviceID), err)
+				log.Printf("Failed to save default sources for %s: %s", sanitizeLog(deviceID), sanitizeErr(err))
 			}
 		}
 	}
@@ -1161,7 +1161,7 @@ func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
 	}
 
 	if err := s.ds.SaveDeviceInfo(accountID, deviceID, info); err != nil {
-		log.Printf("Failed to save device info for %s: %v", sanitizeLog(deviceID), err)
+		log.Printf("Failed to save device info for %s: %s", sanitizeLog(deviceID), sanitizeErr(err))
 		return
 	}
 
@@ -1171,7 +1171,7 @@ func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
 			log.Printf("Creating default Sources.xml for device %s (fallback)", sanitizeLog(deviceID))
 
 			if err := s.ds.SaveConfiguredSources(accountID, deviceID, sources); err != nil {
-				log.Printf("Failed to save default sources for %s: %v", sanitizeLog(deviceID), err)
+				log.Printf("Failed to save default sources for %s: %s", sanitizeLog(deviceID), sanitizeErr(err))
 			}
 		}
 	}
