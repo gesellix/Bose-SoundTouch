@@ -1,9 +1,6 @@
 ---
 title: "Preset Management - Bose SoundTouch API"
 ---
-
-# Preset Management - Bose SoundTouch API
-
 This document covers preset management functionality in the Bose SoundTouch API client.
 
 ## Overview

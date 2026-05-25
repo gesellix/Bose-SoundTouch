@@ -1,9 +1,6 @@
 ---
 title: "Bose SoundTouch Traffic Interception Runbook"
 ---
-
-# Bose SoundTouch Traffic Interception Runbook
-
 Intercept HTTPS/WebSocket traffic from the Bose SoundTouch Android app using an Android emulator, mitmproxy, and Frida. Tested on Apple Silicon (ARM64) Mac.
 
 ## Automated Setup

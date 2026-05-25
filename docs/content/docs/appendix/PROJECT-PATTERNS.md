@@ -3,8 +3,6 @@ title: "Project Structure Patterns: Bose SoundTouch API Client"
 sidebar:
   exclude: true
 ---
-
-# Project Structure Patterns: Bose SoundTouch API Client
 ## Summary for Reuse in API Client Projects
 
 This document describes the most important patterns for the Bose SoundTouch API client, especially for XML-based API clients with Web UI, CLI tool, and WASM support.

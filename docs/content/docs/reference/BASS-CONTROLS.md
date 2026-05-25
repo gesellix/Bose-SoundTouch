@@ -1,9 +1,6 @@
 ---
 title: "Bass Control Guide"
 ---
-
-# Bass Control Guide
-
 ## Overview
 
 The Bose SoundTouch Go client provides comprehensive bass control functionality through the `GET /bass` and `POST /bass` endpoints. This feature allows you to adjust bass levels from -9 (maximum bass cut) to +9 (maximum bass boost) with full validation and safety features.

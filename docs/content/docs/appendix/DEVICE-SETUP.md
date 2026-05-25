@@ -3,9 +3,6 @@ title: "Bose SoundTouch Device Setup Flow"
 sidebar:
   exclude: true
 ---
-
-# Bose SoundTouch Device Setup Flow
-
 This document details the multi-step process required to fully set up a Bose SoundTouch device, as derived from the Stockholm firmware (`setup/js/`) analysis.
 
 A complete setup flow involves a sequence of local (WebSocket) and cloud (HTTP) actions that move the device from a factory-reset state to a fully registered, functional system.

@@ -3,9 +3,6 @@ title: "Device Customization Setup Guide"
 sidebar:
   exclude: true
 ---
-
-# Device Customization Setup Guide
-
 This guide documents the manual steps required to configure your Bose SoundTouch device for customization using the SoundCork approach.
 
 Based on: https://github.com/deborahgu/soundcork

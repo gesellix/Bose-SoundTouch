@@ -1,9 +1,6 @@
 ---
 title: "On-Device Install Walkthrough"
 ---
-
-# On-Device Install Walkthrough
-
 A complete end-to-end runbook for installing AfterTouch directly on a
 Bose SoundTouch speaker — from first SSH connection through verified
 radio preset playback.

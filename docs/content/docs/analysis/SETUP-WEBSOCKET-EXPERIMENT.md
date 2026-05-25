@@ -1,9 +1,6 @@
 ---
 title: "Experiment: Does bare `setMargeAccount` work outside the SETUP bracket?"
 ---
-
-# Experiment: Does bare `setMargeAccount` work outside the SETUP bracket?
-
 ## Why we are doing this
 
 Our captured pairing flow (`docs/reference/DEVICE-PAIRING-FLOW.md`) shows the official Bose app always sends `setMargeAccount` *inside* a `SETUP_START` → `SETUP_ENTER` → `SETUP_LEAVE` state-machine bracket over WebSocket. The question this experiment answers:

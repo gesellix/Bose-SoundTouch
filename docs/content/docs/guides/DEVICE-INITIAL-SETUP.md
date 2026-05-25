@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch Device Initial Setup Variants"
 ---
-
-# SoundTouch Device Initial Setup Variants
-
 Based on community research from the **SoundCork** and **ÜberBöse API** projects, as well as analysis of the Stockholm firmware (`firmware/Stockholm/.../setup/`), this document outlines the methods used for the "out-of-the-box" setup of SoundTouch devices.
 
 ## Setup Overview

@@ -1,9 +1,6 @@
 ---
 title: "Device-Local Install: Four User Journeys"
 ---
-
-# Device-Local Install: Four User Journeys
-
 > **Looking for how to actually install AfterTouch?**
 > See the [Deployment Overview](../guides/DEPLOYMENT-OVERVIEW.md) for user-friendly
 > step-by-step guides for both deployment scenarios (external host and on-device).

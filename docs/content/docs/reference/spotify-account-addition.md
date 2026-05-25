@@ -1,9 +1,6 @@
 ---
 title: "Spotify Account Addition Technical Reference"
 ---
-
-# Spotify Account Addition Technical Reference
-
 This document details the exact network requests performed by the Bose SoundTouch "Stockholm" application and the SoundTouch speaker when adding a new Spotify account. This information is based on analysis of the Stockholm firmware version `27.0.13-4277-8963611`.
 
 ## Flow Overview

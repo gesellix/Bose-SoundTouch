@@ -3,9 +3,6 @@ title: "/power_on Implementation Guide"
 sidebar:
   exclude: true
 ---
-
-# /power_on Implementation Guide
-
 ## Overview
 
 This guide provides detailed technical specifications for implementing `/power_on` endpoint enhancements to reduce network dependency and improve device lifecycle management in the SoundTouch service.

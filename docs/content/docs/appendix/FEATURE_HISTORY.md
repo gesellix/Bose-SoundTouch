@@ -3,9 +3,6 @@ title: "Feature Development History"
 sidebar:
   exclude: true
 ---
-
-# Feature Development History
-
 This document tracks the detailed evolution of features and capabilities in the Bose SoundTouch API client library.
 
 ## Development Timeline

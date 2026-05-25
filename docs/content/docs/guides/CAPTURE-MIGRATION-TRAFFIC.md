@@ -1,9 +1,6 @@
 ---
 title: "Capture Speaker Migration Traffic"
 ---
-
-# Capture Speaker Migration Traffic
-
 Runbook for migrating a SoundTouch speaker to `soundtouch-service` and capturing
 all traffic (App→Service and Speaker→Service) to identify unimplemented endpoints.
 

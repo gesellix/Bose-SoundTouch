@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch Service"
 ---
-
-# SoundTouch Service
-
 The `soundtouch-service` is a comprehensive local server that emulates Bose's cloud services, enabling offline SoundTouch device operation and advanced debugging capabilities. This service is particularly valuable given Bose's announcement that cloud support will end in May 2026.
 
 ## Overview

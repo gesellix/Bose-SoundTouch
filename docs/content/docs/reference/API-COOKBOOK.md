@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch API Cookbook"
 ---
-
-# SoundTouch API Cookbook
-
 **Real-world patterns, recipes, and best practices for the SoundTouch Go client**
 
 This cookbook provides practical solutions to common SoundTouch integration challenges. Each recipe includes working code, error handling, and production considerations.

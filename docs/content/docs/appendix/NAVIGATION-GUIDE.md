@@ -3,9 +3,6 @@ title: "Navigation and Station Management Guide"
 sidebar:
   exclude: true
 ---
-
-# Navigation and Station Management Guide
-
 ## Overview
 
 The Bose SoundTouch Go client provides comprehensive navigation and station management functionality that allows you to:

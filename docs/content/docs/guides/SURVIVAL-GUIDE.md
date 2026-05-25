@@ -1,9 +1,6 @@
 ---
 title: "Keeping Your Speakers Alive After the Bose Cloud Shutdown"
 ---
-
-# Keeping Your Speakers Alive After the Bose Cloud Shutdown
-
 Bose shut down SoundTouch cloud services on **May 6, 2026**. Per the [official end-of-life page](https://www.bose.com/soundtouch-end-of-life), the following no longer work:
 
 - **Presets** — preset buttons on the product and in the app

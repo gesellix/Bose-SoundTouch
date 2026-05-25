@@ -3,9 +3,6 @@ title: "Device Logging & Troubleshooting"
 sidebar:
   exclude: true
 ---
-
-# Device Logging & Troubleshooting
-
 Accessing logs from SoundTouch devices is critical for debugging custom service integrations and understanding internal device behavior. This document outlines the methods for collecting logs, as discovered by the **SoundCork** and **ÜberBöse API** communities.
 
 ## Log Types

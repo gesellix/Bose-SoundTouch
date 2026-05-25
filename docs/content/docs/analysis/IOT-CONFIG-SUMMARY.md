@@ -1,9 +1,6 @@
 ---
 title: "IoT Configuration Quick Reference"
 ---
-
-# IoT Configuration Quick Reference
-
 ## Key Files and Locations
 
 | File/Location                           | Purpose                | Notes                                   |

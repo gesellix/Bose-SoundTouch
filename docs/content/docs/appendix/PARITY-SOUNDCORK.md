@@ -3,9 +3,6 @@ title: "Parity Analysis: Bose-SoundTouch (Go) vs. SoundCork (Python)"
 sidebar:
   exclude: true
 ---
-
-# Parity Analysis: Bose-SoundTouch (Go) vs. SoundCork (Python)
-
 This document provides a comparative analysis of the current Go implementation and the `deborahgu/soundcork` project, identifying functional gaps and potential improvements.
 
 ## 1. Core Architecture and Language

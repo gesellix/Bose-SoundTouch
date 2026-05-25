@@ -1,9 +1,6 @@
 ---
 title: "Migration Flow Diagrams"
 ---
-
-# Migration Flow Diagrams
-
 This document specifies the diagrams needed for the migration guide, with descriptions that can be used to create actual visual diagrams.
 
 ## 1. Overall Migration Process Flow

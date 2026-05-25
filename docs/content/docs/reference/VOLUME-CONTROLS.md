@@ -1,9 +1,6 @@
 ---
 title: "Volume Control Implementation"
 ---
-
-# Volume Control Implementation
-
 This document describes the implementation of the GET/POST `/volume` endpoints for volume management in the Bose SoundTouch API client.
 
 ## Overview

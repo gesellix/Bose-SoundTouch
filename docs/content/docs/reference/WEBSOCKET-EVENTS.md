@@ -1,9 +1,6 @@
 ---
 title: "WebSocket Events - Real-time SoundTouch Monitoring"
 ---
-
-# WebSocket Events - Real-time SoundTouch Monitoring
-
 This document describes the WebSocket event functionality for real-time monitoring of Bose SoundTouch devices.
 
 ## Overview

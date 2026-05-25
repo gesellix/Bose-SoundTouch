@@ -1,9 +1,6 @@
 ---
 title: "What a SoundTouch speaker does during factory reset"
 ---
-
-# What a SoundTouch speaker does during factory reset
-
 Observed live on ST10 firmware `27.0.6.46330.5043500` (build `epdbuild.trunk.hepdswbld04.2022-08-04`) on 2026-05-12, by running `soundtouch-cli setup factory-reset` and tailing the speaker's `logread` over SSH. The trace is preserved at `_/logs/factory-reset.txt` for reference.
 
 ## Sequence

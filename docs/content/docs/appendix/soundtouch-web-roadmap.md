@@ -3,9 +3,6 @@ title: "soundtouch-web: remaining features"
 sidebar:
   exclude: true
 ---
-
-# soundtouch-web: remaining features
-
 Four features complete the parity gap between soundtouch-web and the Stockholm
 app's local-control functionality. Everything else in Stockholm (OAuth flows,
 setup wizard, service account linking, onboarding, analytics) is cloud

@@ -1,9 +1,6 @@
 ---
 title: "Placeholder values for examples"
 ---
-
-# Placeholder values for examples
-
 This repo is public. Documentation, READMEs, example configs, and test
 fixtures must never carry real LAN IPs, real device MACs, real Bose
 account IDs, or personal device names from any maintainer or

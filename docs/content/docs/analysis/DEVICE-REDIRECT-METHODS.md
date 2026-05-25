@@ -1,9 +1,6 @@
 ---
 title: "Device Redirect Methods & Custom Service Setup"
 ---
-
-# Device Redirect Methods & Custom Service Setup
-
 To enable offline operation or use custom services like **SoundCork** or **ÜberBöse API**, SoundTouch devices must be redirected from Bose's official cloud endpoints to a local or custom server. This document outlines the three known methods to achieve this, gathered from community reverse-engineering efforts in the **SoundCork** and **ÜberBöse API** projects.
 
 > A fourth, **SSH-free** path — driving the device's diagnostic shell on TCP port 17000 — is being added as a peer to the XML and DNS methods. See **[TELNET-MIGRATION-METHOD.md](TELNET-MIGRATION-METHOD.md)** for the use cases, community findings, and feasibility analysis. The `/etc/hosts` method documented below is now deprecated and will not be exposed in the web UI.

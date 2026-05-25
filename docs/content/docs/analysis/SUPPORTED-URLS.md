@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch supportedURLs Endpoint Analysis"
 ---
-
-# SoundTouch supportedURLs Endpoint Analysis
-
 This document provides a comprehensive analysis of the `/supportedURLs` endpoint response from real Bose SoundTouch devices and compares it with our current implementation.
 
 ## Discovery Summary

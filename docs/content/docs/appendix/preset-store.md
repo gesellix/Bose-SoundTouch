@@ -3,9 +3,6 @@ title: "SoundTouch `/storePreset` Implementation Guide"
 sidebar:
   exclude: true
 ---
-
-# SoundTouch `/storePreset` Implementation Guide
-
 ## Overview
 
 This document analyzes the feasibility and implementation approach for adding `/storePreset` functionality to the Bose SoundTouch API client, based on [GitHub Issue #14](https://github.com/gesellix/Bose-SoundTouch/issues/14) and endpoints discovered through the comprehensive [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API).

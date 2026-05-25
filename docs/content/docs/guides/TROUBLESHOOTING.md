@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch Troubleshooting Guide"
 ---
-
-# SoundTouch Troubleshooting Guide
-
 **Complete guide to diagnosing and fixing common SoundTouch Go client issues**
 
 This guide helps you quickly identify and resolve problems with the SoundTouch Go client library. Issues are organized by category with step-by-step solutions.

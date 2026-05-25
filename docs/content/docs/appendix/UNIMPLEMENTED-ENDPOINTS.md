@@ -3,9 +3,6 @@ title: "Unimplemented SoundTouch API Endpoints"
 sidebar:
   exclude: true
 ---
-
-# Unimplemented SoundTouch API Endpoints
-
 **Last Updated:** January 2026  
 **Source:** [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)  
 **Current Implementation:** 35 endpoints (including preset & navigation management discovered via SoundTouch Plus Wiki)  

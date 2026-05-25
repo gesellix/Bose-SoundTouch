@@ -1,9 +1,6 @@
 ---
 title: "Spotify on SoundTouch — Overview"
 ---
-
-# Spotify on SoundTouch — Overview
-
 This is the entry point for understanding how Spotify works on a SoundTouch
 speaker behind AfterTouch. Read this first; the deeper docs assume you already
 have the mental model below.

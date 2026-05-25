@@ -3,9 +3,6 @@ title: "Preset Management Quick Start Guide"
 sidebar:
   exclude: true
 ---
-
-# Preset Management Quick Start Guide
-
 **Save your favorite music, radio stations, and playlists as 1-6 presets for instant access.**
 
 ## Overview

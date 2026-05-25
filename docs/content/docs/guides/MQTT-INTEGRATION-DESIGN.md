@@ -1,9 +1,6 @@
 ---
 title: "MQTT Integration Design for SoundTouch Service"
 ---
-
-# MQTT Integration Design for SoundTouch Service
-
 ## Overview
 
 This document outlines the design for integrating MQTT support into the existing SoundTouch service to simulate AWS IoT Core functionality. The integration will provide real-time device communication, shadow state management, and prepare for the AWS IoT service shutdown in May 2026.

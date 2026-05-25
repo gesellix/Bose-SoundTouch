@@ -3,9 +3,6 @@ title: "SCMUDC Enrichment Implementation Summary"
 sidebar:
   exclude: true
 ---
-
-# SCMUDC Enrichment Implementation Summary
-
 ## Overview
 
 This document summarizes the implementation of SCMUDC (Sound Control Management Usage Data Collection) event enrichment in the AfterTouch toolkit. The enhancement provides human-readable analysis of device telemetry data to improve usability and debugging capabilities.

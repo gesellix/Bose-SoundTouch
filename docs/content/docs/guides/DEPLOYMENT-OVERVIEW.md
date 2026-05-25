@@ -1,9 +1,6 @@
 ---
 title: "AfterTouch Deployment Overview"
 ---
-
-# AfterTouch Deployment Overview
-
 AfterTouch replaces the Bose SoundTouch cloud, which shut down on 2026-05-06. There are
 three ways to run it — pick the one that fits your situation.
 

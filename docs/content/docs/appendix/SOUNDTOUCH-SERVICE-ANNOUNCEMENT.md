@@ -3,9 +3,6 @@ title: "🎉 Introducing SoundTouch Service: Local Cloud Service Emulation"
 sidebar:
   exclude: true
 ---
-
-# 🎉 Introducing SoundTouch Service: Local Cloud Service Emulation
-
 **Date**: February 2026
 **Version**: v2.0.0+
 **Status**: Production Ready

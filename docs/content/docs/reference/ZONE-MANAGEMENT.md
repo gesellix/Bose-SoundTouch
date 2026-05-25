@@ -1,9 +1,6 @@
 ---
 title: "Zone Management - Multiroom SoundTouch Control"
 ---
-
-# Zone Management - Multiroom SoundTouch Control
-
 This document describes the comprehensive zone management functionality for controlling multiroom setups with Bose SoundTouch devices.
 
 ## Overview

@@ -3,9 +3,6 @@ title: "Service Availability Implementation Summary"
 sidebar:
   exclude: true
 ---
-
-# Service Availability Implementation Summary
-
 ## Overview
 
 This document summarizes the implementation of the `/serviceAvailability` endpoint support in the Bose SoundTouch Go client library. This feature enables applications to query which music services and input sources are available on a SoundTouch device, providing better user feedback about supported stations and sources.

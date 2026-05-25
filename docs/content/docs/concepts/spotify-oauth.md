@@ -1,9 +1,6 @@
 ---
 title: "Spotify OAuth Integration"
 ---
-
-# Spotify OAuth Integration
-
 > **New here?** Start with [spotify-overview.md](spotify-overview.md) for the
 > mental model (Spotify Connect vs OAuth-intercept, DNS rewrite gotcha,
 > end-to-end token lifecycle). This document zooms in on the OAuth flows and

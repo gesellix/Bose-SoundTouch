@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch CLI Reference"
 ---
-
-# SoundTouch CLI Reference
-
 **Complete command reference for the soundtouch-cli tool**
 
 This document provides comprehensive documentation for all available commands and options in the `soundtouch-cli` tool.

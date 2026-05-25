@@ -1,9 +1,6 @@
 ---
 title: "Raspberry Pi Installation Guide"
 ---
-
-# Raspberry Pi Installation Guide
-
 This guide explains how to install the `soundtouch-service` as a persistent systemd service on a Raspberry Pi (tested on Raspberry Pi Zero 2W, 3, and 4).
 
 For a complete walkthrough — from install through speaker migration and preset setup — see

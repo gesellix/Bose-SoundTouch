@@ -1,9 +1,6 @@
 ---
 title: "Spotify Priming Strategy"
 ---
-
-# Spotify Priming Strategy
-
 > **New here?** Start with [spotify-overview.md](spotify-overview.md) for the
 > mental model. This document goes deep on the priming protocol, ZeroConf DH
 > exchange, and deployment topologies.

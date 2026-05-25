@@ -1,9 +1,6 @@
 ---
 title: "Bose SoundTouch Telnet (Port 17000) Command Reference"
 ---
-
-# Bose SoundTouch Telnet (Port 17000) Command Reference
-
 A consolidated reference for the diagnostic shell that listens on TCP port
 17000 across the SoundTouch line. Compiled from multiple community sources
 to give a single map of what's been observed in the wild — useful both for

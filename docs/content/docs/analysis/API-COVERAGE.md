@@ -1,9 +1,6 @@
 ---
 title: "Bose SoundTouch API Coverage Analysis"
 ---
-
-# Bose SoundTouch API Coverage Analysis
-
 **Last Updated:** February 2026
 **API Version:** Official Bose SoundTouch Web API v1.0
 **Implementation Status:** 100% Official Coverage + Extended Features

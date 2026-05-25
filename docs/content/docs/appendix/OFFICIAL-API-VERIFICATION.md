@@ -3,9 +3,6 @@ title: "Official SoundTouch Web API Verification"
 sidebar:
   exclude: true
 ---
-
-# Official SoundTouch Web API Verification
-
 **Source**: Official Bose SoundTouch Web API v1.0 Documentation (January 7, 2026)  
 **Verification Date**: January 9, 2026  
 **Project Status**: Complete API coverage verification

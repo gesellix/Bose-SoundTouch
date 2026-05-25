@@ -1,9 +1,6 @@
 ---
 title: "Migration & Safety Guide"
 ---
-
-# Migration & Safety Guide
-
 Starting a migration on real hardware requires a "Safety First" approach. This guide outlines the safety features implemented in the `soundtouch-service` and provides a checklist for a successful migration.
 
 #### 🛠 Technical Safety Enhancements

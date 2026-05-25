@@ -1,9 +1,6 @@
 ---
 title: "Connecting Music Services (Spotify & Amazon Music)"
 ---
-
-# Connecting Music Services (Spotify & Amazon Music)
-
 This guide explains how to link your Spotify or Amazon Music account to AfterTouch so your speakers can stream music from those services.
 
 > For Spotify, a higher-level mental model of how the integration works —

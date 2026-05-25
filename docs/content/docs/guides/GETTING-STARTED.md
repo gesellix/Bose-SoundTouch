@@ -1,9 +1,6 @@
 ---
 title: "Getting Started with SoundTouch Go Client"
 ---
-
-# Getting Started with SoundTouch Go Client
-
 **A complete guide to controlling your Bose SoundTouch devices with Go**
 
 This guide will get you up and running with the SoundTouch Go client in under 10 minutes. By the end, you'll be able to discover devices, control playback, manage volume, and monitor real-time events.

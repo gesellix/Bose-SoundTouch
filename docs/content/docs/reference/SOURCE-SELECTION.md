@@ -1,9 +1,6 @@
 ---
 title: "Source Selection Guide"
 ---
-
-# Source Selection Guide
-
 ## Overview
 
 The Bose SoundTouch Go client provides comprehensive source selection functionality through the `POST /select` endpoint. This feature allows you to switch between different audio sources like Spotify, Bluetooth, AUX input, and various streaming services.

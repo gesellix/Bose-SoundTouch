@@ -1,9 +1,6 @@
 ---
 title: "MAC Address to Serial Number Mapping"
 ---
-
-# MAC Address to Serial Number Mapping
-
 **Understanding and troubleshooting device identification in SoundTouch service**
 
 This guide explains how the SoundTouch service handles device identification through MAC address to serial number mapping, and how to troubleshoot related issues.

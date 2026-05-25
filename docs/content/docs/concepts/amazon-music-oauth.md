@@ -1,9 +1,6 @@
 ---
 title: "Amazon Music OAuth Integration"
 ---
-
-# Amazon Music OAuth Integration
-
 This document describes the plan and specification for adding Amazon Music OAuth support to the SoundTouch service, enabling continued Amazon Music playback after the Bose cloud shutdown (May 2026).
 
 The implementation mirrors the [Spotify OAuth integration](spotify-oauth.md) closely. Read that document first — this one calls out only the differences.

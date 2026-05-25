@@ -1,9 +1,6 @@
 ---
 title: "System Endpoints Documentation"
 ---
-
-# System Endpoints Documentation
-
 This document provides comprehensive documentation for the system management endpoints in the Bose SoundTouch Go client library.
 
 ## Overview

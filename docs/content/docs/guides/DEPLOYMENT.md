@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch Production Deployment Guide"
 ---
-
-# SoundTouch Production Deployment Guide
-
 **Best practices for deploying SoundTouch Go applications in production environments**
 
 This guide covers everything you need to know to deploy robust, scalable SoundTouch applications in production, including configuration management, monitoring, security, and operational considerations.

@@ -3,9 +3,6 @@ title: "Host:Port Parsing Feature"
 sidebar:
   exclude: true
 ---
-
-# Host:Port Parsing Feature
-
 This document describes the automatic host:port parsing functionality added to the SoundTouch CLI, which allows users to specify both host and port in a single `-host` flag.
 
 ## Overview

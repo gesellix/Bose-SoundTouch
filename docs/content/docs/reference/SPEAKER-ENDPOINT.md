@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch Speaker Endpoint Documentation"
 ---
-
-# SoundTouch Speaker Endpoint Documentation
-
 This document describes the implementation of the `/speaker` endpoint for Bose SoundTouch devices, which enables Text-To-Speech (TTS) notifications and URL content playback.
 
 ## Overview

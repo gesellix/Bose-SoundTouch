@@ -3,9 +3,6 @@ title: "Technical Proposal: External Service Provider Abstraction"
 sidebar:
   exclude: true
 ---
-
-# Technical Proposal: External Service Provider Abstraction
-
 This document outlines a strategy to refactor the SoundTouch Service's content handling into a modular provider-based system.
 
 ## 1. Problem Statement

@@ -1,9 +1,6 @@
 ---
 title: "External Host Walkthrough"
 ---
-
-# External Host Walkthrough
-
 A step-by-step guide to running AfterTouch on a Raspberry Pi (or any always-on
 computer) and migrating your Bose SoundTouch speakers to use it.
 

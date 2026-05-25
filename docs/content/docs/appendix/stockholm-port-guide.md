@@ -3,9 +3,6 @@ title: "Stockholm Backend — Port Guide for Bose-SoundTouch (Go)"
 sidebar:
   exclude: true
 ---
-
-# Stockholm Backend — Port Guide for Bose-SoundTouch (Go)
-
 This document describes everything needed to integrate the
 [krahl/soundcork-stockholm-app](https://github.com/krahl/soundcork-stockholm-app)
 functionality into the Go service. It is written as a reference; nothing here

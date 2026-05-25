@@ -3,9 +3,6 @@ title: "Parity Analysis: Bose-SoundTouch (Go) vs. OpenCloudTouch (Python)"
 sidebar:
   exclude: true
 ---
-
-# Parity Analysis: Bose-SoundTouch (Go) vs. OpenCloudTouch (Python)
-
 This document provides a comparative analysis of the current Go implementation and the `scheilch/opencloudtouch` project, identifying functional gaps and potential improvements.
 
 ## 1. Core Architecture and Language

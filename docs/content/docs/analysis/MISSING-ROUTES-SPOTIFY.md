@@ -1,9 +1,6 @@
 ---
 title: "Spotify Account Addition Implementation Status"
 ---
-
-# Spotify Account Addition Implementation Status
-
 To fully replace Bose cloud services for the Spotify account addition flow in the "Stockholm" SoundTouch application, the following routes have been implemented in the `soundtouch-service`:
 
 ## 1. OAuth Token Exchange (Bose Cloud)

@@ -1,9 +1,6 @@
 ---
 title: "Bose SoundTouch – Traffic Analysis Runbook"
 ---
-
-# Bose SoundTouch – Traffic Analysis Runbook
-
 > **Goal:** Set up a Raspberry Pi as a transparent access point to fully observe the traffic of the Bose SoundTouch app – specifically the pairing flow with the Bose Cloud. This serves as a basis for later reverse engineering / simulation of the cloud endpoints.
 
 ---

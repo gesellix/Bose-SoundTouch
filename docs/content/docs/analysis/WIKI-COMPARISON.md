@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch API Comparison: Community Wiki vs Current Implementation"
 ---
-
-# SoundTouch API Comparison: Community Wiki vs Current Implementation
-
 **Date:** January 2026
 **Source:** [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)
 **Our Implementation:** Bose-SoundTouch Go Library v1.0

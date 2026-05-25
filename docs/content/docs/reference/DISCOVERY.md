@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch Device Discovery"
 ---
-
-# SoundTouch Device Discovery
-
 This document describes the various methods available for discovering Bose SoundTouch devices on your network.
 
 ## Overview

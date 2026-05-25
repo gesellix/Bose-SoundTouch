@@ -1,9 +1,6 @@
 ---
 title: "HTTPS & Custom CA Certificate"
 ---
-
-# HTTPS & Custom CA Certificate
-
 SoundTouch speakers communicate with cloud services over HTTPS. For the local service to work over HTTPS, speakers must trust the AfterTouch Root CA. The service manages this automatically — it generates a CA on first start and the web UI guides you through installing it on each speaker as part of the migration flow.
 
 > ### ⚠️ Speakers connect to `:443`, AfterTouch defaults to `:8443`

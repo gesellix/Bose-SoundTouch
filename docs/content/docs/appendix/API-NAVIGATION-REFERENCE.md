@@ -3,9 +3,6 @@ title: "Navigation API Reference"
 sidebar:
   exclude: true
 ---
-
-# Navigation API Reference
-
 ## Overview
 
 This document provides a complete API reference for the Bose SoundTouch navigation and station management functionality. For usage examples and workflows, see [NAVIGATION-GUIDE.md](NAVIGATION-GUIDE.md).

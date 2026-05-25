@@ -1,9 +1,6 @@
 ---
 title: "Key Control Implementation"
 ---
-
-# Key Control Implementation
-
 This document describes the implementation of the POST `/key` endpoint for media control commands in the Bose SoundTouch API client.
 
 ## Overview

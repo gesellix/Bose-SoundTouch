@@ -1,9 +1,6 @@
 ---
 title: "Self-Hosting AfterTouch"
 ---
-
-# Self-Hosting AfterTouch
-
 This guide walks you through running AfterTouch on your own computer or server. No programming knowledge required.
 
 ---

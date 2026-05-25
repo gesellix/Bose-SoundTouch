@@ -3,9 +3,6 @@ title: "CLAUDE.md - Development Guidelines for Bose SoundTouch Project"
 sidebar:
   exclude: true
 ---
-
-# CLAUDE.md - Development Guidelines for Bose SoundTouch Project
-
 ## Documentation Overview
 
 This document contains important development guidelines for working on the Bose SoundTouch project. Please also read the following documentation:

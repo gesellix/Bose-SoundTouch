@@ -1,9 +1,6 @@
 ---
 title: "SoundTouch Device WebSocket API — Pairing & Operation Flow"
 ---
-
-# SoundTouch Device WebSocket API — Pairing & Operation Flow
-
 Reference document derived from mitmproxy captures of the Bose SoundTouch Android app
 (`bose-pairing-20260502-155542`, `bose-pairing-20260502-165549`).
 

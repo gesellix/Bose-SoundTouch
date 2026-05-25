@@ -3,9 +3,6 @@ title: "Encrypted Diagnostic Export"
 sidebar:
   exclude: true
 ---
-
-# Encrypted Diagnostic Export
-
 AfterTouch can produce an encrypted diagnostic report that users can download and
 send to the project maintainer without exposing sensitive data to third parties.
 The report is encrypted with an SSH public key using

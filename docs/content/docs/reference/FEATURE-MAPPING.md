@@ -1,9 +1,6 @@
 ---
 title: "Feature Mapping Guide"
 ---
-
-# Feature Mapping Guide
-
 This guide demonstrates the comprehensive endpoint-to-feature mapping system that helps you understand exactly what your SoundTouch device can do and how to use it effectively.
 
 ## Overview

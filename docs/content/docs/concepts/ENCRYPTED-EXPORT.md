@@ -1,9 +1,6 @@
 ---
 title: "Encrypting Sensitive Data Exports with SSH/age or GPG"
 ---
-
-# Encrypting Sensitive Data Exports with SSH/age or GPG
-
 ## Problem
 
 Allow users of our software to export potentially sensitive data, encrypt it locally, and send it to us. We decrypt on our side. Goal: no key exchange, minimal user friction.

@@ -1,9 +1,6 @@
 ---
 title: "Migration Guide: From Bose Cloud to AfterTouch"
 ---
-
-# Migration Guide: From Bose Cloud to AfterTouch
-
 This guide walks through the complete process of migrating your SoundTouch speakers from Bose's cloud services to **AfterTouch**, the replacement provided by `soundtouch-service`. By the end, your speakers will work fully independently of Bose's servers.
 
 For a shorter overview, see the [Survival Guide](SURVIVAL-GUIDE.md). For safety considerations and rollback options, see the [Migration & Safety Guide](MIGRATION-SAFETY.md).

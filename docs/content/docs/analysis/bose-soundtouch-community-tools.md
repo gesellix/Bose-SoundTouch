@@ -1,9 +1,6 @@
 ---
 title: "Bose SoundTouch — Community Tools for Post-EOL Preservation"
 ---
-
-# Bose SoundTouch — Community Tools for Post-EOL Preservation
-
 > **Context:** Bose announced the shutdown of SoundTouch cloud services, extended to **May 6, 2026**. On that date the official SoundTouch app will update to a local-only version. Bose has released the [SoundTouch Web API documentation](https://assets.bosecreative.com/m/496577402d128874/original/SoundTouch-Web-API.pdf) as open-source to enable community-driven development. This document surveys the active community projects, their feature coverage, and open development opportunities.
 
 ---

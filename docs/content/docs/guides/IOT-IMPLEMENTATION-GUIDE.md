@@ -1,9 +1,6 @@
 ---
 title: "IoT Implementation Guide"
 ---
-
-# IoT Implementation Guide
-
 ## Overview
 
 This guide provides technical implementation details for integrating with the Bose SoundTouch IoT configuration system. It covers the AWS IoT Core integration, certificate management, and device shadow operations.

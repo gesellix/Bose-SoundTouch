@@ -3,9 +3,6 @@ title: "Device Lifecycle and /power_on Enhancement"
 sidebar:
   exclude: true
 ---
-
-# Device Lifecycle and /power_on Enhancement
-
 ## Overview
 
 This document provides a comprehensive analysis of the current SoundTouch device registration and lifecycle management implementation, and proposes enhancements using the `/power_on` endpoint to reduce dependency on local network connectivity.

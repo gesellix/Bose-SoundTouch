@@ -3,9 +3,6 @@ title: "SCMUDC Events Analysis"
 sidebar:
   exclude: true
 ---
-
-# SCMUDC Events Analysis
-
 ## Overview
 
 SCMUDC (Sound Control Management Usage Data Collection) events are telemetry data sent from SoundTouch devices to `events.api.bosecm.com` via `/v1/scmudc/{deviceId}` endpoints. These events track user interactions and device behaviors for analytics and monitoring.

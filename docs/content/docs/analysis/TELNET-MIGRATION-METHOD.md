@@ -1,9 +1,6 @@
 ---
 title: "Telnet (Port 17000) Migration Method — Analysis"
 ---
-
-# Telnet (Port 17000) Migration Method — Analysis
-
 This document captures the use cases, community findings, and feasibility analysis
 for adding a **Telnet/port 17000** migration path to `soundtouch-service` as a
 peer of the existing XML and DNS-based methods. The `/etc/hosts` method stays

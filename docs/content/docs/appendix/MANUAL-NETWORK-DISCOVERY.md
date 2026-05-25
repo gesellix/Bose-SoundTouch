@@ -3,9 +3,6 @@ title: "Manual Network Discovery on macOS"
 sidebar:
   exclude: true
 ---
-
-# Manual Network Discovery on macOS
-
 This document provides comprehensive guidance for manually discovering network services and devices using built-in macOS tools and command-line utilities. This is particularly useful for troubleshooting network discovery issues or understanding what services are available on your local network.
 
 ## Overview

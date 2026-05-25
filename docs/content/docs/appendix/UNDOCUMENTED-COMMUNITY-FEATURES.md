@@ -3,8 +3,6 @@ title: "Undocumented Community Features & API Discoveries"
 sidebar:
   exclude: true
 ---
-
-# Undocumented Community Features & API Discoveries
 This document captures advanced API endpoints and device behaviors discovered by the SoundTouch community through reverse engineering projects like **SoundCork** and **ÜberBöse API**. These features are not documented in the official Bose SoundTouch Web API v1.0 but are crucial for full device emulation and offline operation.
 ## Cloud Emulation (Marge/BMX) Discoveries
 While the local `/8090` API is well-documented, the cloud-side service emulation reveals deeper device integration points.

@@ -3,9 +3,6 @@ title: "Device Lifecycle Analysis - Executive Summary"
 sidebar:
   exclude: true
 ---
-
-# Device Lifecycle Analysis - Executive Summary
-
 ## Current State Assessment
 
 The SoundTouch service currently relies heavily on local network connectivity for device discovery and management:

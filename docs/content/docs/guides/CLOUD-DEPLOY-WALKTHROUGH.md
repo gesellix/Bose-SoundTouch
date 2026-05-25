@@ -1,9 +1,6 @@
 ---
 title: "Cloud Deployment Walkthrough"
 ---
-
-# Cloud Deployment Walkthrough
-
 A step-by-step guide to running AfterTouch on a VPS or cloud server and
 pointing your local Bose SoundTouch speakers at it.
 

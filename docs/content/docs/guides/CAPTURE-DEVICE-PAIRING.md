@@ -1,9 +1,6 @@
 ---
 title: "Capture Device Pairing Traffic"
 ---
-
-# Capture Device Pairing Traffic
-
 Step-by-step runbook for factory-resetting a SoundTouch speaker, pairing it to a Bose cloud account, and capturing every cloud request via mitmproxy. Tested on Apple Silicon Mac.
 
 **Goal:** obtain a full `.mitm` recording of the account-pairing flow (streaming.bose.com) triggered by the official Android app.

@@ -3,9 +3,6 @@ title: "Content Selection Implementation Summary"
 sidebar:
   exclude: true
 ---
-
-# Content Selection Implementation Summary
-
 This document summarizes the implementation of advanced content selection features for the Bose SoundTouch Go client, including full support for the LOCAL_INTERNET_RADIO streamUrl format and LOCAL_MUSIC/STORED_MUSIC content selection.
 
 ## ✅ Implementation Status: COMPLETE

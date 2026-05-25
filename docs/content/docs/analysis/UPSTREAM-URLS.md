@@ -1,9 +1,6 @@
 ---
 title: "Upstream URLs & Domains Analysis"
 ---
-
-# Upstream URLs & Domains Analysis
-
 This document provides a comprehensive overview of the upstream Bose cloud services and domains that SoundTouch devices communicate with. These details were gathered from firmware analysis of ST10/ST20 devices, binary string extraction, and community research from the **SoundCork** project (Issue #128).
 
 ## Core Service Domains

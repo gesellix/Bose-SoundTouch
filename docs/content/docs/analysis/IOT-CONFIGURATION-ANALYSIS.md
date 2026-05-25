@@ -1,9 +1,6 @@
 ---
 title: "IoT Configuration Analysis"
 ---
-
-# IoT Configuration Analysis
-
 ## Overview
 
 This document provides a detailed analysis of the AWS IoT configuration system used by Bose SoundTouch devices, based on firmware backup analysis from ST10 and ST20 models.

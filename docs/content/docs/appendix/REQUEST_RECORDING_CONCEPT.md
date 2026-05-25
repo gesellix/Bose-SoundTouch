@@ -3,9 +3,6 @@ title: "Request Recording Concept"
 sidebar:
   exclude: true
 ---
-
-# Request Recording Concept
-
 ## Problem Statement
 
 The current request recording system has fundamental issues when dealing with request cloning, body consumption, and multiple response scenarios. Specifically:
