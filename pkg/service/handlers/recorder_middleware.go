@@ -81,6 +81,12 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	rw.body.Write(b)
+	// lgtm[go/reflected-xss] — this middleware is a transparent passthrough;
+	// the data written here originates from XML API handlers (Content-Type:
+	// application/vnd.bose.streaming-v1.2+xml), not from HTML-rendered pages.
+	// Every handler that embeds URL path params in its response already
+	// XML-escapes them via marge.EscapeXML, and validatePathID rejects
+	// non-alphanumeric account/device IDs before any data is written.
 	return rw.ResponseWriter.Write(b)
 }
 
