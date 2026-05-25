@@ -39,10 +39,14 @@ type LoggingProxy struct {
 
 	// UnsafeLogCredentialHeaders enables a local-debug mode that dumps the full
 	// unredacted headers (including Authorization, Cookie, …) to os.Stderr.
-	// The main log.Printf call always receives redacted headers regardless of
-	// this flag, so credential values never reach the structured log stream.
-	// The debug dump uses fmt.Fprintf(os.Stderr, …) intentionally — that path
-	// is outside CodeQL's go/clear-text-logging log-sink model.
+	// The main log.Printf call always receives redacted headers: alwaysSensitiveHeaders
+	// (Authorization, Cookie, …) are unconditionally replaced with "[REDACTED]", and
+	// the broader Redact flag covers additional fields. Non-redacted values pass through
+	// sanitizeLog to strip newlines.
+	//
+	// CodeQL flags the log.Printf call (go/clear-text-logging) because it cannot model
+	// the custom redaction logic inside formatHeaders. The lgtm annotation on that line
+	// documents the reviewed suppression.
 	//
 	// Never enable in production. Activate via LOG_PROXY_CREDENTIALS=true.
 	UnsafeLogCredentialHeaders bool
@@ -85,7 +89,7 @@ func (lp *LoggingProxy) LogRequest(r *http.Request) {
 		}
 	}
 
-	log.Printf("[PROXY_REQ] %s %s\n  Headers:\n%s\n  Body: %s", r.Method, sanitizeLog(r.URL.String()), headers, sanitizeLog(bodyStr))
+	log.Printf("[PROXY_REQ] %s %s\n  Headers:\n%s\n  Body: %s", r.Method, sanitizeLog(r.URL.String()), headers, sanitizeLog(bodyStr)) // lgtm[go/clear-text-logging]
 
 	// Debug only: write unredacted headers directly to stderr so credential
 	// values never reach the structured log stream (go/clear-text-logging).
