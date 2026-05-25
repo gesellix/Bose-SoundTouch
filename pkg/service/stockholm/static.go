@@ -60,7 +60,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request, stockholmDir string, ba
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 
 	rel := resolveStaticRel(r.URL.Path)
 
@@ -72,7 +72,7 @@ func ServeStatic(w http.ResponseWriter, r *http.Request, stockholmDir string, ba
 
 	// Directory → serve index.html inside it.
 	if info.IsDir() {
-		rel = rel + "/index.html"
+		rel += "/index.html"
 
 		info, err = root.Stat(rel)
 		if err != nil || info.IsDir() {
