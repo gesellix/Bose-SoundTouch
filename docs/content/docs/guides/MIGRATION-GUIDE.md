@@ -132,6 +132,15 @@ The XML migration writes updated configuration to the speaker's filesystem, whic
 
 You only need to do this once per speaker. SSH can remain enabled for future maintenance or be disabled after migration — your choice.
 
+**To disable SSH after migration:**
+
+- **USB stick only (no persistent file written):** remove the stick and reboot the speaker — SSH will not be available after the next boot.
+- **Persistent `remote_services` file** (written automatically during XML migration): remove it via the admin UI → *Migrate* tab → **Disable SSH (Remove remote_services)** button, then reboot. Or via the CLI:
+  ```shell
+  soundtouch-cli --host <SPEAKER-IP> setup remote-services --remove
+  ```
+  Then reboot the speaker for the change to take effect.
+
 ### Telnet:17000 (fallback when SSH isn't possible)
 
 If the USB-stick unlock doesn't work on your speaker (some firmware revisions refuse it — notably SA-5, ST520, and recent ST Portables), the wizard falls back to the speaker's **built-in diagnostic shell on TCP port 17000**. No setup required — most SoundTouch firmware exposes it automatically. The wizard detects which transports are available and picks the right one; you don't have to choose manually.

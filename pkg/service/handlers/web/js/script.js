@@ -2454,7 +2454,7 @@ async function removeRemoteServices(deviceId, ip) {
         return;
     }
     const display = getDeviceDisplayName(deviceId);
-    if (!confirm("Are you sure you want to remove remote services from " + display + "?",)) {
+    if (!confirm("Remove the remote_services file from " + display + "? SSH will be disabled after the next reboot.")) {
         return;
     }
     const summaryDiv = document.getElementById("migration-summary");
@@ -3772,9 +3772,10 @@ function caVerdict(summary) {
 
 function remoteServicesVerdict(summary) {
     if (!summary.ssh_success) return {icon: "❓", text: "Unknown", note: "(SSH not reachable)"};
-    if (!summary.remote_services_enabled) return {icon: "❌", text: "Not enabled", note: "(SSH/telnet shells will not survive a reboot until USB-stick unlock is reapplied)"};
-    if (!summary.remote_services_persistent) return {icon: "⚠️", text: "Enabled but not persistent", note: "(will be lost on reboot)"};
-    return {icon: "✅", text: "Persistent", note: ""};
+    if (!summary.remote_services_enabled) return {icon: "❌", text: "SSH not enabled", note: "(insert USB stick with remote_services file and reboot to enable)"};
+    if (!summary.remote_services_persistent) return {icon: "⚠️", text: "SSH enabled (not persistent)", note: "(will be lost on reboot — use 'Enable SSH' button to persist)"};
+
+    return {icon: "✅", text: "SSH enabled (persistent)", note: ""};
 }
 
 // parseTelnetVerifiedConfig extracts field values from the device's
