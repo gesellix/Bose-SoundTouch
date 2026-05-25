@@ -965,14 +965,14 @@ func (s *Server) findExistingDeviceInfoByIP(ip string) *models.ServiceDeviceInfo
 }
 
 func (s *Server) pushSpotifyTokenToDevice(deviceIP, username, accessToken string) error {
-	var zcURL string
-	if _, _, err := net.SplitHostPort(deviceIP); err == nil {
-		zcURL = fmt.Sprintf("http://%s/zc", deviceIP)
-	} else {
-		zcURL = fmt.Sprintf("http://%s:8200/zc", deviceIP)
+	host, port, err := net.SplitHostPort(deviceIP)
+	if err != nil {
+		// deviceIP has no port component — use the standard ZeroConf port.
+		host = deviceIP
+		port = "8200"
 	}
 
-	return spotify.PushSpotifyCredentials(zcURL, username, accessToken)
+	return spotify.PushSpotifyCredentials(host, port, username, accessToken)
 }
 
 // PrimeDeviceWithAmazon triggers an Amazon Music priming of the speaker if an Amazon account is linked.
@@ -1010,14 +1010,14 @@ func (s *Server) PrimeDeviceWithAmazon(deviceIP string) {
 }
 
 func (s *Server) pushAmazonTokenToDevice(deviceIP, username, accessToken string) error {
-	var zcURL string
-	if _, _, err := net.SplitHostPort(deviceIP); err == nil {
-		zcURL = fmt.Sprintf("http://%s/zc", deviceIP)
-	} else {
-		zcURL = fmt.Sprintf("http://%s:8200/zc", deviceIP)
+	host, port, err := net.SplitHostPort(deviceIP)
+	if err != nil {
+		// deviceIP has no port component — use the standard ZeroConf port.
+		host = deviceIP
+		port = "8200"
 	}
 
-	return amazon.PushAmazonCredentials(zcURL, username, accessToken)
+	return amazon.PushAmazonCredentials(host, port, username, accessToken)
 }
 
 func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {

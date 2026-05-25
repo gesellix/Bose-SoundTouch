@@ -180,70 +180,61 @@ func DecryptBlob(encKey, macKey, blob []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// validateZcBaseURL parses zcBaseURL and ensures the URL points at a
-// non-routable host on the LAN. Speakers live on the local network; rejecting
-// non-local hosts prevents the upstream caller from being tricked into
-// making outbound requests to arbitrary hosts (server-side request forgery).
+// validateZcHost parses host as a literal IP and ensures it is on the local
+// network. Speakers live on the LAN; rejecting non-local addresses prevents
+// SSRF gadgets that could trick the service into reaching arbitrary hosts.
 //
-// The validator is strict on purpose:
-//   - the scheme must be http or https,
-//   - the host must be a *literal IP* (no DNS / mDNS hostnames — see note
-//     below) that is loopback, RFC1918 private, or IPv4/IPv6 link-local,
-//   - the returned URL is rebuilt from validated components so the
-//     subsequent String() call no longer carries the original tainted host
-//     value, which CodeQL recognises as taint sanitisation.
-//
-// Note on hostnames: SoundTouch speakers announce themselves with
-// IP-based zeroconf URLs in the captures we have. If a future deployment
-// needs mDNS support, the right place to add it is in the caller — resolve
-// the hostname to an IP and pass the IP-form URL in here. Doing the lookup
-// inside the validator would re-introduce the very SSRF surface CodeQL is
-// flagging, because malicious DNS could point a *.local name at a
-// public host between the lookup and the request.
-func validateZcBaseURL(zcBaseURL string) (*url.URL, error) {
-	u, err := url.Parse(zcBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("zeroconf URL %q: parse: %w", zcBaseURL, err)
-	}
-
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("zeroconf URL %q: scheme %q not allowed — must be http or https", zcBaseURL, u.Scheme)
-	}
-
-	host := u.Hostname()
+// Only literal IPs are accepted — no DNS/mDNS hostnames. If the caller has a
+// hostname, resolve it first and pass the resulting IP. Doing the lookup here
+// would re-introduce the SSRF surface, because malicious DNS could point a
+// *.local name at a public address between the lookup and the request.
+func validateZcHost(host string) (net.IP, error) {
 	if host == "" {
-		return nil, fmt.Errorf("zeroconf URL %q: missing host", zcBaseURL)
+		return nil, fmt.Errorf("zeroconf host must not be empty")
 	}
 
 	ip := net.ParseIP(host)
 	if ip == nil {
 		return nil, fmt.Errorf(
-			"zeroconf URL %q: host %q must be a literal IP — resolve the hostname to a private-network IP first "+
+			"zeroconf host %q must be a literal IP — resolve the hostname first "+
 				"(e.g. `getent hosts %s` or `dig +short %s`) and retry with the resolved address",
-			zcBaseURL, host, host, host)
+			host, host, host)
 	}
 
 	if !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() {
 		return nil, fmt.Errorf(
-			"zeroconf URL %q: host %q is not on a local network — only loopback (127.0.0.0/8, ::1), "+
+			"zeroconf host %q is not on a local network — only loopback (127.0.0.0/8, ::1), "+
 				"RFC1918 private (10/8, 172.16/12, 192.168/16) and link-local (169.254/16, fe80::/10) "+
 				"addresses are accepted",
-			zcBaseURL, host)
+			host)
 	}
 
-	// Build a fresh URL from validated components only — the IP literal,
-	// the original port, the original path. Pre-existing ?query and
-	// #fragment are stripped so callers can attach their own cleanly.
-	hostPort := ip.String()
-	if port := u.Port(); port != "" {
-		hostPort = net.JoinHostPort(ip.String(), port)
+	return ip, nil
+}
+
+// buildZcBase constructs the ZeroConf base URL from a validated IP and port.
+// The path is always the literal "/zc" — no user-supplied path component ever
+// flows here, which is what satisfies CodeQL's go/request-forgery model.
+// port may be empty, in which case the scheme default applies.
+func buildZcBase(ip net.IP, port string) *url.URL {
+	var host string
+
+	switch {
+	case port != "":
+		// net.JoinHostPort brackets IPv6 addresses automatically.
+		host = net.JoinHostPort(ip.String(), port)
+	case ip.To4() == nil:
+		// IPv6 address without a port must be bracketed in a URL host field.
+		host = "[" + ip.String() + "]"
+	default:
+		host = ip.String()
 	}
 
 	return &url.URL{
-		Scheme: u.Scheme,
-		Host:   hostPort,
-		Path:   u.Path,
-	}, nil
+		Scheme: "http",
+		Host:   host,
+		Path:   "/zc",
+	}
 }
 
 // withAction returns the validated base URL with ?action=<action> appended.
@@ -257,11 +248,15 @@ func withAction(base *url.URL, action string) string {
 }
 
 // GetInfo fetches the speaker's DH public key via GET ?action=getInfo.
-func GetInfo(zcBaseURL string) ([]byte, error) {
-	base, err := validateZcBaseURL(zcBaseURL)
+// host must be a literal private-network IP address.
+// port is the ZeroConf port (typically "8200"); pass "" to omit it from the URL.
+func GetInfo(host, port string) ([]byte, error) {
+	ip, err := validateZcHost(host)
 	if err != nil {
 		return nil, fmt.Errorf("getInfo: %w", err)
 	}
+
+	base := buildZcBase(ip, port)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
@@ -300,17 +295,20 @@ func GetInfo(zcBaseURL string) ([]byte, error) {
 // PushCredentials pushes OAuth credentials to a speaker using the ZeroConf DH
 // key exchange protocol. If getInfo fails (older firmware without DH support),
 // it falls back to the simplified tokenType=accesstoken approach.
-// zcBaseURL is the base URL of the ZeroConf endpoint, e.g. "http://192.168.10.10:8200/zc".
-func PushCredentials(zcBaseURL, username, accessToken string) error {
-	base, err := validateZcBaseURL(zcBaseURL)
+// host must be a literal private-network IP address.
+// port is the ZeroConf port (typically "8200"); pass "" to omit it from the URL.
+func PushCredentials(host, port, username, accessToken string) error {
+	ip, err := validateZcHost(host)
 	if err != nil {
 		return fmt.Errorf("pushCredentials: %w", err)
 	}
 
-	speakerPublicKey, err := GetInfo(zcBaseURL)
+	base := buildZcBase(ip, port)
+
+	speakerPublicKey, err := GetInfo(host, port)
 	if err != nil {
 		log.Printf("[ZeroConf] getInfo failed (%s), falling back to simplified token push", sanitizeErr(err))
-		return pushSimplifiedToken(zcBaseURL, username, accessToken)
+		return pushSimplifiedToken(host, port, username, accessToken)
 	}
 
 	privateKey, ourPublicKeyBytes, err := GenerateDHKeyPair()
@@ -396,11 +394,13 @@ func logAddUserFailure(path string, base *url.URL, username string, resp *http.R
 
 // pushSimplifiedToken is the fallback for firmware that does not support DH
 // key exchange. It sends the raw OAuth access token directly as the blob.
-func pushSimplifiedToken(zcBaseURL, username, accessToken string) error {
-	base, err := validateZcBaseURL(zcBaseURL)
+func pushSimplifiedToken(host, port, username, accessToken string) error {
+	ip, err := validateZcHost(host)
 	if err != nil {
 		return fmt.Errorf("pushSimplifiedToken: %w", err)
 	}
+
+	base := buildZcBase(ip, port)
 
 	data := url.Values{}
 	data.Set("userName", username)

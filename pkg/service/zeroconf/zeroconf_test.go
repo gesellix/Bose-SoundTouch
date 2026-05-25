@@ -5,10 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+// srvHostPort returns the host and port of a test server's listener.
+func srvHostPort(srv *httptest.Server) (host, port string) {
+	host, port, _ = net.SplitHostPort(srv.Listener.Addr().String())
+	return
+}
 
 func TestGenerateDHKeyPair(t *testing.T) {
 	priv1, pub1, err := GenerateDHKeyPair()
@@ -199,7 +206,8 @@ func TestPushCredentials_FullRoundTrip(t *testing.T) {
 	const wantUsername = "user@example.com"
 	const wantToken = "eyJhbGciOiJSUzI1NiJ9.access-token"
 
-	if err := PushCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+	host, port := srvHostPort(srv)
+	if err := PushCredentials(host, port, wantUsername, wantToken); err != nil {
 		t.Fatalf("PushCredentials: %v", err)
 	}
 
@@ -242,7 +250,8 @@ func TestPushCredentials_FallbackOnGetInfoFailure(t *testing.T) {
 	const wantUsername = "user@example.com"
 	const wantToken = "raw-access-token"
 
-	if err := PushCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+	host, port := srvHostPort(srv)
+	if err := PushCredentials(host, port, wantUsername, wantToken); err != nil {
 		t.Fatalf("PushCredentials: %v", err)
 	}
 
@@ -314,57 +323,76 @@ func readProtoVarint(data []byte) (uint64, int) {
 	return 0, len(data)
 }
 
-func TestValidateZcBaseURL(t *testing.T) {
+func TestValidateZcHost(t *testing.T) {
+	// These cases use RFC-1918 192.168/16 addresses — validateZcHost accepts
+	// loopback, RFC-1918, and link-local only. RFC-5737 doc IPs (192.0.2/24 etc.)
+	// would be rejected, so tests use real private-range values.
 	cases := []struct {
-		name     string
-		input    string
-		wantOK   bool
-		wantHost string // expected u.Host on success
-		wantPath string
+		name   string
+		input  string
+		wantOK bool
 	}{
-		{"loopback", "http://127.0.0.1:8200/zc", true, "127.0.0.1:8200", "/zc"},
-		{"loopback no port", "http://127.0.0.1/zc", true, "127.0.0.1", "/zc"},
-		// The "private 192" and "strips query" cases must use an
-		// RFC-1918 192.168/16 value — validateZcBaseURL only accepts
-		// loopback, RFC-1918, and link-local. RFC-5737 doc IPs
-		// (which we use as placeholders elsewhere) would be rejected
-		// here, so the test uses a generic-but-real 192.168 value.
-		{"private 192", "http://192.168.10.10:8200/zc", true, "192.168.10.10:8200", "/zc"},
-		{"private 10", "http://10.0.0.5/zc", true, "10.0.0.5", "/zc"},
-		{"private 172", "http://172.16.0.1/zc", true, "172.16.0.1", "/zc"},
-		{"link-local v4", "http://169.254.10.20/zc", true, "169.254.10.20", "/zc"},
-		{"ipv6 loopback", "http://[::1]:8200/zc", true, "[::1]:8200", "/zc"},
-		{"ipv6 link-local", "http://[fe80::1]:8200/zc", true, "[fe80::1]:8200", "/zc"},
-		{"strips query", "http://192.168.10.10:8200/zc?foo=bar", true, "192.168.10.10:8200", "/zc"},
+		{"loopback", "127.0.0.1", true},
+		{"private 192", "192.168.10.10", true},
+		{"private 10", "10.0.0.5", true},
+		{"private 172", "172.16.0.1", true},
+		{"link-local v4", "169.254.10.20", true},
+		// IPv6 hosts are passed without brackets (brackets are URL syntax).
+		{"ipv6 loopback", "::1", true},
+		{"ipv6 link-local", "fe80::1", true},
 
-		{"public IP rejected", "http://1.1.1.1/zc", false, "", ""},
-		{"public ipv6 rejected", "http://[2001:db8::1]/zc", false, "", ""},
-		{"hostname rejected", "http://myspeaker.local/zc", false, "", ""},
-		{"plain hostname rejected", "http://speaker/zc", false, "", ""},
-		{"ftp scheme rejected", "ftp://192.0.2.10/zc", false, "", ""},
-		{"file scheme rejected", "file:///etc/passwd", false, "", ""},
-		{"empty host rejected", "http:///zc", false, "", ""},
-		{"unparseable rejected", "::not a url::", false, "", ""},
+		{"public IP rejected", "1.1.1.1", false},
+		{"public ipv6 rejected", "2001:db8::1", false},
+		{"hostname rejected", "myspeaker.local", false},
+		{"plain hostname rejected", "speaker", false},
+		{"empty host rejected", "", false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := validateZcBaseURL(tc.input)
+			ip, err := validateZcHost(tc.input)
 			if tc.wantOK {
 				if err != nil {
-					t.Fatalf("validateZcBaseURL(%q) returned error %v, want success", tc.input, err)
+					t.Fatalf("validateZcHost(%q) returned error %v, want success", tc.input, err)
 				}
-				if got.Host != tc.wantHost {
-					t.Errorf("Host = %q, want %q", got.Host, tc.wantHost)
-				}
-				if got.Path != tc.wantPath {
-					t.Errorf("Path = %q, want %q", got.Path, tc.wantPath)
-				}
-				if got.RawQuery != "" {
-					t.Errorf("RawQuery = %q, want empty (validator should strip query)", got.RawQuery)
+				if ip == nil {
+					t.Fatalf("validateZcHost(%q) returned nil IP, want non-nil", tc.input)
 				}
 			} else if err == nil {
-				t.Errorf("validateZcBaseURL(%q) succeeded, want error", tc.input)
+				t.Errorf("validateZcHost(%q) succeeded, want error", tc.input)
+			}
+		})
+	}
+}
+
+func TestBuildZcBase(t *testing.T) {
+	cases := []struct {
+		name    string
+		host    string
+		port    string
+		wantURL string
+	}{
+		{"with port", "127.0.0.1", "8200", "http://127.0.0.1:8200/zc"},
+		{"without port", "192.168.1.1", "", "http://192.168.1.1/zc"},
+		{"ipv6 with port", "::1", "8200", "http://[::1]:8200/zc"},
+		{"ipv6 without port", "::1", "", "http://[::1]/zc"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ip := net.ParseIP(tc.host)
+			if ip == nil {
+				t.Fatalf("test setup: net.ParseIP(%q) returned nil", tc.host)
+			}
+			got := buildZcBase(ip, tc.port)
+			if got.String() != tc.wantURL {
+				t.Errorf("buildZcBase(%q, %q) = %q, want %q", tc.host, tc.port, got.String(), tc.wantURL)
+			}
+			if got.Path != "/zc" {
+				t.Errorf("Path = %q, want /zc", got.Path)
+			}
+			if got.RawQuery != "" {
+				t.Errorf("RawQuery = %q, want empty", got.RawQuery)
 			}
 		})
 	}
@@ -399,7 +427,8 @@ func TestPushCredentials_AddUserNoOp(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err = PushCredentials(srv.URL+"/zc", "gesellix", "fresh-access-token")
+	host, port := srvHostPort(srv)
+	err = PushCredentials(host, port, "gesellix", "fresh-access-token")
 	if !errors.Is(err, ErrAddUserNoOp) {
 		t.Fatalf("PushCredentials: got %v, want ErrAddUserNoOp", err)
 	}
@@ -421,7 +450,8 @@ func TestPushCredentials_AddUserNoOpInSimplifiedPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := PushCredentials(srv.URL+"/zc", "gesellix", "raw-access-token")
+	host, port := srvHostPort(srv)
+	err := PushCredentials(host, port, "gesellix", "raw-access-token")
 	if !errors.Is(err, ErrAddUserNoOp) {
 		t.Fatalf("PushCredentials (simplified path): got %v, want ErrAddUserNoOp", err)
 	}
@@ -468,7 +498,8 @@ func TestPushCredentials_AddUserRealError_NotMisclassified(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			err := PushCredentials(srv.URL+"/zc", "gesellix", "fresh-access-token")
+			host, port := srvHostPort(srv)
+			err := PushCredentials(host, port, "gesellix", "fresh-access-token")
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}

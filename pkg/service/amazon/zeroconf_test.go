@@ -3,6 +3,7 @@ package amazon
 import (
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,7 +101,8 @@ func TestPushAmazonCredentials_FullRoundTrip(t *testing.T) {
 	const wantUsername = "amazonuser@example.com"
 	const wantToken = "Atza|access-token"
 
-	if err := PushAmazonCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	if err := PushAmazonCredentials(host, port, wantUsername, wantToken); err != nil {
 		t.Fatalf("PushAmazonCredentials: %v", err)
 	}
 
@@ -143,7 +145,8 @@ func TestPushAmazonCredentials_FallbackOnGetInfoFailure(t *testing.T) {
 	const wantUsername = "amazonuser@example.com"
 	const wantToken = "Atza|raw-access-token"
 
-	if err := PushAmazonCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	if err := PushAmazonCredentials(host, port, wantUsername, wantToken); err != nil {
 		t.Fatalf("PushAmazonCredentials: %v", err)
 	}
 

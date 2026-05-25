@@ -9,7 +9,8 @@ var ErrAddUserNoOp = zeroconf.ErrAddUserNoOp
 // PushAmazonCredentials pushes Amazon Music credentials to a speaker using the
 // ZeroConf DH key exchange protocol. Falls back to simplified token push if
 // the speaker does not support DH (older firmware).
-// zcBaseURL is the base URL of the ZeroConf endpoint, e.g. "http://192.168.10.10:8200/zc".
-func PushAmazonCredentials(zcBaseURL, username, accessToken string) error {
-	return zeroconf.PushCredentials(zcBaseURL, username, accessToken)
+// host must be a literal private-network IP address.
+// port is the ZeroConf port (typically "8200"); pass "" to omit it from the URL.
+func PushAmazonCredentials(host, port, username, accessToken string) error {
+	return zeroconf.PushCredentials(host, port, username, accessToken)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -83,7 +84,8 @@ func TestPushSpotifyCredentials_FullRoundTrip(t *testing.T) {
 	const wantUsername = "spotifyuser@example.com"
 	const wantToken = "eyJhbGciOiJSUzI1NiJ9.access-token"
 
-	if err := PushSpotifyCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	if err := PushSpotifyCredentials(host, port, wantUsername, wantToken); err != nil {
 		t.Fatalf("PushSpotifyCredentials: %v", err)
 	}
 
@@ -129,7 +131,8 @@ func TestPushSpotifyCredentials_FallbackOnGetInfoFailure(t *testing.T) {
 	const wantUsername = "spotifyuser@example.com"
 	const wantToken = "raw-access-token"
 
-	if err := PushSpotifyCredentials(srv.URL+"/zc", wantUsername, wantToken); err != nil {
+	host, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	if err := PushSpotifyCredentials(host, port, wantUsername, wantToken); err != nil {
 		t.Fatalf("PushSpotifyCredentials: %v", err)
 	}
 
