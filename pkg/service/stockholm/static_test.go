@@ -77,74 +77,65 @@ func TestIsBootstrapTarget(t *testing.T) {
 	}
 }
 
-// ---- resolveStaticFile ----
+// ---- resolveStaticRel ----
 
-func TestResolveStaticFile_Normal(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "app.js"), []byte("js"), 0644)
-
-	file, rel, err := resolveStaticFile("/app.js", dir)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !strings.HasSuffix(file, "app.js") {
-		t.Errorf("expected file path to end with app.js, got %q", file)
-	}
-
+func TestResolveStaticRel_Normal(t *testing.T) {
+	rel := resolveStaticRel("/app.js")
 	if rel != "app.js" {
 		t.Errorf("expected rel = %q, got %q", "app.js", rel)
 	}
 }
 
-func TestResolveStaticFile_RootMapsToIndexHTML(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>"), 0644)
-
-	file, rel, err := resolveStaticFile("/", dir)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !strings.HasSuffix(file, "index.html") {
-		t.Errorf("expected file path to end with index.html, got %q", file)
-	}
-
+func TestResolveStaticRel_RootMapsToIndexHTML(t *testing.T) {
+	rel := resolveStaticRel("/")
 	if rel != "index.html" {
 		t.Errorf("expected rel = %q, got %q", "index.html", rel)
 	}
 }
 
-func TestResolveStaticFile_DirectoryMapsToIndexHTML(t *testing.T) {
-	dir := t.TempDir()
-	subDir := filepath.Join(dir, "setup")
-	_ = os.MkdirAll(subDir, 0755)
-	_ = os.WriteFile(filepath.Join(subDir, "index.html"), []byte("<html>"), 0644)
-
-	file, rel, err := resolveStaticFile("/setup", dir)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !strings.HasSuffix(file, filepath.Join("setup", "index.html")) {
-		t.Errorf("expected file path to end with setup/index.html, got %q", file)
-	}
-
-	if rel != "setup/index.html" {
-		t.Errorf("expected rel = %q, got %q", "setup/index.html", rel)
+func TestResolveStaticRel_EmptyMapsToIndexHTML(t *testing.T) {
+	rel := resolveStaticRel("")
+	if rel != "index.html" {
+		t.Errorf("expected rel = %q, got %q", "index.html", rel)
 	}
 }
 
-func TestResolveStaticFile_PathTraversalRejected(t *testing.T) {
+// ---- ServeStatic path-traversal and directory tests ----
+
+func TestServeStatic_DirectoryMapsToIndexHTML(t *testing.T) {
 	dir := t.TempDir()
+	subDir := filepath.Join(dir, "setup")
+	_ = os.MkdirAll(subDir, 0755)
+	_ = os.WriteFile(filepath.Join(subDir, "index.html"), []byte("<html><head></head><body>setup</body></html>"), 0644)
 
-	_, _, err := resolveStaticFile("/../../../etc/passwd", dir)
+	state := NewNativeState(t.TempDir())
+	cfg := &Config{}
+	backendCfg := &BackendConfig{}
 
-	if err == nil {
-		t.Error("expected error for path traversal, got nil")
+	req := httptest.NewRequest(http.MethodGet, "/setup", nil)
+	rec := httptest.NewRecorder()
+
+	ServeStatic(rec, req, dir, backendCfg, state, cfg)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestServeStatic_PathTraversalRejected(t *testing.T) {
+	dir := t.TempDir()
+	state := NewNativeState(t.TempDir())
+	cfg := &Config{}
+	backendCfg := &BackendConfig{}
+
+	// os.Root rejects any path that would escape the root directory.
+	req := httptest.NewRequest(http.MethodGet, "/../../../etc/passwd", nil)
+	rec := httptest.NewRecorder()
+
+	ServeStatic(rec, req, dir, backendCfg, state, cfg)
+
+	if rec.Code == http.StatusOK {
+		t.Errorf("expected non-200 for path traversal attempt, got 200")
 	}
 }
 

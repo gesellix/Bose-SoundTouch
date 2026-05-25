@@ -3,10 +3,10 @@ package stockholm
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -44,6 +44,10 @@ func contentTypeFor(name string) string {
 }
 
 // ServeStatic handles all static file requests for the Stockholm frontend.
+// All file operations are performed via an os.Root anchored at stockholmDir,
+// which prevents path traversal at the OS level (go/path-injection, alerts
+// 143–145). The URL-path → relative-path mapping is handled by
+// resolveStaticRel; os.Root rejects any path that would escape stockholmDir.
 func ServeStatic(w http.ResponseWriter, r *http.Request, stockholmDir string, backendCfg *BackendConfig, state *NativeState, cfg *Config) {
 	method := strings.ToUpper(r.Method)
 	if method != http.MethodGet && method != http.MethodHead {
@@ -51,27 +55,46 @@ func ServeStatic(w http.ResponseWriter, r *http.Request, stockholmDir string, ba
 		return
 	}
 
-	file, rel, err := resolveStaticFile(r.URL.Path, stockholmDir)
+	root, err := os.OpenRoot(stockholmDir)
 	if err != nil {
-		log.Printf("[Stockholm static] Path traversal rejected: %s", sanitizeLog(r.URL.Path))
-		http.Error(w, "Forbidden", http.StatusForbidden)
-
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	defer root.Close()
 
-	info, err := os.Stat(file)
-	if err != nil || info.IsDir() {
+	rel := resolveStaticRel(r.URL.Path)
+
+	info, err := root.Stat(rel)
+	if err != nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
 	}
 
-	body, err := os.ReadFile(file)
+	// Directory → serve index.html inside it.
+	if info.IsDir() {
+		rel = rel + "/index.html"
+
+		info, err = root.Stat(rel)
+		if err != nil || info.IsDir() {
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+	}
+
+	f, err := root.Open(rel)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
+	body, err := io.ReadAll(f)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	ct := contentTypeFor(file)
+	ct := contentTypeFor(rel)
 
 	if ct == "text/html; charset=UTF-8" && isBootstrapTarget(rel) {
 		body = injectBootstrap(body, state, cfg)
@@ -97,36 +120,21 @@ func ServeStatic(w http.ResponseWriter, r *http.Request, stockholmDir string, ba
 	_, _ = w.Write(body)
 }
 
-func resolveStaticFile(rawPath, stockholmDir string) (filePath, relPath string, err error) {
+// resolveStaticRel converts a URL path to a relative path for use with an
+// os.Root anchored at the Stockholm static-files directory. It handles the
+// root-path → index.html default and strips the leading slash; it does not
+// validate for traversal because os.Root enforces containment at the OS level.
+func resolveStaticRel(rawPath string) string {
 	if rawPath == "" || rawPath == "/" {
-		rawPath = "/index.html"
+		return "index.html"
 	}
 
-	// Strip leading slash, resolve relative to stockholmDir
-	clean := filepath.Clean(strings.TrimPrefix(rawPath, "/"))
-	resolved := filepath.Join(stockholmDir, clean)
-
-	// Security: reject path traversal
-	absStockholm, _ := filepath.Abs(stockholmDir)
-	absResolved, _ := filepath.Abs(resolved)
-
-	if !strings.HasPrefix(absResolved+string(filepath.Separator), absStockholm+string(filepath.Separator)) &&
-		absResolved != absStockholm {
-		return "", "", fmt.Errorf("path outside stockholm root")
+	rel := strings.TrimPrefix(rawPath, "/")
+	if rel == "" {
+		return "index.html"
 	}
 
-	rel := strings.TrimPrefix(absResolved, absStockholm+string(filepath.Separator))
-	rel = strings.ReplaceAll(rel, string(filepath.Separator), "/")
-
-	// Directory → try index.html
-	info, statErr := os.Stat(resolved)
-	if statErr == nil && info.IsDir() {
-		resolved = filepath.Join(resolved, "index.html")
-		rel = strings.TrimPrefix(resolved, absStockholm+string(filepath.Separator))
-		rel = strings.ReplaceAll(rel, string(filepath.Separator), "/")
-	}
-
-	return resolved, rel, nil
+	return rel
 }
 
 func isBootstrapTarget(relPath string) bool {
