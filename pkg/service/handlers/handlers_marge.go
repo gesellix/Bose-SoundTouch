@@ -754,6 +754,10 @@ func (s *Server) HandleMargeAddSource(w http.ResponseWriter, r *http.Request) {
 // HandleMargeProviderSettings returns Marge provider settings.
 func (s *Server) HandleMargeProviderSettings(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	_, _ = w.Write([]byte(marge.ProviderSettingsToXML(account)))
