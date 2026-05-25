@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -44,6 +45,9 @@ func TestRadioBrowserSearch(t *testing.T) {
 }
 
 func TestRadioBrowserSearch_Real(t *testing.T) {
+	if testing.Short() || os.Getenv("RADIOBROWSER_INTEGRATION") == "" {
+		t.Skip("skipping live network test; set RADIOBROWSER_INTEGRATION=1 to run")
+	}
 	query := "Deutschlandfunk Kultur"
 	resp, err := RadioBrowserSearch(query)
 	if err != nil {
