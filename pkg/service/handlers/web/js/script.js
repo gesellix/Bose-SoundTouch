@@ -1933,8 +1933,11 @@ async function showSummary(deviceId) {
         fillPlanURLInputs(defaultServiceURLs(targetUrl, {soundcorkMode: soundcork}));
 
         const migrationStatus = document.getElementById("migration-status");
-        migrationStatus.innerText = summary.is_migrated ? "✅ Migrated to AfterTouch" : "❌ Not Migrated";
-        migrationStatus.style.color = summary.is_migrated ? "green" : "red";
+        const otherTarget = isMigratedToOtherTarget(summary);
+        migrationStatus.innerText = summary.is_migrated ? "✅ Migrated to AfterTouch"
+            : otherTarget ? "⚠️ Migrated (URL mismatch)"
+            : "❌ Not Migrated";
+        migrationStatus.style.color = summary.is_migrated ? "green" : otherTarget ? "orange" : "red";
         migrationStatus.style.fontWeight = "bold";
 
         // Trust CA Now button now lives inside the state card's CA / TLS
@@ -3736,6 +3739,23 @@ function formatURLPair(xmlVal, telVal) {
     return `xml: ${xmlVal}  •  live: ${telVal}`;
 }
 
+// isMigratedToOtherTarget returns true when the speaker's on-device URLs have
+// been changed away from Bose cloud but don't match the Settings Target Domain —
+// i.e. the speaker was previously migrated to a different AfterTouch hostname
+// (or the Settings Target Domain drifted after migration). In this state
+// xml_migrated and telnet_migrated are both false (they only match the *current*
+// Settings Target Domain), yet labelling the speaker "Original (Bose cloud)"
+// would be factually wrong.
+function isMigratedToOtherTarget(summary) {
+    if (summary.xml_migrated || summary.telnet_migrated) return false;
+    const boseDomains = ["streaming.bose.com", "stats.bose.com", "updates.bose.com", "bmx.bose.com"];
+    const cfg = summary.parsed_current_config;
+    if (!cfg) return false;
+    const urls = [cfg.margeServerUrl, cfg.statsServerUrl, cfg.swUpdateUrl, cfg.bmxRegistryUrl].filter(Boolean);
+    if (urls.length === 0) return false;
+    return !urls.some(u => boseDomains.some(d => u.includes(d)));
+}
+
 // urlConfigVerdict reports the URL-flip axis in the context of DNS
 // interception, because "URLs still point at Bose" is only a problem
 // if nothing else is redirecting them. When the DNS hook (or, less
@@ -3751,8 +3771,20 @@ function urlConfigVerdict(summary) {
     if (xml) return {icon: "✅", text: "AfterTouch URLs", note: "(XML only — telnet runtime may still hold the old URLs)"};
     if (tel) return {icon: "✅", text: "AfterTouch URLs", note: "(telnet runtime — reboot to persist into the on-disk XML)"};
 
-    // Neither URL-flip mechanism is active. Whether that's OK depends
-    // on whether DNS interception is doing the redirect.
+    // Neither URL-flip mechanism matched the Settings Target Domain.
+    // Before falling back to "Original (Bose cloud)", check whether the
+    // device's URLs already point somewhere that is clearly not Bose cloud
+    // — e.g. the speaker was migrated to "http://spotify:8000" but the
+    // Settings Target Domain is now an IP address (or vice versa). The
+    // speaker is effectively migrated; "Original (Bose cloud)" would be
+    // misleading and alarming.
+    if (isMigratedToOtherTarget(summary)) {
+        const margeUrl = (summary.parsed_current_config || {}).margeServerUrl || "unknown";
+        if (dns) return {icon: "✅", text: "Migrated (URL mismatch)", note: `— device has ${margeUrl}, also intercepted via DNS`};
+        return {icon: "⚠️", text: "Migrated (URL mismatch)", note: `— device has ${margeUrl}; the speaker must be able to reach the service there. Update Settings Target Domain to match, or apply the plan to change the device URL`};
+    }
+
+    // URLs are genuinely pointing at Bose cloud (or the config is unreadable).
     if (dns) return {icon: "✅", text: "Original (Bose cloud)", note: "— intercepted via DNS, device reaches AfterTouch"};
     return {icon: "❌", text: "Original (Bose cloud)", note: "— not intercepted, device will reach the real Bose cloud"};
 }
