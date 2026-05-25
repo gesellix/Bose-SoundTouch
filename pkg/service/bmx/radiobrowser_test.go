@@ -45,7 +45,7 @@ func TestRadioBrowserSearch(t *testing.T) {
 }
 
 func TestRadioBrowserSearch_Real(t *testing.T) {
-	if testing.Short() || os.Getenv("RADIOBROWSER_INTEGRATION") == "" {
+	if os.Getenv("RADIOBROWSER_INTEGRATION") == "" {
 		t.Skip("skipping live network test; set RADIOBROWSER_INTEGRATION=1 to run")
 	}
 	query := "Deutschlandfunk Kultur"
