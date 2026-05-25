@@ -182,6 +182,12 @@ unless the user has already authorised that specific action in this
 session. Prefer reversible alternatives (`git stash` over
 `git reset --hard`).
 
+**Force-flags also require explicit approval.** `git add -f` (force-add
+a gitignored file), `git push --force`, `git push --force-with-lease`,
+and any other flag that overrides a git safety mechanism must be
+proposed and confirmed before running, for the same reason: they
+bypass protections that exist intentionally.
+
 ## What never goes into this repo
 
 This repository is public. The following must never be committed:
