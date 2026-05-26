@@ -275,6 +275,8 @@ func (app *WebApp) handleControlAction(w http.ResponseWriter, r *http.Request, a
 		app.sendControlResponse(w, err, "Toggled mute")
 	case "preset":
 		app.handlePresetControl(w, r, device)
+	case "storepreset":
+		app.handleStorePreset(w, r, device)
 	case "bass":
 		app.handleBassControl(w, r, device)
 	case "source":
@@ -332,6 +334,29 @@ func (app *WebApp) handlePresetControl(w http.ResponseWriter, r *http.Request, d
 
 	err = device.Client.SelectPreset(presetID)
 	app.sendControlResponse(w, err, fmt.Sprintf("Selected preset %d", presetID))
+}
+
+// handleStorePreset stores the currently playing content as a numbered preset.
+func (app *WebApp) handleStorePreset(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection) {
+	presetParam := r.URL.Query().Get("id")
+	if presetParam == "" {
+		app.sendError(w, "Preset ID required", http.StatusBadRequest)
+		return
+	}
+
+	presetID, err := strconv.Atoi(presetParam)
+	if err != nil {
+		app.sendError(w, "Invalid preset ID", http.StatusBadRequest)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	err = device.Client.StoreCurrentAsPreset(presetID)
+	app.sendControlResponse(w, err, fmt.Sprintf("Stored current as preset %d", presetID))
 }
 
 // handleBassControl processes bass control requests

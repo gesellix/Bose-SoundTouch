@@ -337,8 +337,59 @@ img { display: block; max-width: 100%; }
     box-shadow: var(--shadow);
     min-height: 98px; /* Fixed height to avoid jumps between tracks/standby */
     align-items: center;
+    position: relative; /* anchor for the ★ fav button */
 }
 .now-playing.standby { color: var(--text-dim); font-size: .9rem; }
+
+/* ── Now-playing ★ fav / preset button ──────────────────────────────────── */
+.now-playing-fav-wrap {
+    position: absolute;
+    top: .45rem;
+    right: .5rem;
+}
+
+.now-playing-fav-btn {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: .15rem .2rem;
+    cursor: pointer;
+    color: var(--text-dim);
+    opacity: .3;
+    transition: opacity .15s, color .15s;
+    border-radius: 4px;
+}
+.now-playing-fav-btn:hover,
+.now-playing-fav-btn.open {
+    opacity: .75;
+    color: var(--text);
+}
+.now-playing-fav-btn.mapped {
+    color: #c9a000; /* warm gold, not too bright */
+    opacity: .85;
+}
+.now-playing-fav-btn.mapped:hover,
+.now-playing-fav-btn.mapped.open {
+    opacity: 1;
+    color: #e0b800;
+}
+
+.now-playing-fav-overlay {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 50;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: .5rem .6rem;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    min-width: 170px;
+}
 
 .album-art { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
 
@@ -399,6 +450,45 @@ img { display: block; max-width: 100%; }
 }
 .progress-time { font-size: .7rem; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
 
+/* ── Save-as-preset picker (NowPlaying) ─────────────────────────────────── */
+.preset-picker-wrap { position: relative; margin-top: .6rem; display: inline-block; }
+
+.save-preset-btn {
+    font-size: .72rem; font-weight: 600;
+    padding: .3rem .65rem; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-dim); cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+.save-preset-btn:hover, .save-preset-btn.open {
+    border-color: var(--accent); color: var(--accent);
+}
+
+.preset-picker-overlay {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: .5rem .6rem; display: flex; flex-direction: column; gap: .4rem;
+    min-width: 180px;
+}
+.preset-picker-label {
+    font-size: .65rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text-dim);
+}
+.preset-picker-slots { display: flex; gap: .35rem; }
+.preset-picker-slot {
+    width: 2rem; height: 2rem; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--bg);
+    font-size: .8rem; font-weight: 700; cursor: pointer;
+    transition: background .1s, border-color .1s, color .1s;
+    display: flex; align-items: center; justify-content: center;
+}
+.preset-picker-slot:hover:not(:disabled) {
+    border-color: var(--accent); color: var(--accent);
+}
+.preset-picker-slot.saving { opacity: .5; cursor: wait; }
+.preset-picker-slot.saved  { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+
 /* ── Presets ─────────────────────────────────────────────────────────────── */
 .presets-section, .sources-section { margin-top: 1.25rem; }
 .section-title { font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: .6rem; }
@@ -427,6 +517,37 @@ img { display: block; max-width: 100%; }
 .preset-slot:disabled { opacity: .4; cursor: default; }
 .preset-slot.active { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
 .preset-slot.active .preset-name { color: var(--accent-fg); }
+
+.preset-slot-wrap { position: relative; }
+.preset-slot-wrap .preset-slot { width: 100%; }
+
+/* Source-specific accent colour applied as a top border on text-only slots
+   (slots that have no artwork image).  Has no visible effect when art is
+   shown because the image fills the top of the slot. */
+.preset-slot[data-source="SPOTIFY"]              { --slot-color: #1DB954; }
+.preset-slot[data-source="TUNEIN"]               { --slot-color: #0082C8; }
+.preset-slot[data-source="LOCAL_INTERNET_RADIO"] { --slot-color: #FF6B35; }
+.preset-slot[data-source="RADIO_BROWSER"]        { --slot-color: #FF6B35; }
+.preset-slot[data-source="AMAZON"]               { --slot-color: #FF9900; }
+.preset-slot[data-source="PANDORA"]              { --slot-color: #005483; }
+.preset-slot:not(.active):not(.empty):not(:has(.preset-art)) {
+    border-top: 2px solid var(--slot-color, var(--border));
+}
+
+/* Save-to-preset overlay button — fades in on hover, lives outside the play
+   button to avoid invalid nested <button> elements. */
+.preset-save-btn {
+    position: absolute; top: 2px; left: 3px; z-index: 1;
+    font-size: .65rem; line-height: 1; font-weight: 700;
+    background: none; border: none; cursor: pointer; padding: 2px 3px;
+    border-radius: 2px; color: var(--text-dim);
+    opacity: 0; transition: opacity .15s, color .15s;
+}
+.preset-slot-wrap:hover .preset-save-btn,
+.preset-save-btn:focus { opacity: .65; }
+.preset-save-btn:hover { opacity: 1; color: var(--accent); }
+.preset-save-btn.saved { opacity: 1; color: var(--accent); }
+.preset-save-btn.error { opacity: 1; color: #e55; }
 
 .preset-art { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; }
 .preset-source-label { font-size: .6rem; font-weight: 600; text-transform: uppercase; opacity: .6; }

@@ -32,6 +32,7 @@ export const api = {
     tuneInSearch: (q) => req(`/api/tunein/search?q=${encodeURIComponent(q)}`),
     tuneInSearchNext: (cursor) => req(`/api/tunein/search/next?cursor=${encodeURIComponent(cursor)}`),
     control: (id, action, presetId) => req(`/api/control/${id}/${action}?id=${presetId}`),
+    storePreset: (id, slotId) => req(`/api/control/${id}/storepreset?id=${slotId}`),
     selectSource: (id, source, account) => req(`/api/control/${id}/source?name=${encodeURIComponent(source)}&account=${encodeURIComponent(account || '')}`),
     tuneInPlay: (deviceId, item) => req(`/api/tunein/play/${deviceId}`, {
         method: 'POST',

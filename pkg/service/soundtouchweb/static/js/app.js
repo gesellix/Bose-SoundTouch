@@ -32,7 +32,7 @@ function DeviceDetail({ deviceId, devices, onBack }) {
                 <button class="back-btn" onClick=${onBack}>← Back</button>
                 <button class="btn-icon" onClick=${() => api.power(deviceId)} title="Power">⏻</button>
             </div>
-            <${NowPlaying} nowPlaying=${device.status?.nowPlaying} />
+            <${NowPlaying} nowPlaying=${device.status?.nowPlaying} deviceId=${deviceId} presets=${device.status?.presets} />
             <${Controls} deviceId=${deviceId} status=${device.status} />
             <${Presets} deviceId=${deviceId} status=${device.status} />
             <${Sources} deviceId=${deviceId} status=${device.status} />

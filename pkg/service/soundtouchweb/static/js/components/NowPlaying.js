@@ -1,6 +1,7 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
+import { api } from '../api.js';
 
 const html = htm.bind(h);
 
@@ -11,7 +12,79 @@ function fmt(secs) {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function NowPlaying({ nowPlaying }) {
+// PresetPicker — ★ star button in the top-right corner of the now-playing card.
+// Translucent when nothing is mapped; golden when the current content already
+// exists in one of the device's presets.  Click to open a slot picker (1–6).
+function PresetPicker({ deviceId, nowPlaying, presets }) {
+    const [open, setOpen] = useState(false);
+    const [savingSlot, setSavingSlot] = useState(null);
+    const [savedSlot, setSavedSlot] = useState(null);
+    const wrapRef = useRef(null);
+
+    // Detect whether the current content is already saved as any preset.
+    const currentSource   = nowPlaying?.ContentItem?.Source;
+    const currentLocation = nowPlaying?.ContentItem?.Location;
+    const presetList = presets?.Preset ?? [];
+    const isMapped = !!(currentLocation && presetList.some(p =>
+        p.ContentItem?.Location === currentLocation &&
+        p.ContentItem?.Source   === currentSource
+    ));
+
+    // Close popover on outside click.
+    useEffect(() => {
+        if (!open) return;
+        function onDocClick(e) {
+            if (!wrapRef.current?.contains(e.target)) setOpen(false);
+        }
+        document.addEventListener('click', onDocClick, true);
+        return () => document.removeEventListener('click', onDocClick, true);
+    }, [open]);
+
+    function save(slotId) {
+        setSavingSlot(slotId);
+        api.storePreset(deviceId, slotId)
+            .then(res => {
+                setSavingSlot(null);
+                setSavedSlot(slotId);
+                setTimeout(() => {
+                    setSavedSlot(null);
+                    setOpen(false);
+                }, 900);
+            })
+            .catch(() => {
+                setSavingSlot(null);
+                setOpen(false);
+            });
+    }
+
+    return html`
+        <div class="now-playing-fav-wrap" ref=${wrapRef}>
+            <button
+                class="now-playing-fav-btn ${isMapped ? 'mapped' : ''} ${open ? 'open' : ''}"
+                onClick=${() => setOpen(o => !o)}
+                title=${isMapped ? 'Saved as preset — save again to update' : 'Save as preset'}
+                aria-label="Save as preset"
+            >★</button>
+            ${open && html`
+                <div class="now-playing-fav-overlay">
+                    <div class="preset-picker-label">Save as preset</div>
+                    <div class="preset-picker-slots">
+                        ${[1, 2, 3, 4, 5, 6].map(n => html`
+                            <button
+                                key=${n}
+                                class="preset-picker-slot ${savingSlot === n ? 'saving' : savedSlot === n ? 'saved' : ''}"
+                                onClick=${() => save(n)}
+                                disabled=${savingSlot !== null}
+                            >${n}</button>
+                        `)}
+                    </div>
+                </div>
+            `}
+        </div>
+    `;
+}
+
+export function NowPlaying({ nowPlaying, deviceId, presets }) {
     const [position, setPosition] = useState(0);
 
     useEffect(() => {
@@ -52,6 +125,13 @@ export function NowPlaying({ nowPlaying }) {
                     </div>
                 `}
             </div>
+            ${deviceId && html`
+                <${PresetPicker}
+                    deviceId=${deviceId}
+                    nowPlaying=${nowPlaying}
+                    presets=${presets}
+                />
+            `}
         </div>
     `;
 }
