@@ -8,6 +8,12 @@ ARG TARGETARCH
 ARG TARGETOS
 ARG TARGETVARIANT
 
+# Version info injected at build time; defaults keep local builds working.
+# The release workflow passes VERSION, COMMIT, and DATE via --build-arg.
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG DATE=unknown
+
 WORKDIR /app
 
 # Copy go mod and sum files
@@ -19,16 +25,24 @@ COPY . .
 
 # Build the soundtouch-service
 RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
-      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build -o /soundtouch-service ./cmd/soundtouch-service; \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} \
+      go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+      -o /soundtouch-service ./cmd/soundtouch-service; \
     else \
-      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /soundtouch-service ./cmd/soundtouch-service; \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+      go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+      -o /soundtouch-service ./cmd/soundtouch-service; \
     fi
 
 # Build the soundtouch-web
 RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
-      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build -o /soundtouch-web ./cmd/soundtouch-web; \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} \
+      go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+      -o /soundtouch-web ./cmd/soundtouch-web; \
     else \
-      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /soundtouch-web ./cmd/soundtouch-web; \
+      CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+      go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+      -o /soundtouch-web ./cmd/soundtouch-web; \
     fi
 
 # soundtouch-service image
