@@ -1219,10 +1219,10 @@ func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []
 	if lastDeviceID != "" {
 		sources, err = ds.GetConfiguredSources(account, lastDeviceID)
 		if err == nil {
-			sources = mergeDefaultSources(sources, ds.GetDefaultSources())
+			sources = mergeDefaultSources(sources, ds.GetInitialSources())
 		}
 	} else {
-		sources = ds.GetDefaultSources()
+		sources = ds.GetInitialSources()
 	}
 
 	if err != nil {

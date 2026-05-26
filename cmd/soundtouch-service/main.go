@@ -77,7 +77,7 @@ func initializeDefaultSources(ds *datastore.DataStore) {
 			// claimed tracks which stored sources have already been matched by a default,
 			// so two defaults with the same SourceKeyType but different SourceProviderIDs
 			// (e.g. INTERNET_RADIO/2 and INTERNET_RADIO/39) are treated as distinct entries.
-			defaults := ds.GetDefaultSources()
+			defaults := ds.GetInitialSources()
 			modified := false
 			claimed := make(map[int]bool)
 

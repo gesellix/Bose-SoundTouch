@@ -2173,6 +2173,15 @@ func (ds *DataStore) GetDefaultSources() []models.ConfiguredSource {
 	return ds.getDefaultSources()
 }
 
+// GetInitialSources returns the default sources for a brand-new device:
+// the full default list minus the legacy INTERNET_RADIO stub.
+// Use this (not GetDefaultSources) whenever deciding which sources to add
+// to a device — re-adding INTERNET_RADIO to existing devices would silently
+// undo the stale_internet_radio health-check quick-fix.
+func (ds *DataStore) GetInitialSources() []models.ConfiguredSource {
+	return ds.getInitialSources()
+}
+
 // CanonicalSourceByID returns the canonical default ConfiguredSource for one
 // of the well-known built-in source IDs (10001..10005). The returned source
 // has its SourceKey.Type / SourceKey.Account mirrored from

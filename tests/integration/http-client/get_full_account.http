@@ -52,7 +52,10 @@ Authorization: Bearer {{token}}
         // AUX from its own hardware via isLocal=true in :8090/sources. See
         // pkg/service/marge/marge.go getAccountSources for the reasoning and
         // commit 2b40481 for the fix that closed #195/#269.
-        client.assert(sourceCount === 5, "Expected 5 cloud sources (INTERNET_RADIO, LOCAL_INTERNET_RADIO, TUNEIN, RADIO_BROWSER, Spotify; AUX is hardware-local) but got " + sourceCount);
+        // INTERNET_RADIO (id=10002) is also excluded — it is a legacy stub
+        // that AfterTouch no longer adds to new or existing devices. See
+        // GetInitialSources() in pkg/service/datastore/datastore.go.
+        client.assert(sourceCount === 4, "Expected 4 cloud sources (LOCAL_INTERNET_RADIO, TUNEIN, RADIO_BROWSER, Spotify; AUX and INTERNET_RADIO are excluded) but got " + sourceCount);
 
         // Explicit negative assertion: AUX must not appear in /full.
         var sourceList = sources.getElementsByTagName("source");

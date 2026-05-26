@@ -64,16 +64,17 @@ func TestMargeCreateAccount(t *testing.T) {
 		t.Errorf("Expected 7-digit ID, got %v", resp.ID)
 	}
 
-	// Verify default sources. AUX (id=10001, sourceproviderid=9) is
-	// intentionally excluded from cloud responses — real Bose never
-	// emitted AUX in /full; the speaker enumerates AUX from its own
-	// hardware via isLocal=true in :8090/sources. See
+	// Verify default sources. AUX (id=10001) is intentionally excluded from
+	// cloud responses — real Bose never emitted AUX in /full; the speaker
+	// enumerates AUX from its own hardware via isLocal=true in :8090/sources.
+	// INTERNET_RADIO (id=10002) is also excluded — it is a legacy stub that
+	// AfterTouch no longer adds to new devices. See GetInitialSources() and
 	// pkg/service/marge/marge.go getAccountSources.
-	if len(resp.Sources) != 4 {
-		t.Errorf("Expected 4 cloud default sources (AUX excluded), got %d", len(resp.Sources))
+	if len(resp.Sources) != 3 {
+		t.Errorf("Expected 3 cloud default sources (AUX and INTERNET_RADIO excluded), got %d", len(resp.Sources))
 	} else {
-		if resp.Sources[0].ID != "10002" {
-			t.Errorf("Expected first cloud source ID 10002 (INTERNET_RADIO), got %s", resp.Sources[0].ID)
+		if resp.Sources[0].ID != "10003" {
+			t.Errorf("Expected first cloud source ID 10003 (LOCAL_INTERNET_RADIO), got %s", resp.Sources[0].ID)
 		}
 	}
 
@@ -641,13 +642,14 @@ func TestMargeAccountSourcesNoDevices(t *testing.T) {
 	// Verify that we get the default cloud sources with correct IDs. AUX
 	// (id=10001) is intentionally excluded — real Bose never emitted AUX
 	// in cloud responses; the speaker enumerates AUX from its own
-	// hardware (isLocal=true on :8090/sources). See
-	// pkg/service/marge/marge.go getAccountSources.
+	// hardware (isLocal=true on :8090/sources). INTERNET_RADIO (id=10002)
+	// is also intentionally excluded — it is a legacy stub that AfterTouch
+	// no longer adds to new or no-device accounts. See GetInitialSources()
+	// and pkg/service/marge/marge.go getAccountSources.
 	expectedSnippets := []string{
 		"<sources>",
 		"<source id=\"10004\" type=\"Audio\"",
 		"<source id=\"10003\" type=\"Audio\"",
-		"<source id=\"10002\" type=\"Audio\"",
 	}
 
 	for _, snippet := range expectedSnippets {
@@ -658,6 +660,10 @@ func TestMargeAccountSourcesNoDevices(t *testing.T) {
 
 	if strings.Contains(bodyStr, "<source id=\"10001\"") {
 		t.Errorf("Response must not include AUX (id=10001); body:\n%s", bodyStr)
+	}
+
+	if strings.Contains(bodyStr, "<source id=\"10002\"") {
+		t.Errorf("Response must not include INTERNET_RADIO (id=10002) for accounts with no device; body:\n%s", bodyStr)
 	}
 
 	// Verify that no sources have empty display names

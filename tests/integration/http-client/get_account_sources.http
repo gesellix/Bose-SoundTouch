@@ -25,7 +25,10 @@ Authorization: Bearer dummy-token
         // the speaker enumerates AUX from its own hardware via isLocal=true
         // in :8090/sources. See pkg/service/marge/marge.go getAccountSources
         // and commit 2b40481 (#195/#269).
-        const expectedIds = ["10002", "10003", "10004"];
+        // INTERNET_RADIO (id=10002) is also excluded — it is a legacy stub
+        // that AfterTouch no longer adds to new or existing devices. See
+        // GetInitialSources() in pkg/service/datastore/datastore.go.
+        const expectedIds = ["10003", "10004", "10005"];
         for (let i = 0; i < sourceList.length; i++) {
             const source = sourceList.item(i);
             const sourceId = source.getAttribute("id");
