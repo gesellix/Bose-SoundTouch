@@ -526,8 +526,8 @@ func main() {
 				return fmt.Errorf("failed to listen on %s: %w", config.addr, err)
 			}
 
-			log.Printf("Go service listening on %s (server URL: %s)",
-				ln.Addr().String(), sanitizeLog(config.serverURL))
+			log.Printf("Go service listening on %s (configured: %s, server URL: %s)",
+				ln.Addr().String(), sanitizeLog(config.addr), sanitizeLog(config.serverURL))
 
 			// TLS cert generation can be slow on constrained hardware; run it in the
 			// background so the HTTP server is available immediately.
