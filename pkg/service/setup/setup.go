@@ -1198,6 +1198,53 @@ func (m *Manager) EnsureRemoteServices(deviceIP string) (string, error) {
 	return logs, fmt.Errorf("failed to enable remote services in any of the locations: %v", locations)
 }
 
+// ProbeCABundles returns the live CA bundle and the .original factory backup
+// from the speaker at deviceIP via a single SSH round-trip. sshOK is false
+// when SSH is unreachable or authentication failed; in that case both bundle
+// strings are empty. Either bundle string may be empty if the corresponding
+// file does not exist on the device (e.g. .original is absent on speakers
+// that have never had the AfterTouch CA injected).
+//
+// Used by the health check to verify bundle integrity without exposing the
+// unexported speakerProbe type.
+func (m *Manager) ProbeCABundles(deviceIP string) (current, original string, sshOK bool) {
+	probe := m.probeSpeakerSSH(deviceIP)
+
+	return probe.Files["/etc/pki/tls/certs/ca-bundle.crt"],
+		probe.Files["/etc/pki/tls/certs/ca-bundle.crt.original"],
+		probe.SSHOK
+}
+
+// RestoreCABundleFromOriginal copies the .original factory backup over the
+// live ca-bundle.crt on the speaker. It is called by the health-check fix
+// executor when check (1) — "original certs are contained in current bundle"
+// — fails, before re-injecting the AfterTouch CA via TrustCACert.
+//
+// The operation requires SSH access and a read-write root filesystem; both
+// are attempted via the same remount path as TrustCACertFromBytes.
+func (m *Manager) RestoreCABundleFromOriginal(deviceIP string) error {
+	if m.NewSSH == nil {
+		return errors.New("RestoreCABundleFromOriginal: no SSH factory configured")
+	}
+
+	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
+	client := m.NewSSH(deviceIP)
+
+	if _, err := client.Run("(rw || mount -o remount,rw /)"); err != nil {
+		return fmt.Errorf("remount rw: %w", err)
+	}
+
+	if _, err := client.Run(fmt.Sprintf("[ -f %s.original ]", bundlePath)); err != nil {
+		return fmt.Errorf("original backup %s.original not found on speaker — run `setup install-ca` first", bundlePath)
+	}
+
+	if _, err := client.Run(fmt.Sprintf("cp %s.original %s", bundlePath, bundlePath)); err != nil {
+		return fmt.Errorf("restore from original: %w", err)
+	}
+
+	return nil
+}
+
 // TrustCACert injects the local CA certificate into the device's shared
 // trust store. The cert is read from disk via Manager.Crypto — used by
 // the in-process migration flow where the CLI and the certmanager share

@@ -35,11 +35,12 @@ type speakerProbe struct {
 // with the consumers in GetMigrationSummary.
 var (
 	probeFilePaths = []string{
-		SoundTouchSdkPrivateCfgPath,               // current XML config
-		SoundTouchSdkPrivateCfgPath + ".original", // backup XML config
-		"/etc/resolv.conf",                        // DNS resolver
-		"/etc/hosts",                              // hostname overrides
-		"/etc/pki/tls/certs/ca-bundle.crt",        // CA trust store
+		SoundTouchSdkPrivateCfgPath,                 // current XML config
+		SoundTouchSdkPrivateCfgPath + ".original",   // backup XML config
+		"/etc/resolv.conf",                          // DNS resolver
+		"/etc/hosts",                                // hostname overrides
+		"/etc/pki/tls/certs/ca-bundle.crt",          // CA trust store
+		"/etc/pki/tls/certs/ca-bundle.crt.original", // factory backup written by TrustCACertFromBytes
 	}
 
 	probeExistsPaths = []string{

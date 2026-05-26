@@ -135,6 +135,9 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterRefreshSourcesCheck(s.healthRegistry, ds)
 	health.RegisterStaleInternetRadioCheck(s.healthRegistry, ds)
 	health.RegisterDefaultAccountNonBoseDevicesCheck(s.healthRegistry, ds)
+	health.RegisterSpeakerCABundleCheck(s.healthRegistry, ds, func(deviceIP string) (string, string, bool) {
+		return s.sm.ProbeCABundles(deviceIP)
+	})
 	health.RegisterServerURLReachableCheck(s.healthRegistry, func() string {
 		serverURL, _ := s.GetSettings()
 		return serverURL
@@ -167,6 +170,20 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		health.CheckIDSpeakerMargeURL,
 		health.FixIDAddMargeHostToTLS,
 		s.addMargeHostToTLSFix,
+	)
+
+	// QuickFix executors for the speaker_ca_bundle integrity check.
+	// Fix executors live here (not in the health package) because they
+	// need setup.Manager — the same boundary as completeSpeakerPairingFix.
+	s.healthRegistry.RegisterFix(
+		health.CheckIDSpeakerCABundle,
+		health.FixIDRestoreAndInjectCA,
+		s.restoreAndInjectCAFix,
+	)
+	s.healthRegistry.RegisterFix(
+		health.CheckIDSpeakerCABundle,
+		health.FixIDInjectCACert,
+		s.injectCACertFix,
 	)
 	health.RegisterDNSSanityCheck(
 		s.healthRegistry,
