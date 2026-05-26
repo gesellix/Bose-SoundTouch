@@ -8,6 +8,12 @@ app's local-control functionality. Everything else in Stockholm (OAuth flows,
 setup wizard, service account linking, onboarding, analytics) is cloud
 infrastructure that is either shut down or already handled by soundtouch-service.
 
+> **Shipped:** Saving the current content to a preset slot (slots 1–6) is
+> already implemented — a ★ star button in the top-right corner of the Now
+> Playing card opens a slot picker, and a **+** button on each preset tile
+> saves to that slot directly.  See [PRESET-QUICKSTART.md](PRESET-QUICKSTART.md)
+> for usage details.
+
 ---
 
 ## 1. Seek / scrub
@@ -37,10 +43,16 @@ func (c *Client) Seek(positionSeconds int) error {
 
 ---
 
-## 2. Favorites
+## 2. Favorites (device-native, distinct from presets)
 
-Mark or unmark the currently playing track as a favourite directly from the
-Now Playing card.
+> **Note:** This section is about the speaker's **built-in** `/favorites` API —
+> a separate concept from the 6 preset slots.  Preset-slot saving (★ star /
+> **+** button) is already shipped; the native Favorites API is not yet
+> surfaced in soundtouch-web.
+
+Mark or unmark the currently playing track as a device favourite directly from
+the Now Playing card.  Unlike presets (maximum 6, numbered slots), the device
+can hold a larger favourites list; support varies by source.
 
 **Device API:**
 - `GET /favorites` — returns `<favorites>` list

@@ -49,7 +49,8 @@ Check that the service is running:
 systemctl status soundtouch-service
 ```
 
-The Admin UI is now at **`http://<pi-ip>:8000`** — open it in a browser.
+The Admin UI is now at **`http://<pi-ip>`** (port 80: the Raspberry Pi
+installer defaults to port 80, not 8000) — open it in a browser.
 
 ### Other Linux hosts (systemd)
 
@@ -166,15 +167,40 @@ curl -s http://192.0.2.1:8090/sources
 
 ## Step 7 — Set up preset buttons (optional)
 
-### Via the AfterTouch web UI
+### Via soundtouch-web
 
-1. Open **`http://<host-ip>:8000`** and navigate to your speaker.
-2. Use the **Radio Browser** or **TuneIn** tab to find a station.
-3. Click the station to play it.
-4. Click **Store as preset → slot 1** (or whichever slot you want).
-5. Repeat for slots 2–6.
+The Radio Browser, TuneIn tabs, and preset saving live in
+**soundtouch-web**, a separate binary from the service. Run it on your
+host and open **`http://<host-ip>:8080`** in your browser (default port
+8080).
 
-### Via soundtouch-cli (any machine on the LAN)
+> **Raspberry Pi note:** The Raspberry Pi installer (`install.sh`) only
+> installs `soundtouch-service`. Download `soundtouch-web` separately from
+> the [Releases page](https://github.com/gesellix/Bose-SoundTouch/releases)
+> and start it alongside the service.
+
+soundtouch-web provides two ways to save what's currently playing to a
+preset slot:
+
+**★ Star button in the Now Playing card**
+
+1. Open **`http://<host-ip>:8080`** and navigate to your speaker.
+2. Use the **Radio Browser** or **TuneIn** tab to find a station and click
+   it to play.
+3. A semi-transparent **★** appears in the top-right corner of the
+   **Now Playing** card.  Click it — a slot picker (1–6) opens.  Select
+   the target preset number.  The star turns gold once the content is
+   mapped to at least one slot.
+4. Repeat for each station you want to save.
+
+**+ button on the preset grid**
+
+Alternatively, while something is playing you can hover over any of the six
+preset tiles in the **Presets** row.  A small **+** button appears in the
+corner of each tile; clicking it saves the current content directly to that
+slot.
+
+### Alternatively — storing presets via soundtouch-cli (any machine on the LAN)
 
 Download the CLI for your machine from the
 [Releases page](https://github.com/gesellix/Bose-SoundTouch/releases), then:

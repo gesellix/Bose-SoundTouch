@@ -7,7 +7,27 @@ sidebar:
 
 ## Overview
 
-SoundTouch devices support 6 preset slots that can store your favorite content for instant access. This guide shows you how to manage presets using both the CLI and Go library.
+SoundTouch devices support 6 preset slots that can store your favorite content for instant access. This guide shows you how to manage presets using the soundtouch-web UI, the CLI, or the Go library.
+
+## Via soundtouch-web (browser UI)
+
+**soundtouch-web** (default port **8080**) is the easiest way to manage presets without the command line.  Two save paths are available whenever content is playing:
+
+### ★ Star button — save from Now Playing
+
+1. Navigate to your speaker's detail page.
+2. Play any station or track (via Radio Browser, TuneIn, or the speaker's own sources).
+3. A semi-transparent **★** appears in the top-right corner of the **Now Playing** card.
+4. Click the star — a slot picker **1 · 2 · 3 · 4 · 5 · 6** opens.
+5. Click the target slot number.  The star turns gold once the current content is saved to at least one slot.
+
+### + button — save directly to a preset tile
+
+While something is playing, hover over any of the six **Preset** tiles.  A small **+** button appears in the tile's corner; clicking it saves the current content to that slot immediately (no picker needed).
+
+Use the **+** when you already know which slot you want; use the **★** when you want to pick the slot after you've decided to save.
+
+---
 
 ## Quick CLI Usage
 
