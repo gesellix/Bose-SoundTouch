@@ -54,6 +54,12 @@ disablePathToLower = true
       sortOrder   = "desc"
 
 [[menu.main]]
+  identifier = "search"
+  name = "Search"
+  weight = 10
+  params = { type = "search" }
+
+[[menu.main]]
   identifier = "docs"
   name = "Docs"
   pageRef = "/docs"
