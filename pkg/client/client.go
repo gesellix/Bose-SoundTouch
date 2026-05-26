@@ -424,7 +424,19 @@ func (c *Client) StoreCurrentAsPreset(id int) error {
 		return fmt.Errorf("current content cannot be saved as preset")
 	}
 
-	return c.StorePreset(id, nowPlaying.ContentItem)
+	// Streaming services (Spotify, TuneIn, …) put the artwork URL in the
+	// top-level <art> element of the now-playing response, not inside
+	// ContentItem.containerArt.  Copy it over before storing so the preset
+	// slot shows the album/station cover image.
+	ci := *nowPlaying.ContentItem // shallow copy — no pointer fields in ContentItem
+	if ci.ContainerArt == "" &&
+		nowPlaying.Art != nil &&
+		nowPlaying.Art.ArtImageStatus == "IMAGE_PRESENT" &&
+		nowPlaying.Art.URL != "" {
+		ci.ContainerArt = nowPlaying.Art.URL
+	}
+
+	return c.StorePreset(id, &ci)
 }
 
 // RemovePreset deletes a preset from the SoundTouch device
