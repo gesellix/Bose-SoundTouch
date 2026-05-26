@@ -518,7 +518,16 @@ func main() {
 
 			r := setupRouter(server, stockholmHandler)
 
-			log.Printf("Go service starting on %s", sanitizeLog(config.serverURL))
+			// Bind the listener before logging so we print the true
+			// effective port (handles :0 and catches "address already
+			// in use" before the TLS goroutine launches).
+			ln, err := net.Listen("tcp", config.addr)
+			if err != nil {
+				return fmt.Errorf("failed to listen on %s: %w", config.addr, err)
+			}
+
+			log.Printf("Go service listening on %s (server URL: %s)",
+				ln.Addr().String(), sanitizeLog(config.serverURL))
 
 			// TLS cert generation can be slow on constrained hardware; run it in the
 			// background so the HTTP server is available immediately.
@@ -536,7 +545,7 @@ func main() {
 				runHTTPSPreflight(config.httpsServerURL, config.serverURL, config.dnsEnabled, server.ResolveServerURLIPForPreflight)
 			}()
 
-			return http.ListenAndServe(config.addr, r)
+			return http.Serve(ln, r)
 		},
 		Commands: []*cli.Command{
 			{
@@ -1306,14 +1315,15 @@ func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, h
 		ErrorLog:  log.Default(), // Ensure error logging is enabled
 	}
 
-	log.Printf("Go service starting HTTPS on %s", sanitizeLog(httpsServerURL))
-
 	go func() {
 		listener, err := net.Listen("tcp", httpsAddr)
 		if err != nil {
 			log.Printf("[TLS] Failed to create listener: %v", err)
 			return
 		}
+
+		log.Printf("Go service listening HTTPS on %s (server URL: %s)",
+			listener.Addr().String(), sanitizeLog(httpsServerURL))
 
 		tlsListener := tls.NewListener(listener, tlsConfig)
 

@@ -135,6 +135,10 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterRefreshSourcesCheck(s.healthRegistry, ds)
 	health.RegisterStaleInternetRadioCheck(s.healthRegistry, ds)
 	health.RegisterDefaultAccountNonBoseDevicesCheck(s.healthRegistry, ds)
+	health.RegisterServerURLReachableCheck(s.healthRegistry, func() string {
+		serverURL, _ := s.GetSettings()
+		return serverURL
+	})
 	health.RegisterOAuthTargetReachableCheck(
 		s.healthRegistry,
 		func() string {
