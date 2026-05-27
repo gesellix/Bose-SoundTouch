@@ -77,7 +77,7 @@ func TestSourcesXMLPresent_QuickFix_MaterialisesDefaults(t *testing.T) {
 	r := NewRegistry()
 	RegisterSourcesXMLPresent(r, ds)
 
-	msg, err := r.RunFix(CheckIDSourcesXMLPresent, FixIDCreateDefaultSources, Target{
+	msg, _, err := r.RunFix(CheckIDSourcesXMLPresent, FixIDCreateDefaultSources, Target{
 		Account: account,
 		Device:  device,
 	})
@@ -143,7 +143,7 @@ func TestSourcesXMLPresent_FixRejectsEmptyTarget(t *testing.T) {
 	r := NewRegistry()
 	RegisterSourcesXMLPresent(r, ds)
 
-	if _, err := r.RunFix(CheckIDSourcesXMLPresent, FixIDCreateDefaultSources, Target{}); err == nil {
+	if _, _, err := r.RunFix(CheckIDSourcesXMLPresent, FixIDCreateDefaultSources, Target{}); err == nil {
 		t.Errorf("expected error for empty target, got nil")
 	}
 }

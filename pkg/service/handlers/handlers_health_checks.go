@@ -27,6 +27,10 @@ type healthFixRequest struct {
 type healthFixResponse struct {
 	OK      bool   `json:"ok"`
 	Message string `json:"message,omitempty"`
+	// Refresh tells the UI whether to re-fetch health after this fix.
+	// false for persistent affordances (e.g. play_ding) that don't
+	// change any check state, so no "Loading…" flash occurs.
+	Refresh bool `json:"refresh"`
 }
 
 // HandleHealthChecks runs every registered health check and
@@ -73,7 +77,7 @@ func (s *Server) HandleHealthFix(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := s.healthRegistry.RunFix(req.CheckID, req.FixID, req.Target)
+	msg, refresh, err := s.healthRegistry.RunFix(req.CheckID, req.FixID, req.Target)
 	if err != nil {
 		if errors.Is(err, health.ErrFixNotFound) {
 			writeJSONError(w, http.StatusNotFound, err.Error())
@@ -87,7 +91,7 @@ func (s *Server) HandleHealthFix(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(healthFixResponse{OK: true, Message: msg}); err != nil {
+	if err := json.NewEncoder(w).Encode(healthFixResponse{OK: true, Message: msg, Refresh: refresh}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

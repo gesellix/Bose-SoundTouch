@@ -4368,8 +4368,10 @@ async function runQuickFix(checkId, fixId, target, confirmMsg, button) {
             status.textContent = data.message || "Done.";
             status.style.color = "#2e7d32";
         }
-        // Refresh to drop the resolved finding.
-        setTimeout(fetchHealth, 400);
+        // Re-fetch health so resolved findings disappear from the list.
+        // Skipped when the server signals refresh:false (persistent
+        // affordances like play_ding that don't change check state).
+        if (data.refresh !== false) setTimeout(fetchHealth, 400);
     } catch (e) {
         if (status) {
             status.textContent = `Failed: ${e.message || e}`;

@@ -58,13 +58,17 @@ func TestRegistry_RunFix_Dispatch(t *testing.T) {
 		return "applied", nil
 	})
 
-	msg, err := r.RunFix("c1", "f1", Target{Account: "A", Device: "D"})
+	msg, refresh, err := r.RunFix("c1", "f1", Target{Account: "A", Device: "D"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if msg != "applied" {
 		t.Errorf("unexpected message: %q", msg)
+	}
+
+	if !refresh {
+		t.Errorf("expected refresh=true for a fix registered via RegisterFix")
 	}
 
 	if captured.Account != "A" || captured.Device != "D" {
@@ -75,7 +79,7 @@ func TestRegistry_RunFix_Dispatch(t *testing.T) {
 func TestRegistry_RunFix_NotFound(t *testing.T) {
 	r := NewRegistry()
 
-	_, err := r.RunFix("nope", "also-nope", Target{})
+	_, _, err := r.RunFix("nope", "also-nope", Target{})
 	if !errors.Is(err, ErrFixNotFound) {
 		t.Errorf("expected ErrFixNotFound, got %v", err)
 	}

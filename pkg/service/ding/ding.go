@@ -173,6 +173,7 @@ func Render(opts Options) []byte {
 	// instance is audible even if the first is missed.
 	if opts.Repeat > 1 {
 		repeatGapN := int(math.Round(float64(opts.SampleRate) * opts.RepeatGapDuration))
+
 		baseLeft := append([]float64{}, left...)
 		baseRight := append([]float64{}, right...)
 		silence := make([]float64, repeatGapN)

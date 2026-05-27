@@ -118,24 +118,31 @@ func TestPlayDing_PostsContentItemToSelectEndpoint(t *testing.T) {
 	// reuse it directly with httptest. Test the building blocks
 	// (ContentItem rendering + the curl-command form) here, and
 	// leave the full POST plumbing for a manual smoke test.
-	mediaURL := "http://aftertouch.local" + DingMediaPath
-	contentItem := buildDingContentItem(mediaURL)
+	const serverBase = "http://aftertouch.local"
+	customURL := dingCustomURL(serverBase)
+	contentItem := buildDingContentItem(customURL)
 
-	if !strings.Contains(contentItem, "source=\"INTERNET_RADIO\"") {
-		t.Errorf("ContentItem missing INTERNET_RADIO source, got %q", contentItem)
+	if !strings.Contains(contentItem, "source=\"LOCAL_INTERNET_RADIO\"") {
+		t.Errorf("ContentItem missing LOCAL_INTERNET_RADIO source, got %q", contentItem)
 	}
 
-	if !strings.Contains(contentItem, mediaURL) {
-		t.Errorf("ContentItem missing media URL, got %q", contentItem)
+	if !strings.Contains(contentItem, DingCustomPath) {
+		t.Errorf("ContentItem missing custom-playback path, got %q", contentItem)
 	}
 
-	cmd := dingCurlCommand("192.0.2.10", "http://aftertouch.local")
+	// The WAV URL is base64-encoded inside the custom URL — verify the
+	// custom URL itself is present in the ContentItem.
+	if !strings.Contains(contentItem, customURL) {
+		t.Errorf("ContentItem missing custom URL, got %q", contentItem)
+	}
+
+	cmd := dingCurlCommand("192.0.2.10", serverBase)
 	if !strings.Contains(cmd, "192.0.2.10:8090/select") {
 		t.Errorf("curl command should target speaker /select, got %q", cmd)
 	}
 
-	if !strings.Contains(cmd, "/media/aftertouch-ding.wav") {
-		t.Errorf("curl command should include the ding URL, got %q", cmd)
+	if !strings.Contains(cmd, DingCustomPath) {
+		t.Errorf("curl command should include the custom-playback path, got %q", cmd)
 	}
 }
 

@@ -3,6 +3,7 @@ package health
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,6 +29,23 @@ const FixIDPlayDing = "play_ding"
 // pkg/service/handlers (see static/media embed).
 const DingMediaPath = "/media/aftertouch-ding.wav"
 
+// DingCustomPath is the AfterTouch custom-playback prefix. The speaker
+// fetches this URL, AfterTouch responds with a BMX JSON payload, and the
+// speaker plays via LOCAL_INTERNET_RADIO — avoiding the INTERNET_RADIO
+// FLAC-parser path that causes UNKNOWN_SOURCE_ERROR (1005) on some firmware
+// versions (see issue #345).
+const DingCustomPath = "/custom/v1/playback/"
+
+// dingCustomURL builds the LOCAL_INTERNET_RADIO proxy URL for the ding WAV.
+// The WAV URL is base64url-encoded into the path; the name query param sets
+// the display name on the speaker.
+func dingCustomURL(serverURL string) string {
+	mediaURL := serverURL + DingMediaPath
+	encoded := base64.URLEncoding.EncodeToString([]byte(mediaURL))
+
+	return serverURL + DingCustomPath + encoded + "?name=AfterTouch+ding"
+}
+
 // RegisterTestPlaybackCheck registers the playback_test check and
 // its play_ding quick fix. serverURLFn returns the externally
 // reachable URL of this service — the speaker fetches the audio
@@ -42,7 +60,10 @@ func RegisterTestPlaybackCheck(r *Registry, ds *datastore.DataStore, serverURLFn
 		},
 	})
 
-	r.RegisterFix(CheckIDTestPlayback, FixIDPlayDing, func(target Target) (string, error) {
+	// play_ding is a persistent operator affordance, not a resolvable
+	// finding — success doesn't change any check state, so the UI
+	// should not re-fetch health afterwards (no "Loading…" flash).
+	r.RegisterFixNoRefresh(CheckIDTestPlayback, FixIDPlayDing, func(target Target) (string, error) {
 		return playDingOnDevice(ds, serverURLFn(), target)
 	})
 }
@@ -80,7 +101,7 @@ func runTestPlaybackCheck(ds *datastore.DataStore, serverURL string) []Finding {
 			Severity: SeverityInfo,
 			Target:   Target{Account: dev.AccountID, Device: dev.DeviceID},
 			Message:  fmt.Sprintf("Play the AfterTouch ding on %s.", displayName(dev.Name, dev.DeviceID)),
-			Details:  fmt.Sprintf("Pushes %s%s to the speaker via a custom-radio ContentItem. Confirms migration is healthy end-to-end without depending on TuneIn or any external service.", serverURL, DingMediaPath),
+			Details:  fmt.Sprintf("Pushes the ding WAV to the speaker via LOCAL_INTERNET_RADIO (custom-playback proxy at %s%s). Confirms migration is healthy end-to-end without depending on TuneIn or any external service.", serverURL, DingCustomPath),
 			QuickFixes: []QuickFix{{
 				ID:    FixIDPlayDing,
 				Label: "Play ding",
@@ -114,8 +135,8 @@ func playDingOnDevice(ds *datastore.DataStore, serverURL string, target Target) 
 		return "", fmt.Errorf("device %s has no IP address recorded", target.Device)
 	}
 
-	mediaURL := serverURL + DingMediaPath
-	contentItem := buildDingContentItem(mediaURL)
+	customURL := dingCustomURL(serverURL)
+	contentItem := buildDingContentItem(customURL)
 	selectURL := fmt.Sprintf("http://%s:8090/select", dev.IPAddress)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -143,18 +164,23 @@ func playDingOnDevice(ds *datastore.DataStore, serverURL string, target Target) 
 	return fmt.Sprintf("Pushed ding URL to %s. You should hear it within a second.", displayName(dev.Name, target.Device)), nil
 }
 
-func buildDingContentItem(mediaURL string) string {
-	escaped := xmlAttrEscape(mediaURL)
+// buildDingContentItem returns the XML ContentItem that pushes the ding to a
+// speaker. Uses LOCAL_INTERNET_RADIO with the AfterTouch custom-playback
+// proxy URL so the speaker fetches a BMX JSON response and plays via the
+// LOCAL_INTERNET_RADIO code path — avoiding the INTERNET_RADIO FLAC-parser
+// issue that causes UNKNOWN_SOURCE_ERROR (1005) on some firmware versions
+// (issue #345).
+func buildDingContentItem(customURL string) string {
+	escaped := xmlAttrEscape(customURL)
 
 	return fmt.Sprintf(
-		`<ContentItem source="INTERNET_RADIO" type="stationurl" location="%s" sourceAccount="" isPresetable="false"><itemName>AfterTouch ding</itemName></ContentItem>`,
+		`<ContentItem source="LOCAL_INTERNET_RADIO" type="stationurl" location="%s" sourceAccount="" isPresetable="true"><itemName>AfterTouch ding</itemName></ContentItem>`,
 		escaped,
 	)
 }
 
 func dingCurlCommand(speakerIP, serverURL string) string {
-	mediaURL := serverURL + DingMediaPath
-	body := buildDingContentItem(mediaURL)
+	body := buildDingContentItem(dingCustomURL(serverURL))
 
 	return fmt.Sprintf(
 		"curl -sS -X POST 'http://%s:8090/select' -H 'Content-Type: application/xml' -d '%s'",

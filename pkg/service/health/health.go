@@ -114,18 +114,29 @@ type CheckResult struct {
 // registered under the (checkID, fixID) pair.
 var ErrFixNotFound = errors.New("quick fix not registered")
 
+// fixEntry pairs a FixFunc with its refresh policy. refresh=true
+// means the UI should re-run fetchHealth after the fix succeeds so
+// resolved findings disappear from the list. refresh=false is used
+// for persistent affordances (e.g. play_ding) that never change check
+// state — no re-render is needed and the brief "Loading…" flash is
+// avoided.
+type fixEntry struct {
+	fn      FixFunc
+	refresh bool
+}
+
 // Registry owns the set of checks and fixes for one Server
 // instance. The default zero value is not usable; construct via
 // NewRegistry.
 type Registry struct {
 	mu     sync.RWMutex
 	checks []Check
-	fixes  map[string]FixFunc // key: "<checkID>/<fixID>"
+	fixes  map[string]fixEntry // key: "<checkID>/<fixID>"
 }
 
 // NewRegistry returns an empty Registry.
 func NewRegistry() *Registry {
-	return &Registry{fixes: map[string]FixFunc{}}
+	return &Registry{fixes: map[string]fixEntry{}}
 }
 
 // Register adds a check to the registry. Duplicate IDs replace
@@ -147,12 +158,25 @@ func (r *Registry) Register(c Check) {
 
 // RegisterFix associates a FixFunc with the given (checkID, fixID)
 // pair. A QuickFix with that ID can be advertised by any Finding
-// emitted by the matching check.
+// emitted by the matching check. After a successful run the UI will
+// re-fetch health so resolved findings disappear from the list.
 func (r *Registry) RegisterFix(checkID, fixID string, fn FixFunc) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.fixes[fixKey(checkID, fixID)] = fn
+	r.fixes[fixKey(checkID, fixID)] = fixEntry{fn: fn, refresh: true}
+}
+
+// RegisterFixNoRefresh is like RegisterFix but signals the UI that
+// re-fetching health after the fix runs is unnecessary. Use this for
+// persistent operator affordances (e.g. play_ding) whose success
+// doesn't change any check state — skipping the re-fetch avoids a
+// distracting "Loading…" flash with no benefit.
+func (r *Registry) RegisterFixNoRefresh(checkID, fixID string, fn FixFunc) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.fixes[fixKey(checkID, fixID)] = fixEntry{fn: fn, refresh: false}
 }
 
 // RunAll executes every registered check and returns the results
@@ -183,20 +207,22 @@ func (r *Registry) RunAll() []CheckResult {
 	return out
 }
 
-// RunFix dispatches to the FixFunc registered for (checkID,
-// fixID). The returned string is forwarded as the user-facing
-// success message. ErrFixNotFound is returned when no fix is
-// registered.
-func (r *Registry) RunFix(checkID, fixID string, target Target) (string, error) {
+// RunFix dispatches to the FixFunc registered for (checkID, fixID).
+// Returns the user-facing success message, whether the UI should
+// re-fetch health afterwards, and any execution error.
+// ErrFixNotFound is returned when no fix is registered.
+func (r *Registry) RunFix(checkID, fixID string, target Target) (string, bool, error) {
 	r.mu.RLock()
-	fn, ok := r.fixes[fixKey(checkID, fixID)]
+	entry, ok := r.fixes[fixKey(checkID, fixID)]
 	r.mu.RUnlock()
 
 	if !ok {
-		return "", fmt.Errorf("%w: %s/%s", ErrFixNotFound, checkID, fixID)
+		return "", false, fmt.Errorf("%w: %s/%s", ErrFixNotFound, checkID, fixID)
 	}
 
-	return fn(target)
+	msg, err := entry.fn(target)
+
+	return msg, entry.refresh, err
 }
 
 func fixKey(checkID, fixID string) string {
