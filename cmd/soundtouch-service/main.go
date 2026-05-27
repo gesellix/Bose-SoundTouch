@@ -1097,6 +1097,11 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 			r.Post("/group/", server.HandleMargeAddGroup)
 			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
 			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
+			// Speakers send DELETE /group/ (no group ID, trailing slash) during
+			// stereo-pair teardown; master and slave use their own account IDs
+			// so each deletes its own copy.
+			r.Delete("/group", server.HandleMargeDeleteAccountGroups)
+			r.Delete("/group/", server.HandleMargeDeleteAccountGroups)
 		})
 
 		r.Get("/device/{device}/streaming_token", server.HandleMargeStreamingToken)
@@ -1144,6 +1149,8 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 			r.Post("/group/", server.HandleMargeAddGroup)
 			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
 			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
+			r.Delete("/group", server.HandleMargeDeleteAccountGroups)
+			r.Delete("/group/", server.HandleMargeDeleteAccountGroups)
 			r.Get("/devices/{device}/presets", server.HandleMargePresets)
 			r.Get("/devices/{device}/recents", server.HandleMargeRecents)
 

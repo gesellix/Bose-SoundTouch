@@ -901,7 +901,7 @@ func (s *Server) HandleMargeModifyGroup(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(data)
 }
 
-// HandleMargeDeleteGroup removes a stereo group.
+// HandleMargeDeleteGroup removes a stereo group identified by {groupId}.
 func (s *Server) HandleMargeDeleteGroup(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 	groupID := chi.URLParam(r, "groupId")
@@ -913,6 +913,28 @@ func (s *Server) HandleMargeDeleteGroup(w http.ResponseWriter, r *http.Request) 
 
 	if err := s.ds.DeleteGroup(account, groupID); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(constants.XMLHeader + `<status>Group deleted successfully</status>`))
+}
+
+// HandleMargeDeleteAccountGroups removes all stereo groups stored for an
+// account. Speakers send DELETE /streaming/account/{id}/group/ (trailing
+// slash, no group ID) during stereo-pair teardown. Master and slave often
+// live in different accounts, so each speaker deletes its own copy here.
+func (s *Server) HandleMargeDeleteAccountGroups(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+
+	if !validatePathID(account) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.ds.DeleteAllGroupsForAccount(account); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -1,6 +1,8 @@
 CONNECT  /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter handlers.(*Server).HandleSiriusXMLiveAdapter-fm
 CONNECT  /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter/* handlers.(*Server).HandleSiriusXMLiveAdapterSubpath-fm
 DELETE   /accounts/{account}/devices/{device}                         handlers.(*Server).HandleMargeRemoveDevice-fm
+DELETE   /accounts/{account}/group                                    handlers.(*Server).HandleMargeDeleteAccountGroups-fm
+DELETE   /accounts/{account}/group/                                   handlers.(*Server).HandleMargeDeleteAccountGroups-fm
 DELETE   /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleMargeDeleteGroup-fm
 DELETE   /bmx/tunein/v1/favorite/{stationID}                          handlers.(*Server).HandleTuneInDeleteFavorite-fm
 DELETE   /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter handlers.(*Server).HandleSiriusXMLiveAdapter-fm
@@ -12,6 +14,8 @@ DELETE   /setup/interactions/sessions/{session}                       handlers.(
 DELETE   /setup/sources/{account}/{device}/{sourceID}                 handlers.(*Server).HandleDeleteSource-fm
 DELETE   /streaming/account/{account}/device/{device}                 handlers.(*Server).HandleMargeRemoveDevice-fm
 DELETE   /streaming/account/{account}/device/{device}/preset/{presetNumber} handlers.(*Server).HandleMargeRemovePreset-fm
+DELETE   /streaming/account/{account}/group                           handlers.(*Server).HandleMargeDeleteAccountGroups-fm
+DELETE   /streaming/account/{account}/group/                          handlers.(*Server).HandleMargeDeleteAccountGroups-fm
 DELETE   /streaming/account/{account}/group/{groupId}                 handlers.(*Server).HandleMargeDeleteGroup-fm
 GET      /                                                            handlers.(*Server).HandleRoot-fm
 GET      /accounts/{account}/devices                                  handlers.(*Server).HandleMargeAccountDevices-fm

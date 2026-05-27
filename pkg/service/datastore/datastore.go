@@ -2816,6 +2816,37 @@ func (ds *DataStore) DeleteGroup(account, groupID string) error {
 	return err
 }
 
+// DeleteAllGroupsForAccount removes every Group_*.xml file stored under
+// account. Speakers send DELETE /streaming/account/{id}/group/ (no group
+// ID) during stereo-pair teardown; since master and slave may live in
+// different accounts each speaker deletes its own copy. Returns nil if no
+// group files are found — idempotent by design.
+func (ds *DataStore) DeleteAllGroupsForAccount(account string) error {
+	ds.fileMutex.Lock()
+	defer ds.fileMutex.Unlock()
+
+	dir := ds.AccountDevicesDir(account)
+
+	entries, err := ds.rootReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing to delete
+		}
+
+		return err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), "Group_") || !strings.HasSuffix(e.Name(), ".xml") {
+			continue
+		}
+
+		_ = ds.rootRemove(filepath.Join(dir, e.Name()))
+	}
+
+	return nil
+}
+
 // SaveTuneInFavorite records a TuneIn station as favorited by creating a marker file.
 // File presence indicates the station is a favorite; no content is stored.
 func (ds *DataStore) SaveTuneInFavorite(stationID string) error {

@@ -244,7 +244,10 @@ func renameGroup(c *cli.Context) error {
 	return nil
 }
 
-// removeGroup tears down the device's stereo pair.
+// removeGroup tears down the device's stereo pair by sending /removeGroup to
+// every member in parallel. Sending it only to the master (as the old code
+// did) leaves the slave stuck in GroupSlave state indefinitely — mirrors the
+// same symmetry as createGroup (see issue #252 comment there).
 func removeGroup(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
 	PrintDeviceHeader("Removing stereo pair", clientConfig.Host, clientConfig.Port)
@@ -255,9 +258,74 @@ func removeGroup(c *cli.Context) error {
 		return err
 	}
 
-	if err := stClient.RemoveGroup(); err != nil {
-		PrintError(fmt.Sprintf("Failed to remove group: %v", err))
+	// Fetch current group to learn every member's IP before tearing down.
+	group, err := stClient.GetGroup()
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to read current group: %v", err))
 		return err
+	}
+
+	if group.IsEmpty() {
+		fmt.Println("Device is not in a stereo pair — nothing to remove")
+		return nil
+	}
+
+	// Collect the unique set of member IPs. The master is always reachable
+	// via clientConfig.Host; the roles carry all members including slaves.
+	type memberResult struct {
+		ip  string
+		err error
+	}
+
+	members := make([]string, 0, len(group.Roles.Roles))
+	seen := map[string]bool{}
+
+	for _, role := range group.Roles.Roles {
+		if role.IPAddress != "" && !seen[role.IPAddress] {
+			seen[role.IPAddress] = true
+			members = append(members, role.IPAddress)
+		}
+	}
+
+	// Always include the addressed host even if the group response omitted IPs.
+	if !seen[clientConfig.Host] {
+		members = append(members, clientConfig.Host)
+	}
+
+	results := make([]memberResult, len(members))
+
+	var wg sync.WaitGroup
+
+	for i, ip := range members {
+		wg.Add(1)
+
+		go func(idx int, host string) {
+			defer wg.Done()
+
+			mc, mcErr := clientForHost(c, host)
+			if mcErr != nil {
+				results[idx] = memberResult{ip: host, err: mcErr}
+				return
+			}
+
+			results[idx] = memberResult{ip: host, err: mc.RemoveGroup()}
+		}(i, ip)
+	}
+
+	wg.Wait()
+
+	anyErr := false
+
+	for _, r := range results {
+		if r.err != nil {
+			PrintError(fmt.Sprintf("%s /removeGroup failed: %v", r.ip, r.err))
+
+			anyErr = true
+		}
+	}
+
+	if anyErr {
+		return fmt.Errorf("/removeGroup propagation failed")
 	}
 
 	PrintSuccess("Stereo pair removed")
