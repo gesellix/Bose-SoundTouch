@@ -45,13 +45,13 @@ func TestRender_ProducesWAVHeader(t *testing.T) {
 	}
 }
 
-func TestRender_DefaultSizeApproximately52KB(t *testing.T) {
+func TestRender_DefaultSizeApproximately229KB(t *testing.T) {
 	data := Render(DefaultOptions())
 
-	// Default: 22050 Hz * 2 channels * 2 bytes * 0.6 s = 52920 data
-	// + ~44 byte header.
-	const wantData = 22050 * 2 * 2 * 60 / 100 // 0.6 seconds, integer math
-	if got := len(data); got < wantData || got > wantData+200 {
+	// Default: 3 repetitions of 0.6 s + 2 gaps of 0.4 s = 2.6 s total.
+	// 22050 Hz * 2 ch * 2 bytes * 2.6 s ≈ 229320 data bytes + 44 byte header.
+	const wantData = 22050 * 2 * 2 * 260 / 100 // 2.6 seconds, integer math
+	if got := len(data); got < wantData || got > wantData+500 {
 		t.Errorf("expected ~%d bytes, got %d", wantData, got)
 	}
 }
@@ -109,6 +109,15 @@ func TestRender_HugeSampleRateDoesNotTruncateOrPanic(t *testing.T) {
 	data := Render(Options{SampleRate: 1 << 33}.WithDefaults())
 	if sr := binary.LittleEndian.Uint32(data[24:28]); sr != uint32(DefaultOptions().SampleRate) {
 		t.Errorf("expected clamp to default sample rate, got %d", sr)
+	}
+}
+
+func TestRender_RepeatProducesLongerAudio(t *testing.T) {
+	once := Render(Options{Repeat: 1}.WithDefaults())
+	thrice := Render(Options{Repeat: 3}.WithDefaults())
+
+	if len(thrice) <= len(once) {
+		t.Errorf("expected Repeat:3 to produce more bytes than Repeat:1: %d vs %d", len(thrice), len(once))
 	}
 }
 

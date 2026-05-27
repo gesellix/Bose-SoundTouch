@@ -52,21 +52,33 @@ type Options struct {
 	ReleaseDuration float64 // seconds of fade-out per chirp. Default 0.060.
 
 	Peak float64 // final-mix headroom; 0 < Peak <= 1.0. Default 0.85.
+
+	// Repeat is the total number of times the complete ding is played.
+	// Speakers need a moment to start buffering after receiving a
+	// ContentItem, so the first repetition may be missed; later ones
+	// will be heard. Default 3.
+	Repeat int
+
+	// RepeatGapDuration is the silence inserted between successive
+	// repetitions, in seconds. Default 0.40.
+	RepeatGapDuration float64
 }
 
 // DefaultOptions returns the canonical option set used by the
 // runtime handler when no overrides are supplied.
 func DefaultOptions() Options {
 	return Options{
-		SampleRate:      22050,
-		PitchHigh:       880.00,
-		PitchMid:        659.2551,
-		PitchLow:        440.00,
-		ChirpDuration:   0.25,
-		GapDuration:     0.10,
-		AttackDuration:  0.020,
-		ReleaseDuration: 0.060,
-		Peak:            0.85,
+		SampleRate:        22050,
+		PitchHigh:         880.00,
+		PitchMid:          659.2551,
+		PitchLow:          440.00,
+		ChirpDuration:     0.25,
+		GapDuration:       0.10,
+		AttackDuration:    0.020,
+		ReleaseDuration:   0.060,
+		Peak:              0.85,
+		Repeat:            3,
+		RepeatGapDuration: 0.40,
 	}
 }
 
@@ -115,6 +127,14 @@ func (o Options) WithDefaults() Options {
 		o.Peak = d.Peak
 	}
 
+	if o.Repeat <= 0 {
+		o.Repeat = d.Repeat
+	}
+
+	if o.RepeatGapDuration <= 0 {
+		o.RepeatGapDuration = d.RepeatGapDuration
+	}
+
 	return o
 }
 
@@ -146,6 +166,24 @@ func Render(opts Options) []byte {
 
 	renderChirp(left, right, 0, chirpN, attackN, releaseN, voicesS, opts.SampleRate)
 	renderChirp(left, right, chirpN+gapN, chirpN, attackN, releaseN, voicesT, opts.SampleRate)
+
+	// Repeat: append silence + a copy of the base audio for each
+	// additional repetition. Speakers need a moment to start buffering
+	// after receiving a ContentItem; repeating ensures at least one
+	// instance is audible even if the first is missed.
+	if opts.Repeat > 1 {
+		repeatGapN := int(math.Round(float64(opts.SampleRate) * opts.RepeatGapDuration))
+		baseLeft := append([]float64{}, left...)
+		baseRight := append([]float64{}, right...)
+		silence := make([]float64, repeatGapN)
+
+		for i := 1; i < opts.Repeat; i++ {
+			left = append(left, silence...)
+			right = append(right, silence...)
+			left = append(left, baseLeft...)
+			right = append(right, baseRight...)
+		}
+	}
 
 	normalise(left, right, opts.Peak)
 

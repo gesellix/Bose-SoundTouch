@@ -35,6 +35,8 @@ var dingDefaultCache struct {
 //	release-ms                  int milliseconds; default 60
 //	sample-rate                 Hz, int; default 22050
 //	peak                        0..1 float; default 0.85
+//	repeat                      int 1..10; default 3
+//	repeat-gap-ms               int milliseconds; default 400
 //
 // The default option set is rendered once via sync.Once and the
 // resulting bytes are reused across subsequent default requests —
@@ -124,6 +126,16 @@ func parseDingOptions(r *http.Request) (ding.Options, bool) {
 		touched = true
 	}
 
+	if v, ok := repeatParam(q.Get("repeat")); ok {
+		opts.Repeat = v
+		touched = true
+	}
+
+	if v, ok := millisecondsParam(q.Get("repeat-gap-ms")); ok {
+		opts.RepeatGapDuration = v
+		touched = true
+	}
+
 	if !touched {
 		return ding.DefaultOptions(), true
 	}
@@ -166,6 +178,21 @@ const (
 	dingMinSampleRate = 8000
 	dingMaxSampleRate = 192000
 )
+
+// repeatParam parses the "repeat" query knob (integer, 1–10).
+// Values outside that range silently fall back to the default.
+func repeatParam(raw string) (int, bool) {
+	if raw == "" {
+		return 0, false
+	}
+
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 1 || v > 10 {
+		return 0, false
+	}
+
+	return v, true
+}
 
 func sampleRateParam(raw string) (int, bool) {
 	if raw == "" {
