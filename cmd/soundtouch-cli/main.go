@@ -385,6 +385,11 @@ func main() {
 								Name:  "artwork",
 								Usage: "Artwork URL",
 							},
+							&cli.StringFlag{
+								Name:    "service-url",
+								Usage:   "AfterTouch service HTTPS URL (e.g. https://soundtouch.local). Required for LOCAL_INTERNET_RADIO: the speaker's BMX module calls GET on the preset location and expects an Orion JSON response, not raw audio. When provided, the stream URL is automatically wrapped in the Orion station endpoint.",
+								EnvVars: []string{"SOUNDTOUCH_SERVICE_URL"},
+							},
 						},
 						Before: RequireHost,
 					},

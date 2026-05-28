@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -85,6 +88,7 @@ type presetParams struct {
 	name          string
 	itemType      string
 	artwork       string
+	serviceURL    string
 }
 
 // extractPresetParams extracts parameters from CLI context
@@ -97,7 +101,36 @@ func extractPresetParams(c *cli.Context) *presetParams {
 		name:          c.String("name"),
 		itemType:      c.String("type"),
 		artwork:       c.String("artwork"),
+		serviceURL:    strings.TrimRight(c.String("service-url"), "/"),
 	}
+}
+
+// buildOrionLocation wraps a raw stream URL in the AfterTouch Orion station
+// endpoint that the speaker's BMX module expects when playing LOCAL_INTERNET_RADIO
+// content. The speaker calls GET on the stored preset location and expects a
+// BmxPlaybackResponse JSON — not raw audio bytes — which is why direct stream
+// URLs silently fail to start playback.
+func buildOrionLocation(serviceURL, name, imageURL, streamURL string) string {
+	payload := struct {
+		Name      string `json:"name"`
+		ImageURL  string `json:"imageUrl"`
+		StreamURL string `json:"streamUrl"`
+	}{
+		Name:      name,
+		ImageURL:  imageURL,
+		StreamURL: streamURL,
+	}
+
+	data, _ := json.Marshal(payload)
+	encoded := url.QueryEscape(base64.StdEncoding.EncodeToString(data))
+
+	return serviceURL + "/core02/svc-bmx-adapter-orion/prod/orion/station?data=" + encoded
+}
+
+// isOrionLocation reports whether location is already an Orion station URL so
+// we don't double-wrap it.
+func isOrionLocation(location string) bool {
+	return strings.Contains(location, "/core02/svc-bmx-adapter-orion/")
 }
 
 // resolveLocationAndMetadata resolves location and fetches metadata if needed
@@ -107,6 +140,26 @@ func resolveLocationAndMetadata(params *presetParams) error {
 
 	params.source = resolvedSource
 	params.location = resolvedLocation
+
+	// For LOCAL_INTERNET_RADIO with a raw stream URL, the speaker's BMX module
+	// calls GET on the preset location expecting a BmxPlaybackResponse JSON (the
+	// Orion station format). A direct stream URL returns raw audio, which BMX
+	// cannot parse, so playback silently stays on the previous source.
+	// Wrap the stream URL in the Orion endpoint when --service-url is provided.
+	if params.source == "LOCAL_INTERNET_RADIO" &&
+		params.serviceURL != "" &&
+		!isOrionLocation(params.location) &&
+		(strings.HasPrefix(params.location, "http://") || strings.HasPrefix(params.location, "https://")) {
+		params.location = buildOrionLocation(params.serviceURL, params.name, params.artwork, resolvedLocation)
+		fmt.Printf("  Wrapped stream URL in Orion location for LOCAL_INTERNET_RADIO\n")
+	} else if params.source == "LOCAL_INTERNET_RADIO" &&
+		params.serviceURL == "" &&
+		!isOrionLocation(params.location) &&
+		(strings.HasPrefix(params.location, "http://") || strings.HasPrefix(params.location, "https://")) {
+		fmt.Printf("  ⚠️  --service-url not set: storing raw stream URL as location.\n")
+		fmt.Printf("     The speaker's BMX module expects an Orion station URL, not raw audio.\n")
+		fmt.Printf("     Re-run with --service-url <https://your-aftertouch-host> to fix this.\n")
+	}
 
 	// If metadata (name or artwork) is missing, try to fetch it
 	if params.name == "" || params.artwork == "" {
