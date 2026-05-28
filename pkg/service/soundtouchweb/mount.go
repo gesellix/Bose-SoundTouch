@@ -22,6 +22,9 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	// WebSocket endpoint
 	r.Get("/ws", app.HandleWebSocket)
 
+	// Health / liveness
+	r.Get("/health", app.HandleHealth)
+
 	// API endpoints
 	r.Get("/api/devices", app.HandleAPIDevices)
 	r.Get("/api/device/{id}", app.HandleAPIDevice)

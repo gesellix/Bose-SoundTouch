@@ -2,30 +2,28 @@
 set -euo pipefail
 
 # ==============================================================================
-# Bose-SoundTouch soundtouch-service installer (systemd, headless)
+# Bose-SoundTouch soundtouch-web installer (systemd, headless)
 #
 # Usage:
-#   sudo bash install.sh [vX.Y.Z]
+#   sudo bash install-web.sh [vX.Y.Z]
 #
 # Examples (override defaults via env vars):
 #
 #   sudo \
-#     VERSION=v0.97.0 \
-#     HOSTNAME_FQDN=soundtouch.local \
-#     HTTP_PORT=80 \
-#     HTTPS_PORT=443 \
-#     DATA_DIR=/var/lib/soundtouch-service \
-#     bash install.sh
+#     VERSION=v0.95.0 \
+#     HTTP_PORT=8081 \
+#     bash install-web.sh
 #
 # Or with a version argument to perform an update:
-#   sudo bash install.sh v0.97.0
+#   sudo bash install-web.sh v0.95.0
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
-# - It installs a systemd unit that can bind privileged ports (80/443) using:
-#     AmbientCapabilities=CAP_NET_BIND_SERVICE
-#   so you do NOT need setcap and do NOT need to run as root.
-# - Safe to re-run; it will update binary/config/unit and restart the service.
+# - soundtouch-web is stateless (no data directory) — it is safe to stop/restart freely.
+# - Default port is 8080 (unprivileged — no special capabilities needed).
+# - If soundtouch-service is already installed, soundtouch-web reuses the
+#   existing soundtouch:soundtouch user/group.
+# - Safe to re-run; it will update the binary, env file, and unit and restart.
 # ==============================================================================
 
 VERSION="${1:-${VERSION:-v0.97.0}}"
@@ -33,39 +31,22 @@ VERSION="${1:-${VERSION:-v0.97.0}}"
 if [[ ! "$VERSION" =~ ^v ]]; then
   VERSION="v${VERSION}"
 fi
-SERVICE_NAME="${SERVICE_NAME:-soundtouch-service}"
-BIN_PATH="${BIN_PATH:-/usr/local/bin/soundtouch-service}"
+SERVICE_NAME="${SERVICE_NAME:-soundtouch-web}"
+BIN_PATH="${BIN_PATH:-/usr/local/bin/soundtouch-web}"
 
-CONFIG_DIR="${CONFIG_DIR:-/etc/soundtouch-service}"
-ENV_FILE="${ENV_FILE:-$CONFIG_DIR/soundtouch-service.env}"
-DATA_DIR="${DATA_DIR:-/var/lib/soundtouch-service}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/soundtouch-web}"
+ENV_FILE="${ENV_FILE:-$CONFIG_DIR/soundtouch-web.env}"
 
 SERVICE_USER="${SERVICE_USER:-soundtouch}"
 SERVICE_GROUP="${SERVICE_GROUP:-soundtouch}"
 
-# Ports
-HTTP_PORT="${HTTP_PORT:-80}"
-HTTPS_PORT="${HTTPS_PORT:-443}"
+# Port (unprivileged — no CAP_NET_BIND_SERVICE needed)
+HTTP_PORT="${HTTP_PORT:-8080}"
 
-# URLs (default uses current hostname + .local)
-HOSTNAME_FQDN="${HOSTNAME_FQDN:-$(hostname).local}"
-SERVER_URL="${SERVER_URL:-http://${HOSTNAME_FQDN}}"
-HTTPS_SERVER_URL="${HTTPS_SERVER_URL:-https://${HOSTNAME_FQDN}}"
-
-# Additional env vars (mirrors the project's docker-compose.yml)
-LOG_PROXY_BODY="${LOG_PROXY_BODY:-false}"
-REDACT_PROXY_LOGS="${REDACT_PROXY_LOGS:-true}"
-RECORD_INTERACTIONS="${RECORD_INTERACTIONS:-true}"
-DISCOVERY_INTERVAL="${DISCOVERY_INTERVAL:-5m}"
-
-# Spotify OAuth config (optional)
-SPOTIFY_CLIENT_ID="${SPOTIFY_CLIENT_ID:-}"
-SPOTIFY_CLIENT_SECRET="${SPOTIFY_CLIENT_SECRET:-}"
-SPOTIFY_REDIRECT_URI="${SPOTIFY_REDIRECT_URI:-}"
-
-# Management API credentials
-MGMT_USERNAME="${MGMT_USERNAME:-admin}"
-MGMT_PASSWORD="${MGMT_PASSWORD:-change_me!}"
+# Optional discovery / device config
+BIND_ADDR="${BIND_ADDR:-}"
+DISCOVERY_INTERFACE="${DISCOVERY_INTERFACE:-}"
+SOUNDTOUCH_DEVICES="${SOUNDTOUCH_DEVICES:-}"
 
 # Override if you want to force a specific asset suffix:
 #   ARCH_ASSET=linux-armv7|linux-arm64|linux-amd64
@@ -93,8 +74,6 @@ apt_install_if_missing() {
 }
 
 detect_arch_asset() {
-  # Upstream release naming expects: linux-armv7, linux-arm64, linux-amd64
-  # Map uname -m to those.
   local m
   m="$(uname -m)"
 
@@ -116,9 +95,7 @@ detect_arch_asset() {
 
 download_url_for() {
   local asset="$1"
-  # Release asset pattern used by you earlier:
-  # soundtouch-service-v0.97.0-linux-armv7
-  echo "https://github.com/gesellix/Bose-SoundTouch/releases/download/${VERSION}/soundtouch-service-${VERSION}-${asset}"
+  echo "https://github.com/gesellix/Bose-SoundTouch/releases/download/${VERSION}/soundtouch-web-${VERSION}-${asset}"
 }
 
 ensure_user_group() {
@@ -128,8 +105,7 @@ ensure_user_group() {
   fi
   if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
     useradd --system \
-      --home "${DATA_DIR}" \
-      --create-home \
+      --no-create-home \
       --shell /usr/sbin/nologin \
       --gid "${SERVICE_GROUP}" \
       "${SERVICE_USER}"
@@ -137,16 +113,9 @@ ensure_user_group() {
 }
 
 ensure_dirs() {
-  log "Creating directories"
-  mkdir -p "${CONFIG_DIR}" "${DATA_DIR}"
-
-  # Optimized ownership check: only chown if not already owned by service user
-  if [[ "$(stat -c '%U:%G' "${DATA_DIR}")" != "${SERVICE_USER}:${SERVICE_GROUP}" ]]; then
-    log "Adjusting ownership of ${DATA_DIR} to ${SERVICE_USER}:${SERVICE_GROUP}"
-    chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${DATA_DIR}"
-  fi
-
-  chmod 0755 "${CONFIG_DIR}" "${DATA_DIR}"
+  log "Creating config directory"
+  mkdir -p "${CONFIG_DIR}"
+  chmod 0755 "${CONFIG_DIR}"
 }
 
 download_binary() {
@@ -159,31 +128,29 @@ download_binary() {
   trap 'rm -rf "${tmp}"' EXIT
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "${tmp}/soundtouch-service" "${url}"
+    curl -fsSL -o "${tmp}/soundtouch-web" "${url}"
   else
-    wget -qO "${tmp}/soundtouch-service" "${url}"
+    wget -qO "${tmp}/soundtouch-web" "${url}"
   fi
 
-  chmod +x "${tmp}/soundtouch-service"
+  chmod +x "${tmp}/soundtouch-web"
 
-  # Backup existing binary if it exists
   if [[ -f "${BIN_PATH}" ]]; then
     log "Backing up existing binary to ${BIN_PATH}.old"
     cp -p "${BIN_PATH}" "${BIN_PATH}.old"
   fi
 
-  install -m 0755 "${tmp}/soundtouch-service" "${BIN_PATH}"
+  install -m 0755 "${tmp}/soundtouch-web" "${BIN_PATH}"
   log "Installed binary to ${BIN_PATH}"
 }
 
 self_update() {
-  # If we are already a self-update re-exec, don't do it again
   if [[ "$IS_SELF_UPDATE" == "true" ]]; then
     return
   fi
 
-  local url="https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/${VERSION}/scripts/raspberry-pi/install.sh"
-  local tmp_script="/tmp/soundtouch-install-${VERSION}.sh"
+  local url="https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/${VERSION}/scripts/raspberry-pi/install-web.sh"
+  local tmp_script="/tmp/soundtouch-web-install-${VERSION}.sh"
 
   log "Checking for installer updates for ${VERSION}..."
   log "URL: ${url}"
@@ -200,7 +167,6 @@ self_update() {
     fi
   fi
 
-  # Compare scripts to see if we actually need to re-exec
   if diff -q "${SCRIPT_PATH}" "${tmp_script}" >/dev/null 2>&1; then
     log "Installer is already up to date."
     rm -f "${tmp_script}"
@@ -211,10 +177,9 @@ self_update() {
   install -m 0755 "${tmp_script}" "${SCRIPT_PATH}"
   rm -f "${tmp_script}"
 
-  # Export current env vars to the new script
   export IS_SELF_UPDATE="true"
-  export VERSION HOSTNAME_FQDN HTTP_PORT HTTPS_PORT DATA_DIR BIN_PATH CONFIG_DIR ENV_FILE SERVICE_USER SERVICE_GROUP
-  export SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET SPOTIFY_REDIRECT_URI MGMT_USERNAME MGMT_PASSWORD
+  export VERSION HTTP_PORT BIND_ADDR DISCOVERY_INTERFACE SOUNDTOUCH_DEVICES
+  export BIN_PATH CONFIG_DIR ENV_FILE SERVICE_USER SERVICE_GROUP
 
   exec "${SCRIPT_PATH}" "$@"
 }
@@ -222,22 +187,11 @@ self_update() {
 write_env_file() {
   log "Updating env file: ${ENV_FILE}"
 
-  # 1. Start with a list of all variables we want to manage
   local vars=(
     "PORT=${HTTP_PORT}"
-    "HTTPS_PORT=${HTTPS_PORT}"
-    "DATA_DIR=${DATA_DIR}"
-    "LOG_PROXY_BODY=${LOG_PROXY_BODY}"
-    "REDACT_PROXY_LOGS=${REDACT_PROXY_LOGS}"
-    "RECORD_INTERACTIONS=${RECORD_INTERACTIONS}"
-    "DISCOVERY_INTERVAL=${DISCOVERY_INTERVAL}"
-    "SERVER_URL=${SERVER_URL}"
-    "HTTPS_SERVER_URL=${HTTPS_SERVER_URL}"
-    "SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}"
-    "SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}"
-    "SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}"
-    "MGMT_USERNAME=${MGMT_USERNAME}"
-    "MGMT_PASSWORD=${MGMT_PASSWORD}"
+    "BIND_ADDR=${BIND_ADDR}"
+    "DISCOVERY_INTERFACE=${DISCOVERY_INTERFACE}"
+    "SOUNDTOUCH_DEVICES=${SOUNDTOUCH_DEVICES}"
   )
 
   if [[ ! -f "${ENV_FILE}" ]]; then
@@ -255,7 +209,6 @@ write_env_file() {
   fi
 
   chmod 0640 "${ENV_FILE}"
-  # group-readable so you can add yourself to the group if desired
   chown root:"${SERVICE_GROUP}" "${ENV_FILE}" || true
 }
 
@@ -263,7 +216,7 @@ write_systemd_unit() {
   log "Writing systemd unit: /etc/systemd/system/${SERVICE_NAME}.service"
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
-Description=Bose SoundTouch Service
+Description=Bose SoundTouch Web UI
 Wants=network-online.target
 After=network-online.target
 
@@ -272,21 +225,13 @@ Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_GROUP}
 EnvironmentFile=${ENV_FILE}
-WorkingDirectory=${DATA_DIR}
 ExecStart=${BIN_PATH}
-
-# Allow binding to privileged ports (80/443) without running as root
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-
 Restart=on-failure
 RestartSec=2
 
-# Sensible hardening (compatible with privileged-port binding)
 PrivateTmp=true
-ProtectSystem=full
+ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${DATA_DIR}
 
 [Install]
 WantedBy=multi-user.target
@@ -316,9 +261,9 @@ reload_enable_start() {
   done
 
   if [[ "$success" = true ]]; then
-    log "✅ Service is healthy and responding!"
+    log "✅ soundtouch-web is healthy and responding!"
   else
-    log "⚠️ Service started but did not respond to health check at $health_url within timeout."
+    log "⚠️ Service started but did not respond at $health_url within timeout."
     log "Check logs with: journalctl -u ${SERVICE_NAME}.service -n 50"
   fi
 }
@@ -327,28 +272,27 @@ show_status() {
   log "Service status"
   systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
 
-  log "Listening sockets (${HTTP_PORT}/${HTTPS_PORT})"
-  ss -tulpn | grep -E ":((${HTTP_PORT})|(${HTTPS_PORT}))\b" || true
+  log "Listening socket (:${HTTP_PORT})"
+  ss -tulpn | grep -E ":${HTTP_PORT}\b" || true
 
   if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
     log "Firewall check (UFW is active)"
-    if ! ufw status | grep -qE "${HTTP_PORT}.*ALLOW|${HTTPS_PORT}.*ALLOW"; then
-      log "⚠️ UFW is active but ports ${HTTP_PORT}/${HTTPS_PORT} might be blocked."
-      log "Run: sudo ufw allow ${HTTP_PORT}/tcp && sudo ufw allow ${HTTPS_PORT}/tcp"
+    if ! ufw status | grep -qE "${HTTP_PORT}.*ALLOW"; then
+      log "⚠️ UFW is active but port ${HTTP_PORT} might be blocked."
+      log "Run: sudo ufw allow ${HTTP_PORT}/tcp"
     else
-      log "✅ UFW rules for service ports appear to be in place."
+      log "✅ UFW rule for port ${HTTP_PORT} appears to be in place."
     fi
   fi
 
   cat <<EOF
 
-Try from another machine:
-  ${SERVER_URL}
-  ${HTTPS_SERVER_URL}
+Open in your browser:
+  http://<pi-ip>:${HTTP_PORT}/
 
-If mDNS doesn't work, use the Pi's IP:
-  http://<pi-ip>/
-  https://<pi-ip>/
+soundtouch-web is a control panel — you can stop it when not in use:
+  sudo systemctl stop ${SERVICE_NAME}
+  sudo systemctl start ${SERVICE_NAME}
 
 Logs:
   journalctl -u ${SERVICE_NAME}.service -e --no-pager

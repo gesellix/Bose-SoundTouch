@@ -8,8 +8,8 @@ set -eo pipefail
 #
 # Override via environment variable or the --version/-v flag:
 #   VERSION=0.92.0 curl -sSL .../install.sh | sh
-#   curl -sSL .../install.sh | sh -s -- --version 0.92.0
-VERSION=${VERSION:-0.93.1}
+#   curl -sSL .../install.sh | sh -s -- --version 0.97.0
+VERSION=${VERSION:-0.97.0}
 
 # Parse optional command-line arguments so the script can be invoked as:
 #   install.sh --version 0.92.0

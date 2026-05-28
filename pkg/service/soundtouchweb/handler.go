@@ -1101,6 +1101,15 @@ func (app *WebApp) HandleAPIVersion(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// HandleHealth returns a minimal liveness response.
+func (app *WebApp) HandleHealth(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": app.Version}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 // HandleRadioBrowserSearch handles RadioBrowser search requests.
 func (app *WebApp) HandleRadioBrowserSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
