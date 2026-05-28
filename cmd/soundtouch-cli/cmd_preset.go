@@ -151,6 +151,7 @@ func resolveLocationAndMetadata(params *presetParams) error {
 		!isOrionLocation(params.location) &&
 		(strings.HasPrefix(params.location, "http://") || strings.HasPrefix(params.location, "https://")) {
 		params.location = buildOrionLocation(params.serviceURL, params.name, params.artwork, resolvedLocation)
+
 		fmt.Printf("  Wrapped stream URL in Orion location for LOCAL_INTERNET_RADIO\n")
 	} else if params.source == "LOCAL_INTERNET_RADIO" &&
 		params.serviceURL == "" &&

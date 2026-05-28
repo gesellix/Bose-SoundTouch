@@ -1,3 +1,4 @@
+// Package main demonstrates content navigation and station management with SoundTouch devices.
 package main
 
 import (
@@ -41,12 +42,14 @@ func main() {
 func demonstrateNavigationAndStations(c *client.Client) error {
 	// 1. Browse TuneIn content
 	fmt.Println("📻 Step 1: Browsing TuneIn stations...")
+
 	if err := browseTuneInStations(c); err != nil {
 		return fmt.Errorf("failed to browse TuneIn: %w", err)
 	}
 
 	// 2. Search for specific content
 	fmt.Println("\n🔍 Step 2: Searching for jazz stations...")
+
 	searchResults, err := searchForJazzStations(c)
 	if err != nil {
 		return fmt.Errorf("failed to search stations: %w", err)
@@ -54,6 +57,7 @@ func demonstrateNavigationAndStations(c *client.Client) error {
 
 	// 3. Add and play a station
 	fmt.Println("\n➕ Step 3: Adding and playing a station...")
+
 	if err := addAndPlayStation(c, searchResults); err != nil {
 		fmt.Printf("⚠️  Could not add station: %v\n", err)
 		// Continue with demo even if this fails
@@ -61,6 +65,7 @@ func demonstrateNavigationAndStations(c *client.Client) error {
 
 	// 4. Demonstrate Pandora search (if account available)
 	fmt.Println("\n🎵 Step 4: Demonstrating Pandora search...")
+
 	if err := demonstratePandoraSearch(c); err != nil {
 		fmt.Printf("⚠️  Pandora search not available: %v\n", err)
 		// Continue with demo
@@ -68,6 +73,7 @@ func demonstrateNavigationAndStations(c *client.Client) error {
 
 	// 5. Browse stored music (if available)
 	fmt.Println("\n💿 Step 5: Browsing stored music...")
+
 	if err := browseStoredMusic(c); err != nil {
 		fmt.Printf("⚠️  Stored music not available: %v\n", err)
 		// Continue with demo
@@ -75,6 +81,7 @@ func demonstrateNavigationAndStations(c *client.Client) error {
 
 	// 6. Search Spotify content (if account available)
 	fmt.Println("\n🎧 Step 6: Demonstrating Spotify search...")
+
 	if err := demonstrateSpotifySearch(c); err != nil {
 		fmt.Printf("⚠️  Spotify search not available: %v\n", err)
 		// Continue with demo
@@ -95,8 +102,10 @@ func browseTuneInStations(c *client.Client) error {
 
 	if len(response.Items) > 0 {
 		fmt.Printf("  🎵 Sample stations:\n")
+
 		for i, item := range response.Items[:min(5, len(response.Items))] {
 			fmt.Printf("    %d. %s\n", i+1, item.GetDisplayName())
+
 			if item.IsPlayable() {
 				fmt.Printf("       ▶️  Playable\n")
 			} else if item.IsDirectory() {
@@ -125,13 +134,16 @@ func searchForJazzStations(c *client.Client) (*models.SearchStationResponse, err
 	if len(songs) > 0 {
 		fmt.Printf("  🎵 Songs (%d): %s\n", len(songs), songs[0].GetDisplayName())
 	}
+
 	if len(artists) > 0 {
 		fmt.Printf("  🎤 Artists (%d): %s\n", len(artists), artists[0].GetDisplayName())
 	}
+
 	if len(stations) > 0 {
 		fmt.Printf("  📻 Stations (%d):\n", len(stations))
-		for i, station := range stations[:min(3, len(stations))] {
-			fmt.Printf("    %d. %s (Token: %s)\n", i+1, station.GetDisplayName(), station.Token)
+
+		for i := range stations[:min(3, len(stations))] {
+			fmt.Printf("    %d. %s (Token: %s)\n", i+1, stations[i].GetDisplayName(), stations[i].Token)
 		}
 	}
 
@@ -176,7 +188,7 @@ func addAndPlayStation(c *client.Client, searchResults *models.SearchStationResp
 	return nil
 }
 
-func demonstratePandoraSearch(c *client.Client) error {
+func demonstratePandoraSearch(_ *client.Client) error {
 	// Note: This would require a valid Pandora account
 	// For demo purposes, we'll show how it would work
 	fmt.Printf("  🎵 Pandora search requires a valid source account\n")
@@ -190,7 +202,7 @@ func demonstratePandoraSearch(c *client.Client) error {
 	return nil
 }
 
-func browseStoredMusic(c *client.Client) error {
+func browseStoredMusic(_ *client.Client) error {
 	// Note: This would require a valid device ID for stored music
 	fmt.Printf("  💿 Stored music browsing requires device ID\n")
 	fmt.Printf("  💡 Example usage:\n")
@@ -204,7 +216,7 @@ func browseStoredMusic(c *client.Client) error {
 	return nil
 }
 
-func demonstrateSpotifySearch(c *client.Client) error {
+func demonstrateSpotifySearch(_ *client.Client) error {
 	// Note: This would require a valid Spotify account
 	fmt.Printf("  🎧 Spotify search requires a valid source account\n")
 	fmt.Printf("  💡 Example usage:\n")
@@ -216,14 +228,6 @@ func demonstrateSpotifySearch(c *client.Client) error {
 	fmt.Printf("     }\n")
 
 	return nil
-}
-
-// Helper function to get minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func printUsage() {
