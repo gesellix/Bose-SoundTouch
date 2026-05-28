@@ -45,4 +45,9 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
+    playURL: (deviceId, url, name, imageUrl, serviceUrl) => req(`/api/play-url/${deviceId}`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ url, name, imageUrl, serviceUrl }),
+    }),
 };

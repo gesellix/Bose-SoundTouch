@@ -35,10 +35,11 @@ type WebApp struct {
 	WSClients map[*websocket.Conn]bool
 	WSMutex   sync.RWMutex
 
-	Version string
-	Commit  string
-	Date    string
-	RepoURL string
+	Version    string
+	Commit     string
+	Date       string
+	RepoURL    string
+	ServiceURL string
 
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }
@@ -1084,6 +1085,81 @@ func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandlePlayURL plays a custom stream URL on a device. When ServiceURL is
+// configured the stream is wrapped in the Orion location format so the
+// speaker's BMX module receives JSON instead of raw audio bytes. This also
+// ensures that the ★ preset save flow stores a working location.
+func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	var req struct {
+		URL        string `json:"url"`
+		Name       string `json:"name"`
+		ImageURL   string `json:"imageUrl"`
+		ServiceURL string `json:"serviceUrl"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		app.sendError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.URL == "" {
+		app.sendError(w, "url is required", http.StatusBadRequest)
+		return
+	}
+
+	// Server-side --service-url wins; fall back to client-supplied value.
+	serviceURL := app.ServiceURL
+	if serviceURL == "" {
+		serviceURL = strings.TrimRight(req.ServiceURL, "/")
+	}
+
+	if serviceURL == "" {
+		app.sendError(w,
+			"AfterTouch service URL is required for LOCAL_INTERNET_RADIO playback. "+
+				"Start soundtouch-web with --service-url <https://your-aftertouch-host> or enter it in the Play URL settings.",
+			http.StatusBadRequest)
+
+		return
+	}
+
+	location := bmxpkg.BuildOrionLocation(serviceURL, req.Name, req.ImageURL, req.URL)
+
+	contentItem := &models.ContentItem{
+		Source:       "LOCAL_INTERNET_RADIO",
+		Type:         "stationurl",
+		Location:     location,
+		ItemName:     req.Name,
+		IsPresetable: true,
+	}
+
+	if err := device.Client.SelectContentItem(contentItem); err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
+		Success: true,
+		Data:    map[string]string{"message": "Playing " + req.Name},
+	}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 // HandleAPIVersion returns the current version of the application.
 func (app *WebApp) HandleAPIVersion(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -1095,6 +1171,7 @@ func (app *WebApp) HandleAPIVersion(w http.ResponseWriter, _ *http.Request) {
 		"repo_url":    app.RepoURL,
 		"release_url": app.RepoURL + "/releases/tag/" + app.Version,
 		"commit_url":  app.RepoURL + "/commit/" + app.Commit,
+		"service_url": app.ServiceURL,
 	}
 	if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: versionInfo}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)

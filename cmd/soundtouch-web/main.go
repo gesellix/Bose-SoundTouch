@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
@@ -75,6 +76,11 @@ func main() {
 				Usage:   "SoundTouch device IP address(es) to add manually (can be specified multiple times)",
 				EnvVars: []string{"SOUNDTOUCH_DEVICES"},
 			},
+			&cli.StringFlag{
+				Name:    "service-url",
+				Usage:   "AfterTouch service base URL (e.g. https://soundtouch.local). Required for custom stream URLs to work as presets via LOCAL_INTERNET_RADIO",
+				EnvVars: []string{"SERVICE_URL"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			port := c.String("port")
@@ -108,6 +114,7 @@ func main() {
 			webApp.Commit = commit
 			webApp.Date = date
 			webApp.RepoURL = repoURL
+			webApp.ServiceURL = strings.TrimRight(c.String("service-url"), "/")
 
 			discoveryService := soundtouchweb.NewDiscoveryService(ifaceName)
 

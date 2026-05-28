@@ -76,12 +76,16 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	r.Get("/api/radiobrowser/search", app.HandleRadioBrowserSearch)
 	r.Post("/api/radiobrowser/play/{id}", app.HandlePlayRadioBrowser)
 
+	// Custom URL playback
+	r.Post("/api/play-url/{id}", app.HandlePlayURL)
+
 	// SPA routes — serve index.html for client-side routing
 	r.Get("/", app.serveIndex)
 	r.Get("/devices", app.serveIndex)
 	r.Get("/device/*", app.serveIndex)
 	r.Get("/tunein", app.serveIndex)
 	r.Get("/radiobrowser", app.serveIndex)
+	r.Get("/playurl", app.serveIndex)
 }
 
 func (app *WebApp) serveIndex(w http.ResponseWriter, _ *http.Request) {

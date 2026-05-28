@@ -10,6 +10,7 @@ import { Zone } from './components/Zone.js';
 import { Recents } from './components/Recents.js';
 import { TuneInBrowser } from './components/TuneInBrowser.js';
 import { RadioBrowser } from './components/RadioBrowser.js';
+import { PlayURL } from './components/PlayURL.js';
 import { api } from './api.js';
 
 const html = htm.bind(h);
@@ -68,6 +69,7 @@ function App() {
         }
         if (page === 'tunein') return 'TuneIn';
         if (page === 'radiobrowser') return 'RadioBrowser';
+        if (page === 'playurl') return 'Play URL';
         return 'AfterTouch';
     };
 
@@ -169,6 +171,12 @@ function App() {
                     >
                         <img src="/static/img/radiobrowser-mono.svg" alt="RadioBrowser" class="nav-rb-icon" />
                     </a>
+                    <a href="#" class="${page === 'playurl' ? 'active' : ''}"
+                        onClick=${(e) => { e.preventDefault(); navigate('playurl'); }}
+                        title="Play URL"
+                    >
+                        <img src="/static/img/link-mono.svg" alt="Play URL" class="nav-url-icon" />
+                    </a>
                     <span class="nav-separator">|</span>
                     <button class="btn-icon" onClick=${discover} title="Discover">
                         <img src="/static/img/knob-mono.svg" alt="Discover" class="nav-discover-icon ${isDiscovering ? 'buzzing' : ''}" />
@@ -196,6 +204,8 @@ function App() {
                     <${TuneInBrowser} key="tunein-browser" devices=${devices} />
                 ` : page === 'radiobrowser' ? html`
                     <${RadioBrowser} key="radiobrowser-browser" devices=${devices} />
+                ` : page === 'playurl' ? html`
+                    <${PlayURL} key="play-url" devices=${devices} serverServiceUrl=${version?.service_url || ''} />
                 ` : null}
             </main>
 

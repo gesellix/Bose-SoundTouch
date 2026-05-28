@@ -4,10 +4,37 @@
 package bmx
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"net/url"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
+
+// BuildOrionLocation wraps a raw stream URL in the AfterTouch Orion station
+// endpoint that the speaker's BMX module expects when playing LOCAL_INTERNET_RADIO
+// content. The speaker calls GET on the stored location expecting a
+// BmxPlaybackResponse JSON — not raw audio bytes.
+func BuildOrionLocation(serviceURL, name, imageURL, streamURL string) string {
+	payload := struct {
+		Name      string `json:"name"`
+		ImageURL  string `json:"imageUrl"`
+		StreamURL string `json:"streamUrl"`
+	}{
+		Name:      name,
+		ImageURL:  imageURL,
+		StreamURL: streamURL,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+
+	encoded := url.QueryEscape(base64.StdEncoding.EncodeToString(data))
+
+	return serviceURL + "/core02/svc-bmx-adapter-orion/prod/orion/station?data=" + encoded
+}
 
 // BuildCustomStreamResponse builds a playback response from streamUrl, imageUrl, and name.
 func BuildCustomStreamResponse(streamURL, imageURL, name string) (*models.BmxPlaybackResponse, error) {
