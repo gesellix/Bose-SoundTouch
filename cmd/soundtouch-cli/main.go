@@ -613,6 +613,28 @@ func main() {
 						Before: RequireHost,
 					},
 					{
+						Name:   "find",
+						Usage:  "Find stations via the AfterTouch service (tunein or radiobrowser)",
+						Action: searchService,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:  "provider",
+								Usage: "Station provider: tunein or radiobrowser",
+								Value: "tunein",
+							},
+							&cli.StringFlag{
+								Name:     "query",
+								Aliases:  []string{"q"},
+								Usage:    "Search query",
+								Required: true,
+							},
+							&cli.BoolFlag{
+								Name:  "more",
+								Usage: "Follow up to 3 additional result pages when available",
+							},
+						},
+					},
+					{
 						Name:   "search-tunein",
 						Usage:  "Search TuneIn stations",
 						Action: searchTuneIn,
@@ -663,6 +685,19 @@ func main() {
 							},
 						},
 						Before: RequireHost,
+					},
+					{
+						Name:   "search-radiobrowser",
+						Usage:  "Search Radio Browser stations via the AfterTouch service",
+						Action: searchServiceRadioBrowser,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "query",
+								Aliases:  []string{"q"},
+								Usage:    "Search query",
+								Required: true,
+							},
+						},
 					},
 					{
 						Name:   "add",

@@ -1809,6 +1809,8 @@ func classifyLearnedSource(src *models.ConfiguredSource, sourceID, location, sou
 		classifyAsSpotify(src)
 	case strings.Contains(location, "amazon") || sourceID == constants.ProviderAmazon || sourceProviderID == strconv.Itoa(constants.AmazonProviderID):
 		classifyAsAmazon(src)
+	case sourceProviderID == strconv.Itoa(constants.RadioBrowserProviderID) || strings.Contains(location, "/soundtouch/stations/byuuid/"):
+		classifyAsRadioBrowser(src)
 	}
 	// If we can't classify, leave SourceKey.Type empty so the canonical-by-ID
 	// fallback in mapToFullResponseSource and the read-side applyCanonicalDefaults
@@ -1866,6 +1868,21 @@ func classifyAsAmazon(src *models.ConfiguredSource) {
 
 	if src.DisplayName == "" || src.DisplayName == "Other" {
 		src.DisplayName = "Amazon Music"
+	}
+}
+
+func classifyAsRadioBrowser(src *models.ConfiguredSource) {
+	src.SourceKey.Type = constants.ProviderRadioBrowser
+	src.SourceKeyType = constants.ProviderRadioBrowser
+	src.Type = "Audio"
+	src.SecretType = constants.CredentialTypeToken
+
+	if src.Secret == "" {
+		src.Secret = datastore.GenerateSerialSecret(strings.ToLower(constants.ProviderRadioBrowser))
+	}
+
+	if src.DisplayName == "Other" || src.DisplayName == constants.ProviderRadioBrowser || src.DisplayName == "" {
+		src.DisplayName = constants.ProviderRadioBrowser
 	}
 }
 

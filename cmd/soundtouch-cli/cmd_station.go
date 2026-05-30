@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/stations"
 	"github.com/urfave/cli/v2"
 )
 
@@ -472,4 +474,150 @@ func printStationList(response *models.NavigateResponse, source string) {
 	fmt.Printf("💡 Usage hints:\n")
 	fmt.Printf("   • To play a station: Use the location value with 'play content' command\n")
 	fmt.Printf("   • To save as preset: Use 'preset set' command with the location\n")
+}
+
+// printBmxNavResults renders a *models.BmxNavResponse to stdout.
+// For each section it prints the section name as a header, then each item's
+// name, subtitle, and playback location so the user can act on it.
+func printBmxNavResults(resp *models.BmxNavResponse) {
+	if len(resp.BmxSections) == 0 {
+		fmt.Println("  No results found")
+		return
+	}
+
+	for _, section := range resp.BmxSections {
+		if section.Name != "" {
+			fmt.Printf("\n  [%s]\n", section.Name)
+		}
+
+		if len(section.Items) == 0 {
+			fmt.Println("    (empty)")
+			continue
+		}
+
+		for i, item := range section.Items {
+			fmt.Printf("  %3d. %s\n", i+1, item.Name)
+
+			if item.Subtitle != "" {
+				fmt.Printf("       %s\n", item.Subtitle)
+			}
+
+			if item.Links != nil && item.Links.BmxPlayback != nil {
+				fmt.Printf("       Location: %s\n", item.Links.BmxPlayback.Href)
+			}
+		}
+	}
+}
+
+// bmxNavCursor extracts the opaque cursor value from a section's BmxNext link.
+// The Href looks like "...?cursor=<value>"; this returns the cursor query param.
+// Returns "" when no next link is present.
+func bmxNavCursor(section *models.BmxNavSection) string {
+	if section == nil || section.Links == nil || section.Links.BmxNext == nil {
+		return ""
+	}
+
+	href := section.Links.BmxNext.Href
+	if href == "" {
+		return ""
+	}
+
+	// The cursor is the query parameter named "cursor".
+	parsed, err := url.Parse(href)
+	if err != nil {
+		return ""
+	}
+
+	return parsed.Query().Get("cursor")
+}
+
+// searchService is the action for `station search` with --provider / --query / --more.
+// It uses the service-side stations package (works even when the speaker's cloud is dead).
+func searchService(c *cli.Context) error {
+	providerStr := c.String("provider")
+	query := c.String("query")
+	more := c.Bool("more")
+
+	if query == "" {
+		PrintError("Search query is required")
+		return fmt.Errorf("search query cannot be empty")
+	}
+
+	var provider stations.Provider
+
+	switch strings.ToLower(providerStr) {
+	case "tunein":
+		provider = stations.ProviderTuneIn
+	case "radiobrowser":
+		provider = stations.ProviderRadioBrowser
+	default:
+		PrintError(fmt.Sprintf("Unknown provider %q: must be 'tunein' or 'radiobrowser'", providerStr))
+		return fmt.Errorf("unknown provider: %s", providerStr)
+	}
+
+	fmt.Printf("Searching %s for: %s\n", providerStr, query)
+
+	resp, err := stations.Search(provider, query)
+	if err != nil {
+		PrintError(fmt.Sprintf("Search failed: %v", err))
+		return err
+	}
+
+	printBmxNavResults(resp)
+
+	if !more {
+		return nil
+	}
+
+	// Follow up to 3 additional pages while a next cursor is available.
+	const maxExtraPages = 3
+	for page := 0; page < maxExtraPages; page++ {
+		// Find a cursor from any section that has one.
+		cursor := ""
+		for i := range resp.BmxSections {
+			cursor = bmxNavCursor(&resp.BmxSections[i])
+			if cursor != "" {
+				break
+			}
+		}
+
+		if cursor == "" {
+			break
+		}
+
+		fmt.Printf("\n  -- page %d --\n", page+2)
+
+		resp, err = stations.SearchNext(provider, cursor)
+		if err != nil {
+			PrintError(fmt.Sprintf("Failed to fetch next page: %v", err))
+			return err
+		}
+
+		printBmxNavResults(resp)
+	}
+
+	return nil
+}
+
+// searchServiceRadioBrowser is the action for `station search-radiobrowser`.
+// It searches via the service-side RadioBrowser backend.
+func searchServiceRadioBrowser(c *cli.Context) error {
+	query := c.String("query")
+
+	if query == "" {
+		PrintError("Search query is required")
+		return fmt.Errorf("search query cannot be empty")
+	}
+
+	fmt.Printf("Searching Radio Browser for: %s\n", query)
+
+	resp, err := stations.Search(stations.ProviderRadioBrowser, query)
+	if err != nil {
+		PrintError(fmt.Sprintf("Search failed: %v", err))
+		return err
+	}
+
+	printBmxNavResults(resp)
+
+	return nil
 }

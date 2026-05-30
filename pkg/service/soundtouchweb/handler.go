@@ -15,6 +15,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
+	"github.com/gesellix/bose-soundtouch/pkg/service/stations"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
@@ -651,7 +652,7 @@ func (app *WebApp) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := bmxpkg.TuneInSearch(query)
+	resp, err := stations.Search(stations.ProviderTuneIn, query)
 	if err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -672,7 +673,7 @@ func (app *WebApp) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp, err := bmxpkg.TuneInSearchNext(cursor)
+	resp, err := stations.SearchNext(stations.ProviderTuneIn, cursor)
 	if err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -694,47 +695,7 @@ func (app *WebApp) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request
 func (app *WebApp) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
 	wildcard := chi.URLParam(r, "*")
 
-	var (
-		resp interface{}
-		err  error
-	)
-
-	if wildcard == "" {
-		resp, err = bmxpkg.TuneInNavigate("", nil)
-	} else {
-		firstSlash := strings.Index(wildcard, "/")
-		if firstSlash == -1 {
-			resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
-		} else {
-			pfx := wildcard[:firstSlash]
-			rest := wildcard[firstSlash+1:]
-
-			switch pfx {
-			case "sub":
-				secondSlash := strings.Index(rest, "/")
-				if secondSlash == -1 {
-					resp, err = bmxpkg.TuneInNavigate(rest, nil)
-				} else {
-					n, parseErr := strconv.Atoi(rest[:secondSlash])
-					if parseErr != nil {
-						resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
-					} else {
-						resp, err = bmxpkg.TuneInNavigate(rest[secondSlash+1:], &n)
-					}
-				}
-			case "profiles":
-				parts := strings.SplitN(rest, "/", 3)
-				if len(parts) < 3 {
-					resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
-				} else {
-					resp, err = bmxpkg.TuneInNavigateProfile(parts[2])
-				}
-			default:
-				resp, err = bmxpkg.TuneInNavigate(wildcard, nil)
-			}
-		}
-	}
-
+	resp, err := stations.Navigate(stations.ProviderTuneIn, wildcard)
 	if err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1195,7 +1156,7 @@ func (app *WebApp) HandleRadioBrowserSearch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resp, err := bmxpkg.RadioBrowserSearch(query)
+	resp, err := stations.Search(stations.ProviderRadioBrowser, query)
 	if err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1232,15 +1193,16 @@ func (app *WebApp) HandlePlayRadioBrowser(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	contentItem := &models.ContentItem{
-		Source:       "URL",
-		Type:         "stationurl",
-		Location:     req.Location,
-		ItemName:     req.Name,
-		IsPresetable: true,
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
 	}
 
-	if err := device.Client.SelectContentItem(contentItem); err != nil {
+	if err := stations.Play(device.Client, stations.PlayItem{
+		Provider: stations.ProviderRadioBrowser,
+		Location: req.Location,
+		Name:     req.Name,
+	}); err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1283,21 +1245,18 @@ func (app *WebApp) HandlePlayTuneIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemType := req.Type
-	if itemType == "" {
-		itemType = "stationurl"
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
 	}
 
-	contentItem := &models.ContentItem{
-		Source:       "TUNEIN",
-		Type:         itemType,
+	if err := stations.Play(device.Client, stations.PlayItem{
+		Provider:     stations.ProviderTuneIn,
 		Location:     req.Location,
-		ItemName:     req.Name,
-		IsPresetable: true,
+		Name:         req.Name,
+		Type:         req.Type,
 		ContainerArt: req.ContainerArt,
-	}
-
-	if err := device.Client.SelectContentItem(contentItem); err != nil {
+	}); err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

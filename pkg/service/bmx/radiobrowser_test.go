@@ -1,10 +1,13 @@
 package bmx
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -41,6 +44,140 @@ func TestRadioBrowserSearch(t *testing.T) {
 	item := resp.BmxSections[0].Items[0]
 	if item.Name != "Radio Paradise" {
 		t.Errorf("expected name 'Radio Paradise', got %q", item.Name)
+	}
+}
+
+// makeStationsJSON returns a JSON array of n station objects.
+func makeStationsJSON(n int) string {
+	stations := make([]string, n)
+	for i := 0; i < n; i++ {
+		stations[i] = fmt.Sprintf(`{"name":"Station %d","stationuuid":"uuid-%d","favicon":"","country":"DE","tags":"pop"}`, i, i)
+	}
+
+	return "[" + strings.Join(stations, ",") + "]"
+}
+
+func TestRadioBrowserSearchPage_FullPage_HasNext(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, makeStationsJSON(radioBrowserPageSize))
+	}))
+	defer ts.Close()
+
+	originalBaseURL := radioBrowserBaseURL
+	radioBrowserBaseURL = ts.URL
+	defer func() { radioBrowserBaseURL = originalBaseURL }()
+
+	resp, err := RadioBrowserSearchPage("test", 0)
+	if err != nil {
+		t.Fatalf("RadioBrowserSearchPage failed: %v", err)
+	}
+
+	if len(resp.BmxSections) == 0 {
+		t.Fatal("expected sections")
+	}
+
+	section := resp.BmxSections[0]
+
+	if len(section.Items) != radioBrowserPageSize {
+		t.Errorf("expected %d items, got %d", radioBrowserPageSize, len(section.Items))
+	}
+
+	if section.Links == nil || section.Links.BmxNext == nil {
+		t.Fatal("expected BmxNext link on full page")
+	}
+
+	if !strings.Contains(section.Links.BmxNext.Href, "cursor=") {
+		t.Errorf("expected cursor in BmxNext href, got %q", section.Links.BmxNext.Href)
+	}
+}
+
+func TestRadioBrowserSearchPage_ShortPage_NoNext(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, makeStationsJSON(5)) // fewer than radioBrowserPageSize
+	}))
+	defer ts.Close()
+
+	originalBaseURL := radioBrowserBaseURL
+	radioBrowserBaseURL = ts.URL
+	defer func() { radioBrowserBaseURL = originalBaseURL }()
+
+	resp, err := RadioBrowserSearchPage("test", 0)
+	if err != nil {
+		t.Fatalf("RadioBrowserSearchPage failed: %v", err)
+	}
+
+	if len(resp.BmxSections) == 0 {
+		t.Fatal("expected sections")
+	}
+
+	section := resp.BmxSections[0]
+
+	if section.Links != nil && section.Links.BmxNext != nil {
+		t.Errorf("expected no BmxNext link on short page, got %q", section.Links.BmxNext.Href)
+	}
+}
+
+func TestRadioBrowserSearchNext_CursorRoundTrip(t *testing.T) {
+	// Build a cursor manually to verify RadioBrowserSearchNext decodes it correctly.
+	cursorData := radioBrowserCursor{Query: "jazz", NextOffset: 20}
+	cursorJSON, err := json.Marshal(cursorData)
+	if err != nil {
+		t.Fatalf("marshal cursor: %v", err)
+	}
+
+	encoded := base64.RawURLEncoding.EncodeToString(cursorJSON)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify the offset was forwarded in the URL.
+		if !strings.Contains(r.URL.RawQuery, "offset=20") {
+			t.Errorf("expected offset=20 in query, got %q", r.URL.RawQuery)
+		}
+
+		if !strings.Contains(r.URL.RawQuery, "name=jazz") {
+			t.Errorf("expected name=jazz in query, got %q", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, makeStationsJSON(3))
+	}))
+	defer ts.Close()
+
+	originalBaseURL := radioBrowserBaseURL
+	radioBrowserBaseURL = ts.URL
+	defer func() { radioBrowserBaseURL = originalBaseURL }()
+
+	resp, err := RadioBrowserSearchNext(encoded)
+	if err != nil {
+		t.Fatalf("RadioBrowserSearchNext failed: %v", err)
+	}
+
+	if len(resp.BmxSections) == 0 || len(resp.BmxSections[0].Items) != 3 {
+		t.Errorf("expected 3 items, got response: %+v", resp)
+	}
+}
+
+func TestRadioBrowserSearchNext_InvalidCursor(t *testing.T) {
+	_, err := RadioBrowserSearchNext("not-valid-base64!!!")
+	if err == nil {
+		t.Error("expected error for invalid cursor")
+	}
+}
+
+func TestRadioBrowserSearchNext_EmptyQueryCursor(t *testing.T) {
+	// A cursor with an empty query should be rejected.
+	cursorData := radioBrowserCursor{Query: "", NextOffset: 20}
+	cursorJSON, err := json.Marshal(cursorData)
+	if err != nil {
+		t.Fatalf("marshal cursor: %v", err)
+	}
+
+	encoded := base64.RawURLEncoding.EncodeToString(cursorJSON)
+
+	_, err = RadioBrowserSearchNext(encoded)
+	if err == nil {
+		t.Error("expected error for cursor with empty query")
 	}
 }
 
