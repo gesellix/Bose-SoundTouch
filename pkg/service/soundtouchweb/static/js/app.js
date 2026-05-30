@@ -31,7 +31,12 @@ function DeviceDetail({ deviceId, devices, onBack }) {
         <div class="device-detail">
             <div class="page-header">
                 <button class="back-btn" onClick=${onBack}>← Back</button>
-                <button class="btn-icon" onClick=${() => api.power(deviceId)} title="Power">⏻</button>
+                <button class="btn-icon" onClick=${() => api.power(deviceId)} title="Power">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M12 2v8" />
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                    </svg>
+                </button>
             </div>
             <${NowPlaying} nowPlaying=${device.status?.nowPlaying} deviceId=${deviceId} presets=${device.status?.presets} />
             <${Controls} deviceId=${deviceId} status=${device.status} />
