@@ -808,7 +808,7 @@ func TuneInPlayback(stationID, formats string) (*models.BmxPlaybackResponse, err
 
 	name, logo, _ := TuneInDescribeMeta(stationID)
 
-	return BuildCustomStreamResponse(urls[0], logo, name)
+	return BuildCustomStreamResponseFromURLs(urls, logo, name)
 }
 
 // TuneInPodcastInfo returns info for a TuneIn podcast.

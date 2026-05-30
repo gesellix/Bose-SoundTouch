@@ -6,6 +6,7 @@ package bmx
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/url"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -36,20 +37,28 @@ func BuildOrionLocation(serviceURL, name, imageURL, streamURL string) string {
 	return serviceURL + "/core02/svc-bmx-adapter-orion/prod/orion/station?data=" + encoded
 }
 
-// BuildCustomStreamResponse builds a playback response from streamUrl, imageUrl, and name.
-func BuildCustomStreamResponse(streamURL, imageURL, name string) (*models.BmxPlaybackResponse, error) {
-	streamList := []models.Stream{
-		{
+// BuildCustomStreamResponseFromURLs wraps one or more candidate stream URLs
+// in a playback response. The speaker fails over between entries in the
+// Streams array, so order matters — pass them as the provider listed them.
+// The top-level StreamUrl mirrors urls[0] for compatibility.
+func BuildCustomStreamResponseFromURLs(urls []string, imageURL, name string) (*models.BmxPlaybackResponse, error) {
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("no stream URLs provided")
+	}
+
+	streamList := make([]models.Stream, 0, len(urls))
+	for _, u := range urls {
+		streamList = append(streamList, models.Stream{
 			HasPlaylist: true,
 			IsRealtime:  true,
-			StreamUrl:   streamURL,
-		},
+			StreamUrl:   u,
+		})
 	}
 
 	audio := models.Audio{
 		HasPlaylist: true,
 		IsRealtime:  true,
-		StreamUrl:   streamURL,
+		StreamUrl:   urls[0],
 		Streams:     streamList,
 	}
 
@@ -61,6 +70,11 @@ func BuildCustomStreamResponse(streamURL, imageURL, name string) (*models.BmxPla
 	}
 
 	return response, nil
+}
+
+// BuildCustomStreamResponse builds a playback response from streamUrl, imageUrl, and name.
+func BuildCustomStreamResponse(streamURL, imageURL, name string) (*models.BmxPlaybackResponse, error) {
+	return BuildCustomStreamResponseFromURLs([]string{streamURL}, imageURL, name)
 }
 
 // PlayCustomStream builds a playback response from a base64-encoded JSON blob
