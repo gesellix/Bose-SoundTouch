@@ -917,11 +917,20 @@ soundtouch-cli --host <device> station search-pandora --source-account <ACCOUNT>
 # Search Spotify specifically (requires account)
 soundtouch-cli --host <device> station search-spotify --source-account <ACCOUNT> --query <SEARCH_TERM>
 
+# Find stations via the AfterTouch service (TuneIn or Radio Browser; no live cloud needed)
+soundtouch-cli station find --provider <tunein|radiobrowser> --query <SEARCH_TERM> [--more]
+
+# Search Radio Browser via the AfterTouch service
+soundtouch-cli station search-radiobrowser --query <SEARCH_TERM>
+
 # Add station and play immediately
 soundtouch-cli --host <device> station add --source <SOURCE> --token <TOKEN> --name <NAME>
 
 # Remove station from collection
 soundtouch-cli --host <device> station remove --source <SOURCE> --location <LOCATION>
+
+# List saved stations for a source
+soundtouch-cli --host <device> station list --source <SOURCE> [--source-account <ACCOUNT>]
 ```
 
 **Search Examples:**
@@ -937,6 +946,36 @@ soundtouch-cli --host 192.0.2.10 station search-spotify --source-account spotify
 
 # General search across any source
 soundtouch-cli --host 192.0.2.10 station search --source TUNEIN --query "classic rock"
+```
+
+##### Service-side search: `station find` and `station search-radiobrowser`
+
+The commands above (`search`, `search-tunein`, …) ask the **speaker** to
+search, which only works while the speaker's cloud source is reachable.
+`station find` and `station search-radiobrowser` instead run the search
+**in AfterTouch itself**, so they work even when the speaker's original
+cloud is gone — and they don't require a reachable speaker (`--host`) to
+search:
+
+- `station find --provider tunein|radiobrowser --query <term>` — unified
+  service-side search. `--provider` defaults to `tunein`.
+- `station find … --more` — follow up to three additional result pages
+  when more are available (Radio Browser and TuneIn both paginate).
+- `station search-radiobrowser --query <term>` — Radio Browser sibling,
+  equivalent to `station find --provider radiobrowser`.
+
+Results include each station's playback `Location`, which you can feed to
+`source tunein` (TuneIn) or a preset/play flow.
+
+```bash
+# Service-side TuneIn search (no speaker required to search)
+soundtouch-cli station find --provider tunein --query "jazz"
+
+# Service-side Radio Browser search, walking extra result pages
+soundtouch-cli station find --provider radiobrowser --query "jazz" --more
+
+# Radio Browser sibling (same as: station find --provider radiobrowser)
+soundtouch-cli station search-radiobrowser --query "VRT"
 ```
 
 **Station Management Examples:**
