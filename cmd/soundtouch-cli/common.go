@@ -340,6 +340,22 @@ func PrintWarning(message string) {
 	fmt.Printf("⚠️  %s\n", message)
 }
 
+// PrintDeprecation prints a deprecation notice to stderr (so it does not
+// pollute piped stdout output). reason explains why the command is going
+// away; newUsage is an optional replacement example — pass "" when there
+// is no replacement yet.
+func PrintDeprecation(command, reason, newUsage string) {
+	fmt.Fprintf(os.Stderr, "⚠️  '%s' is deprecated and will be removed in a future release.\n", command)
+
+	if reason != "" {
+		fmt.Fprintf(os.Stderr, "    %s\n", reason)
+	}
+
+	if newUsage != "" {
+		fmt.Fprintf(os.Stderr, "    Use instead:\n      %s\n", newUsage)
+	}
+}
+
 // showVersionInfo displays detailed version information including build details
 func showVersionInfo(_ *cli.Context) error {
 	fmt.Printf("%s version %s\n", os.Args[0], version)

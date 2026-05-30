@@ -12,6 +12,12 @@ import (
 
 // searchStations handles searching for stations across different sources
 func searchStations(c *cli.Context) error {
+	PrintDeprecation(
+		"station search",
+		"It asks the speaker to search, which fails when the speaker's cloud is gone.",
+		`soundtouch-cli station find --provider tunein --query "<your search>"`,
+	)
+
 	source := c.String("source")
 	sourceAccount := c.String("source-account")
 	searchTerm := c.String("query")
@@ -51,6 +57,12 @@ func searchStations(c *cli.Context) error {
 
 // searchTuneIn handles searching TuneIn specifically
 func searchTuneIn(c *cli.Context) error {
+	PrintDeprecation(
+		"station search-tunein",
+		"It asks the speaker to search, which fails when the speaker's cloud is gone.",
+		`soundtouch-cli station find-tunein --query "<your search>"`,
+	)
+
 	searchTerm := c.String("query")
 
 	if searchTerm == "" {
@@ -86,6 +98,12 @@ func searchTuneIn(c *cli.Context) error {
 
 // searchPandora handles searching Pandora specifically
 func searchPandora(c *cli.Context) error {
+	PrintDeprecation(
+		"station search-pandora",
+		"There is no built-in Pandora search yet (it requires the speaker and your account).",
+		"",
+	)
+
 	sourceAccount := c.String("source-account")
 	searchTerm := c.String("query")
 
@@ -127,6 +145,12 @@ func searchPandora(c *cli.Context) error {
 
 // searchSpotify handles searching Spotify specifically
 func searchSpotify(c *cli.Context) error {
+	PrintDeprecation(
+		"station search-spotify",
+		"There is no built-in Spotify search yet (it requires the speaker and your account).",
+		"",
+	)
+
 	sourceAccount := c.String("source-account")
 	searchTerm := c.String("query")
 
@@ -531,31 +555,18 @@ func bmxNavCursor(section *models.BmxNavSection) string {
 	return parsed.Query().Get("cursor")
 }
 
-// searchService is the action for `station search` with --provider / --query / --more.
-// It uses the service-side stations package (works even when the speaker's cloud is dead).
-func searchService(c *cli.Context) error {
-	providerStr := c.String("provider")
-	query := c.String("query")
-	more := c.Bool("more")
-
+// runFind performs a built-in station search for the given provider and
+// prints the results. The search runs inside the CLI itself, querying the
+// radio provider's public API directly — it needs neither the speaker's
+// cloud nor a running soundtouch-service. When more is true it follows up
+// to three additional result pages while a next cursor is available.
+func runFind(provider stations.Provider, label, query string, more bool) error {
 	if query == "" {
 		PrintError("Search query is required")
 		return fmt.Errorf("search query cannot be empty")
 	}
 
-	var provider stations.Provider
-
-	switch strings.ToLower(providerStr) {
-	case "tunein":
-		provider = stations.ProviderTuneIn
-	case "radiobrowser":
-		provider = stations.ProviderRadioBrowser
-	default:
-		PrintError(fmt.Sprintf("Unknown provider %q: must be 'tunein' or 'radiobrowser'", providerStr))
-		return fmt.Errorf("unknown provider: %s", providerStr)
-	}
-
-	fmt.Printf("Searching %s for: %s\n", providerStr, query)
+	fmt.Printf("Searching %s for: %s\n", label, query)
 
 	resp, err := stations.Search(provider, query)
 	if err != nil {
@@ -569,7 +580,6 @@ func searchService(c *cli.Context) error {
 		return nil
 	}
 
-	// Follow up to 3 additional pages while a next cursor is available.
 	const maxExtraPages = 3
 	for page := 0; page < maxExtraPages; page++ {
 		// Find a cursor from any section that has one.
@@ -599,25 +609,36 @@ func searchService(c *cli.Context) error {
 	return nil
 }
 
-// searchServiceRadioBrowser is the action for `station search-radiobrowser`.
-// It searches via the service-side RadioBrowser backend.
-func searchServiceRadioBrowser(c *cli.Context) error {
-	query := c.String("query")
+// findStations is the action for the unified `station find` with
+// --provider / --query / --more.
+func findStations(c *cli.Context) error {
+	providerStr := c.String("provider")
 
-	if query == "" {
-		PrintError("Search query is required")
-		return fmt.Errorf("search query cannot be empty")
+	var (
+		provider stations.Provider
+		label    string
+	)
+
+	switch strings.ToLower(providerStr) {
+	case "tunein":
+		provider, label = stations.ProviderTuneIn, "TuneIn"
+	case "radiobrowser":
+		provider, label = stations.ProviderRadioBrowser, "Radio Browser"
+	default:
+		PrintError(fmt.Sprintf("Unknown provider %q: must be 'tunein' or 'radiobrowser'", providerStr))
+		return fmt.Errorf("unknown provider: %s", providerStr)
 	}
 
-	fmt.Printf("Searching Radio Browser for: %s\n", query)
+	return runFind(provider, label, c.String("query"), c.Bool("more"))
+}
 
-	resp, err := stations.Search(stations.ProviderRadioBrowser, query)
-	if err != nil {
-		PrintError(fmt.Sprintf("Search failed: %v", err))
-		return err
-	}
+// findTuneIn is the action for `station find-tunein` (built-in TuneIn search).
+func findTuneIn(c *cli.Context) error {
+	return runFind(stations.ProviderTuneIn, "TuneIn", c.String("query"), c.Bool("more"))
+}
 
-	printBmxNavResults(resp)
-
-	return nil
+// findRadioBrowser is the action for `station find-radiobrowser`
+// (built-in Radio Browser search).
+func findRadioBrowser(c *cli.Context) error {
+	return runFind(stations.ProviderRadioBrowser, "Radio Browser", c.String("query"), c.Bool("more"))
 }

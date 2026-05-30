@@ -589,9 +589,72 @@ func main() {
 				Aliases: []string{"st"},
 				Usage:   "Search and manage stations",
 				Subcommands: []*cli.Command{
+					// Built-in search ("find" family): runs inside the CLI,
+					// querying the radio provider's public API directly. No
+					// speaker cloud and no soundtouch-service required.
+					{
+						Name:   "find",
+						Usage:  "Find stations directly (built-in tunein or radiobrowser search; no speaker needed)",
+						Action: findStations,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:  "provider",
+								Usage: "Station provider: tunein or radiobrowser",
+								Value: "tunein",
+							},
+							&cli.StringFlag{
+								Name:     "query",
+								Aliases:  []string{"q"},
+								Usage:    "Search query",
+								Required: true,
+							},
+							&cli.BoolFlag{
+								Name:  "more",
+								Usage: "Follow up to 3 additional result pages when available",
+							},
+						},
+					},
+					{
+						Name:   "find-tunein",
+						Usage:  "Find TuneIn stations directly (built-in search; no speaker needed)",
+						Action: findTuneIn,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "query",
+								Aliases:  []string{"q"},
+								Usage:    "Search query",
+								Required: true,
+							},
+							&cli.BoolFlag{
+								Name:  "more",
+								Usage: "Follow up to 3 additional result pages when available",
+							},
+						},
+					},
+					{
+						Name:   "find-radiobrowser",
+						Usage:  "Find Radio Browser stations directly (built-in search; no speaker needed)",
+						Action: findRadioBrowser,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "query",
+								Aliases:  []string{"q"},
+								Usage:    "Search query",
+								Required: true,
+							},
+							&cli.BoolFlag{
+								Name:  "more",
+								Usage: "Follow up to 3 additional result pages when available",
+							},
+						},
+					},
+					// Deprecated speaker-based search commands. They ask the
+					// speaker to search, which fails once its cloud is gone.
+					// Prefer the "find" family above. Kept for now; each emits
+					// a deprecation notice on stderr.
 					{
 						Name:   "search",
-						Usage:  "Search for stations and content",
+						Usage:  "[DEPRECATED] Search via the speaker; use 'station find' instead",
 						Action: searchStations,
 						Flags: []cli.Flag{
 							&cli.StringFlag{
@@ -613,30 +676,8 @@ func main() {
 						Before: RequireHost,
 					},
 					{
-						Name:   "find",
-						Usage:  "Find stations via the AfterTouch service (tunein or radiobrowser)",
-						Action: searchService,
-						Flags: []cli.Flag{
-							&cli.StringFlag{
-								Name:  "provider",
-								Usage: "Station provider: tunein or radiobrowser",
-								Value: "tunein",
-							},
-							&cli.StringFlag{
-								Name:     "query",
-								Aliases:  []string{"q"},
-								Usage:    "Search query",
-								Required: true,
-							},
-							&cli.BoolFlag{
-								Name:  "more",
-								Usage: "Follow up to 3 additional result pages when available",
-							},
-						},
-					},
-					{
 						Name:   "search-tunein",
-						Usage:  "Search TuneIn stations",
+						Usage:  "[DEPRECATED] Search TuneIn via the speaker; use 'station find-tunein' instead",
 						Action: searchTuneIn,
 						Flags: []cli.Flag{
 							&cli.StringFlag{
@@ -650,7 +691,7 @@ func main() {
 					},
 					{
 						Name:   "search-pandora",
-						Usage:  "Search Pandora stations",
+						Usage:  "[DEPRECATED] Search Pandora via the speaker (no built-in equivalent yet)",
 						Action: searchPandora,
 						Flags: []cli.Flag{
 							&cli.StringFlag{
@@ -669,7 +710,7 @@ func main() {
 					},
 					{
 						Name:   "search-spotify",
-						Usage:  "Search Spotify content",
+						Usage:  "[DEPRECATED] Search Spotify via the speaker (no built-in equivalent yet)",
 						Action: searchSpotify,
 						Flags: []cli.Flag{
 							&cli.StringFlag{
@@ -685,19 +726,6 @@ func main() {
 							},
 						},
 						Before: RequireHost,
-					},
-					{
-						Name:   "search-radiobrowser",
-						Usage:  "Search Radio Browser stations via the AfterTouch service",
-						Action: searchServiceRadioBrowser,
-						Flags: []cli.Flag{
-							&cli.StringFlag{
-								Name:     "query",
-								Aliases:  []string{"q"},
-								Usage:    "Search query",
-								Required: true,
-							},
-						},
 					},
 					{
 						Name:   "add",
