@@ -216,6 +216,11 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 		log.Printf("WebSocket connected for device %s", sanitizeLog(deviceID))
 
+		// Fetch current state immediately: speakers do not replay events on
+		// new WebSocket connections, so anything that changed while we were
+		// disconnected would otherwise stay stale until the next WS event.
+		go app.UpdateDeviceStatus(deviceID, conn)
+
 		// Reset backoff after a successful connect so the next failure
 		// starts at the lowest cadence again.
 		backoff = initialBackoff

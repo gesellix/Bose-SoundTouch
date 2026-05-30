@@ -93,7 +93,8 @@ export function NowPlaying({ nowPlaying, deviceId, presets }) {
         if (nowPlaying?.PlayStatus !== 'PLAY_STATE') return;
         const id = setInterval(() => setPosition(p => p + 1), 1000);
         return () => clearInterval(id);
-    }, [nowPlaying?.Time?.Position, nowPlaying?.PlayStatus]);
+    }, [nowPlaying?.Time?.Position, nowPlaying?.PlayStatus,
+        nowPlaying?.TrackID, nowPlaying?.ContentItem?.Location]);
 
     if (!nowPlaying || nowPlaying.Source === 'STANDBY') {
         return html`<div class="now-playing standby">Standby</div>`;
@@ -121,7 +122,7 @@ export function NowPlaying({ nowPlaying, deviceId, presets }) {
                         <div class="progress-bar">
                             <div class="progress-fill" style="width:${pct}%"></div>
                         </div>
-                        <span class="progress-time">${fmt(position)} / ${fmt(total)}</span>
+                        <span class="progress-time">${fmt(Math.min(position, total))} / ${fmt(total)}</span>
                     </div>
                 `}
             </div>

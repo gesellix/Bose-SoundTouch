@@ -71,6 +71,18 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 
 	go app.UpdateDeviceStatus(host, conn)
 
+	// Poll via HTTP every 30 s as a fallback for WebSocket events that the
+	// speaker does not emit (e.g. Spotify Connect track changes) and for the
+	// window between a WS disconnect and its reconnect.
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			app.UpdateDeviceStatus(host, conn)
+		}
+	}()
+
 	log.Printf("Added %s device %s (%s) at %s:%d", sanitizeLog(source), sanitizeLog(info.Name), sanitizeLog(info.Type), sanitizeLog(host), port)
 }
 

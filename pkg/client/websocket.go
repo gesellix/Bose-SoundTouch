@@ -241,6 +241,15 @@ func (ws *WebSocketClient) connectWithConfig(config *WebSocketConfig) error {
 	ws.conn = conn
 	ws.connected = true
 
+	// Extend the read deadline on every pong so the connection survives
+	// quiet periods between speaker events. Without this, the 60-second
+	// read deadline in readLoop fires reliably after one ping cycle (30 s
+	// ping interval + 5 s reconnect = ~65 s disconnect loop).
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	// Start background goroutines for connection management
 	go ws.readLoop(config)
 	go ws.pingLoop(config)
