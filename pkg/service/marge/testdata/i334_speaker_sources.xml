@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Real /sources capture from a SoundTouch 20 in issue #334 (v-tron's
+  bundle), sanitized: deviceID, the Spotify account, the StoredMusic GUID
+  and the owner e-mail are replaced with placeholders. The Bose built-in
+  placeholder account strings (QPlay1UserName, UPnPUserName, ...) are
+  preserved verbatim because they are structural, not PII, and matter to
+  the round-trip under test.
+
+  Note what this list does NOT contain: any INVALID_SOURCE entry. Every
+  source here is a legitimate, speaker-reported source. The round-trip
+  test feeds this clean list through the real import + /full build to see
+  whether AfterTouch itself emits something a speaker would reject.
+-->
+<sources deviceID="DEVICEID01">
+  <sourceItem source="AUX" sourceAccount="AUX" status="READY" isLocal="true" multiroomallowed="true">AUX IN</sourceItem>
+  <sourceItem source="STORED_MUSIC" sourceAccount="00000000-0000-0000-0000-000000000000/0" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">Meine Musikbibliothek</sourceItem>
+  <sourceItem source="NOTIFICATION" status="UNAVAILABLE" isLocal="false" multiroomallowed="true" />
+  <sourceItem source="QPLAY" sourceAccount="QPlay1UserName" status="UNAVAILABLE" isLocal="true" multiroomallowed="true">QPlay1UserName</sourceItem>
+  <sourceItem source="QPLAY" sourceAccount="QPlay2UserName" status="UNAVAILABLE" isLocal="true" multiroomallowed="true">QPlay2UserName</sourceItem>
+  <sourceItem source="UPNP" sourceAccount="UPnPUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">UPnPUserName</sourceItem>
+  <sourceItem source="SPOTIFY" sourceAccount="spotifyacct01" status="READY" isLocal="false" multiroomallowed="true">user@example.com</sourceItem>
+  <sourceItem source="ALEXA" status="READY" isLocal="false" multiroomallowed="true" />
+  <sourceItem source="SPOTIFY" sourceAccount="SpotifyConnectUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">SpotifyConnectUserName</sourceItem>
+  <sourceItem source="SPOTIFY" sourceAccount="SpotifyAlexaUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">SpotifyAlexaUserName</sourceItem>
+  <sourceItem source="STORED_MUSIC_MEDIA_RENDERER" sourceAccount="StoredMusicUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="true">StoredMusicUserName</sourceItem>
+  <sourceItem source="AIRPLAY" sourceAccount="AirPlay2DefaultUserName" status="UNAVAILABLE" isLocal="false" multiroomallowed="false">AirPlay2DefaultUserName</sourceItem>
+  <sourceItem source="BLUETOOTH" status="UNAVAILABLE" isLocal="true" multiroomallowed="true" />
+  <sourceItem source="TUNEIN" status="READY" isLocal="false" multiroomallowed="true" />
+  <sourceItem source="LOCAL_INTERNET_RADIO" status="READY" isLocal="false" multiroomallowed="true" />
+  <sourceItem source="RADIO_BROWSER" status="READY" isLocal="false" multiroomallowed="true" />
+</sources>

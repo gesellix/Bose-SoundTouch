@@ -22,6 +22,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/gesellix/bose-soundtouch/pkg/ssh"
 	"github.com/gesellix/bose-soundtouch/pkg/telnet"
 )
@@ -2728,6 +2729,13 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 				s.SourceKeyAccount = s.SourceKey.Account
 			}
 
+			// Drop device-local/transient sources without a resolvable
+			// sourceproviderid (e.g. STORED_MUSIC_MEDIA_RENDERER, UPNP).
+			// Persisting them causes /full to emit an empty
+			// <sourceproviderid> which the speaker rejects as INVALID_SOURCE
+			// (#334).
+			srs.Sources = filterServableSources(srs.Sources, deviceID)
+
 			_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, srs.Sources)
 
 			return
@@ -2774,8 +2782,39 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 			configuredSources = append(configuredSources, cs)
 		}
 
+		// Drop device-local/transient sources without a resolvable
+		// sourceproviderid (e.g. STORED_MUSIC_MEDIA_RENDERER, UPNP).
+		// Persisting them causes /full to emit an empty <sourceproviderid>
+		// which the speaker rejects as INVALID_SOURCE (#334).
+		configuredSources = filterServableSources(configuredSources, deviceID)
+
 		_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, configuredSources)
 	}
+}
+
+// filterServableSources returns a copy of srcs containing only sources that
+// have a resolvable sourceproviderid. Device-local / transient slots without
+// one (STORED_MUSIC_MEDIA_RENDERER, UPNP, INVALID_SOURCE, …) are silently
+// dropped and logged as a single summary line.
+func filterServableSources(srcs []models.ConfiguredSource, deviceID string) []models.ConfiguredSource {
+	var servable []models.ConfiguredSource
+
+	var dropped []string
+
+	for i := range srcs {
+		if marge.HasResolvableProviderID(srcs[i]) {
+			servable = append(servable, srcs[i])
+		} else {
+			dropped = append(dropped, sanitizeLog(srcs[i].SourceKeyType))
+		}
+	}
+
+	if len(dropped) > 0 {
+		log.Printf("[SYNC] device %s: dropping %d unresolvable source(s) on import (types: %v)",
+			sanitizeLog(deviceID), len(dropped), dropped)
+	}
+
+	return servable
 }
 
 // notifySpeakerSourcesUpdated POSTs the <sourcesUpdated/> notification

@@ -446,6 +446,12 @@ func TestSyncSourcesAggregation(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Sources include valid <sourceproviderid> values so that HasResolvableProviderID
+	// accepts them on import. Sources without a resolvable providerid are filtered
+	// before persistence (issue #334) — bare type="Audio" sources with no providerid
+	// would be dropped, exactly as device-local transient slots are. Use real
+	// providerids (LOCAL_INTERNET_RADIO=11, INTERNET_RADIO=2, TUNEIN=25) here so
+	// the aggregation assertion covers the path that actually reaches SaveConfiguredSources.
 	xmlData := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <account id="agg_account">
     <devices>
@@ -454,6 +460,7 @@ func TestSyncSourcesAggregation(t *testing.T) {
                 <preset buttonNumber="1">
                     <name>Preset Source</name>
                     <source id="src_preset" type="Audio">
+                        <sourceproviderid>11</sourceproviderid>
                         <name>Preset Source Name</name>
                     </source>
                 </preset>
@@ -464,6 +471,7 @@ func TestSyncSourcesAggregation(t *testing.T) {
                         <itemName>Recent Source</itemName>
                     </contentItem>
                     <source id="src_recent" type="Audio">
+                        <sourceproviderid>25</sourceproviderid>
                         <name>Recent Source Name</name>
                     </source>
                 </recent>
@@ -472,6 +480,7 @@ func TestSyncSourcesAggregation(t *testing.T) {
     </devices>
     <sources>
         <source id="src_account" type="Audio">
+            <sourceproviderid>2</sourceproviderid>
             <name>Account Source Name</name>
         </source>
     </sources>

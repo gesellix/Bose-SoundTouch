@@ -169,7 +169,29 @@ func syncConfiguredSources(ds *datastore.DataStore, accountID, deviceID string, 
 	// 4. Add deduction based on local presets/recents
 	ds.DeduceSourceIDs(accountID, deviceID, deviceSources)
 
-	if err := ds.SaveConfiguredSources(accountID, deviceID, deviceSources); err != nil {
+	// 5. Drop sources that cannot be assigned a canonical sourceproviderid.
+	// Device-local / transient slots (STORED_MUSIC_MEDIA_RENDERER, UPNP,
+	// INVALID_SOURCE, ...) have no StaticProviders entry; persisting them
+	// causes the serve path to emit an empty <sourceproviderid>, which the
+	// speaker rejects and re-reports as INVALID_SOURCE — the #334 loop.
+	var servable []models.ConfiguredSource
+
+	var dropped []string
+
+	for i := range deviceSources {
+		if HasResolvableProviderID(deviceSources[i]) {
+			servable = append(servable, deviceSources[i])
+		} else {
+			dropped = append(dropped, sanitizeLog(deviceSources[i].SourceKeyType))
+		}
+	}
+
+	if len(dropped) > 0 {
+		log.Printf("[SYNC] device %s: dropping %d unresolvable source(s) before save (types: %v)",
+			sanitizeLog(deviceID), len(dropped), dropped)
+	}
+
+	if err := ds.SaveConfiguredSources(accountID, deviceID, servable); err != nil {
 		log.Printf("[SYNC_ERR] Failed to save sources for %s: %v", sanitizeLog(deviceID), err)
 	}
 }

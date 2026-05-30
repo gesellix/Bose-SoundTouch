@@ -422,11 +422,18 @@ func TestMargeAccountSources(t *testing.T) {
 	deviceDir := filepath.Join(tempDir, "accounts", account, "devices", deviceID)
 	_ = os.MkdirAll(deviceDir, 0755)
 
-	// Mock Sources.xml
+	// Mock Sources.xml. PANDORA is used because (a) it maps to a
+	// constants.StaticProviders entry, so HasResolvableProviderID accepts it
+	// and ensureSourceProviderID fills its providerid — sources with no
+	// resolvable providerid are now filtered before serving, since the speaker
+	// rejects an empty <sourceproviderid> as INVALID_SOURCE (issue #334); and
+	// (b) it is not one of the username-blanking types
+	// (TUNEIN/INTERNET_RADIO/LOCAL_INTERNET_RADIO), so the serve path still
+	// emits <username>, keeping that assertion meaningful.
 	sourcesXML := `
 		<sources>
-			<source id="SRC1" type="Audio" createdOn="2024-01-01T00:00:00Z" updatedOn="2024-01-01T00:00:00Z" displayName="Source1" secret="TOKEN1" secretType="token" sourceProviderId="2" sourceName="SourceName1">
-				<sourceKey type="NOT_TUNEIN" account="User1"/>
+			<source id="SRC1" type="Audio" createdOn="2024-01-01T00:00:00Z" updatedOn="2024-01-01T00:00:00Z" displayName="Source1" secret="TOKEN1" secretType="token" sourceName="SourceName1">
+				<sourceKey type="PANDORA" account="User1"/>
 			</source>
 		</sources>`
 	_ = os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte(sourcesXML), 0644)
@@ -456,7 +463,7 @@ func TestMargeAccountSources(t *testing.T) {
 		t.Errorf("Response missing expected source ID: %s", bodyStr)
 	}
 
-	// Verify current XML structure produced by marge.go
+	// Verify current XML structure produced by marge.go.
 	expectedSnippets := []string{
 		"<sources>",
 		"<source id=\"SRC1\" type=\"Audio\"",

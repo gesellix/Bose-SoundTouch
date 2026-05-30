@@ -118,13 +118,45 @@ func ensureSourceType(s *models.ConfiguredSource) {
 	}
 }
 
+// canonicalProviderIDByName returns the canonical sourceproviderid for a
+// symbolic source-key type ("TUNEIN", "SPOTIFY", ...) via constants.StaticProviders.
+// Returns the provider ID as a decimal string and ok=true on match, ("", false) otherwise.
+func canonicalProviderIDByName(name string) (string, bool) {
+	for _, p := range constants.StaticProviders {
+		if p.Name == name {
+			return strconv.Itoa(p.ID), true
+		}
+	}
+
+	return "", false
+}
+
+// HasResolvableProviderID reports whether s can be given a canonical
+// sourceproviderid — it already carries one, or its source-key type maps to a
+// constants.StaticProviders entry. Sources without one are device-local /
+// transient slots (STORED_MUSIC_MEDIA_RENDERER, UPNP, the INVALID_SOURCE
+// sentinel, ...) that a speaker rejects as INVALID_SOURCE (issue #334); they
+// must not be persisted for, or served to, a speaker.
+func HasResolvableProviderID(s models.ConfiguredSource) bool {
+	if s.SourceProviderID != "" {
+		return true
+	}
+
+	if _, ok := canonicalProviderIDByName(s.SourceKey.Type); ok {
+		return true
+	}
+
+	if _, ok := canonicalProviderIDByName(s.SourceKeyType); ok {
+		return true
+	}
+
+	return false
+}
+
 func ensureSourceProviderID(s *models.ConfiguredSource) {
 	if s.SourceProviderID == "" && s.SourceKey.Type != "" {
-		for _, p := range constants.StaticProviders {
-			if p.Name == s.SourceKey.Type {
-				s.SourceProviderID = strconv.Itoa(p.ID)
-				break
-			}
+		if id, ok := canonicalProviderIDByName(s.SourceKey.Type); ok {
+			s.SourceProviderID = id
 		}
 	}
 }
@@ -1253,7 +1285,16 @@ func getAccountSources(ds *datastore.DataStore, account, lastDeviceID string) []
 		}
 
 		PrepareConfiguredSource(&s)
-		fullSources = append(fullSources, mapToFullResponseSource(s))
+
+		fs := mapToFullResponseSource(s)
+		if fs.SourceProviderID == "" {
+			log.Printf("[Marge] /full: omitting source name=%q (sourceKey type %q) — no resolvable sourceproviderid; would be rejected as INVALID_SOURCE",
+				sanitizeLog(fs.Name), sanitizeLog(s.SourceKeyType))
+
+			continue
+		}
+
+		fullSources = append(fullSources, fs)
 	}
 
 	return fullSources
