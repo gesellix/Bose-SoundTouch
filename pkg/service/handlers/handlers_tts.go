@@ -27,13 +27,20 @@ type ttsSpeakRequest struct {
 	Voice    string `json:"voice,omitempty"`
 	Format   string `json:"format,omitempty"`
 	Volume   *int   `json:"volume,omitempty"`
+	// Method selects how the clip is played on the speaker:
+	//   "radio"   (default) — LOCAL_INTERNET_RADIO via /custom/v1/playback,
+	//                          no app_key; replaces the current source.
+	//   "speaker"           — POST /speaker notification; ducks and resumes
+	//                          the current playback, supports volume, but
+	//                          requires the speaker to accept the app_key
+	//                          (validated via GET /v1/auth, which we answer 200).
+	Method string `json:"method,omitempty"`
 }
 
-// HandleTTSSpeak synthesizes the requested text, then tells the target speaker
-// to play it as a LOCAL_INTERNET_RADIO ContentItem via the /custom/v1/playback
-// proxy. This is the same path the "ding" health check uses and, unlike the
-// /speaker notification endpoint, needs no Bose app_key (which speakers
-// validate against the now-dead Bose cloud).
+// HandleTTSSpeak synthesizes the requested text and plays it on the target
+// speaker. Two playback methods (see ttsSpeakRequest.Method): the default
+// LOCAL_INTERNET_RADIO path (like the "ding", no app_key) or the /speaker
+// notification path (ducks/resumes and supports volume).
 func (s *Server) HandleTTSSpeak(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -71,20 +78,50 @@ func (s *Server) HandleTTSSpeak(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	location := buildCustomPlaybackURL(svc.BaseURL(), playURL, "AfterTouch TTS: "+req.Text)
-
 	c := client.NewClientFromHost(host)
-	if err := c.SelectLocalInternetRadio(location, "", "AfterTouch TTS", ""); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, "play: "+err.Error()), http.StatusBadGateway)
-		return
+	method := strings.ToLower(strings.TrimSpace(req.Method))
+
+	resp := map[string]interface{}{"status": "ok", "host": host, "url": playURL}
+
+	switch method {
+	case "speaker":
+		appKey := svc.AppKey()
+		if appKey == "" {
+			// The speaker validates the app_key via GET /v1/auth, which we
+			// answer 200 regardless, so any non-empty value works.
+			appKey = "aftertouch"
+		}
+
+		volume := svc.DefaultVolume()
+		if req.Volume != nil {
+			volume = *req.Volume
+		}
+
+		var playErr error
+		if volume > 0 {
+			playErr = c.PlayURL(playURL, appKey, "AfterTouch TTS", req.Text, "", volume)
+		} else {
+			playErr = c.PlayURL(playURL, appKey, "AfterTouch TTS", req.Text, "")
+		}
+
+		if playErr != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, "play (speaker): "+playErr.Error()), http.StatusBadGateway)
+			return
+		}
+
+		resp["method"] = "speaker"
+	default: // "radio" or unset
+		location := buildCustomPlaybackURL(svc.BaseURL(), playURL, "AfterTouch TTS: "+req.Text)
+		if err := c.SelectLocalInternetRadio(location, "", "AfterTouch TTS", ""); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, "play (radio): "+err.Error()), http.StatusBadGateway)
+			return
+		}
+
+		resp["method"] = "radio"
+		resp["location"] = location
 	}
 
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":   "ok",
-		"host":     host,
-		"url":      playURL,
-		"location": location,
-	}); err != nil {
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }

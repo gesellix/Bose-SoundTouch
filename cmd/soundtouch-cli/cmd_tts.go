@@ -63,7 +63,12 @@ func ttsSpeakCmd() *cli.Command {
 			&cli.IntFlag{
 				Name:    "volume",
 				Aliases: []string{"v"},
-				Usage:   "Playback volume (0-100, 0 = service default)",
+				Usage:   "Playback volume (0-100, 0 = service default; only honoured by --method speaker)",
+			},
+			&cli.StringFlag{
+				Name:  "method",
+				Usage: "Playback method: 'radio' (LOCAL_INTERNET_RADIO, no app_key, replaces source) or 'speaker' (/speaker notification, ducks+resumes, supports volume)",
+				Value: "radio",
 			},
 		),
 		Action: ttsSpeak,
@@ -98,6 +103,10 @@ func ttsSpeak(c *cli.Context) error {
 
 	if c.IsSet("volume") {
 		payload["volume"] = c.Int("volume")
+	}
+
+	if m := c.String("method"); m != "" {
+		payload["method"] = m
 	}
 
 	body, err := json.Marshal(payload)
