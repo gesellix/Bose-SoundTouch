@@ -29,19 +29,12 @@ func (app *WebApp) HandleAPISpeakText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if app.ServiceURL == "" {
-		app.sendError(w,
-			"TTS requires the AfterTouch service. Start soundtouch-web with --service-url <https://your-aftertouch-host>.",
-			http.StatusBadRequest)
-
-		return
-	}
-
 	var req struct {
-		Text     string `json:"text"`
-		Language string `json:"language,omitempty"`
-		Voice    string `json:"voice,omitempty"`
-		Volume   *int   `json:"volume,omitempty"`
+		Text       string `json:"text"`
+		Language   string `json:"language,omitempty"`
+		Voice      string `json:"voice,omitempty"`
+		Volume     *int   `json:"volume,omitempty"`
+		ServiceURL string `json:"serviceUrl,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -51,6 +44,20 @@ func (app *WebApp) HandleAPISpeakText(w http.ResponseWriter, r *http.Request) {
 
 	if strings.TrimSpace(req.Text) == "" {
 		app.sendError(w, "text is required", http.StatusBadRequest)
+		return
+	}
+
+	// Server-side --service-url wins; fall back to the client-supplied value.
+	serviceURL := app.ServiceURL
+	if serviceURL == "" {
+		serviceURL = strings.TrimRight(req.ServiceURL, "/")
+	}
+
+	if serviceURL == "" {
+		app.sendError(w,
+			"TTS requires the AfterTouch service URL. Start soundtouch-web with --service-url <https://your-aftertouch-host> or enter it in the TTS settings.",
+			http.StatusBadRequest)
+
 		return
 	}
 
@@ -76,7 +83,7 @@ func (app *WebApp) HandleAPISpeakText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream, err := http.NewRequestWithContext(r.Context(), http.MethodPost, app.ServiceURL+"/mgmt/tts/speak", bytes.NewReader(body))
+	upstream, err := http.NewRequestWithContext(r.Context(), http.MethodPost, serviceURL+"/mgmt/tts/speak", bytes.NewReader(body))
 	if err != nil {
 		app.sendError(w, "Failed to build TTS request", http.StatusInternalServerError)
 		return

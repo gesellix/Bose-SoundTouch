@@ -30,7 +30,6 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/gesellix/bose-soundtouch/pkg/service/stockholm"
-	"github.com/gesellix/bose-soundtouch/pkg/service/tts"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/urfave/cli/v2"
@@ -177,44 +176,21 @@ func initMusicServices(config serviceConfig, server *handlers.Server) {
 	}
 }
 
-// initTTSService builds the text-to-speech service from config and registers it
-// on the server. The Translate provider needs no credentials; the Google Cloud
-// provider needs an API key. The clip cache (for synthesized audio) lives on the
-// service and is served via GET /media/tts/{id}.
+// initTTSService loads the text-to-speech configuration onto the server and
+// builds the running service. The provider construction and (re)build logic
+// lives on the server so the settings UI can re-apply changes at runtime; see
+// handlers.Server.ReinitTTSService.
 func initTTSService(config serviceConfig, server *handlers.Server) {
-	var provider tts.Provider
-
-	switch config.ttsProvider {
-	case tts.ProviderGoogleCloud:
-		if config.ttsGoogleAPIKey == "" {
-			log.Printf("[TTS] Provider 'google-cloud' selected but no --tts-google-api-key set; synthesis will fail until one is provided")
-		}
-
-		cloud := tts.NewCloudProvider(config.ttsGoogleAPIKey)
-		if config.ttsGoogleEndpoint != "" {
-			cloud.SetEndpoint(config.ttsGoogleEndpoint)
-		}
-
-		provider = cloud
-	case tts.ProviderTranslate, "":
-		provider = tts.NewTranslateProvider()
-	default:
-		log.Printf("[TTS] Unknown provider %q; falling back to 'translate'", sanitizeLog(config.ttsProvider))
-
-		provider = tts.NewTranslateProvider()
-	}
-
-	svc := tts.NewService(provider, tts.Config{
-		BaseURL:         config.serverURL,
-		AppKey:          config.ttsAppKey,
-		DefaultLanguage: config.ttsLanguage,
-		DefaultVoice:    config.ttsVoice,
-		DefaultVolume:   config.ttsVolume,
-	})
-
-	server.SetTTSService(svc)
-
-	log.Printf("TTS service initialized (provider: %s)", provider.Name())
+	server.SetTTSConfig(
+		config.ttsProvider,
+		config.ttsGoogleAPIKey,
+		config.ttsGoogleEndpoint,
+		config.ttsAppKey,
+		config.ttsLanguage,
+		config.ttsVoice,
+		config.ttsVolume,
+	)
+	server.ReinitTTSService()
 }
 
 // logBufferCapacityFromEnv reads SOUNDTOUCH_LOG_BUFFER_LINES and
@@ -401,8 +377,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "tts-provider",
-				Usage:   "Text-to-speech provider: 'translate' (Google Translate, no credentials) or 'google-cloud' (Google Cloud TTS, needs an API key)",
-				Value:   "translate",
+				Usage:   "Text-to-speech provider: 'translate' (Google Translate, no credentials, default) or 'google-cloud' (Google Cloud TTS, needs an API key). Empty falls back to translate; leave unset to let a value saved in the settings UI take effect",
 				EnvVars: []string{"TTS_PROVIDER"},
 			},
 			&cli.StringFlag{
@@ -998,6 +973,30 @@ func applyPersistedMusicServiceCredentials(config *serviceConfig, persisted data
 
 	if config.amazonRedirectURI == "" {
 		config.amazonRedirectURI = persisted.AmazonRedirectURI
+	}
+
+	if config.ttsProvider == "" {
+		config.ttsProvider = persisted.TTSProvider
+	}
+
+	if config.ttsGoogleAPIKey == "" {
+		config.ttsGoogleAPIKey = persisted.TTSGoogleAPIKey
+	}
+
+	if config.ttsAppKey == "" {
+		config.ttsAppKey = persisted.TTSAppKey
+	}
+
+	if config.ttsLanguage == "" {
+		config.ttsLanguage = persisted.TTSLanguage
+	}
+
+	if config.ttsVoice == "" {
+		config.ttsVoice = persisted.TTSVoice
+	}
+
+	if config.ttsVolume == 0 {
+		config.ttsVolume = persisted.TTSVolume
 	}
 }
 

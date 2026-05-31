@@ -2464,6 +2464,12 @@ type Settings struct {
 	AmazonClientID      string         `json:"amazon_client_id,omitempty"`
 	AmazonClientSecret  string         `json:"amazon_client_secret,omitempty"`
 	AmazonRedirectURI   string         `json:"amazon_redirect_uri,omitempty"`
+	TTSProvider         string         `json:"tts_provider,omitempty"`
+	TTSGoogleAPIKey     string         `json:"tts_google_api_key,omitempty"`
+	TTSAppKey           string         `json:"tts_app_key,omitempty"`
+	TTSLanguage         string         `json:"tts_language,omitempty"`
+	TTSVoice            string         `json:"tts_voice,omitempty"`
+	TTSVolume           int            `json:"tts_volume,omitempty"`
 
 	// TrustForwardedHeaders enables proxy-aware client IP resolution: when the
 	// immediate TCP peer is one of the TrustedProxyCIDRs, the X-Real-IP /

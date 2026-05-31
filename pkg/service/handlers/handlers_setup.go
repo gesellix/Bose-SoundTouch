@@ -164,6 +164,13 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	amazonClientID := s.amazonClientID
 	amazonClientSecret := s.amazonClientSecret
 	amazonRedirectURI := s.amazonRedirectURI
+	ttsConfigured := s.ttsConfigured()
+	ttsProvider := s.ttsProvider
+	ttsGoogleAPIKey := s.ttsGoogleAPIKey
+	ttsAppKey := s.ttsAppKey
+	ttsLanguage := s.ttsLanguage
+	ttsVoice := s.ttsVoice
+	ttsVolume := s.ttsVolume
 	s.mu.RUnlock()
 
 	dnsRunning, actualBind := s.GetDNSRunning()
@@ -186,6 +193,20 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 
 	if amazonClientSecret != "" {
 		amazonClientSecret = "***"
+	}
+
+	// Default the provider for display so the UI shows "translate" rather than
+	// an empty selection when nothing has been configured yet.
+	if ttsProvider == "" {
+		ttsProvider = "translate"
+	}
+
+	if ttsGoogleAPIKey != "" {
+		ttsGoogleAPIKey = "***"
+	}
+
+	if ttsAppKey != "" {
+		ttsAppKey = "***"
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -224,6 +245,13 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"amazon_client_id":              amazonClientID,
 		"amazon_client_secret":          amazonClientSecret,
 		"amazon_redirect_uri":           amazonRedirectURI,
+		"tts_configured":                ttsConfigured,
+		"tts_provider":                  ttsProvider,
+		"tts_google_api_key":            ttsGoogleAPIKey,
+		"tts_app_key":                   ttsAppKey,
+		"tts_language":                  ttsLanguage,
+		"tts_voice":                     ttsVoice,
+		"tts_volume":                    ttsVolume,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -247,6 +275,12 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		AmazonClientID      string         `json:"amazon_client_id"`
 		AmazonClientSecret  string         `json:"amazon_client_secret"`
 		AmazonRedirectURI   string         `json:"amazon_redirect_uri"`
+		TTSProvider         string         `json:"tts_provider"`
+		TTSGoogleAPIKey     string         `json:"tts_google_api_key"`
+		TTSAppKey           string         `json:"tts_app_key"`
+		TTSLanguage         string         `json:"tts_language"`
+		TTSVoice            string         `json:"tts_voice"`
+		TTSVolume           int            `json:"tts_volume"`
 		TLSExtraHosts       *[]string      `json:"tls_extra_hosts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
@@ -320,6 +354,12 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		settings.AmazonClientID, settings.AmazonClientSecret, settings.AmazonRedirectURI,
 	)
 
+	// Update TTS config (empty/"***" secrets mean "unchanged").
+	s.applyTTSConfig(
+		settings.TTSProvider, settings.TTSGoogleAPIKey, settings.TTSAppKey,
+		settings.TTSLanguage, settings.TTSVoice, settings.TTSVolume,
+	)
+
 	// Persist to datastore
 	// Access fields directly since we already hold the lock
 	currentRedact := s.redactLogs
@@ -354,6 +394,12 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		AmazonClientID:      s.amazonClientID,
 		AmazonClientSecret:  s.amazonClientSecret,
 		AmazonRedirectURI:   s.amazonRedirectURI,
+		TTSProvider:         s.ttsProvider,
+		TTSGoogleAPIKey:     s.ttsGoogleAPIKey,
+		TTSAppKey:           s.ttsAppKey,
+		TTSLanguage:         s.ttsLanguage,
+		TTSVoice:            s.ttsVoice,
+		TTSVolume:           s.ttsVolume,
 		TLSExtraHosts:       resolvedTLSExtraHosts,
 	})
 
@@ -374,6 +420,10 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if reinitAmazon {
 		s.ReinitAmazonService()
 	}
+
+	// TTS always has a usable provider (translate needs no credentials), so
+	// rebuild unconditionally to pick up any provider/key/app-key change.
+	s.ReinitTTSService()
 
 	if err != nil {
 		http.Error(w, "Failed to save settings: "+err.Error(), http.StatusInternalServerError)

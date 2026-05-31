@@ -1,17 +1,37 @@
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 
 const html = htm.bind(h);
 
+// Shared with PlayURL so the AfterTouch service URL only has to be entered once.
+const LS_KEY = 'aftertouch_service_url';
+
 // TTS is a "source" view (like PlayURL / TuneIn / RadioBrowser): enter text,
 // pick a device, and the AfterTouch service synthesizes and plays it. Synthesis
-// and credentials live in the service; this just collects text and a target.
-export function TTS({ devices }) {
+// and credentials live in the service; this collects text, a target, and the
+// service URL (the service hosts synthesized clips for the speaker to fetch).
+export function TTS({ devices, serverServiceUrl }) {
     const [text, setText] = useState('');
+    const [serviceUrl, setServiceUrl] = useState(() => localStorage.getItem(LS_KEY) || '');
     const [pendingSpeak, setPendingSpeak] = useState(null);
     const [status, setStatus] = useState(null);
+
+    useEffect(() => {
+        if (serverServiceUrl && !localStorage.getItem(LS_KEY)) {
+            setServiceUrl(serverServiceUrl);
+        }
+    }, [serverServiceUrl]);
+
+    function onServiceUrlChange(val) {
+        setServiceUrl(val);
+        if (val) {
+            localStorage.setItem(LS_KEY, val);
+        } else {
+            localStorage.removeItem(LS_KEY);
+        }
+    }
 
     function startSpeak() {
         const trimmed = text.trim();
@@ -25,7 +45,7 @@ export function TTS({ devices }) {
         setPendingSpeak(null);
         setStatus('Speaking…');
         try {
-            const resp = await api.speak(deviceId, item.text);
+            const resp = await api.speak(deviceId, item.text, serviceUrl.trim());
             setStatus(resp.success ? 'Speaking' : 'Error: ' + (resp.error || 'Unknown error'));
         } catch (e) {
             setStatus('Error: ' + e.message);
@@ -47,8 +67,18 @@ export function TTS({ devices }) {
                 />
                 <button class="btn-primary" onClick=${startSpeak} disabled=${!text.trim()}>🔊 Speak</button>
             </div>
+            <div class="tunein-toolbar" style="margin-top:.4rem">
+                <input
+                    type="url"
+                    class="tunein-search-input"
+                    placeholder="AfterTouch URL (https://…)"
+                    value=${serviceUrl}
+                    onInput=${(e) => onServiceUrlChange(e.target.value)}
+                    title="AfterTouch service base URL — the service synthesizes speech and hosts the clip for the speaker to play"
+                />
+            </div>
             <div class="track-meta" style="margin-top:.4rem">
-                Uses the AfterTouch service's configured TTS provider. Requires soundtouch-web to be started with --service-url.
+                Uses the AfterTouch service's configured TTS provider (Settings → Integrations).
             </div>
             ${status && html`<div class="track-meta" style="margin-top:.6rem">${status}</div>`}
 

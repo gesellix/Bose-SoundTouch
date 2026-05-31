@@ -278,39 +278,93 @@
             </div>
         </div>
         <div style="margin-bottom: 20px">
-            <strong>Spotify Integration:</strong>
-            <div style="margin-top: 8px; margin-left: 20px">
-                <div style="margin-bottom: 8px">
-                    <label for="spotify-client-id" style="display: inline-block; width: 130px">Client ID:</label>
-                    <input type="text" id="spotify-client-id" placeholder="32-char hex string" style="width: 280px"/>
-                </div>
-                <div style="margin-bottom: 8px">
-                    <label for="spotify-client-secret" style="display: inline-block; width: 130px">Client Secret:</label>
-                    <input type="password" id="spotify-client-secret" placeholder="(leave blank to keep existing)" style="width: 280px"/>
-                </div>
-                <div style="margin-bottom: 8px">
-                    <label for="spotify-redirect-uri" style="display: inline-block; width: 130px">Redirect URI:</label>
-                    <input type="text" id="spotify-redirect-uri" placeholder="<your-service-url>/mgmt/spotify/callback" style="width: 280px"/>
-                </div>
-                <div id="spotify-config-status" style="margin-top: 5px; font-size: 0.9em">Checking configuration...</div>
-            </div>
-        </div>
-        <div style="margin-bottom: 20px">
-            <strong>Amazon Music Integration:</strong>
-            <div style="margin-top: 8px; margin-left: 20px">
-                <div style="margin-bottom: 8px">
-                    <label for="amazon-client-id" style="display: inline-block; width: 130px">Client ID:</label>
-                    <input type="text" id="amazon-client-id" placeholder="amzn1.application-oa2-client..." style="width: 280px"/>
-                </div>
-                <div style="margin-bottom: 8px">
-                    <label for="amazon-client-secret" style="display: inline-block; width: 130px">Client Secret:</label>
-                    <input type="password" id="amazon-client-secret" placeholder="(leave blank to keep existing)" style="width: 280px"/>
-                </div>
-                <div style="margin-bottom: 8px">
-                    <label for="amazon-redirect-uri" style="display: inline-block; width: 130px">Redirect URI:</label>
-                    <input type="text" id="amazon-redirect-uri" placeholder="<your-service-url>/mgmt/amazon/callback" style="width: 280px"/>
-                </div>
-                <div id="amazon-config-status" style="margin-top: 5px; font-size: 0.9em">Checking configuration...</div>
+            <strong>Integrations:</strong>
+            <div style="margin-top: 8px">
+                <details class="integration-panel" id="panel-spotify">
+                    <summary class="integration-summary">
+                        <span class="integration-name">Spotify</span>
+                        <span class="integration-badge" id="spotify-badge">…</span>
+                    </summary>
+                    <div class="integration-body">
+                        <div style="margin-bottom: 8px">
+                            <label for="spotify-client-id" style="display: inline-block; width: 130px">Client ID:</label>
+                            <input type="text" id="spotify-client-id" placeholder="32-char hex string" style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="spotify-client-secret" style="display: inline-block; width: 130px">Client Secret:</label>
+                            <input type="password" id="spotify-client-secret" placeholder="(leave blank to keep existing)" style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="spotify-redirect-uri" style="display: inline-block; width: 130px">Redirect URI:</label>
+                            <input type="text" id="spotify-redirect-uri" placeholder="<your-service-url>/mgmt/spotify/callback" style="width: 280px"/>
+                        </div>
+                        <div id="spotify-config-status" style="margin-top: 5px; font-size: 0.9em">Checking configuration...</div>
+                    </div>
+                </details>
+
+                <details class="integration-panel" id="panel-amazon">
+                    <summary class="integration-summary">
+                        <span class="integration-name">Amazon Music</span>
+                        <span class="integration-badge" id="amazon-badge">…</span>
+                    </summary>
+                    <div class="integration-body">
+                        <div style="margin-bottom: 8px">
+                            <label for="amazon-client-id" style="display: inline-block; width: 130px">Client ID:</label>
+                            <input type="text" id="amazon-client-id" placeholder="amzn1.application-oa2-client..." style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="amazon-client-secret" style="display: inline-block; width: 130px">Client Secret:</label>
+                            <input type="password" id="amazon-client-secret" placeholder="(leave blank to keep existing)" style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="amazon-redirect-uri" style="display: inline-block; width: 130px">Redirect URI:</label>
+                            <input type="text" id="amazon-redirect-uri" placeholder="<your-service-url>/mgmt/amazon/callback" style="width: 280px"/>
+                        </div>
+                        <div id="amazon-config-status" style="margin-top: 5px; font-size: 0.9em">Checking configuration...</div>
+                    </div>
+                </details>
+
+                <details class="integration-panel" id="panel-tts">
+                    <summary class="integration-summary">
+                        <span class="integration-name">Google Cloud TTS</span>
+                        <span class="integration-badge" id="tts-badge">…</span>
+                    </summary>
+                    <div class="integration-body">
+                        <div style="font-size: 0.85em; color: #555; max-width: 600px; margin-bottom: 8px">
+                            Text-to-speech for speaker announcements. The <em>translate</em> provider needs no
+                            credentials; <em>google-cloud</em> needs an API key. Either way, an app key is required to
+                            play on the speaker (see the <strong>Speaker endpoint</strong> docs).
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="tts-provider" style="display: inline-block; width: 130px">Provider:</label>
+                            <select id="tts-provider" style="width: 285px">
+                                <option value="translate">Google Translate (no credentials)</option>
+                                <option value="google-cloud">Google Cloud TTS (API key)</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="tts-google-api-key" style="display: inline-block; width: 130px">Google API Key:</label>
+                            <input type="password" id="tts-google-api-key" placeholder="(leave blank to keep existing)" style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="tts-app-key" style="display: inline-block; width: 130px">Speaker app_key:</label>
+                            <input type="password" id="tts-app-key" placeholder="(leave blank to keep existing)" style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="tts-language" style="display: inline-block; width: 130px">Default language:</label>
+                            <input type="text" id="tts-language" placeholder="EN (translate) or en-US (google-cloud)" style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="tts-voice" style="display: inline-block; width: 130px">Default voice:</label>
+                            <input type="text" id="tts-voice" placeholder="e.g. en-US-Neural2-C (google-cloud only)" style="width: 280px"/>
+                        </div>
+                        <div style="margin-bottom: 8px">
+                            <label for="tts-volume" style="display: inline-block; width: 130px">Default volume:</label>
+                            <input type="number" id="tts-volume" min="0" max="100" placeholder="0 = keep current" style="width: 100px"/>
+                        </div>
+                        <div id="tts-config-status" style="margin-top: 5px; font-size: 0.9em">Checking configuration...</div>
+                    </div>
+                </details>
             </div>
         </div>
         <div style="margin-bottom: 20px">

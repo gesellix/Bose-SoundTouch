@@ -228,6 +228,21 @@ async function primeSpotify(deviceId) {
     }
 }
 
+// setIntegrationBadge updates the Active/Saved/Inactive pill shown in an
+// integration panel's summary (visible even when the panel is collapsed).
+function setIntegrationBadge(id, state) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const map = {
+        active: {cls: "badge-active", text: "✅ Active"},
+        saved: {cls: "badge-saved", text: "⚠ Saved — re-save to apply"},
+        inactive: {cls: "badge-inactive", text: "❌ Inactive"},
+    };
+    const m = map[state] || map.inactive;
+    el.className = "integration-badge " + m.cls;
+    el.textContent = m.text;
+}
+
 async function fetchSettings() {
     try {
         const response = await fetch("/setup/settings");
@@ -351,14 +366,15 @@ async function fetchSettings() {
             document.getElementById("spotify-redirect-uri").value = settings.spotify_redirect_uri || "";
         }
         const spotifyStatus = document.getElementById("spotify-config-status");
-        if (spotifyStatus) {
-            if (settings.spotify_configured) {
-                spotifyStatus.innerHTML = '<span style="color: green;">✅ Active</span>';
-            } else if (settings.spotify_client_id) {
-                spotifyStatus.innerHTML = '<span style="color: orange;">⚠ Credentials saved — restart or re-save to activate</span>';
-            } else {
-                spotifyStatus.innerHTML = '<span style="color: #666;">❌ Not configured</span>';
-            }
+        if (settings.spotify_configured) {
+            if (spotifyStatus) spotifyStatus.innerHTML = '<span style="color: green;">✅ Active</span>';
+            setIntegrationBadge("spotify-badge", "active");
+        } else if (settings.spotify_client_id) {
+            if (spotifyStatus) spotifyStatus.innerHTML = '<span style="color: orange;">⚠ Credentials saved — restart or re-save to activate</span>';
+            setIntegrationBadge("spotify-badge", "saved");
+        } else {
+            if (spotifyStatus) spotifyStatus.innerHTML = '<span style="color: #666;">❌ Not configured</span>';
+            setIntegrationBadge("spotify-badge", "inactive");
         }
 
         // Amazon credential fields
@@ -370,14 +386,40 @@ async function fetchSettings() {
             document.getElementById("amazon-redirect-uri").value = settings.amazon_redirect_uri || "";
         }
         const amazonStatus = document.getElementById("amazon-config-status");
-        if (amazonStatus) {
-            if (settings.amazon_configured) {
-                amazonStatus.innerHTML = '<span style="color: green;">✅ Active</span>';
-            } else if (settings.amazon_client_id) {
-                amazonStatus.innerHTML = '<span style="color: orange;">⚠ Credentials saved — restart or re-save to activate</span>';
-            } else {
-                amazonStatus.innerHTML = '<span style="color: #666;">❌ Not configured</span>';
-            }
+        if (settings.amazon_configured) {
+            if (amazonStatus) amazonStatus.innerHTML = '<span style="color: green;">✅ Active</span>';
+            setIntegrationBadge("amazon-badge", "active");
+        } else if (settings.amazon_client_id) {
+            if (amazonStatus) amazonStatus.innerHTML = '<span style="color: orange;">⚠ Credentials saved — restart or re-save to activate</span>';
+            setIntegrationBadge("amazon-badge", "saved");
+        } else {
+            if (amazonStatus) amazonStatus.innerHTML = '<span style="color: #666;">❌ Not configured</span>';
+            setIntegrationBadge("amazon-badge", "inactive");
+        }
+
+        // TTS fields (secrets are masked server-side; leave password inputs blank)
+        if (settings.tts_provider !== undefined) {
+            document.getElementById("tts-provider").value = settings.tts_provider || "translate";
+        }
+        document.getElementById("tts-google-api-key").value = "";
+        document.getElementById("tts-app-key").value = "";
+        if (settings.tts_language !== undefined) {
+            document.getElementById("tts-language").value = settings.tts_language || "";
+        }
+        if (settings.tts_voice !== undefined) {
+            document.getElementById("tts-voice").value = settings.tts_voice || "";
+        }
+        if (settings.tts_volume !== undefined) {
+            document.getElementById("tts-volume").value = settings.tts_volume || 0;
+        }
+        const ttsStatus = document.getElementById("tts-config-status");
+        if (settings.tts_configured) {
+            if (ttsStatus) ttsStatus.innerHTML = '<span style="color: green;">✅ Active (' + (settings.tts_provider || "translate") + ")</span>";
+            setIntegrationBadge("tts-badge", "active");
+        } else {
+            const need = settings.tts_provider === "google-cloud" ? "an app_key and a Google API key" : "an app_key";
+            if (ttsStatus) ttsStatus.innerHTML = '<span style="color: #666;">❌ Not active — set ' + need + "</span>";
+            setIntegrationBadge("tts-badge", "inactive");
         }
 
         fetchLoggingSettings();
@@ -434,6 +476,12 @@ async function updateSettings() {
         amazon_client_id: document.getElementById("amazon-client-id").value,
         amazon_client_secret: document.getElementById("amazon-client-secret").value,
         amazon_redirect_uri: document.getElementById("amazon-redirect-uri").value,
+        tts_provider: document.getElementById("tts-provider").value,
+        tts_google_api_key: document.getElementById("tts-google-api-key").value,
+        tts_app_key: document.getElementById("tts-app-key").value,
+        tts_language: document.getElementById("tts-language").value,
+        tts_voice: document.getElementById("tts-voice").value,
+        tts_volume: parseInt(document.getElementById("tts-volume").value, 10) || 0,
         tls_extra_hosts: document
             .getElementById("tls-extra-hosts")
             .value.split("\n")

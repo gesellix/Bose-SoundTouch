@@ -68,6 +68,13 @@ type Server struct {
 	amazonRedirectURI   string
 	amazonService       *amazon.Service
 	ttsService          *tts.Service
+	ttsProvider         string
+	ttsGoogleAPIKey     string
+	ttsGoogleEndpoint   string // test-only override; not exposed in the UI
+	ttsAppKey           string
+	ttsLanguage         string
+	ttsVoice            string
+	ttsVolume           int
 	peerObserver        *peerObserver
 	healthRegistry      *health.Registry
 	logBuf              *logbuf.Buffer
@@ -775,6 +782,110 @@ func (s *Server) ttsSvc() *tts.Service {
 	defer s.mu.RUnlock()
 
 	return s.ttsService
+}
+
+// SetTTSConfig sets the text-to-speech configuration. An empty endpoint keeps
+// the production default. Call ReinitTTSService afterwards to (re)build the
+// running service from this config.
+func (s *Server) SetTTSConfig(provider, googleAPIKey, googleEndpoint, appKey, language, voice string, volume int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.ttsProvider = provider
+	s.ttsGoogleAPIKey = googleAPIKey
+	s.ttsGoogleEndpoint = googleEndpoint
+	s.ttsAppKey = appKey
+	s.ttsLanguage = language
+	s.ttsVoice = voice
+	s.ttsVolume = volume
+}
+
+// GetTTSConfig returns the current text-to-speech configuration.
+func (s *Server) GetTTSConfig() (provider, googleAPIKey, appKey, language, voice string, volume int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.ttsProvider, s.ttsGoogleAPIKey, s.ttsAppKey, s.ttsLanguage, s.ttsVoice, s.ttsVolume
+}
+
+// applyTTSConfig updates TTS config from a settings save. Empty provider keeps
+// the existing one; empty or "***" secrets (API key, app key) keep the existing
+// value so the UI never has to round-trip them. Caller must hold s.mu.
+func (s *Server) applyTTSConfig(provider, googleAPIKey, appKey, language, voice string, volume int) {
+	if provider != "" {
+		s.ttsProvider = provider
+	}
+
+	if googleAPIKey != "" && googleAPIKey != "***" {
+		s.ttsGoogleAPIKey = googleAPIKey
+	}
+
+	if appKey != "" && appKey != "***" {
+		s.ttsAppKey = appKey
+	}
+
+	s.ttsLanguage = language
+	s.ttsVoice = voice
+	s.ttsVolume = volume
+}
+
+// ttsConfigured reports whether TTS is usefully configured: an app_key is
+// required to play on the speaker, and the google-cloud provider additionally
+// needs an API key. Caller must hold at least s.mu.RLock.
+func (s *Server) ttsConfigured() bool {
+	if s.ttsAppKey == "" {
+		return false
+	}
+
+	if s.ttsProvider == tts.ProviderGoogleCloud {
+		return s.ttsGoogleAPIKey != ""
+	}
+
+	return true
+}
+
+// ReinitTTSService builds the TTS service from the current config and replaces
+// the running one. Unlike the OAuth services it always installs a service (the
+// translate provider needs no credentials); the provider is chosen by
+// s.ttsProvider, defaulting to translate.
+func (s *Server) ReinitTTSService() {
+	s.mu.RLock()
+	provider := s.ttsProvider
+	apiKey := s.ttsGoogleAPIKey
+	endpoint := s.ttsGoogleEndpoint
+	cfg := tts.Config{
+		BaseURL:         s.serverURL,
+		AppKey:          s.ttsAppKey,
+		DefaultLanguage: s.ttsLanguage,
+		DefaultVoice:    s.ttsVoice,
+		DefaultVolume:   s.ttsVolume,
+	}
+	s.mu.RUnlock()
+
+	var p tts.Provider
+
+	switch provider {
+	case tts.ProviderGoogleCloud:
+		if apiKey == "" {
+			log.Printf("[TTS] Provider 'google-cloud' selected but no API key set; synthesis will fail until one is provided")
+		}
+
+		cloud := tts.NewCloudProvider(apiKey)
+		if endpoint != "" {
+			cloud.SetEndpoint(endpoint)
+		}
+
+		p = cloud
+	case tts.ProviderTranslate, "":
+		p = tts.NewTranslateProvider()
+	default:
+		log.Printf("[TTS] Unknown provider %q; falling back to 'translate'", provider)
+
+		p = tts.NewTranslateProvider()
+	}
+
+	s.SetTTSService(tts.NewService(p, cfg))
+	log.Printf("[TTS] Service reinitialized (provider: %s)", p.Name())
 }
 
 // GetRecordEnabled returns whether recording is enabled.

@@ -224,7 +224,7 @@ function App() {
                 ` : page === 'playurl' ? html`
                     <${PlayURL} key="play-url" devices=${devices} serverServiceUrl=${version?.service_url || ''} />
                 ` : page === 'tts' ? html`
-                    <${TTS} key="tts" devices=${devices} />
+                    <${TTS} key="tts" devices=${devices} serverServiceUrl=${version?.service_url || ''} />
                 ` : null}
             </main>
 

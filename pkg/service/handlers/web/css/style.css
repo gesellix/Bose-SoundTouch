@@ -171,3 +171,41 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
     margin-right: 10px;
     margin-top: -5px;
 }
+
+/* Integration panels (collapsible, status visible when collapsed) */
+.integration-panel {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: #fcfcfc;
+}
+.integration-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.integration-summary::-webkit-details-marker { display: none; }
+.integration-summary::before {
+    content: "▸";
+    color: #888;
+    transition: transform 0.15s ease;
+}
+.integration-panel[open] > .integration-summary::before { transform: rotate(90deg); }
+.integration-name { font-weight: bold; flex: 1; }
+.integration-body {
+    padding: 10px 14px 14px 30px;
+    border-top: 1px solid #eee;
+}
+.integration-badge {
+    font-size: 0.8em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.integration-badge.badge-active   { background: #e6ffed; color: #137333; border: 1px solid #b7e0c0; }
+.integration-badge.badge-saved    { background: #fff4e5; color: #a5600a; border: 1px solid #f0d2a8; }
+.integration-badge.badge-inactive { background: #f1f3f4; color: #666;    border: 1px solid #ddd; }
