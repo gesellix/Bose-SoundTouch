@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -500,9 +501,27 @@ func printStationList(response *models.NavigateResponse, source string) {
 	fmt.Printf("   • To save as preset: Use 'preset set' command with the location\n")
 }
 
+// playbackID returns the bare station/episode id from a playback href,
+// e.g. "/v1/playback/station/s228737" -> "s228737" and
+// "/v1/playback/episodes/p1864248?encoded_name=…" -> "p1864248".
+// Returns "" when href is empty.
+func playbackID(href string) string {
+	if href == "" {
+		return ""
+	}
+
+	if i := strings.IndexByte(href, '?'); i >= 0 {
+		href = href[:i]
+	}
+
+	return path.Base(href)
+}
+
 // printBmxNavResults renders a *models.BmxNavResponse to stdout.
-// For each section it prints the section name as a header, then each item's
-// name, subtitle, and playback location so the user can act on it.
+// For each section it prints the section name as a header, then each item as a
+// leading id column followed by the name, with subtitle and playback location
+// indented below. The bare id sits alone in its own column so it is easy to
+// copy-paste.
 func printBmxNavResults(resp *models.BmxNavResponse) {
 	if len(resp.BmxSections) == 0 {
 		fmt.Println("  No results found")
@@ -519,15 +538,33 @@ func printBmxNavResults(resp *models.BmxNavResponse) {
 			continue
 		}
 
-		for i, item := range section.Items {
-			fmt.Printf("  %3d. %s\n", i+1, item.Name)
+		// Width of the leading id column = widest id in this section.
+		maxID := 0
+
+		for _, item := range section.Items {
+			if item.Links != nil && item.Links.BmxPlayback != nil {
+				maxID = max(maxID, len(playbackID(item.Links.BmxPlayback.Href)))
+			}
+		}
+
+		// Continuation lines align under the name: 4 leading spaces
+		// + id column + 2-space gap.
+		indent := strings.Repeat(" ", 4+maxID+2)
+
+		for _, item := range section.Items {
+			id := ""
+			if item.Links != nil && item.Links.BmxPlayback != nil {
+				id = playbackID(item.Links.BmxPlayback.Href)
+			}
+
+			fmt.Printf("    %-*s  %s\n", maxID, id, item.Name)
 
 			if item.Subtitle != "" {
-				fmt.Printf("       %s\n", item.Subtitle)
+				fmt.Printf("%s%s\n", indent, item.Subtitle)
 			}
 
 			if item.Links != nil && item.Links.BmxPlayback != nil {
-				fmt.Printf("       Location: %s\n", item.Links.BmxPlayback.Href)
+				fmt.Printf("%sLocation: %s\n", indent, item.Links.BmxPlayback.Href)
 			}
 		}
 	}
