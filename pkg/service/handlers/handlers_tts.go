@@ -145,14 +145,18 @@ func (s *Server) HandleSpeakerAuth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// resolveTTSHost returns the speaker IP/hostname to target. An explicit Host
-// wins; otherwise DeviceID is looked up in the datastore.
+// resolveTTSHost returns the speaker IP to target, resolved from the datastore
+// so the result is always a known device address — never a value taken straight
+// from the request. This prevents the endpoint from being used as an SSRF proxy
+// to arbitrary hosts (the resolved IP flows into client.NewClientFromHost ->
+// baseURL -> the outbound request). Match by DeviceID, or by Host equal to a
+// known device's IP; either way the returned string is the datastore's
+// IPAddress, not the caller-supplied value.
 func (s *Server) resolveTTSHost(req ttsSpeakRequest) (string, error) {
-	if h := strings.TrimSpace(req.Host); h != "" {
-		return h, nil
-	}
+	deviceID := strings.TrimSpace(req.DeviceID)
+	host := strings.TrimSpace(req.Host)
 
-	if strings.TrimSpace(req.DeviceID) == "" {
+	if deviceID == "" && host == "" {
 		return "", fmt.Errorf("either deviceId or host is required")
 	}
 
@@ -162,16 +166,21 @@ func (s *Server) resolveTTSHost(req ttsSpeakRequest) (string, error) {
 	}
 
 	for i := range devices {
-		if devices[i].DeviceID == req.DeviceID {
-			if devices[i].IPAddress == "" {
-				return "", fmt.Errorf("device %s has no known IP address", req.DeviceID)
-			}
+		ip := devices[i].IPAddress
+		if ip == "" {
+			continue
+		}
 
-			return devices[i].IPAddress, nil
+		if (deviceID != "" && devices[i].DeviceID == deviceID) || (host != "" && ip == host) {
+			return ip, nil
 		}
 	}
 
-	return "", fmt.Errorf("device %s not found", req.DeviceID)
+	if deviceID != "" {
+		return "", fmt.Errorf("device %s not found (or has no known IP)", deviceID)
+	}
+
+	return "", fmt.Errorf("host %s is not a known device", host)
 }
 
 // HandleTTSMedia serves a synthesized clip by id for the speaker to fetch.

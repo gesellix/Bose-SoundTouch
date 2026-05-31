@@ -163,6 +163,10 @@ func TestHandleTTSSpeakValidation(t *testing.T) {
 		{"empty text", `{"host":"192.0.2.10","text":"  "}`, http.StatusBadRequest},
 		{"no target", `{"text":"hello"}`, http.StatusBadRequest},
 		{"bad json", `{not json}`, http.StatusBadRequest},
+		// SSRF guard: an arbitrary host that isn't a known device must be
+		// rejected, not connected to.
+		{"unknown host", `{"host":"203.0.113.99","text":"hello"}`, http.StatusBadRequest},
+		{"unknown device", `{"deviceId":"NOPE","text":"hello"}`, http.StatusBadRequest},
 	}
 
 	for _, tc := range cases {
