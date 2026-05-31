@@ -41,7 +41,10 @@ export function PlayURL({ devices, serverServiceUrl }) {
         setPendingPlay(null);
         setStatus('Playing…');
         try {
-            const resp = await api.playURL(deviceId, item.url, item.name, '', serviceUrl.trim());
+            // When configured server-side, that value wins; send it so a stale
+            // localStorage override never matters.
+            const effectiveServiceUrl = serverServiceUrl || serviceUrl.trim();
+            const resp = await api.playURL(deviceId, item.url, item.name, '', effectiveServiceUrl);
             setStatus(resp.success ? 'Playing — use ★ on the device page to save as preset' : 'Error: ' + (resp.error || 'Unknown error'));
         } catch (e) {
             setStatus('Error: ' + e.message);
@@ -77,11 +80,15 @@ export function PlayURL({ devices, serverServiceUrl }) {
                     type="url"
                     class="tunein-search-input"
                     placeholder="AfterTouch URL (https://…)"
-                    value=${serviceUrl}
+                    value=${serverServiceUrl || serviceUrl}
                     onInput=${(e) => onServiceUrlChange(e.target.value)}
+                    readonly=${!!serverServiceUrl}
                     title="AfterTouch service base URL — required for LOCAL_INTERNET_RADIO playback and preset save"
                 />
             </div>
+            ${serverServiceUrl
+                ? html`<div class="track-meta" style="margin-top:.2rem; opacity:.85">Configured server-side (soundtouch-web --service-url); edits here would be ignored.</div>`
+                : null}
             ${status && html`<div class="track-meta" style="margin-top:.6rem">${status}</div>`}
 
             ${pendingPlay ? html`
