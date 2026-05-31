@@ -42,6 +42,11 @@ type WebApp struct {
 	RepoURL    string
 	ServiceURL string
 
+	// Management API credentials for proxying to the AfterTouch service's
+	// Basic-Auth-protected /mgmt endpoints (e.g. TTS synthesis).
+	MgmtUsername string
+	MgmtPassword string
+
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }
 

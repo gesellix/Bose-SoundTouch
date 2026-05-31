@@ -37,7 +37,7 @@ func TestNewTTSPlayInfo(t *testing.T) {
 	// Test without volume
 	playInfo := NewTTSPlayInfo("Hello World", "test-key", "EN")
 
-	expectedURL := "http://translate.google.com/translate_tts?ie=UTF-8&tl=EN&client=tw-ob&q=Hello+World"
+	expectedURL := "https://translate.google.com/translate_tts?ie=UTF-8&tl=EN&client=tw-ob&q=Hello+World"
 	if playInfo.URL != expectedURL {
 		t.Errorf("Expected URL '%s', got '%s'", expectedURL, playInfo.URL)
 	}

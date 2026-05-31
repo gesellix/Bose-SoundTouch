@@ -48,6 +48,7 @@ GET      /favicon.ico                                                 setupRoute
 GET      /health                                                      handlers.(*Server).HandleHealth-fm
 GET      /media/*                                                     handlers.(*Server).HandleMedia
 GET      /media/aftertouch-ding.wav                                   handlers.(*Server).HandleDing-fm
+GET      /media/tts/{id}                                              handlers.(*Server).HandleTTSMedia-fm
 GET      /mgmt/accounts/                                              handlers.(*Server).HandleMgmtListAccounts-fm
 GET      /mgmt/accounts/{accountId}                                   handlers.(*Server).HandleMgmtAccountDetails-fm
 GET      /mgmt/accounts/{accountId}/speakers                          handlers.(*Server).HandleMgmtListSpeakers-fm
@@ -58,6 +59,7 @@ GET      /mgmt/devices/{deviceId}/events                              handlers.(
 GET      /mgmt/spotify/accounts                                       handlers.(*Server).HandleMgmtSpotifyAccounts-fm
 GET      /mgmt/spotify/callback                                       handlers.(*Server).HandleMgmtSpotifyCallback-fm
 GET      /mgmt/spotify/token                                          handlers.(*Server).HandleMgmtSpotifyToken-fm
+GET      /mgmt/tts/config                                             handlers.(*Server).HandleMgmtTTSConfig-fm
 GET      /setup/account-id-suggestions/{deviceId}                     handlers.(*Server).HandleAccountIDSuggestions-fm
 GET      /setup/ca.crt                                                handlers.(*Server).HandleGetCACert-fm
 GET      /setup/device-summary/{deviceId}                             handlers.(*Server).HandleDeviceSummary-fm
@@ -130,6 +132,7 @@ POST     /mgmt/spotify/confirm                                        handlers.(
 POST     /mgmt/spotify/entity                                         handlers.(*Server).HandleMgmtSpotifyEntity-fm
 POST     /mgmt/spotify/init                                           handlers.(*Server).HandleMgmtSpotifyInit-fm
 POST     /mgmt/spotify/prime                                          handlers.(*Server).HandleMgmtPrimeDevice-fm
+POST     /mgmt/tts/speak                                              handlers.(*Server).HandleMgmtTTSSpeak-fm
 POST     /oauth/account/{account}/music/musicprovider/{sourceID}/token/cs handlers.(*Server).HandleBoseAccountToken-fm
 POST     /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token handlers.(*Server).HandleBoseLegacyToken-fm
 POST     /oauth/device/{deviceID}/music/musicprovider/{sourceID}/token/cs1 handlers.(*Server).HandleBoseToken-fm

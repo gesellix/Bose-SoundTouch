@@ -30,6 +30,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/gesellix/bose-soundtouch/pkg/service/stockholm"
+	"github.com/gesellix/bose-soundtouch/pkg/service/tts"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/urfave/cli/v2"
@@ -174,6 +175,46 @@ func initMusicServices(config serviceConfig, server *handlers.Server) {
 
 		log.Printf("Amazon Music service initialized (client ID: %s...)", sanitizeLog(clientIDPrefix))
 	}
+}
+
+// initTTSService builds the text-to-speech service from config and registers it
+// on the server. The Translate provider needs no credentials; the Google Cloud
+// provider needs an API key. The clip cache (for synthesized audio) lives on the
+// service and is served via GET /media/tts/{id}.
+func initTTSService(config serviceConfig, server *handlers.Server) {
+	var provider tts.Provider
+
+	switch config.ttsProvider {
+	case tts.ProviderGoogleCloud:
+		if config.ttsGoogleAPIKey == "" {
+			log.Printf("[TTS] Provider 'google-cloud' selected but no --tts-google-api-key set; synthesis will fail until one is provided")
+		}
+
+		cloud := tts.NewCloudProvider(config.ttsGoogleAPIKey)
+		if config.ttsGoogleEndpoint != "" {
+			cloud.SetEndpoint(config.ttsGoogleEndpoint)
+		}
+
+		provider = cloud
+	case tts.ProviderTranslate, "":
+		provider = tts.NewTranslateProvider()
+	default:
+		log.Printf("[TTS] Unknown provider %q; falling back to 'translate'", sanitizeLog(config.ttsProvider))
+
+		provider = tts.NewTranslateProvider()
+	}
+
+	svc := tts.NewService(provider, tts.Config{
+		BaseURL:         config.serverURL,
+		AppKey:          config.ttsAppKey,
+		DefaultLanguage: config.ttsLanguage,
+		DefaultVoice:    config.ttsVoice,
+		DefaultVolume:   config.ttsVolume,
+	})
+
+	server.SetTTSService(svc)
+
+	log.Printf("TTS service initialized (provider: %s)", provider.Name())
 }
 
 // logBufferCapacityFromEnv reads SOUNDTOUCH_LOG_BUFFER_LINES and
@@ -359,6 +400,43 @@ func main() {
 				EnvVars: []string{"AMAZON_PROFILE_URL"},
 			},
 			&cli.StringFlag{
+				Name:    "tts-provider",
+				Usage:   "Text-to-speech provider: 'translate' (Google Translate, no credentials) or 'google-cloud' (Google Cloud TTS, needs an API key)",
+				Value:   "translate",
+				EnvVars: []string{"TTS_PROVIDER"},
+			},
+			&cli.StringFlag{
+				Name:    "tts-google-api-key",
+				Usage:   "Google Cloud Text-to-Speech API key (required when --tts-provider=google-cloud)",
+				EnvVars: []string{"TTS_GOOGLE_API_KEY"},
+			},
+			&cli.StringFlag{
+				Name:    "tts-google-endpoint",
+				Usage:   "Google Cloud TTS synthesize endpoint override (for testing)",
+				EnvVars: []string{"TTS_GOOGLE_ENDPOINT"},
+			},
+			&cli.StringFlag{
+				Name:    "tts-language",
+				Usage:   "Default TTS language code. Provider-specific: 'EN'/'DE' for translate, BCP-47 like 'en-US' for google-cloud",
+				EnvVars: []string{"TTS_LANGUAGE"},
+			},
+			&cli.StringFlag{
+				Name:    "tts-voice",
+				Usage:   "Default Google Cloud TTS voice name (e.g. en-US-Neural2-C); ignored by the translate provider",
+				EnvVars: []string{"TTS_VOICE"},
+			},
+			&cli.StringFlag{
+				Name:    "tts-app-key",
+				Usage:   "Bose /speaker app_key used to play TTS notifications on speakers",
+				EnvVars: []string{"TTS_APP_KEY"},
+			},
+			&cli.IntFlag{
+				Name:    "tts-volume",
+				Usage:   "Default TTS playback volume (0-100, 0 = keep current volume)",
+				Value:   0,
+				EnvVars: []string{"TTS_VOLUME"},
+			},
+			&cli.StringFlag{
 				Name:    "mgmt-username",
 				Usage:   "Management API username for HTTP Basic Auth",
 				Value:   "admin",
@@ -445,6 +523,7 @@ func main() {
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
 
 			initMusicServices(config, server)
+			initTTSService(config, server)
 
 			// Load and set initial DNS discoveries
 			dnsDiscoveries, err := ds.LoadDNSDiscoveries()
@@ -604,6 +683,13 @@ type serviceConfig struct {
 	amazonProfileURL    string
 	mgmtUsername        string
 	mgmtPassword        string
+	ttsProvider         string
+	ttsGoogleAPIKey     string
+	ttsGoogleEndpoint   string
+	ttsLanguage         string
+	ttsVoice            string
+	ttsAppKey           string
+	ttsVolume           int
 	migrationEnabled    bool
 	migrationDryRun     bool
 	stockholmDir        string
@@ -678,6 +764,13 @@ func loadConfig(c *cli.Context) serviceConfig {
 	amazonProfileURL := c.String("amazon-profile-url")
 	mgmtUsername := c.String("mgmt-username")
 	mgmtPassword := c.String("mgmt-password")
+	ttsProvider := c.String("tts-provider")
+	ttsGoogleAPIKey := c.String("tts-google-api-key")
+	ttsGoogleEndpoint := c.String("tts-google-endpoint")
+	ttsLanguage := c.String("tts-language")
+	ttsVoice := c.String("tts-voice")
+	ttsAppKey := c.String("tts-app-key")
+	ttsVolume := c.Int("tts-volume")
 	internalPaths := c.StringSlice("internal-paths")
 	migrationEnabled := c.Bool("migration-enabled")
 	migrationDryRun := c.Bool("migration-dry-run")
@@ -716,6 +809,13 @@ func loadConfig(c *cli.Context) serviceConfig {
 		amazonProfileURL:    amazonProfileURL,
 		mgmtUsername:        mgmtUsername,
 		mgmtPassword:        mgmtPassword,
+		ttsProvider:         ttsProvider,
+		ttsGoogleAPIKey:     ttsGoogleAPIKey,
+		ttsGoogleEndpoint:   ttsGoogleEndpoint,
+		ttsLanguage:         ttsLanguage,
+		ttsVoice:            ttsVoice,
+		ttsAppKey:           ttsAppKey,
+		ttsVolume:           ttsVolume,
 		migrationEnabled:    migrationEnabled,
 		migrationDryRun:     migrationDryRun,
 		stockholmDir:        stockholmDir,
@@ -994,6 +1094,9 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 	})
 
 	r.Get("/media/aftertouch-ding.wav", server.HandleDing)
+	// Synthesized TTS clips (Google Cloud provider). Served before the
+	// /media/* wildcard so the {id} param route takes precedence.
+	r.Get("/media/tts/{id}", server.HandleTTSMedia)
 	r.Get("/media/*", server.HandleMedia())
 	r.Get("/bmx-icons/*", server.HandleBmxIcons())
 	r.Get("/ced/*", server.HandleCedStatic())
@@ -1217,6 +1320,11 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 				r.Get("/accounts", server.HandleMgmtAmazonAccounts)
 				r.Get("/token", server.HandleMgmtAmazonToken)
 				r.Post("/prime", server.HandleMgmtPrimeDeviceAmazon)
+			})
+
+			r.Route("/tts", func(r chi.Router) {
+				r.Post("/speak", server.HandleMgmtTTSSpeak)
+				r.Get("/config", server.HandleMgmtTTSConfig)
 			})
 
 			r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)

@@ -58,14 +58,24 @@ func (p *PlayInfo) SetVolume(volume int) *PlayInfo {
 	return p
 }
 
+// BuildTranslateTTSURL builds the (undocumented) Google Translate TTS URL the
+// speaker fetches directly for a /speaker notification. language is a short code
+// such as "EN" or "DE". Shared by NewTTSPlayInfo and the TTS service's Translate
+// provider so the query-string format lives in exactly one place.
+//
+// https://translate.google.com/translate_tts?ie=UTF-8&tl=de&client=aftertouch&q=Hallo+Wie+Geht%27s
+func BuildTranslateTTSURL(text, language string) string {
+	return fmt.Sprintf("https://translate.google.com/translate_tts?ie=UTF-8&tl=%s&client=tw-ob&q=%s", language, url.QueryEscape(text))
+}
+
 // NewTTSPlayInfo creates a PlayInfo for Google TTS playback
 func NewTTSPlayInfo(text, appKey, language string, volume ...int) *PlayInfo {
 	// URL encode the text for Google TTS
-	url := fmt.Sprintf("http://translate.google.com/translate_tts?ie=UTF-8&tl=%s&client=tw-ob&q=%s", language, url.QueryEscape(text))
+	ttsURL := BuildTranslateTTSURL(text, language)
 
 	playInfo := &PlayInfo{
 		XMLName: xml.Name{Local: "play_info"},
-		URL:     url,
+		URL:     ttsURL,
 		AppKey:  appKey,
 		Service: "TTS Notification",
 		Message: "Google TTS",

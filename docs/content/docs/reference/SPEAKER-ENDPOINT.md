@@ -66,15 +66,15 @@ func main() {
         Host: "192.0.2.100",
         Port: 8090,
     }
-    
+
     client := client.NewClient(config)
-    
+
     // Play TTS at current volume (language code "EN", "DE", etc.)
     err := client.PlayTTS("Hello, this is a test message", "YOUR_APP_KEY", "EN")
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Play TTS at specific volume (70)
     err = client.PlayTTS("Volume test message", "YOUR_APP_KEY", "EN", 70)
     if err != nil {
@@ -91,9 +91,9 @@ func main() {
         Host: "192.0.2.100",
         Port: 8090,
     }
-    
+
     client := client.NewClient(config)
-    
+
     // Play audio from URL
     err := client.PlayURL(
         "https://example.com/audio.mp3",
@@ -114,7 +114,7 @@ func main() {
 ```go
 func main() {
     client := client.NewClient(config)
-    
+
     // Create custom play info
     playInfo := models.NewPlayInfo(
         "https://example.com/audio.mp3",
@@ -123,7 +123,7 @@ func main() {
         "Custom Message",
         "Custom Reason",
     ).SetVolume(60)
-    
+
     err := client.PlayCustom(playInfo)
     if err != nil {
         log.Fatal(err)
@@ -136,7 +136,7 @@ func main() {
 ```go
 func main() {
     client := client.NewClient(config)
-    
+
     // Uses GET request (fixed in v2025.02+)
     err := client.PlayNotificationBeep()
     if err != nil {
@@ -206,22 +206,22 @@ soundtouch-cli speaker url --help
 
 The following language codes are supported for Google TTS:
 
-| Code | Language |
-|------|----------|
-| EN | English |
-| DE | German |
-| ES | Spanish |
-| FR | French |
-| IT | Italian |
-| NL | Dutch |
-| PT | Portuguese |
-| RU | Russian |
-| ZH | Chinese |
-| JA | Japanese |
-| KO | Korean |
-| AR | Arabic |
-| HI | Hindi |
-| TH | Thai |
+| Code | Language   |
+|------|------------|
+| EN   | English    |
+| DE   | German     |
+| ES   | Spanish    |
+| FR   | French     |
+| IT   | Italian    |
+| NL   | Dutch      |
+| PT   | Portuguese |
+| RU   | Russian    |
+| ZH   | Chinese    |
+| JA   | Japanese   |
+| KO   | Korean     |
+| AR   | Arabic     |
+| HI   | Hindi      |
+| TH   | Thai       |
 
 ## Behavior Notes
 
@@ -230,7 +230,7 @@ The following language codes are supported for Google TTS:
    - Automatically restore the previous volume after playback completes
    - If volume is 0 or omitted, content plays at current volume
 
-2. **Content Interruption**: 
+2. **Content Interruption**:
    - Currently playing content is paused during notification playback
    - Original content resumes automatically after notification ends
    - If currently playing content is already a notification, you may get an error
@@ -241,7 +241,7 @@ The following language codes are supported for Google TTS:
 
 4. **Now Playing Display**:
    - Service name appears in the "artist" field
-   - Message appears in the "album" field  
+   - Message appears in the "album" field
    - Reason appears in the "track" field
    - Custom artwork can be included in URL-based content
 
@@ -264,6 +264,84 @@ Both TTS and URL playback require an `app_key` parameter. This appears to be use
 
 You'll need to provide your own application key. The format and generation method for valid app keys is not documented in the official API.
 
+## Google Cloud Text-to-Speech (via the AfterTouch service)
+
+The direct `speaker tts` path above hands the speaker an (undocumented) Google
+Translate URL to fetch. That endpoint is fine for short notifications but is
+low quality, length-limited, and can change without notice.
+
+For higher-quality speech (real voices, SSML, many languages) the AfterTouch
+service can synthesize audio with **Google Cloud Text-to-Speech** and host it
+locally for the speaker to play. Because Cloud TTS returns audio bytes from an
+authenticated request (not a fetchable URL), the service caches the clip and
+serves it at `GET /media/tts/{id}`, then tells the speaker to play that local
+URL via `/speaker`. The same `app_key` constraint applies.
+
+### Provider selection
+
+The service picks a TTS provider via `--tts-provider` (env `TTS_PROVIDER`):
+
+- `translate` (default): the Google Translate URL path. No credentials.
+- `google-cloud`: Google Cloud TTS via a REST API key. No OAuth, no SDK.
+
+### Configuration (soundtouch-service)
+
+| Flag                   | Env                  | Purpose                                                                         |
+|------------------------|----------------------|---------------------------------------------------------------------------------|
+| `--tts-provider`       | `TTS_PROVIDER`       | `translate` or `google-cloud`                                                   |
+| `--tts-google-api-key` | `TTS_GOOGLE_API_KEY` | Google Cloud TTS API key (required for `google-cloud`)                          |
+| `--tts-language`       | `TTS_LANGUAGE`       | Default language. `EN`/`DE` for translate, BCP-47 like `en-US` for google-cloud |
+| `--tts-voice`          | `TTS_VOICE`          | Default Cloud TTS voice (e.g. `en-US-Neural2-C`); ignored by translate          |
+| `--tts-app-key`        | `TTS_APP_KEY`        | Bose `/speaker` app_key used to play the clip                                   |
+| `--tts-volume`         | `TTS_VOLUME`         | Default playback volume (0-100, 0 = keep current)                               |
+
+Example:
+
+```bash
+TTS_PROVIDER=google-cloud \
+TTS_GOOGLE_API_KEY=YOUR_GOOGLE_API_KEY \
+TTS_LANGUAGE=en-US \
+TTS_VOICE=en-US-Neural2-C \
+TTS_APP_KEY=YOUR_APP_KEY \
+soundtouch-service
+```
+
+### Triggering speech
+
+Service management API (Basic Auth):
+
+```bash
+curl -u admin:change_me! -X POST http://soundtouch.local:8000/mgmt/tts/speak \
+  -H 'Content-Type: application/json' \
+  -d '{"host":"192.0.2.100","text":"Dinner is ready"}'
+```
+
+`deviceId` may be used instead of `host` (the service resolves it to an IP from
+its datastore). Optional fields: `language`, `voice`, `volume`.
+
+CLI (calls the service, not the speaker directly):
+
+```bash
+soundtouch-cli tts speak \
+  --service-url http://soundtouch.local:8000 \
+  --speaker-host 192.0.2.100 \
+  --text "Dinner is ready"
+```
+
+Web UI: the per-device controls include a "Say something…" box. soundtouch-web
+proxies it to the service, so start it with `--service-url` (and `--mgmt-username`
+/ `--mgmt-password` if you changed the defaults).
+
+### Notes and limitations
+
+- **The `app_key` still applies.** Cloud TTS does not bypass the `/speaker`
+  requirement; without a working `app_key` the speaker will reject playback.
+- **Model support** is the same as the direct path (primarily ST-10 Series III).
+- **Reachability:** the speaker must be able to reach the service's
+  `/media/tts/{id}` URL. The service builds it from its configured `server-url`.
+- Synthesized clips are cached in memory for a short time and identical requests
+  reuse the same clip.
+
 ## Limitations
 
 1. **Device Support**: Limited to specific SoundTouch models (primarily ST-10 Series III)
@@ -283,7 +361,7 @@ client.PlayTTS("Someone is at the front door", "home-automation-key", "EN", 80)
 // Security alert
 client.PlayURL(
     "https://myserver.com/alerts/security-breach.mp3",
-    "security-system-key", 
+    "security-system-key",
     "Security System",
     "Alert",
     "Motion detected in restricted area",
@@ -297,7 +375,7 @@ client.PlayURL(
 # Test connectivity
 soundtouch-cli speaker beep --host 192.0.2.100
 
-# Test TTS functionality  
+# Test TTS functionality
 soundtouch-cli speaker tts --text "Testing TTS functionality" --app-key test-key --host 192.0.2.100
 
 # Test URL playback

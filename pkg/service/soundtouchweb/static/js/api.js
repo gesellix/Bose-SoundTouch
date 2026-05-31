@@ -50,4 +50,9 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify({ url, name, imageUrl, serviceUrl }),
     }),
+    speak: (deviceId, text) => req(`/api/device-speak/${deviceId}`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ text }),
+    }),
 };

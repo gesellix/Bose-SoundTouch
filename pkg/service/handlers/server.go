@@ -29,6 +29,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
+	"github.com/gesellix/bose-soundtouch/pkg/service/tts"
 	"github.com/miekg/dns"
 )
 
@@ -66,6 +67,7 @@ type Server struct {
 	amazonClientSecret  string
 	amazonRedirectURI   string
 	amazonService       *amazon.Service
+	ttsService          *tts.Service
 	peerObserver        *peerObserver
 	healthRegistry      *health.Registry
 	logBuf              *logbuf.Buffer
@@ -757,6 +759,22 @@ func (s *Server) SetSpotifyService(ss *spotify.Service) {
 	defer s.mu.Unlock()
 
 	s.spotifyService = ss
+}
+
+// SetTTSService sets the text-to-speech service.
+func (s *Server) SetTTSService(t *tts.Service) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.ttsService = t
+}
+
+// ttsSvc returns the configured TTS service, or nil if none is set.
+func (s *Server) ttsSvc() *tts.Service {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.ttsService
 }
 
 // GetRecordEnabled returns whether recording is enabled.

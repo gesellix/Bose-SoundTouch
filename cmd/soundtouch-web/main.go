@@ -81,6 +81,17 @@ func main() {
 				Usage:   "AfterTouch service base URL (e.g. https://soundtouch.local). Required for custom stream URLs to work as presets via LOCAL_INTERNET_RADIO",
 				EnvVars: []string{"SERVICE_URL"},
 			},
+			&cli.StringFlag{
+				Name:    "mgmt-username",
+				Usage:   "AfterTouch management API username, used to proxy TTS to the service's /mgmt endpoints",
+				Value:   "admin",
+				EnvVars: []string{"MGMT_USERNAME"},
+			},
+			&cli.StringFlag{
+				Name:    "mgmt-password",
+				Usage:   "AfterTouch management API password, used to proxy TTS to the service's /mgmt endpoints",
+				EnvVars: []string{"MGMT_PASSWORD"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			port := c.String("port")
@@ -115,6 +126,8 @@ func main() {
 			webApp.Date = date
 			webApp.RepoURL = repoURL
 			webApp.ServiceURL = strings.TrimRight(c.String("service-url"), "/")
+			webApp.MgmtUsername = c.String("mgmt-username")
+			webApp.MgmtPassword = c.String("mgmt-password")
 
 			discoveryService := soundtouchweb.NewDiscoveryService(ifaceName)
 

@@ -2315,6 +2315,7 @@ func main() {
 	// AfterTouch service management (sources, accounts, devices).
 	// Defined in cmd_cloud.go.
 	app.Commands = append(app.Commands, cloudCommand())
+	app.Commands = append(app.Commands, ttsCommand())
 
 	// Sort commands alphabetically (including subcommands and flags recursively)
 	sortCommands(app.Commands)
