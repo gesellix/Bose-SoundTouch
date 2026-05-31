@@ -154,7 +154,7 @@ func TestMigrateViaHosts(t *testing.T) {
 				if command == "cat /etc/hosts" {
 					// Handle both initial read and verification read
 					if len(runCalls) > 2 { // Rough heuristic: verification happens after upload
-						return "192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
+						return "192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\taudionotification.api.bosecm.com\n192.0.2.100\taudionotificationdev.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 					}
 					return "127.0.0.1 localhost", nil
 				}
@@ -232,7 +232,7 @@ func TestMigrateViaHosts_UpdateExisting(t *testing.T) {
 				runCount++
 				if command == "cat /etc/hosts" {
 					if runCount > 1 {
-						return "127.0.0.1 localhost\n192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
+						return "127.0.0.1 localhost\n192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\taudionotification.api.bosecm.com\n192.0.2.100\taudionotificationdev.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 					}
 					return "127.0.0.1 localhost\n1.2.3.4\tstreaming.bose.com\n1.2.3.4\tupdates.bose.com", nil
 				}
@@ -771,7 +771,7 @@ func TestMigrateViaHosts_SkipCAIfTrusted(t *testing.T) {
 				if command == "cat /etc/hosts" {
 					// Handle both initial read and verification read
 					if len(runCalls) > 2 { // Rough heuristic: verification happens after upload
-						return "192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
+						return "192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\taudionotification.api.bosecm.com\n192.0.2.100\taudionotificationdev.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 					}
 					return "127.0.0.1 localhost", nil
 				}

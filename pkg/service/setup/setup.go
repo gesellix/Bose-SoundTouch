@@ -426,6 +426,13 @@ func (m *Manager) populatePlannedNetworkConfig(summary *MigrationSummary, _, tar
 		"bmx.bose.com",
 		"content.api.bose.io",
 		"events.api.bosecm.com",
+		// app_key validation for /speaker audio notifications (TTS). Without
+		// these redirects the speaker validates against the dead Bose cloud and
+		// reports an invalid app key. Both the prod and dev hosts are seeded
+		// (firmware may use either). DNS interception already covers them via
+		// the bosecm.com substring; seed here for /etc/hosts migrations too.
+		"audionotification.api.bosecm.com",
+		"audionotificationdev.api.bosecm.com",
 		"bose-prod.apigee.net",
 		"worldwide.bose.com",
 		"music.api.bose.com",
@@ -1424,6 +1431,13 @@ func (m *Manager) migrateViaHosts(deviceIP, targetURL string) (string, error) {
 		"bmx.bose.com",
 		"content.api.bose.io",
 		"events.api.bosecm.com",
+		// app_key validation for /speaker audio notifications (TTS). Without
+		// these redirects the speaker validates against the dead Bose cloud and
+		// reports an invalid app key. Both the prod and dev hosts are seeded
+		// (firmware may use either). DNS interception already covers them via
+		// the bosecm.com substring; seed here for /etc/hosts migrations too.
+		"audionotification.api.bosecm.com",
+		"audionotificationdev.api.bosecm.com",
 		"bose-prod.apigee.net",
 		"worldwide.bose.com",
 		"media.bose.io",

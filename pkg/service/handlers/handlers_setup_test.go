@@ -412,7 +412,7 @@ func (m *mockSSH) Run(command string) (string, error) {
 		m.runCount++
 		if m.runCount > 1 {
 			// Return updated hosts for verification
-			return "127.0.0.1 localhost\n192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
+			return "127.0.0.1 localhost\n192.0.2.100\tstreaming.bose.com\n192.0.2.100\tupdates.bose.com\n192.0.2.100\tstats.bose.com\n192.0.2.100\tbmx.bose.com\n192.0.2.100\tcontent.api.bose.io\n192.0.2.100\tevents.api.bosecm.com\n192.0.2.100\taudionotification.api.bosecm.com\n192.0.2.100\taudionotificationdev.api.bosecm.com\n192.0.2.100\tbose-prod.apigee.net\n192.0.2.100\tworldwide.bose.com\n192.0.2.100\tmedia.bose.io\n192.0.2.100\tdownloads.bose.com\n192.0.2.100\tvoice.api.bose.io", nil
 		}
 		return "127.0.0.1 localhost", nil
 	}

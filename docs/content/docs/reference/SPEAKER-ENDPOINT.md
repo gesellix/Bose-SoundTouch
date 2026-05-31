@@ -339,9 +339,15 @@ box. soundtouch-web proxies it to the service, so start it with `--service-url`
 
 ### Notes and limitations
 
-- **The `app_key` still applies.** Cloud TTS does not bypass the `/speaker`
-  requirement; without a working `app_key` the speaker will reject playback.
-- **Model support** is the same as the direct path (primarily ST-10 Series III).
+- **`app_key` validation is handled automatically (speaker method).** The
+  speaker validates the key by calling `GET /v1/auth` on Bose's audio
+  notification host (`audionotification.api.bosecm.com`, and a `…dev…` variant),
+  which AfterTouch intercepts (DNS substring match on `bosecm.com`, plus
+  `/etc/hosts` seeding during migration) and answers `200`. So any non-empty
+  `app_key` works; you don't need a real Bose-issued key. The `radio` method
+  needs no `app_key` at all.
+- **Model support** for the `speaker` method is the same as the direct `/speaker`
+  path (primarily ST-10 Series III). Use `--method radio` on models without it.
 - **Reachability:** the speaker must be able to reach the service's
   `/media/tts/{id}` URL. The service builds it from its configured `server-url`.
 - Synthesized clips are cached in memory for a short time and identical requests
