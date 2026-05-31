@@ -6,9 +6,11 @@ import (
 	"compress/gzip"
 	"crypto/tls"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,7 +21,9 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/export"
 	"github.com/gesellix/bose-soundtouch/pkg/service/health"
+	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	speakerssh "github.com/gesellix/bose-soundtouch/pkg/ssh"
+	"github.com/gesellix/bose-soundtouch/pkg/telnet"
 )
 
 // diagnosticReport is the structured summary included as diagnostic.json
@@ -42,6 +46,23 @@ type deviceDiagnostic struct {
 	IPAddress       string             `json:"ip_address,omitempty"`
 	Sources         []sourceDiagnostic `json:"sources,omitempty"`
 	Presets         []presetDiagnostic `json:"presets,omitempty"`
+	RedirectConfig  *redirectConfig    `json:"redirect_config,omitempty"`
+}
+
+// redirectConfig captures where a speaker is configured to send its
+// marge/BMX/streaming traffic, and how AfterTouch obtained that config. The
+// URLs come from the on-device SoundTouchSdkPrivateCfg.xml (via SSH) or, when
+// SSH is unavailable, from `getpdo CurrentSystemConfiguration` over telnet.
+// A speaker reachable only via telnet was, by elimination, migrated with the
+// telnet method — the xml/hosts/resolv methods all require SSH.
+type redirectConfig struct {
+	Source                  string `json:"source"` // "ssh" | "telnet" | "none"
+	SSHReachable            bool   `json:"ssh_reachable"`
+	InferredMigrationMethod string `json:"inferred_migration_method,omitempty"`
+	MargeServerURL          string `json:"marge_server_url,omitempty"`
+	StatsServerURL          string `json:"stats_server_url,omitempty"`
+	SwUpdateURL             string `json:"sw_update_url,omitempty"`
+	BmxRegistryURL          string `json:"bmx_registry_url,omitempty"`
 }
 
 type sourceDiagnostic struct {
@@ -108,7 +129,12 @@ func (s *Server) buildDiagnosticArchive() ([]byte, error) {
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
 
-	report := s.buildDiagnosticReport()
+	// Collect speaker redirect config first (SSH-preferred, telnet fallback);
+	// it writes raw artifacts into the archive and feeds parsed URLs +
+	// provenance into the JSON report below.
+	redirectCfgs := s.collectSpeakerRedirectConfig(tw)
+
+	report := s.buildDiagnosticReport(redirectCfgs)
 
 	jsonBytes, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
@@ -279,9 +305,33 @@ func (s *Server) addSpeakerHTTP(tw *tar.Writer, client *http.Client, devices []m
 }
 
 // speakerSSHPaths lists file paths to retrieve from each speaker via SSH.
+// Each is best-effort: paths that don't exist on a given firmware/migration
+// method are logged and skipped.
 var speakerSSHPaths = []string{
 	"/etc/pki/tls/certs/ca-bundle.crt",
+	"/etc/pki/tls/certs/ca-bundle.crt.original", // pre-migration CA bundle backup
 	"/etc/ssl/certs/ca-certificates.crt",
+	// Redirection-relevant state: where the speaker resolves Bose hostnames
+	// and what it had before migration. (The live marge/BMX URL config in
+	// SoundTouchSdkPrivateCfg.xml is handled by collectSpeakerRedirectConfig,
+	// which also parses it and has a telnet fallback; its .original backup is
+	// a plain raw pull here, showing the pre-migration Bose URLs.)
+	"/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original", // pre-migration URL config backup
+	"/etc/hosts",                // deprecated hosts-migration redirect or manual edits
+	"/etc/hosts.original",       // factory backup, if the hosts method was ever used
+	"/etc/resolv.conf",          // which DNS the speaker actually queries
+	"/etc/resolv.conf.original", // pre-migration resolv backup (resolv method)
+	"/mnt/nv/soundtouch-service/aftertouch.resolv.conf", // resolv-method nameserver hook
+	"/mnt/nv/aftertouch.resolv.conf",                    // legacy resolv-hook path
+	// resolv method's live redirection mechanism: a boot hook plus DHCP-renew
+	// hooks that prepend our nameserver. Whether these are intact decides if
+	// the speaker resolves Bose hosts to AfterTouch or escapes to the real
+	// cloud — written under a root remount, so persistent on the rootfs.
+	"/mnt/nv/rc.local",        // boot hook installing the resolv override
+	"/etc/udhcpc.d/50default", // DHCP-renew hook (primary)
+	"/opt/Bose/udhcpc.script", // DHCP-renew hook (alternate, if present)
+	"/etc/remote_services",    // SSH-enablement marker (preferred location)
+	"/mnt/nv/remote_services", // SSH-enablement marker (NV fallback)
 }
 
 // speakerLogWindow is the default look-back period for speaker syslog entries.
@@ -384,7 +434,14 @@ func addSpeakerSSH(tw *tar.Writer, devices []models.ServiceDeviceInfo) {
 		}
 
 		// dmesg and any other plain commands.
-		for filename, cmd := range map[string]string{"dmesg.txt": "dmesg"} {
+		// firewall.txt: iptables-save yields the active filter on FW 27.0.6;
+		// ip6tables-save typically yields nothing (no error) but is harmless
+		// and future-proofs IPv6-capable builds. Catches a self-inflicted
+		// DROP of speaker↔service or speaker↔Bose-host traffic.
+		for filename, cmd := range map[string]string{
+			"dmesg.txt":    "dmesg",
+			"firewall.txt": "iptables-save 2>/dev/null; ip6tables-save 2>/dev/null",
+		} {
 			out, err := sc.Run(cmd)
 			if err != nil && strings.TrimSpace(out) == "" {
 				log.Printf("[Export] SSH %s %q: %v", sanitizeLog(id), cmd, err)
@@ -411,6 +468,122 @@ func addSpeakerSSH(tw *tar.Writer, devices []models.ServiceDeviceInfo) {
 			}
 		}
 	}
+}
+
+// sshReachable reports whether the speaker accepts a TCP connection on the SSH
+// port. Used only to classify provenance: a speaker that answers telnet but
+// not SSH was, by elimination, migrated via the telnet method.
+func sshReachable(ip string) bool {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "22"), time.Second)
+	if err != nil {
+		return false
+	}
+
+	_ = conn.Close()
+
+	return true
+}
+
+// readTelnetSystemConfig reads the live URL set from the speaker's diagnostic
+// shell (port 17000) via `getpdo CurrentSystemConfiguration`. Returns the raw
+// reply and true on success.
+func readTelnetSystemConfig(ip string) (string, bool) {
+	t := telnet.NewClient(ip)
+	if err := t.Dial(); err != nil {
+		return "", false
+	}
+
+	defer func() { _ = t.Close() }()
+
+	_, _ = t.Probe()
+
+	resp, err := t.SendCommand("getpdo CurrentSystemConfiguration")
+	if err != nil || strings.TrimSpace(resp) == "" {
+		return "", false
+	}
+
+	return resp, true
+}
+
+// collectSpeakerRedirectConfig determines, per speaker, where it is configured
+// to send marge/BMX/streaming traffic — the data that decides whether a
+// TuneIn/RadioBrowser select reaches AfterTouch or escapes to the dead Bose
+// cloud. It prefers the persisted SoundTouchSdkPrivateCfg.xml over SSH; when
+// SSH is unavailable it falls back to `getpdo CurrentSystemConfiguration` over
+// telnet (the same channel the telnet migration uses). Raw artifacts are
+// written into the archive; parsed URLs + provenance are returned keyed by
+// device ID for inclusion in diagnostic.json.
+func (s *Server) collectSpeakerRedirectConfig(tw *tar.Writer) map[string]*redirectConfig {
+	out := map[string]*redirectConfig{}
+
+	devices, err := s.ds.ListAllDevices()
+	if err != nil {
+		log.Printf("[Export] redirect config: list devices: %v", err)
+
+		return out
+	}
+
+	for i := range devices {
+		dev := &devices[i]
+		if dev.IPAddress == "" {
+			continue
+		}
+
+		id := dev.DeviceID
+		if id == "" {
+			id = dev.IPAddress
+		}
+
+		rc := &redirectConfig{Source: "none", SSHReachable: sshReachable(dev.IPAddress)}
+
+		// 1. Prefer the persisted XML over SSH.
+		sc := speakerssh.NewClient(dev.IPAddress)
+		if data, rerr := sc.ReadFile(setup.SoundTouchSdkPrivateCfgPath); rerr == nil {
+			archivePath := "ssh/speaker/" + id + setup.SoundTouchSdkPrivateCfgPath
+			if aerr := addTarBytes(tw, archivePath, data); aerr != nil {
+				log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), aerr)
+			}
+
+			var cfg setup.PrivateCfg
+			if xerr := xml.Unmarshal(data, &cfg); xerr == nil {
+				rc.Source = "ssh"
+				rc.MargeServerURL = cfg.MargeServerUrl
+				rc.StatsServerURL = cfg.StatsServerUrl
+				rc.SwUpdateURL = cfg.SwUpdateUrl
+				rc.BmxRegistryURL = cfg.BmxRegistryUrl
+			} else {
+				log.Printf("[Export] parse %s for %s: %v", setup.SoundTouchSdkPrivateCfgPath, sanitizeLog(id), xerr)
+			}
+		}
+
+		// 2. Fall back to telnet getpdo when SSH gave us nothing.
+		if rc.Source == "none" {
+			if raw, ok := readTelnetSystemConfig(dev.IPAddress); ok {
+				archivePath := "telnet/speaker/" + id + "/system-configuration.txt"
+				if aerr := addTarBytes(tw, archivePath, []byte(raw)); aerr != nil {
+					log.Printf("[Export] add %s: %v", sanitizeLog(archivePath), aerr)
+				}
+
+				if fields := setup.ParseGetpdoConfig(raw); len(fields) > 0 {
+					rc.Source = "telnet"
+					rc.MargeServerURL = fields["margeServerUrl"]
+					rc.StatsServerURL = fields["statsServerUrl"]
+					rc.SwUpdateURL = fields["swUpdateUrl"]
+					rc.BmxRegistryURL = fields["bmxRegistryUrl"]
+
+					// SSH-free reachability implies the telnet migration method
+					// (xml/hosts/resolv all require SSH).
+					if !rc.SSHReachable {
+						rc.InferredMigrationMethod = "telnet"
+					}
+				}
+			}
+		}
+
+		out[dev.DeviceID] = rc
+	}
+
+	return out
 }
 
 // addServiceLog appends the in-memory service log buffer as logs/service.txt.
@@ -593,7 +766,7 @@ func addTarBytes(tw *tar.Writer, name string, data []byte) error {
 	return err
 }
 
-func (s *Server) buildDiagnosticReport() diagnosticReport {
+func (s *Server) buildDiagnosticReport(redirectCfgs map[string]*redirectConfig) diagnosticReport {
 	report := diagnosticReport{
 		GeneratedAt:    time.Now().UTC().Format(time.RFC3339),
 		ServiceVersion: buildVersionInfo(),
@@ -646,6 +819,8 @@ func (s *Server) buildDiagnosticReport() diagnosticReport {
 				})
 			}
 		}
+
+		dd.RedirectConfig = redirectCfgs[dev.DeviceID]
 
 		report.Devices = append(report.Devices, dd)
 	}

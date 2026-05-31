@@ -5,6 +5,15 @@ import (
 	"strings"
 )
 
+// ParseGetpdoConfig is an exported wrapper around the internal `getpdo
+// CurrentSystemConfiguration` reply parser, for callers outside this package
+// (e.g. the diagnostic export, which reads the live URL set over telnet when
+// SSH is unavailable). Returns a map keyed by config field name
+// (margeServerUrl, statsServerUrl, swUpdateUrl, bmxRegistryUrl, …).
+func ParseGetpdoConfig(text string) map[string]string {
+	return parseGetpdoConfig(text)
+}
+
 // crossCheckPreflights compares the URL fields visible via SSH (from the
 // parsed SoundTouchSdkPrivateCfg.xml) with the same fields visible via
 // telnet (from `getpdo CurrentSystemConfiguration`). Any field that is

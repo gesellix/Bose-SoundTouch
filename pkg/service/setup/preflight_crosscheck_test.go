@@ -19,6 +19,41 @@ func TestParseGetpdoConfig_StandardLines(t *testing.T) {
 	}
 }
 
+// TestParseGetpdoConfig_ExportedWrapper locks in the field-name contract the
+// diagnostic export (handlers.collectSpeakerRedirectConfig) relies on: the
+// exported wrapper must surface margeServerUrl / statsServerUrl / swUpdateUrl /
+// bmxRegistryUrl from a protobuf-text reply. If the parser's output keys ever
+// change, the export's telnet fallback would silently stop populating URLs —
+// this test fails loudly instead.
+func TestParseGetpdoConfig_ExportedWrapper(t *testing.T) {
+	in := `margeServerUrl {
+  text: "http://soundtouch.lan:8000"
+}
+statsServerUrl {
+  text: "http://soundtouch.lan:8000"
+}
+swUpdateUrl {
+  text: "http://soundtouch.lan:8000/updates"
+}
+bmxRegistryUrl {
+  text: "http://soundtouch.lan:8000/bmx/registry/v1/services"
+}
+->OK
+`
+
+	got := ParseGetpdoConfig(in)
+
+	for _, key := range []string{"margeServerUrl", "statsServerUrl", "swUpdateUrl", "bmxRegistryUrl"} {
+		if got[key] == "" {
+			t.Errorf("ParseGetpdoConfig missing %q; export relies on this key. got=%v", key, got)
+		}
+	}
+
+	if got["bmxRegistryUrl"] != "http://soundtouch.lan:8000/bmx/registry/v1/services" {
+		t.Errorf("bmxRegistryUrl = %q", got["bmxRegistryUrl"])
+	}
+}
+
 func TestParseGetpdoConfig_TolerantToNoise(t *testing.T) {
 	in := "BoseShell\n-> getpdo CurrentSystemConfiguration\nmargeServerUrl=http://example:8000\nrandom line without equals\n  statsServerUrl  =  http://example:8000  \n-> "
 
