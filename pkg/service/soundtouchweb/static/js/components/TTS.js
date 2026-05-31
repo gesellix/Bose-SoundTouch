@@ -1,37 +1,21 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 
 const html = htm.bind(h);
 
-// Shared with PlayURL so the AfterTouch service URL only has to be entered once.
-const LS_KEY = 'aftertouch_service_url';
-
 // TTS is a "source" view (like PlayURL / TuneIn / RadioBrowser): enter text,
-// pick a device, and the AfterTouch service synthesizes and plays it. Synthesis
-// and credentials live in the service; this collects text, a target, and the
-// service URL (the service hosts synthesized clips for the speaker to fetch).
+// pick a device, and the AfterTouch service synthesizes and plays it. Synthesis,
+// credentials, and the service URL all live server-side — soundtouch-web proxies
+// to the service it was started with (--service-url). The service URL is shown
+// read-only: unlike Play URL (whose URL is handed to the speaker), here
+// soundtouch-web makes the request itself, so a browser-supplied URL would be an
+// open SSRF proxy.
 export function TTS({ devices, serverServiceUrl }) {
     const [text, setText] = useState('');
-    const [serviceUrl, setServiceUrl] = useState(() => localStorage.getItem(LS_KEY) || '');
     const [pendingSpeak, setPendingSpeak] = useState(null);
     const [status, setStatus] = useState(null);
-
-    useEffect(() => {
-        if (serverServiceUrl && !localStorage.getItem(LS_KEY)) {
-            setServiceUrl(serverServiceUrl);
-        }
-    }, [serverServiceUrl]);
-
-    function onServiceUrlChange(val) {
-        setServiceUrl(val);
-        if (val) {
-            localStorage.setItem(LS_KEY, val);
-        } else {
-            localStorage.removeItem(LS_KEY);
-        }
-    }
 
     function startSpeak() {
         const trimmed = text.trim();
@@ -45,7 +29,7 @@ export function TTS({ devices, serverServiceUrl }) {
         setPendingSpeak(null);
         setStatus('Speaking…');
         try {
-            const resp = await api.speak(deviceId, item.text, serviceUrl.trim());
+            const resp = await api.speak(deviceId, item.text);
             setStatus(resp.success ? 'Speaking' : 'Error: ' + (resp.error || 'Unknown error'));
         } catch (e) {
             setStatus('Error: ' + e.message);
@@ -65,20 +49,27 @@ export function TTS({ devices, serverServiceUrl }) {
                     onInput=${(e) => setText(e.target.value)}
                     onKeyDown=${(e) => e.key === 'Enter' && startSpeak()}
                 />
-                <button class="btn-primary" onClick=${startSpeak} disabled=${!text.trim()}>🔊 Speak</button>
+                <button class="btn-primary" onClick=${startSpeak} disabled=${!text.trim() || !serverServiceUrl}>🔊 Speak</button>
             </div>
             <div class="tunein-toolbar" style="margin-top:.4rem">
                 <input
                     type="url"
                     class="tunein-search-input"
-                    placeholder="AfterTouch URL (https://…)"
-                    value=${serviceUrl}
-                    onInput=${(e) => onServiceUrlChange(e.target.value)}
-                    title="AfterTouch service base URL — the service synthesizes speech and hosts the clip for the speaker to play"
+                    value=${serverServiceUrl || ''}
+                    placeholder="(not configured — start soundtouch-web with --service-url)"
+                    readonly
+                    title="AfterTouch service URL — set server-side via --service-url"
                 />
             </div>
-            <div class="track-meta" style="margin-top:.4rem">
-                Uses the AfterTouch service's configured TTS provider (Settings → Integrations).
+            <div class="track-meta" style="margin-top:.4rem; opacity:.85">
+                ${serverServiceUrl
+                    ? html`Synthesized by the AfterTouch service (Settings → Integrations) and played on the speaker.`
+                    : html`<strong>TTS is unavailable:</strong> start soundtouch-web with <code>--service-url</code>.`}
+                <br/>
+                The service URL is fixed server-side and can't be edited here: soundtouch-web
+                makes the request itself, so a browser-supplied URL would let anyone use it as
+                an SSRF proxy. (Play URL differs — its URL is handed to the speaker, not fetched
+                here.)
             </div>
             ${status && html`<div class="track-meta" style="margin-top:.6rem">${status}</div>`}
 
