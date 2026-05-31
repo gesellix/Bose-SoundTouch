@@ -23,8 +23,8 @@ func ttsTestRouter(t *testing.T, baseURL string) (*chi.Mux, *Server) {
 
 	r := chi.NewRouter()
 	r.Get("/media/tts/{id}", server.HandleTTSMedia)
-	r.Post("/mgmt/tts/speak", server.HandleMgmtTTSSpeak)
-	r.Get("/mgmt/tts/config", server.HandleMgmtTTSConfig)
+	r.Post("/setup/tts/speak", server.HandleTTSSpeak)
+	r.Get("/setup/tts/config", server.HandleTTSConfig)
 
 	return r, server
 }
@@ -40,10 +40,10 @@ func mockCloudTTS(t *testing.T, audio string) *httptest.Server {
 	}))
 }
 
-func TestHandleMgmtTTSConfigNotConfigured(t *testing.T) {
+func TestHandleTTSConfigNotConfigured(t *testing.T) {
 	r, _ := ttsTestRouter(t, "http://localhost:8001")
 
-	req := httptest.NewRequest(http.MethodGet, "/mgmt/tts/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/setup/tts/config", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -61,11 +61,11 @@ func TestHandleMgmtTTSConfigNotConfigured(t *testing.T) {
 	}
 }
 
-func TestHandleMgmtTTSConfigConfigured(t *testing.T) {
+func TestHandleTTSConfigConfigured(t *testing.T) {
 	r, server := ttsTestRouter(t, "http://localhost:8001")
 	server.SetTTSService(tts.NewService(tts.NewTranslateProvider(), tts.Config{AppKey: "k", DefaultLanguage: "EN"}))
 
-	req := httptest.NewRequest(http.MethodGet, "/mgmt/tts/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/setup/tts/config", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -139,10 +139,10 @@ func TestHandleTTSMediaMissingClip(t *testing.T) {
 	}
 }
 
-func TestHandleMgmtTTSSpeakNotConfigured(t *testing.T) {
+func TestHandleTTSSpeakNotConfigured(t *testing.T) {
 	r, _ := ttsTestRouter(t, "http://localhost:8001")
 
-	req := httptest.NewRequest(http.MethodPost, "/mgmt/tts/speak", strings.NewReader(`{"host":"192.0.2.10","text":"hi"}`))
+	req := httptest.NewRequest(http.MethodPost, "/setup/tts/speak", strings.NewReader(`{"host":"192.0.2.10","text":"hi"}`))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -151,7 +151,7 @@ func TestHandleMgmtTTSSpeakNotConfigured(t *testing.T) {
 	}
 }
 
-func TestHandleMgmtTTSSpeakValidation(t *testing.T) {
+func TestHandleTTSSpeakValidation(t *testing.T) {
 	r, server := ttsTestRouter(t, "http://localhost:8001")
 	server.SetTTSService(tts.NewService(tts.NewTranslateProvider(), tts.Config{AppKey: "k"}))
 
@@ -167,7 +167,7 @@ func TestHandleMgmtTTSSpeakValidation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/mgmt/tts/speak", strings.NewReader(tc.body))
+			req := httptest.NewRequest(http.MethodPost, "/setup/tts/speak", strings.NewReader(tc.body))
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
 

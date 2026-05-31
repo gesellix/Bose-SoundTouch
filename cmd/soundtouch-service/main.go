@@ -1321,11 +1321,6 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 				r.Post("/prime", server.HandleMgmtPrimeDeviceAmazon)
 			})
 
-			r.Route("/tts", func(r chi.Router) {
-				r.Post("/speak", server.HandleMgmtTTSSpeak)
-				r.Get("/config", server.HandleMgmtTTSConfig)
-			})
-
 			r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)
 		})
 	})
@@ -1338,6 +1333,11 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Get("/discovery-status", server.HandleGetDiscoveryStatus)
 		r.Get("/settings", server.HandleGetSettings)
 		r.Post("/settings", server.HandleUpdateSettings)
+		// TTS lives under /setup (LAN-trust, like the rest of the integration
+		// surface and Play URL), not /mgmt: the API key is already configured
+		// via /setup/settings, and -web/CLI reach this without mgmt credentials.
+		r.Post("/tts/speak", server.HandleTTSSpeak)
+		r.Get("/tts/config", server.HandleTTSConfig)
 		r.Get("/info/{deviceId}", server.HandleGetDeviceInfo)
 		r.Get("/summary/{deviceId}", server.HandleGetMigrationSummary)
 		r.Post("/migrate/{deviceId}", server.HandleMigrateDevice)

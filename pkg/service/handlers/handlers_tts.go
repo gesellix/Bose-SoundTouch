@@ -25,9 +25,9 @@ type ttsSpeakRequest struct {
 	Volume   *int   `json:"volume,omitempty"`
 }
 
-// HandleMgmtTTSSpeak synthesizes the requested text (or builds a direct URL),
+// HandleTTSSpeak synthesizes the requested text (or builds a direct URL),
 // then tells the target speaker to play it via the /speaker endpoint.
-func (s *Server) HandleMgmtTTSSpeak(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleTTSSpeak(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	svc := s.ttsSvc()
@@ -147,8 +147,8 @@ func (s *Server) HandleTTSMedia(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(audio)
 }
 
-// HandleMgmtTTSConfig reports the active TTS configuration (no secrets).
-func (s *Server) HandleMgmtTTSConfig(w http.ResponseWriter, _ *http.Request) {
+// HandleTTSConfig reports the active TTS configuration (no secrets).
+func (s *Server) HandleTTSConfig(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	svc := s.ttsSvc()

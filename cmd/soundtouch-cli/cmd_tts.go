@@ -65,17 +65,6 @@ func ttsSpeakCmd() *cli.Command {
 				Aliases: []string{"v"},
 				Usage:   "Playback volume (0-100, 0 = service default)",
 			},
-			&cli.StringFlag{
-				Name:    "mgmt-username",
-				Usage:   "Management API username for HTTP Basic Auth",
-				Value:   "admin",
-				EnvVars: []string{"MGMT_USERNAME"},
-			},
-			&cli.StringFlag{
-				Name:    "mgmt-password",
-				Usage:   "Management API password for HTTP Basic Auth",
-				EnvVars: []string{"MGMT_PASSWORD"},
-			},
 		),
 		Action: ttsSpeak,
 	}
@@ -116,13 +105,12 @@ func ttsSpeak(c *cli.Context) error {
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, serviceURL+"/mgmt/tts/speak", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, serviceURL+"/setup/tts/speak", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(c.String("mgmt-username"), c.String("mgmt-password"))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

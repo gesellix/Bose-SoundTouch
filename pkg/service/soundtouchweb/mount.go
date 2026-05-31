@@ -79,7 +79,7 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	// Custom URL playback
 	r.Post("/api/play-url/{id}", app.HandlePlayURL)
 
-	// Text-to-speech (proxied to the AfterTouch service's /mgmt/tts/speak)
+	// Text-to-speech (proxied to the AfterTouch service's /setup/tts/speak)
 	r.Post("/api/device-speak/{id}", app.HandleAPISpeakText)
 
 	// SPA routes — serve index.html for client-side routing

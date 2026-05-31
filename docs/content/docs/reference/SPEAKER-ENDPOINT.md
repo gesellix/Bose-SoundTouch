@@ -308,10 +308,11 @@ soundtouch-service
 
 ### Triggering speech
 
-Service management API (Basic Auth):
+Service HTTP API (under `/setup`, LAN-trust like the rest of the setup surface,
+no auth):
 
 ```bash
-curl -u admin:change_me! -X POST http://soundtouch.local:8000/mgmt/tts/speak \
+curl -X POST http://soundtouch.local:8000/setup/tts/speak \
   -H 'Content-Type: application/json' \
   -d '{"host":"192.0.2.100","text":"Dinner is ready"}'
 ```
@@ -328,9 +329,9 @@ soundtouch-cli tts speak \
   --text "Dinner is ready"
 ```
 
-Web UI: the per-device controls include a "Say something…" box. soundtouch-web
-proxies it to the service, so start it with `--service-url` (and `--mgmt-username`
-/ `--mgmt-password` if you changed the defaults).
+Web UI: the TTS source view (and the Play URL view) include a "Say something…"
+box. soundtouch-web proxies it to the service, so start it with `--service-url`
+(or enter the service URL in the view).
 
 ### Notes and limitations
 
