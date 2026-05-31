@@ -100,6 +100,7 @@ GET      /streaming/resources/api_versions.xml                        handlers.(
 GET      /streaming/software/update/account/{account}                 handlers.(*Server).HandleMargeSoftwareUpdate-fm
 GET      /streaming/sourceproviders                                   handlers.(*Server).HandleMargeSourceProviders-fm
 GET      /updates/soundtouch                                          handlers.(*Server).HandleMargeSoftwareUpdate-fm
+GET      /v1/auth                                                     handlers.(*Server).HandleSpeakerAuth-fm
 GET      /v1/blacklist/{deviceId}                                     setupRouter
 GET      /web/*                                                       setupRouter.(*Server).HandleWeb
 HEAD     /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter handlers.(*Server).HandleSiriusXMLiveAdapter-fm

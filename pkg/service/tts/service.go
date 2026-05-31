@@ -49,6 +49,10 @@ func NewService(provider Provider, cfg Config) *Service {
 // ProviderName returns the active provider's identifier.
 func (s *Service) ProviderName() string { return s.provider.Name() }
 
+// BaseURL returns the configured public service URL (used to build the
+// /custom/v1/playback LOCAL_INTERNET_RADIO proxy URL for playback).
+func (s *Service) BaseURL() string { return s.cfg.BaseURL }
+
 // AppKey returns the configured Bose /speaker app_key.
 func (s *Service) AppKey() string { return s.cfg.AppKey }
 

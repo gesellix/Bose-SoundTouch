@@ -1283,6 +1283,11 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Get("/blacklist/{deviceId}", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		})
+		// app_key validation for the /speaker notification endpoint. Real Bose
+		// validated the app_key against its cloud; as the cloud replacement we
+		// accept it (200). A 404 here makes the speaker report "invalid app key"
+		// (HandleInvalidAppKeyCb) and refuse TTS/URL notifications.
+		r.Get("/auth", server.HandleSpeakerAuth)
 	})
 
 	r.Route("/mgmt", func(r chi.Router) {
