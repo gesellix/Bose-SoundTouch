@@ -68,8 +68,7 @@ export function TTS({ devices, serverServiceUrl }) {
                 <br/>
                 The service URL is fixed server-side and can't be edited here: soundtouch-web
                 makes the request itself, so a browser-supplied URL would let anyone use it as
-                an SSRF proxy. (Play URL differs — its URL is handed to the speaker, not fetched
-                here.)
+                an SSRF proxy.
             </div>
             ${status && html`<div class="track-meta" style="margin-top:.6rem">${status}</div>`}
 
