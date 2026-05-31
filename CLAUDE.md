@@ -227,6 +227,16 @@ When working with a human user in this repo:
   back to whatever you were doing when the user asks something else.
 - **Don't substitute assumptions for real information.** When something
   is unclear, ask or check, rather than guessing and proceeding.
+- **An issue is only "resolved" once the reporter confirms.** Prefer
+  "candidate fix, awaiting reporter confirmation" over "fixed" or
+  "closed" until the person who reported it says it works. A merged PR
+  or a shipped release is not confirmation.
+- **Mind GitHub's `#<id>` auto-linking.** `#<id>` links to issues and
+  pull requests only — it does **not** resolve to discussions. For a
+  discussion, write the full URL
+  (`https://github.com/gesellix/Bose-SoundTouch/discussions/<id>`). For
+  security alerts, write e.g. "CodeQL alert 280" (no `#`) or the full
+  URL, since `#280` would point at an unrelated issue/PR.
 
 These principles also apply to other AI assistants pointed at this
 repo. Tool-specific config dirs (e.g. `.junie/`, `.claude/`) should
