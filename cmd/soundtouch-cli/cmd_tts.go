@@ -11,30 +11,21 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// ttsCommand assembles the `soundtouch-cli tts …` command group. Unlike
-// `speaker tts` (which talks to a speaker directly using the Google Translate
-// URL), these subcommands call the AfterTouch service, which synthesizes audio
-// with the configured provider (e.g. Google Cloud TTS) and plays it on a
-// speaker. They require --service-url.
-func ttsCommand() *cli.Command {
+// ttsCloudCmd is the `speaker tts-cloud` subcommand. Unlike `speaker tts`
+// (which sends a Google Translate URL straight to the speaker), this routes
+// through the AfterTouch service, which synthesizes the audio with the
+// configured provider (e.g. Google Cloud TTS), hosts it, and plays it on the
+// speaker. It therefore needs --service-url. Target the speaker with the global
+// --host, or with --device (resolved to an IP by the service).
+func ttsCloudCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "tts",
-		Usage: "Text-to-speech via the AfterTouch service (Google Cloud TTS or Google Translate)",
-		Description: "Sends text to the AfterTouch service, which synthesizes audio (or builds a\n" +
-			"direct URL) and plays it on a speaker via the /speaker endpoint.\n\n" +
-			"This differs from 'speaker tts', which talks to a speaker directly using\n" +
-			"the Google Translate URL. Use 'tts speak' for the service's configured\n" +
-			"provider (e.g. Google Cloud TTS).",
-		Subcommands: []*cli.Command{
-			ttsSpeakCmd(),
-		},
-	}
-}
-
-func ttsSpeakCmd() *cli.Command {
-	return &cli.Command{
-		Name:  "speak",
-		Usage: "Synthesize text and play it on a speaker via the AfterTouch service",
+		Name:  "tts-cloud",
+		Usage: "Speak text via the AfterTouch service (Google Cloud TTS), synthesized server-side",
+		Description: "Routes through the AfterTouch service (requires --service-url), which\n" +
+			"synthesizes the audio with the configured provider, hosts it, and plays it\n" +
+			"on the speaker. Target the speaker with the global --host or with --device.\n\n" +
+			"Contrast with 'speaker tts', which sends a Google Translate URL directly to\n" +
+			"the speaker without involving the service.",
 		Flags: append(CloudCommonFlags,
 			&cli.StringFlag{
 				Name:     "text",
@@ -45,11 +36,7 @@ func ttsSpeakCmd() *cli.Command {
 			&cli.StringFlag{
 				Name:    "device",
 				Aliases: []string{"d"},
-				Usage:   "Target device ID (the service resolves it to an IP)",
-			},
-			&cli.StringFlag{
-				Name:  "speaker-host",
-				Usage: "Target speaker IP/hostname (alternative to --device)",
+				Usage:   "Target device ID (the service resolves it to an IP); alternative to --host",
 			},
 			&cli.StringFlag{
 				Name:    "language",
@@ -71,17 +58,17 @@ func ttsSpeakCmd() *cli.Command {
 				Value: "radio",
 			},
 		),
-		Action: ttsSpeak,
+		Action: ttsCloud,
 	}
 }
 
-func ttsSpeak(c *cli.Context) error {
+func ttsCloud(c *cli.Context) error {
 	serviceURL := strings.TrimRight(c.String("service-url"), "/")
 	device := c.String("device")
-	speakerHost := c.String("speaker-host")
+	host := c.String("host") // global flag
 
-	if device == "" && speakerHost == "" {
-		return fmt.Errorf("one of --device or --speaker-host is required")
+	if device == "" && host == "" {
+		return fmt.Errorf("one of --host or --device is required")
 	}
 
 	payload := map[string]interface{}{"text": c.String("text")}
@@ -89,8 +76,8 @@ func ttsSpeak(c *cli.Context) error {
 		payload["deviceId"] = device
 	}
 
-	if speakerHost != "" {
-		payload["host"] = speakerHost
+	if host != "" {
+		payload["host"] = host
 	}
 
 	if l := c.String("language"); l != "" {

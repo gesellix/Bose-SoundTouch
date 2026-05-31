@@ -317,16 +317,19 @@ curl -X POST http://soundtouch.local:8000/setup/tts/speak \
   -d '{"host":"192.0.2.100","text":"Dinner is ready"}'
 ```
 
-`deviceId` may be used instead of `host` (the service resolves it to an IP from
-its datastore). Optional fields: `language`, `voice`, `volume`.
+`deviceId` may be used instead of `host` (the service resolves it to an IP from its datastore). Optional fields: `language`, `voice`, `volume`, and `method`
+(`radio`, the default LOCAL_INTERNET_RADIO path, or `speaker`, the /speaker
+notification path that ducks and resumes playback).
 
-CLI (calls the service, not the speaker directly):
+CLI (`speaker tts-cloud` routes through the service for Cloud TTS, in contrast
+to `speaker tts` which sends a Google Translate URL straight to the speaker):
 
 ```bash
-soundtouch-cli tts speak \
+soundtouch-cli speaker tts-cloud \
   --service-url http://soundtouch.local:8000 \
-  --speaker-host 192.0.2.100 \
-  --text "Dinner is ready"
+  --host 192.0.2.100 \
+  --text "Dinner is ready" \
+  --method speaker
 ```
 
 Web UI: the TTS source view (and the Play URL view) include a "Say something…"
