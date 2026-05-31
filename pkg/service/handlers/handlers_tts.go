@@ -4,9 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -28,19 +26,19 @@ type ttsSpeakRequest struct {
 	Format   string `json:"format,omitempty"`
 	Volume   *int   `json:"volume,omitempty"`
 	// Method selects how the clip is played on the speaker:
-	//   "radio"   (default) — LOCAL_INTERNET_RADIO via /custom/v1/playback,
+	//   "speaker" (default) — POST /speaker notification; ducks and resumes
+	//                          the current playback, supports volume. Requires
+	//                          the speaker to accept the app_key (validated via
+	//                          GET /v1/auth, which we answer 200).
+	//   "radio"             — LOCAL_INTERNET_RADIO via /custom/v1/playback,
 	//                          no app_key; replaces the current source.
-	//   "speaker"           — POST /speaker notification; ducks and resumes
-	//                          the current playback, supports volume, but
-	//                          requires the speaker to accept the app_key
-	//                          (validated via GET /v1/auth, which we answer 200).
 	Method string `json:"method,omitempty"`
 }
 
 // HandleTTSSpeak synthesizes the requested text and plays it on the target
 // speaker. Two playback methods (see ttsSpeakRequest.Method): the default
-// LOCAL_INTERNET_RADIO path (like the "ding", no app_key) or the /speaker
-// notification path (ducks/resumes and supports volume).
+// /speaker notification path (ducks/resumes and supports volume) or the
+// LOCAL_INTERNET_RADIO path (like the "ding", no app_key, replaces the source).
 func (s *Server) HandleTTSSpeak(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -84,7 +82,16 @@ func (s *Server) HandleTTSSpeak(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{"status": "ok", "host": host, "url": playURL}
 
 	switch method {
-	case "speaker":
+	case "radio":
+		location := buildCustomPlaybackURL(svc.BaseURL(), playURL, "AfterTouch TTS: "+req.Text)
+		if err := c.SelectLocalInternetRadio(location, "", "AfterTouch TTS", ""); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, "play (radio): "+err.Error()), http.StatusBadGateway)
+			return
+		}
+
+		resp["method"] = "radio"
+		resp["location"] = location
+	default: // "speaker" or unset — ducks and resumes the current playback
 		appKey := svc.AppKey()
 		if appKey == "" {
 			// The speaker validates the app_key via GET /v1/auth, which we
@@ -110,15 +117,6 @@ func (s *Server) HandleTTSSpeak(w http.ResponseWriter, r *http.Request) {
 		}
 
 		resp["method"] = "speaker"
-	default: // "radio" or unset
-		location := buildCustomPlaybackURL(svc.BaseURL(), playURL, "AfterTouch TTS: "+req.Text)
-		if err := c.SelectLocalInternetRadio(location, "", "AfterTouch TTS", ""); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":%q}`, "play (radio): "+err.Error()), http.StatusBadGateway)
-			return
-		}
-
-		resp["method"] = "radio"
-		resp["location"] = location
 	}
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -136,20 +134,14 @@ func buildCustomPlaybackURL(base, audioURL, name string) string {
 	return base + "/custom/v1/playback/" + encoded + "?name=" + url.QueryEscape(name)
 }
 
-// HandleSpeakerAuth accepts the app_key the speaker presents when validating a
-// /speaker notification. Real Bose validated against its cloud; as the cloud
-// replacement we always accept (200) so the speaker doesn't report an invalid
-// app key and refuse the notification.
-func (s *Server) HandleSpeakerAuth(w http.ResponseWriter, r *http.Request) {
-	// TEMP DEBUG: dump the full request so we can see how the speaker presents
-	// the app_key (query param / header / body) and what a valid response might
-	// need to look like. Remove once the /speaker auth contract is understood.
-	if dump, err := httputil.DumpRequest(r, true); err == nil {
-		log.Printf("[TTS][/v1/auth DEBUG] %s", dump)
-	} else {
-		log.Printf("[TTS][/v1/auth DEBUG] dump failed: %v; method=%s url=%s headers=%v", err, r.Method, r.URL.String(), r.Header)
-	}
-
+// HandleSpeakerAuth accepts the app_key a speaker presents when validating a
+// /speaker notification. The speaker issues GET /v1/auth to the (now-dead) Bose
+// host audionotification.api.bosecm.com — which AfterTouch's DNS interception
+// points at us — with the key in an "Apikeyheader" header. An empty 200 is
+// sufficient; real Bose validated against its cloud, but as the cloud
+// replacement we always accept, so the speaker doesn't report an invalid app
+// key (HandleInvalidAppKeyCb) and refuse the notification.
+func (s *Server) HandleSpeakerAuth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 

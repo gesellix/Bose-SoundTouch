@@ -318,8 +318,9 @@ curl -X POST http://soundtouch.local:8000/setup/tts/speak \
 ```
 
 `deviceId` may be used instead of `host` (the service resolves it to an IP from its datastore). Optional fields: `language`, `voice`, `volume`, and `method`
-(`radio`, the default LOCAL_INTERNET_RADIO path, or `speaker`, the /speaker
-notification path that ducks and resumes playback).
+(`speaker`, the default /speaker notification path that ducks and resumes
+playback, or `radio`, the LOCAL_INTERNET_RADIO path that needs no app_key but
+replaces the current source).
 
 CLI (`speaker tts-cloud` routes through the service for Cloud TTS, in contrast
 to `speaker tts` which sends a Google Translate URL straight to the speaker):

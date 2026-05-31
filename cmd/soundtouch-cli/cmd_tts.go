@@ -54,8 +54,8 @@ func ttsCloudCmd() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "method",
-				Usage: "Playback method: 'radio' (LOCAL_INTERNET_RADIO, no app_key, replaces source) or 'speaker' (/speaker notification, ducks+resumes, supports volume)",
-				Value: "radio",
+				Usage: "Playback method: 'speaker' (/speaker notification, ducks+resumes, supports volume) or 'radio' (LOCAL_INTERNET_RADIO, no app_key, replaces source)",
+				Value: "speaker",
 			},
 		),
 		Action: ttsCloud,
