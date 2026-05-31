@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/tts"
 	"github.com/go-chi/chi/v5"
@@ -177,6 +178,64 @@ func TestHandleTTSSpeakValidation(t *testing.T) {
 
 			if rec.Code != tc.want {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.want)
+			}
+		})
+	}
+}
+
+// TestResolveTTSHost covers the SSRF guard plus the host-normalization that
+// lets a base URL (what a client's Host() returns, e.g. soundtouch-web sends
+// "http://ip:8090") resolve to a known device. The result is always the
+// datastore's bare IP, never the caller's value.
+func TestResolveTTSHost(t *testing.T) {
+	ds := datastore.NewDataStore(t.TempDir())
+	if err := ds.Initialize(); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+
+	if err := ds.SaveDeviceInfo("1000001", "DEVICEID01", &models.ServiceDeviceInfo{
+		DeviceID:  "DEVICEID01",
+		AccountID: "1000001",
+		IPAddress: "192.0.2.10",
+	}); err != nil {
+		t.Fatalf("SaveDeviceInfo: %v", err)
+	}
+
+	server := NewServer(ds, nil, "http://localhost:8001", false, false, false)
+
+	cases := []struct {
+		name    string
+		req     ttsSpeakRequest
+		want    string
+		wantErr bool
+	}{
+		{"bare ip", ttsSpeakRequest{Host: "192.0.2.10"}, "192.0.2.10", false},
+		{"base url", ttsSpeakRequest{Host: "http://192.0.2.10:8090"}, "192.0.2.10", false},
+		{"host:port", ttsSpeakRequest{Host: "192.0.2.10:8090"}, "192.0.2.10", false},
+		{"by device id", ttsSpeakRequest{DeviceID: "DEVICEID01"}, "192.0.2.10", false},
+		// SSRF guard intact: unknown targets are rejected even in URL form.
+		{"unknown host url", ttsSpeakRequest{Host: "http://203.0.113.99:8090"}, "", true},
+		{"unknown device", ttsSpeakRequest{DeviceID: "NOPE"}, "", true},
+		{"no target", ttsSpeakRequest{}, "", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := server.resolveTTSHost(tc.req)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
 	}

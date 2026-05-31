@@ -161,6 +161,8 @@ PORT=8080
 BIND_ADDR=
 DISCOVERY_INTERFACE=
 SOUNDTOUCH_DEVICES=
+SERVICE_URL=
+SERVICE_CA=
 ```
 
 `SOUNDTOUCH_DEVICES` accepts a comma-separated list of IP addresses for manual
@@ -170,6 +172,22 @@ network:
 ```bash
 SOUNDTOUCH_DEVICES=192.0.2.1,192.0.2.2
 ```
+
+`SERVICE_URL` links `soundtouch-web` to your `soundtouch-service` instance,
+which is required for Text-to-Speech ("Speak"). When the service is served
+over HTTPS with its own self-signed certificate (the default), also set
+`SERVICE_CA` to that CA certificate, or the proxied TTS call fails with
+`x509: certificate signed by unknown authority`. The CA is the service's
+`<dataDir>/certs/ca.crt` (also downloadable from `GET /setup/ca.crt`). For
+example:
+
+```bash
+SERVICE_URL=https://soundtouch.local
+SERVICE_CA=/var/lib/soundtouch-service/certs/ca.crt
+```
+
+With a plain `http://` `SERVICE_URL`, `SERVICE_CA` is unused (no TLS) and can
+be left empty.
 
 After editing the env file:
 

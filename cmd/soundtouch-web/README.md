@@ -93,10 +93,37 @@ go build -o soundtouch-web
 
 ### Command Line Options
 ```
--port string    Web server port (default "8080")
--host string    Specific SoundTouch device host (optional, enables single-device mode)
--help          Show help information
+--port, -p string    HTTP port to listen on (default "8080", env PORT)
+--bind string        Address for the HTTP listener: host, IP, or interface name (env BIND_ADDR)
+--interface string   Network interface name for mDNS/UPnP discovery (env DISCOVERY_INTERFACE)
+--devices strings    SoundTouch device IP(s) to add manually, repeatable (env SOUNDTOUCH_DEVICES)
+--service-url string AfterTouch service base URL, e.g. https://soundtouch.local (env SERVICE_URL)
+--service-ca string  Path to the AfterTouch service CA certificate (PEM) to trust (env SERVICE_CA)
+--help, -h           Show help information
 ```
+
+### Text-to-Speech (TTS)
+
+TTS synthesis and the Bose `app_key` live in the AfterTouch service, not in
+soundtouch-web, so the "Speak" feature proxies to the service's
+`/setup/tts/speak` endpoint. To use it, point soundtouch-web at the service
+with `--service-url`.
+
+When the service is served over HTTPS with its own self-signed certificate
+(the default), soundtouch-web also needs to trust the service's CA, or the
+proxied call fails with `x509: certificate signed by unknown authority`. Pass
+the CA with `--service-ca`; it is the service's `<dataDir>/certs/ca.crt`:
+
+```bash
+soundtouch-web \
+  --service-url https://soundtouch.fritz.box \
+  --service-ca /path/to/certs/ca.crt
+```
+
+The CA is appended to the system trust store, so a service URL that uses a
+publicly trusted certificate keeps working without the flag. The target
+speaker must be known to the service (it resolves the speaker against its own
+device datastore).
 
 ## Usage
 

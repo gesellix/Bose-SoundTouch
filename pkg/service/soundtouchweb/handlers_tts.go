@@ -5,11 +5,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// hostOnly reduces a base URL or host:port to a bare host (IP or hostname).
+// device.Client.Host() returns a full base URL like "http://192.168.0.2:8090",
+// but the AfterTouch service matches the TTS target against bare datastore IPs,
+// so we strip the scheme and port before sending it. Inputs that are already
+// bare ("192.168.0.2") are returned unchanged.
+func hostOnly(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		return u.Hostname()
+	}
+
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return host
+	}
+
+	return raw
+}
 
 // HandleAPISpeakText synthesizes and plays text on a device. The Web UI talks
 // to speakers directly for most controls, but TTS synthesis (Google Cloud) and
@@ -60,10 +84,22 @@ func (app *WebApp) HandleAPISpeakText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Identify the target speaker for the service. Prefer the DeviceID (the
+	// canonical, unambiguous key the service matches in its datastore). Also
+	// send a bare-IP host as a fallback: device.Client.Host() is a full base
+	// URL (http://ip:8090), which the service's exact-match SSRF guard
+	// (resolveTTSHost) would reject, so strip it down to host-only.
 	payload := map[string]interface{}{
-		"host": device.Client.Host(),
 		"text": req.Text,
 	}
+	if device.DeviceInfo != nil && device.DeviceInfo.DeviceID != "" {
+		payload["deviceId"] = device.DeviceInfo.DeviceID
+	}
+
+	if h := hostOnly(device.Client.Host()); h != "" {
+		payload["host"] = h
+	}
+
 	if req.Language != "" {
 		payload["language"] = req.Language
 	}
@@ -90,7 +126,7 @@ func (app *WebApp) HandleAPISpeakText(w http.ResponseWriter, r *http.Request) {
 
 	upstream.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(upstream)
+	resp, err := app.serviceHTTPClient().Do(upstream)
 	if err != nil {
 		app.sendError(w, fmt.Sprintf("TTS service request failed: %v", err), http.StatusBadGateway)
 		return

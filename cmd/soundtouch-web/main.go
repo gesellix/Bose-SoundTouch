@@ -81,6 +81,11 @@ func main() {
 				Usage:   "AfterTouch service base URL (e.g. https://soundtouch.local). Required for custom stream URLs to work as presets via LOCAL_INTERNET_RADIO",
 				EnvVars: []string{"SERVICE_URL"},
 			},
+			&cli.StringFlag{
+				Name:    "service-ca",
+				Usage:   "Path to the AfterTouch service CA certificate (PEM) to trust for server-side calls such as TTS. Typically the service's <dataDir>/certs/ca.crt. Appended to the system trust store",
+				EnvVars: []string{"SERVICE_CA"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 			port := c.String("port")
@@ -115,6 +120,17 @@ func main() {
 			webApp.Date = date
 			webApp.RepoURL = repoURL
 			webApp.ServiceURL = strings.TrimRight(c.String("service-url"), "/")
+
+			if caPath := c.String("service-ca"); caPath != "" {
+				client, err := soundtouchweb.NewServiceHTTPClient(caPath)
+				if err != nil {
+					log.Fatalf("--service-ca: %v", err)
+				}
+
+				webApp.ServiceClient = client
+
+				log.Printf("Trusting AfterTouch service CA from %s", sanitizeLog(caPath))
+			}
 
 			discoveryService := soundtouchweb.NewDiscoveryService(ifaceName)
 

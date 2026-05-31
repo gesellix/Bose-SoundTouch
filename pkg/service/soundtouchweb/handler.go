@@ -42,7 +42,24 @@ type WebApp struct {
 	RepoURL    string
 	ServiceURL string
 
+	// ServiceClient is used for server-side calls to the AfterTouch service
+	// (currently the TTS proxy). When nil, serviceHTTPClient falls back to
+	// http.DefaultClient. Set it via NewServiceHTTPClient to trust the
+	// service's self-signed CA.
+	ServiceClient *http.Client
+
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
+}
+
+// serviceHTTPClient returns the client used for outbound calls to the
+// AfterTouch service, falling back to http.DefaultClient when no CA-trusting
+// client was configured.
+func (app *WebApp) serviceHTTPClient() *http.Client {
+	if app.ServiceClient != nil {
+		return app.ServiceClient
+	}
+
+	return http.DefaultClient
 }
 
 // DeviceEntry pairs a device id with its connection. Used by

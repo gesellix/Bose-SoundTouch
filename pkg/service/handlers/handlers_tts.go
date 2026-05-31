@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -152,9 +153,15 @@ func (s *Server) HandleSpeakerAuth(w http.ResponseWriter, _ *http.Request) {
 // baseURL -> the outbound request). Match by DeviceID, or by Host equal to a
 // known device's IP; either way the returned string is the datastore's
 // IPAddress, not the caller-supplied value.
+//
+// The incoming Host is normalized to a bare host (scheme and port stripped)
+// before the match so callers that pass a base URL (e.g. "http://ip:8090",
+// which is what a client's Host() returns) still resolve. This only makes the
+// needle comparable to the datastore's bare IPs; the result is still always a
+// datastore IP, so the SSRF guarantee is unchanged.
 func (s *Server) resolveTTSHost(req ttsSpeakRequest) (string, error) {
 	deviceID := strings.TrimSpace(req.DeviceID)
-	host := strings.TrimSpace(req.Host)
+	host := ttsHostOnly(strings.TrimSpace(req.Host))
 
 	if deviceID == "" && host == "" {
 		return "", fmt.Errorf("either deviceId or host is required")
@@ -181,6 +188,25 @@ func (s *Server) resolveTTSHost(req ttsSpeakRequest) (string, error) {
 	}
 
 	return "", fmt.Errorf("host %s is not a known device", host)
+}
+
+// ttsHostOnly reduces a base URL or host:port to a bare host so it can be
+// compared against the datastore's bare IPs. Inputs that are already bare are
+// returned unchanged. The empty string maps to the empty string.
+func ttsHostOnly(raw string) string {
+	if raw == "" {
+		return ""
+	}
+
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		return u.Hostname()
+	}
+
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return host
+	}
+
+	return raw
 }
 
 // HandleTTSMedia serves a synthesized clip by id for the speaker to fetch.

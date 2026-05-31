@@ -14,6 +14,12 @@ set -euo pipefail
 #     HTTP_PORT=8081 \
 #     bash install-web.sh
 #
+#   # With an AfterTouch service link for TTS (HTTPS + self-signed CA):
+#   sudo \
+#     SERVICE_URL=https://soundtouch.local \
+#     SERVICE_CA=/var/lib/soundtouch-service/certs/ca.crt \
+#     bash install-web.sh
+#
 # Or with a version argument to perform an update:
 #   sudo bash install-web.sh v0.104.0
 #
@@ -47,6 +53,13 @@ HTTP_PORT="${HTTP_PORT:-8080}"
 BIND_ADDR="${BIND_ADDR:-}"
 DISCOVERY_INTERFACE="${DISCOVERY_INTERFACE:-}"
 SOUNDTOUCH_DEVICES="${SOUNDTOUCH_DEVICES:-}"
+
+# Optional AfterTouch service link (needed for TTS / "Speak").
+# SERVICE_URL: base URL of soundtouch-service, e.g. https://soundtouch.local
+# SERVICE_CA:  path to the service CA cert when it serves HTTPS with its own
+#              self-signed certificate, e.g. /var/lib/soundtouch-service/certs/ca.crt
+SERVICE_URL="${SERVICE_URL:-}"
+SERVICE_CA="${SERVICE_CA:-}"
 
 # Override if you want to force a specific asset suffix:
 #   ARCH_ASSET=linux-armv7|linux-arm64|linux-amd64
@@ -179,6 +192,7 @@ self_update() {
 
   export IS_SELF_UPDATE="true"
   export VERSION HTTP_PORT BIND_ADDR DISCOVERY_INTERFACE SOUNDTOUCH_DEVICES
+  export SERVICE_URL SERVICE_CA
   export BIN_PATH CONFIG_DIR ENV_FILE SERVICE_USER SERVICE_GROUP
 
   exec "${SCRIPT_PATH}" "$@"
@@ -192,6 +206,8 @@ write_env_file() {
     "BIND_ADDR=${BIND_ADDR}"
     "DISCOVERY_INTERFACE=${DISCOVERY_INTERFACE}"
     "SOUNDTOUCH_DEVICES=${SOUNDTOUCH_DEVICES}"
+    "SERVICE_URL=${SERVICE_URL}"
+    "SERVICE_CA=${SERVICE_CA}"
   )
 
   if [[ ! -f "${ENV_FILE}" ]]; then
