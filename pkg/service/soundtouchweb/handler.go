@@ -413,12 +413,17 @@ func (app *WebApp) handleSourceControl(w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
+	// Forward the optional account parameter as sourceAccount. Devices with
+	// multiple jacks that share source="AUX" (e.g. ST-5 CD/Aux inputs)
+	// disambiguate them via distinct sourceAccount values (AUX, AUX1, …).
+	accountParam := r.URL.Query().Get("account")
+
 	if device.Client == nil {
 		app.sendError(w, "Device client not available", http.StatusInternalServerError)
 		return
 	}
 
-	err := device.Client.SelectSource(sourceParam, "")
+	err := device.Client.SelectSource(sourceParam, accountParam)
 	app.sendControlResponse(w, err, fmt.Sprintf("Selected source %s", sourceParam))
 }
 

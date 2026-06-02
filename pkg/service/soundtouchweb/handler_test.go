@@ -704,3 +704,68 @@ func TestHandleDevicePlay_SourceAccountFiltering(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleSourceControl_ForwardsAccount verifies that the account query
+// parameter is forwarded as sourceAccount in the /select XML. Devices like
+// the ST-5 expose multiple AUX jacks that share source="AUX" and are only
+// disambiguated by distinct sourceAccount values (AUX, AUX1, …). Regression
+// test for issue #444, where the handler dropped the account parameter.
+func TestHandleSourceControl_ForwardsAccount(t *testing.T) {
+	tests := []struct {
+		name              string
+		query             string
+		wantSourceAccount string
+	}{
+		{
+			name:              "AUX with explicit account — forwarded",
+			query:             "name=AUX&account=AUX1",
+			wantSourceAccount: "AUX1",
+		},
+		{
+			name:              "AUX without account — defaults to AUX",
+			query:             "name=AUX",
+			wantSourceAccount: "AUX",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody string
+
+			// Fake speaker that captures the /select POST body.
+			speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/select" {
+					b, _ := io.ReadAll(r.Body)
+					capturedBody = string(b)
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer speaker.Close()
+
+			speakerClient := client.NewClient(&client.Config{Host: speaker.URL})
+
+			app := NewWebApp()
+			deviceInfo := &models.DeviceInfo{Name: "Test Speaker"}
+			conn := webtypes.NewDeviceConnection(speakerClient, deviceInfo)
+			conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
+			app.AddDevice("source-device", conn)
+
+			req := httptest.NewRequest("GET", "/api/control/source-device/source?"+tt.query, nil)
+			req = withChiParams(req, map[string]string{"id": "source-device", "action": "source"})
+			w := httptest.NewRecorder()
+
+			app.HandleAPIControl(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			if want := `source="AUX"`; !strings.Contains(capturedBody, want) {
+				t.Errorf("XML should contain %q, got: %s", want, capturedBody)
+			}
+			if want := `sourceAccount="` + tt.wantSourceAccount + `"`; !strings.Contains(capturedBody, want) {
+				t.Errorf("XML should contain %q, got: %s", want, capturedBody)
+			}
+		})
+	}
+}
