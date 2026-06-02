@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 )
@@ -159,11 +158,4 @@ func ResolveContentItem(item PlayItem) *models.ContentItem {
 	}
 
 	return &ci
-}
-
-// Play builds a ContentItem via ResolveContentItem and sends it to the speaker via c.
-func Play(c *client.Client, item PlayItem) error {
-	ci := ResolveContentItem(item)
-
-	return c.SelectContentItem(ci)
 }

@@ -423,6 +423,8 @@ func (app *WebApp) handleSourceControl(w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
+	logPlaybackRequest("source-select", chi.URLParam(r, "id"), sourceParam, accountParam, "", "")
+
 	err := device.Client.SelectSource(sourceParam, accountParam)
 	app.sendControlResponse(w, err, fmt.Sprintf("Selected source %s", sourceParam))
 }
@@ -1053,6 +1055,8 @@ func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
 		contentItem.SourceAccount = req.SourceAccount
 	}
 
+	logPlaybackRequest("device-play", deviceID, contentItem.Source, contentItem.SourceAccount, contentItem.Location, contentItem.ItemName)
+
 	if err := device.Client.SelectContentItem(contentItem); err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1127,6 +1131,8 @@ func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
 		ItemName:     req.Name,
 		IsPresetable: true,
 	}
+
+	logPlaybackRequest("play-url", deviceID, contentItem.Source, contentItem.SourceAccount, contentItem.Location, contentItem.ItemName)
 
 	if err := device.Client.SelectContentItem(contentItem); err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
@@ -1220,11 +1226,15 @@ func (app *WebApp) HandlePlayRadioBrowser(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := stations.Play(device.Client, stations.PlayItem{
+	ci := stations.ResolveContentItem(stations.PlayItem{
 		Provider: stations.ProviderRadioBrowser,
 		Location: req.Location,
 		Name:     req.Name,
-	}); err != nil {
+	})
+
+	logPlaybackRequest("radiobrowser", deviceID, ci.Source, ci.SourceAccount, ci.Location, ci.ItemName)
+
+	if err := device.Client.SelectContentItem(ci); err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1272,13 +1282,17 @@ func (app *WebApp) HandlePlayTuneIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := stations.Play(device.Client, stations.PlayItem{
+	ci := stations.ResolveContentItem(stations.PlayItem{
 		Provider:     stations.ProviderTuneIn,
 		Location:     req.Location,
 		Name:         req.Name,
 		Type:         req.Type,
 		ContainerArt: req.ContainerArt,
-	}); err != nil {
+	})
+
+	logPlaybackRequest("tunein", deviceID, ci.Source, ci.SourceAccount, ci.Location, ci.ItemName)
+
+	if err := device.Client.SelectContentItem(ci); err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

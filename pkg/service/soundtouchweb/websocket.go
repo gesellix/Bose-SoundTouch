@@ -162,6 +162,10 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 	backoff := initialBackoff
 
+	// Tracks the last now_playing source seen so a speaker stuck reporting an
+	// error source is logged once per transition into it, not on every event.
+	var prevSource string
+
 	for {
 		wsClient := conn.Client.NewWebSocketClient(nil)
 
@@ -169,8 +173,19 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		// UpdateStatus so concurrent events and the periodic poller
 		// (UpdateDeviceStatus) cannot lose each other's writes.
 		wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
+			np := &event.NowPlaying
+
+			// A /select returns 200 even when the source is rejected; the
+			// failure shows up here as a transition to an error source. Log it
+			// so it lands in a diagnostic export without needing a live trace.
+			if np.Source != prevSource && isErrorSource(np.Source) {
+				logNowPlayingError(deviceID, np.Source, np.SourceAccount)
+			}
+
+			prevSource = np.Source
+
 			conn.UpdateStatus(func(s *webtypes.DeviceStatus) {
-				s.NowPlaying = &event.NowPlaying
+				s.NowPlaying = np
 				s.LastActivity = time.Now()
 			})
 		})
