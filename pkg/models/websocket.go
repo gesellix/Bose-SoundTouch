@@ -102,7 +102,28 @@ type WebSocketEvent struct {
 	ErrorUpdated           *ErrorUpdatedEvent           `xml:"errorUpdated,omitempty"`
 	RecentsUpdated         *RecentsUpdatedEvent         `xml:"recentsUpdated,omitempty"`
 	LanguageUpdated        *LanguageUpdatedEvent        `xml:"languageUpdated,omitempty"`
-	Timestamp              time.Time                    `json:"timestamp"` // Added by client for tracking
+	// UnknownElements captures <updates> children we don't model yet (e.g.
+	// nowSelectionUpdated), so callers can log them by name instead of an
+	// empty list when no known event matched.
+	UnknownElements []UnknownElement `xml:",any"`
+	Timestamp       time.Time        `json:"timestamp"` // Added by client for tracking
+}
+
+// UnknownElement records the tag name of an <updates> child element that the
+// WebSocketEvent struct does not (yet) model.
+type UnknownElement struct {
+	XMLName xml.Name
+}
+
+// UnknownEventNames returns the tag names of any unmodeled <updates> children,
+// for diagnostic logging.
+func (e *WebSocketEvent) UnknownEventNames() []string {
+	names := make([]string, 0, len(e.UnknownElements))
+	for _, u := range e.UnknownElements {
+		names = append(names, u.XMLName.Local)
+	}
+
+	return names
 }
 
 // GetEvents returns all events present in this WebSocket event

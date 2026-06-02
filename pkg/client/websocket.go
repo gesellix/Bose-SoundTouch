@@ -563,7 +563,11 @@ func (ws *WebSocketClient) handleEvent(event *models.WebSocketEvent) {
 	if !hasKnownEvent && handlers.OnUnknownEvent != nil {
 		handlers.OnUnknownEvent(event)
 	} else if !hasKnownEvent {
-		ws.logger.Printf("Received unknown event types: %v", eventTypes)
+		// Log the actual unmodeled element names (e.g. nowSelectionUpdated)
+		// rather than an empty list; skip frames that carry no child events.
+		if names := event.UnknownEventNames(); len(names) > 0 {
+			ws.logger.Printf("Received unhandled event types: %v", names)
+		}
 	}
 }
 

@@ -540,3 +540,41 @@ func TestCreateMockWebSocketEvent(t *testing.T) {
 		t.Errorf("Event types don't match expected values")
 	}
 }
+
+// TestParseWebSocketEvent_UnknownElements verifies that an <updates> envelope
+// whose only child is an unmodeled element (e.g. nowSelectionUpdated, observed
+// on real SoundTouch 10 firmware) parses with no known event types but with
+// the element captured by name, so callers can log something useful instead
+// of an empty list.
+func TestParseWebSocketEvent_UnknownElements(t *testing.T) {
+	raw := []byte(`<updates deviceID="A81B6A536A98"><nowSelectionUpdated><preset id="0"><ContentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s308770" sourceAccount="" isPresetable="true"><itemName>Willy</itemName></ContentItem></preset></nowSelectionUpdated></updates>`)
+
+	event, err := ParseWebSocketEvent(raw)
+	if err != nil {
+		t.Fatalf("ParseWebSocketEvent: %v", err)
+	}
+
+	if got := event.GetEventTypes(); len(got) != 0 {
+		t.Errorf("expected no known event types, got %v", got)
+	}
+
+	names := event.UnknownEventNames()
+	if len(names) != 1 || names[0] != "nowSelectionUpdated" {
+		t.Errorf("expected [nowSelectionUpdated], got %v", names)
+	}
+}
+
+// TestParseWebSocketEvent_KnownEventNoUnknowns confirms a modeled event is not
+// also captured as an unknown element.
+func TestParseWebSocketEvent_KnownEventNoUnknowns(t *testing.T) {
+	raw := []byte(`<updates deviceID="A81B6A536A98"><nowPlayingUpdated><nowPlaying deviceID="A81B6A536A98" source="TUNEIN"></nowPlaying></nowPlayingUpdated></updates>`)
+
+	event, err := ParseWebSocketEvent(raw)
+	if err != nil {
+		t.Fatalf("ParseWebSocketEvent: %v", err)
+	}
+
+	if names := event.UnknownEventNames(); len(names) != 0 {
+		t.Errorf("expected no unknown elements for a modeled event, got %v", names)
+	}
+}
