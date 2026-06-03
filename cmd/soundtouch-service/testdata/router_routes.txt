@@ -141,6 +141,7 @@ POST     /setup/backup/{deviceId}                                     handlers.(
 POST     /setup/devices                                               handlers.(*Server).HandleAddManualDevice-fm
 POST     /setup/discover                                              handlers.(*Server).HandleTriggerDiscovery-fm
 POST     /setup/ensure-remote-services/{deviceId}                     handlers.(*Server).HandleEnsureRemoteServices-fm
+POST     /setup/health/dns-path-probe                                 handlers.(*Server).HandleDNSPathProbe-fm
 POST     /setup/health/fix                                            handlers.(*Server).HandleHealthFix-fm
 POST     /setup/logging-settings                                      handlers.(*Server).HandleUpdateLoggingSettings-fm
 POST     /setup/migrate/{deviceId}                                    handlers.(*Server).HandleMigrateDevice-fm

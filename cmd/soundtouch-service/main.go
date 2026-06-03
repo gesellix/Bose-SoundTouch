@@ -1287,6 +1287,8 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		// validated the app_key against its cloud; as the cloud replacement we
 		// accept it (200). A 404 here makes the speaker report "invalid app key"
 		// (HandleInvalidAppKeyCb) and refuse TTS/URL notifications.
+		// When an active DNS-path probe is running (POST /setup/health/dns-path-probe),
+		// a matching probe nonce returns 403 instead so no audio plays.
 		r.Get("/auth", server.HandleSpeakerAuth)
 	})
 
@@ -1379,6 +1381,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 
 		r.Get("/health", server.HandleHealthChecks)
 		r.Post("/health/fix", server.HandleHealthFix)
+		r.Post("/health/dns-path-probe", server.HandleDNSPathProbe)
 		r.Get("/export/diagnostic", server.HandleExportDiagnostic)
 		r.Get("/logs", server.HandleGetLogs)
 

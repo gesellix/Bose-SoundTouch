@@ -35,51 +35,53 @@ import (
 
 // Server handles HTTP requests for the SoundTouch service.
 type Server struct {
-	ds                  *datastore.DataStore
-	sm                  *setup.Manager
-	mu                  sync.RWMutex
-	serverURL           string
-	httpsServerURL      string
-	discovering         bool
-	redactLogs          bool
-	logBodies           bool
-	recordEnabled       bool
-	discoveryInterval   time.Duration
-	discoveryEnabled    bool
-	dnsEnabled          bool
-	dnsUpstream         []string
-	dnsBindAddr         string
-	internalPaths       []string
-	shortcuts           map[string]int
-	recorder            *proxy.Recorder
-	dnsDiscovery        *discovery.DNSDiscovery
-	Version             string
-	Commit              string
-	Date                string
-	RepoURL             string
-	mgmtUsername        string
-	mgmtPassword        string
-	spotifyClientID     string
-	spotifyClientSecret string
-	spotifyRedirectURI  string
-	spotifyService      *spotify.Service
-	amazonClientID      string
-	amazonClientSecret  string
-	amazonRedirectURI   string
-	amazonService       *amazon.Service
-	ttsService          *tts.Service
-	ttsProvider         string
-	ttsGoogleAPIKey     string
-	ttsGoogleEndpoint   string // test-only override; not exposed in the UI
-	ttsAppKey           string
-	ttsLanguage         string
-	ttsVoice            string
-	ttsVolume           int
-	peerObserver        *peerObserver
-	healthRegistry      *health.Registry
-	logBuf              *logbuf.Buffer
-	expectedHosts       []string
-	ownCACache          struct {
+	ds                       *datastore.DataStore
+	sm                       *setup.Manager
+	mu                       sync.RWMutex
+	serverURL                string
+	httpsServerURL           string
+	discovering              bool
+	redactLogs               bool
+	logBodies                bool
+	recordEnabled            bool
+	discoveryInterval        time.Duration
+	discoveryEnabled         bool
+	dnsEnabled               bool
+	dnsUpstream              []string
+	dnsBindAddr              string
+	internalPaths            []string
+	shortcuts                map[string]int
+	recorder                 *proxy.Recorder
+	dnsDiscovery             *discovery.DNSDiscovery
+	authProbes               *authProbeRegistry
+	authProbeTimeoutOverride time.Duration // zero means use defaultAuthProbeTimeout; injectable for tests
+	Version                  string
+	Commit                   string
+	Date                     string
+	RepoURL                  string
+	mgmtUsername             string
+	mgmtPassword             string
+	spotifyClientID          string
+	spotifyClientSecret      string
+	spotifyRedirectURI       string
+	spotifyService           *spotify.Service
+	amazonClientID           string
+	amazonClientSecret       string
+	amazonRedirectURI        string
+	amazonService            *amazon.Service
+	ttsService               *tts.Service
+	ttsProvider              string
+	ttsGoogleAPIKey          string
+	ttsGoogleEndpoint        string // test-only override; not exposed in the UI
+	ttsAppKey                string
+	ttsLanguage              string
+	ttsVoice                 string
+	ttsVolume                int
+	peerObserver             *peerObserver
+	healthRegistry           *health.Registry
+	logBuf                   *logbuf.Buffer
+	expectedHosts            []string
+	ownCACache               struct {
 		once sync.Once
 		cert *x509.Certificate
 	}
@@ -119,6 +121,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		discoveryEnabled:  true,
 		peerObserver:      newPeerObserver(),
 		healthRegistry:    health.NewRegistry(),
+		authProbes:        newAuthProbeRegistry(defaultAuthProbeTTL),
 	}
 
 	health.RegisterSourcesXMLPresent(s.healthRegistry, ds)
@@ -206,6 +209,53 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 			}
 
 			return ip
+		},
+	)
+	health.RegisterDNSSpeakerUsageCheck(
+		s.healthRegistry,
+		s.ds,
+		s.GetDNSRunning,
+		func() map[string]time.Time {
+			if s.dnsDiscovery == nil {
+				return map[string]time.Time{}
+			}
+
+			return s.dnsDiscovery.InterceptClientIPs()
+		},
+	)
+
+	// QuickFix executor for the dns_speaker_usage per-device info findings.
+	// Lives here (not in the health package) because it needs runDNSPathProbe,
+	// which is part of the handlers layer. The health package deliberately
+	// avoids importing handlers to keep its transitive dep surface small.
+	//
+	// Registered without refresh: this probe is a diagnostic whose value is the
+	// result message ("DNS path OK" / "no callback ..."). A refresh would re-fetch
+	// the whole health list and wipe that message from the UI before the operator
+	// can read it. The operator can refresh manually to see a now-confirmed
+	// speaker drop its finding.
+	s.healthRegistry.RegisterFixNoRefresh(
+		health.CheckIDDNSSpeakerUsage,
+		"probe_dns_path",
+		func(target health.Target) (string, error) {
+			res, err := s.runDNSPathProbe(target.Device, "")
+			if err != nil {
+				return "", err
+			}
+
+			if res.Success {
+				return fmt.Sprintf(
+					"Speaker resolved a Bose hostname through AfterTouch in %.0fms. DNS path OK.",
+					res.LatencyMs,
+				), nil
+			}
+
+			msg := "No /v1/auth callback within the timeout; this speaker likely resolves Bose hostnames via a different DNS resolver."
+			if res.Remediation != "" {
+				msg += " " + res.Remediation
+			}
+
+			return msg, nil
 		},
 	)
 

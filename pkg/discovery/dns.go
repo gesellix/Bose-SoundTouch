@@ -29,8 +29,9 @@ type DNSDiscovery struct {
 	derivedHosts []string
 
 	// State
-	discovered map[string]*DiscoveredHost
-	mu         sync.RWMutex
+	discovered       map[string]*DiscoveredHost
+	interceptClients map[string]time.Time
+	mu               sync.RWMutex
 
 	// Callbacks
 	onNewDiscovery func(hostname string)
@@ -73,12 +74,13 @@ func NewDNSDiscovery(upstreamDNS []string, serviceIP, serverURL string) *DNSDisc
 	}
 
 	return &DNSDiscovery{
-		upstreamDNS:  upstreamDNS,
-		serviceIP:    serviceIP,
-		derivedHosts: derived,
-		discovered:   make(map[string]*DiscoveredHost),
-		timeout:      2 * time.Second,
-		lastLog:      make(map[string]time.Time),
+		upstreamDNS:      upstreamDNS,
+		serviceIP:        serviceIP,
+		derivedHosts:     derived,
+		discovered:       make(map[string]*DiscoveredHost),
+		interceptClients: make(map[string]time.Time),
+		timeout:          2 * time.Second,
+		lastLog:          make(map[string]time.Time),
 	}
 }
 
@@ -219,6 +221,21 @@ func (d *DNSDiscovery) recordQuery(hostname string, isIntercepted bool, remoteAd
 		host.IsIntercepted = isIntercepted
 		if remoteAddr != "" {
 			host.RemoteAddr = remoteAddr
+		}
+	}
+
+	// Track distinct non-loopback clients that queried an intercepted hostname.
+	// Used by the dns_speaker_usage health check to detect whether any speaker
+	// actually resolves Bose hostnames through AfterTouch's DNS interceptor.
+	if isIntercepted && remoteAddr != "" {
+		clientHost, _, err := net.SplitHostPort(remoteAddr)
+		if err != nil {
+			// remoteAddr doesn't parse as host:port; use as-is.
+			clientHost = remoteAddr
+		}
+
+		if ip := net.ParseIP(clientHost); ip != nil && !ip.IsLoopback() {
+			d.interceptClients[clientHost] = time.Now()
 		}
 	}
 }
@@ -428,6 +445,24 @@ func (d *DNSDiscovery) GetDiscovered() map[string]*DiscoveredHost {
 	// Return copy
 	result := make(map[string]*DiscoveredHost)
 	for k, v := range d.discovered {
+		result[k] = v
+	}
+
+	return result
+}
+
+// InterceptClientIPs returns a copy of the set of non-loopback client IPs
+// that have queried an intercepted Bose hostname. The value for each key is
+// the timestamp of the most recent intercepted query from that client.
+// Empty map means no non-loopback speaker has ever used AfterTouch's DNS
+// interceptor. Callers receive a snapshot; the map is safe to read after
+// this method returns.
+func (d *DNSDiscovery) InterceptClientIPs() map[string]time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	result := make(map[string]time.Time, len(d.interceptClients))
+	for k, v := range d.interceptClients {
 		result[k] = v
 	}
 

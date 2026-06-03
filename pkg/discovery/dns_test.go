@@ -545,3 +545,84 @@ func TestDNSDiscovery_UnresolvableHostname(t *testing.T) {
 		t.Errorf("Expected CNAME record for unresolvable hostname, got %T", rw.msg.Answer[0])
 	}
 }
+
+// mockResponseWriterWithAddr is like mockResponseWriter but returns a
+// configurable remote address; used to simulate queries from speaker IPs.
+type mockResponseWriterWithAddr struct {
+	mockResponseWriter
+	remote net.Addr
+}
+
+func (m *mockResponseWriterWithAddr) RemoteAddr() net.Addr { return m.remote }
+
+// mockUDPAddr implements net.Addr for test purposes.
+type mockUDPAddr struct{ addr string }
+
+func (a *mockUDPAddr) Network() string { return "udp" }
+func (a *mockUDPAddr) String() string  { return a.addr }
+
+func TestDNSDiscovery_InterceptClientTracking_NonLoopback(t *testing.T) {
+	d := NewDNSDiscovery([]string{"8.8.8.8"}, "192.0.2.100", "")
+
+	// Query for an intercepted Bose hostname from a non-loopback address.
+	msg := new(dns.Msg)
+	msg.SetQuestion("content.api.bose.io.", dns.TypeA)
+
+	rw := &mockResponseWriterWithAddr{
+		remote: &mockUDPAddr{addr: "10.1.103.209:54321"},
+	}
+	d.ServeDNS(rw, msg)
+
+	clients := d.InterceptClientIPs()
+	if _, ok := clients["10.1.103.209"]; !ok {
+		t.Errorf("expected 10.1.103.209 in interceptClients, got %v", clients)
+	}
+}
+
+func TestDNSDiscovery_InterceptClientTracking_LoopbackExcluded(t *testing.T) {
+	d := NewDNSDiscovery([]string{"8.8.8.8"}, "192.0.2.100", "")
+
+	// Query for an intercepted hostname from loopback (health-probe scenario).
+	msg := new(dns.Msg)
+	msg.SetQuestion("api.bose.com.", dns.TypeA)
+
+	rw := &mockResponseWriterWithAddr{
+		remote: &mockUDPAddr{addr: "127.0.0.1:55069"},
+	}
+	d.ServeDNS(rw, msg)
+
+	clients := d.InterceptClientIPs()
+	if len(clients) != 0 {
+		t.Errorf("expected no clients (loopback should be excluded), got %v", clients)
+	}
+}
+
+func TestDNSDiscovery_InterceptClientTracking_NonInterceptedNotRecorded(t *testing.T) {
+	// Forwarded (non-intercepted) queries should not populate interceptClients.
+	upstreamMux := dns.NewServeMux()
+	upstreamMux.HandleFunc("google.com.", func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		_ = w.WriteMsg(m)
+	})
+	ts := &dns.Server{Addr: "127.0.0.1:5360", Net: "udp", Handler: upstreamMux,
+		ReadTimeout: 100 * time.Millisecond, WriteTimeout: 100 * time.Millisecond}
+	go func() { _ = ts.ListenAndServe() }()
+	defer func() { _ = ts.Shutdown() }()
+	time.Sleep(100 * time.Millisecond)
+
+	d := NewDNSDiscovery([]string{"127.0.0.1:5360"}, "192.0.2.100", "")
+
+	msg := new(dns.Msg)
+	msg.SetQuestion("google.com.", dns.TypeA)
+
+	rw := &mockResponseWriterWithAddr{
+		remote: &mockUDPAddr{addr: "10.1.103.209:54321"},
+	}
+	d.ServeDNS(rw, msg)
+
+	clients := d.InterceptClientIPs()
+	if len(clients) != 0 {
+		t.Errorf("expected no intercept clients for non-intercepted query, got %v", clients)
+	}
+}

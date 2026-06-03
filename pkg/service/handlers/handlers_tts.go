@@ -142,7 +142,25 @@ func buildCustomPlaybackURL(base, audioURL, name string) string {
 // sufficient; real Bose validated against its cloud, but as the cloud
 // replacement we always accept, so the speaker doesn't report an invalid app
 // key (HandleInvalidAppKeyCb) and refuse the notification.
-func (s *Server) HandleSpeakerAuth(w http.ResponseWriter, _ *http.Request) {
+//
+// When an active DNS-path probe is running (HandleDNSPathProbe), the probe
+// registers its nonce as the app_key. If the nonce matches, this handler
+// returns 403 so the speaker treats the key as invalid and refuses the
+// notification (no audio plays). The callback arrival itself already proved
+// the speaker resolved a Bose host through AfterTouch's DNS.
+func (s *Server) HandleSpeakerAuth(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("Apikeyheader")
+	if token != "" && s.authProbes != nil {
+		if s.authProbes.observe(token, clientHostFromRemoteAddr(r.RemoteAddr)) {
+			// Active DNS-path probe: the callback arrival already proved the
+			// speaker resolved a Bose host through AfterTouch. Returning 403
+			// makes the speaker treat the key as invalid and refuse the
+			// notification, so no audio plays.
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+	}
+	// Normal path: accept any app_key so real TTS/URL notifications proceed.
 	w.WriteHeader(http.StatusOK)
 }
 
