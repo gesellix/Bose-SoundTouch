@@ -150,6 +150,28 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterSpeakerCABundleCheck(s.healthRegistry, ds, func(deviceIP string) (string, string, bool) {
 		return s.sm.ProbeCABundles(deviceIP)
 	})
+	health.RegisterSpeakerClockCheck(s.healthRegistry, ds, func(ip string) (int64, int64, bool) {
+		cfg := client.DefaultConfig()
+		cfg.Host = ip
+		cfg.Timeout = 5 * time.Second
+
+		c := client.NewClient(cfg)
+		ct, err := c.GetClockTime()
+
+		if err != nil || ct == nil || ct.GetUTC() == 0 {
+			return 0, 0, false
+		}
+
+		return ct.GetUTC(), ct.GetUTCSyncTime(), true
+	}, func(ip string) error {
+		cfg := client.DefaultConfig()
+		cfg.Host = ip
+		cfg.Timeout = 5 * time.Second
+
+		c := client.NewClient(cfg)
+
+		return c.SetClockTime(models.NewClockTimeRequest(time.Now()))
+	})
 	health.RegisterServerURLReachableCheck(s.healthRegistry, func() string {
 		serverURL, _ := s.GetSettings()
 		return serverURL
