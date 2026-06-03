@@ -18,7 +18,7 @@ services:
       - AMAZON_PROFILE_URL=http://amazon-mock:8080/user/profile
 
   spotify-mock:
-    image: golang:1.26.3-alpine
+    image: golang:1.26.4-alpine
     container_name: spotify-mock
     working_dir: /app
     volumes:
@@ -30,7 +30,7 @@ services:
       - soundtouch-test-net
 
   amazon-mock:
-    image: golang:1.26.3-alpine
+    image: golang:1.26.4-alpine
     container_name: amazon-mock
     working_dir: /app
     volumes:
