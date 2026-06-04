@@ -1210,15 +1210,83 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 	return ds.atomicWriteFile(path, append(header, data...))
 }
 
+// atomicWriteFile writes data to filename atomically AND durably: it writes a
+// temp file, fsyncs it, renames it into place, then fsyncs the parent
+// directory. Without the fsyncs an unclean power-cut on a journaling NAND
+// filesystem (UBIFS, the speaker's /mnt/nv) can leave the renamed file present
+// but 0 bytes — the rename was journalled but the data blocks were never
+// flushed. See #458.
 func (ds *DataStore) atomicWriteFile(filename string, data []byte) error {
 	perm := os.FileMode(0644)
 
 	tempFile := filename + ".tmp"
-	if err := ds.rootWriteFile(tempFile, data, perm); err != nil {
+	if err := ds.rootWriteFileSync(tempFile, data, perm); err != nil {
 		return err
 	}
 
-	return ds.rootRename(tempFile, filename)
+	if err := ds.rootRename(tempFile, filename); err != nil {
+		return err
+	}
+
+	// Fsync the parent directory so the rename itself survives a power-cut.
+	// Best-effort: not every filesystem permits directory fsync, and the data +
+	// rename have already succeeded by this point.
+	ds.rootSyncDir(filepath.Dir(filename))
+
+	return nil
+}
+
+// rootWriteFileSync writes data to absPath (truncating any existing file) and
+// fsyncs the file before returning, so the contents are on stable storage. This
+// is the durable equivalent of rootWriteFile.
+func (ds *DataStore) rootWriteFileSync(absPath string, data []byte, perm os.FileMode) error {
+	r, err := ds.getRoot()
+	if err != nil {
+		return err
+	}
+
+	rel, err := ds.rootRel(absPath)
+	if err != nil {
+		return err
+	}
+
+	f, err := r.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+
+	if _, werr := f.Write(data); werr != nil {
+		_ = f.Close()
+
+		return werr
+	}
+
+	if serr := f.Sync(); serr != nil {
+		_ = f.Close()
+
+		return serr
+	}
+
+	return f.Close()
+}
+
+// rootSyncDir fsyncs the directory at absDir so a preceding create/rename is
+// durable. Best-effort: directory fsync isn't supported on every filesystem, so
+// failures are logged and swallowed rather than failing an already-successful
+// write.
+func (ds *DataStore) rootSyncDir(absDir string) {
+	d, err := ds.rootOpen(absDir)
+	if err != nil {
+		log.Printf("[Datastore] rootSyncDir: open %s failed (best-effort): %v", sanitizeLog(absDir), err)
+
+		return
+	}
+
+	if serr := d.Sync(); serr != nil {
+		log.Printf("[Datastore] rootSyncDir: fsync %s failed (best-effort): %v", sanitizeLog(absDir), serr)
+	}
+
+	_ = d.Close()
 }
 
 // GetRecents returns the list of recently played items for the specified account and device.
