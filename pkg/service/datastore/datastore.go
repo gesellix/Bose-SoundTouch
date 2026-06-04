@@ -962,6 +962,16 @@ func (ds *DataStore) readPresetsLocked(account, device string) ([]models.Service
 		return nil, false, err
 	}
 
+	// An empty / 0-byte Presets.xml (e.g. truncated by an unclean power-cut on
+	// the speaker's NAND) is treated as "no presets" rather than a hard parse
+	// error, so the device-level /presets endpoint returns an empty list
+	// instead of HTTP 500. See #458.
+	if len(bytes.TrimSpace(data)) == 0 {
+		log.Printf("[Datastore] readPresetsLocked: empty/0-byte Presets.xml at %s — treating as no presets (#458)", sanitizeLog(path))
+
+		return []models.ServicePreset{}, false, nil
+	}
+
 	var presetsWrap struct {
 		Presets []struct {
 			ID          string `xml:"id,attr"`
@@ -989,7 +999,9 @@ func (ds *DataStore) readPresetsLocked(account, device string) ([]models.Service
 	needsRewrite := !bytes.Equal(normalized, data)
 
 	if err := xml.Unmarshal(normalized, &presetsWrap); err != nil {
-		return nil, false, fmt.Errorf("malformed presets XML at %s: %w", path, err)
+		log.Printf("[Datastore] readPresetsLocked: malformed Presets.xml at %s (%v) — treating as no presets (#458)", sanitizeLog(path), err)
+
+		return []models.ServicePreset{}, false, nil
 	}
 
 	presets := []models.ServicePreset{}
@@ -1225,6 +1237,16 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 		return nil, err
 	}
 
+	// An empty / 0-byte Recents.xml (e.g. truncated by an unclean power-cut) is
+	// treated as "no recents" rather than a hard parse error, so the
+	// device-level /recents endpoint returns an empty list instead of HTTP 500.
+	// See #458.
+	if len(bytes.TrimSpace(data)) == 0 {
+		log.Printf("[Datastore] GetRecents: empty/0-byte Recents.xml at %s — treating as no recents (#458)", sanitizeLog(path))
+
+		return []models.ServiceRecent{}, nil
+	}
+
 	type RecentXML struct {
 		DeviceID    string `xml:"deviceID,attr,omitempty"`
 		UtcTime     string `xml:"utcTime,attr,omitempty"`
@@ -1252,7 +1274,9 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 
 	var wrap RecentsXML
 	if err := xml.Unmarshal(data, &wrap); err != nil {
-		return nil, fmt.Errorf("malformed recents XML at %s: %w", path, err)
+		log.Printf("[Datastore] GetRecents: malformed Recents.xml at %s (%v) — treating as no recents (#458)", sanitizeLog(path), err)
+
+		return []models.ServiceRecent{}, nil
 	}
 
 	recents := make([]models.ServiceRecent, 0, len(wrap.Recents))
@@ -1794,16 +1818,32 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 
+	// defaultSources is the fallback used whenever there is no usable
+	// Sources.xml: file missing (normal for a fresh device) or present but
+	// empty / 0-byte / unparseable. The latter happens when an unclean
+	// power-cut truncates a not-yet-flushed datastore write on the speaker's
+	// NAND; treating it like "missing" lets /full re-serve the managed defaults
+	// so the speaker self-heals instead of dropping all its sources. See #458.
+	defaultSources := func() []models.ConfiguredSource {
+		sources := ds.getInitialSources()
+		ds.DeduceSourceIDs(account, device, sources)
+
+		return sources
+	}
+
 	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			sources := ds.getInitialSources()
-			ds.DeduceSourceIDs(account, device, sources)
-
-			return sources, nil
+			return defaultSources(), nil
 		}
 
 		return nil, err
+	}
+
+	if len(bytes.TrimSpace(data)) == 0 {
+		log.Printf("[Datastore] GetConfiguredSources: empty/0-byte Sources.xml at %s — treating as missing, serving defaults (#458)", sanitizeLog(path))
+
+		return defaultSources(), nil
 	}
 
 	type persistentSource struct {
@@ -1830,7 +1870,9 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 	}
 
 	if err := xml.Unmarshal(data, &sourcesWrap); err != nil {
-		return nil, fmt.Errorf("malformed sources XML at %s: %w", path, err)
+		log.Printf("[Datastore] GetConfiguredSources: malformed Sources.xml at %s (%v) — treating as missing, serving defaults (#458)", sanitizeLog(path), err)
+
+		return defaultSources(), nil
 	}
 
 	sources := make([]models.ConfiguredSource, len(sourcesWrap.Sources))
@@ -2359,12 +2401,22 @@ func (ds *DataStore) GetETagForPresets(account, device string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
-// HasConfiguredSources reports whether a Sources.xml file exists for the given account and device.
+// HasConfiguredSources reports whether a non-empty Sources.xml file exists for
+// the given account and device. A present-but-0-byte file (truncated by an
+// unclean power-cut) counts as absent. See #458.
 func (ds *DataStore) HasConfiguredSources(account, device string) bool {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
-	_, err := ds.rootStat(path)
 
-	return err == nil
+	data, err := ds.rootReadFile(path)
+	if err != nil {
+		return false
+	}
+
+	// An existing but empty / 0-byte Sources.xml (e.g. truncated by an unclean
+	// power-cut on the speaker's NAND) must not count as "present": otherwise it
+	// hides the sources_xml_present health check and its create_default_sources
+	// quick fix, leaving the device with no managed sources. See #458.
+	return len(bytes.TrimSpace(data)) > 0
 }
 
 // GetETagForSources returns the ETag (modification time) for the sources file for a specific device.
