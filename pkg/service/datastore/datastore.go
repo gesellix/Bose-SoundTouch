@@ -999,7 +999,7 @@ func (ds *DataStore) readPresetsLocked(account, device string) ([]models.Service
 	needsRewrite := !bytes.Equal(normalized, data)
 
 	if err := xml.Unmarshal(normalized, &presetsWrap); err != nil {
-		log.Printf("[Datastore] readPresetsLocked: malformed Presets.xml at %s (%v) — treating as no presets (#458)", sanitizeLog(path), err)
+		log.Printf("[Datastore] readPresetsLocked: malformed Presets.xml at %s (%s) — treating as no presets (#458)", sanitizeLog(path), sanitizeErr(err))
 
 		return []models.ServicePreset{}, false, nil
 	}
@@ -1342,7 +1342,7 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 
 	var wrap RecentsXML
 	if err := xml.Unmarshal(data, &wrap); err != nil {
-		log.Printf("[Datastore] GetRecents: malformed Recents.xml at %s (%v) — treating as no recents (#458)", sanitizeLog(path), err)
+		log.Printf("[Datastore] GetRecents: malformed Recents.xml at %s (%s) — treating as no recents (#458)", sanitizeLog(path), sanitizeErr(err))
 
 		return []models.ServiceRecent{}, nil
 	}
@@ -1938,7 +1938,7 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 	}
 
 	if err := xml.Unmarshal(data, &sourcesWrap); err != nil {
-		log.Printf("[Datastore] GetConfiguredSources: malformed Sources.xml at %s (%v) — treating as missing, serving defaults (#458)", sanitizeLog(path), err)
+		log.Printf("[Datastore] GetConfiguredSources: malformed Sources.xml at %s (%s) — treating as missing, serving defaults (#458)", sanitizeLog(path), sanitizeErr(err))
 
 		return defaultSources(), nil
 	}
