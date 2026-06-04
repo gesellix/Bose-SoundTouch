@@ -1277,13 +1277,13 @@ func (ds *DataStore) rootWriteFileSync(absPath string, data []byte, perm os.File
 func (ds *DataStore) rootSyncDir(absDir string) {
 	d, err := ds.rootOpen(absDir)
 	if err != nil {
-		log.Printf("[Datastore] rootSyncDir: open %s failed (best-effort): %v", sanitizeLog(absDir), err)
+		log.Printf("[Datastore] rootSyncDir: open %s failed (best-effort): %s", sanitizeLog(absDir), sanitizeErr(err))
 
 		return
 	}
 
 	if serr := d.Sync(); serr != nil {
-		log.Printf("[Datastore] rootSyncDir: fsync %s failed (best-effort): %v", sanitizeLog(absDir), serr)
+		log.Printf("[Datastore] rootSyncDir: fsync %s failed (best-effort): %s", sanitizeLog(absDir), sanitizeErr(serr))
 	}
 
 	_ = d.Close()
