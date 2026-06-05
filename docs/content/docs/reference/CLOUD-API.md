@@ -3,6 +3,8 @@ title: "Bose SoundTouch Cloud API Emulation (Marge/BMX/Stats)"
 ---
 This document describes the cloud-emulation APIs provided by the SoundTouch service. These APIs mimic the Bose cloud services (Marge, BMX, Stats) that SoundTouch devices and the SoundTouch controller application (Stockholm) interact with.
 
+> **See also:** [API Route Layout and Refactoring Plan](../architecture/API-ROUTE-LAYOUT.md) - how these cloud-emulation routes are classified (frozen speaker contract vs our own movable surface) and the planned API consolidation toward a single binary.
+
 ## Marge API (Account & Configuration)
 
 Base path: `/marge`

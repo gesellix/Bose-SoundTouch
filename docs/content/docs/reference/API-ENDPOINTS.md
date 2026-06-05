@@ -3,6 +3,8 @@ title: "Bose SoundTouch Web API - Endpoints Overview"
 ---
 This document provides a comprehensive overview of the available API endpoints verified against the official Bose SoundTouch Web API v1.0 specification (January 7, 2026).
 
+> **Note:** This documents the *speaker device* Web API (port 8090). For the AfterTouch *service's* own route layout (cloud emulation vs admin/control surface) and the planned refactoring, see [API Route Layout and Refactoring Plan](../architecture/API-ROUTE-LAYOUT.md).
+
 **Acknowledgment**: Additional endpoints beyond the official API were discovered through the comprehensive [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API) maintained by the SoundTouch Plus community. Special thanks to @thlucas1 and contributors for documenting these working endpoints that enable full preset management and content navigation functionality.
 
 ## Implementation Status Legend
