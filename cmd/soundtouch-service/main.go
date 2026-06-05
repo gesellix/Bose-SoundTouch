@@ -693,6 +693,9 @@ func loadConfig(c *cli.Context) serviceConfig {
 	if serverURL == "" {
 		serverURL = "http://" + hostname + ":" + port
 	}
+	// Strip a trailing slash so it cannot leak into the BMX registry base or the
+	// margeServerUrl/bmxRegistryUrl pushed to speakers during migration.
+	serverURL = handlers.NormalizeServerURL(serverURL)
 
 	httpsPort := c.String("https-port")
 
@@ -878,7 +881,7 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	}
 
 	if persisted.ServerURL != "" {
-		config.serverURL = persisted.ServerURL
+		config.serverURL = handlers.NormalizeServerURL(persisted.ServerURL)
 	}
 
 	if persisted.HTTPServerURL != "" {
@@ -1059,6 +1062,13 @@ func startDeviceDiscovery(server *handlers.Server) {
 
 func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *chi.Mux {
 	r := chi.NewRouter()
+
+	// CleanPath collapses duplicate slashes ("//bmx/..." -> "/bmx/...") and
+	// resolves . / .. before routing. Defensive net for the double-slash
+	// playback bug: even if a misconfigured base URL hands a speaker a "//bmx"
+	// path, it still reaches the right handler instead of 404ing. Runs first so
+	// every downstream middleware and the recorder see the cleaned path.
+	r.Use(middleware.CleanPath)
 
 	// TrustedRealIP must run before any handler that reads r.RemoteAddr —
 	// SnapshotMiddleware captures the request, and several handlers

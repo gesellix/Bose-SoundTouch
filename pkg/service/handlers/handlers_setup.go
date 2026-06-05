@@ -294,6 +294,11 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[DNS] DNS Discovery enabled without explicit upstreams, will try system DNS.")
 	}
 
+	// Strip a trailing slash before validating/persisting: it would otherwise
+	// flow into the BMX registry base and produce "//bmx/..." playback requests
+	// the router 404s.
+	settings.ServerURL = NormalizeServerURL(settings.ServerURL)
+
 	// Validate server_url: the same value the DNS server uses to derive its
 	// intercept IP. Reject anything that does not resolve to a routable IP so
 	// users see the error in the UI instead of getting a silently-broken setup

@@ -108,12 +108,23 @@ var bufferPool = sync.Pool{
 	},
 }
 
+// NormalizeServerURL trims surrounding whitespace and any trailing slashes from
+// a configured server URL. A trailing slash poisons every URL built by string
+// concatenation from it, most visibly the BMX registry base ("{BMX_SERVER}/bmx/
+// tunein" in bmx_services.json): it would otherwise hand a speaker
+// "http://host:8000//bmx/tunein" and make it request "//bmx/tunein/...", a path
+// the chi router does not match, so playback 404s. It also keeps {MEDIA_SERVER}
+// and the OAuth redirect URIs free of a stray double slash.
+func NormalizeServerURL(serverURL string) string {
+	return strings.TrimRight(strings.TrimSpace(serverURL), "/")
+}
+
 // NewServer creates a new SoundTouch service server.
 func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, redactLogs, logBodies, recordEnabled bool) *Server {
 	s := &Server{
 		ds:                ds,
 		sm:                sm,
-		serverURL:         serverURL,
+		serverURL:         NormalizeServerURL(serverURL),
 		redactLogs:        redactLogs,
 		logBodies:         logBodies,
 		recordEnabled:     recordEnabled,
