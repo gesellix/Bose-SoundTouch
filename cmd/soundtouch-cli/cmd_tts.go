@@ -101,7 +101,7 @@ func ttsCloud(c *cli.Context) error {
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, serviceURL+"/setup/tts/speak", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, serviceURL+"/api/setup/tts/speak", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}

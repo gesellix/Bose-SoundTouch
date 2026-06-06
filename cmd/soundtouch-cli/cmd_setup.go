@@ -606,7 +606,7 @@ func setupInstallCACmd() *cli.Command {
 				return err
 			}
 
-			fmt.Printf("Fetched %d bytes of CA PEM from %s/setup/ca.crt\n", len(certPEM), serviceURL)
+			fmt.Printf("Fetched %d bytes of CA PEM from %s/api/setup/ca.crt\n", len(certPEM), serviceURL)
 
 			m := setup.NewManager(serviceURL, nil, nil)
 
@@ -627,11 +627,11 @@ func setupInstallCACmd() *cli.Command {
 	}
 }
 
-// fetchCACert pulls AfterTouch's CA bundle from /setup/ca.crt. On HTTP 401
+// fetchCACert pulls AfterTouch's CA bundle from /api/setup/ca.crt. On HTTP 401
 // it prompts interactively for basic-auth credentials (or accepts --auth)
 // and retries once.
 func fetchCACert(serviceURL, authFlag string) ([]byte, error) {
-	url := serviceURL + "/setup/ca.crt"
+	url := serviceURL + "/api/setup/ca.crt"
 
 	doRequest := func(user, pass string) (*http.Response, error) {
 		req, err := http.NewRequest(http.MethodGet, url, nil)
