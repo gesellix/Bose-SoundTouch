@@ -1,0 +1,50 @@
+### GET /bmx/tunein (bare TuneIn service descriptor)
+###
+### Frozen BMX route — the registry advertises this as TuneIn's `self` link.
+### Returns the TUNEIN entry of the service registry with {BMX_SERVER}/{MEDIA_SERVER}
+### substituted (HandleTuneInService).
+GET {{host}}/bmx/tunein
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("TuneIn descriptor 200 JSON", function () {
+        client.assert(response.status === 200, "got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "expected application/json, got '" + response.contentType.mimeType + "'");
+        client.assert(response.body.hasOwnProperty("_links"), "descriptor missing _links");
+        client.assert(response.body.hasOwnProperty("assets"), "descriptor missing assets");
+    });
+%}
+
+### GET /bmx/tunein/ (trailing-slash form — chi routes both to the same descriptor)
+GET {{host}}/bmx/tunein/
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("TuneIn descriptor 200 (trailing slash)", function () {
+        client.assert(response.status === 200, "got " + response.status);
+        client.assert(response.body.hasOwnProperty("assets"), "descriptor missing assets");
+    });
+%}
+
+### GET /core02/svc-bmx-adapter-orion/prod/orion (bare Orion adapter descriptor)
+###
+### Frozen route — the registry advertises this as the Orion (LOCAL_INTERNET_RADIO)
+### adapter's `self` link. Returns the LOCAL_INTERNET_RADIO registry entry with the
+### same substitution (HandleOrionService).
+GET {{host}}/core02/svc-bmx-adapter-orion/prod/orion
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("Orion descriptor 200 JSON", function () {
+        client.assert(response.status === 200, "got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "expected application/json, got '" + response.contentType.mimeType + "'");
+        client.assert(response.body.hasOwnProperty("baseUrl"), "descriptor missing baseUrl");
+        client.assert(response.body.id.name === "LOCAL_INTERNET_RADIO",
+            "expected id.name LOCAL_INTERNET_RADIO, got '" + (response.body.id && response.body.id.name) + "'");
+    });
+%}

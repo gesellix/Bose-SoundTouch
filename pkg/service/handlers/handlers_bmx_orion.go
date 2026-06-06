@@ -76,3 +76,21 @@ func (s *Server) HandleOrionPlayback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// HandleOrionService returns the Orion (LOCAL_INTERNET_RADIO) service
+// descriptor — the bare GET /core02/svc-bmx-adapter-orion/prod/orion endpoint
+// the registry advertises as the adapter's `self` link. It is the
+// LOCAL_INTERNET_RADIO entry of bmx_services.json with the registry's
+// {BMX_SERVER} / {MEDIA_SERVER} substitution applied.
+func (s *Server) HandleOrionService(w http.ResponseWriter, _ *http.Request) {
+	svc, err := extractBMXService(bmxServicesJSON, "LOCAL_INTERNET_RADIO")
+	if err != nil {
+		log.Printf("[BMX Orion] failed to extract service descriptor: %v", sanitizeErr(err))
+		http.Error(w, "service descriptor unavailable", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(s.applyBMXTemplate(string(svc))))
+}

@@ -340,3 +340,20 @@ func (s *Server) HandleTuneInDeleteFavorite(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusAccepted)
 	_, _ = w.Write([]byte("{}"))
 }
+
+// HandleTuneInService returns the TuneIn service descriptor (the bare
+// GET /bmx/tunein endpoint the registry advertises as the service's `self`
+// link). It is the TUNEIN entry of bmx_services.json with the same
+// {BMX_SERVER} / {MEDIA_SERVER} substitution the registry applies.
+func (s *Server) HandleTuneInService(w http.ResponseWriter, _ *http.Request) {
+	svc, err := extractBMXService(bmxServicesJSON, "TUNEIN")
+	if err != nil {
+		log.Printf("[BMX TuneIn] failed to extract service descriptor: %v", sanitizeErr(err))
+		http.Error(w, "service descriptor unavailable", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(s.applyBMXTemplate(string(svc))))
+}

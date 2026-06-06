@@ -1,0 +1,15 @@
+### DELETE /streaming/account/{accountId}/source/{sourceId} (remove a configured source)
+###
+### Frozen Marge route: removes the source from every device of the account
+### (HandleMargeDeleteSource), mirroring the account-level POST add-source.
+### Idempotent — a 200 is returned whether or not the source was present, so this
+### pins the route + contract without depending on prior state.
+DELETE {{host}}/streaming/account/{{accountId}}/source/SRC_contract_test
+Authorization: Bearer {{token}}
+User-Agent: Bose_Lisa/27.0.6
+
+> {%
+    client.test("Source removal accepted (200)", function () {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+    });
+%}

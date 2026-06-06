@@ -751,6 +751,29 @@ func (s *Server) HandleMargeAddSource(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(resp)
 }
 
+// HandleMargeDeleteSource removes a configured source from the account
+// (DELETE /streaming/account/{account}/source/{sourceID}). It mirrors the
+// account-level POST add-source: the source is removed from every device of the
+// account. Returns 200 with an empty body, matching the upstream contract.
+func (s *Server) HandleMargeDeleteSource(w http.ResponseWriter, r *http.Request) {
+	account := chi.URLParam(r, "account")
+	sourceID := chi.URLParam(r, "sourceID")
+
+	if !validatePathID(account) || sourceID == "" {
+		http.Error(w, "Invalid account or source ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := marge.RemoveSourceFromAccount(s.ds, account, sourceID); err != nil {
+		log.Printf("[Marge] Failed to remove source %s: %v", sanitizeLog(sourceID), sanitizeErr(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 // HandleMargeProviderSettings returns Marge provider settings.
 func (s *Server) HandleMargeProviderSettings(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")

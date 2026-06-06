@@ -1141,6 +1141,8 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Get("/registry/v1/servicesAvailability", server.HandleBMXServicesAvailability)
 
 		r.Route("/tunein", func(r chi.Router) {
+			// Bare service descriptor (the registry's `self` link for TuneIn).
+			r.Get("/", server.HandleTuneInService)
 			r.Get("/v1/playback/station/{stationID}", server.HandleTuneInPlayback)
 			r.Get("/v1/playback/episodes/{podcastID}", server.HandleTuneInPodcastInfo)
 			r.Get("/v1/playback/episode/{podcastID}", server.HandleTuneInPlaybackPodcast)
@@ -1161,6 +1163,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 	// pkg/service/handlers/static/bmx_services_ustream.json), so speakers
 	// reach the token + station endpoints at exactly these paths under
 	// either DNS-interception or URL-flip migration.
+	r.Get("/core02/svc-bmx-adapter-orion/prod/orion", server.HandleOrionService)
 	r.Post("/core02/svc-bmx-adapter-orion/prod/orion/token", server.HandleOrionToken)
 	r.Get("/core02/svc-bmx-adapter-orion/prod/orion/station", server.HandleOrionPlayback)
 
@@ -1181,6 +1184,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Post("/account", server.HandleMargeCreateAccount)
 		r.Post("/account/login", server.HandleMargeLogin)
 		r.Post("/account/{account}/source", server.HandleMargeAddSource)
+		r.Delete("/account/{account}/source/{sourceID}", server.HandleMargeDeleteSource)
 
 		r.Route("/account/{account}", func(r chi.Router) {
 			r.Get("/emailaddress", server.HandleMargeGetEmailAddress)

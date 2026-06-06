@@ -189,6 +189,7 @@ test-http-client:
 		/workdir/power_on.http \
 		/workdir/get_bmx_services.http \
 		/workdir/get_bmx_services_availability.http \
+		/workdir/get_bmx_service_descriptors.http \
 		/workdir/get_ced_index.http \
 		/workdir/get_sourceproviders.http \
 		/workdir/get_software_update.http \
@@ -214,6 +215,7 @@ test-http-client:
 		/workdir/get_account_presets.http \
 		/workdir/get_account_devices.http \
 		/workdir/get_account_sources.http \
+		/workdir/delete_source.http \
 		/workdir/get_api_versions.http \
 		/workdir/post_musicprovider_is_eligible.http \
 		/workdir/get_full_account.http \
