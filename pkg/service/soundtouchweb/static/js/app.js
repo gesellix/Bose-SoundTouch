@@ -91,7 +91,7 @@ function App() {
             .catch(err => console.error('Failed to fetch version:', err));
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${location.host}/ws`);
+        const ws = new WebSocket(`${protocol}//${location.host}/api/control/ws`);
         let reconnectTimer;
 
         ws.onmessage = (event) => {

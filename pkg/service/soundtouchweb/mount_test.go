@@ -21,7 +21,11 @@ func TestMountControlAPIShape(t *testing.T) {
 
 	var apiRoutes []string
 
+	registered := map[string]bool{}
+
 	walkErr := chi.Walk(r, func(_, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		registered[route] = true
+
 		if strings.HasPrefix(route, "/api/") {
 			apiRoutes = append(apiRoutes, route)
 		}
@@ -44,15 +48,12 @@ func TestMountControlAPIShape(t *testing.T) {
 		}
 	}
 
-	registered := make(map[string]bool, len(apiRoutes))
-	for _, route := range apiRoutes {
-		registered[route] = true
-	}
-
 	// The provider infix (#451): browsable providers expose global browse
-	// routes; every provider play nests under devices/{id}/providers/.
+	// routes; every provider play nests under devices/{id}/providers/. The
+	// app-wide socket moved from top-level /ws to /api/control/ws.
 	mustExist := []string{
 		"/api/control/version",
+		"/api/control/ws",
 		"/api/control/providers/tunein/search",
 		"/api/control/providers/radiobrowser/search",
 		"/api/control/devices/{id}/providers/tunein/play",
@@ -66,8 +67,10 @@ func TestMountControlAPIShape(t *testing.T) {
 		}
 	}
 
-	// The pre-infix flat paths are gone.
+	// The pre-infix flat paths are gone, and the app-wide socket no longer
+	// sits at top-level /ws.
 	mustNotExist := []string{
+		"/ws",
 		"/api/control/tunein/search",
 		"/api/control/radiobrowser/search",
 		"/api/control/devices/{id}/play-url",

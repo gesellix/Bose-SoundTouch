@@ -498,7 +498,7 @@ func TestHandleWebSocket_InvalidUpgrade(t *testing.T) {
 	app := createTestApp()
 
 	// Test without proper WebSocket headers (should fail gracefully)
-	req := httptest.NewRequest("GET", "/ws", nil)
+	req := httptest.NewRequest("GET", "/api/control/ws", nil)
 	w := httptest.NewRecorder()
 
 	// This will fail because it's not a real WebSocket upgrade, but should not panic

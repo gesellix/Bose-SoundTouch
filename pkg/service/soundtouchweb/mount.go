@@ -19,19 +19,21 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	subFS, _ := fs.Sub(StaticFS, "static")
 	r.Get("/static/*", http.StripPrefix("/static", http.FileServer(http.FS(subFS))).ServeHTTP)
 
-	// WebSocket endpoint
-	r.Get("/ws", app.HandleWebSocket)
-
 	// Health / liveness
 	r.Get("/health", app.HandleHealth)
 
 	// Player / control API. Per #451 this is the post-merge canonical shape:
 	// device-scoped actions nest under devices/{id}/, so every direct child of
-	// /api/control is a literal namespace (version, discover, devices,
+	// /api/control is a literal namespace (version, ws, discover, devices,
 	// providers) — no static-vs-param sibling, so routing never depends on
 	// chi's static-over-param precedence.
 	r.Route("/api/control", func(r chi.Router) {
 		r.Get("/version", app.HandleAPIVersion)
+
+		// App-wide event stream: device list, discovery status, per-device
+		// status updates. The read/event half of the control surface (the
+		// per-device socket lives at devices/{id}/ws).
+		r.Get("/ws", app.HandleWebSocket)
 
 		r.Post("/discover", func(w http.ResponseWriter, r *http.Request) {
 			app.HandleAPIDiscover(w, r)
