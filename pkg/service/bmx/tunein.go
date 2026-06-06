@@ -13,23 +13,10 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
-// TuneIn endpoint templates used to resolve station and stream URLs.
+// TuneIn endpoint constants. The base URLs themselves are configurable vars
+// (see tuneInOpmlTuneBase and friends below, set via SetTuneInEndpoints); only
+// the format-list default is a fixed constant.
 const (
-	TuneInDescribe     = "https://opml.radiotime.com/describe.ashx?id=%s"
-	TuneInNavigateAshx = "http://opml.radiotime.com/?render=json"
-	TuneInSearchAPI    = "https://api.radiotime.com/profiles?fulltextsearch=true&version=1.3&query="
-
-	// TuneInProfileContents is the modern JSON API that lists a
-	// program's (`p<N>`) episodes. The legacy OPML endpoints can't —
-	// `Tune.ashx?id=p<N>` returns `#STATUS: 400`, `Browse.ashx?id=p<N>`
-	// only surfaces related genres + networks. Same payload is served
-	// from api.tunein.com and api.radiotime.com; we use radiotime
-	// because TuneInNavigateProfile already navigates there via
-	// Pivots.Contents.Url, so all program-related traffic stays on the
-	// same host that's already in allowedTuneInHosts. See
-	// `_/i226/tunein-api-findings.md` for the full endpoint map.
-	TuneInProfileContents = "https://api.radiotime.com/profiles/%s/contents?version=1.3"
-
 	// DefaultTuneInStreamFormats is the comma-separated format list
 	// AfterTouch sends to TuneIn's Tune.ashx by default. Matches the
 	// pre-2026-05-10 behaviour from before PR #249 added "hls"
@@ -53,13 +40,52 @@ func TuneInStream(stationID, formats string) string {
 		formats = DefaultTuneInStreamFormats
 	}
 
-	return fmt.Sprintf("http://opml.radiotime.com/Tune.ashx?id=%s&formats=%s", stationID, formats)
+	return fmt.Sprintf("%s/Tune.ashx?id=%s&formats=%s", tuneInOpmlTuneBase, stationID, formats)
 }
 
 // allowedTuneInHosts restricts outbound fetches to known TuneIn domains.
 var allowedTuneInHosts = map[string]bool{
 	"opml.radiotime.com": true,
 	"api.radiotime.com":  true,
+}
+
+// TuneIn endpoint base URLs. They default to the real TuneIn hosts (matching the
+// constants above) but can be redirected with SetTuneInEndpoints, e.g. to point
+// the playback / describe / search calls at a local mock so an integration suite
+// does not depend on the live TuneIn service. opmlBase covers the
+// opml.radiotime.com endpoints (Tune.ashx, describe.ashx, navigate); apiBase
+// covers the api.radiotime.com endpoints (search, profile contents).
+var (
+	tuneInOpmlTuneBase     = "http://opml.radiotime.com"
+	tuneInOpmlDescribeBase = "https://opml.radiotime.com"
+	tuneInOpmlNavigateBase = "http://opml.radiotime.com"
+	tuneInAPIBase          = "https://api.radiotime.com"
+)
+
+// SetTuneInEndpoints overrides the TuneIn upstream base URLs and registers their
+// hosts in the outbound allowlist. Empty arguments leave the corresponding
+// default in place. Intended for tests and local mocks; production leaves the
+// real TuneIn hosts.
+func SetTuneInEndpoints(opmlBase, apiBase string) {
+	if opmlBase != "" {
+		b := strings.TrimRight(opmlBase, "/")
+		tuneInOpmlTuneBase = b
+		tuneInOpmlDescribeBase = b
+		tuneInOpmlNavigateBase = b
+
+		if u, err := url.Parse(b); err == nil && u.Hostname() != "" {
+			allowedTuneInHosts[u.Hostname()] = true
+		}
+	}
+
+	if apiBase != "" {
+		b := strings.TrimRight(apiBase, "/")
+		tuneInAPIBase = b
+
+		if u, err := url.Parse(b); err == nil && u.Hostname() != "" {
+			allowedTuneInHosts[u.Hostname()] = true
+		}
+	}
 }
 
 // isTuneInOpmlURI returns true when the URL's host is opml.radiotime.com,
@@ -94,7 +120,7 @@ func tuneInRenderJSONURI(rawURL string) string {
 
 // tuneInSearchURI returns the TuneIn search API URL with the query properly URL-encoded.
 func tuneInSearchURI(query string) string {
-	return TuneInSearchAPI + url.QueryEscape(query)
+	return tuneInAPIBase + "/profiles?fulltextsearch=true&version=1.3&query=" + url.QueryEscape(query)
 }
 
 func fetchJSON(fetchURL string) (map[string]interface{}, error) {
@@ -117,7 +143,7 @@ func TuneInNavigate(encodedURI string, subsection *int) (*models.BmxNavResponse,
 
 		tuneInURI = decoded
 	} else {
-		tuneInURI = TuneInNavigateAshx
+		tuneInURI = tuneInOpmlNavigateBase + "/?render=json"
 		templated := true
 		bmxSearchLink = &models.Link{
 			Filters:   []interface{}{},
@@ -725,7 +751,11 @@ func parseTuneInProgramContents(body []byte, programID string) (episodeID string
 }
 
 func resolveTuneInProgramLatestEpisode(programID string) (episodeID string, err error) {
-	fetchURL := fmt.Sprintf(TuneInProfileContents, programID)
+	// The modern JSON API lists a program's (`p<N>`) episodes; the legacy OPML
+	// endpoints can't (`Tune.ashx?id=p<N>` returns `#STATUS: 400`). We use the
+	// api.radiotime.com host (tuneInAPIBase) because TuneInNavigateProfile already
+	// navigates there. See `_/i226/tunein-api-findings.md` for the endpoint map.
+	fetchURL := fmt.Sprintf("%s/profiles/%s/contents?version=1.3", tuneInAPIBase, programID)
 
 	resp, err := defaultClient.Get(fetchURL)
 	if err != nil {
@@ -748,7 +778,7 @@ func resolveTuneInProgramLatestEpisode(programID string) (episodeID string, err 
 
 // TuneInDescribeMeta fetches the name and logo for a TuneIn guide ID.
 func TuneInDescribeMeta(id string) (name, logo string, err error) {
-	fetchURL := fmt.Sprintf(TuneInDescribe, id)
+	fetchURL := fmt.Sprintf("%s/describe.ashx?id=%s", tuneInOpmlDescribeBase, id)
 
 	resp, err := defaultClient.Get(fetchURL)
 	if err != nil {

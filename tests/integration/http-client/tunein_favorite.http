@@ -1,0 +1,30 @@
+### POST /bmx/tunein/v1/favorite/{stationID} (mark a TuneIn station as favorite)
+###
+### Frozen BMX route. The speaker favorites/unfavorites a TuneIn station; the
+### service persists it locally and acknowledges with 202 + empty object
+### (HandleTuneInFavorite). Local datastore only, no upstream TuneIn call.
+POST {{host}}/bmx/tunein/v1/favorite/s166521
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+X-Bmx-Api-Key: {{bmxApiKey}}
+Content-Type: application/json
+
+> {%
+    client.test("Favorite accepted (202)", function () {
+        client.assert(response.status === 202, "Response status is not 202, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "Expected application/json, got '" + response.contentType.mimeType + "'");
+    });
+%}
+
+### DELETE /bmx/tunein/v1/favorite/{stationID} (remove the favorite)
+DELETE {{host}}/bmx/tunein/v1/favorite/s166521
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+X-Bmx-Api-Key: {{bmxApiKey}}
+
+> {%
+    client.test("Favorite removal accepted (202)", function () {
+        client.assert(response.status === 202, "Response status is not 202, got " + response.status);
+    });
+%}

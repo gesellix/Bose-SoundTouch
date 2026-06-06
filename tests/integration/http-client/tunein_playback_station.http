@@ -1,12 +1,18 @@
-### GET /bmx/tunein/v1/playback/station/_station_ (no Authorization)
+### GET /bmx/tunein/v1/playback/station/{stationID} (no Authorization)
+###
+### Frozen BMX route. Resolving a TuneIn station goes upstream to TuneIn's
+### Tune.ashx (stream URLs) + describe.ashx (name/logo); in CI those calls are
+### served by mock-tunein (TUNEIN_OPML_URL, see docker-compose.ci.yml), so this
+### test is fully offline. The mock returns RFC-5737 stream URLs keyed by the
+### station id, which we assert below to prove the response came from the mock.
+###
 ### Auth gate temporarily disabled — see handlers_bmx.go (writeBMXUnauthorized
-### is kept as the future-restore point). When the gate is re-enabled,
-### swap the 200/audio assertions below back to the 401/Unauthorized ones
-### that were here historically.
-GET {{host}}/bmx/tunein/v1/playback/station/_station_
+### is kept as the future-restore point). When the gate is re-enabled, swap the
+### 200/audio assertions below back to the 401/Unauthorized ones.
+GET {{host}}/bmx/tunein/v1/playback/station/s166521
 Accept: */*
 Accept-Language: en
-X-Bmx-Api-Key: bmx-api-key-dummy
+X-Bmx-Api-Key: {{bmxApiKey}}
 X-Bmx-Device-Id: bmx-device-id-dummy
 User-Agent: Bose_Lisa/27.0.6
 
@@ -15,18 +21,23 @@ User-Agent: Bose_Lisa/27.0.6
         client.assert(response.status === 200, "Response status is not 200");
     });
 
-    client.test("Response contains audio information", function() {
+    client.test("Response carries the mock-served stream (offline)", function() {
         client.assert(response.body.hasOwnProperty("audio"), "Response missing 'audio'");
-        client.assert(response.body.audio.hasOwnProperty("streamUrl"), "Response missing 'streamUrl'");
+        client.assert(response.body.audio.streamUrl === "http://192.0.2.20:8000/s166521/stream-1.mp3",
+            "audio.streamUrl should be the mock stream, got '" + response.body.audio.streamUrl + "'");
+        client.assert(response.body.audio.streams.length === 2,
+            "expected 2 failover streams from the mock, got " + response.body.audio.streams.length);
+        client.assert(response.body.name === "Mock Radio s166521",
+            "name should come from the mock describe.ashx, got '" + response.body.name + "'");
     });
 %}
 
-### POST /bmx/tunein/v1/token
+### POST /bmx/tunein/v1/token (local canned token, no upstream)
 POST {{host}}/bmx/tunein/v1/token
 User-Agent: Bose_Lisa/27.0.6
 Accept: */*
 Accept-Language: en
-X-Bmx-Api-Key: bmx-api-key-dummy
+X-Bmx-Api-Key: {{bmxApiKey}}
 X-Bmx-Device-Id: bmx-device-id-dummy
 Content-Type: application/json
 
@@ -45,13 +56,13 @@ Content-Type: application/json
     client.global.set("bmx_access_token", response.body.access_token);
 %}
 
-### GET /bmx/tunein/v1/playback/station/_station_ (Authorized)
-GET {{host}}/bmx/tunein/v1/playback/station/_station_
+### GET /bmx/tunein/v1/playback/station/{stationID} (Authorized)
+GET {{host}}/bmx/tunein/v1/playback/station/s166521
 User-Agent: Bose_Lisa/27.0.6
 Accept: */*
 Accept-Language: en
 Authorization: {{bmx_access_token}}
-X-Bmx-Api-Key: bmx-api-key-dummy
+X-Bmx-Api-Key: {{bmxApiKey}}
 X-Bmx-Device-Id: bmx-device-id-dummy
 
 > {%
@@ -59,8 +70,9 @@ X-Bmx-Device-Id: bmx-device-id-dummy
         client.assert(response.status === 200, "Response status is not 200");
     });
 
-    client.test("Response contains audio information", function() {
+    client.test("Response carries the mock-served stream (offline)", function() {
         client.assert(response.body.hasOwnProperty("audio"), "Response missing 'audio'");
-        client.assert(response.body.audio.hasOwnProperty("streamUrl"), "Response missing 'streamUrl'");
+        client.assert(response.body.audio.streamUrl === "http://192.0.2.20:8000/s166521/stream-1.mp3",
+            "audio.streamUrl should be the mock stream, got '" + response.body.audio.streamUrl + "'");
     });
 %}

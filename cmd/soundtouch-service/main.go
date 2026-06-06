@@ -22,6 +22,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
+	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
@@ -376,6 +377,16 @@ func main() {
 				EnvVars: []string{"AMAZON_PROFILE_URL"},
 			},
 			&cli.StringFlag{
+				Name:    "tunein-opml-url",
+				Usage:   "TuneIn OPML base URL, covering Tune.ashx/describe.ashx/navigate (for testing / local mock; defaults to opml.radiotime.com)",
+				EnvVars: []string{"TUNEIN_OPML_URL"},
+			},
+			&cli.StringFlag{
+				Name:    "tunein-api-url",
+				Usage:   "TuneIn API base URL, covering search and profile contents (for testing / local mock; defaults to api.radiotime.com)",
+				EnvVars: []string{"TUNEIN_API_URL"},
+			},
+			&cli.StringFlag{
 				Name:    "tts-provider",
 				Usage:   "Text-to-speech provider: 'translate' (Google Translate, no credentials, default) or 'google-cloud' (Google Cloud TTS, needs an API key). Empty falls back to translate; leave unset to let a value saved in the settings UI take effect",
 				EnvVars: []string{"TTS_PROVIDER"},
@@ -499,6 +510,12 @@ func main() {
 
 			initMusicServices(config, server)
 			initTTSService(config, server)
+
+			// Redirect TuneIn upstream calls when overridden (e.g. to a local
+			// mock in integration tests); empty values keep the real hosts.
+			if config.tuneInOpmlURL != "" || config.tuneInAPIURL != "" {
+				bmx.SetTuneInEndpoints(config.tuneInOpmlURL, config.tuneInAPIURL)
+			}
 
 			// Load and set initial DNS discoveries
 			dnsDiscoveries, err := ds.LoadDNSDiscoveries()
@@ -656,6 +673,8 @@ type serviceConfig struct {
 	amazonRedirectURI   string
 	amazonTokenURL      string
 	amazonProfileURL    string
+	tuneInOpmlURL       string
+	tuneInAPIURL        string
 	mgmtUsername        string
 	mgmtPassword        string
 	ttsProvider         string
@@ -740,6 +759,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 	amazonRedirectURI := c.String("amazon-redirect-uri")
 	amazonTokenURL := c.String("amazon-token-url")
 	amazonProfileURL := c.String("amazon-profile-url")
+	tuneInOpmlURL := c.String("tunein-opml-url")
+	tuneInAPIURL := c.String("tunein-api-url")
 	mgmtUsername := c.String("mgmt-username")
 	mgmtPassword := c.String("mgmt-password")
 	ttsProvider := c.String("tts-provider")
@@ -785,6 +806,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 		amazonRedirectURI:   amazonRedirectURI,
 		amazonTokenURL:      amazonTokenURL,
 		amazonProfileURL:    amazonProfileURL,
+		tuneInOpmlURL:       tuneInOpmlURL,
+		tuneInAPIURL:        tuneInAPIURL,
 		mgmtUsername:        mgmtUsername,
 		mgmtPassword:        mgmtPassword,
 		ttsProvider:         ttsProvider,

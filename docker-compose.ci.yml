@@ -16,6 +16,8 @@ services:
       - AMAZON_CLIENT_SECRET=mock-amazon-secret
       - AMAZON_TOKEN_URL=http://amazon-mock:8080/auth/o2/token
       - AMAZON_PROFILE_URL=http://amazon-mock:8080/user/profile
+      - TUNEIN_OPML_URL=http://tunein-mock:8080
+      - TUNEIN_API_URL=http://tunein-mock:8080
 
   spotify-mock:
     image: golang:1.26.4-alpine
@@ -38,6 +40,18 @@ services:
     command: go run ./cmd/mock-amazon/main.go -port 8080
     ports:
       - "8082:8080"
+    networks:
+      - soundtouch-test-net
+
+  tunein-mock:
+    image: golang:1.26.4-alpine
+    container_name: tunein-mock
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: go run ./cmd/mock-tunein/main.go -port 8080
+    ports:
+      - "8083:8080"
     networks:
       - soundtouch-test-net
 

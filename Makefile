@@ -193,6 +193,7 @@ test-http-client:
 		/workdir/get_provider_settings.http \
 		/workdir/tunein_playback_station.http \
 		/workdir/post_tunein_report.http \
+		/workdir/tunein_favorite.http \
 		/workdir/get_orion_station.http \
 		/workdir/get_custom_playback.http \
 		/workdir/get_media_ding.http \

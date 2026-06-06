@@ -91,7 +91,9 @@ func TestTuneInSearchURI(t *testing.T) {
 		{
 			name:  "plain query is appended to base URL",
 			query: "jazz",
-			check: func(u string) bool { return u == TuneInSearchAPI+"jazz" },
+			check: func(u string) bool {
+				return u == "https://api.radiotime.com/profiles?fulltextsearch=true&version=1.3&query=jazz"
+			},
 		},
 	}
 

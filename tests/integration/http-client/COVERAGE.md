@@ -60,10 +60,10 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
 | POST | `/alexa/certificate` | 501 (rare 200) | — | ⬜ (edge) |
 | GET | `/bmx/registry/v1/services` | 200 | `get_bmx_services.http` | ✅ |
 | POST | `/bmx/tunein/v1/token` | 200 | `tunein_playback_station.http` | ✅ |
-| GET | `/bmx/tunein/v1/playback/station/{stationID}` | 200, 401 | `tunein_playback_station.http` | ✅ |
-| GET | `/bmx/tunein/v1/playback/episode(s)/{episodeID}` | 200 | — | ⬜ (TuneIn live) |
-| POST | `/bmx/tunein/v1/report` | 200 | — | ⬜ |
-| POST/DELETE | `/bmx/tunein/v1/favorite/{stationID}` | 202 | — | ⬜ (TuneIn live) |
+| GET | `/bmx/tunein/v1/playback/station/{stationID}` | 200, 401 | `tunein_playback_station.http` | ✅ (offline via mock-tunein) |
+| GET | `/bmx/tunein/v1/playback/episode(s)/{episodeID}` | 200 | — | ⬜ (needs mock fixture, see TUNEIN-MOCK-MISSING.md) |
+| POST | `/bmx/tunein/v1/report` | 200 | `post_tunein_report.http` | ✅ |
+| POST/DELETE | `/bmx/tunein/v1/favorite/{stationID}` | 202 | `tunein_favorite.http` | ✅ (local-only) |
 | GET | `/core02/svc-bmx-adapter-orion/prod/orion/station` | 200 | — | ⬜ |
 | GET | `/custom/v1/playback/{encodedURL}` | 200 | — | ⬜ |
 | GET | `/media/aftertouch-ding.wav` | 200 (binary) | — | ⬜ |
