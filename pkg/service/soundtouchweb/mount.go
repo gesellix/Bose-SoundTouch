@@ -27,9 +27,9 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 
 	// Player / control API. Per #451 this is the post-merge canonical shape:
 	// device-scoped actions nest under devices/{id}/, so every direct child of
-	// /api/control is a literal namespace (devices, tunein, radiobrowser,
-	// version, discover) — no static-vs-param sibling, so routing never depends
-	// on chi's static-over-param precedence.
+	// /api/control is a literal namespace (version, discover, devices,
+	// providers) — no static-vs-param sibling, so routing never depends on
+	// chi's static-over-param precedence.
 	r.Route("/api/control", func(r chi.Router) {
 		r.Get("/version", app.HandleAPIVersion)
 
@@ -64,10 +64,8 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 				r.Post("/power", app.HandleDevicePower)
 				r.Get("/power-status", app.HandleDevicePowerStatus)
 				r.Get("/recents", app.HandleDeviceRecents)
+				// Low-level "play this ContentItem" primitive (not a provider).
 				r.Post("/play", app.HandleDevicePlay)
-				r.Post("/play-url", app.HandlePlayURL)
-				// Proxied to the AfterTouch service's /api/setup/tts/speak.
-				r.Post("/speak", app.HandleAPISpeakText)
 				// Generic key / preset / source / bass actions.
 				r.Get("/action/{action}", app.HandleAPIControl)
 				r.Post("/action/{action}", app.HandleAPIControl)
@@ -81,21 +79,33 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 					r.Post("/leave", app.HandleZoneLeave)
 				})
 
-				r.Post("/tunein/play", app.HandlePlayTuneIn)
-				r.Post("/radiobrowser/play", app.HandlePlayRadioBrowser)
+				// Play a result from a content provider on this device.
+				// Browsable providers (tunein, radiobrowser) take a catalog item;
+				// input providers (url, tts) take the raw input.
+				r.Route("/providers", func(r chi.Router) {
+					r.Post("/tunein/play", app.HandlePlayTuneIn)
+					r.Post("/radiobrowser/play", app.HandlePlayRadioBrowser)
+					r.Post("/url/play", app.HandlePlayURL)
+					// Proxied to the AfterTouch service's /api/setup/tts/speak.
+					r.Post("/tts/play", app.HandleAPISpeakText)
+				})
 			})
 		})
 
-		// Browse / search (global, not device-scoped).
-		r.Route("/tunein", func(r chi.Router) {
-			r.Get("/search", app.HandleTuneInSearch)
-			r.Get("/search/next", app.HandleTuneInSearchNext)
-			r.Get("/navigate", app.HandleTuneInNavigate)
-			r.Get("/navigate/*", app.HandleTuneInNavigate)
-		})
+		// Provider browse / search (global, not device-scoped). Only browsable
+		// providers (a catalog you search/navigate) appear here; input
+		// providers (url, tts) exist solely as a device play above.
+		r.Route("/providers", func(r chi.Router) {
+			r.Route("/tunein", func(r chi.Router) {
+				r.Get("/search", app.HandleTuneInSearch)
+				r.Get("/search/next", app.HandleTuneInSearchNext)
+				r.Get("/navigate", app.HandleTuneInNavigate)
+				r.Get("/navigate/*", app.HandleTuneInNavigate)
+			})
 
-		r.Route("/radiobrowser", func(r chi.Router) {
-			r.Get("/search", app.HandleRadioBrowserSearch)
+			r.Route("/radiobrowser", func(r chi.Router) {
+				r.Get("/search", app.HandleRadioBrowserSearch)
+			})
 		})
 	})
 

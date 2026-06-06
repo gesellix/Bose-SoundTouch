@@ -28,29 +28,29 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
-    tuneInBrowse: (path) => req(path ? `/api/control/tunein/navigate/${path}` : '/api/control/tunein/navigate'),
-    tuneInSearch: (q) => req(`/api/control/tunein/search?q=${encodeURIComponent(q)}`),
-    tuneInSearchNext: (cursor) => req(`/api/control/tunein/search/next?cursor=${encodeURIComponent(cursor)}`),
+    tuneInBrowse: (path) => req(path ? `/api/control/providers/tunein/navigate/${path}` : '/api/control/providers/tunein/navigate'),
+    tuneInSearch: (q) => req(`/api/control/providers/tunein/search?q=${encodeURIComponent(q)}`),
+    tuneInSearchNext: (cursor) => req(`/api/control/providers/tunein/search/next?cursor=${encodeURIComponent(cursor)}`),
     control: (id, action, presetId) => req(`/api/control/devices/${id}/action/${action}?id=${presetId}`),
     storePreset: (id, slotId) => req(`/api/control/devices/${id}/action/storepreset?id=${slotId}`),
     selectSource: (id, source, account) => req(`/api/control/devices/${id}/action/source?name=${encodeURIComponent(source)}&account=${encodeURIComponent(account || '')}`),
-    tuneInPlay: (deviceId, item) => req(`/api/control/devices/${deviceId}/tunein/play`, {
+    tuneInPlay: (deviceId, item) => req(`/api/control/devices/${deviceId}/providers/tunein/play`, {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
-    radioBrowserSearch: (q) => req(`/api/control/radiobrowser/search?q=${encodeURIComponent(q)}`),
-    radioBrowserPlay: (deviceId, item) => req(`/api/control/devices/${deviceId}/radiobrowser/play`, {
+    radioBrowserSearch: (q) => req(`/api/control/providers/radiobrowser/search?q=${encodeURIComponent(q)}`),
+    radioBrowserPlay: (deviceId, item) => req(`/api/control/devices/${deviceId}/providers/radiobrowser/play`, {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
-    playURL: (deviceId, url, name, imageUrl, serviceUrl) => req(`/api/control/devices/${deviceId}/play-url`, {
+    playURL: (deviceId, url, name, imageUrl, serviceUrl) => req(`/api/control/devices/${deviceId}/providers/url/play`, {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify({ url, name, imageUrl, serviceUrl }),
     }),
-    speak: (deviceId, text) => req(`/api/control/devices/${deviceId}/speak`, {
+    speak: (deviceId, text) => req(`/api/control/devices/${deviceId}/providers/tts/play`, {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify({ text }),

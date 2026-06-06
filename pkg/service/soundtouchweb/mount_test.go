@@ -44,19 +44,41 @@ func TestMountControlAPIShape(t *testing.T) {
 		}
 	}
 
-	// Spot-check a representative endpoint actually registered.
-	found := false
-
+	registered := make(map[string]bool, len(apiRoutes))
 	for _, route := range apiRoutes {
-		if route == "/api/control/version" {
-			found = true
+		registered[route] = true
+	}
 
-			break
+	// The provider infix (#451): browsable providers expose global browse
+	// routes; every provider play nests under devices/{id}/providers/.
+	mustExist := []string{
+		"/api/control/version",
+		"/api/control/providers/tunein/search",
+		"/api/control/providers/radiobrowser/search",
+		"/api/control/devices/{id}/providers/tunein/play",
+		"/api/control/devices/{id}/providers/radiobrowser/play",
+		"/api/control/devices/{id}/providers/url/play",
+		"/api/control/devices/{id}/providers/tts/play",
+	}
+	for _, want := range mustExist {
+		if !registered[want] {
+			t.Errorf("expected route %q to be registered; got %v", want, apiRoutes)
 		}
 	}
 
-	if !found {
-		t.Errorf("expected /api/control/version to be registered; got %v", apiRoutes)
+	// The pre-infix flat paths are gone.
+	mustNotExist := []string{
+		"/api/control/tunein/search",
+		"/api/control/radiobrowser/search",
+		"/api/control/devices/{id}/play-url",
+		"/api/control/devices/{id}/speak",
+		"/api/control/devices/{id}/tunein/play",
+		"/api/control/devices/{id}/radiobrowser/play",
+	}
+	for _, gone := range mustNotExist {
+		if registered[gone] {
+			t.Errorf("pre-infix route %q should have moved under /providers/", gone)
+		}
 	}
 }
 
