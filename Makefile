@@ -200,6 +200,7 @@ test-http-client:
 		/workdir/get_bmx_icon.http \
 		/workdir/set_preset_6.http \
 		/workdir/get_presets.http \
+		/workdir/get_presets_conditional.http \
 		/workdir/delete_preset_6.http \
 		/workdir/set_preset_5.http \
 		/workdir/post_recent.http \
@@ -210,6 +211,7 @@ test-http-client:
 		/workdir/get_api_versions.http \
 		/workdir/post_musicprovider_is_eligible.http \
 		/workdir/get_full_account.http \
+		/workdir/get_full_account_conditional.http \
 		/workdir/create_group.http \
 		/workdir/get_group.http \
 		/workdir/delete_group.http \

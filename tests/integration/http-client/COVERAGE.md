@@ -25,7 +25,7 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
 
 | Method | Route | Status(es) observed | Covered by | State |
 |--------|-------|--------------------|------------|-------|
-| GET | `/streaming/account/{a}/full` | 200, 304 | `get_full_account.http` | 〰️ (304 conditional gap) |
+| GET | `/streaming/account/{a}/full` | 200, 304 | `get_full_account.http`, `get_full_account_conditional.http` | ✅ |
 | GET | `/streaming/account/{a}/devices` | 200 | `get_account_devices.http` | ✅ |
 | GET | `/streaming/account/{a}/sources` | 200 | `get_account_sources.http` | ✅ |
 | GET | `/streaming/account/{a}/presets/all` | 200 | `get_account_presets.http` | ✅ |
@@ -35,7 +35,7 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
 | PUT | `/streaming/account/{a}/device/{d}` | 200, 401 | `rename_device.http` | 〰️ (401 gap) |
 | DELETE | `/streaming/account/{a}/device/{d}` | 200 | `unregister_device.http` | ✅ |
 | GET | `/streaming/account/{a}/device/{d}/group/` | 200 | `get_group.http` | ✅ |
-| GET | `/streaming/account/{a}/device/{d}/presets` | 200, 304 | `get_presets.http` | 〰️ (304 conditional gap) |
+| GET | `/streaming/account/{a}/device/{d}/presets` | 200, 304 | `get_presets.http`, `get_presets_conditional.http` | ✅ |
 | PUT | `/streaming/account/{a}/device/{d}/preset/{n}` | 200 | `set_preset_5/6.http` | ✅ |
 | DELETE | `/streaming/account/{a}/device/{d}/preset/{n}` | 200 | `delete_preset_6.http` | ✅ |
 | POST | `/streaming/account/{a}/device/{d}/recent` | 201 | `post_recent.http` | ✅ |
@@ -93,6 +93,6 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
    `/media/bmx-icons/{...}`, group delete lifecycle.
 2. **Medium (TuneIn live dep, like the existing playback test):**
    `/bmx/tunein/v1/playback/episode(s)/{id}`, `/bmx/tunein/v1/favorite/{id}`.
-3. **Low / edge:** 304 conditional GETs (`/full`, `/presets`), PUT-device 401,
-   `/v1/blacklist` 405, `/ced/*` 404, `/alexa/certificate` 501,
-   `/media/tts/{hash}`.
+3. **Low / edge (still open):** PUT-device 401, `/v1/blacklist` 405,
+   `/ced/*` 404, `/alexa/certificate` 501, `/media/tts/{hash}`. Quirky-status
+   pins; add on demand.

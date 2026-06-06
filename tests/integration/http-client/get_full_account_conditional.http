@@ -1,0 +1,32 @@
+### GET /streaming/account/{accountId}/full then re-GET with If-None-Match -> 304
+###
+### The speaker polls /full with the ETag it last saw; when nothing changed the
+### service answers 304 Not Modified so the speaker skips re-parsing. This pins
+### the ETag / conditional-GET contract (the ETag header is case-sensitive on the
+### wire; see CLAUDE.md). Self-contained: capture the current ETag, then replay.
+
+### Prime: fetch /full and capture its ETag
+GET {{host}}/streaming/account/{{accountId}}/full
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+
+> {%
+    client.test("Initial /full is 200 with an ETag", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.headers.valueOf("ETag") !== null, "Response should carry an ETag header");
+    });
+
+    client.global.set("fullEtag", response.headers.valueOf("ETag"));
+%}
+
+### Conditional GET with the captured ETag -> 304 Not Modified
+GET {{host}}/streaming/account/{{accountId}}/full
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+If-None-Match: {{fullEtag}}
+
+> {%
+    client.test("Conditional /full returns 304 Not Modified", function() {
+        client.assert(response.status === 304, "Response status is not 304, got " + response.status);
+    });
+%}

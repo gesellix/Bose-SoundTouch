@@ -1,0 +1,31 @@
+### GET .../device/{deviceId}/presets then re-GET with If-None-Match -> 304
+###
+### Same conditional-GET contract as /full, for the device presets resource: the
+### speaker re-polls with its last ETag and the service answers 304 when the
+### preset list is unchanged. Self-contained: capture the current ETag, replay.
+
+### Prime: fetch presets and capture the ETag
+GET {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/presets
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+
+> {%
+    client.test("Initial presets fetch is 200 with an ETag", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.headers.valueOf("ETag") !== null, "Response should carry an ETag header");
+    });
+
+    client.global.set("presetsEtag", response.headers.valueOf("ETag"));
+%}
+
+### Conditional GET with the captured ETag -> 304 Not Modified
+GET {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/presets
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+If-None-Match: {{presetsEtag}}
+
+> {%
+    client.test("Conditional presets fetch returns 304 Not Modified", function() {
+        client.assert(response.status === 304, "Response status is not 304, got " + response.status);
+    });
+%}
