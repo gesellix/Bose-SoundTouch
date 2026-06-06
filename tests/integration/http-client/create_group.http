@@ -63,4 +63,11 @@ Accept: application/vnd.bose.streaming-v1.2+xml
         const roles = group.getElementsByTagName("groupRole");
         client.assert(roles.length === 2, "Response should contain exactly 2 <groupRole> entries, got " + roles.length);
     });
+
+    // Capture the new group id (last path segment of the Location header) so the
+    // delete-group lifecycle step (delete_group.http) can remove this group.
+    (function () {
+        const loc = response.headers.valueOf("Location");
+        client.global.set("groupId", loc ? loc.substring(loc.lastIndexOf("/") + 1) : "");
+    })();
 %}

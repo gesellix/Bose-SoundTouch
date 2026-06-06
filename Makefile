@@ -211,6 +211,7 @@ test-http-client:
 		/workdir/get_full_account.http \
 		/workdir/create_group.http \
 		/workdir/get_group.http \
+		/workdir/delete_group.http \
 		/workdir/rename_device.http \
 		/workdir/unregister_device.http \
 		--report; \

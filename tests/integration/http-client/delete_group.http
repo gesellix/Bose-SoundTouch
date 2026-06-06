@@ -1,0 +1,40 @@
+### DELETE /streaming/account/{accountId}/group/{groupId} (remove a specific group)
+###
+### Completes the group lifecycle: create_group.http created the group and
+### captured its id into {{groupId}}; this removes that group
+### (HandleMargeDeleteGroup -> 200 with a <status> body). Runs after get_group.http
+### and before the device teardown so the group exists when we delete it.
+DELETE {{host}}/streaming/account/{{accountId}}/group/{{groupId}}
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+
+> {%
+    client.test("Group deleted (200)", function () {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/vnd.bose.streaming-v1.2+xml",
+            "Expected application/vnd.bose.streaming-v1.2+xml, got '" + response.contentType.mimeType + "'");
+    });
+
+    client.test("Response body confirms deletion", function () {
+        client.assert(response.body.getElementsByTagName("status").length > 0,
+            "Response should contain a <status> element");
+    });
+%}
+
+### DELETE /streaming/account/{accountId}/group/ (account-level teardown, no id)
+###
+### The no-id, trailing-slash form a speaker sends to clear all of an account's
+### groups (e.g. during a factory reset). HandleMargeDeleteAccountGroups -> 200.
+DELETE {{host}}/streaming/account/{{accountId}}/group/
+Content-Type: application/vnd.bose.streaming-v1.2+xml
+Authorization: Bearer {{token}}
+User-Agent: Bose_Lisa/27.0.6
+Accept: application/vnd.bose.streaming-v1.2+xml
+
+> {%
+    client.test("Account-level group teardown (200)", function () {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+    });
+%}

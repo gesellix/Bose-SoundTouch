@@ -42,8 +42,8 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
 | GET | `/streaming/account/{a}/device/{d}/recents` | 200 | `get_recents.http` | ✅ |
 | POST | `/streaming/account/{a}/source` | 200 | `set_preset_5.http` | ✅ |
 | POST | `/streaming/account/{a}/group/` | 201 | `create_group.http` | ✅ |
-| DELETE | `/streaming/account/{a}/group/` | 405 | (method-not-allowed edge) | ⬜ |
-| DELETE | `/streaming/account/{a}/group/{id}` | 200 | — | ⬜ |
+| DELETE | `/streaming/account/{a}/group/` | 200 | `delete_group.http` | ✅ (account-level teardown) |
+| DELETE | `/streaming/account/{a}/group/{id}` | 200 | `delete_group.http` | ✅ |
 | GET | `/streaming/device/{d}/streaming_token` | 200 | `get_streaming_token.http` | ✅ |
 | GET | `/streaming/software/update/account/{a}` | 200 | `get_software_update.http` | ✅ |
 | GET | `/streaming/sourceproviders` | 200 | `get_sourceproviders.http` | ✅ |
