@@ -3,10 +3,23 @@ title: "SoundTouch supportedURLs Endpoint Analysis"
 ---
 This document provides a comprehensive analysis of the `/supportedURLs` endpoint response from real Bose SoundTouch devices and compares it with our current implementation.
 
+> **Reconciliation note (June 2026).** The categorised lists below had drifted
+> from `pkg/client`. Verified against the code, these are **implemented** and have
+> been re-marked (some were wrongly under "Not Yet Implemented", and a few were
+> listed twice): the music-service set (`setMusicServiceAccount`,
+> `setMusicServiceOAuthAccount`, `removeMusicServiceAccount`, `serviceAvailability`),
+> presets (`storePreset`, `removePreset`), stations (`searchStation`, `addStation`,
+> `removeStation`), `navigate`, the native stereo-pair group set (`getGroup`,
+> `addGroup`, `removeGroup`, `updateGroup`), `speaker`, `playNotification`,
+> `requestToken`, `notification`. Still **not** implemented (confirmed absent from
+> `pkg/client`): `search`, `standby`, `powerManagement`, `lowPowerStandby`,
+> `language`, `listMediaServers`, `bluetoothInfo`, `userPlayControl`, and the
+> wireless / bluetooth-pairing / software-update / source-shortcut families.
+
 ## Discovery Summary
 
 **Test Devices:**
-- Device 1: `192.0.2.11:8090` (deviceID: `08DF1F0BA325`)
+- Device 1: `192.0.2.11:8090` (deviceID: `AABBCCDDEE01`)
 - Device 2: `192.0.2.10:8090` (deviceID: `AABBCCDDEEFF`)
 
 **Key Findings:**
@@ -61,18 +74,18 @@ This document provides a comprehensive analysis of the `/supportedURLs` endpoint
 - `/audioproducttonecontrols` - Advanced tone controls (capability-dependent)
 - `/audioproductlevelcontrols` - Speaker level controls (capability-dependent)
 
-**System Info (3/3):**
-- `/trackInfo` - Track information
-- `/bluetoothInfo` - Bluetooth information
-- `/recents` - Recently played content
+**System Info (1/3):**
+- `/recents` - Recently played content ✅
+- `/trackInfo` - Track information ❌ non-functional on real devices (use `/now_playing`)
+- `/bluetoothInfo` - Bluetooth information ❌ not implemented in `pkg/client`
 
-### 🔶 Partially Implemented/Different Approach
+### ✅ Stereo-Pair Group Management (native)
 
-**Zone Management:**
-- `/addGroup` ⚠️ - We use `/setZone` for group management
-- `/removeGroup` ⚠️ - We use `/setZone` for group management  
-- `/getGroup` ⚠️ - We use `/getZone` for group information
-- `/updateGroup` ⚠️ - We use `/setZone` for group updates
+Implemented natively in `pkg/client` (in addition to the `/setZone` multiroom path):
+- `/addGroup` ✅ - `AddGroup()`
+- `/removeGroup` ✅ - `RemoveGroup()`
+- `/getGroup` ✅ - `GetGroup()`
+- `/updateGroup` ✅ - `UpdateGroup()`
 
 ### ❌ Not Yet Implemented (High Priority)
 
@@ -91,22 +104,22 @@ This document provides a comprehensive analysis of the `/supportedURLs` endpoint
 - `/selectLastSoundTouchSource` - Select last SoundTouch source
 - `/selectLocalSource` - Select local source
 
-**Music Services Integration:**
-- `/setMusicServiceAccount` - Configure music service account
-- `/setMusicServiceOAuthAccount` - OAuth account setup
-- `/removeMusicServiceAccount` - Remove music service account
-- `/serviceAvailability` - Check service availability
+**Music Services Integration:** ✅ implemented (moved out of this list)
+- ~~`/setMusicServiceAccount`~~ ✅ `SetMusicServiceAccount()`
+- ~~`/setMusicServiceOAuthAccount`~~ ✅ `SetMusicServiceOAuthAccount()`
+- ~~`/removeMusicServiceAccount`~~ ✅ `RemoveMusicServiceAccount()`
+- ~~`/serviceAvailability`~~ ✅ `GetServiceAvailability()`
 
 **Enhanced Presets:**
-- `/storePreset` - Store new preset
-- `/removePreset` - Remove existing preset
+- ~~`/storePreset`~~ ✅ `StorePreset()` (also listed under Fully Implemented)
+- ~~`/removePreset`~~ ✅ `RemovePreset()`
 - `/bookmark` - Bookmark current content
 - `/userRating` - User rating for content
 
 **Station/Radio Management:**
-- `/searchStation` - Search for stations
-- `/addStation` - Add station to favorites
-- `/removeStation` - Remove station from favorites
+- ~~`/searchStation`~~ ✅ `SearchStation()`
+- ~~`/addStation`~~ ✅ `AddStation()`
+- ~~`/removeStation`~~ ✅ `RemoveStation()`
 - `/genreStations` - Browse stations by genre
 - `/stationInfo` - Station information
 
@@ -119,7 +132,7 @@ This document provides a comprehensive analysis of the `/supportedURLs` endpoint
 - `/systemtimeout` - System timeout settings
 - `/powersaving` - Power saving configuration
 - `/language` - Language settings
-- `/speaker` - Speaker configuration
+- ~~`/speaker`~~ ✅ `PlayTTS()` / `PlayURL()` (TTS & URL notifications; not "speaker configuration")
 
 **Network & Connectivity:**
 - `/performWirelessSiteSurvey` - WiFi site survey
@@ -133,7 +146,7 @@ This document provides a comprehensive analysis of the `/supportedURLs` endpoint
 
 **Content Discovery:**
 - `/search` - Content search
-- `/navigate` - Content navigation
+- ~~`/navigate`~~ ✅ `Navigate()`
 - `/listMediaServers` - List available media servers
 
 ### ❌ Not Yet Implemented (Low Priority)
@@ -156,9 +169,9 @@ This document provides a comprehensive analysis of the `/supportedURLs` endpoint
 
 **System Utilities:**
 - `/userActivity` - User activity tracking
-- `/requestToken` - Token management
-- `/notification` - Notification management
-- `/playNotification` - Play notification sound
+- ~~`/requestToken`~~ ✅ `RequestToken()`
+- ~~`/notification`~~ ✅ `NotifySourcesUpdated()`
+- ~~`/playNotification`~~ ✅ `PlayNotification()`
 - `/introspect` - System introspection
 - `/test` - System test interface
 
@@ -229,7 +242,7 @@ This document provides a comprehensive analysis of the `/supportedURLs` endpoint
 **Example Response Structure:**
 ```xml
 <?xml version="1.0" encoding="UTF-8" ?>
-<supportedURLs deviceID="08DF1F0BA325">
+<supportedURLs deviceID="AABBCCDDEE01">
     <URL location="/info" />
     <URL location="/capabilities" />
     <!-- ... 101 additional endpoints ... -->

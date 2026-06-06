@@ -1,13 +1,13 @@
 ---
 title: "Bose SoundTouch API Coverage Analysis"
 ---
-**Last Updated:** February 2026
+**Last Updated:** June 2026 (reconciled against `pkg/client`)
 **API Version:** Official Bose SoundTouch Web API v1.0
-**Implementation Status:** 100% Official Coverage + Extended Features
+**Implementation Status:** Official coverage 20/21 + extended features
 
 ## Executive Summary
 
-This Go implementation provides **complete coverage** of the Bose SoundTouch Web API with **100% of official endpoints implemented** (18/19) plus **5 additional extended features** not documented in the official API v1.0 but working with real hardware.
+This Go implementation provides near-complete coverage of the Bose SoundTouch Web API with **20 of 21 official endpoints implemented** (the one exception, `/trackInfo`, is documented but non-functional on real hardware) plus **5 additional extended features** not documented in the official API v1.0 but working with real hardware.
 
 ### Key Findings
 - ✅ **All essential user functionality implemented**

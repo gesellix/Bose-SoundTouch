@@ -3,13 +3,30 @@ title: "Unimplemented SoundTouch API Endpoints"
 sidebar:
   exclude: true
 ---
-**Last Updated:** January 2026  
+**Last Updated:** June 2026 (reconciled against `pkg/client`)  
 **Source:** [SoundTouch Plus Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)  
-**Current Implementation:** 35 endpoints (including preset & navigation management discovered via SoundTouch Plus Wiki)  
+**Current Implementation:** ~41 endpoints in `pkg/client` (see reconciliation note)  
 **Wiki Documentation:** 87 endpoints  
-**Implementation Gap:** 52 endpoints
+**Implementation Gap:** ~46 endpoints
 
-This document provides comprehensive information about SoundTouch API endpoints documented in the community wiki but not yet implemented in this Go library. All examples are based on real device responses and extensive community testing.
+This document covers SoundTouch **device** WebServices API endpoints (the
+speaker's local `:8090` API consumed by `pkg/client`) documented in the community
+wiki but not yet implemented. It is **not** about the cloud-service router
+(`cmd/soundtouch-service`); for that surface see the contract checklist
+`tests/integration/http-client/COVERAGE.md`. Examples are based on real device
+responses and community testing.
+
+> **Reconciliation note (June 2026).** Verified against `pkg/client`. Since the
+> last update these are **now implemented** and have been re-marked below:
+> `setMusicServiceAccount` / `removeMusicServiceAccount` (`SetMusicServiceAccount`,
+> `RemoveMusicServiceAccount`) and the full stereo-pair group set
+> `getGroup` / `addGroup` / `removeGroup` / `updateGroup`
+> (`GetGroup`, `AddGroup`, `RemoveGroup`, `UpdateGroup`). The priority-matrix
+> counts further down are historical and have not all been recomputed; trust the
+> per-endpoint ✅ markers over the section totals. Endpoints still listed as
+> candidates (e.g. `/search`, `/standby`, `/powerManagement`, `/bluetoothInfo`,
+> `/language`, `/listMediaServers`) were confirmed absent from `pkg/client`
+> (some appear only in test fixtures).
 
 ---
 
@@ -69,11 +86,14 @@ Specialized hardware-specific features.
 - CLI command: `preset select --slot <1-6>`
 - Alternative: Direct key commands (`SendKey("PRESET_1")` etc.)
 
-### Music Service Management
+### ~~Music Service Management~~ ✅ **IMPLEMENTED**
 Critical for streaming service integration.
 
-#### POST /setMusicServiceAccount 🔥 **CRITICAL**
+#### ~~POST /setMusicServiceAccount~~ ✅ **IMPLEMENTED**
 Adds a music service account to the sources list.
+
+**Status:** **COMPLETE** - `pkg/client` exposes `SetMusicServiceAccount(...)`
+(and `SetMusicServiceOAuthAccount(...)` for OAuth sources like Spotify/Amazon).
 
 **Request Examples:**
 
@@ -111,8 +131,10 @@ NAS Music Library:
 - Note the `/0` suffix for STORED_MUSIC user names
 - Spotify requires PREMIUM account for most operations
 
-#### POST /removeMusicServiceAccount 🔥 **CRITICAL**
+#### ~~POST /removeMusicServiceAccount~~ ✅ **IMPLEMENTED**
 Removes an existing music service account.
+
+**Status:** **COMPLETE** - `pkg/client` exposes `RemoveMusicServiceAccount(...)`.
 
 **Request Examples:**
 
@@ -630,9 +652,12 @@ Selects LOCAL source (only way to select LOCAL on some devices).
 <status>/selectLocalSource</status>
 ```
 
-### Group Management (ST-10 Stereo Pairs Only)
+### ~~Group Management (ST-10 Stereo Pairs Only)~~ ✅ **IMPLEMENTED**
 
-#### GET /getGroup 📊 **MEDIUM**
+**Status:** **COMPLETE** - the full stereo-pair set is implemented in `pkg/client`:
+`GetGroup()`, `AddGroup()`, `RemoveGroup()`, `UpdateGroup()`.
+
+#### ~~GET /getGroup~~ ✅ **IMPLEMENTED**
 Gets current stereo pair configuration.
 
 **Response Example (paired):**
@@ -662,7 +687,7 @@ Gets current stereo pair configuration.
 <group />
 ```
 
-#### POST /addGroup 📊 **MEDIUM**
+#### ~~POST /addGroup~~ ✅ **IMPLEMENTED**
 Creates new stereo pair group.
 
 **Request Example:**
@@ -688,7 +713,7 @@ Creates new stereo pair group.
 **Response:** Same as GET /getGroup  
 **WebSocket Event:** `groupUpdated` sent to both devices
 
-#### GET /removeGroup 📊 **MEDIUM**
+#### ~~GET /removeGroup~~ ✅ **IMPLEMENTED**
 Removes existing stereo pair group.
 
 **Response:**
@@ -698,7 +723,7 @@ Removes existing stereo pair group.
 
 **WebSocket Event:** `groupUpdated` sent to both devices
 
-#### POST /updateGroup 📊 **MEDIUM**
+#### ~~POST /updateGroup~~ ✅ **IMPLEMENTED**
 Updates stereo pair group name.
 
 **Request Example:**
@@ -982,8 +1007,8 @@ func TestDeviceCompatibility(t *testing.T) {
 
 ### Phase 1: Essential Features (4 weeks)
 1. ✅ **Preset Management**: ~~`storePreset`, `removePreset`, `selectPreset`~~ (IMPLEMENTED)
-2. **Music Services**: `setMusicServiceAccount`, `removeMusicServiceAccount`  
-3. ✅ **Content Discovery**: ~~`navigate`, `search`~~ (IMPLEMENTED), `recents`
+2. ✅ **Music Services**: ~~`setMusicServiceAccount`, `removeMusicServiceAccount`~~ (IMPLEMENTED)
+3. ✅ **Content Discovery**: ~~`navigate`~~ (IMPLEMENTED), `search`, `recents`
 4. ✅ **Station Management**: ~~`searchStation`, `addStation`, `removeStation`~~ (IMPLEMENTED)
 5. **Enhanced Controls**: `userPlayControl`, `userRating`
 
@@ -996,7 +1021,7 @@ func TestDeviceCompatibility(t *testing.T) {
 ### Phase 3: Advanced Features (3 weeks)
 1. **Bluetooth**: `enterBluetoothPairing`, `clearBluetoothPaired`
 2. **Software Updates**: `swUpdateCheck`, `swUpdateQuery`
-3. **Stereo Pairs**: `getGroup`, `addGroup`, `removeGroup`, `updateGroup`
+3. ✅ **Stereo Pairs**: ~~`getGroup`, `addGroup`, `removeGroup`, `updateGroup`~~ (IMPLEMENTED)
 4. **Source Shortcuts**: `selectLastSource`, `selectLastSoundTouchSource`
 
 ### Phase 4: Specialized Features (2 weeks)
