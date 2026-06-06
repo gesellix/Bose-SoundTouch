@@ -109,7 +109,7 @@ async function probeBrowser443(lanHost, listenerPort, statusEl, serverLocalhostO
 
 async function fetchSpotifyStatus() {
     try {
-        const settingsResponse = await fetch("/setup/settings");
+        const settingsResponse = await fetch("/api/setup/settings");
         const settings = await settingsResponse.json();
         const header = document.getElementById("spotify-status-header");
 
@@ -120,7 +120,7 @@ async function fetchSpotifyStatus() {
 
         if (header) header.style.display = "flex";
 
-        const response = await fetch("/mgmt/spotify/accounts");
+        const response = await fetch("/api/mgmt/spotify/accounts");
         if (!response.ok) return;
         const data = await response.json();
         const nameEl = document.getElementById("spotify-account-name");
@@ -160,7 +160,7 @@ function toggleInfo(id) {
 
 async function linkSpotify() {
     try {
-        const response = await fetch("/mgmt/spotify/init", {method: "POST"});
+        const response = await fetch("/api/mgmt/spotify/init", {method: "POST"});
         if (!response.ok) {
             const err = await response.text();
             alert("Failed to initialize Spotify link: " + err);
@@ -174,7 +174,7 @@ async function linkSpotify() {
                 win.focus();
                 // Start polling for status change
                 const pollInterval = setInterval(async () => {
-                    const statusResponse = await fetch("/mgmt/spotify/accounts");
+                    const statusResponse = await fetch("/api/mgmt/spotify/accounts");
                     if (statusResponse.ok) {
                         const statusData = await statusResponse.json();
                         if (statusData.accounts && statusData.accounts.length > 0) {
@@ -201,7 +201,7 @@ async function primeSpotify(deviceId) {
     btn.disabled = true;
 
     try {
-        const response = await fetch(`/mgmt/spotify/prime?deviceId=${encodeURIComponent(deviceId)}`, {
+        const response = await fetch(`/api/mgmt/spotify/prime?deviceId=${encodeURIComponent(deviceId)}`, {
             method: "POST",
         },);
         if (response.ok) {
@@ -245,7 +245,7 @@ function setIntegrationBadge(id, state) {
 
 async function fetchSettings() {
     try {
-        const response = await fetch("/setup/settings");
+        const response = await fetch("/api/setup/settings");
         const settings = await response.json();
         if (settings.server_url) {
             document.getElementById("target-domain").value = settings.server_url;
@@ -269,7 +269,7 @@ async function fetchSettings() {
             // The :443 check only applies to the DNS-migration path. Hide the row
             // entirely when AfterTouch's DNS interception is off — those users are
             // either using SDK overrides (port-explicit URLs) or external DNS
-            // interception (in which case they can read /setup/settings JSON
+            // interception (in which case they can read /api/setup/settings JSON
             // directly if they want the result).
             if (!settings.dns_enabled) {
                 port443.innerHTML = "";
@@ -432,7 +432,7 @@ async function fetchSettings() {
 
 async function fetchLoggingSettings() {
     try {
-        const response = await fetch("/setup/logging-settings");
+        const response = await fetch("/api/setup/logging-settings");
         const settings = await response.json();
         document.getElementById("logging-redact").checked = settings.redact;
         document.getElementById("logging-log-body").checked = settings.log_body;
@@ -449,7 +449,7 @@ async function updateLoggingSettings() {
         record: document.getElementById("logging-record").checked,
     };
     try {
-        await fetch("/setup/logging-settings", {
+        await fetch("/api/setup/logging-settings", {
             method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(settings),
         });
     } catch (error) {
@@ -493,7 +493,7 @@ async function updateSettings() {
     status.style.color = "blue";
 
     try {
-        const response = await fetch("/setup/settings", {
+        const response = await fetch("/api/setup/settings", {
             method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(settings),
         });
         if (response.ok) {
@@ -513,7 +513,7 @@ async function updateSettings() {
 
 async function fetchDevices() {
     try {
-        const response = await fetch("/setup/devices");
+        const response = await fetch("/api/setup/devices");
         const devices = await response.json();
         const container = document.getElementById("device-list");
         const syncSelector = document.getElementById("sync-device-list");
@@ -741,7 +741,7 @@ async function startSync() {
     log.innerHTML = "";
 
     try {
-        const response = await fetch("/setup/sync/" + encodeURIComponent(deviceId), {method: "POST"},);
+        const response = await fetch("/api/setup/sync/" + encodeURIComponent(deviceId), {method: "POST"},);
         if (response.ok) {
             status.style.backgroundColor = "#dfd";
             status.textContent = "✅ Sync completed successfully for " + display + "!";
@@ -759,7 +759,7 @@ async function startSync() {
 
 async function fetchVersion() {
     try {
-        const response = await fetch("/setup/version");
+        const response = await fetch("/api/setup/version");
         const data = await response.json();
         const info = document.getElementById("version-info");
         if (info && data.version) {
@@ -781,7 +781,7 @@ async function fetchVersion() {
 
 async function fetchAccountList() {
     try {
-        const response = await fetch("/mgmt/accounts");
+        const response = await fetch("/api/mgmt/accounts");
         if (!response.ok) return;
         const data = await response.json();
         const selector = document.getElementById("account-selector");
@@ -809,7 +809,7 @@ async function fetchAccountDetails(accountId) {
     if (devicesEl) devicesEl.innerHTML = "Loading devices...";
 
     try {
-        const response = await fetch(`/mgmt/accounts/${encodeURIComponent(accountId)}`);
+        const response = await fetch(`/api/mgmt/accounts/${encodeURIComponent(accountId)}`);
         if (!response.ok) {
             if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Failed to load account details: ${response.statusText}</span>`;
             return;
@@ -886,7 +886,7 @@ async function fetchAccountDetails(accountId) {
                         statusEl.style.color = "#666";
                     }
                     try {
-                        const response = await fetch(`/mgmt/accounts/${data.account.account_id}/language`, {
+                        const response = await fetch(`/api/mgmt/accounts/${data.account.account_id}/language`, {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
@@ -930,7 +930,7 @@ async function fetchAccountDetails(accountId) {
                     }
 
                     try {
-                        const response = await fetch(`/mgmt/accounts/${accID}/provider-settings`, {
+                        const response = await fetch(`/api/mgmt/accounts/${accID}/provider-settings`, {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
@@ -1084,7 +1084,7 @@ async function connectSpotifyToAccount() {
     if (statusEl) statusEl.innerHTML = "Initializing Spotify authorization...";
 
     try {
-        const response = await fetch(`/mgmt/spotify/init?account=${encodeURIComponent(accountId)}`, {
+        const response = await fetch(`/api/mgmt/spotify/init?account=${encodeURIComponent(accountId)}`, {
             method: "POST"
         });
         if (!response.ok) {
@@ -1128,7 +1128,7 @@ async function connectAmazonToAccount() {
     if (statusEl) statusEl.innerHTML = "Initializing Amazon Music authorization...";
 
     try {
-        const response = await fetch(`/mgmt/amazon/init?account=${encodeURIComponent(accountId)}`, {
+        const response = await fetch(`/api/mgmt/amazon/init?account=${encodeURIComponent(accountId)}`, {
             method: "POST"
         });
         if (!response.ok) {
@@ -1164,7 +1164,7 @@ async function connectAmazonToAccount() {
 async function fetchInteractionStats() {
     console.log("Fetching interaction stats...");
     try {
-        const response = await fetch("/setup/interaction-stats");
+        const response = await fetch("/api/setup/interaction-stats");
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1249,7 +1249,7 @@ async function fetchInteractionStats() {
 
 function downloadSession(sessionId) {
     if (!sessionId) return;
-    window.location.href = `/setup/interactions/sessions/${sessionId}/download`;
+    window.location.href = `/api/setup/interactions/sessions/${sessionId}/download`;
 }
 
 async function filterBySession(sessionId) {
@@ -1268,7 +1268,7 @@ async function deleteSession(sessionId) {
     }
 
     try {
-        const response = await fetch(`/setup/interactions/sessions/${sessionId}`, {
+        const response = await fetch(`/api/setup/interactions/sessions/${sessionId}`, {
             method: "DELETE",
         });
         if (response.ok) {
@@ -1294,7 +1294,7 @@ async function cleanupSessions() {
     }
 
     try {
-        const response = await fetch("/setup/interactions/sessions?keep=10", {
+        const response = await fetch("/api/setup/interactions/sessions?keep=10", {
             method: "DELETE",
         });
         if (response.ok) {
@@ -1317,7 +1317,7 @@ async function fetchInteractions() {
     const category = document.getElementById("filter-category").value;
     const since = document.getElementById("filter-since").value;
 
-    let url = "/setup/interactions";
+    let url = "/api/setup/interactions";
     const params = [];
     if (session) params.push(`session=${encodeURIComponent(session)}`);
     if (category) params.push(`category=${encodeURIComponent(category)}`);
@@ -1435,7 +1435,7 @@ function getActionIcon(action) {
 
 function showSCMUDCDetails(file) {
     // Find the interaction data for this file
-    fetch("/setup/interactions")
+    fetch("/api/setup/interactions")
         .then((response) => response.json())
         .then((interactions) => {
             const interaction = interactions.find((i) => (i.file || i.File) === file);
@@ -1523,7 +1523,7 @@ function escapeHtml(text) {
 
 async function viewInteraction(file) {
     try {
-        const response = await fetch(`/setup/interaction-content?file=${encodeURIComponent(file)}`,);
+        const response = await fetch(`/api/setup/interaction-content?file=${encodeURIComponent(file)}`,);
         const content = await response.text();
 
         document.getElementById("viewer-filename").innerText = file;
@@ -1540,7 +1540,7 @@ async function viewInteraction(file) {
 async function fetchDNSDiscoveries() {
     console.log("Fetching DNS discoveries...");
     try {
-        const response = await fetch("/setup/dns-discoveries");
+        const response = await fetch("/api/setup/dns-discoveries");
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1591,7 +1591,7 @@ async function clearDNSDiscoveries() {
     }
 
     try {
-        const response = await fetch("/setup/dns-discoveries", {
+        const response = await fetch("/api/setup/dns-discoveries", {
             method: "DELETE",
         });
         if (response.ok) {
@@ -1606,7 +1606,7 @@ async function clearDNSDiscoveries() {
 }
 
 function downloadDNSDiscoveries() {
-    window.location.href = "/setup/dns-discoveries/download";
+    window.location.href = "/api/setup/dns-discoveries/download";
 }
 
 async function showDeviceEvents() {
@@ -1629,7 +1629,7 @@ async function fetchDeviceEvents(deviceId) {
     list.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Loading events...</td></tr>';
 
     try {
-        const response = await fetch(`/setup/devices/${deviceId}/events`);
+        const response = await fetch(`/api/setup/devices/${deviceId}/events`);
         const data = await response.json();
         const events = data.events;
 
@@ -1742,7 +1742,7 @@ async function addManualDevice() {
     }
 
     try {
-        const response = await fetch("/setup/devices", {
+        const response = await fetch("/api/setup/devices", {
             method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ip: ip}),
         });
 
@@ -1764,7 +1764,7 @@ async function removeDevice(deviceId, name) {
     }
 
     try {
-        const response = await fetch(`/setup/devices/${deviceId}`, {
+        const response = await fetch(`/api/setup/devices/${deviceId}`, {
             method: "DELETE",
         });
 
@@ -1783,7 +1783,7 @@ async function triggerDiscovery() {
     const indicator = document.getElementById("discovery-indicator");
     if (indicator) indicator.style.display = "inline";
     try {
-        const response = await fetch("/setup/discover", {method: "POST"});
+        const response = await fetch("/api/setup/discover", {method: "POST"});
         if (!response.ok) {
             const err = await response.text();
             alert("Failed to start discovery: " + err);
@@ -1800,7 +1800,7 @@ async function triggerDiscovery() {
 async function pollDiscoveryStatus() {
     const indicator = document.getElementById("discovery-indicator");
     try {
-        const response = await fetch("/setup/discovery-status");
+        const response = await fetch("/api/setup/discovery-status");
         const data = await response.json();
         if (data.discovering) {
             setTimeout(pollDiscoveryStatus, 2000);
@@ -1816,7 +1816,7 @@ async function pollDiscoveryStatus() {
 
 async function updateDeviceInfo(deviceId, ip) {
     try {
-        const response = await fetch("/setup/info/" + encodeURIComponent(deviceId));
+        const response = await fetch("/api/setup/info/" + encodeURIComponent(deviceId));
         if (!response.ok) return;
         const info = await response.json();
 
@@ -1902,7 +1902,7 @@ async function showSummary(deviceId) {
     }
 
     try {
-        const response = await fetch("/setup/summary/" + encodeURIComponent(deviceId) + query,);
+        const response = await fetch("/api/setup/summary/" + encodeURIComponent(deviceId) + query,);
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(errorText);
@@ -2121,7 +2121,7 @@ async function revert(deviceId, ip) {
     statusDiv.textContent = "Reverting " + display + " to defaults...";
 
     try {
-        const response = await fetch("/setup/revert/" + encodeURIComponent(deviceId), {method: "POST"},);
+        const response = await fetch("/api/setup/revert/" + encodeURIComponent(deviceId), {method: "POST"},);
         const result = await response.json();
         showCommandOutput(result);
         if (result.ok) {
@@ -2160,7 +2160,7 @@ async function reboot(deviceId, ip) {
     statusDiv.textContent = "Rebooting " + display + " via " + rebootMethod + "...";
 
     try {
-        const url = "/setup/reboot/" + encodeURIComponent(deviceId)
+        const url = "/api/setup/reboot/" + encodeURIComponent(deviceId)
             + "?method=" + encodeURIComponent(rebootMethod);
         const response = await fetch(url, {method: "POST"},);
         const result = await response.json();
@@ -2220,7 +2220,7 @@ async function renderPlanPairing(summary, deviceId) {
 }
 
 // loadPlanAccountSuggestions populates the datastore-pick dropdown
-// from /setup/account-id-suggestions. Quietly degrades on failure —
+// from /api/setup/account-id-suggestions. Quietly degrades on failure —
 // the input + Generate button still work standalone.
 async function loadPlanAccountSuggestions(deviceId) {
     const select = document.getElementById("plan-pair-existing");
@@ -2233,7 +2233,7 @@ async function loadPlanAccountSuggestions(deviceId) {
     select.appendChild(placeholder);
 
     try {
-        const resp = await fetch("/setup/account-id-suggestions/" + encodeURIComponent(deviceId));
+        const resp = await fetch("/api/setup/account-id-suggestions/" + encodeURIComponent(deviceId));
         if (!resp.ok) return;
         const data = await resp.json();
         for (const id of data.known || []) {
@@ -2341,10 +2341,10 @@ function readPlanPairTarget() {
     return {accountId: v, valid: true};
 }
 
-// pairAccount POSTs to /setup/pair-account and throws on failure so
+// pairAccount POSTs to /api/setup/pair-account and throws on failure so
 // the Apply orchestrator's first-failure-aborts logic kicks in.
 async function pairAccount(deviceId, accountId) {
-    const url = `/setup/pair-account/${encodeURIComponent(deviceId)}?account_id=${encodeURIComponent(accountId)}`;
+    const url = `/api/setup/pair-account/${encodeURIComponent(deviceId)}?account_id=${encodeURIComponent(accountId)}`;
     const resp = await fetch(url, {method: "POST"});
     const result = await resp.json();
     if (!resp.ok || !result.ok) {
@@ -2401,7 +2401,7 @@ async function migrate(deviceId, ip, method) {
     }
 
     try {
-        const response = await fetch("/setup/migrate/" + encodeURIComponent(deviceId) + query, {method: "POST"},);
+        const response = await fetch("/api/setup/migrate/" + encodeURIComponent(deviceId) + query, {method: "POST"},);
         const result = await response.json();
         showCommandOutput(result);
         if (result.ok) {
@@ -2451,7 +2451,7 @@ async function trustCA(deviceId, ip) {
     statusDiv.textContent = "Injecting Root CA into shared trust store on " + display + "...";
 
     try {
-        const response = await fetch("/setup/trust-ca/" + encodeURIComponent(deviceId), {method: "POST"},);
+        const response = await fetch("/api/setup/trust-ca/" + encodeURIComponent(deviceId), {method: "POST"},);
         const result = await response.json();
         showCommandOutput(result);
         if (result.ok) {
@@ -2483,7 +2483,7 @@ async function ensureRemoteServices(deviceId, ip) {
     statusDiv.textContent = "Ensuring remote services for " + display + "...";
 
     try {
-        const response = await fetch("/setup/ensure-remote-services/" + encodeURIComponent(deviceId), {method: "POST"},);
+        const response = await fetch("/api/setup/ensure-remote-services/" + encodeURIComponent(deviceId), {method: "POST"},);
         const result = await response.json();
         showCommandOutput(result);
         if (result.ok) {
@@ -2517,7 +2517,7 @@ async function removeRemoteServices(deviceId, ip) {
     statusDiv.textContent = "Removing remote services for " + display + "...";
 
     try {
-        const response = await fetch("/setup/remove-remote-services/" + encodeURIComponent(deviceId), {method: "POST"},);
+        const response = await fetch("/api/setup/remove-remote-services/" + encodeURIComponent(deviceId), {method: "POST"},);
         const result = await response.json();
         showCommandOutput(result);
         if (result.ok) {
@@ -2545,7 +2545,7 @@ async function backupConfig(deviceId, ip) {
     statusDiv.textContent = "Creating backup for " + display + "...";
 
     try {
-        const response = await fetch("/setup/backup/" + encodeURIComponent(deviceId), {method: "POST"},);
+        const response = await fetch("/api/setup/backup/" + encodeURIComponent(deviceId), {method: "POST"},);
         const result = await response.json();
         showCommandOutput(result);
         if (result.ok) {
@@ -2574,7 +2574,7 @@ async function testConnection(deviceId, useExplicitCA) {
 
     try {
         const query = `?target_url=${encodeURIComponent(testUrl)}&use_explicit_ca=${useExplicitCA}`;
-        const response = await fetch(`/setup/test-connection/${encodeURIComponent(deviceId)}${query}`, {method: "POST"},);
+        const response = await fetch(`/api/setup/test-connection/${encodeURIComponent(deviceId)}${query}`, {method: "POST"},);
         const result = await response.json();
 
         if (result.ok) {
@@ -2602,7 +2602,7 @@ async function testDNSRedirection(deviceId) {
 
     try {
         const query = `?target_url=${encodeURIComponent(targetUrl)}`;
-        const response = await fetch(`/setup/test-dns/${encodeURIComponent(deviceId)}${query}`, {method: "POST"},);
+        const response = await fetch(`/api/setup/test-dns/${encodeURIComponent(deviceId)}${query}`, {method: "POST"},);
         const result = await response.json();
 
         if (result.ok) {
@@ -2636,7 +2636,7 @@ function onPlanTargetURLChange() {
 }
 
 // saveTargetURLAsDefault posts the current plan-target-url value to
-// /setup/settings as the global default. Other settings on that
+// /api/setup/settings as the global default. Other settings on that
 // endpoint are read first and re-posted unchanged ("***" secrets and
 // other fields are preserved verbatim — the backend treats "***" as
 // "unchanged").
@@ -2652,10 +2652,10 @@ async function saveTargetURLAsDefault() {
     btn.disabled = true;
 
     try {
-        const cur = await (await fetch("/setup/settings")).json();
+        const cur = await (await fetch("/api/setup/settings")).json();
         cur.server_url = newURL;
 
-        const resp = await fetch("/setup/settings", {
+        const resp = await fetch("/api/setup/settings", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(cur),
@@ -3187,7 +3187,7 @@ async function checkConnectionFromDevice(deviceId, testUrl) {
         // equivalent to use_explicit_ca=false when CA is already
         // installed.
         const q = `?target_url=${encodeURIComponent(testUrl)}&use_explicit_ca=true`;
-        const resp = await fetch(`/setup/test-connection/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
+        const resp = await fetch(`/api/setup/test-connection/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
         const result = await resp.json();
         if (result.ok) return {status: "ok"};
         return {status: "fail", message: (result.message || "connection failed").split("\n")[0]};
@@ -3199,7 +3199,7 @@ async function checkConnectionFromDevice(deviceId, testUrl) {
 async function checkDNSRedirectionFromDevice(deviceId, targetUrl) {
     try {
         const q = `?target_url=${encodeURIComponent(targetUrl)}`;
-        const resp = await fetch(`/setup/test-dns/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
+        const resp = await fetch(`/api/setup/test-dns/${encodeURIComponent(deviceId)}${q}`, {method: "POST"});
         const result = await resp.json();
         if (result.ok) return {status: "ok"};
         return {status: "fail", message: (result.message || "DNS test failed").split("\n")[0]};
@@ -3217,7 +3217,7 @@ async function checkDNSRedirectionFromDevice(deviceId, targetUrl) {
 // See pkg/service/setup/peer_probe.go for orchestration details.
 async function checkPeerReachability(deviceId) {
     try {
-        const resp = await fetch(`/setup/peer-probe/${encodeURIComponent(deviceId)}`, {method: "POST"});
+        const resp = await fetch(`/api/setup/peer-probe/${encodeURIComponent(deviceId)}`, {method: "POST"});
         const result = await resp.json();
         if (result.ok) {
             const ms = result.result && result.result.elapsed_ms;
@@ -3394,7 +3394,7 @@ async function runPreflightCheck(deviceId, methods, opts, targetUrl) {
 
     let summary;
     try {
-        const resp = await fetch("/setup/summary/" + encodeURIComponent(deviceId) + q);
+        const resp = await fetch("/api/setup/summary/" + encodeURIComponent(deviceId) + q);
         if (!resp.ok) {
             return {ok: false, issues: [`Failed to refresh summary: ${await resp.text()}`]};
         }
@@ -4156,7 +4156,7 @@ async function fetchHealth() {
     if (generatedAtEl) generatedAtEl.textContent = "";
 
     try {
-        const resp = await fetch("/setup/health");
+        const resp = await fetch("/api/setup/health");
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         renderHealthChecks(data, findingsEl, generatedAtEl);
@@ -4170,7 +4170,7 @@ async function downloadDiagnostic() {
     if (statusEl) statusEl.textContent = "Building diagnostic report…";
 
     try {
-        const resp = await fetch("/setup/export/diagnostic");
+        const resp = await fetch("/api/setup/export/diagnostic");
         if (!resp.ok) {
             const text = await resp.text().catch(() => resp.statusText);
             throw new Error(`HTTP ${resp.status}: ${text}`);
@@ -4404,7 +4404,7 @@ async function runQuickFix(checkId, fixId, target, confirmMsg, button) {
     }
 
     try {
-        const resp = await fetch("/setup/health/fix", {
+        const resp = await fetch("/api/setup/health/fix", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ checkId, fixId, target }),
@@ -4502,7 +4502,7 @@ async function pollLogsOnce() {
 
     const statusEl = document.getElementById("logs-status");
     try {
-        const url = `/setup/logs?since=${encodeURIComponent(logsState.nextSince)}`;
+        const url = `/api/setup/logs?since=${encodeURIComponent(logsState.nextSince)}`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
@@ -4580,7 +4580,7 @@ async function toggleDeviceSummary(deviceId) {
     cell.innerHTML = '<em style="color:#666;">Probing speaker…</em>';
 
     try {
-        const resp = await fetch(`/setup/device-summary/${encodeURIComponent(deviceId)}`);
+        const resp = await fetch(`/api/setup/device-summary/${encodeURIComponent(deviceId)}`);
         if (!resp.ok) {
             const txt = await resp.text();
             cell.innerHTML = `<span style="color:#c62828;">Summary failed: ${resp.status} ${escapeHTML(txt)}</span>`;
