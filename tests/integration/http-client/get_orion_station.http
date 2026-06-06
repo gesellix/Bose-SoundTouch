@@ -1,0 +1,30 @@
+### GET /core02/svc-bmx-adapter-orion/prod/orion/station (Orion custom-stream adapter)
+###
+### Frozen BMX adapter route. Presets that store a LOCAL_INTERNET_RADIO / Orion
+### location replay this exact path later; the speaker passes the station detail
+### as a base64 JSON ?data= blob and expects playable audio JSON back
+### (HandleOrionPlayback -> bmx.PlayCustomStream). Pure decode, no upstream call.
+###
+### data decodes to:
+###   {"name":"Doc Radio","imageUrl":"","streamUrl":"http://192.0.2.10:8000/stream"}
+GET {{host}}/core02/svc-bmx-adapter-orion/prod/orion/station?data=eyJuYW1lIjoiRG9jIFJhZGlvIiwiaW1hZ2VVcmwiOiIiLCJzdHJlYW1VcmwiOiJodHRwOi8vMTkyLjAuMi4xMDo4MDAwL3N0cmVhbSJ9
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+Accept-Language: de
+
+> {%
+    client.test("Response is 200 OK with JSON", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "Expected application/json, got '" + response.contentType.mimeType + "'");
+    });
+
+    client.test("Response carries playable audio for the decoded stream", function() {
+        client.assert(response.body.hasOwnProperty("audio"), "Response missing 'audio'");
+        client.assert(response.body.audio.hasOwnProperty("streamUrl"), "Response missing 'audio.streamUrl'");
+        client.assert(response.body.audio.streamUrl === "http://192.0.2.10:8000/stream",
+            "audio.streamUrl should echo the decoded streamUrl, got '" + response.body.audio.streamUrl + "'");
+        client.assert(response.body.name === "Doc Radio",
+            "name should echo the decoded name, got '" + response.body.name + "'");
+    });
+%}

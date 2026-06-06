@@ -1,0 +1,17 @@
+### GET /media/bmx-icons/{provider}/{file} (BMX source icon)
+###
+### Frozen route. The BMX registry advertises {MEDIA_SERVER}/bmx-icons; the
+### speaker fetches source/provider icons from this static base (served by
+### HandleMedia from the embedded asset tree). Binary body, so assert status +
+### content type only (never commit the bytes).
+GET {{host}}/media/bmx-icons/tunein/monochromePng.png
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("Icon served as image/png 200", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "image/png",
+            "Expected image/png, got '" + response.contentType.mimeType + "'");
+    });
+%}

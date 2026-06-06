@@ -1,0 +1,18 @@
+### POST /v1/scmudc/{deviceId} (speaker telemetry / event upload)
+###
+### Speakers POST SCMUDC event envelopes (volume changes, presets, taps, ...) to
+### the dead Bose host events.api.bosecm.com, DNS-intercepted to AfterTouch. The
+### service accepts and records them (HandleAppEvents) and returns an empty 200.
+### Body shape mirrors a real envelope; all ids are placeholders.
+POST {{host}}/v1/scmudc/{{deviceId}}
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+Content-Type: text/json; charset=utf-8
+
+{"envelope":{"monoTime":35173,"payloadProtocolVersion":"3.1","payloadType":"scmudc","protocolVersion":"1.0","time":"2026-01-01T00:00:00.000000+00:00","uniqueId":"{{deviceId}}"},"payload":{"deviceInfo":{"boseID":"{{accountId}}","deviceID":"{{deviceId}}","deviceType":"SoundTouch test","serialNumber":"{{serialNumber}}","softwareVersion":"27.0.6.46330.5043500 epdbuild.trunk.hepdswbld04.2022-08-04T11:20:29","systemSerialNumber":"{{productSerialNumber}}"},"events":[{"data":{"startTime":"2026-01-01T00:00:00.000000+00:00","volume-change":[28,28,28]},"monoTime":35173,"time":"2026-01-01T00:00:00.000000+00:00","type":"volume-change"}]}}
+
+> {%
+    client.test("SCMUDC event accepted (200)", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+    });
+%}

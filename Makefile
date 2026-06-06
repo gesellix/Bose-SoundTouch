@@ -178,6 +178,8 @@ test-http-client:
 		/workdir/amazon_registration.http \
 		/workdir/create_account.http \
 		/workdir/register_device.http \
+		/workdir/post_scmudc_event.http \
+		/workdir/get_speaker_auth.http \
 		/workdir/spotify_full_flow.http \
 		/workdir/customer_support.http \
 		/workdir/power_on.http \
@@ -190,6 +192,11 @@ test-http-client:
 		/workdir/post_oauth_token_amazon.http \
 		/workdir/get_provider_settings.http \
 		/workdir/tunein_playback_station.http \
+		/workdir/post_tunein_report.http \
+		/workdir/get_orion_station.http \
+		/workdir/get_custom_playback.http \
+		/workdir/get_media_ding.http \
+		/workdir/get_bmx_icon.http \
 		/workdir/set_preset_6.http \
 		/workdir/get_presets.http \
 		/workdir/delete_preset_6.http \

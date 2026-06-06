@@ -1,0 +1,25 @@
+### GET /custom/v1/playback/{encodedURL} (LOCAL_INTERNET_RADIO / ding / TTS replay)
+###
+### Frozen route. The speaker replays presets/notifications whose stored location
+### is /custom/v1/playback/<base64 stream URL>; the service decodes it and returns
+### playable audio JSON pointing at that URL (HandleCustomPlayback ->
+### bmx.BuildCustomStreamResponse). Pure decode, no upstream call.
+###
+### encodedURL decodes to: http://192.0.2.10:8000/stream
+GET {{host}}/custom/v1/playback/aHR0cDovLzE5Mi4wLjIuMTA6ODAwMC9zdHJlYW0=?name=Doc%20Radio
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("Response is 200 OK with JSON", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "Expected application/json, got '" + response.contentType.mimeType + "'");
+    });
+
+    client.test("Response echoes the decoded stream URL as playable audio", function() {
+        client.assert(response.body.hasOwnProperty("audio"), "Response missing 'audio'");
+        client.assert(response.body.audio.streamUrl === "http://192.0.2.10:8000/stream",
+            "audio.streamUrl should echo the decoded URL, got '" + response.body.audio.streamUrl + "'");
+    });
+%}

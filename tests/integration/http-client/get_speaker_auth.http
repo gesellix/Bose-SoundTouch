@@ -1,0 +1,17 @@
+### GET /v1/auth (speaker app-key validation probe)
+###
+### The speaker issues this to the dead Bose host audionotification.api.bosecm.com
+### (DNS-intercepted to AfterTouch) before playing a /speaker notification, with
+### its app_key in the "Apikeyheader" header. As the cloud replacement we accept
+### any key with an empty 200 so the speaker proceeds (HandleSpeakerAuth).
+### Returns 403 only while an active DNS-path probe nonce matches; none runs here.
+GET {{host}}/v1/auth
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+Apikeyheader: example-app-key
+
+> {%
+    client.test("Speaker app-key is accepted (200)", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+    });
+%}

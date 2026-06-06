@@ -1,0 +1,17 @@
+### GET /media/aftertouch-ding.wav (notification chime)
+###
+### Frozen route advertised as part of the {MEDIA_SERVER} base. The speaker
+### fetches the ding before playing a notification; the service renders a WAV
+### (HandleDing). Binary body, so assert status + content type only (never commit
+### the bytes).
+GET {{host}}/media/aftertouch-ding.wav
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("Ding served as audio/wav 200", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "audio/wav",
+            "Expected audio/wav, got '" + response.contentType.mimeType + "'");
+    });
+%}

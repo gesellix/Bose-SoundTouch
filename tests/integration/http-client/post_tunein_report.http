@@ -1,0 +1,39 @@
+### POST /bmx/tunein/v1/report (TuneIn playback reporting)
+###
+### Frozen BMX route. The speaker reports playback lifecycle events (START / STOP)
+### for TuneIn content. STOP and most events return an empty object; START returns
+### a polling hint (HandleTuneInReport). Pure local handling, no upstream call.
+
+### STOP report -> empty object
+POST {{host}}/bmx/tunein/v1/report?guide_id=s166521&listen_id=1234567890&stream_type=onDemand
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+X-Bmx-Api-Key: {{bmxApiKey}}
+Content-Type: application/json
+
+{"timeStamp":"2026-01-01T00:00:00+0000","eventType":"STOP","reason":"USER_STOP","timeIntoTrack":5,"playbackDelay":0}
+
+> {%
+    client.test("STOP report is acknowledged with JSON 200", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "Expected application/json, got '" + response.contentType.mimeType + "'");
+    });
+%}
+
+### START report -> polling hint
+POST {{host}}/bmx/tunein/v1/report?guide_id=s166521&listen_id=1234567890&stream_type=onDemand
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+X-Bmx-Api-Key: {{bmxApiKey}}
+Content-Type: application/json
+
+{"timeStamp":"2026-01-01T00:00:00+0000","eventType":"START","timeIntoTrack":0,"playbackDelay":0}
+
+> {%
+    client.test("START report returns a nextReportIn polling hint", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.body.hasOwnProperty("nextReportIn"),
+            "START response should carry 'nextReportIn'");
+    });
+%}
