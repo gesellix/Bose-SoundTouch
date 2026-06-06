@@ -1,19 +1,9 @@
-### DELETE /{{accountId}}/devices/{{deviceId}} (Unregister Device)
-DELETE {{host}}/accounts/{{accountId}}/devices/{{deviceId}}
-Authorization: Bearer {{token}}
-
-> {%
-    client.test("Device unregistered successfully", function() {
-        client.assert(response.status === 200, "Response status is not 200");
-    });
-%}
-
-### DELETE /streaming/account/{{accountId}}/device/{{deviceId}} (Unregister Device Variant)
+### DELETE /streaming/account/{{accountId}}/device/{{deviceId}} (Unregister Device)
 DELETE {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}
 Authorization: Bearer {{token}}
 
 > {%
-    client.test("Device unregistered successfully (variant)", function() {
+    client.test("Device unregistered successfully", function() {
         client.assert(response.status === 200, "Response status is not 200");
     });
 %}

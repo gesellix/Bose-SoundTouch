@@ -40,7 +40,7 @@ Authorization: Basic admin change_me!
 
 # 4. Verify Marge Source Registration and extract Spotify Source ID
 # @name Get Marge Sources
-GET {{host}}/accounts/{{accountId}}/sources
+GET {{host}}/streaming/account/{{accountId}}/sources
 
 > {%
  client.test("Spotify source registered in Marge", function() {
@@ -94,7 +94,7 @@ GET {{host}}/accounts/{{accountId}}/sources
 
 # 5. Add a Spotify Preset
 # @name Update Preset
-POST {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/presets/1
+PUT {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/preset/1
 Content-Type: application/xml
 
 <preset id="1">
@@ -114,7 +114,7 @@ Content-Type: application/xml
 
 # 6. Verify Preset in Marge
 # @name Get Presets
-GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/presets
+GET {{host}}/streaming/account/{{accountId}}/device/{{deviceId}}/presets
 
 > {%
  client.test("Verify preset content", function() {

@@ -183,6 +183,7 @@ test-http-client:
 		/workdir/get_speaker_auth.http \
 		/workdir/get_blacklist.http \
 		/workdir/post_alexa_certificate.http \
+		/workdir/unsupported_routes.http \
 		/workdir/spotify_full_flow.http \
 		/workdir/customer_support.http \
 		/workdir/power_on.http \

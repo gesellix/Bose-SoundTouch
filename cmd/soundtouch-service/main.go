@@ -1228,6 +1228,9 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 			// Speakers POST to /group/ (with trailing slash) when forwarding
 			// the addGroup payload to Marge during stereo-pair formation --
 			// see issue #252. Register both forms so chi accepts either.
+			// Speakers POST to /group/ (with trailing slash) when forwarding
+			// the addGroup payload to Marge during stereo-pair formation --
+			// see issue #252. Register both forms so chi accepts either.
 			r.Post("/group", server.HandleMargeAddGroup)
 			r.Post("/group/", server.HandleMargeAddGroup)
 			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
@@ -1266,31 +1269,38 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Get("/resources/api_versions.xml", server.HandleMargeAPIVersions)
 	})
 
+	// The /accounts/* group mirrored /streaming/account/* for compatibility, but
+	// no speaker or app was ever observed using this prefix in the recording
+	// corpus (the integration tests that exercised it were migrated onto the
+	// /streaming equivalents). The whole mirror is therefore treated as unused
+	// and stubbed (HandleUnsupported): it logs + 501s so any real-world use
+	// surfaces instead of being silently dropped, leaving the prefix a clean
+	// removal candidate for the #451 refactor.
 	r.Route("/accounts", func(r chi.Router) {
 		r.Route("/{account}", func(r chi.Router) {
-			r.Get("/full", server.HandleMargeAccountFull)
-			r.Get("/sources", server.HandleMargeAccountSources)
-			r.Get("/devices", server.HandleMargeAccountDevices)
+			r.Get("/full", server.HandleUnsupported)
+			r.Get("/sources", server.HandleUnsupported)
+			r.Get("/devices", server.HandleUnsupported)
 
-			r.Post("/devices", server.HandleMargeAddDevice)
+			r.Post("/devices", server.HandleUnsupported)
 
-			r.Delete("/devices/{device}", server.HandleMargeRemoveDevice)
-			r.Get("/devices/{device}/group", server.HandleMargeDeviceGroup)
-			r.Get("/devices/{device}/group/", server.HandleMargeDeviceGroup)
-			r.Get("/devices/{device}/group/server", server.HandleMargeDeviceGroupServer)
-			r.Get("/devices/{device}/group/member", server.HandleMargeDeviceGroupMember)
+			r.Delete("/devices/{device}", server.HandleUnsupported)
+			r.Get("/devices/{device}/group", server.HandleUnsupported)
+			r.Get("/devices/{device}/group/", server.HandleUnsupported)
+			r.Get("/devices/{device}/group/server", server.HandleUnsupported)
+			r.Get("/devices/{device}/group/member", server.HandleUnsupported)
 
-			r.Post("/group", server.HandleMargeAddGroup)
-			r.Post("/group/", server.HandleMargeAddGroup)
-			r.Post("/group/{groupId}", server.HandleMargeModifyGroup)
-			r.Delete("/group/{groupId}", server.HandleMargeDeleteGroup)
-			r.Delete("/group", server.HandleMargeDeleteAccountGroups)
-			r.Delete("/group/", server.HandleMargeDeleteAccountGroups)
-			r.Get("/devices/{device}/presets", server.HandleMargePresets)
-			r.Get("/devices/{device}/recents", server.HandleMargeRecents)
+			r.Post("/group", server.HandleUnsupported)
+			r.Post("/group/", server.HandleUnsupported)
+			r.Post("/group/{groupId}", server.HandleUnsupported)
+			r.Delete("/group/{groupId}", server.HandleUnsupported)
+			r.Delete("/group", server.HandleUnsupported)
+			r.Delete("/group/", server.HandleUnsupported)
+			r.Get("/devices/{device}/presets", server.HandleUnsupported)
+			r.Get("/devices/{device}/recents", server.HandleUnsupported)
 
-			r.Post("/devices/{device}/presets/{presetNumber}", server.HandleMargeUpdatePreset)
-			r.Post("/devices/{device}/recents", server.HandleMargeAddRecent)
+			r.Post("/devices/{device}/presets/{presetNumber}", server.HandleUnsupported)
+			r.Post("/devices/{device}/recents", server.HandleUnsupported)
 		})
 	})
 

@@ -1,0 +1,147 @@
+### Unsupported (zero-usage) /accounts/* mirror -> 501
+###
+### The /accounts/* group mirrored /streaming/account/* for compatibility, but no
+### speaker or app was ever observed using this prefix across the full recording
+### corpus, and every operation it offers is provably served via the
+### /streaming/account/* paths that real clients DO use (the integration tests
+### were migrated onto those). The whole mirror is therefore wired to
+### HandleUnsupported, which logs the full request + client IP + a "please report
+### this" message and returns 501, so any real-world use surfaces instead of
+### being silently broken and the prefix becomes a clean removal candidate for
+### the #451 refactor. These tests pin that 501 contract.
+###
+### NOTE: the real /streaming/account/* (and /streaming/...) routes are NOT
+### stubbed — those are the frozen Bose contract and stay on their real handlers
+### even where our corpus didn't exercise them.
+
+### GET /accounts/{a}/full
+GET {{host}}/accounts/{{accountId}}/full
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/sources (real clients use /streaming/account/{a}/sources)
+GET {{host}}/accounts/{{accountId}}/sources
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/devices
+GET {{host}}/accounts/{{accountId}}/devices
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### POST /accounts/{a}/devices (real clients use POST /streaming/account/{a}/device/)
+POST {{host}}/accounts/{{accountId}}/devices
+User-Agent: Bose_Lisa/27.0.6
+Content-Type: application/xml
+
+<device/>
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### DELETE /accounts/{a}/devices/{deviceId} (real clients use DELETE /streaming/account/{a}/device/{d})
+DELETE {{host}}/accounts/{{accountId}}/devices/{{deviceId}}
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/devices/{deviceId}/group
+GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/group
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/devices/{deviceId}/group/
+GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/group/
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/devices/{deviceId}/group/server
+GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/group/server
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/devices/{deviceId}/group/member
+GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/group/member
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/devices/{deviceId}/presets (real clients use /streaming/account/{a}/device/{d}/presets)
+GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/presets
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### GET /accounts/{a}/devices/{deviceId}/recents
+GET {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/recents
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### POST /accounts/{a}/devices/{deviceId}/recents
+POST {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/recents
+User-Agent: Bose_Lisa/27.0.6
+Content-Type: application/xml
+
+<recent/>
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### POST /accounts/{a}/devices/{deviceId}/presets/{n} (real clients use PUT /streaming/account/{a}/device/{d}/preset/{n})
+POST {{host}}/accounts/{{accountId}}/devices/{{deviceId}}/presets/1
+User-Agent: Bose_Lisa/27.0.6
+Content-Type: application/xml
+
+<preset/>
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### POST /accounts/{a}/group
+POST {{host}}/accounts/{{accountId}}/group
+User-Agent: Bose_Lisa/27.0.6
+Content-Type: application/xml
+
+<group/>
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### POST /accounts/{a}/group/
+POST {{host}}/accounts/{{accountId}}/group/
+User-Agent: Bose_Lisa/27.0.6
+Content-Type: application/xml
+
+<group/>
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### POST /accounts/{a}/group/{groupId}
+POST {{host}}/accounts/{{accountId}}/group/1
+User-Agent: Bose_Lisa/27.0.6
+Content-Type: application/xml
+
+<group/>
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### DELETE /accounts/{a}/group
+DELETE {{host}}/accounts/{{accountId}}/group
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### DELETE /accounts/{a}/group/
+DELETE {{host}}/accounts/{{accountId}}/group/
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
+
+### DELETE /accounts/{a}/group/{groupId}
+DELETE {{host}}/accounts/{{accountId}}/group/1
+User-Agent: Bose_Lisa/27.0.6
+
+> {% client.test("501", function () { client.assert(response.status === 501, "got " + response.status); }); %}
