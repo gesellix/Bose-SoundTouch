@@ -1,0 +1,19 @@
+### GET /customer/account/{accountId} (app-called account profile)
+###
+### App / provisioning surface (not the speaker data-plane). No live recording in
+### _/mitm for this exact route; the response is a canned profile from
+### HandleMargeAccountProfile, returned as a <customer> XML document. App user-agent.
+GET {{host}}/customer/account/{{accountId}}
+User-Agent: Mozilla/5.0 (Linux; Android 13) SOUNDTOUCH_MOBILE_APP
+Accept: application/xml
+Authorization: Bearer {{token}}
+
+> {%
+    client.test("Account profile returned as XML 200", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.body.getElementsByTagName("customer").length > 0,
+            "Response should contain <customer>");
+        client.assert(response.body.getElementsByTagName("accountID").length > 0,
+            "<customer> should contain <accountID>");
+    });
+%}

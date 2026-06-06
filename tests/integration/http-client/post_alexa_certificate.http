@@ -1,0 +1,20 @@
+### POST /alexa/certificate (currently ignored: 501 Not Implemented)
+###
+### Speakers request an Alexa IoT provisioning certificate. AfterTouch has no AWS
+### IoT integration, so HandleAlexaCertificate deliberately returns 501 with an
+### explanatory JSON body. Pinning the current 501 documents this as intentionally
+### unimplemented. (data is a form field carrying {"device":"..."}.)
+POST {{host}}/alexa/certificate
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+Content-Type: application/x-www-form-urlencoded
+
+data=%7B%22device%22%3A%22{{deviceId}}%22%7D
+
+> {%
+    client.test("Alexa certificate provisioning is the ignored 501 stub", function() {
+        client.assert(response.status === 501, "Response status is not 501, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "Expected application/json, got '" + response.contentType.mimeType + "'");
+    });
+%}

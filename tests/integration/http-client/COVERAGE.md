@@ -59,8 +59,8 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
 | GET | `/updates/soundtouch` | 200 | `get_soundtouch_updates.http` | ✅ |
 | GET | `/v1/auth` | 200, 403, 404 | `get_speaker_auth.http` | ✅ (200; 403/404 probe/edge) |
 | POST | `/v1/scmudc/{d}` | 200 | `post_scmudc_event.http` | ✅ |
-| GET | `/v1/blacklist/{d}` | 405 | — | ⬜ (edge) |
-| POST | `/alexa/certificate` | 501 (rare 200) | — | ⬜ (edge) |
+| GET | `/v1/blacklist/{d}` | 405 | `get_blacklist.http` | ✅ (currently ignored: 405 stub) |
+| POST | `/alexa/certificate` | 501 (rare 200) | `post_alexa_certificate.http` | ✅ (currently ignored: 501 stub) |
 | GET | `/bmx/registry/v1/services` | 200 | `get_bmx_services.http` | ✅ |
 | GET | `/bmx/registry/v1/servicesAvailability` | 200 | `get_bmx_services_availability.http` | ✅ |
 | POST | `/bmx/tunein/v1/token` | 200 | `tunein_playback_station.http` | ✅ |
@@ -77,18 +77,28 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
 | POST | `/oauth/device/{d}/.../15/token/cs3` | 200 | `post_oauth_token.http` | ✅ |
 | POST | `/oauth/device/{d}/.../20/token/cs1` | 200 | `post_oauth_token_amazon.http` | ✅ |
 
-## Not observed from the speaker (lower priority / different audience)
+## App / provisioning surface (app-called, not the speaker data-plane)
+
+The SoundTouch app (not the speaker) drives these. They are part of the frozen
+contract but a different audience; shapes are taken from `_/mitm` where a capture
+exists, otherwise from the handler (the current responses are canned / stubs).
+
+| Method | Route | Status | Covered by | Source |
+|--------|-------|--------|------------|--------|
+| GET | `/streaming/account/{a}/emailaddress` | 200 | `get_emailaddress.http` | `_/mitm` capture |
+| GET | `/customer/account/{a}` | 200 | `get_customer_profile.http` | handler (canned profile) |
+| POST | `/customer/account/{a}` | 200 | `post_customer_profile.http` | handler (stub accept) |
+| POST | `/customer/account/{a}/password` | 200 | `post_customer_profile.http` | handler (stub accept) |
+| POST | `/streaming/account/login` | 200 | `create_account.http` | `_/mitm` capture |
+
+## Not observed (lower priority / no fixture)
 
 - `/bmx/tunein/v1/navigate`, `/search`, `/search/next` — registered (frozen),
   but in the corpus the speaker uses `/playback/*`; the search/navigate layer is
-  driven by the app/UI (`/api/tunein/*`), not the speaker. Covered conceptually,
-  no speaker recording to replay (and no upstream fixture yet, see
-  TUNEIN-MOCK-MISSING.md).
+  driven by the app/UI (`/api/tunein/*`), not the speaker. No upstream fixture
+  yet, see TUNEIN-MOCK-MISSING.md.
 - `/core02/svc-bmx-adapter-siriusxm-*` — registered, but not present in this
   corpus (no SiriusXM device). Left as a known blank.
-- App / provisioning surface (`/customer/account*`, account profile/password,
-  `/streaming/account/login` beyond create) — app-called, not the speaker
-  data-plane; out of scope for the speaker-contract net.
 
 ## Remaining gaps
 
@@ -97,5 +107,5 @@ Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered)
 - `/media/tts/{hash}.mp3` — returns 200 only after a TTS has been generated
   (otherwise a 404 miss). Needs a prior `/setup/tts/speak` step to be a
   deterministic 200.
-- Edge statuses (quirky-status pins, add on demand): PUT-device `401`,
-  `/v1/blacklist` `405`, `/alexa/certificate` `501`.
+- PUT-device `401` (rename with a mismatched/blocked payload) — the only
+  remaining status variant on an otherwise-covered route.

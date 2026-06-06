@@ -1,0 +1,15 @@
+### GET /v1/blacklist/{deviceId} (currently ignored: 405 Method Not Allowed)
+###
+### The speaker probes a notification blacklist endpoint. AfterTouch does not
+### implement it and deliberately returns 405 (inline stub in setupRouter).
+### Pinning the current 405 documents this as a conscious no-op, so any future
+### behaviour change here is deliberate rather than accidental.
+GET {{host}}/v1/blacklist/{{deviceId}}
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("Blacklist probe is the ignored 405 stub", function() {
+        client.assert(response.status === 405, "Response status is not 405, got " + response.status);
+    });
+%}

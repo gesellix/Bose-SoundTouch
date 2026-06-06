@@ -177,9 +177,14 @@ test-http-client:
 		/workdir/spotify_registration.http \
 		/workdir/amazon_registration.http \
 		/workdir/create_account.http \
+		/workdir/get_emailaddress.http \
+		/workdir/get_customer_profile.http \
+		/workdir/post_customer_profile.http \
 		/workdir/register_device.http \
 		/workdir/post_scmudc_event.http \
 		/workdir/get_speaker_auth.http \
+		/workdir/get_blacklist.http \
+		/workdir/post_alexa_certificate.http \
 		/workdir/spotify_full_flow.http \
 		/workdir/customer_support.http \
 		/workdir/power_on.http \

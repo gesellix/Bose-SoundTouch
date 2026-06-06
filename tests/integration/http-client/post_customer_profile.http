@@ -1,0 +1,39 @@
+### POST /customer/account/{accountId} (update account profile)
+###
+### App / provisioning surface. HandleMargeUpdateAccountProfile is a stub that
+### accepts the update with 200. No live recording; this pins the current accept.
+POST {{host}}/customer/account/{{accountId}}
+User-Agent: Mozilla/5.0 (Linux; Android 13) SOUNDTOUCH_MOBILE_APP
+Content-Type: application/xml
+Authorization: Bearer {{token}}
+
+<?xml version="1.0" encoding="UTF-8"?>
+<customer>
+  <accountID>{{accountId}}</accountID>
+  <firstName>SoundTouch</firstName>
+  <lastName>User</lastName>
+</customer>
+
+> {%
+    client.test("Profile update accepted (200)", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+    });
+%}
+
+### POST /customer/account/{accountId}/password (change account password)
+###
+### App / provisioning surface. HandleMargeChangePassword is a stub that accepts
+### the change with 200. No live recording; this pins the current accept.
+POST {{host}}/customer/account/{{accountId}}/password
+User-Agent: Mozilla/5.0 (Linux; Android 13) SOUNDTOUCH_MOBILE_APP
+Content-Type: application/xml
+Authorization: Bearer {{token}}
+
+<?xml version="1.0" encoding="UTF-8"?>
+<password><old>old-secret</old><new>new-secret</new></password>
+
+> {%
+    client.test("Password change accepted (200)", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+    });
+%}

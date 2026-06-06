@@ -1,0 +1,17 @@
+### GET /streaming/account/{accountId}/emailaddress (app-called account surface)
+###
+### The SoundTouch app fetches the account email (captured in _/mitm). Not part of
+### the speaker data-plane, but part of the frozen app/provisioning contract.
+### HandleMargeGetEmailAddress returns an <emailAddress> XML body. App user-agent.
+GET {{host}}/streaming/account/{{accountId}}/emailaddress
+User-Agent: Mozilla/5.0 (Linux; Android 13) SOUNDTOUCH_MOBILE_APP
+Accept: application/vnd.bose.streaming-v1.1+xml
+Authorization: Bearer {{token}}
+
+> {%
+    client.test("Email address returned as XML 200", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.body.getElementsByTagName("emailAddress").length > 0,
+            "Response should contain <emailAddress>");
+    });
+%}
