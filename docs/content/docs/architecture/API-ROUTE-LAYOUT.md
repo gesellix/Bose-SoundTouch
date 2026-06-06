@@ -42,11 +42,25 @@ Two refinements that matter in practice:
 
 - **"Must stay" is not one thing.** (1a) is immovable; (1b) is movable but
   coordinated. Do not lump OAuth callbacks in with firmware paths.
-- **There is a merge-collision bucket.** `/`, `/health`, and `/ws` are defined
-  in *both* routers today and must be reconciled when the binaries merge. TuneIn
-  is **not** in this bucket: `/bmx/tunein/*` (speaker <-> BMX integration, frozen)
-  and `/api/tunein/*` (the player's generalized radio search/play, ours to
-  change) are two different layers, not a collision.
+- **The merge-overlap bucket is smaller than it looks.** Verified against the
+  two routers, only **`/` is a true collision** (service `HandleRoot` vs the web
+  app's `serveIndex`); resolve it with a small **landing page** at `/` that lets
+  the user pick Admin/Setup (service) or the App (web). **`/health` is a merge,
+  not a clash** (both define it; standardise on the service's richer body, which
+  carries version + timestamp, and confirm nothing depends on the web's
+  `{"status":"ok","version"}` shape). **`/ws` and `/static/*` do not collide at
+  all** — the service registers neither, so bringing the web's in is purely
+  additive. TuneIn is **not** in this bucket either: `/bmx/tunein/*` (speaker <->
+  BMX integration, frozen) and `/api/tunein/*` (the player's generalized radio
+  search/play, ours to change) are two different layers.
+
+  **Resolve overlaps structurally, before merging, not behind a flag.** A
+  conditional "only register the web routes when opt-in is on" does not fix a
+  collision — it just hides it while the flag is off, and the double-registration
+  returns when it's on. Do not rely on chi to detect or warn about it. Clean up
+  `/` (and the `/health` merge) up front so the merged router is unambiguous
+  regardless of the flag. The opt-in (below) exists only to let people optionally
+  run the merged variant and give feedback, not as a collision guard.
 
 ## What pins the frozen routes (evidence)
 
@@ -94,11 +108,11 @@ Grouped by prefix. The authoritative enumerated list is the router golden file
 Defined in `pkg/service/soundtouchweb/mount.go`. Not currently mounted inside
 the service; it is a separate binary.
 
-| Group                                                                                    | Category        | Note                                                                                 |
-|------------------------------------------------------------------------------------------|-----------------|--------------------------------------------------------------------------------------|
-| `/api/*` (devices, control, tunein, zone, radiobrowser, play-url, device-speak)          | (3) web/control | Freely restructurable                                                                |
-| `/health`<br>`/static/*`<br>`/ws`                                                        | (Infra)         | `/health` and `/ws` collide with the service at merge time                           |
-| `/`<br>`/device/*`<br>`/devices`<br>`/playurl`<br>`/radiobrowser`<br>`/tts`<br>`/tunein` | (4) frontend    | The anti-pattern: each SPA route enumerated in the backend, all serving `index.html` |
+| Group                                                                                    | Category        | Note                                                                                                                                                                |
+|------------------------------------------------------------------------------------------|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/api/*` (devices, control, tunein, zone, radiobrowser, play-url, device-speak)          | (3) web/control | Freely restructurable                                                                                                                                               |
+| `/health`<br>`/static/*`<br>`/ws`                                                        | (Infra)         | `/health` is a merge (standardise on the service's body); `/static/*` and `/ws` are additive (the service registers neither)                                        |
+| `/`<br>`/device/*`<br>`/devices`<br>`/playurl`<br>`/radiobrowser`<br>`/tts`<br>`/tunein` | (4) frontend    | `/` is the one true collision (-> landing page); the rest move under `/app/*`. The anti-pattern: each SPA route enumerated in the backend, all serving `index.html` |
 
 ## Deployment scenarios, reachability, and trust boundaries
 
@@ -509,20 +523,48 @@ them.
      step is about our movable routes only.
    - **Exclude** `/mgmt/spotify/callback` and `/mgmt/amazon/callback` (1b):
      freeze, or move only with a deliberate provider re-registration.
-2. **Fold `soundtouch-web` into the service.** Bring the control API in as
-   `/api/control/*` and the UI under `/app/*` (one role-gated app, see above).
-   Reconcile the `/`, `/health`, `/ws` collisions (the web socket as e.g.
-   `/api/control/ws` or one shared `/ws`; the service keeps `/` and `/health`).
+2. **First, migrate `soundtouch-web` in place to the target API shape.** Before
+   touching the service, restructure the standalone `-web` binary's own routes to
+   what they should be *after* the merge: the control API under `/api/control/*`
+   and the SPA under `/app/*` (with `/ws` as e.g. `/api/control/ws`). Unlike the
+   service, this is a **direct migration, not a dual-mount, and with no
+   deprecation signal**: `-web`'s only client is its own bundled frontend, served
+   and reloaded from the same binary, so there are no out-of-band callers to keep
+   compatible — restructure the routes and update the frontend in lockstep, in
+   small commits, and a stale tab is fixed by a reload. (The careful
+   add-alias-then-deprecate dance is reserved for `-service`, which is central and
+   serves callers we do not control.) The payoff: by the time we merge, `-web`'s
+   routes already match the target and don't overlap the service's namespaces, so
+   the merge below is a near-additive mount.
+
+3. **Fold `soundtouch-web` into the service.** Bring the (already target-shaped)
+   control API in as `/api/control/*` and the UI under `/app/*` (one role-gated
+   app, see above).
+   The actual overlap to clean up (verified) is small: only **`/`** truly
+   collides, so replace the two competing root handlers with a **landing page**
+   that routes the user to Admin/Setup or the App; **`/health`** is a merge
+   (keep the service's richer body); **`/ws`** and **`/static/*`** are additive
+   (the service registers neither, so no collision). Do this cleanup
+   structurally and verify it (a test that builds the merged router and asserts
+   no double-registration) rather than hiding overlaps behind the opt-in flag.
    Keep the two TuneIn layers separate (frozen `/bmx/tunein/*` vs the player's
-   `/api/control/*` radio feature). Add the landing page / authority boundary at
-   `/`.
-3. **Deprecate the `soundtouch-web` binary.** It keeps working in 0.x but prints
+   `/api/control/*` radio feature).
+   - **Ship the merged variant behind an opt-in flag (default off).** Its sole
+     purpose is to let people optionally run the combined binary and give
+     feedback; it is **not** a collision guard and **not** a security boundary on
+     its own. Until the auth track lands, default-off keeps the merged app/control
+     surface from being exposed unless an operator deliberately enables it. The
+     flag follows the same CLI/env/persisted precedence as `server-url`, and is
+     the seam the `deployment-mode` parameter later subsumes.
+4. **Deprecate the `soundtouch-web` binary.** It keeps working in 0.x but prints
    a startup deprecation warning (along the lines of "this binary is removed in
    1.x, use soundtouch-service") so its removal is no surprise.
-4. **Warn on old-route hits in the service, observably.** When a deprecated path
+5. **Warn on old-route hits in the service, observably.** When a deprecated path
    is called, log a deprecation warning **and** count it (a metric / signal), so
    the 1.x removal is data-driven: a route is only cut once it has gone quiet
-   across real deployments, not on a guess.
+   across real deployments, not on a guess. *(Done for the `/setup` and `/mgmt`
+   legacy paths via `DeprecatedRouteMiddleware`; extends to any future aliased
+   route.)*
 
 ### Auth track (0.x, parallel)
 
