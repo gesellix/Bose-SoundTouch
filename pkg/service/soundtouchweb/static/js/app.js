@@ -152,7 +152,7 @@ function App() {
         <div class="app">
             <nav class="navbar">
                 <a class="brand" href="#" onClick=${(e) => { e.preventDefault(); navigate('devices'); }}>
-                    <img src="/static/img/logo.svg" alt="AfterTouch" class="nav-logo" />
+                    <img src="/app/static/img/logo.svg" alt="AfterTouch" class="nav-logo" />
                     <div class="brand-text">
                         <span class="brand-name">AfterTouch</span>
                         <span class="brand-subtitle">Bose SoundTouch Toolkit</span>
@@ -164,25 +164,25 @@ function App() {
                         onClick=${(e) => { e.preventDefault(); navigate('devices'); }}
                         title="Devices"
                     >
-                        <img src="/static/img/speaker-mono.svg" alt="Devices" class="nav-device-icon" />
+                        <img src="/app/static/img/speaker-mono.svg" alt="Devices" class="nav-device-icon" />
                     </a>
                     <a href="#" class="${page === 'tunein' ? 'active' : ''}"
                         onClick=${(e) => { e.preventDefault(); navigate('tunein'); }}
                         title="TuneIn"
                     >
-                        <img src="/static/img/tunein-mono.svg" alt="TuneIn" class="nav-tunein-icon" />
+                        <img src="/app/static/img/tunein-mono.svg" alt="TuneIn" class="nav-tunein-icon" />
                     </a>
                     <a href="#" class="${page === 'radiobrowser' ? 'active' : ''}"
                         onClick=${(e) => { e.preventDefault(); navigate('radiobrowser'); }}
                         title="RadioBrowser"
                     >
-                        <img src="/static/img/radiobrowser-mono.svg" alt="RadioBrowser" class="nav-rb-icon" />
+                        <img src="/app/static/img/radiobrowser-mono.svg" alt="RadioBrowser" class="nav-rb-icon" />
                     </a>
                     <a href="#" class="${page === 'playurl' ? 'active' : ''}"
                         onClick=${(e) => { e.preventDefault(); navigate('playurl'); }}
                         title="Play URL"
                     >
-                        <img src="/static/img/link-mono.svg" alt="Play URL" class="nav-url-icon" />
+                        <img src="/app/static/img/link-mono.svg" alt="Play URL" class="nav-url-icon" />
                     </a>
                     <a href="#" class="${page === 'tts' ? 'active' : ''}"
                         onClick=${(e) => { e.preventDefault(); navigate('tts'); }}
@@ -196,7 +196,7 @@ function App() {
                     </a>
                     <span class="nav-separator">|</span>
                     <button class="btn-icon" onClick=${discover} title="Discover">
-                        <img src="/static/img/knob-mono.svg" alt="Discover" class="nav-discover-icon ${isDiscovering ? 'buzzing' : ''}" />
+                        <img src="/app/static/img/knob-mono.svg" alt="Discover" class="nav-discover-icon ${isDiscovering ? 'buzzing' : ''}" />
                     </button>
                 </div>
             </nav>

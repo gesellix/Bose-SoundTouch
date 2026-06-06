@@ -10,17 +10,19 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Mount registers all routes (static, WebSocket, REST) on r. The
-// discovery service is reused by the POST /api/discover handler to
-// trigger an on-demand sweep — pass the same instance you used for
-// startup discovery so settings (interface, timeout) stay consistent.
-func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscoveryService) {
-	// Static assets (embedded in binary)
+// MountWeb registers the portable soundtouch-web surface on r: the embedded
+// assets (/app/static/*), the control API (/api/control/*), and the SPA
+// (/app/*). It is self-contained under /api/control and /app, registering
+// nothing outside those subtrees (no /, no /health), so it can be mounted into
+// another router (e.g. soundtouch-service) additively. The discovery service
+// is reused by POST /api/control/discover for on-demand sweeps; pass the same
+// instance used for startup discovery so settings (interface, timeout) stay
+// consistent.
+func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDiscoveryService) {
+	// Embedded assets, served under the /app subtree so nothing contends with a
+	// host router's own /static (e.g. the Stockholm bridge's root catch-all).
 	subFS, _ := fs.Sub(StaticFS, "static")
-	r.Get("/static/*", http.StripPrefix("/static", http.FileServer(http.FS(subFS))).ServeHTTP)
-
-	// Health / liveness
-	r.Get("/health", app.HandleHealth)
+	r.Get("/app/static/*", http.StripPrefix("/app/static", http.FileServer(http.FS(subFS))).ServeHTTP)
 
 	// Player / control API. Per #451 this is the post-merge canonical shape:
 	// device-scoped actions nest under devices/{id}/, so every direct child of
@@ -123,10 +125,19 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	r.Get("/app/radiobrowser", app.serveIndex)
 	r.Get("/app/playurl", app.serveIndex)
 	r.Get("/app/tts", app.serveIndex)
+}
 
-	// Standalone convenience: the bare root jumps into the app. When -web is
-	// folded into -service, / instead serves a landing page (admin vs app) and
-	// this redirect is replaced.
+// Mount is the standalone soundtouch-web entry point: the portable web surface
+// (see MountWeb) plus the standalone-only liveness endpoint and a / redirect
+// into the app. soundtouch-service does not call this — it mounts MountWeb and
+// keeps its own / (landing page) and /health.
+func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscoveryService) {
+	app.MountWeb(r, discoveryService)
+
+	// Health / liveness (standalone only).
+	r.Get("/health", app.HandleHealth)
+
+	// Standalone convenience: the bare root jumps into the app.
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusFound)
 	})

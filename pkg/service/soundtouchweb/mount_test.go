@@ -8,32 +8,42 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// TestMountControlAPIShape verifies the issue #451 web API restructure:
-// building the router must not panic (catches any chi route-registration
-// ambiguity), and every web `/api/*` route must live under `/api/control/*`
-// (the post-merge canonical namespace). This is the only test that exercises
-// Mount itself; the handler tests call handlers directly with injected params.
-func TestMountControlAPIShape(t *testing.T) {
-	app := NewWebApp()
+// walkRoutes returns the set of route patterns registered on r.
+func walkRoutes(t *testing.T, r chi.Router) map[string]bool {
+	t.Helper()
 
-	r := chi.NewRouter()
-	app.Mount(r, nil) // must not panic while registering routes
+	routes := map[string]bool{}
 
-	var apiRoutes []string
-
-	registered := map[string]bool{}
-
-	walkErr := chi.Walk(r, func(_, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		registered[route] = true
-
-		if strings.HasPrefix(route, "/api/") {
-			apiRoutes = append(apiRoutes, route)
-		}
+	err := chi.Walk(r, func(_, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		routes[route] = true
 
 		return nil
 	})
-	if walkErr != nil {
-		t.Fatalf("walk routes: %v", walkErr)
+	if err != nil {
+		t.Fatalf("walk routes: %v", err)
+	}
+
+	return routes
+}
+
+// TestMountWebControlAPIShape verifies the issue #451 web API restructure on
+// the portable surface (MountWeb): building must not panic (catches any chi
+// route-registration ambiguity), and every web /api/* route must live under
+// /api/control/* (the post-merge canonical namespace).
+func TestMountWebControlAPIShape(t *testing.T) {
+	app := NewWebApp()
+
+	r := chi.NewRouter()
+	app.MountWeb(r, nil) // must not panic while registering routes
+
+	registered := walkRoutes(t, r)
+
+	var apiRoutes []string
+
+	for route := range registered {
+		if strings.HasPrefix(route, "/api/") {
+			apiRoutes = append(apiRoutes, route)
+		}
 	}
 
 	if len(apiRoutes) == 0 {
@@ -50,8 +60,10 @@ func TestMountControlAPIShape(t *testing.T) {
 
 	// The provider infix (#451): browsable providers expose global browse
 	// routes; every provider play nests under devices/{id}/providers/. The
-	// app-wide socket moved from top-level /ws to /api/control/ws.
+	// app-wide socket moved from top-level /ws to /api/control/ws, and assets
+	// live under /app/static.
 	mustExist := []string{
+		"/app/static/*",
 		"/api/control/version",
 		"/api/control/ws",
 		"/api/control/providers/tunein/search",
@@ -63,14 +75,18 @@ func TestMountControlAPIShape(t *testing.T) {
 	}
 	for _, want := range mustExist {
 		if !registered[want] {
-			t.Errorf("expected route %q to be registered; got %v", want, apiRoutes)
+			t.Errorf("expected route %q to be registered", want)
 		}
 	}
 
-	// The pre-infix flat paths are gone, and the app-wide socket no longer
-	// sits at top-level /ws.
+	// The pre-infix flat paths are gone, the app-wide socket no longer sits at
+	// top-level /ws, and the portable surface owns nothing outside
+	// /api/control + /app (no /, no /health, no top-level /static).
 	mustNotExist := []string{
+		"/",
 		"/ws",
+		"/health",
+		"/static/*",
 		"/api/control/tunein/search",
 		"/api/control/radiobrowser/search",
 		"/api/control/devices/{id}/play-url",
@@ -80,30 +96,21 @@ func TestMountControlAPIShape(t *testing.T) {
 	}
 	for _, gone := range mustNotExist {
 		if registered[gone] {
-			t.Errorf("pre-infix route %q should have moved under /providers/", gone)
+			t.Errorf("portable surface should not register %q", gone)
 		}
 	}
 }
 
-// TestMountSPARoutes verifies the issue #451 SPA move: the web UI is served
-// under /app/* and the old top-level page paths are gone, with / kept only as
-// a redirect into the app.
-func TestMountSPARoutes(t *testing.T) {
+// TestMountWebSPARoutes verifies the issue #451 SPA move: the web UI is served
+// under /app/* and the old top-level page paths are gone. The portable surface
+// does not register /.
+func TestMountWebSPARoutes(t *testing.T) {
 	app := NewWebApp()
 
 	r := chi.NewRouter()
-	app.Mount(r, nil)
+	app.MountWeb(r, nil)
 
-	routes := map[string]bool{}
-
-	walkErr := chi.Walk(r, func(_, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		routes[route] = true
-
-		return nil
-	})
-	if walkErr != nil {
-		t.Fatalf("walk routes: %v", walkErr)
-	}
+	routes := walkRoutes(t, r)
 
 	for _, want := range []string{"/app", "/app/devices", "/app/tunein"} {
 		if !routes[want] {
@@ -111,15 +118,26 @@ func TestMountSPARoutes(t *testing.T) {
 		}
 	}
 
-	// The old top-level page paths moved under /app.
-	for _, gone := range []string{"/devices", "/device/*", "/tunein", "/radiobrowser", "/playurl", "/tts"} {
+	for _, gone := range []string{"/", "/devices", "/device/*", "/tunein", "/radiobrowser", "/playurl", "/tts"} {
 		if routes[gone] {
-			t.Errorf("top-level SPA route %q should have moved under /app", gone)
+			t.Errorf("top-level route %q should not be registered by the portable surface", gone)
 		}
 	}
+}
 
-	// / stays registered, but only as the redirect into the app.
-	if !routes["/"] {
-		t.Error("expected / to remain registered (redirect into the app)")
+// TestMountStandalone verifies that the standalone entry point (Mount) adds the
+// / redirect and /health liveness endpoint on top of the portable surface.
+func TestMountStandalone(t *testing.T) {
+	app := NewWebApp()
+
+	r := chi.NewRouter()
+	app.Mount(r, nil)
+
+	routes := walkRoutes(t, r)
+
+	for _, want := range []string{"/", "/health", "/app", "/api/control/version"} {
+		if !routes[want] {
+			t.Errorf("expected standalone Mount to register %q", want)
+		}
 	}
 }
