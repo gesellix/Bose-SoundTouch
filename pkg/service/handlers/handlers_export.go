@@ -31,10 +31,11 @@ import (
 // alongside it so the maintainer can compare on-disk state with what the
 // service serves.
 type diagnosticReport struct {
-	GeneratedAt    string               `json:"generated_at"`
-	ServiceVersion map[string]string    `json:"service_version"`
-	HealthChecks   []health.CheckResult `json:"health_checks"`
-	Devices        []deviceDiagnostic   `json:"devices"`
+	GeneratedAt         string               `json:"generated_at"`
+	ServiceVersion      map[string]string    `json:"service_version"`
+	HealthChecks        []health.CheckResult `json:"health_checks"`
+	Devices             []deviceDiagnostic   `json:"devices"`
+	DeprecatedRouteHits map[string]int64     `json:"deprecated_route_hits,omitempty"`
 }
 
 type deviceDiagnostic struct {
@@ -768,8 +769,9 @@ func addTarBytes(tw *tar.Writer, name string, data []byte) error {
 
 func (s *Server) buildDiagnosticReport(redirectCfgs map[string]*redirectConfig) diagnosticReport {
 	report := diagnosticReport{
-		GeneratedAt:    time.Now().UTC().Format(time.RFC3339),
-		ServiceVersion: buildVersionInfo(),
+		GeneratedAt:         time.Now().UTC().Format(time.RFC3339),
+		ServiceVersion:      buildVersionInfo(),
+		DeprecatedRouteHits: s.DeprecatedRouteHits(),
 	}
 
 	if s.healthRegistry != nil {

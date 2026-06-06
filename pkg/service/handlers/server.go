@@ -55,6 +55,7 @@ type Server struct {
 	dnsDiscovery             *discovery.DNSDiscovery
 	authProbes               *authProbeRegistry
 	authProbeTimeoutOverride time.Duration // zero means use defaultAuthProbeTimeout; injectable for tests
+	deprecatedRoutes         *deprecatedRouteTracker
 	Version                  string
 	Commit                   string
 	Date                     string
@@ -133,6 +134,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		peerObserver:      newPeerObserver(),
 		healthRegistry:    health.NewRegistry(),
 		authProbes:        newAuthProbeRegistry(defaultAuthProbeTTL),
+		deprecatedRoutes:  newDeprecatedRouteTracker(),
 	}
 
 	health.RegisterSourcesXMLPresent(s.healthRegistry, ds)

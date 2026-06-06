@@ -1375,9 +1375,12 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Get("/spotify/callback", server.HandleMgmtSpotifyCallback)
 		r.Get("/amazon/callback", server.HandleMgmtAmazonCallback)
 
-		// All other management endpoints require Basic Auth.
+		// All other management endpoints require Basic Auth. On the legacy mount
+		// they also carry the deprecation signal (counts + one-time warning); the
+		// callbacks above are excluded (externally-pinned, not deprecated).
 		r.Group(func(r chi.Router) {
 			r.Use(server.BasicAuthMgmt())
+			r.Use(server.DeprecatedRouteMiddleware)
 			mountMgmtAuthed(r)
 		})
 	})
@@ -1454,7 +1457,13 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 	}
 
 	r.Route("/setup", func(r chi.Router) {
-		mountSetupAPI(r)
+		// Legacy admin API: same handlers as /api/setup, plus the deprecation
+		// signal (counts + one-time warning). Scoped to the API routes only — the
+		// Stockholm wizard catch-all below is frontend, not a deprecated API path.
+		r.Group(func(r chi.Router) {
+			r.Use(server.DeprecatedRouteMiddleware)
+			mountSetupAPI(r)
+		})
 
 		// Serve Stockholm setup wizard pages for paths not matched by the
 		// management API. The Stockholm frontend has a setup/ directory that must
