@@ -316,7 +316,7 @@ avahi-resolve -n soundtouch.local
 ```go
 nowPlaying, err := client.GetNowPlaying()
 if err == nil {
-    fmt.Printf("Status: %s, Source: %s\n", 
+    fmt.Printf("Status: %s, Source: %s\n",
         nowPlaying.PlayStatus, nowPlaying.Source)
 }
 ```
@@ -326,7 +326,7 @@ if err == nil {
 sources, err := client.GetSources()
 if err == nil {
     for _, source := range sources.Sources {
-        fmt.Printf("Source: %s, Status: %s\n", 
+        fmt.Printf("Source: %s, Status: %s\n",
             source.Source, source.Status)
     }
 }
@@ -490,7 +490,7 @@ if err == nil {
 // Only zone master can control volume
 if zoneStatus == "MEMBER" {
     fmt.Println("Device is zone member - only master controls volume")
-    
+
     // Find and use master device
     zone, _ := client.GetZone()
     // Connect to master device using zone.Master ID
@@ -507,7 +507,7 @@ client.DecreaseVolume(5)
 3. **Check Current Volume:**
 ```go
 volume, _ := client.GetVolume()
-fmt.Printf("Target: %d, Actual: %d, Muted: %t\n", 
+fmt.Printf("Target: %d, Actual: %d, Muted: %t\n",
     volume.TargetVolume, volume.ActualVolume, volume.Muted)
 ```
 
@@ -586,7 +586,7 @@ curl http://192.0.2.10:8090/playNotification
 **Causes & Solutions:**
 
 #### 1. **Device Model Compatibility**
-- ✅ **Supported**: SoundTouch 10 (ST-10), SoundTouch 20 (ST-20)  
+- ✅ **Supported**: SoundTouch 10 (ST-10), SoundTouch 20 (ST-20)
 - ❌ **Not Supported**: SoundTouch 300 (ST-300), older models
 
 **Solution:** Verify device model with:
@@ -619,7 +619,7 @@ Only one notification can play at a time. Wait a few seconds and retry.
 #### 2. **Check Current Playback Status**
 ```go
 nowPlaying, _ := client.GetNowPlaying()
-fmt.Printf("Current source: %s, status: %s\n", 
+fmt.Printf("Current source: %s, status: %s\n",
     nowPlaying.Source, nowPlaying.PlayStatus)
 ```
 
@@ -880,7 +880,7 @@ config.Logger = &client.DefaultLogger{}  // Or custom logger
 # Capture SoundTouch traffic
 sudo tcpdump -i any host 192.0.2.100 and port 8090
 
-# Monitor WebSocket traffic  
+# Monitor WebSocket traffic
 sudo tcpdump -i any host 192.0.2.100 and port 8080
 
 # HTTP debugging with curl
@@ -1024,7 +1024,7 @@ Use this checklist to systematically troubleshoot issues:
 
 ### Network Connectivity
 - [ ] Device power LED is solid white
-- [ ] Both devices on same network subnet  
+- [ ] Both devices on same network subnet
 - [ ] Firewall allows ports 8090 (HTTP) and 8080 (WebSocket)
 - [ ] Can ping device IP address
 - [ ] Can telnet to ports 8090 and 8080
@@ -1041,7 +1041,7 @@ Use this checklist to systematically troubleshoot issues:
 - [ ] Proper error handling
 - [ ] Resource cleanup (defer statements)
 
-### Multiroom Specific  
+### Multiroom Specific
 - [ ] All devices support multiroom
 - [ ] Device IDs are correct (from GetDeviceInfo)
 - [ ] Devices on same network subnet

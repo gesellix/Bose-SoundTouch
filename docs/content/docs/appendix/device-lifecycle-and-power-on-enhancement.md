@@ -22,7 +22,7 @@ The current system uses multiple data collection methods to build a complete dev
       Name            string    // From UPnP friendlyName
       Host            string    // IP address
       Port            int       // Usually 8090
-      ModelID         string    // From UPnP modelName  
+      ModelID         string    // From UPnP modelName
       SerialNo        string    // MAC address from UPnP
       UPnPLocation    string    // Device description URL
       UPnPUSN         string    // Unique service name
@@ -66,7 +66,7 @@ The current system uses multiple data collection methods to build a complete dev
 ```mermaid
 sequenceDiagram
     participant Service as SoundTouch Service
-    participant UPnP as UPnP Discovery  
+    participant UPnP as UPnP Discovery
     participant mDNS as mDNS Discovery
     participant Device as SoundTouch Device
     participant DataStore as Data Store
@@ -76,28 +76,28 @@ sequenceDiagram
 
     Service->>UPnP: Start SSDP Discovery
     Service->>mDNS: Start mDNS Discovery
-    
+
     UPnP->>UPnP: Send M-SEARCH multicast
     Device->>UPnP: Respond with location URL
     UPnP->>Device: Fetch device description XML
     Device->>UPnP: Return basic device info
-    
+
     mDNS->>mDNS: Query _soundtouch._tcp
     Device->>mDNS: Respond with service info
-    
+
     Service->>Service: Merge discovery results
     Service->>Device: GET /info (enrich data)
     Device->>Service: Return detailed device info
     Service->>DataStore: Store discovered device
-    
+
     Note over User,DataStore: User Registration
     User->>Service: POST /account/{id}/devices
     Note right of User: deviceId + user-friendly name
     Service->>DataStore: Link device to account
-    
+
     Note over Service,DataStore: Migration Process
     Service->>Device: GET /info (device identification)
-    Device->>Service: Return device details  
+    Device->>Service: Return device details
     Service->>Service: Build migration summary
     Service->>Device: Apply configuration changes
 ```
@@ -199,25 +199,25 @@ The `/power_on` endpoint receives comprehensive device data that could replace m
 
 ### Data Completeness Comparison
 
-| Data Field | Current `/info` | `/power_on` | Gap Assessment |
-|------------|----------------|-------------|----------------|
-| **Device ID** | ✅ UUID format | ✅ MAC format | Different format |
-| **Device Name** | ✅ Internal name | ❌ Missing | **Critical Gap** |
-| **Device Type** | ✅ Model string | ✅ Product code | ✅ Available |
-| **Account ID** | ✅ marge UUID | ❌ Missing | **Critical Gap** |
-| **Service URL** | ✅ marge URL | ❌ Missing | **Important Gap** |
-| **Firmware Version** | ✅ Full version | ✅ Full version | ✅ Available |
-| **Serial Numbers** | ✅ Component serials | ✅ Device + Product | ✅ Available |
-| **MAC Addresses** | ✅ Interface-specific | ✅ Multiple MACs | ✅ Enhanced |
-| **IP Address** | ✅ Interface IPs | ✅ Current IP | ✅ Available |
-| **Network Status** | ❌ Basic | ✅ Rich diagnostics | ✅ **Enhanced** |
-| **Regional Settings** | ✅ Country/Region | ❌ Missing | **Important Gap** |
+| Data Field            | Current `/info`      | `/power_on`        | Gap Assessment    |
+|-----------------------|----------------------|--------------------|-------------------|
+| **Device ID**         | ✅ UUID format        | ✅ MAC format       | Different format  |
+| **Device Name**       | ✅ Internal name      | ❌ Missing          | **Critical Gap**  |
+| **Device Type**       | ✅ Model string       | ✅ Product code     | ✅ Available       |
+| **Account ID**        | ✅ marge UUID         | ❌ Missing          | **Critical Gap**  |
+| **Service URL**       | ✅ marge URL          | ❌ Missing          | **Important Gap** |
+| **Firmware Version**  | ✅ Full version       | ✅ Full version     | ✅ Available       |
+| **Serial Numbers**    | ✅ Component serials  | ✅ Device + Product | ✅ Available       |
+| **MAC Addresses**     | ✅ Interface-specific | ✅ Multiple MACs    | ✅ Enhanced        |
+| **IP Address**        | ✅ Interface IPs      | ✅ Current IP       | ✅ Available       |
+| **Network Status**    | ❌ Basic              | ✅ Rich diagnostics | ✅ **Enhanced**    |
+| **Regional Settings** | ✅ Country/Region     | ❌ Missing          | **Important Gap** |
 
 ### Enhancement Benefits
 
 #### 1. Network Independence
 - ✅ Works across internet/WAN connections
-- ✅ No multicast/broadcast requirements  
+- ✅ No multicast/broadcast requirements
 - ✅ Firewall/NAT friendly
 - ✅ Supports remote device management
 
@@ -246,21 +246,21 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
         // Fallback to existing discovery
         return s.fallbackToDiscovery(r.RemoteAddr)
     }
-    
+
     // Extract device information
     deviceMAC := powerOnData.Device.ID
     deviceIP := powerOnData.DiagnosticData.DeviceLandscape.IPAddress
-    
+
     // Lookup existing device data
     deviceInfo := s.lookupDeviceByMAC(deviceMAC)
     if deviceInfo == nil {
         // New device - trigger registration flow
         deviceInfo = s.createDeviceFromPowerOn(powerOnData)
     }
-    
+
     // Update with power_on data
     s.updateDeviceFromPowerOn(deviceInfo, powerOnData)
-    
+
     // Determine response actions
     response := s.buildPowerOnResponse(deviceInfo)
     s.sendResponse(w, response)
@@ -280,7 +280,7 @@ Address missing data through complementary mechanisms:
 ```mermaid
 sequenceDiagram
     participant Device as SoundTouch Device
-    participant Service as SoundTouch Service  
+    participant Service as SoundTouch Service
     participant DataStore as Data Store
     participant User as User/App
 
@@ -293,7 +293,7 @@ sequenceDiagram
         alt Device Unknown
             Service->>DataStore: Create device record
             Service->>User: Notify new device found
-        else Device Known  
+        else Device Known
             Service->>DataStore: Update device status
         end
         Service->>Device: Configuration response
@@ -360,11 +360,11 @@ type Migration struct {
 
 ### Immediate Actions (Phase 1)
 1. **Enhance `/power_on` handler** to extract and store comprehensive device data
-2. **Implement device lookup by MAC address** as primary identification method  
+2. **Implement device lookup by MAC address** as primary identification method
 3. **Create hybrid discovery system** using both `/power_on` and existing methods
 4. **Add network-independent device management** capabilities
 
-### Medium-term Improvements (Phase 2)  
+### Medium-term Improvements (Phase 2)
 1. **Implement account-device MAC mapping** for automatic association
 2. **Add IP geolocation** for regional settings inference
 3. **Create device registration UI** optimized for `/power_on` discovered devices
@@ -372,7 +372,7 @@ type Migration struct {
 
 ### Long-term Enhancements (Phase 3)
 1. **Request firmware enhancement** to include missing data in `/power_on`
-2. **Implement real-time device monitoring** via `/power_on` events  
+2. **Implement real-time device monitoring** via `/power_on` events
 3. **Create centralized device management** independent of network topology
 4. **Add predictive migration** based on device status patterns
 
@@ -387,7 +387,7 @@ type Migration struct {
 The `/power_on` endpoint provides a significant opportunity to reduce network dependencies while enhancing device management capabilities. By implementing a hybrid approach that leverages `/power_on` data for primary device identification and status updates while maintaining existing registration workflows for user-controlled metadata, the system can achieve:
 
 - **Network independence** for core device management
-- **Enhanced real-time capabilities** through device-initiated communication  
+- **Enhanced real-time capabilities** through device-initiated communication
 - **Improved scalability** across diverse network topologies
 - **Better user experience** with automatic device discovery and status updates
 

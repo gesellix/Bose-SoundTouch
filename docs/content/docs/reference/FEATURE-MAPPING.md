@@ -161,27 +161,27 @@ import (
 func analyzeDevice(host string) {
     // Create client
     c := client.NewClient(&client.Config{Host: host})
-    
+
     // Get supported URLs with feature mapping
     supportedURLs, err := c.GetSupportedURLs()
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Get device capabilities overview
     completeness, supported, total := supportedURLs.GetFeatureCompleteness()
-    fmt.Printf("Device supports %d%% of features (%d/%d)\n", 
+    fmt.Printf("Device supports %d%% of features (%d/%d)\n",
         completeness, supported, total)
-    
+
     // Check specific capabilities
     if supportedURLs.HasMultiroomSupport() {
         fmt.Println("✅ Device can create multiroom zones")
     }
-    
+
     if supportedURLs.HasAdvancedAudioSupport() {
         fmt.Println("✅ Device has advanced audio controls")
     }
-    
+
     // Get missing essential features
     missing := supportedURLs.GetMissingEssentialFeatures()
     if len(missing) > 0 {
@@ -190,13 +190,13 @@ func analyzeDevice(host string) {
             fmt.Printf("   • %s\n", feature.Name)
         }
     }
-    
+
     // Get features by category
     featuresByCategory := supportedURLs.GetFeaturesByCategory()
     for category, features := range featuresByCategory {
         fmt.Printf("%s: %d features available\n", category, len(features))
     }
-    
+
     // Check for partial implementations
     partial := supportedURLs.GetPartiallyImplementedFeatures()
     for _, feature := range partial {
@@ -211,10 +211,10 @@ func analyzeDevice(host string) {
 func canDoAdvancedAudio(supportedURLs *models.SupportedURLsResponse) bool {
     requiredEndpoints := []string{
         "/audiodspcontrols",
-        "/audioproducttonecontrols", 
+        "/audioproducttonecontrols",
         "/audioproductlevelcontrols",
     }
-    
+
     for _, endpoint := range requiredEndpoints {
         if !supportedURLs.HasURL(endpoint) {
             return false
@@ -226,19 +226,19 @@ func canDoAdvancedAudio(supportedURLs *models.SupportedURLsResponse) bool {
 // Get device-specific recommendations
 func getPersonalizedTips(supportedURLs *models.SupportedURLsResponse) []string {
     var tips []string
-    
+
     if supportedURLs.HasURL("/presets") {
         tips = append(tips, "Set up presets for your favorite stations")
     }
-    
+
     if supportedURLs.HasURL("/setZone") {
         tips = append(tips, "Create multiroom zones for whole-home audio")
     }
-    
+
     if supportedURLs.HasURL("/search") && supportedURLs.HasURL("/addStation") {
         tips = append(tips, "Search and save new radio stations")
     }
-    
+
     return tips
 }
 ```
@@ -289,7 +289,7 @@ soundtouch-cli audio level get             # Get level controls
 ```bash
 # Basic Playback (Essential)
 soundtouch-cli play start                  # Start playback
-soundtouch-cli play stop                   # Stop playback  
+soundtouch-cli play stop                   # Stop playback
 soundtouch-cli play pause                  # Pause playback
 soundtouch-cli play now                    # Get now playing info
 
@@ -306,7 +306,7 @@ soundtouch-cli key mute                    # Mute toggle
 # Audio Sources
 soundtouch-cli source list                 # List available sources
 soundtouch-cli source select --source SPOTIFY  # Select Spotify
-soundtouch-cli source bluetooth            # Select Bluetooth  
+soundtouch-cli source bluetooth            # Select Bluetooth
 soundtouch-cli source aux                  # Select AUX input
 
 # Service Availability
@@ -321,7 +321,7 @@ soundtouch-cli browse tunein               # Browse TuneIn content
 soundtouch-cli browse pandora --source-account <account>  # Browse Pandora
 soundtouch-cli browse spotify --source-account <account>  # Browse Spotify
 
-# Station Management  
+# Station Management
 soundtouch-cli station search-tunein --query "jazz"       # Search TuneIn
 soundtouch-cli station search-pandora --query "rock" --source-account <account>
 soundtouch-cli station add --source TUNEIN --token <token> --name "Jazz FM"
@@ -354,7 +354,7 @@ soundtouch-cli zone remove --member 192.0.2.103 # Remove from zone
 # Quick capability check
 soundtouch-cli supported-urls | grep "Feature Coverage"
 
-# Essential features verification  
+# Essential features verification
 soundtouch-cli analyze | grep -A 5 "Missing Essential Features"
 
 # Advanced features check
@@ -368,7 +368,7 @@ soundtouch-cli supported-urls --features | grep "Multiroom"
 Based on feature support, devices are automatically classified:
 
 - **Premium SoundTouch Speaker**: Multiroom + Advanced Audio + Full Feature Set
-- **Standard SoundTouch Speaker**: Multiroom Capable + Core Features  
+- **Standard SoundTouch Speaker**: Multiroom Capable + Core Features
 - **Basic SoundTouch Speaker**: Streaming + Presets + Core Features
 - **Essential SoundTouch Device**: Core Playback Features Only
 - **Limited SoundTouch Device**: Minimal Feature Set
@@ -384,7 +384,7 @@ soundtouch-cli supported-urls --features | grep -i "bass control"
 # If not listed, device doesn't support bass control
 ```
 
-**Issue**: "Multiroom not available"  
+**Issue**: "Multiroom not available"
 ```bash
 # Verify multiroom support
 soundtouch-cli analyze | grep "Multiroom"
@@ -405,7 +405,7 @@ soundtouch-cli supported-urls --features | grep "Content Navigation"
 The feature mapping system provides personalized recommendations:
 
 - **Missing Balance Control**: "No balance control available on this device"
-- **Multiroom Available**: "Create speaker groups with other devices"  
+- **Multiroom Available**: "Create speaker groups with other devices"
 - **Advanced Audio**: "Fine-tune sound with DSP controls"
 - **Limited Features**: "Consider upgrading for full functionality"
 
