@@ -590,9 +590,9 @@ func main() {
 
 			// Embedded web UI (soundtouch-web): LAN control UI under /app, control
 			// API under /api/control. Same LAN-trust tier as /setup, no auth.
-			webApp, webDiscovery := newEmbeddedWebApp(config.serverURL, ds)
+			webApp := newEmbeddedWebApp(server, config.serverURL, ds)
 
-			r := setupRouter(server, stockholmHandler, webApp, webDiscovery)
+			r := setupRouter(server, stockholmHandler, webApp)
 
 			// Bind the listener before logging so we print the true
 			// effective port (handles :0 and catches "address already
@@ -1090,11 +1090,15 @@ func startDeviceDiscovery(server *handlers.Server) {
 
 // newEmbeddedWebApp builds the soundtouch-web application for embedding in the
 // service router: release metadata from the build vars, a loopback ServiceURL
-// for the TTS / Play URL proxy (plain HTTP, no CA trust needed), and a device
-// seed from the service datastore so the UI shows manually-added speakers even
-// when network discovery is disabled. It also returns a discovery service and
-// kicks off an initial sweep.
-func newEmbeddedWebApp(serverURL string, ds *datastore.DataStore) (*soundtouchweb.WebApp, *discovery.UnifiedDiscoveryService) {
+// for the TTS / Play URL proxy (plain HTTP, no CA trust needed), and device
+// state sourced entirely from the service.
+//
+// The web UI shares the service's discovery rather than running its own (the
+// datastore is the single source of truth): ExtraDeviceHosts reads it,
+// TriggerDiscovery runs the service sweep on a UI-initiated "discover", and the
+// devices-changed hook re-syncs the UI registry whenever the service's
+// discovery or a manual add changes the set.
+func newEmbeddedWebApp(server *handlers.Server, serverURL string, ds *datastore.DataStore) *soundtouchweb.WebApp {
 	webApp := soundtouchweb.NewWebApp()
 	webApp.Version = version
 	webApp.Commit = commit
@@ -1118,22 +1122,26 @@ func newEmbeddedWebApp(serverURL string, ds *datastore.DataStore) (*soundtouchwe
 		return hosts
 	}
 
-	webDiscovery := soundtouchweb.NewDiscoveryService("")
+	// UI "discover" runs the service's sweep, not a second mDNS stack.
+	webApp.TriggerDiscovery = server.DiscoverDevices
+
+	// Keep the UI registry live as the service discovers or devices are added.
+	server.SetDevicesChangedHook(func() {
+		webApp.SeedExtraDevices()
+		webApp.BroadcastDeviceList()
+	})
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		webApp.BroadcastDiscoveryStatus("starting", webApp.DeviceCount())
-		webApp.DiscoverDevices(ctx, webDiscovery)
-		webApp.BroadcastDiscoveryStatus("completed", webApp.DeviceCount())
+		// Project the current device set into the UI; the devices-changed hook
+		// and the service's periodic discovery keep it current from here on.
+		webApp.SeedExtraDevices()
 		webApp.BroadcastDeviceList()
 	}()
 
-	return webApp, webDiscovery
+	return webApp
 }
 
-func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, webApp *soundtouchweb.WebApp, webDiscovery *discovery.UnifiedDiscoveryService) *chi.Mux {
+func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, webApp *soundtouchweb.WebApp) *chi.Mux {
 	r := chi.NewRouter()
 
 	// CleanPath collapses duplicate slashes ("//bmx/..." -> "/bmx/...") and
@@ -1530,10 +1538,11 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 
 	// Embedded web UI: control API under /api/control and the SPA under /app
 	// (LAN-trust, like /setup). Additive — nothing here collides with the
-	// service's own /, /health, or /static. Skipped when nil, e.g. unit tests
-	// that only exercise the service surface.
+	// service's own /, /health, or /static. The web app shares the service's
+	// discovery (nil discovery service here), so it runs no mDNS of its own.
+	// Skipped when nil, e.g. unit tests that only exercise the service surface.
 	if webApp != nil {
-		webApp.MountWeb(r, webDiscovery)
+		webApp.MountWeb(r, nil)
 	}
 
 	if stockholmHandler != nil {

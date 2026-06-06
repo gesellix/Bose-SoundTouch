@@ -22,7 +22,7 @@ func TestPrintRoutes(t *testing.T) {
 	// snapshot also captures the embedded soundtouch-web surface
 	// (/api/control + /app); discovery is nil since we only register routes.
 	server := handlers.NewServer(nil, nil, "http://localhost:8000", true, true, true)
-	r := setupRouter(server, nil, soundtouchweb.NewWebApp(), nil)
+	r := setupRouter(server, nil, soundtouchweb.NewWebApp())
 
 	var routes []string
 	walkFunc := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
@@ -131,7 +131,7 @@ func TestPUTRenameRoutesToLocalHandler(t *testing.T) {
 	_ = ds.Initialize()
 
 	server := handlers.NewServer(ds, nil, "http://localhost:8000", false, false, false)
-	r := setupRouter(server, nil, nil, nil)
+	r := setupRouter(server, nil, nil)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 

@@ -129,7 +129,7 @@ func loadHTTPClientRequests(t *testing.T, dir string) [][2]string {
 // machine-checked companion to tests/integration/http-client/COVERAGE.md.
 func TestFrozenRouteContractCoverage(t *testing.T) {
 	server := handlers.NewServer(nil, nil, "http://localhost:8000", true, true, true)
-	r := setupRouter(server, nil, nil, nil)
+	r := setupRouter(server, nil, nil)
 
 	httpRequests := loadHTTPClientRequests(t, filepath.Join("..", "..", "tests", "integration", "http-client"))
 

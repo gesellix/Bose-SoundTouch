@@ -2,6 +2,7 @@
 package soundtouchweb
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -54,6 +55,13 @@ type WebApp struct {
 	// the UI shows manually-added speakers even when network discovery is
 	// disabled. Standalone soundtouch-web leaves it nil.
 	ExtraDeviceHosts func() []string
+
+	// TriggerDiscovery, when set, runs an external discovery sweep instead of
+	// this app's own mDNS/UPnP. The embedded build wires it to the host
+	// service's discovery (the single source of truth, which updates the shared
+	// datastore); DiscoverDevices then re-syncs from ExtraDeviceHosts. Standalone
+	// soundtouch-web leaves it nil and runs its own sweep.
+	TriggerDiscovery func(ctx context.Context)
 
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }

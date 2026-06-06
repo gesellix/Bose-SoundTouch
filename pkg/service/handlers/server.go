@@ -56,6 +56,7 @@ type Server struct {
 	authProbes               *authProbeRegistry
 	authProbeTimeoutOverride time.Duration // zero means use defaultAuthProbeTimeout; injectable for tests
 	deprecatedRoutes         *deprecatedRouteTracker
+	devicesChangedHook       func()
 	Version                  string
 	Commit                   string
 	Date                     string
@@ -463,6 +464,28 @@ func (s *Server) SetDiscoverySettings(interval time.Duration, enabled bool) {
 
 	s.discoveryInterval = interval
 	s.discoveryEnabled = enabled
+}
+
+// SetDevicesChangedHook registers a callback fired after the known device set
+// changes (a discovery sweep or a manual add). The embedded web UI uses it to
+// re-sync its registry from the shared datastore — the single source of truth —
+// so it never runs its own discovery. Nil-safe.
+func (s *Server) SetDevicesChangedHook(hook func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.devicesChangedHook = hook
+}
+
+// notifyDevicesChanged fires the devices-changed hook, if one is registered.
+func (s *Server) notifyDevicesChanged() {
+	s.mu.RLock()
+	hook := s.devicesChangedHook
+	s.mu.RUnlock()
+
+	if hook != nil {
+		hook()
+	}
 }
 
 // parseUpstreamDNS splits a comma-separated string of DNS servers.
@@ -1038,6 +1061,9 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 
 	// Post-discovery cleanup: merge overlapping IP/Serial entries
 	s.mergeOverlappingDevices()
+
+	// Let any observer (e.g. the embedded web UI) re-sync from the datastore.
+	s.notifyDevicesChanged()
 }
 
 // findExistingDeviceInfoByDeviceID looks for existing device info by deviceID

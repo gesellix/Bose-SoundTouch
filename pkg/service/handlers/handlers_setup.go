@@ -72,6 +72,9 @@ func (s *Server) HandleAddManualDevice(w http.ResponseWriter, r *http.Request) {
 	s.handleDiscoveredDevice(d)
 	s.mergeOverlappingDevices()
 
+	// Let any observer (e.g. the embedded web UI) re-sync from the datastore.
+	s.notifyDevicesChanged()
+
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
