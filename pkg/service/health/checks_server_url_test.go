@@ -9,7 +9,7 @@ import (
 
 func TestServerURLReachableCheck_PassesWhenVersionEndpointReturns200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/setup/version" {
+		if r.URL.Path == "/api/setup/version" {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"version":"test"}`))
 			return
@@ -20,7 +20,7 @@ func TestServerURLReachableCheck_PassesWhenVersionEndpointReturns200(t *testing.
 
 	got := runServerURLReachableCheck(srv.URL)
 	if len(got) != 0 {
-		t.Errorf("expected no findings when /setup/version returns 200, got %+v", got)
+		t.Errorf("expected no findings when /api/setup/version returns 200, got %+v", got)
 	}
 }
 
@@ -32,7 +32,7 @@ func TestServerURLReachableCheck_WarnsWhenVersionEndpointReturns404(t *testing.T
 
 	got := runServerURLReachableCheck(srv.URL)
 	if len(got) != 1 {
-		t.Fatalf("expected one finding when /setup/version returns 404, got %+v", got)
+		t.Fatalf("expected one finding when /api/setup/version returns 404, got %+v", got)
 	}
 
 	if got[0].Severity != SeverityWarning {

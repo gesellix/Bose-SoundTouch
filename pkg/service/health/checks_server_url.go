@@ -12,7 +12,7 @@ import (
 const CheckIDServerURLReachable = "server_url_reachable"
 
 // RegisterServerURLReachableCheck registers the server_url_reachable
-// check. It probes GET {serverURL}/setup/version from inside the
+// check. It probes GET {serverURL}/api/setup/version from inside the
 // service. If the request fails or returns a non-200 status, the
 // configured server URL doesn't route back to AfterTouch — speakers
 // pointing their margeURL at that address will receive errors instead
@@ -41,7 +41,7 @@ func runServerURLReachableCheck(serverURL string) []Finding {
 		return nil
 	}
 
-	probeURL := strings.TrimRight(serverURL, "/") + "/setup/version"
+	probeURL := strings.TrimRight(serverURL, "/") + "/api/setup/version"
 	res := ProbeGet(context.Background(), probeURL, 2*time.Second)
 
 	if res.Reachable && res.Status == 200 {
