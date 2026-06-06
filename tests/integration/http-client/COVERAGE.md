@@ -24,6 +24,14 @@ Variable path segments are templated: `{stationID}`, `{episodeID}`, `{hash}`,
 
 Legend: ✅ covered · ⬜ gap · 〰️ partial (some status/variant uncovered).
 
+**Enforced by:** `TestFrozenRouteContractCoverage`
+(`cmd/soundtouch-service/coverage_guard_test.go`). It walks the router for
+frozen-contract routes, matches each against the `.http` request lines, and
+golden-files the set of *uncovered* frozen routes
+(`cmd/soundtouch-service/testdata/frozen_routes_uncovered.txt`). Adding a new
+frozen route without a test, or a test that newly covers one, changes that set
+and fails the test, so this checklist can't silently drift from the code.
+
 ## Frozen speaker routes
 
 | Method      | Route                                              | Status(es) observed | Covered by                                                   | State                                              |
