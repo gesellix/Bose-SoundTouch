@@ -1111,12 +1111,6 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 
 	r.Get("/", server.HandleRoot)
 	r.Get("/health", server.HandleHealth)
-	// Passive peer-reachability probe. Registers a device IP with the
-	// in-process observer, nudges :8090/swUpdateCheck, and waits for
-	// any inbound from that IP. Used post-migration where the daemon
-	// caches its swUpdateUrl at boot and the active round-trip can't
-	// reach it without a reboot.
-	r.Post("/setup/peer-probe/{deviceId}", server.HandlePeerProbe)
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		// The favicon lives in the embedded web/img bundle, not under
 		// static/media — HandleMedia would 404. HandleWeb serves from
@@ -1339,47 +1333,67 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Get("/auth", server.HandleSpeakerAuth)
 	})
 
+	// Management API (admin tier). Registered under both /mgmt (legacy) and
+	// /api/mgmt (new canonical — issue #451 route-transition step 1) from one
+	// shared registration so the two paths stay byte-identical; both carry the
+	// same Basic Auth. The browser OAuth callbacks are externally-pinned
+	// (provider redirect URIs) and therefore stay at /mgmt only, not aliased.
+	mountMgmtAuthed := func(r chi.Router) {
+		r.Route("/accounts", func(r chi.Router) {
+			r.Get("/", server.HandleMgmtListAccounts)
+			r.Get("/{accountId}", server.HandleMgmtAccountDetails)
+			r.Post("/{accountId}/language", server.HandleMgmtUpdateAccountLanguage)
+			r.Post("/{accountId}/provider-settings", server.HandleMgmtUpdateAccountProviderSetting)
+			r.Get("/{accountId}/speakers", server.HandleMgmtListSpeakers)
+		})
+
+		r.Route("/spotify", func(r chi.Router) {
+			r.Post("/init", server.HandleMgmtSpotifyInit)
+			r.Post("/confirm", server.HandleMgmtSpotifyConfirm)
+			r.Get("/accounts", server.HandleMgmtSpotifyAccounts)
+			r.Get("/token", server.HandleMgmtSpotifyToken)
+			r.Post("/entity", server.HandleMgmtSpotifyEntity)
+			r.Post("/prime", server.HandleMgmtPrimeDevice)
+		})
+
+		r.Route("/amazon", func(r chi.Router) {
+			r.Post("/init", server.HandleMgmtAmazonInit)
+			r.Post("/confirm", server.HandleMgmtAmazonConfirm)
+			r.Get("/accounts", server.HandleMgmtAmazonAccounts)
+			r.Get("/token", server.HandleMgmtAmazonToken)
+			r.Post("/prime", server.HandleMgmtPrimeDeviceAmazon)
+		})
+
+		r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)
+	}
+
 	r.Route("/mgmt", func(r chi.Router) {
 		// Browser OAuth callbacks — no auth required (provider redirects the
 		// user's browser here directly). The authorization code is single-use,
-		// short-lived, and useless without the client_secret.
+		// short-lived, and useless without the client_secret. Not aliased under
+		// /api/mgmt (externally-pinned redirect URIs).
 		r.Get("/spotify/callback", server.HandleMgmtSpotifyCallback)
 		r.Get("/amazon/callback", server.HandleMgmtAmazonCallback)
 
 		// All other management endpoints require Basic Auth.
 		r.Group(func(r chi.Router) {
 			r.Use(server.BasicAuthMgmt())
-
-			r.Route("/accounts", func(r chi.Router) {
-				r.Get("/", server.HandleMgmtListAccounts)
-				r.Get("/{accountId}", server.HandleMgmtAccountDetails)
-				r.Post("/{accountId}/language", server.HandleMgmtUpdateAccountLanguage)
-				r.Post("/{accountId}/provider-settings", server.HandleMgmtUpdateAccountProviderSetting)
-				r.Get("/{accountId}/speakers", server.HandleMgmtListSpeakers)
-			})
-
-			r.Route("/spotify", func(r chi.Router) {
-				r.Post("/init", server.HandleMgmtSpotifyInit)
-				r.Post("/confirm", server.HandleMgmtSpotifyConfirm)
-				r.Get("/accounts", server.HandleMgmtSpotifyAccounts)
-				r.Get("/token", server.HandleMgmtSpotifyToken)
-				r.Post("/entity", server.HandleMgmtSpotifyEntity)
-				r.Post("/prime", server.HandleMgmtPrimeDevice)
-			})
-
-			r.Route("/amazon", func(r chi.Router) {
-				r.Post("/init", server.HandleMgmtAmazonInit)
-				r.Post("/confirm", server.HandleMgmtAmazonConfirm)
-				r.Get("/accounts", server.HandleMgmtAmazonAccounts)
-				r.Get("/token", server.HandleMgmtAmazonToken)
-				r.Post("/prime", server.HandleMgmtPrimeDeviceAmazon)
-			})
-
-			r.Get("/devices/{deviceId}/events", server.HandleMgmtDeviceEvents)
+			mountMgmtAuthed(r)
 		})
 	})
 
-	r.Route("/setup", func(r chi.Router) {
+	r.Route("/api/mgmt", func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			r.Use(server.BasicAuthMgmt())
+			mountMgmtAuthed(r)
+		})
+	})
+
+	// Setup / admin API (admin tier). Registered under both /setup (legacy) and
+	// /api/setup (new canonical) from one shared registration. The Stockholm
+	// setup-wizard static catch-all is a frontend concern and stays under /setup
+	// only — /api/setup serves data only.
+	mountSetupAPI := func(r chi.Router) {
 		r.Get("/devices", server.HandleListDiscoveredDevices)
 		r.Post("/devices", server.HandleAddManualDevice)
 		r.Delete("/devices/{deviceId}", server.HandleRemoveDevice)
@@ -1399,6 +1413,12 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Post("/reboot/{deviceId}", server.HandleRebootDevice)
 		r.Get("/account-id-suggestions/{deviceId}", server.HandleAccountIDSuggestions)
 		r.Post("/pair-account/{deviceId}", server.HandlePairAccount)
+		// Passive peer-reachability probe. Registers a device IP with the
+		// in-process observer, nudges :8090/swUpdateCheck, and waits for any
+		// inbound from that IP. Used post-migration where the daemon caches its
+		// swUpdateUrl at boot and the active round-trip can't reach it without a
+		// reboot.
+		r.Post("/peer-probe/{deviceId}", server.HandlePeerProbe)
 		r.Post("/trust-ca/{deviceId}", server.HandleTrustCACert)
 		r.Post("/ensure-remote-services/{deviceId}", server.HandleEnsureRemoteServices)
 		r.Post("/remove-remote-services/{deviceId}", server.HandleRemoveRemoteServices)
@@ -1431,13 +1451,22 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 		r.Post("/health/dns-path-probe", server.HandleDNSPathProbe)
 		r.Get("/export/diagnostic", server.HandleExportDiagnostic)
 		r.Get("/logs", server.HandleGetLogs)
+	}
 
-		// Serve Stockholm setup wizard pages for paths not matched by the management API.
-		// The Stockholm frontend has a setup/ directory that must be accessible at /setup/*.
+	r.Route("/setup", func(r chi.Router) {
+		mountSetupAPI(r)
+
+		// Serve Stockholm setup wizard pages for paths not matched by the
+		// management API. The Stockholm frontend has a setup/ directory that must
+		// be accessible at /setup/*. Frontend-only — not mirrored under /api/setup.
 		if stockholmHandler != nil {
 			r.Get("/*", stockholmHandler.HandleStatic)
 			r.Get("/", stockholmHandler.HandleStatic)
 		}
+	})
+
+	r.Route("/api/setup", func(r chi.Router) {
+		mountSetupAPI(r)
 	})
 
 	if stockholmHandler != nil {
