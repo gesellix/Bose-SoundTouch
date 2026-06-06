@@ -1,0 +1,17 @@
+### GET /bmx/registry/v1/servicesAvailability (BMX service availability registry)
+###
+### Frozen BMX route, sibling of /bmx/registry/v1/services. The speaker queries
+### which BMX services are available; the service returns the embedded registry
+### JSON (HandleBMXServicesAvailability). Static, no upstream call.
+GET {{host}}/bmx/registry/v1/servicesAvailability
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+X-Bmx-Api-Key: {{bmxApiKey}}
+
+> {%
+    client.test("Availability registry served as JSON 200", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType === "application/json",
+            "Expected application/json, got '" + response.contentType.mimeType + "'");
+    });
+%}

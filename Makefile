@@ -184,6 +184,8 @@ test-http-client:
 		/workdir/customer_support.http \
 		/workdir/power_on.http \
 		/workdir/get_bmx_services.http \
+		/workdir/get_bmx_services_availability.http \
+		/workdir/get_ced_index.http \
 		/workdir/get_sourceproviders.http \
 		/workdir/get_software_update.http \
 		/workdir/get_soundtouch_updates.http \

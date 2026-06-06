@@ -1,0 +1,17 @@
+### GET /ced/soundtouch/mr4_22097fe2/index.xml (CED firmware-update config)
+###
+### Frozen route mirroring downloads.bose.com/ced/soundtouch/...; the speaker
+### fetches its CED update index from this static base (HandleCedStatic serves the
+### embedded file tree). A present file returns 200 XML; absent paths 404 (the
+### recorded take5.mp3 was such a miss). Static, no upstream call.
+GET {{host}}/ced/soundtouch/mr4_22097fe2/index.xml
+User-Agent: Bose_Lisa/27.0.6
+Accept: */*
+
+> {%
+    client.test("CED index served as XML 200", function() {
+        client.assert(response.status === 200, "Response status is not 200, got " + response.status);
+        client.assert(response.contentType.mimeType.indexOf("xml") !== -1,
+            "Expected an XML content type, got '" + response.contentType.mimeType + "'");
+    });
+%}
