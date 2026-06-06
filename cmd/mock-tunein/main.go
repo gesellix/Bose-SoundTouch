@@ -17,6 +17,9 @@ func main() {
 
 	log.Printf("Starting mock TuneIn server on port %d", *port)
 
+	// Plaintext HTTP is intentional: this is a throwaway test mock that only
+	// runs on the loopback / CI compose network, never in production.
+	// nosemgrep: go.lang.security.audit.net.use-tls.use-tls
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), tunein.NewTuneInHandler()); err != nil {
 		log.Fatal(err)
 	}

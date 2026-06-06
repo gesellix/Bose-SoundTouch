@@ -17,6 +17,9 @@ func NewAmazonHandler() http.Handler {
 	// LWA User Profile Endpoint
 	mux.HandleFunc("/user/profile", HandleProfile)
 
+	// Readiness probe (used by the CI compose healthcheck)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
 	return mux
 }
 

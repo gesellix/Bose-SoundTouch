@@ -18,6 +18,9 @@ func NewSpotifyHandler() http.Handler {
 	mux.HandleFunc("/v1/me", HandleMe)
 	mux.HandleFunc("/me", HandleMe)
 
+	// Readiness probe (used by the CI compose healthcheck)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
 	return mux
 }
 

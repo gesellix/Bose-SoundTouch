@@ -164,10 +164,8 @@ test-http-client-rotate:
 	fi
 
 test-http-client:
-	@echo "Starting services with docker compose..."
-	@docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
-	@echo "Waiting for services to start..."
-	@sleep 10
+	@echo "Starting services with docker compose (waiting for healthchecks)..."
+	@docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wait
 	@echo "Running .http tests..."
 	@docker run --rm --network soundtouch-test-net \
 		-v "$(PWD)/tests/integration/http-client:/workdir" \

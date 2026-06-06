@@ -16,13 +16,25 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 )
+
+// unsafeGuideIDChars matches anything outside the TuneIn guide-id charset
+// (e.g. s166521, p290778, t472593281). Stripping them before the id is
+// interpolated into the JSON/XML response keeps a caller from injecting markup
+// or breaking the document (the input is attacker-controlled query data).
+var unsafeGuideIDChars = regexp.MustCompile(`[^A-Za-z0-9._-]`)
+
+func safeGuideID(id string) string {
+	return unsafeGuideIDChars.ReplaceAllString(id, "")
+}
 
 // NewTuneInHandler returns an http.Handler configured with the mocked TuneIn
 // OPML endpoints.
 func NewTuneInHandler() http.Handler {
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("/Tune.ashx", HandleTune)
 	mux.HandleFunc("/describe.ashx", HandleDescribe)
 	mux.HandleFunc("/", HandleCatchAll)
@@ -42,6 +54,8 @@ func HandleTune(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"head":{"status":"400"}}`, http.StatusBadRequest)
 		return
 	}
+
+	id = safeGuideID(id)
 
 	body := fmt.Sprintf(`{"head":{"status":"200"},"body":[`+
 		`{"url":"http://192.0.2.20:8000/%s/stream-1.mp3","media_type":"mp3","reliability":99,"bitrate":128,"is_direct":true},`+
@@ -63,6 +77,8 @@ func HandleDescribe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing id", http.StatusBadRequest)
 		return
 	}
+
+	id = safeGuideID(id)
 
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
 		`<opml version="1">`+
