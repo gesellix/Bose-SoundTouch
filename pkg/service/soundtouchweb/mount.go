@@ -99,14 +99,25 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 		})
 	})
 
-	// SPA routes — serve index.html for client-side routing
-	r.Get("/", app.serveIndex)
-	r.Get("/devices", app.serveIndex)
-	r.Get("/device/*", app.serveIndex)
-	r.Get("/tunein", app.serveIndex)
-	r.Get("/radiobrowser", app.serveIndex)
-	r.Get("/playurl", app.serveIndex)
-	r.Get("/tts", app.serveIndex)
+	// SPA — served under /app/*. The client navigates via component state
+	// rather than the URL, so these entries only ensure deep links and
+	// refreshes return index.html instead of 404. Per #451 this keeps the
+	// whole web UI under one /app subtree, so folding -web into -service is an
+	// additive mount.
+	r.Get("/app", app.serveIndex)
+	r.Get("/app/devices", app.serveIndex)
+	r.Get("/app/device/*", app.serveIndex)
+	r.Get("/app/tunein", app.serveIndex)
+	r.Get("/app/radiobrowser", app.serveIndex)
+	r.Get("/app/playurl", app.serveIndex)
+	r.Get("/app/tts", app.serveIndex)
+
+	// Standalone convenience: the bare root jumps into the app. When -web is
+	// folded into -service, / instead serves a landing page (admin vs app) and
+	// this redirect is replaced.
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/app", http.StatusFound)
+	})
 }
 
 func (app *WebApp) serveIndex(w http.ResponseWriter, _ *http.Request) {

@@ -59,3 +59,42 @@ func TestMountControlAPIShape(t *testing.T) {
 		t.Errorf("expected /api/control/version to be registered; got %v", apiRoutes)
 	}
 }
+
+// TestMountSPARoutes verifies the issue #451 SPA move: the web UI is served
+// under /app/* and the old top-level page paths are gone, with / kept only as
+// a redirect into the app.
+func TestMountSPARoutes(t *testing.T) {
+	app := NewWebApp()
+
+	r := chi.NewRouter()
+	app.Mount(r, nil)
+
+	routes := map[string]bool{}
+
+	walkErr := chi.Walk(r, func(_, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		routes[route] = true
+
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walk routes: %v", walkErr)
+	}
+
+	for _, want := range []string{"/app", "/app/devices", "/app/tunein"} {
+		if !routes[want] {
+			t.Errorf("expected SPA route %q under /app to be registered", want)
+		}
+	}
+
+	// The old top-level page paths moved under /app.
+	for _, gone := range []string{"/devices", "/device/*", "/tunein", "/radiobrowser", "/playurl", "/tts"} {
+		if routes[gone] {
+			t.Errorf("top-level SPA route %q should have moved under /app", gone)
+		}
+	}
+
+	// / stays registered, but only as the redirect into the app.
+	if !routes["/"] {
+		t.Error("expected / to remain registered (redirect into the app)")
+	}
+}
