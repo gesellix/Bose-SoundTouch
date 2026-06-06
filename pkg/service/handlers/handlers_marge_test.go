@@ -300,13 +300,13 @@ func TestMargeAccountFullExcludesEmptyAmazonSource(t *testing.T) {
 	account := "1000001"
 
 	// First device (alphabetically): has Amazon in Sources.xml
-	firstDeviceID := "08DF1F0BA325"
+	firstDeviceID := "AABBCCDDEE0A"
 	firstDir := filepath.Join(tempDir, "accounts", account, "devices", firstDeviceID)
 	if err := os.MkdirAll(firstDir, 0755); err != nil {
 		t.Fatalf("Failed to create first device dir: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(firstDir, "DeviceInfo.xml"), []byte(`
-		<info deviceID="08DF1F0BA325">
+		<info deviceID="AABBCCDDEE0A">
 			<name>Kitchen SoundTouch</name>
 			<type>SoundTouch 20 scm</type>
 		</info>

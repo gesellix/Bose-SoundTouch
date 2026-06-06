@@ -89,7 +89,7 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 
 	ds := datastore.NewDataStore(tempDir)
 	account := "1234567"
-	device := "08DF1F0BA325"
+	device := "AABBCCDDEE0A"
 
 	// 1. Setup Device Info with Components
 	info := &models.ServiceDeviceInfo{
@@ -183,14 +183,14 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	}
 
 	// Device structure
-	if !strings.Contains(xmlStr, `<device deviceid="08DF1F0BA325">`) {
+	if !strings.Contains(xmlStr, `<device deviceid="AABBCCDDEE0A">`) {
 		t.Errorf("Expected device attribute deviceid, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<name>Kitchen SoundTouch</name>`) {
 		t.Errorf("Expected <name>Kitchen SoundTouch</name> under device, got %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, `<serialNumber>08DF1F0BA325</serialNumber>`) {
-		t.Errorf("Expected <serialNumber>08DF1F0BA325</serialNumber> under device, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<serialNumber>AABBCCDDEE0A</serialNumber>`) {
+		t.Errorf("Expected <serialNumber>AABBCCDDEE0A</serialNumber> under device, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<updatedOn>`) {
 		t.Errorf("Expected <updatedOn> under device, got %s", xmlStr)
@@ -217,8 +217,8 @@ func TestAccountFullToXML_Structure(t *testing.T) {
 	if !strings.Contains(xmlStr, `<firmware-version>1.2.3</firmware-version>`) {
 		t.Errorf("Expected firmware-version 1.2.3, got %s", xmlStr)
 	}
-	if !strings.Contains(xmlStr, `<serialnumber>08DF1F0BA325</serialnumber>`) {
-		t.Errorf("Expected <serialnumber>08DF1F0BA325</serialnumber> under attachedProduct, got %s", xmlStr)
+	if !strings.Contains(xmlStr, `<serialnumber>AABBCCDDEE0A</serialnumber>`) {
+		t.Errorf("Expected <serialnumber>AABBCCDDEE0A</serialnumber> under attachedProduct, got %s", xmlStr)
 	}
 	if !strings.Contains(xmlStr, `<updatedOn>`) {
 		t.Errorf("Expected <updatedOn> under attachedProduct, got %s", xmlStr)

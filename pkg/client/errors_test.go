@@ -13,7 +13,7 @@ import (
 func TestClient_Post_ErrorsResponse(t *testing.T) {
 	// Mock speaker error response
 	errorXML := `<?xml version="1.0" encoding="UTF-8" ?>
-<errors deviceID="08DF1F0BA325">
+<errors deviceID="AABBCCDDEE0A">
     <error value="1029" name="UNKNOWN_ACTION_ERROR" severity="Unknown">This version of SCM does not support spotify create account functionality.</error>
 </errors>`
 
@@ -38,8 +38,8 @@ func TestClient_Post_ErrorsResponse(t *testing.T) {
 		t.Fatalf("expected models.ErrorsResponse, got %T: %v", err, err)
 	}
 
-	if errs.DeviceID != "08DF1F0BA325" {
-		t.Errorf("expected DeviceID 08DF1F0BA325, got %s", errs.DeviceID)
+	if errs.DeviceID != "AABBCCDDEE0A" {
+		t.Errorf("expected DeviceID AABBCCDDEE0A, got %s", errs.DeviceID)
 	}
 
 	if len(errs.Errors) != 1 {
@@ -67,7 +67,7 @@ func TestClient_Post_ErrorsResponse(t *testing.T) {
 func TestClient_PostWithResponse_ErrorsResponse(t *testing.T) {
 	// Mock speaker error response
 	errorXML := `<?xml version="1.0" encoding="UTF-8" ?>
-<errors deviceID="08DF1F0BA325">
+<errors deviceID="AABBCCDDEE0A">
     <error value="1029" name="UNKNOWN_ACTION_ERROR" severity="Unknown">This version of SCM does not support spotify create account functionality.</error>
 </errors>`
 

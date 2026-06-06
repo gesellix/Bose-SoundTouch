@@ -93,16 +93,16 @@ func TestReproduceMissingName(t *testing.T) {
 	accountID := "1234567"
 
 	// Create device folders
-	// 08DF1F0BA325 (has name)
+	// AABBCCDDEE0A (has name)
 	// 001122334455 (missing name in full_local.xml)
 
-	// Device 1: 08DF1F0BA325
-	dev1Dir := filepath.Join(tempBaseDir, "accounts", accountID, "devices", "08DF1F0BA325")
+	// Device 1: AABBCCDDEE0A
+	dev1Dir := filepath.Join(tempBaseDir, "accounts", accountID, "devices", "AABBCCDDEE0A")
 	err = os.MkdirAll(dev1Dir, 0755)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dev1Info := `<info deviceID="08DF1F0BA325">
+	dev1Info := `<info deviceID="AABBCCDDEE0A">
     <name>Kitchen SoundTouch</name>
     <type>SoundTouch</type>
     <moduleType>20</moduleType>
@@ -229,10 +229,10 @@ func TestReproduceMissingName(t *testing.T) {
 
 	for _, d := range resp.Devices {
 		t.Logf("Checking device in response: ID=%s, Name='%s'\n", d.DeviceID, d.Name)
-		if d.DeviceID == "08DF1F0BA325" {
+		if d.DeviceID == "AABBCCDDEE0A" {
 			found08 = true
 			if d.Name == "" {
-				t.Error("Device 08DF1F0BA325 name should not be empty")
+				t.Error("Device AABBCCDDEE0A name should not be empty")
 			}
 		}
 		if d.DeviceID == "001122334455" || d.DeviceID == "I6332527703739342000020" {
@@ -243,7 +243,7 @@ func TestReproduceMissingName(t *testing.T) {
 	}
 
 	if !found08 {
-		t.Error("Device 08DF1F0BA325 not found in response")
+		t.Error("Device AABBCCDDEE0A not found in response")
 	}
 	if !foundA8 {
 		t.Error("Device 001122334455 not found in response")
@@ -334,7 +334,7 @@ func TestSyncSourcesAttributes(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <account id="1234567">
     <devices>
-        <device deviceid="08DF1F0BA325">
+        <device deviceid="AABBCCDDEE0A">
             <presets>
                 <preset buttonNumber="1">
                     <name>test-playlist</name>
@@ -405,7 +405,7 @@ func TestSyncSourcesAttributes(t *testing.T) {
 	}
 
 	// Check datastore
-	presets, err := ds.GetPresets("1234567", "08DF1F0BA325")
+	presets, err := ds.GetPresets("1234567", "AABBCCDDEE0A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +419,7 @@ func TestSyncSourcesAttributes(t *testing.T) {
 		t.Errorf("Synced preset source ID mismatch: expected 10863533, got '%s'", lp.SourceID)
 	}
 
-	recents, err := ds.GetRecents("1234567", "08DF1F0BA325")
+	recents, err := ds.GetRecents("1234567", "AABBCCDDEE0A")
 	if err != nil {
 		t.Fatal(err)
 	}

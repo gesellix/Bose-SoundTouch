@@ -42,7 +42,7 @@ pattern) but stay numeric for parsers that expect integer-looking IDs.
 
 An earlier anonymisation pass used `192.168.1.x` as its target. That
 range is RFC-1918 private space — perfectly valid on real networks,
-which means a reader can't tell whether `192.168.1.10` is a
+which means a reader can't tell whether `192.0.2.10` is a
 placeholder or a documented LAN address. RFC-5737 ranges fix that:
 because they're reserved for documentation only, any reader knows on
 sight that they don't represent a real device.

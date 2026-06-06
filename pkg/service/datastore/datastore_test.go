@@ -175,7 +175,7 @@ func TestListAllDevices(t *testing.T) {
 
 	ds := NewDataStore(tempDir)
 	account := "default"
-	deviceID := "BO5EBO5E-F00D-F00D-FEED-08DF1F0BA325"
+	deviceID := "BO5EBO5E-F00D-F00D-FEED-AABBCCDDEE0A"
 
 	info := &models.ServiceDeviceInfo{
 		DeviceID:           deviceID,

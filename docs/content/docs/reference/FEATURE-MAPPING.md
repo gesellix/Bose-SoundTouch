@@ -84,7 +84,7 @@ Device system settings:
 $ soundtouch-cli --host 192.0.2.100 analyze
 
 🔍 Device Capability Analysis:
-  Device ID: 08DF1F0BA325
+  Device ID: AABBCCDDEE0A
   Feature Coverage: 87% (13/15 features)
   Device Type: Premium SoundTouch Speaker (Full Feature Set)
 

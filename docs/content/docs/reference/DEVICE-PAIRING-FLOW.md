@@ -71,7 +71,7 @@ All subsequent messages (except `selectLastWiFiSource`, see below) use this enve
 ```
 
 `requestID` is a monotonically increasing integer per connection (client-side sequence).
-`{device_id}` is the speaker's MAC address with colons removed (e.g. `08DF1F0BA325`).
+`{device_id}` is the speaker's MAC address with colons removed (e.g. `AABBCCDDEE0A`).
 
 ---
 

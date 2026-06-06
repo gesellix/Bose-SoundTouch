@@ -1121,10 +1121,10 @@ In `vi`, find `block_remote_traffic()`. Press `i` to enter insert mode. After th
 first `done` line in that function, add:
 
 ```
-echo -A INPUT -i $IFACE -s 192.168.10.0/24 -j ACCEPT
+echo -A INPUT -i $IFACE -s 192.0.2.0/24 -j ACCEPT
 ```
 
-Replace `192.168.10.0/24` with the subnet your AfterTouch host is on. Press `Esc`,
+Replace `192.0.2.0/24` with the subnet your AfterTouch host is on. Press `Esc`,
 type `:wq`, press `Enter`, then reboot:
 
 ```bash

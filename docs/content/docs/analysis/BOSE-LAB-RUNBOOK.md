@@ -84,7 +84,7 @@ sudo tee /etc/systemd/network/08-wlan0.network << 'EOF'
 Name=wlan0
 
 [Network]
-Address=192.168.10.1/24
+Address=198.51.100.1/24
 IPForward=yes
 ConfigureWithoutCarrier=yes
 DHCP=no
@@ -104,7 +104,7 @@ sudo systemctl mask wpa_supplicant@wlan0
 **Verify:**
 ```bash
 ip addr show wlan0
-# Expected: ONLY inet 192.168.10.1/24 (NO second DHCP IP)
+# Expected: ONLY inet 198.51.100.1/24 (NO second DHCP IP)
 ```
 
 ---
@@ -151,9 +151,9 @@ sudo mv /etc/dnsmasq.conf /etc/dnsmasq.conf.bak
 
 sudo tee /etc/dnsmasq.conf << 'EOF'
 interface=wlan0
-dhcp-range=192.168.10.100,192.168.10.200,24h
-dhcp-option=3,192.168.10.1
-dhcp-option=6,192.168.10.1
+dhcp-range=198.51.100.100,198.51.100.200,24h
+dhcp-option=3,198.51.100.1
+dhcp-option=6,198.51.100.1
 
 # DNS Upstream: custom server on localhost (adjust port if necessary)
 server=127.0.0.1#5353    # Example: custom server on port 5353
@@ -237,7 +237,7 @@ If you cannot see the `Bose-Lab` SSID on your phone:
     ```bash
     sudo nmcli device set wlan0 managed no
     ```
-7.  **Ghost IP Conflict:** If `ip addr show wlan0` shows both `192.168.10.1` and another IP (like `192.0.2.x`), `hostapd` will fail. This is usually caused by NetworkManager managing the interface. Ensure you've run:
+7.  **Ghost IP Conflict:** If `ip addr show wlan0` shows both `198.51.100.1` and another IP (like `192.0.2.x`), `hostapd` will fail. This is usually caused by NetworkManager managing the interface. Ensure you've run:
     ```bash
     sudo nmcli device set wlan0 managed no
     # If the ghost IP is still there, remove it manually:
@@ -259,13 +259,13 @@ If you haven't created a CA yet, follow **Appendix A** first.
 # Temporarily make reachable via HTTP for easy download:
 cd /etc/my-dns-ca/
 python3 -m http.server 8080
-# → Reachable at http://192.168.10.1:8080/ca.crt
+# → Reachable at http://198.51.100.1:8080/ca.crt
 ```
 
 ### Install on Android
 
 1. Connect phone to `Bose-Lab`
-2. Open browser → `http://192.168.10.1:8080/ca.crt`
+2. Open browser → `http://198.51.100.1:8080/ca.crt`
 3. Download certificate
 4. **Settings → Security → Credentials → Install CA Certificate**
 5. Select certificate and confirm
@@ -322,7 +322,7 @@ sudo tcpdump -i wlan0 -n 'not port 53' -w /tmp/bose-nodns.pcap
 
 # Traffic of a specific host only (filter by phone IP)
 # Read phone IP from dnsmasq.leases beforehand (see below)
-sudo tcpdump -i wlan0 -n host 192.168.10.101
+sudo tcpdump -i wlan0 -n host 198.51.100.101
 ```
 
 ### Read SNI from TLS Traffic (without decryption)
@@ -351,7 +351,7 @@ Transfer `.pcap` files from the Pi to the PC:
 
 ```bash
 # From the PC (scp)
-scp pi@192.168.10.1:/tmp/bose-*.pcap ~/Desktop/
+scp pi@198.51.100.1:/tmp/bose-*.pcap ~/Desktop/
 ```
 
 **Important Wireshark Filters:**
@@ -607,7 +607,7 @@ You can either configure the macOS system proxy manually or use `mitmproxy`'s au
 **Method 1: System Proxy (Manual)**
 1.  Go to **System Settings → Network → Wi-Fi → Details... → Proxies**.
 2.  Enable **HTTP Proxy** and **HTTPS Proxy**.
-3.  Set Server to your Pi's IP (`192.168.10.1`) and Port to `8080`.
+3.  Set Server to your Pi's IP (`198.51.100.1`) and Port to `8080`.
 4.  Click **OK** and **Apply**.
 
 **Method 2: mitmproxy Local Redirect (Automatic)**
@@ -667,7 +667,7 @@ If the app uses **Certificate Pinning** (hardcoded hashes), even moving the CA t
 If the **Transparent AP** setup (Steps 1–6) is too complex or you are experiencing routing issues, you can use `mitmproxy` as a **Regular HTTP Proxy**.
 
 ### 1. How it works
-In this mode, the Pi acts as a simple server on port 8080. You tell your phone's Wi-Fi settings to send all traffic to `192.168.10.1:8080`.
+In this mode, the Pi acts as a simple server on port 8080. You tell your phone's Wi-Fi settings to send all traffic to `198.51.100.1:8080`.
 
 *   **Pros:** No complex `nftables` or NAT rules required.
 *   **Cons:** Many Android apps (and background processes) ignore system-wide proxy settings. **HTTPS still requires a trusted CA for decryption.**
@@ -683,7 +683,7 @@ mitmproxy --listen-port 8080
 1.  Go to **Settings → Wi-Fi → Bose-Lab**.
 2.  Select **Modify Network** (or the "i" icon).
 3.  Set **Proxy** to **Manual**.
-4.  **Proxy hostname:** `192.168.10.1`
+4.  **Proxy hostname:** `198.51.100.1`
 5.  **Proxy port:** `8080`
 6.  Save and try to browse a site.
 
@@ -706,7 +706,7 @@ go get github.com/google/gopacket
 go run scripts/extract-ws.go your_capture.pcap [filter_ip]
 
 # Example: Filter for a specific speaker's IP in WebSocket messages
-go run scripts/extract-ws.go capture.pcap 192.168.100.1
+go run scripts/extract-ws.go capture.pcap 203.0.113.1
 ```
 
 ### 2. Manual Extraction with tshark
@@ -889,5 +889,5 @@ pgrep -a tcpdump
 dig @127.0.0.1 -p 5353 global.api.bose.io
 
 # Check network connectivity from the phone (from the Pi)
-ping 192.168.10.101   # Phone IP from dnsmasq.leases
+ping 198.51.100.101   # Phone IP from dnsmasq.leases
 ```

@@ -390,7 +390,7 @@ Lists all discovered SoundTouch devices with their current status.
 ```json
 [
   {
-    "device_id": "08DF1F0BA325",
+    "device_id": "AABBCCDDEE0A",
     "name": "Living Room Speaker",
     "ip_address": "192.0.2.100",
     "product_code": "SoundTouch 20",

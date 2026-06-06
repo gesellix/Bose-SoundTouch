@@ -116,7 +116,7 @@ The system has distinct phases where device information is collected and enhance
 **Endpoint**: `POST /streaming/account/{accountId}/devices`
 **Request Format**:
 ```xml
-<device deviceid="08DF1F0BA325">
+<device deviceid="AABBCCDDEE0A">
     <name>Living Room Speaker</name>
 </device>
 ```

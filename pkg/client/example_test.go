@@ -307,7 +307,7 @@ func ExampleClient_GetSupportedURLs_concept() {
 	}
 
 	// Expected output with a real device:
-	// Device 08DF1F0BA325 supports 103 endpoints
+	// Device AABBCCDDEE0A supports 103 endpoints
 	// Core functionality: true
 	// Multiroom support: true
 	// Streaming support: true

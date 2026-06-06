@@ -91,7 +91,7 @@ that delegates to AfterTouch for these names). The implementation lives in
 
 > **IP-based `--server-url` is incompatible with OAuth (both Spotify and Amazon
 > Music).** The speaker's hostname construction appends `oauth` to the first
-> label only, so `192.168.0.30` would produce `192oauth.168.0.30` — malformed,
+> label only, so `192.0.2.30` would produce `192oauth.0.2.30` — malformed,
 > no DNS resolver will answer for it, and there is no clean workaround on the
 > AfterTouch side. **Use a real LAN hostname** before configuring Spotify or
 > Amazon Music. The Health-tab `oauth_target_reachable` check warns when this

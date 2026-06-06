@@ -280,14 +280,14 @@ func TestGetLiveDeviceInfo(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/xml")
 		_, _ = fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
-<info deviceID="08DF1F0BA325">
+<info deviceID="AABBCCDDEE0A">
     <name>Test Speaker</name>
     <type>SoundTouch 20</type>
     <components>
         <component>
             <componentCategory>SCM</componentCategory>
             <softwareVersion>19.0.5</softwareVersion>
-            <serialNumber>08DF1F0BA325</serialNumber>
+            <serialNumber>AABBCCDDEE0A</serialNumber>
         </component>
     </components>
 </info>`)
@@ -313,8 +313,8 @@ func TestGetLiveDeviceInfo(t *testing.T) {
 		t.Errorf("Expected SoftwareVer '19.0.5', got '%s'", info.SoftwareVer)
 	}
 
-	if info.SerialNumber != "08DF1F0BA325" {
-		t.Errorf("Expected SerialNumber '08DF1F0BA325', got '%s'", info.SerialNumber)
+	if info.SerialNumber != "AABBCCDDEE0A" {
+		t.Errorf("Expected SerialNumber 'AABBCCDDEE0A', got '%s'", info.SerialNumber)
 	}
 }
 
@@ -1441,7 +1441,7 @@ func TestBackupConfigOffDevice(t *testing.T) {
 
 	m := NewManager("http://localhost:8000", ds, nil)
 
-	serial := "08DF1F0BA325"
+	serial := "AABBCCDDEE0A"
 	accountID := "1000001"
 
 	// Mock info server

@@ -22,7 +22,7 @@ func TestClient_GetSupportedURLs(t *testing.T) {
 		{
 			name: "successful_supported_urls_retrieval",
 			responseXML: `<?xml version="1.0" encoding="UTF-8"?>
-<supportedURLs deviceID="08DF1F0BA325">
+<supportedURLs deviceID="AABBCCDDEE0A">
 	<URL location="/info" />
 	<URL location="/capabilities" />
 	<URL location="/supportedURLs" />
@@ -50,7 +50,7 @@ func TestClient_GetSupportedURLs(t *testing.T) {
 	<URL location="/bassCapabilities" />
 </supportedURLs>`,
 			expectedError:    false,
-			expectedDeviceID: "08DF1F0BA325",
+			expectedDeviceID: "AABBCCDDEE0A",
 			expectedURLCount: 25,
 			expectedURLs: []string{
 				"/info", "/capabilities", "/supportedURLs", "/volume", "/bass",
