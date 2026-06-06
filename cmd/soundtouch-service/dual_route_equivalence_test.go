@@ -24,7 +24,7 @@ func TestDualRouteEquivalence(t *testing.T) {
 	_ = ds.Initialize()
 
 	server := handlers.NewServer(ds, nil, "http://localhost:8000", true, false, false)
-	r := setupRouter(server, nil)
+	r := setupRouter(server, nil, nil, nil)
 
 	ts := httptest.NewServer(r)
 	defer ts.Close()

@@ -86,10 +86,31 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 	log.Printf("Added %s device %s (%s) at %s:%d", sanitizeLog(source), sanitizeLog(info.Name), sanitizeLog(info.Type), sanitizeLog(host), port)
 }
 
-// DiscoverDevices runs an mDNS/UPnP sweep and registers any found
-// devices via AddDeviceByHost. Used by the startup goroutine in main
-// and by the /api/discover route inside Mount.
+// SeedExtraDevices registers any devices reported by the ExtraDeviceHosts hook
+// (if set) via AddDeviceByHost. Idempotent: already-known hosts are skipped.
+// Used by the embedded build to surface the service datastore's devices even
+// when network discovery is disabled; a no-op for standalone soundtouch-web.
+func (app *WebApp) SeedExtraDevices() {
+	if app.ExtraDeviceHosts == nil {
+		return
+	}
+
+	for _, host := range app.ExtraDeviceHosts() {
+		if host == "" {
+			continue
+		}
+
+		app.AddDeviceByHost(host, 8090, "service-store")
+	}
+}
+
+// DiscoverDevices seeds any externally-provided hosts (ExtraDeviceHosts), then
+// runs an mDNS/UPnP sweep and registers any found devices via AddDeviceByHost.
+// Used by the startup goroutine in main and by the /api/control/discover route
+// inside MountWeb.
 func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discovery.UnifiedDiscoveryService) {
+	app.SeedExtraDevices()
+
 	log.Println("Starting device discovery...")
 
 	devices, err := discoveryService.DiscoverDevices(ctx)

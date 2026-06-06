@@ -48,6 +48,13 @@ type WebApp struct {
 	// service's self-signed CA.
 	ServiceClient *http.Client
 
+	// ExtraDeviceHosts, when set, returns additional device host IPs to
+	// register alongside mDNS/UPnP discovery. The embedded build in
+	// soundtouch-service points it at the service datastore's known devices so
+	// the UI shows manually-added speakers even when network discovery is
+	// disabled. Standalone soundtouch-web leaves it nil.
+	ExtraDeviceHosts func() []string
+
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }
 

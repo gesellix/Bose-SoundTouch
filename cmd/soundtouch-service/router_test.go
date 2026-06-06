@@ -13,13 +13,16 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
 	"github.com/go-chi/chi/v5"
 )
 
 func TestPrintRoutes(t *testing.T) {
-	// Initialize a minimal server to get the router
+	// Initialize a minimal server to get the router. Pass a web app so the
+	// snapshot also captures the embedded soundtouch-web surface
+	// (/api/control + /app); discovery is nil since we only register routes.
 	server := handlers.NewServer(nil, nil, "http://localhost:8000", true, true, true)
-	r := setupRouter(server, nil)
+	r := setupRouter(server, nil, soundtouchweb.NewWebApp(), nil)
 
 	var routes []string
 	walkFunc := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
@@ -128,7 +131,7 @@ func TestPUTRenameRoutesToLocalHandler(t *testing.T) {
 	_ = ds.Initialize()
 
 	server := handlers.NewServer(ds, nil, "http://localhost:8000", false, false, false)
-	r := setupRouter(server, nil)
+	r := setupRouter(server, nil, nil, nil)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 

@@ -29,6 +29,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/logbuf"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/gesellix/bose-soundtouch/pkg/service/stockholm"
 	"github.com/go-chi/chi/v5"
@@ -587,7 +588,11 @@ func main() {
 				}
 			}
 
-			r := setupRouter(server, stockholmHandler)
+			// Embedded web UI (soundtouch-web): LAN control UI under /app, control
+			// API under /api/control. Same LAN-trust tier as /setup, no auth.
+			webApp, webDiscovery := newEmbeddedWebApp(config.serverURL, ds)
+
+			r := setupRouter(server, stockholmHandler, webApp, webDiscovery)
 
 			// Bind the listener before logging so we print the true
 			// effective port (handles :0 and catches "address already
@@ -1083,7 +1088,52 @@ func startDeviceDiscovery(server *handlers.Server) {
 	}()
 }
 
-func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *chi.Mux {
+// newEmbeddedWebApp builds the soundtouch-web application for embedding in the
+// service router: release metadata from the build vars, a loopback ServiceURL
+// for the TTS / Play URL proxy (plain HTTP, no CA trust needed), and a device
+// seed from the service datastore so the UI shows manually-added speakers even
+// when network discovery is disabled. It also returns a discovery service and
+// kicks off an initial sweep.
+func newEmbeddedWebApp(serverURL string, ds *datastore.DataStore) (*soundtouchweb.WebApp, *discovery.UnifiedDiscoveryService) {
+	webApp := soundtouchweb.NewWebApp()
+	webApp.Version = version
+	webApp.Commit = commit
+	webApp.Date = date
+	webApp.RepoURL = repoURL
+	webApp.ServiceURL = strings.TrimRight(serverURL, "/")
+	webApp.ExtraDeviceHosts = func() []string {
+		devices, listErr := ds.ListAllDevices()
+		if listErr != nil {
+			log.Printf("web UI: failed to list devices from datastore: %v", listErr)
+			return nil
+		}
+
+		hosts := make([]string, 0, len(devices))
+		for i := range devices {
+			if devices[i].IPAddress != "" {
+				hosts = append(hosts, devices[i].IPAddress)
+			}
+		}
+
+		return hosts
+	}
+
+	webDiscovery := soundtouchweb.NewDiscoveryService("")
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		webApp.BroadcastDiscoveryStatus("starting", webApp.DeviceCount())
+		webApp.DiscoverDevices(ctx, webDiscovery)
+		webApp.BroadcastDiscoveryStatus("completed", webApp.DeviceCount())
+		webApp.BroadcastDeviceList()
+	}()
+
+	return webApp, webDiscovery
+}
+
+func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, webApp *soundtouchweb.WebApp, webDiscovery *discovery.UnifiedDiscoveryService) *chi.Mux {
 	r := chi.NewRouter()
 
 	// CleanPath collapses duplicate slashes ("//bmx/..." -> "/bmx/...") and
@@ -1477,6 +1527,14 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler) *
 	r.Route("/api/setup", func(r chi.Router) {
 		mountSetupAPI(r)
 	})
+
+	// Embedded web UI: control API under /api/control and the SPA under /app
+	// (LAN-trust, like /setup). Additive — nothing here collides with the
+	// service's own /, /health, or /static. Skipped when nil, e.g. unit tests
+	// that only exercise the service surface.
+	if webApp != nil {
+		webApp.MountWeb(r, webDiscovery)
+	}
 
 	if stockholmHandler != nil {
 		stockholmHandler.Mount(r)
