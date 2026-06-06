@@ -25,62 +25,79 @@ func (app *WebApp) Mount(r chi.Router, discoveryService *discovery.UnifiedDiscov
 	// Health / liveness
 	r.Get("/health", app.HandleHealth)
 
-	// API endpoints
-	r.Get("/api/devices", app.HandleAPIDevices)
-	r.Get("/api/device/{id}", app.HandleAPIDevice)
-	r.Get("/api/version", app.HandleAPIVersion)
-	r.Post("/api/discover", func(w http.ResponseWriter, r *http.Request) {
-		app.HandleAPIDiscover(w, r)
+	// Player / control API. Per #451 this is the post-merge canonical shape:
+	// device-scoped actions nest under devices/{id}/, so every direct child of
+	// /api/control is a literal namespace (devices, tunein, radiobrowser,
+	// version, discover) — no static-vs-param sibling, so routing never depends
+	// on chi's static-over-param precedence.
+	r.Route("/api/control", func(r chi.Router) {
+		r.Get("/version", app.HandleAPIVersion)
 
-		// Trigger discovery
-		//nolint:contextcheck // Context is created within goroutine
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+		r.Post("/discover", func(w http.ResponseWriter, r *http.Request) {
+			app.HandleAPIDiscover(w, r)
 
-			app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
+			// Trigger discovery
+			//nolint:contextcheck // Context is created within goroutine
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
 
-			app.DiscoverDevices(ctx, discoveryService)
+				app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
 
-			app.BroadcastDiscoveryStatus("completed", app.DeviceCount())
-			app.BroadcastDeviceList()
-		}()
+				app.DiscoverDevices(ctx, discoveryService)
+
+				app.BroadcastDiscoveryStatus("completed", app.DeviceCount())
+				app.BroadcastDeviceList()
+			}()
+		})
+
+		// One /devices subrouter holds both the list and the /{id} subtree (the
+		// issue #285 single-subrouter lesson). Under /{id} every child is a
+		// literal action.
+		r.Route("/devices", func(r chi.Router) {
+			r.Get("/", app.HandleAPIDevices)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", app.HandleAPIDevice)
+				r.Post("/key/{key}", app.HandleDeviceKey)
+				r.Post("/volume/{volume}", app.HandleDirectVolumeControl)
+				r.Post("/power", app.HandleDevicePower)
+				r.Get("/power-status", app.HandleDevicePowerStatus)
+				r.Get("/recents", app.HandleDeviceRecents)
+				r.Post("/play", app.HandleDevicePlay)
+				r.Post("/play-url", app.HandlePlayURL)
+				// Proxied to the AfterTouch service's /api/setup/tts/speak.
+				r.Post("/speak", app.HandleAPISpeakText)
+				// Generic key / preset / source / bass actions.
+				r.Get("/action/{action}", app.HandleAPIControl)
+				r.Post("/action/{action}", app.HandleAPIControl)
+				r.Get("/ws", app.HandleDeviceWebSocket)
+
+				r.Route("/zone", func(r chi.Router) {
+					r.Get("/", app.HandleGetZone)
+					r.Post("/add/{slaveId}", app.HandleZoneAdd)
+					r.Post("/remove/{slaveId}", app.HandleZoneRemove)
+					r.Post("/dissolve", app.HandleZoneDissolve)
+					r.Post("/leave", app.HandleZoneLeave)
+				})
+
+				r.Post("/tunein/play", app.HandlePlayTuneIn)
+				r.Post("/radiobrowser/play", app.HandlePlayRadioBrowser)
+			})
+		})
+
+		// Browse / search (global, not device-scoped).
+		r.Route("/tunein", func(r chi.Router) {
+			r.Get("/search", app.HandleTuneInSearch)
+			r.Get("/search/next", app.HandleTuneInSearchNext)
+			r.Get("/navigate", app.HandleTuneInNavigate)
+			r.Get("/navigate/*", app.HandleTuneInNavigate)
+		})
+
+		r.Route("/radiobrowser", func(r chi.Router) {
+			r.Get("/search", app.HandleRadioBrowserSearch)
+		})
 	})
-
-	// Device control endpoints (GET for most actions, POST for volume/bass)
-	r.Get("/api/control/{id}/{action}", app.HandleAPIControl)
-	r.Post("/api/control/{id}/{action}", app.HandleAPIControl)
-
-	// TuneIn browse, search, and playback
-	r.Get("/api/tunein/search", app.HandleTuneInSearch)
-	r.Get("/api/tunein/search/next", app.HandleTuneInSearchNext)
-	r.Get("/api/tunein/navigate", app.HandleTuneInNavigate)
-	r.Get("/api/tunein/navigate/*", app.HandleTuneInNavigate)
-	r.Post("/api/tunein/play/{id}", app.HandlePlayTuneIn)
-
-	// Enhanced device control endpoints
-	r.Post("/api/device-key/{id}/{key}", app.HandleDeviceKey)
-	r.Post("/api/device-volume/{id}/{volume}", app.HandleDirectVolumeControl)
-	r.Post("/api/device-power/{id}", app.HandleDevicePower)
-	r.Get("/api/device-power-status/{id}", app.HandleDevicePowerStatus)
-	r.Get("/api/device-recents/{id}", app.HandleDeviceRecents)
-	r.Post("/api/device-play/{id}", app.HandleDevicePlay)
-	r.Get("/api/zone/{id}", app.HandleGetZone)
-	r.Post("/api/zone/{id}/add/{slaveId}", app.HandleZoneAdd)
-	r.Post("/api/zone/{id}/remove/{slaveId}", app.HandleZoneRemove)
-	r.Post("/api/zone/{id}/dissolve", app.HandleZoneDissolve)
-	r.Post("/api/zone/{id}/leave", app.HandleZoneLeave)
-	r.Get("/api/device-ws/{id}", app.HandleDeviceWebSocket)
-
-	// RadioBrowser search
-	r.Get("/api/radiobrowser/search", app.HandleRadioBrowserSearch)
-	r.Post("/api/radiobrowser/play/{id}", app.HandlePlayRadioBrowser)
-
-	// Custom URL playback
-	r.Post("/api/play-url/{id}", app.HandlePlayURL)
-
-	// Text-to-speech (proxied to the AfterTouch service's /setup/tts/speak)
-	r.Post("/api/device-speak/{id}", app.HandleAPISpeakText)
 
 	// SPA routes — serve index.html for client-side routing
 	r.Get("/", app.serveIndex)

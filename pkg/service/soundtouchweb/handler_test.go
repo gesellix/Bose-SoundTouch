@@ -65,7 +65,7 @@ func TestNewWebApp(t *testing.T) {
 func TestHandleAPIDevices(t *testing.T) {
 	app := createTestApp()
 
-	req := httptest.NewRequest("GET", "/api/devices", nil)
+	req := httptest.NewRequest("GET", "/api/control/devices", nil)
 	w := httptest.NewRecorder()
 
 	app.HandleAPIDevices(w, req)
@@ -111,21 +111,21 @@ func TestHandleAPIDevice(t *testing.T) {
 	}{
 		{
 			name:           "valid device",
-			path:           "/api/device/test-device",
+			path:           "/api/control/devices/test-device",
 			chiID:          "test-device",
 			expectedStatus: http.StatusOK,
 			expectSuccess:  true,
 		},
 		{
 			name:           "missing device ID",
-			path:           "/api/device/",
+			path:           "/api/control/devices/",
 			chiID:          "",
 			expectedStatus: http.StatusBadRequest,
 			expectSuccess:  false,
 		},
 		{
 			name:           "unknown device",
-			path:           "/api/device/unknown",
+			path:           "/api/control/devices/unknown",
 			chiID:          "unknown",
 			expectedStatus: http.StatusNotFound,
 			expectSuccess:  false,
@@ -166,7 +166,7 @@ func TestHandleAPIDevice(t *testing.T) {
 func TestHandleAPIControl_InvalidDevice(t *testing.T) {
 	app := createTestApp()
 
-	req := httptest.NewRequest("GET", "/api/control/unknown-device/play", nil)
+	req := httptest.NewRequest("GET", "/api/control/devices/unknown-device/action/play", nil)
 	req = withChiParams(req, map[string]string{"id": "unknown-device", "action": "play"})
 	w := httptest.NewRecorder()
 
@@ -197,8 +197,8 @@ func TestHandleAPIControl_InvalidPath(t *testing.T) {
 		name string
 		path string
 	}{
-		{"missing action", "/api/control/test-device"},
-		{"missing device and action", "/api/control/"},
+		{"missing action", "/api/control/devices/test-device/action/"},
+		{"missing device and action", "/api/control/devices//action/"},
 	}
 
 	for _, tt := range tests {
@@ -268,9 +268,9 @@ func TestHandleAPIControl_VolumeValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var req *http.Request
 			if tt.body != "" {
-				req = httptest.NewRequest(tt.method, "/api/control/test-device/volume", strings.NewReader(tt.body))
+				req = httptest.NewRequest(tt.method, "/api/control/devices/test-device/volume/50", strings.NewReader(tt.body))
 			} else {
-				req = httptest.NewRequest(tt.method, "/api/control/test-device/volume", nil)
+				req = httptest.NewRequest(tt.method, "/api/control/devices/test-device/volume/50", nil)
 			}
 			req = withChiParams(req, map[string]string{"id": "test-device", "action": "volume"})
 			req.Header.Set("Content-Type", "application/json")
@@ -322,7 +322,7 @@ func TestHandleAPIControl_BassValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, "/api/control/test-device/bass", strings.NewReader(tt.body))
+			req := httptest.NewRequest(tt.method, "/api/control/devices/test-device/action/bass", strings.NewReader(tt.body))
 			req = withChiParams(req, map[string]string{"id": "test-device", "action": "bass"})
 			req.Header.Set("Content-Type", "application/json")
 
@@ -370,7 +370,7 @@ func TestHandleAPIControl_PresetValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/api/control/test-device/preset"+tt.query, nil)
+			req := httptest.NewRequest("GET", "/api/control/devices/test-device/action/preset"+tt.query, nil)
 			req = withChiParams(req, map[string]string{"id": "test-device", "action": "preset"})
 			w := httptest.NewRecorder()
 
@@ -395,7 +395,7 @@ func TestHandleAPIControl_PresetValidation(t *testing.T) {
 func TestHandleAPIControl_SourceValidation(t *testing.T) {
 	app := createTestApp()
 
-	req := httptest.NewRequest("GET", "/api/control/test-device/source", nil)
+	req := httptest.NewRequest("GET", "/api/control/devices/test-device/action/source", nil)
 	req = withChiParams(req, map[string]string{"id": "test-device", "action": "source"})
 	w := httptest.NewRecorder()
 
@@ -444,7 +444,7 @@ func TestHandleAPIDiscover(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, "/api/discover", nil)
+			req := httptest.NewRequest(tt.method, "/api/control/discover", nil)
 			w := httptest.NewRecorder()
 
 			app.HandleAPIDiscover(w, req)
@@ -511,7 +511,7 @@ func TestHandleWebSocket_InvalidUpgrade(t *testing.T) {
 func TestHandleAPIControl_UnsupportedAction(t *testing.T) {
 	app := createTestApp()
 
-	req := httptest.NewRequest("GET", "/api/control/test-device/unsupported", nil)
+	req := httptest.NewRequest("GET", "/api/control/devices/test-device/action/unsupported", nil)
 	req = withChiParams(req, map[string]string{"id": "test-device", "action": "unsupported"})
 	w := httptest.NewRecorder()
 
@@ -542,7 +542,7 @@ func TestHandleAPIVersion(t *testing.T) {
 	app.Date = "2023-01-01"
 	app.RepoURL = "https://github.com/example/repo"
 
-	req := httptest.NewRequest("GET", "/api/version", nil)
+	req := httptest.NewRequest("GET", "/api/control/version", nil)
 	w := httptest.NewRecorder()
 
 	app.HandleAPIVersion(w, req)
@@ -593,7 +593,7 @@ func BenchmarkHandleAPIDevices(b *testing.B) {
 		app.AddDevice(deviceID, conn)
 	}
 
-	req := httptest.NewRequest("GET", "/api/devices", nil)
+	req := httptest.NewRequest("GET", "/api/control/devices", nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -604,7 +604,7 @@ func BenchmarkHandleAPIDevices(b *testing.B) {
 
 func BenchmarkHandleAPIDevice(b *testing.B) {
 	app := createTestApp()
-	req := httptest.NewRequest("GET", "/api/device/test-device", nil)
+	req := httptest.NewRequest("GET", "/api/control/devices/test-device", nil)
 	req = withChiParams(req, map[string]string{"id": "test-device"})
 
 	b.ResetTimer()
@@ -684,7 +684,7 @@ func TestHandleDevicePlay_SourceAccountFiltering(t *testing.T) {
 				"sourceAccount":"` + tt.sourceAccount + `",
 				"itemName":"Venice Classic Radio"
 			}`)
-			req := httptest.NewRequest("POST", "/api/device-play/play-device", body)
+			req := httptest.NewRequest("POST", "/api/control/devices/play-device/play", body)
 			req.Header.Set("Content-Type", "application/json")
 			req = withChiParams(req, map[string]string{"id": "play-device"})
 			w := httptest.NewRecorder()
@@ -750,7 +750,7 @@ func TestHandleSourceControl_ForwardsAccount(t *testing.T) {
 			conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
 			app.AddDevice("source-device", conn)
 
-			req := httptest.NewRequest("GET", "/api/control/source-device/source?"+tt.query, nil)
+			req := httptest.NewRequest("GET", "/api/control/devices/source-device/action/source?"+tt.query, nil)
 			req = withChiParams(req, map[string]string{"id": "source-device", "action": "source"})
 			w := httptest.NewRecorder()
 

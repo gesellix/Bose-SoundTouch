@@ -81,7 +81,7 @@ function App() {
     };
 
     useEffect(() => {
-        fetch('/api/version')
+        fetch('/api/control/version')
             .then(res => res.json())
             .then(resp => {
                 if (resp.success) {
