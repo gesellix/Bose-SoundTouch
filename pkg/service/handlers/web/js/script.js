@@ -588,8 +588,11 @@ async function fetchDevices() {
             devices.forEach((d) => updateDeviceInfo(d.device_id, d.ip_address));
             fetchSpotifyStatus();
         }
+
+        return devices.length;
     } catch (error) {
         document.getElementById("device-list").textContent = "Error loading devices: " + error;
+        return 0;
     }
 }
 
@@ -1719,11 +1722,15 @@ function formatXML(xml) {
 
 document.addEventListener("DOMContentLoaded", async () => {
     const cfg = await fetchSettings();
-    if (cfg?.discovery_enabled !== false) {
+    fetchVersion();
+    const deviceCount = await fetchDevices();
+    // Only sweep automatically on a cold start (no devices known yet). When
+    // devices are already in the store, rely on the cached list plus the
+    // periodic sweep and the explicit Discover button — re-probing offline
+    // speakers on every admin page load was slow and surprising.
+    if (deviceCount === 0 && cfg?.discovery_enabled !== false) {
         triggerDiscovery();
     }
-    fetchVersion();
-    await fetchDevices();
 
     const hash = window.location.hash.slice(1);
     const [tabId, extra] = hash.split('?');
