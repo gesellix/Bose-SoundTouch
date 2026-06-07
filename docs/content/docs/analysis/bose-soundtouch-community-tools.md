@@ -129,8 +129,8 @@ A Java-based middleware that hosts the original Bose Stockholm frontend (extract
 
 ---
 
-### 8. jaas666/bose-soundtouch-player-api (Reference)
-**[github.com/jaas666/bose-soundtouch-player-api](https://github.com/jaas666/bose-soundtouch-player-api)**
+### 8. jaas666/bose-soundtouch-web-api (Reference)
+**[github.com/jaas666/bose-soundtouch-web-api](https://github.com/jaas666/bose-soundtouch-web-api)**
 
 Community-maintained Markdown conversion of the official Bose SoundTouch Web API PDF (v1.0, January 7, 2026). Useful as a developer reference. Not a deployable tool.
 
@@ -288,7 +288,7 @@ Bose's decision to release API documentation rather than simply shutting down is
 
 - [Bose SoundTouch Plus (Home Assistant component)](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus) — comprehensive HA integration by Todd Lucas, extensive API wiki
 - [Bose SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook) — `LD_PRELOAD`-based reverse engineering framework used by AfterTouch for protocol research
-- [Bose SoundTouch Web API (community Markdown)](https://github.com/jaas666/bose-soundtouch-player-api) — official API PDF converted to Markdown
+- [Bose SoundTouch Web API (community Markdown)](https://github.com/jaas666/bose-soundtouch-web-api) — official API PDF converted to Markdown
 - [Bose Wiki — SoundTouch App Alternatives](https://bose.fandom.com/wiki/SoundTouch_app_alternatives) — community-maintained living list of workarounds and projects
 - [Reddit megathread — Bose alternatives](https://www.reddit.com/r/bose) — ongoing community discussion
 - [Radio Browser](https://www.radio-browser.info/) — the free, community-maintained internet radio directory used as a TuneIn replacement
