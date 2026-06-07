@@ -81,6 +81,10 @@ ENV PORT=8080
 
 EXPOSE 8080
 
+# The player is stateless and binds an unprivileged port, so it has no reason
+# to run as root. mDNS/SSDP discovery uses unprivileged multicast.
+USER nobody
+
 ENTRYPOINT ["/app/soundtouch-player"]
 
 # soundtouch-web image: transitional alias of soundtouch-player. Built from the
@@ -97,5 +101,7 @@ COPY --from=builder /soundtouch-player /app/soundtouch-web
 ENV PORT=8080
 
 EXPOSE 8080
+
+USER nobody
 
 ENTRYPOINT ["/app/soundtouch-web"]
