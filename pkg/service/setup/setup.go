@@ -178,11 +178,26 @@ func NewManager(serverURL string, ds *datastore.DataStore, cm *certmanager.Certi
 		NewSession: func(deviceIP, deviceID string, stepTimeout time.Duration) (StateMachine, error) {
 			return DialSession(deviceIP, deviceID, SessionConfig{StepTimeout: stepTimeout})
 		},
-		HTTPGet:      http.Get,
+		// Bound the speaker GETs (/info, /presets, /recents, /sources,
+		// inspect, peer probes). The default http.Get uses
+		// http.DefaultClient, which has no timeout, so an offline speaker
+		// hangs the caller for the full OS-level TCP timeout (~30 s). That
+		// is fine for a one-off, but the admin device list refreshes every
+		// device's live /info on each load, so a few offline speakers used
+		// to stall the page for 30 s each. A healthy speaker answers in well
+		// under a second on the LAN; liveDeviceHTTPTimeout fails the dead
+		// ones fast instead.
+		HTTPGet:      (&http.Client{Timeout: liveDeviceHTTPTimeout}).Get,
 		MgmtUsername: "admin",
 		MgmtPassword: "change_me!",
 	}
 }
+
+// liveDeviceHTTPTimeout bounds the plain HTTP GETs the Manager makes to a
+// speaker's :8090 endpoints. Generous enough for a healthy speaker on a
+// busy LAN, short enough that an offline speaker fails quickly rather than
+// holding a request (and a browser connection slot) for ~30 s.
+const liveDeviceHTTPTimeout = 5 * time.Second
 
 // DeviceInfoXML represents the XML structure from :8090/info
 type DeviceInfoXML struct {
