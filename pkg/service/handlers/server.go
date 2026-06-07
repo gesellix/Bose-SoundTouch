@@ -30,6 +30,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/gesellix/bose-soundtouch/pkg/service/tts"
+	"github.com/gesellix/bose-soundtouch/pkg/ssh"
 	"github.com/miekg/dns"
 )
 
@@ -177,15 +178,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		}
 
 		return ct.GetUTC(), ct.GetUTCSyncTime(), true
-	}, func(ip string) error {
-		cfg := client.DefaultConfig()
-		cfg.Host = ip
-		cfg.Timeout = 5 * time.Second
-
-		c := client.NewClient(cfg)
-
-		return c.SetClockTime(models.NewClockTimeRequest(time.Now()))
-	})
+	}, s.setSpeakerClock)
 	health.RegisterServerURLReachableCheck(s.healthRegistry, func() string {
 		serverURL, _ := s.GetSettings()
 		return serverURL
@@ -296,6 +289,101 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	)
 
 	return s
+}
+
+// clockSetTolerance is how close the speaker's clock must be to the target
+// after a set for the set to count as successful.
+const clockSetTolerance = 2 * time.Minute
+
+// setSpeakerClock is the set_clock QuickFix executor. It sets the speaker's
+// clock to the service's current time and verifies the clock actually moved
+// before reporting success.
+//
+// Two transports are tried because firmware varies: some builds honour
+// POST /clockTime, but others dispatch that POST to their read handler
+// (HandleClockGetTime) and silently ignore it, so the HTTP path is a no-op
+// there. SSH `date` reliably sets the system clock on an SSH-reachable
+// speaker (root, empty password — the usual unlocked state). We verify by
+// re-reading /clockTime regardless of which path "succeeded", so we never
+// report success when the clock didn't change.
+func (s *Server) setSpeakerClock(ip string) error {
+	now := time.Now()
+
+	// 1) HTTP /clockTime: harmless, and works on firmware that honours it.
+	httpErr := s.setSpeakerClockHTTP(ip, now)
+	if speakerClockWithin(ip, now, clockSetTolerance) {
+		return nil
+	}
+
+	// 2) SSH `date`: the reliable path on firmware that ignores the HTTP POST.
+	sshErr := setSpeakerClockSSH(ip, now)
+	if speakerClockWithin(ip, now, clockSetTolerance) {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"speaker clock unchanged after both transports (http: %v; ssh: %v). "+
+			"This firmware ignores POST /clockTime (it handles the POST as a read), and SSH was not usable. "+
+			"The durable fix is time sync: the speaker likely cannot resolve/reach an NTP server, "+
+			"so restore DNS/NTP reachability (a wrong clock breaks HTTPS/TLS)",
+		httpErr, sshErr,
+	)
+}
+
+// setSpeakerClockHTTP pushes the time via POST /clockTime. Returns the
+// request error (a 200 here does not guarantee the clock changed; the caller
+// verifies separately).
+func (s *Server) setSpeakerClockHTTP(ip string, t time.Time) error {
+	cfg := client.DefaultConfig()
+	cfg.Host = ip
+	cfg.Timeout = 5 * time.Second
+
+	return client.NewClient(cfg).SetClockTime(models.NewClockTimeRequest(t))
+}
+
+// setSpeakerClockSSH sets the speaker's system clock over SSH. The command is
+// built only from the service's own timestamp (no user input). It tries the
+// coreutils `-s` form first and falls back to the BusyBox positional form
+// (MMDDhhmmCCYY.ss), covering both firmware flavours.
+func setSpeakerClockSSH(ip string, t time.Time) error {
+	utc := t.UTC()
+	cmd := fmt.Sprintf(
+		"date -u -s '%s' || date -u %s",
+		utc.Format("2006-01-02 15:04:05"),
+		utc.Format("010215042006.05"),
+	)
+
+	out, err := ssh.NewClient(ip).Run(cmd)
+	if err != nil {
+		return fmt.Errorf("ssh date: %w (%s)", err, strings.TrimSpace(out))
+	}
+
+	return nil
+}
+
+// speakerClockWithin reports whether the speaker's current clock is within
+// tol of target. Used to verify a set actually took effect.
+func speakerClockWithin(ip string, target time.Time, tol time.Duration) bool {
+	cfg := client.DefaultConfig()
+	cfg.Host = ip
+	cfg.Timeout = 5 * time.Second
+
+	ct, err := client.NewClient(cfg).GetClockTime()
+	if err != nil || ct == nil {
+		return false
+	}
+
+	utc := ct.GetUTC()
+	if utc == 0 {
+		return false
+	}
+
+	skew := target.Unix() - utc
+	if skew < 0 {
+		skew = -skew
+	}
+
+	return skew <= int64(tol.Seconds())
 }
 
 // SetExpectedHosts records the hostnames the service considers its
