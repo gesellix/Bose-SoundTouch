@@ -21,7 +21,6 @@
             --accent:    oklch(0.220 0.010 95);
             --accent-fg: oklch(0.980 0.003 95);
             --radius:    12px;
-            --logo-filter: brightness(0) invert(1);
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -34,7 +33,6 @@
                 --live:      oklch(0.720 0.150 150);
                 --accent:    oklch(0.860 0.006 95);
                 --accent-fg: oklch(0.200 0.005 95);
-                --logo-filter: none;
             }
         }
 
@@ -66,7 +64,8 @@
             color: var(--accent-fg);
         }
         .brand { display: flex; align-items: center; gap: 0.5rem; }
-        .brand img { width: 24px; height: 24px; filter: var(--logo-filter); }
+        /* Keep the braille mark in its brand colours; the bar stays monochrome. */
+        .brand img { width: 24px; height: 24px; }
         .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
         .brand-name { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.02em; }
         .brand-subtitle { font-size: 0.7rem; font-weight: 400; opacity: 0.7; }

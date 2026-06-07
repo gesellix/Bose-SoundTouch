@@ -149,7 +149,8 @@ img { display: block; max-width: 100%; }
 .nav-logo {
     width: 24px;
     height: 24px;
-    filter: var(--nav-icon-filter);
+    /* Keep the braille mark in its brand colours; the mono nav icons below
+       still recolour via --nav-icon-filter, the logo stays the one accent. */
 }
 
 .nav-links {
