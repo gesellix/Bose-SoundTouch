@@ -1125,6 +1125,13 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL string, ds *datastore.
 	// UI "discover" runs the service's sweep, not a second mDNS stack.
 	webApp.TriggerDiscovery = server.DiscoverDevices
 
+	// A removal from the player UI cascades to the datastore (the single
+	// source of truth), so the device does not reappear on the next re-sync.
+	webApp.RemoveDeviceHook = func(deviceID string) error {
+		_, err := server.RemoveDeviceByID(deviceID)
+		return err
+	}
+
 	// Keep the UI registry live as the service discovers or devices are added.
 	server.SetDevicesChangedHook(func() {
 		webApp.SeedExtraDevices()

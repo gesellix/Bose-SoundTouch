@@ -101,6 +101,34 @@ func (s *Server) HandleGetDiscoveryStatus(w http.ResponseWriter, _ *http.Request
 	}
 }
 
+// RemoveDeviceByID removes the device with the given device ID (MAC) from
+// the datastore, searching across all accounts. It returns whether a
+// matching device was found. On a successful removal it notifies
+// observers (e.g. the embedded web UI) so they re-sync — the symmetric
+// counterpart to the notify in HandleAddManualDevice.
+func (s *Server) RemoveDeviceByID(deviceID string) (bool, error) {
+	devices, err := s.ds.ListAllDevices()
+	if err != nil {
+		return false, err
+	}
+
+	for i := range devices {
+		if devices[i].DeviceID == deviceID {
+			if err := s.ds.RemoveDevice(devices[i].AccountID, devices[i].DeviceID); err != nil {
+				return false, err
+			}
+
+			// Let any observer (e.g. the embedded web UI) re-sync from the
+			// datastore so the removal propagates to the player UI.
+			s.notifyDevicesChanged()
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // HandleRemoveDevice removes a device from the datastore.
 func (s *Server) HandleRemoveDevice(w http.ResponseWriter, r *http.Request) {
 	deviceId := chi.URLParam(r, "deviceId")
@@ -109,27 +137,10 @@ func (s *Server) HandleRemoveDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find which account this device belongs to.
-	devices, err := s.ds.ListAllDevices()
+	found, err := s.RemoveDeviceByID(deviceId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	var found bool
-
-	for i := range devices {
-		if devices[i].DeviceID == deviceId {
-			err = s.ds.RemoveDevice(devices[i].AccountID, devices[i].DeviceID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			found = true
-
-			break
-		}
 	}
 
 	if !found {

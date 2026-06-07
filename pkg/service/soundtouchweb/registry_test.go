@@ -117,6 +117,81 @@ func TestDeviceSnapshotAndCount(t *testing.T) {
 	}
 }
 
+func TestRemoveDevice(t *testing.T) {
+	app := NewWebApp()
+
+	if app.RemoveDevice("missing") {
+		t.Error("RemoveDevice returned true for unknown id")
+	}
+
+	conn := newRegistryDevice("first")
+	app.AddDevice("host-1", conn)
+
+	if !app.RemoveDevice("host-1") {
+		t.Fatal("RemoveDevice returned false for known id")
+	}
+
+	if _, ok := app.GetDevice("host-1"); ok {
+		t.Error("device still present after RemoveDevice")
+	}
+
+	if got := app.DeviceCount(); got != 0 {
+		t.Errorf("DeviceCount after removal = %d; want 0", got)
+	}
+
+	// Removing the same id again is a no-op.
+	if app.RemoveDevice("host-1") {
+		t.Error("RemoveDevice returned true on second removal")
+	}
+
+	// The connection's done channel must be closed so its background
+	// goroutines (status poll, WebSocket reconnect) stop.
+	select {
+	case <-conn.Done():
+	default:
+		t.Error("RemoveDevice did not close the connection's Done channel")
+	}
+}
+
+// TestRemoveDeviceConcurrent runs adds and removes of the same ids from
+// many goroutines under `go test -race` to confirm the registry stays
+// race-free when removal is in the mix.
+func TestRemoveDeviceConcurrent(t *testing.T) {
+	app := NewWebApp()
+
+	const (
+		workers      = 16
+		opsPerWorker = 200
+	)
+
+	var wg sync.WaitGroup
+
+	wg.Add(workers * 2)
+
+	for w := 0; w < workers; w++ {
+		go func(worker int) {
+			defer wg.Done()
+
+			for i := 0; i < opsPerWorker; i++ {
+				id := fmt.Sprintf("w%d-%d", worker, i)
+				app.AddDevice(id, newRegistryDevice(id))
+			}
+		}(w)
+	}
+
+	for w := 0; w < workers; w++ {
+		go func(worker int) {
+			defer wg.Done()
+
+			for i := 0; i < opsPerWorker; i++ {
+				app.RemoveDevice(fmt.Sprintf("w%d-%d", worker, i))
+			}
+		}(w)
+	}
+
+	wg.Wait()
+}
+
 // TestRegistryConcurrent exercises the registry from many goroutines
 // at once. Before the introduction of devicesMu this would either
 // panic with "fatal error: concurrent map read and map write" or be

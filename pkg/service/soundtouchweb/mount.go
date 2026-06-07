@@ -63,6 +63,7 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", app.HandleAPIDevice)
+				r.Delete("/", app.HandleDeleteDevice)
 				r.Post("/key/{key}", app.HandleDeviceKey)
 				r.Post("/volume/{volume}", app.HandleDirectVolumeControl)
 				r.Post("/power", app.HandleDevicePower)

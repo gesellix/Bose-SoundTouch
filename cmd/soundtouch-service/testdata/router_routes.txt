@@ -4,6 +4,7 @@ DELETE   /accounts/{account}/devices/{device}                         handlers.(
 DELETE   /accounts/{account}/group                                    handlers.(*Server).HandleUnsupported-fm
 DELETE   /accounts/{account}/group/                                   handlers.(*Server).HandleUnsupported-fm
 DELETE   /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleUnsupported-fm
+DELETE   /api/control/devices/{id}/                                   soundtouchweb.(*WebApp).HandleDeleteDevice-fm
 DELETE   /api/setup/devices/{deviceId}                                handlers.(*Server).HandleRemoveDevice-fm
 DELETE   /api/setup/dns-discoveries                                   handlers.(*Server).HandleClearDNSDiscoveries-fm
 DELETE   /api/setup/interactions/sessions                             handlers.(*Server).HandleCleanupSessions-fm

@@ -167,6 +167,13 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 	var prevSource string
 
 	for {
+		// Stop if the device was removed from the registry (conn.Close()).
+		select {
+		case <-conn.Done():
+			return
+		default:
+		}
+
 		wsClient := conn.Client.NewWebSocketClient(nil)
 
 		// Setup event handlers. Each handler funnels its change through
@@ -213,7 +220,10 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 		if err := wsClient.Connect(); err != nil {
 			log.Printf("Failed to connect WebSocket for device %s: %v (retrying in %s)", sanitizeLog(deviceID), err, backoff)
-			time.Sleep(backoff)
+
+			if sleepOrDone(conn, backoff) {
+				return
+			}
 
 			backoff *= 2
 			if backoff > maxBackoff {
@@ -248,12 +258,30 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		})
 
 		log.Printf("WebSocket disconnected for device %s — reconnecting in %s", sanitizeLog(deviceID), backoff)
-		time.Sleep(backoff)
+
+		if sleepOrDone(conn, backoff) {
+			return
+		}
 
 		backoff *= 2
 		if backoff > maxBackoff {
 			backoff = maxBackoff
 		}
+	}
+}
+
+// sleepOrDone waits for d to elapse or for the connection to be closed,
+// whichever comes first. It returns true if the connection was closed
+// (the caller should stop), false if the timer fired normally.
+func sleepOrDone(conn *webtypes.DeviceConnection, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return false
+	case <-conn.Done():
+		return true
 	}
 }
 

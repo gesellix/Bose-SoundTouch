@@ -2,6 +2,7 @@
 package webtypes
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -45,6 +46,13 @@ type DeviceConnection struct {
 	LastSeen   time.Time
 
 	status atomic.Pointer[DeviceStatus]
+
+	// done is closed by Close when the device is removed from the
+	// registry, signalling its background goroutines (the status poller
+	// and the WebSocket reconnect loop) to exit. closeOnce keeps Close
+	// idempotent.
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // DeviceStatus represents the current device state
@@ -66,6 +74,7 @@ func NewDeviceConnection(c *client.Client, info *models.DeviceInfo) *DeviceConne
 		Client:     c,
 		DeviceInfo: info,
 		LastSeen:   time.Now(),
+		done:       make(chan struct{}),
 	}
 	conn.status.Store(&DeviceStatus{
 		IsConnected:  false,
@@ -82,6 +91,28 @@ func NewDeviceConnection(c *client.Client, info *models.DeviceInfo) *DeviceConne
 // connections built via NewDeviceConnection.
 func (c *DeviceConnection) Status() *DeviceStatus {
 	return c.status.Load()
+}
+
+// Done returns a channel that is closed when the connection is removed
+// from the registry. The per-device status poller and WebSocket
+// reconnect loop select on it to stop instead of running for the life
+// of the process.
+func (c *DeviceConnection) Done() <-chan struct{} {
+	return c.done
+}
+
+// Close signals the connection's background goroutines to stop and best-
+// effort disconnects the WebSocket so a blocked reconnect loop wakes
+// promptly. Idempotent; safe to call on a connection that never started
+// any goroutine (e.g. a test connection with a nil Client).
+func (c *DeviceConnection) Close() {
+	c.closeOnce.Do(func() {
+		close(c.done)
+
+		if c.WebSocket != nil {
+			_ = c.WebSocket.Disconnect()
+		}
+	})
 }
 
 // SetStatus atomically replaces the entire status. Use sparingly —

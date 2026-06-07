@@ -63,6 +63,13 @@ type WebApp struct {
 	// soundtouch-web leaves it nil and runs its own sweep.
 	TriggerDiscovery func(ctx context.Context)
 
+	// RemoveDeviceHook, when set, removes a device from the backing store by
+	// its device ID (MAC). The embedded build wires it to the service's
+	// datastore removal so a removal from the player UI also clears the
+	// persisted device; standalone soundtouch-web leaves it nil (no store, so
+	// removal only prunes the in-memory registry).
+	RemoveDeviceHook func(deviceID string) error
+
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }
 
@@ -108,8 +115,9 @@ func (app *WebApp) GetDevice(id string) (*webtypes.DeviceConnection, bool) {
 // DeviceSnapshot returns a list of (id, *DeviceConnection) pairs taken
 // under a single read lock. Callers can iterate the result without
 // holding any registry lock. Devices added or removed after the call
-// are not reflected; the pointers themselves remain valid because
-// nothing deletes from the underlying map today.
+// are not reflected. A pointer captured here stays valid even if the
+// device is later removed (RemoveDevice only detaches it from the map
+// and stops its goroutines), so iterating a stale snapshot is safe.
 func (app *WebApp) DeviceSnapshot() []DeviceEntry {
 	app.devicesMu.RLock()
 	defer app.devicesMu.RUnlock()
@@ -163,6 +171,27 @@ func (app *WebApp) TouchDevice(id string) bool {
 	existing.LastSeen = time.Now()
 
 	return true
+}
+
+// RemoveDevice removes the device registered under id and stops its
+// background goroutines (status poller + WebSocket reconnect loop) via
+// conn.Close. Returns true if id was present. Close runs outside the
+// registry lock because it performs network I/O (WebSocket disconnect).
+func (app *WebApp) RemoveDevice(id string) bool {
+	app.devicesMu.Lock()
+
+	conn, ok := app.devices[id]
+	if ok {
+		delete(app.devices, id)
+	}
+
+	app.devicesMu.Unlock()
+
+	if ok {
+		conn.Close()
+	}
+
+	return ok
 }
 
 // HandleAPIDevices returns all devices as JSON
@@ -224,6 +253,52 @@ func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleDeleteDevice removes a device from the registry and, in the
+// embedded build, from the service datastore. The registry is keyed by
+// host/IP (the {id} URL param); the datastore is keyed by device ID
+// (MAC), so we resolve one to the other via the connection's DeviceInfo
+// before cascading. A device still live on the network is re-discovered
+// on the next sweep — removal is "remove now", not a permanent ban.
+func (app *WebApp) HandleDeleteDevice(w http.ResponseWriter, r *http.Request) {
+	host := chi.URLParam(r, "id")
+	if host == "" {
+		app.sendError(w, "Device ID required", http.StatusBadRequest)
+		return
+	}
+
+	conn, exists := app.GetDevice(host)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	// Cascade to the backing store (embedded build only). Standalone
+	// soundtouch-web has no datastore and leaves the hook nil, so removal
+	// only prunes the in-memory registry below.
+	if app.RemoveDeviceHook != nil {
+		deviceID := ""
+		if conn.DeviceInfo != nil {
+			deviceID = conn.DeviceInfo.DeviceID
+		}
+
+		if err := app.RemoveDeviceHook(deviceID); err != nil {
+			log.Printf("Failed to remove device %s from store: %v", sanitizeLog(host), err)
+			app.sendError(w, "Failed to remove device from store", http.StatusBadGateway)
+
+			return
+		}
+	}
+
+	app.RemoveDevice(host)
+	app.BroadcastDeviceList()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }

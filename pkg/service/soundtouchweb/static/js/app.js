@@ -148,6 +148,25 @@ function App() {
         await api.discover();
     }
 
+    async function removeDevice(id) {
+        const name = devices[id]?.info?.name || id;
+        if (!confirm(`Remove "${name}"?\n\nThis clears it from AfterTouch. A device still online may reappear after the next discovery scan.`)) {
+            return;
+        }
+        // Optimistically drop it; the server's devices broadcast reconciles.
+        setDevices(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        try {
+            const resp = await api.removeDevice(id);
+            showToast(resp?.success ? `Removed "${name}"` : (resp?.error || 'Failed to remove device'));
+        } catch (err) {
+            showToast('Failed to remove device');
+        }
+    }
+
     return html`
         <div class="app">
             <nav class="navbar">
@@ -209,6 +228,7 @@ function App() {
                         isDiscovering=${isDiscovering}
                         onSelect=${(id) => navigate('device', id)}
                         onDiscover=${discover}
+                        onRemove=${removeDevice}
                     />
                 ` : page === 'device' ? html`
                     <${DeviceDetail}

@@ -3,7 +3,7 @@ import htm from 'htm';
 
 const html = htm.bind(h);
 
-function DeviceCard({ id, device, onSelect }) {
+function DeviceCard({ id, device, onSelect, onRemove }) {
     const { info, status } = device;
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
@@ -13,7 +13,12 @@ function DeviceCard({ id, device, onSelect }) {
         <div class="device-card" onClick=${() => onSelect(id)}>
             <div class="device-header">
                 <span class="device-name">${info?.name || id}</span>
-                <span class="device-indicator ${status?.isConnected ? 'online' : 'offline'}"></span>
+                <span class="device-header-right">
+                    <span class="device-indicator ${status?.isConnected ? 'online' : 'offline'}"></span>
+                    <button class="device-remove" title="Remove this device"
+                            aria-label="Remove this device"
+                            onClick=${(e) => { e.stopPropagation(); onRemove(id); }}>✕</button>
+                </span>
             </div>
             <div class="device-type">
                 ${info?.type || ''}
@@ -31,7 +36,7 @@ function DeviceCard({ id, device, onSelect }) {
     `;
 }
 
-export function DeviceList({ devices, isDiscovering, onSelect, onDiscover }) {
+export function DeviceList({ devices, isDiscovering, onSelect, onDiscover, onRemove }) {
     const entries = Object.entries(devices);
 
     return html`
@@ -48,9 +53,13 @@ export function DeviceList({ devices, isDiscovering, onSelect, onDiscover }) {
             : html`
                 <div class="device-grid" key="grid">
                     ${entries.map(([id, device]) => html`
-                        <${DeviceCard} key=${id} id=${id} device=${device} onSelect=${onSelect} />
+                        <${DeviceCard} key=${id} id=${id} device=${device} onSelect=${onSelect} onRemove=${onRemove} />
                     `)}
-                </div>`
+                </div>
+                <p class="device-list-note" key="note">
+                    Removing a device clears it here. One that is still online may
+                    reappear after the next discovery scan.
+                </p>`
         }
         </div>
     `;

@@ -8,6 +8,7 @@ async function req(url, opts = {}) {
 export const api = {
     devices: () => req('/api/control/devices'),
     device: (id) => req(`/api/control/devices/${id}`),
+    removeDevice: (id) => req(`/api/control/devices/${id}`, { method: 'DELETE' }),
     discover: () => req('/api/control/discover', { method: 'POST' }),
     key: (id, key) => req(`/api/control/devices/${id}/key/${key}`, { method: 'POST' }),
     volume: (id, level) => req(`/api/control/devices/${id}/volume/${level}`, { method: 'POST' }),

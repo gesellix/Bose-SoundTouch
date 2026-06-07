@@ -78,8 +78,13 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			app.UpdateDeviceStatus(host, conn)
+		for {
+			select {
+			case <-ticker.C:
+				app.UpdateDeviceStatus(host, conn)
+			case <-conn.Done():
+				return
+			}
 		}
 	}()
 
