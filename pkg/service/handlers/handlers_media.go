@@ -117,15 +117,20 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// HTML branch: a browser hitting "/". Honour the configured default
-	// landing surface, otherwise serve the neutral chooser. The admin
-	// console itself now lives at /admin (served by HandleAdmin).
-	switch s.defaultLanding() {
-	case "app":
-		http.Redirect(w, r, "/app", http.StatusFound)
-		return
-	case "admin":
-		http.Redirect(w, r, "/admin", http.StatusFound)
-		return
+	// landing surface, otherwise serve the neutral chooser. A "?chooser"
+	// query forces the chooser even when a default redirect is set, so the
+	// hub (and through it the admin console) stays reachable: the "home"
+	// links on the player and admin point here. The admin console itself
+	// lives at /admin (served by HandleAdmin).
+	if !r.URL.Query().Has("chooser") {
+		switch s.defaultLanding() {
+		case "app":
+			http.Redirect(w, r, "/app", http.StatusFound)
+			return
+		case "admin":
+			http.Redirect(w, r, "/admin", http.StatusFound)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/html")

@@ -76,6 +76,25 @@ func TestHandleRootRedirects(t *testing.T) {
 	}
 }
 
+// TestHandleRootChooserOverride: "?chooser" forces the chooser even when a
+// default redirect is configured, so the hub stays reachable.
+func TestHandleRootChooserOverride(t *testing.T) {
+	for _, landing := range []string{"app", "admin"} {
+		server := newLandingServer(t, landing)
+
+		rec := httptest.NewRecorder()
+		server.HandleRoot(rec, htmlGet("/?chooser"))
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("landing=%q with ?chooser: status = %d; want 200 (no redirect)", landing, rec.Code)
+		}
+
+		if !strings.Contains(rec.Body.String(), `href="/admin"`) {
+			t.Errorf("landing=%q with ?chooser: body is not the chooser", landing)
+		}
+	}
+}
+
 // TestHandleRootJSONIgnoresLanding: API/speaker clients (non-HTML Accept)
 // always get the version JSON, never a landing redirect, regardless of
 // the configured default.

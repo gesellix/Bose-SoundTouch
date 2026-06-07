@@ -170,7 +170,7 @@ function App() {
     return html`
         <div class="app">
             <nav class="navbar">
-                <a class="brand" href="/" title="AfterTouch home">
+                <a class="brand" href="/?chooser" title="AfterTouch home">
                     <img src="/app/static/img/logo.svg" alt="AfterTouch" class="nav-logo" />
                     <div class="brand-text">
                         <span class="brand-name">AfterTouch</span>
