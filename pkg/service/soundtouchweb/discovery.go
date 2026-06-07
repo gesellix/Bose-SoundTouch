@@ -3,6 +3,7 @@ package soundtouchweb
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
@@ -95,18 +96,34 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 // (if set) via AddDeviceByHost. Idempotent: already-known hosts are skipped.
 // Used by the embedded build to surface the service datastore's devices even
 // when network discovery is disabled; a no-op for standalone soundtouch-web.
+//
+// Hosts are probed concurrently: AddDeviceByHost makes a blocking /info call
+// (up to its 10 s timeout) for each unknown host, so an offline speaker in the
+// datastore would otherwise stall the whole seed for 10 s, serially. Fanning
+// out bounds the cost to roughly a single timeout regardless of how many
+// devices are offline. AddDeviceByHost is registry-safe under concurrency.
 func (app *WebApp) SeedExtraDevices() {
 	if app.ExtraDeviceHosts == nil {
 		return
 	}
+
+	var wg sync.WaitGroup
 
 	for _, host := range app.ExtraDeviceHosts() {
 		if host == "" {
 			continue
 		}
 
-		app.AddDeviceByHost(host, 8090, "service-store")
+		wg.Add(1)
+
+		go func(h string) {
+			defer wg.Done()
+
+			app.AddDeviceByHost(h, 8090, "service-store")
+		}(host)
 	}
+
+	wg.Wait()
 }
 
 // DiscoverDevices refreshes the device registry. When TriggerDiscovery is set
