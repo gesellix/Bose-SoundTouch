@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>AfterTouch</title>
+    <meta name="description" content="AfterTouch — a local replacement for the Bose SoundTouch cloud. Open the player or the admin console."/>
+    <link rel="icon" href="/web/img/favicon-braille.svg" type="image/svg+xml"/>
+    <style>
+        :root {
+            /* Tinted neutrals (OKLCH), a hair warm so the page reads calm.
+               One live-green accent marks the everyday player. The accent
+               bar mirrors the app navbar (dark bar / light text). */
+            --bg:        oklch(0.972 0.004 95);
+            --surface:   oklch(0.995 0.003 95);
+            --border:    oklch(0.905 0.006 95);
+            --text:      oklch(0.255 0.012 95);
+            --text-dim:  oklch(0.520 0.012 95);
+            --hover:     oklch(0.955 0.006 95);
+            --live:      oklch(0.640 0.150 150);
+            --accent:    oklch(0.220 0.010 95);
+            --accent-fg: oklch(0.980 0.003 95);
+            --radius:    12px;
+            --logo-filter: brightness(0) invert(1);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg:        oklch(0.175 0.005 95);
+                --surface:   oklch(0.215 0.006 95);
+                --border:    oklch(0.305 0.008 95);
+                --text:      oklch(0.925 0.008 95);
+                --text-dim:  oklch(0.660 0.012 95);
+                --hover:     oklch(0.255 0.008 95);
+                --live:      oklch(0.720 0.150 150);
+                --accent:    oklch(0.860 0.006 95);
+                --accent-fg: oklch(0.200 0.005 95);
+                --logo-filter: none;
+            }
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body { height: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 15px;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            display: flex;
+            flex-direction: column;
+            min-height: 100%;
+        }
+        a { color: inherit; text-decoration: none; }
+
+        /* ── Shared accent bar (mirrors the app navbar) ──────────────── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            height: 52px;
+            padding: 0 1.25rem;
+            background: var(--accent);
+            color: var(--accent-fg);
+        }
+        .brand { display: flex; align-items: center; gap: 0.5rem; }
+        .brand img { width: 24px; height: 24px; filter: var(--logo-filter); }
+        .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+        .brand-name { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.02em; }
+        .brand-subtitle { font-size: 0.7rem; font-weight: 400; opacity: 0.7; }
+        .bar-links a {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            padding: 0.35rem 0.5rem;
+            border-radius: 4px;
+            transition: opacity 0.15s, background 0.15s;
+        }
+        .bar-links a:hover { opacity: 1; background: rgba(127, 127, 127, 0.18); }
+
+        /* ── Chooser ─────────────────────────────────────────────────── */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            width: 100%;
+            max-width: 32rem;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+        .lead {
+            font-size: 1.05rem;
+            color: var(--text-dim);
+            margin-bottom: 1.75rem;
+            max-width: 28rem;
+        }
+
+        nav.dest-list {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            overflow: hidden;
+        }
+        .dest {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 0.2rem 1rem;
+            padding: 1.15rem 1.25rem;
+            transition: background 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .dest + .dest { border-top: 1px solid var(--border); }
+        .dest:hover { background: var(--hover); }
+        .dest:focus-visible { outline: 2px solid var(--live); outline-offset: -2px; }
+
+        .dest .label {
+            display: flex;
+            align-items: baseline;
+            gap: 0.55rem;
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+        .dest .desc { grid-column: 1; font-size: 0.88rem; color: var(--text-dim); }
+        .dest .arrow {
+            grid-row: 1 / span 2;
+            grid-column: 2;
+            font-size: 1.2rem;
+            color: var(--text-dim);
+            transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), color 0.18s;
+        }
+        .dest:hover .arrow { transform: translateX(4px); }
+        /* The player is the everyday surface: its arrow carries the live
+           accent so the eye lands there first. */
+        .dest--player:hover .arrow { color: var(--live); }
+
+        /* The console is the privileged surface: a key glyph and a quiet
+           tag mark it as setup / diagnostics rather than daily use. */
+        .tag {
+            font-size: 0.7rem;
+            font-weight: 500;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.1rem 0.5rem;
+        }
+
+        /* ── Footer (version line, like the app and admin) ───────────── */
+        footer {
+            max-width: 32rem;
+            margin: 0 auto;
+            padding: 1.5rem;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+        footer a { text-decoration: underline; text-underline-offset: 2px; }
+        footer a:hover { color: var(--text); }
+        .dot { opacity: 0.5; padding: 0 0.15rem; }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="/" title="AfterTouch home">
+            <img src="/web/img/favicon-braille.svg" alt=""/>
+            <span class="brand-text">
+                <span class="brand-name">AfterTouch</span>
+                <span class="brand-subtitle">Bose SoundTouch Toolkit</span>
+            </span>
+        </a>
+        <nav class="bar-links">
+            <a href="https://gesellix.github.io/Bose-SoundTouch/" target="_blank" rel="noopener">Documentation</a>
+        </nav>
+    </header>
+
+    <main>
+        <p class="lead">
+            Your SoundTouch speakers, kept playing on your own network
+            after the Bose cloud shutdown. Where to?
+        </p>
+
+        <nav class="dest-list" aria-label="Choose a surface">
+            <a class="dest dest--player" href="/app">
+                <span class="label">Player</span>
+                <span class="desc">Playback, volume, presets, zones, and TuneIn / RadioBrowser.</span>
+                <span class="arrow" aria-hidden="true">&rarr;</span>
+            </a>
+            <a class="dest dest--admin" href="/admin">
+                <span class="label">
+                    Admin &amp; Setup
+                    <span class="tag">console</span>
+                </span>
+                <span class="desc">Migrate speakers, settings, accounts, and diagnostics.</span>
+                <span class="arrow" aria-hidden="true">&rarr;</span>
+            </a>
+        </nav>
+    </main>
+
+    <footer>
+        <span id="version-info">AfterTouch</span>
+        <span class="dot">&middot;</span>
+        <a href="https://gesellix.github.io/Bose-SoundTouch/" target="_blank" rel="noopener">Documentation</a>
+    </footer>
+
+    <script>
+        // Mirror the version line the app and admin footers show. Same
+        // /api/setup/version payload, kept to a tiny vanilla fetch so the
+        // landing page carries no framework.
+        (async function () {
+            try {
+                const data = await (await fetch('/api/setup/version')).json();
+                if (!data || !data.version) return;
+                let v = data.version;
+                if (data.release_url) {
+                    v = `<a href="${data.release_url}" target="_blank" rel="noopener">${data.version}</a>`;
+                }
+                let line = `AfterTouch ${v}`;
+                if (data.commit && data.commit !== 'unknown') {
+                    const short = data.commit.substring(0, 7);
+                    const c = data.commit_url
+                        ? `<a href="${data.commit_url}" target="_blank" rel="noopener">${short}</a>`
+                        : short;
+                    line += ` (${c})`;
+                }
+                if (data.date && data.date !== 'unknown') {
+                    line += ` &bull; ${data.date}`;
+                }
+                document.getElementById('version-info').innerHTML = line;
+            } catch (e) {
+                /* leave the static "AfterTouch" fallback in place */
+            }
+        })();
+    </script>
+</body>
+</html>

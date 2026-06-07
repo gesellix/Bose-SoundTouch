@@ -13,6 +13,9 @@ import (
 //go:embed web/index.html
 var indexHTML []byte
 
+//go:embed web/landing.html
+var landingHTML []byte
+
 //go:embed web/css/* web/js/* web/img/favicon-braille* web/img/favicon*
 var webFS embed.FS
 
@@ -113,8 +116,41 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// HTML branch: a browser hitting "/". Honour the configured default
+	// landing surface, otherwise serve the neutral chooser. The admin
+	// console itself now lives at /admin (served by HandleAdmin).
+	switch s.defaultLanding() {
+	case "app":
+		http.Redirect(w, r, "/app", http.StatusFound)
+		return
+	case "admin":
+		http.Redirect(w, r, "/admin", http.StatusFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = w.Write(landingHTML)
+}
+
+// HandleAdmin serves the admin / setup console. It used to live at "/";
+// the chooser landing page took that spot, so the console moved here.
+// Its assets (/web/*) and APIs (/setup, /mgmt) are absolute, so the page
+// works unchanged at the new path.
+func (s *Server) HandleAdmin(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	_, _ = w.Write(indexHTMLVersioned)
+}
+
+// defaultLanding returns the configured root-path behaviour for browsers
+// ("chooser", "app", or "admin"), defaulting to "chooser" when unset or
+// unreadable.
+func (s *Server) defaultLanding() string {
+	persisted, err := s.ds.GetSettings()
+	if err != nil || persisted.DefaultLanding == "" {
+		return "chooser"
+	}
+
+	return persisted.DefaultLanding
 }
 
 // HandleWeb returns a handler for serving web resources.

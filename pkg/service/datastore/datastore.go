@@ -2627,6 +2627,15 @@ type Settings struct {
 	// is passed through verbatim; AfterTouch does not validate the
 	// individual format tokens.
 	TuneInStreamFormats string `json:"tunein_stream_formats,omitempty"`
+
+	// DefaultLanding selects what the root path "/" serves to a browser:
+	//   "chooser" (or empty) — the neutral landing page that links to the
+	//                          player and the admin/setup console;
+	//   "app"               — redirect straight to the player UI (/app);
+	//   "admin"             — redirect straight to the admin console (/admin).
+	// API/speaker clients (non-HTML Accept) always get the version JSON
+	// regardless of this setting.
+	DefaultLanding string `json:"default_landing,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.

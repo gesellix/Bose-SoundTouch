@@ -322,6 +322,9 @@ async function fetchSettings() {
         if (settings.discovery_enabled !== undefined) {
             document.getElementById("discovery-enabled").checked = settings.discovery_enabled;
         }
+        if (settings.default_landing) {
+            document.getElementById("default-landing").value = settings.default_landing;
+        }
         if (settings.dns_enabled !== undefined) {
             document.getElementById("dns-enabled").checked = settings.dns_enabled;
         }
@@ -460,6 +463,7 @@ async function updateLoggingSettings() {
 async function updateSettings() {
     const settings = {
         server_url: document.getElementById("target-domain").value,
+        default_landing: document.getElementById("default-landing").value,
         discovery_interval: document.getElementById("discovery-interval").value,
         discovery_enabled: document.getElementById("discovery-enabled").checked,
         dns_enabled: document.getElementById("dns-enabled").checked,

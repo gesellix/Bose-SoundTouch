@@ -1,4 +1,33 @@
 body { font-family: sans-serif; margin: 20px; }
+
+/* Shared accent bar (matches the app navbar and the landing page). It
+   breaks out of the body's 20px margin to sit full-bleed at the top. */
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: 52px;
+    padding: 0 1.25rem;
+    margin: -20px -20px 16px;
+    background: #1a1a1a;
+    color: #fff;
+}
+.topbar .brand { display: flex; align-items: center; gap: .5rem; text-decoration: none; color: inherit; }
+.topbar .brand img { width: 24px; height: 24px; filter: brightness(0) invert(1); }
+.topbar .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.topbar .brand-name { font-size: 1.1rem; font-weight: 600; letter-spacing: .02em; }
+.topbar .brand-subtitle { font-size: .7rem; font-weight: 400; opacity: .7; }
+.topbar .bar-links a {
+    color: #fff;
+    font-size: .85rem;
+    opacity: .85;
+    text-decoration: none;
+    padding: .35rem .5rem;
+    border-radius: 4px;
+}
+.topbar .bar-links a:hover { opacity: 1; background: rgba(255, 255, 255, .12); }
+@media (max-width: 480px) { .topbar .brand-subtitle { display: none; } }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 th { background-color: #f2f2f2; }

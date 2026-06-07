@@ -8,18 +8,20 @@
     <link rel="stylesheet" href="/web/css/style.css"/>
 </head>
 <body>
-<h1><img src="/web/img/favicon-braille.svg" alt="AfterTouch Logo" class="logo"/>AfterTouch</h1>
-<p style="margin-top: -10px; font-style: italic; color: #666">
-    Bose SoundTouch Toolkit
-</p>
-<p style="margin-top: -4px">
-    <a href="/app" style="font-weight: bold">🎵 Open the Player (Web UI) →</a>
-    <span style="font-size: 0.85em; color: #666; margin-left: 8px">
-        Control playback, volume, presets, zones, and browse TuneIn / RadioBrowser.
-    </span>
-</p>
-<p style="margin-top: 2px; font-size: 0.85em; color: #888">
-    This page is the admin / setup console (migration, settings, diagnostics).
+<header class="topbar">
+    <a class="brand" href="/" title="AfterTouch home">
+        <img src="/web/img/favicon-braille.svg" alt=""/>
+        <span class="brand-text">
+            <span class="brand-name">AfterTouch</span>
+            <span class="brand-subtitle">Bose SoundTouch Toolkit</span>
+        </span>
+    </a>
+    <nav class="bar-links">
+        <a href="/app">Open the Player &rarr;</a>
+    </nav>
+</header>
+<p style="margin: 0 0 16px; font-size: 0.9em; color: #888">
+    Admin &amp; Setup console: migration, settings, accounts, and diagnostics.
 </p>
 
 <div class="tabs">
@@ -173,6 +175,18 @@
             <span style="font-size: 0.8em; color: #666">(Standard services URL)</span>
             <div id="target-domain-resolved" style="font-size: 0.85em; margin-top: 4px; min-height: 1.2em"></div>
             <div id="https-443-status" style="font-size: 0.85em; margin-top: 4px; min-height: 1.2em"></div>
+        </div>
+        <div style="margin-bottom: 20px">
+            <label for="default-landing">Landing page (<code>/</code>):</label>
+            <select id="default-landing" style="margin-left: 4px">
+                <option value="chooser">Chooser (pick Player or Admin)</option>
+                <option value="app">Go straight to the Player</option>
+                <option value="admin">Go straight to Admin &amp; Setup</option>
+            </select>
+            <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                What a browser sees at the root URL. The Player and Admin pages
+                stay reachable at <code>/app</code> and <code>/admin</code> either way.
+            </div>
         </div>
         <div style="margin-bottom: 20px">
             <strong>TLS extra hosts:</strong>

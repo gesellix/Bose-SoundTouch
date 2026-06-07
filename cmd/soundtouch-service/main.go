@@ -1175,6 +1175,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 	r.Use(server.RecordMiddleware)
 
 	r.Get("/", server.HandleRoot)
+	r.Get("/admin", server.HandleAdmin)
 	r.Get("/health", server.HandleHealth)
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		// The favicon lives in the embedded web/img bundle, not under

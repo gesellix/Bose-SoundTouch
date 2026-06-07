@@ -189,6 +189,8 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 
 	dnsRunning, actualBind := s.GetDNSRunning()
 
+	defaultLanding := s.defaultLanding()
+
 	var serverURLResolvedIP, serverURLResolveError string
 
 	if ip, err := s.resolveServerURLIP(serverURL); err == nil {
@@ -266,6 +268,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"tts_language":                  ttsLanguage,
 		"tts_voice":                     ttsVoice,
 		"tts_volume":                    ttsVolume,
+		"default_landing":               defaultLanding,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -296,9 +299,19 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		TTSVoice            string         `json:"tts_voice"`
 		TTSVolume           int            `json:"tts_volume"`
 		TLSExtraHosts       *[]string      `json:"tls_extra_hosts"`
+		DefaultLanding      string         `json:"default_landing"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Normalise + validate the landing choice. Empty means "chooser".
+	defaultLanding := strings.ToLower(strings.TrimSpace(settings.DefaultLanding))
+	switch defaultLanding {
+	case "", "chooser", "app", "admin":
+	default:
+		http.Error(w, "Invalid default_landing: must be chooser, app, or admin", http.StatusBadRequest)
 		return
 	}
 
@@ -420,6 +433,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		TTSVoice:            s.ttsVoice,
 		TTSVolume:           s.ttsVolume,
 		TLSExtraHosts:       resolvedTLSExtraHosts,
+		DefaultLanding:      defaultLanding,
 	})
 
 	dnsEnabled := s.dnsEnabled

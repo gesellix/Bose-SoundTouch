@@ -34,6 +34,7 @@ GET      /accounts/{account}/devices/{device}/presets                 handlers.(
 GET      /accounts/{account}/devices/{device}/recents                 handlers.(*Server).HandleUnsupported-fm
 GET      /accounts/{account}/full                                     handlers.(*Server).HandleUnsupported-fm
 GET      /accounts/{account}/sources                                  handlers.(*Server).HandleUnsupported-fm
+GET      /admin                                                       handlers.(*Server).HandleAdmin-fm
 GET      /api/control/devices/                                        soundtouchweb.(*WebApp).HandleAPIDevices-fm
 GET      /api/control/devices/{id}/                                   soundtouchweb.(*WebApp).HandleAPIDevice-fm
 GET      /api/control/devices/{id}/action/{action}                    soundtouchweb.(*WebApp).HandleAPIControl-fm
