@@ -170,8 +170,12 @@ jobs:
           # Build Service
           build_binary "soundtouch-service" "./cmd/soundtouch-service"
 
-          # Build Web
-          build_binary "soundtouch-web" "./cmd/soundtouch-web"
+          # Build Player (formerly soundtouch-web)
+          build_binary "soundtouch-player" "./cmd/soundtouch-player"
+
+          # Build Web: transitional alias of the player, built from the same
+          # source. Dropped in a future release; keep in sync with player.
+          build_binary "soundtouch-web" "./cmd/soundtouch-player"
 
           # Build Backup
           build_binary "soundtouch-backup" "./cmd/soundtouch-backup"
@@ -181,6 +185,7 @@ jobs:
         run: |
           CLI_NAME="${{ steps.build.outputs.soundtouch-cli }}"
           SVC_NAME="${{ steps.build.outputs.soundtouch-service }}"
+          PLAYER_NAME="${{ steps.build.outputs.soundtouch-player }}"
           WEB_NAME="${{ steps.build.outputs.soundtouch-web }}"
           BCK_NAME="${{ steps.build.outputs.soundtouch-backup }}"
 
@@ -198,6 +203,7 @@ jobs:
 
           generate_checksums "$CLI_NAME"
           generate_checksums "$SVC_NAME"
+          generate_checksums "$PLAYER_NAME"
           generate_checksums "$WEB_NAME"
           generate_checksums "$BCK_NAME"
 
@@ -212,6 +218,7 @@ jobs:
           path: |
             build/soundtouch-cli-v*
             build/soundtouch-service-v*
+            build/soundtouch-player-v*
             build/soundtouch-web-v*
             build/soundtouch-backup-v*
           retention-days: 1
@@ -240,7 +247,7 @@ jobs:
           mkdir -p release-files
 
           # Move all files from subdirectories to the collection directory
-          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" -o -name "soundtouch-web-*" -o -name "soundtouch-backup-*" \) -exec mv {} release-files/ \;
+          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" -o -name "soundtouch-player-*" -o -name "soundtouch-web-*" -o -name "soundtouch-backup-*" \) -exec mv {} release-files/ \;
 
           # Remove empty directories
           find . -type d -empty -delete
@@ -255,14 +262,14 @@ jobs:
           # Generate combined checksums (exclude individual .sha256/.sha512 files)
           if ls soundtouch-* 1> /dev/null 2>&1; then
             # Only checksum the actual binaries, not the .sha256/.sha512 files
-            ls soundtouch-cli-* soundtouch-service-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
-            ls soundtouch-cli-* soundtouch-service-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
+            ls soundtouch-cli-* soundtouch-service-* soundtouch-player-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
+            ls soundtouch-cli-* soundtouch-service-* soundtouch-player-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
 
             echo "📋 Generated combined checksums:"
             cat checksums.sha256
 
             # Verify all expected files are present (binaries only, not checksum files)
-            EXPECTED_COUNT=28  # 7 platforms * 4 binaries
+            EXPECTED_COUNT=35  # 7 platforms * 5 binaries (player + its web alias)
             ACTUAL_COUNT=$(ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | wc -l)
 
             if [[ $ACTUAL_COUNT -ne $EXPECTED_COUNT ]]; then
@@ -393,11 +400,15 @@ jobs:
           ./soundtouch-service
           \`\`\`
 
-          ### SoundTouch Web
+          ### SoundTouch Player (formerly soundtouch-web)
           \`\`\`bash
-          # Start the web app
-          ./soundtouch-web
+          # Start the LAN web player
+          ./soundtouch-player
           \`\`\`
+          > Note: \`soundtouch-web\` has been renamed to \`soundtouch-player\`.
+          > The \`soundtouch-web\` assets are still published as a transitional
+          > alias and will be removed in a future release. Please switch your
+          > downloads and scripts to \`soundtouch-player\`.
 
           ### SoundTouch Backup
           \`\`\`bash
@@ -423,7 +434,7 @@ jobs:
           - Windows (amd64)
           - FreeBSD (amd64)
 
-          `soundtouch-cli`, `soundtouch-service`, `soundtouch-web`, and `soundtouch-backup` are included.
+          `soundtouch-cli`, `soundtouch-service`, `soundtouch-player` (with `soundtouch-web` as a transitional alias), and `soundtouch-backup` are included.
 
           ## 🔐 Checksums
 
@@ -478,6 +489,7 @@ jobs:
           files: |
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
+            release-assets/soundtouch-player-v*
             release-assets/soundtouch-web-v*
             release-assets/soundtouch-backup-v*
             release-assets/checksums.sha256
@@ -506,6 +518,7 @@ jobs:
           files: |
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
+            release-assets/soundtouch-player-v*
             release-assets/soundtouch-web-v*
             release-assets/soundtouch-backup-v*
             release-assets/checksums.sha256
@@ -563,6 +576,33 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Extract metadata (tags, labels) for soundtouch-player
+        id: meta-player
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ghcr.io/${{ github.repository }}-player
+          tags: |
+            type=semver,pattern={{version}},value=v${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.validate.outputs.version }}
+            type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
+
+      - name: Build and push soundtouch-player Docker image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          target: soundtouch-player
+          platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
+          push: true
+          tags: ${{ steps.meta-player.outputs.tags }}
+          labels: ${{ steps.meta-player.outputs.labels }}
+          build-args: |
+            VERSION=v${{ needs.validate.outputs.version }}
+            COMMIT=${{ github.sha }}
+            DATE=${{ steps.build_date.outputs.date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Transitional alias image (formerly the only web image). Dropped later.
       - name: Extract metadata (tags, labels) for soundtouch-web
         id: meta-web
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0

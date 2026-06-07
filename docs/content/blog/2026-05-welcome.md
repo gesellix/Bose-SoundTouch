@@ -46,16 +46,16 @@ selection behave the same as before.
 
 Your six preset buttons work. AfterTouch stores preset bindings locally and serves them
 back to the speaker on request. You can also **save new presets** — via the API,
-via `soundtouch-cli`, or through the soundtouch-web UI.
+via `soundtouch-cli`, or through the soundtouch-player UI.
 
 ### ST-10 stereo pairing
 
 **SoundTouch 10 stereo pairs** (and other ST pairing configurations) are supported
 end-to-end: creation, management, and playback routing all go through AfterTouch.
 
-### soundtouch-web — browser UI
+### soundtouch-player — browser UI
 
-**soundtouch-web** is an early-stage but functional browser UI bundled with AfterTouch.
+**soundtouch-player** is an early-stage but functional browser UI bundled with AfterTouch.
 It gives you:
 
 - TuneIn and RadioBrowser browsing and playback
@@ -65,7 +65,7 @@ It gives you:
 
 It runs as part of the AfterTouch service — no separate install needed.
 
-![soundtouch-web UI showing Spotify playback, presets, sources, and zone management](/images/blog/soundtouch-web-ui.png)
+![soundtouch-player UI showing Spotify playback, presets, sources, and zone management](/images/blog/soundtouch-player-ui.png)
 
 ### Automation with soundtouch-cli
 
@@ -110,9 +110,9 @@ right places to start.
 
 ## What's next
 
-The soundtouch-web UI will gain richer preset management — browsing, editing, and
+The soundtouch-player UI will gain richer preset management — browsing, editing, and
 reordering presets directly from the browser. Longer term, merging
-`soundtouch-service` and `soundtouch-web` into a single binary is on the table,
+`soundtouch-service` and `soundtouch-player` into a single binary is on the table,
 which would simplify deployment to a single process with no extra flags.
 
 This blog will be updated monthly — or whenever something significant ships.

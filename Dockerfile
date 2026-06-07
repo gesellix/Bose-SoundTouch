@@ -34,15 +34,15 @@ RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
       -o /soundtouch-service ./cmd/soundtouch-service; \
     fi
 
-# Build the soundtouch-web
+# Build the soundtouch-player (formerly soundtouch-web)
 RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
       CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} \
       go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
-      -o /soundtouch-web ./cmd/soundtouch-web; \
+      -o /soundtouch-player ./cmd/soundtouch-player; \
     else \
       CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
       go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
-      -o /soundtouch-web ./cmd/soundtouch-web; \
+      -o /soundtouch-player ./cmd/soundtouch-player; \
     fi
 
 # soundtouch-service image
@@ -68,14 +68,31 @@ EXPOSE 8000
 
 ENTRYPOINT ["/app/soundtouch-service"]
 
-# soundtouch-web image
+# soundtouch-player image
+FROM alpine:3.23 AS soundtouch-player
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /soundtouch-player /app/soundtouch-player
+
+ENV PORT=8080
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/soundtouch-player"]
+
+# soundtouch-web image: transitional alias of soundtouch-player. Built from the
+# same binary; the entrypoint name makes the binary print a rename notice on
+# start. Will be dropped in a future release.
 FROM alpine:3.23 AS soundtouch-web
 
 RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-COPY --from=builder /soundtouch-web /app/soundtouch-web
+COPY --from=builder /soundtouch-player /app/soundtouch-web
 
 ENV PORT=8080
 

@@ -2,17 +2,17 @@
 title: "API Route Layout and Refactoring Plan"
 ---
 
-> **Tracking issue:** [#451 "Merge soundtouch-web into soundtouch-service"](https://github.com/gesellix/Bose-SoundTouch/issues/451).
+> **Tracking issue:** [#451 "Merge soundtouch-player into soundtouch-service"](https://github.com/gesellix/Bose-SoundTouch/issues/451).
 > This document is the architectural reference for the staged API refactoring
 > that precedes (and enables) that merge.
 
 ## Why this exists
 
-`soundtouch-service` and `soundtouch-web` are two binaries with two routers.
+`soundtouch-service` and `soundtouch-player` are two binaries with two routers.
 We want to:
 
 1. Restructure our own routes into a layout that can stay stable.
-2. Eventually fold `soundtouch-web` into `soundtouch-service` (one binary).
+2. Eventually fold `soundtouch-player` into `soundtouch-service` (one binary).
 3. Stop leaking frontend (SPA) routes into the backend API.
 4. Make **cloud / remote-host a first-class, clean deployment**, not just LAN /
    on-device. This is a primary motivation: we consolidate the API *in a way
@@ -34,7 +34,7 @@ Classify by client audience, then by what pins the path:
 | **(1a) Frozen, firmware-pinned**   | Speaker firmware                  | No, ever. The path is hardcoded in the speaker (or relative to a base it fetches from us).                     |
 | **(1b) Frozen, externally-pinned** | OAuth providers (Spotify/Amazon)  | Only with provider re-registration + device re-priming. Treat as frozen unless that cost is paid deliberately. |
 | **(2) Service-internal**           | The admin/setup UI                | Yes, freely. These are ours.                                                                                   |
-| **(3) Web/control**                | The control UI (soundtouch-web)   | Yes, freely.                                                                                                   |
+| **(3) Web/control**                | The control UI (soundtouch-player)   | Yes, freely.                                                                                                   |
 | **(4) Frontend (SPA)**             | Browser, client-side routing      | Should not be enumerated in the backend at all (see `/app/*` below).                                           |
 | **(Infra)**                        | Humans, monitoring, the SPA shell | Conventionally stable; collision-prone at merge time.                                                          |
 
@@ -103,7 +103,7 @@ Grouped by prefix. The authoritative enumerated list is the router golden file
 | `/web/*` (`HandleWeb`)                                                                             | (4) frontend          | Browser (admin SPA)                   | Yes; already the clean catch-all pattern |
 | `/`<br>`/docs/*`<br>`/favicon.ico`<br>`/health`                                                    | (Infra)               | Humans / monitoring                   | Keep stable by convention                |
 
-## Web routes (`soundtouch-web`)
+## Web routes (`soundtouch-player`)
 
 Defined in `pkg/service/soundtouchweb/mount.go`. Not currently mounted inside
 the service; it is a separate binary.
@@ -166,7 +166,7 @@ deployments:
 
 - **Speaker-direct (control plane):** the service opens a connection *to* the
   speaker's local API (`:8090`) right now. Discovery, migration, reboot,
-  test-connection, peer-probe, and the entire `soundtouch-web`
+  test-connection, peer-probe, and the entire `soundtouch-player`
   control/zone/volume/key/TTS-to-speaker surface. These only work where the host
   shares the LAN with the speaker. **In a cloud deployment they are dead weight**,
   and any UI that shows them is misleading.
@@ -386,7 +386,7 @@ diagnostic export, not leak into shared bundles.
 # auth/authz middleware applies per group, not per route):
 /api/setup/*       (today: /setup/*)            -> admin tier: auth required
 /api/mgmt/*        (today: /mgmt/*, no callbacks) -> admin tier: auth required
-/api/control/*     (today: soundtouch-web /api/*) -> player tier: auth optional
+/api/control/*     (today: soundtouch-player /api/*) -> player tier: auth optional
 /api/devices ...
 
 # OAuth provider callbacks (externally-pinned; freeze in place,
@@ -404,7 +404,7 @@ diagnostic export, not leak into shared bundles.
 ### The `/app/*` pattern
 
 The service's admin UI already does the right thing: `/web/*` is one catch-all
-(`HandleWeb`), not one route per page. The `soundtouch-web` SPA routes
+(`HandleWeb`), not one route per page. The `soundtouch-player` SPA routes
 (`mount.go`, the `/`, `/devices`, `/tunein`, ... block) are the legacy
 anti-pattern. The target:
 
@@ -523,7 +523,7 @@ them.
      step is about our movable routes only.
    - **Exclude** `/mgmt/spotify/callback` and `/mgmt/amazon/callback` (1b):
      freeze, or move only with a deliberate provider re-registration.
-2. **First, migrate `soundtouch-web` in place to the target API shape.** Before
+2. **First, migrate `soundtouch-player` in place to the target API shape.** Before
    touching the service, restructure the standalone `-web` binary's own routes to
    what they should be *after* the merge: the control API under `/api/control/*`
    and the SPA under `/app/*` (with `/ws` as e.g. `/api/control/ws`). Unlike the
@@ -537,7 +537,7 @@ them.
    routes already match the target and don't overlap the service's namespaces, so
    the merge below is a near-additive mount.
 
-3. **Fold `soundtouch-web` into the service.** Bring the (already target-shaped)
+3. **Fold `soundtouch-player` into the service.** Bring the (already target-shaped)
    control API in as `/api/control/*` and the UI under `/app/*` (one role-gated
    app, see above).
    The actual overlap to clean up (verified) is small: only **`/`** truly
@@ -556,7 +556,7 @@ them.
      surface from being exposed unless an operator deliberately enables it. The
      flag follows the same CLI/env/persisted precedence as `server-url`, and is
      the seam the `deployment-mode` parameter later subsumes.
-4. **Deprecate the `soundtouch-web` binary.** It keeps working in 0.x but prints
+4. **Deprecate the `soundtouch-player` binary.** It keeps working in 0.x but prints
    a startup deprecation warning (along the lines of "this binary is removed in
    1.x, use soundtouch-service") so its removal is no surprise.
 5. **Warn on old-route hits in the service, observably.** When a deprecated path
@@ -597,7 +597,7 @@ in a 0.x release first:
 
 ### 1.x cutover
 
-Remove the obsolete routes and retire `soundtouch-web`. Per the versioning
+Remove the obsolete routes and retire `soundtouch-player`. Per the versioning
 section, this is the only point where anything is removed; the frozen
 speaker/app routes stay.
 

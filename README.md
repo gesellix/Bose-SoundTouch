@@ -70,11 +70,13 @@ See the [CLI Reference](https://gesellix.github.io/Bose-SoundTouch/docs/guides/C
 
 ---
 
-### soundtouch-web
+### soundtouch-player
 
-A standalone web UI for device control — play, pause, volume, preset selection, real-time status — served from a local Go binary. Complements `soundtouch-service` when you want a dedicated device-control interface separate from the setup/admin UI.
+> Formerly `soundtouch-web`. The `soundtouch-web` binary, Docker image, and install script are still published as a transitional alias and will be removed in a future release; please switch to `soundtouch-player`.
 
-See the [soundtouch-web README](cmd/soundtouch-web/README.md) for usage.
+A standalone, LAN-resident web UI for device control — play, pause, volume, preset selection, real-time status — served from a local Go binary. Because it reaches speakers directly on your network and can delegate cloud-only features (e.g. TTS) to a remote AfterTouch service via `--service-url`, it stays useful when `soundtouch-service` runs off-LAN (for example in the cloud), where the embedded `/app` player cannot reach your speakers.
+
+See the [soundtouch-player README](cmd/soundtouch-player/README.md) for usage.
 
 ---
 

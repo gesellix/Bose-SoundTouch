@@ -70,15 +70,15 @@ func (app *WebApp) HandleAPISpeakText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The TTS request is made server-side by soundtouch-web, so its target must
+	// The TTS request is made server-side by soundtouch-player, so its target must
 	// be the operator-configured service URL — never a client-supplied value
 	// (that would let any LAN caller use this endpoint as an SSRF proxy). This
 	// differs from Play URL, where the URL is handed to the speaker, not fetched
-	// by soundtouch-web.
+	// by soundtouch-player.
 	serviceURL := strings.TrimRight(app.ServiceURL, "/")
 	if serviceURL == "" {
 		app.sendError(w,
-			"TTS requires the AfterTouch service URL. Start soundtouch-web with --service-url <https://your-aftertouch-host>.",
+			"TTS requires the AfterTouch service URL. Start soundtouch-player with --service-url <https://your-aftertouch-host>.",
 			http.StatusBadRequest)
 
 		return

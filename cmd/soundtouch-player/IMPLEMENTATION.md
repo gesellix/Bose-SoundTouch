@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `soundtouch-web` tool provides a modern single-page application (SPA) for controlling Bose SoundTouch devices. Built with a JSON API backend and client-side JavaScript rendering, it offers superior performance and eliminates template rendering issues.
+The `soundtouch-player` tool provides a modern single-page application (SPA) for controlling Bose SoundTouch devices. Built with a JSON API backend and client-side JavaScript rendering, it offers superior performance and eliminates template rendering issues.
 
 ## Architecture
 
@@ -141,10 +141,10 @@ GET  /api/control/{id}/source?name=X # Select source
 ### Build Commands
 ```bash
 # Build the web application
-cd cmd/soundtouch-web
-go build -o soundtouch-web
+cd cmd/soundtouch-player
+go build -o soundtouch-player
 
-# Build all project components (includes soundtouch-web)
+# Build all project components (includes soundtouch-player)
 make build
 
 # Cross-platform builds
@@ -154,19 +154,19 @@ make build-all
 ### Testing
 ```bash
 # Run unit tests
-go test ./cmd/soundtouch-web/...
+go test ./cmd/soundtouch-player/...
 
 # Run with coverage
-go test -cover ./cmd/soundtouch-web/...
+go test -cover ./cmd/soundtouch-player/...
 
 # Lint checking
-golangci-lint run cmd/soundtouch-web/...
+golangci-lint run cmd/soundtouch-player/...
 ```
 
 ### Development Server
 ```bash
 # Run development server
-cd cmd/soundtouch-web
+cd cmd/soundtouch-player
 go run main.go -port 8080
 
 # Access the web interface
@@ -177,7 +177,7 @@ open http://localhost:8080
 
 ### Command Line Options
 ```bash
-soundtouch-web [options]
+soundtouch-player [options]
 
 Options:
   -port string    Web server port (default "8080")
@@ -186,9 +186,9 @@ Options:
 
 ### File Structure
 ```
-cmd/soundtouch-web/
+cmd/soundtouch-player/
 ├── main.go                    # Application entry point
-├── soundtouch-web            # Built binary
+├── soundtouch-player            # Built binary
 ├── handlers/
 │   ├── handlers.go           # HTTP request handlers
 │   ├── handlers_test.go      # Handler tests

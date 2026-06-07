@@ -11,7 +11,7 @@ import (
 
 // NewServiceHTTPClient builds an *http.Client that trusts the AfterTouch
 // service's CA certificate (PEM at caPath) in addition to the system trust
-// store. soundtouch-web uses it for the only server-side call it makes to the
+// store. soundtouch-player uses it for the only server-side call it makes to the
 // service (the TTS proxy in handlers_tts.go): the service serves a self-signed
 // certificate signed by its own "AfterTouch Local Root CA", which isn't in any
 // system trust store, so http.DefaultClient would reject it with

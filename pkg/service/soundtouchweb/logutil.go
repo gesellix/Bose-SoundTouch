@@ -15,7 +15,7 @@ func sanitizeLog(s string) string {
 	return s
 }
 
-// logPlaybackRequest records what soundtouch-web is about to ask a speaker to
+// logPlaybackRequest records what soundtouch-player is about to ask a speaker to
 // play or switch to. A SoundTouch /select returns HTTP 200 even when the
 // source is ultimately rejected: the failure only surfaces afterwards as a
 // now_playing transition to an error source (see logNowPlayingError). So this

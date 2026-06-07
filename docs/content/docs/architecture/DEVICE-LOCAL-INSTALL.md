@@ -156,7 +156,7 @@ Where today's surfaces fall short for this user:
 
 **Goal.** Music plays. Pressing preset 3 gives them what preset 3 should give them. Skipping a station, adjusting volume, browsing for a new station — all fast, no friction.
 
-**Surfaces.** Physical preset buttons (always there), `soundtouch-web` (today), mobile app (Journey 2 admin app's daily-use mode), WASM-served browser UI (planned), Bose app while it still functions, voice assistants where wired up.
+**Surfaces.** Physical preset buttons (always there), `soundtouch-player` (today), mobile app (Journey 2 admin app's daily-use mode), WASM-served browser UI (planned), Bose app while it still functions, voice assistants where wired up.
 
 ### What this layer needs to be good at
 
@@ -168,14 +168,14 @@ Where today's surfaces fall short for this user:
 
 ### How surfaces map
 
-- `soundtouch-web`: primary daily UI for desktop browsers and (responsively) for tablets. This is already shipped.
+- `soundtouch-player`: primary daily UI for desktop browsers and (responsively) for tablets. This is already shipped.
 - Mobile app: daily-use mode of the same Gio app that handles admin. Capability split — admin features only show up when the user is in admin mode.
 - WASM: same Gio app, served from `soundtouch-service` to anyone on the LAN. The "I forgot which device my login is on, just open a browser" fallback.
 - Physical preset buttons: handled at the agent level (the Bose firmware fires them; AfterTouch or the on-device agent reacts).
 
 ### Open decisions for this journey
 
-- Do we keep `soundtouch-web` as a separate codebase (HTML/JS), or does it become a Gio WASM build sharing code with the admin app?
+- Do we keep `soundtouch-player` as a separate codebase (HTML/JS), or does it become a Gio WASM build sharing code with the admin app?
 - Mobile app store distribution: TestFlight for iOS (gated, slow), Play Store for Android (faster, AAB only), F-Droid as an open-source-friendly side path.
 - Multi-user state: presets per-user vs per-household. Out of scope here, but the daily surface is where it gets felt.
 
@@ -199,7 +199,7 @@ Where today's surfaces fall short for this user:
 ### How surfaces map
 
 - `soundtouch-cli`: the canonical surface for scripted control. Already covers most of the API.
-- `soundtouch-service` REST endpoints: same surface, network-accessible. Used by `soundtouch-web` and by third-party automation.
+- `soundtouch-service` REST endpoints: same surface, network-accessible. Used by `soundtouch-player` and by third-party automation.
 - Home Assistant: external integration; track but do not own.
 - Webhooks / MQTT: not present today; would let speakers participate in event-driven flows. Out of scope for a first pass; worth a separate design doc when demand surfaces.
 
@@ -217,7 +217,7 @@ Where today's surfaces fall short for this user:
 |------------------------------------|---------------------|-------------------|-------------------|------------------------|
 | `soundtouch-cli`                   | partial (today)     | partial (today)   | no                | primary                |
 | `soundtouch-service` web UI        | wizard portion      | primary           | partial           | indirect (REST)        |
-| `soundtouch-web`                   | no                  | no                | primary           | no                     |
+| `soundtouch-player`                   | no                  | no                | primary           | no                     |
 | GUI admin app (Gio, planned)       | primary             | primary           | mobile mode       | no                     |
 | Pre-flashed stick (hypothetical)   | primary             | recovery          | no                | no                     |
 | Physical preset buttons            | no                  | no                | primary           | no                     |
@@ -229,7 +229,7 @@ The diagonal isn't full because some journeys lack a polished surface today (Jou
 
 The Gio admin app, if built, can target Windows / macOS / Linux / iOS / Android / WASM from one codebase. Each target has hard constraints:
 
-- **WASM (browser).** Post-install REST control, device list and status, preset editing, station search. No mDNS (browsers cannot do raw multicast — fall back to manual IP entry or a backend bridge); no raw TCP, so no SSH and no install; no block-device access, so no stick writing. This is the "I just want to use my speakers" surface, equivalent to today's `soundtouch-web`.
+- **WASM (browser).** Post-install REST control, device list and status, preset editing, station search. No mDNS (browsers cannot do raw multicast — fall back to manual IP entry or a backend bridge); no raw TCP, so no SSH and no install; no block-device access, so no stick writing. This is the "I just want to use my speakers" surface, equivalent to today's `soundtouch-player`.
 - **Mobile iOS.** Everything WASM does, plus Bonjour-based mDNS, plus full SSH client (so app-driven install and recovery work). No FAT32 stick writing — iOS has no filesystem-level block device access for third-party apps. Best paired with a pre-flashed stick or a friend's desktop install for the bootstrap.
 - **Mobile Android.** Same as iOS, plus FAT32 stick writing *if* the user grants USB-OTG host permission. UX caveat: most users will not know what USB host mode is.
 - **Desktop (Gio).** Full capability set. mDNS, SSH-driven install, FAT32 stick writing via standard block-device APIs, post-install control, recovery. The primary onboarding surface.

@@ -9,7 +9,7 @@ Two scripts are available, one per binary:
 | Script           | Binary               | Role                                | Default port |
 |------------------|----------------------|-------------------------------------|--------------|
 | `install.sh`     | `soundtouch-service` | Cloud-replacement relay — always-on | 80 / 443     |
-| `install-web.sh` | `soundtouch-web`     | Browser control panel               | 8080         |
+| `install-web.sh` | `soundtouch-player`     | Browser control panel               | 8080         |
 
 Both auto-detect CPU architecture (armv7 / arm64 / amd64), create a `soundtouch`
 system user, and install a systemd unit. They are safe to re-run for updates.
@@ -118,9 +118,9 @@ sudo systemctl daemon-reload
 
 ---
 
-## soundtouch-web
+## soundtouch-player
 
-`soundtouch-web` is a stateless browser control panel — it holds no persistent
+`soundtouch-player` is a stateless browser control panel — it holds no persistent
 data and can be stopped or restarted at any time without data loss.
 
 ### Installation
@@ -151,7 +151,7 @@ Once running, open **`http://<pi-ip>:8080`** in a browser.
 ### Configuration
 
 ```
-/etc/soundtouch-web/soundtouch-web.env
+/etc/soundtouch-player/soundtouch-player.env
 ```
 
 Example:
@@ -173,7 +173,7 @@ network:
 SOUNDTOUCH_DEVICES=192.0.2.1,192.0.2.2
 ```
 
-`SERVICE_URL` links `soundtouch-web` to your `soundtouch-service` instance,
+`SERVICE_URL` links `soundtouch-player` to your `soundtouch-service` instance,
 which is required for Text-to-Speech ("Speak"). When the service is served
 over HTTPS with its own self-signed certificate (the default), also set
 `SERVICE_CA` to that CA certificate, or the proxied TTS call fails with
@@ -192,7 +192,7 @@ be left empty.
 After editing the env file:
 
 ```bash
-sudo systemctl restart soundtouch-web
+sudo systemctl restart soundtouch-player
 ```
 
 ### Port conflicts
@@ -210,19 +210,19 @@ the env file after installation and restart the service.
 ### Service management
 
 ```bash
-systemctl status soundtouch-web
-sudo systemctl enable soundtouch-web    # start on boot
-sudo systemctl disable soundtouch-web
-sudo systemctl stop soundtouch-web
-sudo systemctl start soundtouch-web
-sudo systemctl restart soundtouch-web
+systemctl status soundtouch-player
+sudo systemctl enable soundtouch-player    # start on boot
+sudo systemctl disable soundtouch-player
+sudo systemctl stop soundtouch-player
+sudo systemctl start soundtouch-player
+sudo systemctl restart soundtouch-player
 ```
 
 ### Logs
 
 ```bash
-journalctl -u soundtouch-web -e --no-pager
-journalctl -u soundtouch-web -f
+journalctl -u soundtouch-player -e --no-pager
+journalctl -u soundtouch-player -f
 ```
 
 ### Updates
@@ -235,10 +235,10 @@ sudo bash install-web.sh v0.107.0     # update to a specific version
 ### Removal
 
 ```bash
-sudo systemctl disable --now soundtouch-web
-sudo rm /etc/systemd/system/soundtouch-web.service
-sudo rm -rf /etc/soundtouch-web
-sudo rm /usr/local/bin/soundtouch-web
+sudo systemctl disable --now soundtouch-player
+sudo rm /etc/systemd/system/soundtouch-player.service
+sudo rm -rf /etc/soundtouch-player
+sudo rm /usr/local/bin/soundtouch-player
 sudo systemctl daemon-reload
 ```
 

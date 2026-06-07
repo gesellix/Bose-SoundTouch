@@ -623,7 +623,7 @@ fmt.Printf("Current source: %s, status: %s\n",
     nowPlaying.Source, nowPlaying.PlayStatus)
 ```
 
-### ❌ soundtouch-web TTS fails with `certificate signed by unknown authority`
+### ❌ soundtouch-player TTS fails with `certificate signed by unknown authority`
 
 **Symptoms:**
 ```
@@ -632,17 +632,17 @@ tls: failed to verify certificate: x509: certificate signed by unknown authority
 ```
 
 **Cause:** TTS synthesis and the Bose app key live in `soundtouch-service`,
-so `soundtouch-web` proxies the "Speak" action to the service. When the
+so `soundtouch-player` proxies the "Speak" action to the service. When the
 service is served over HTTPS with its own self-signed certificate (the
-default — see `GET /setup/ca.crt`), `soundtouch-web` doesn't trust that CA out
+default — see `GET /setup/ca.crt`), `soundtouch-player` doesn't trust that CA out
 of the box, so the proxied call fails verification.
 
-**Solution:** start `soundtouch-web` with `--service-ca` pointing at the
+**Solution:** start `soundtouch-player` with `--service-ca` pointing at the
 service's CA certificate (its `<dataDir>/certs/ca.crt`, or the file served at
 `/setup/ca.crt`):
 
 ```bash
-soundtouch-web \
+soundtouch-player \
   --service-url https://soundtouch.fritz.box \
   --service-ca /path/to/certs/ca.crt
 ```
@@ -651,7 +651,7 @@ soundtouch-web \
 system trust store, so a service URL that uses a publicly trusted certificate
 needs no flag.
 
-### ❌ soundtouch-web TTS returns `host ... is not a known device`
+### ❌ soundtouch-player TTS returns `host ... is not a known device`
 
 **Symptoms:**
 ```
@@ -664,8 +664,8 @@ verbatim from the request).
 
 **Solution:** make sure the target speaker is known to `soundtouch-service`
 (discovered or manually added, and migrated to AfterTouch), not only to
-`soundtouch-web`'s own discovery. Check with `GET /setup/devices` on the
-service. (Recent `soundtouch-web` versions identify the speaker by its device
+`soundtouch-player`'s own discovery. Check with `GET /setup/devices` on the
+service. (Recent `soundtouch-player` versions identify the speaker by its device
 ID and a bare IP, so this error otherwise indicates the speaker simply isn't
 registered with the service.)
 

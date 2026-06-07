@@ -2,43 +2,32 @@
 set -euo pipefail
 
 # ==============================================================================
-# DEPRECATED: soundtouch-web has been renamed to soundtouch-player.
-# This installer still works (the soundtouch-web release asset is published as
-# a transitional alias) but will be removed in a future release. Please switch
-# to install-player.sh, which installs the soundtouch-player binary/service.
-# ==============================================================================
-echo "NOTICE: soundtouch-web has been renamed to soundtouch-player." >&2
-echo "        This installer (install-web.sh) is deprecated and will be removed" >&2
-echo "        in a future release; please switch to install-player.sh." >&2
-echo >&2
-
-# ==============================================================================
-# Bose-SoundTouch soundtouch-web installer (systemd, headless)
+# Bose-SoundTouch soundtouch-player installer (systemd, headless)
 #
 # Usage:
-#   sudo bash install-web.sh [vX.Y.Z]
+#   sudo bash install-player.sh [vX.Y.Z]
 #
 # Examples (override defaults via env vars):
 #
 #   sudo \
 #     VERSION=v0.107.0 \
 #     HTTP_PORT=8081 \
-#     bash install-web.sh
+#     bash install-player.sh
 #
 #   # With an AfterTouch service link for TTS (HTTPS + self-signed CA):
 #   sudo \
 #     SERVICE_URL=https://soundtouch.local \
 #     SERVICE_CA=/var/lib/soundtouch-service/certs/ca.crt \
-#     bash install-web.sh
+#     bash install-player.sh
 #
 # Or with a version argument to perform an update:
-#   sudo bash install-web.sh v0.107.0
+#   sudo bash install-player.sh v0.107.0
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
-# - soundtouch-web is stateless (no data directory) — it is safe to stop/restart freely.
+# - soundtouch-player is stateless (no data directory) — it is safe to stop/restart freely.
 # - Default port is 8080 (unprivileged — no special capabilities needed).
-# - If soundtouch-service is already installed, soundtouch-web reuses the
+# - If soundtouch-service is already installed, soundtouch-player reuses the
 #   existing soundtouch:soundtouch user/group.
 # - Safe to re-run; it will update the binary, env file, and unit and restart.
 # ==============================================================================
@@ -48,11 +37,11 @@ VERSION="${1:-${VERSION:-v0.107.0}}"
 if [[ ! "$VERSION" =~ ^v ]]; then
   VERSION="v${VERSION}"
 fi
-SERVICE_NAME="${SERVICE_NAME:-soundtouch-web}"
-BIN_PATH="${BIN_PATH:-/usr/local/bin/soundtouch-web}"
+SERVICE_NAME="${SERVICE_NAME:-soundtouch-player}"
+BIN_PATH="${BIN_PATH:-/usr/local/bin/soundtouch-player}"
 
-CONFIG_DIR="${CONFIG_DIR:-/etc/soundtouch-web}"
-ENV_FILE="${ENV_FILE:-$CONFIG_DIR/soundtouch-web.env}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/soundtouch-player}"
+ENV_FILE="${ENV_FILE:-$CONFIG_DIR/soundtouch-player.env}"
 
 SERVICE_USER="${SERVICE_USER:-soundtouch}"
 SERVICE_GROUP="${SERVICE_GROUP:-soundtouch}"
@@ -119,7 +108,7 @@ detect_arch_asset() {
 
 download_url_for() {
   local asset="$1"
-  echo "https://github.com/gesellix/Bose-SoundTouch/releases/download/${VERSION}/soundtouch-web-${VERSION}-${asset}"
+  echo "https://github.com/gesellix/Bose-SoundTouch/releases/download/${VERSION}/soundtouch-player-${VERSION}-${asset}"
 }
 
 ensure_user_group() {
@@ -152,19 +141,19 @@ download_binary() {
   trap 'rm -rf "${tmp}"' EXIT
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "${tmp}/soundtouch-web" "${url}"
+    curl -fsSL -o "${tmp}/soundtouch-player" "${url}"
   else
-    wget -qO "${tmp}/soundtouch-web" "${url}"
+    wget -qO "${tmp}/soundtouch-player" "${url}"
   fi
 
-  chmod +x "${tmp}/soundtouch-web"
+  chmod +x "${tmp}/soundtouch-player"
 
   if [[ -f "${BIN_PATH}" ]]; then
     log "Backing up existing binary to ${BIN_PATH}.old"
     cp -p "${BIN_PATH}" "${BIN_PATH}.old"
   fi
 
-  install -m 0755 "${tmp}/soundtouch-web" "${BIN_PATH}"
+  install -m 0755 "${tmp}/soundtouch-player" "${BIN_PATH}"
   log "Installed binary to ${BIN_PATH}"
 }
 
@@ -173,8 +162,8 @@ self_update() {
     return
   fi
 
-  local url="https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/${VERSION}/scripts/raspberry-pi/install-web.sh"
-  local tmp_script="/tmp/soundtouch-web-install-${VERSION}.sh"
+  local url="https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/${VERSION}/scripts/raspberry-pi/install-player.sh"
+  local tmp_script="/tmp/soundtouch-player-install-${VERSION}.sh"
 
   log "Checking for installer updates for ${VERSION}..."
   log "URL: ${url}"
@@ -288,7 +277,7 @@ reload_enable_start() {
   done
 
   if [[ "$success" = true ]]; then
-    log "✅ soundtouch-web is healthy and responding!"
+    log "✅ soundtouch-player is healthy and responding!"
   else
     log "⚠️ Service started but did not respond at $health_url within timeout."
     log "Check logs with: journalctl -u ${SERVICE_NAME}.service -n 50"
@@ -317,7 +306,7 @@ show_status() {
 Open in your browser:
   http://<pi-ip>:${HTTP_PORT}/
 
-soundtouch-web is a control panel — you can stop it when not in use:
+soundtouch-player is a control panel — you can stop it when not in use:
   sudo systemctl stop ${SERVICE_NAME}
   sudo systemctl start ${SERVICE_NAME}
 

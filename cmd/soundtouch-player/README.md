@@ -75,20 +75,20 @@ Individual device pages provide full control over:
 make build
 
 # Or manually
-cd cmd/soundtouch-web
-go build -o soundtouch-web
+cd cmd/soundtouch-player
+go build -o soundtouch-player
 ```
 
 ### Running
 ```bash
 # Run with default settings (port 8080)
-./soundtouch-web
+./soundtouch-player
 
 # Specify custom port
-./soundtouch-web -port 8888
+./soundtouch-player -port 8888
 
 # Connect to specific device
-./soundtouch-web -host 192.0.2.100
+./soundtouch-player -host 192.0.2.100
 ```
 
 ### Command Line Options
@@ -105,17 +105,17 @@ go build -o soundtouch-web
 ### Text-to-Speech (TTS)
 
 TTS synthesis and the Bose `app_key` live in the AfterTouch service, not in
-soundtouch-web, so the "Speak" feature proxies to the service's
-`/setup/tts/speak` endpoint. To use it, point soundtouch-web at the service
+soundtouch-player, so the "Speak" feature proxies to the service's
+`/setup/tts/speak` endpoint. To use it, point soundtouch-player at the service
 with `--service-url`.
 
 When the service is served over HTTPS with its own self-signed certificate
-(the default), soundtouch-web also needs to trust the service's CA, or the
+(the default), soundtouch-player also needs to trust the service's CA, or the
 proxied call fails with `x509: certificate signed by unknown authority`. Pass
 the CA with `--service-ca`; it is the service's `<dataDir>/certs/ca.crt`:
 
 ```bash
-soundtouch-web \
+soundtouch-player \
   --service-url https://soundtouch.fritz.box \
   --service-ca /path/to/certs/ca.crt
 ```
@@ -218,7 +218,7 @@ ws.onmessage = function(event) {
 
 ### Project Structure
 ```
-cmd/soundtouch-web/
+cmd/soundtouch-player/
 ├── main.go              # Application entry point and SPA routing
 ├── handlers/            # HTTP and WebSocket handlers
 │   ├── handlers.go     # JSON API endpoints
@@ -244,7 +244,7 @@ cmd/soundtouch-web/
 go test ./...
 
 # Manual testing with multiple devices
-./soundtouch-web -port 8080
+./soundtouch-player -port 8080
 
 # API testing
 curl http://localhost:8080/api/devices
@@ -323,7 +323,7 @@ This UI is based on extensive analysis of captured SoundTouch WebSocket interact
 Add verbose logging by setting environment variable:
 ```bash
 export DEBUG=true
-./soundtouch-web
+./soundtouch-player
 ```
 
 ## Contributing

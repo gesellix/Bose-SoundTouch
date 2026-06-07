@@ -7,10 +7,10 @@ const html = htm.bind(h);
 
 // TTS is a "source" view (like PlayURL / TuneIn / RadioBrowser): enter text,
 // pick a device, and the AfterTouch service synthesizes and plays it. Synthesis,
-// credentials, and the service URL all live server-side — soundtouch-web proxies
+// credentials, and the service URL all live server-side — soundtouch-player proxies
 // to the service it was started with (--service-url). The service URL is shown
 // read-only: unlike Play URL (whose URL is handed to the speaker), here
-// soundtouch-web makes the request itself, so a browser-supplied URL would be an
+// soundtouch-player makes the request itself, so a browser-supplied URL would be an
 // open SSRF proxy.
 export function TTS({ devices, serverServiceUrl }) {
     const [text, setText] = useState('');
@@ -56,7 +56,7 @@ export function TTS({ devices, serverServiceUrl }) {
                     type="url"
                     class="tunein-search-input"
                     value=${serverServiceUrl || ''}
-                    placeholder="(not configured — start soundtouch-web with --service-url)"
+                    placeholder="(not configured — start soundtouch-player with --service-url)"
                     readonly
                     title="AfterTouch service URL — set server-side via --service-url"
                 />
@@ -64,9 +64,9 @@ export function TTS({ devices, serverServiceUrl }) {
             <div class="track-meta" style="margin-top:.4rem; opacity:.85">
                 ${serverServiceUrl
                     ? html`Synthesized by the AfterTouch service (Settings → Integrations) and played on the speaker.`
-                    : html`<strong>TTS is unavailable:</strong> start soundtouch-web with <code>--service-url</code>.`}
+                    : html`<strong>TTS is unavailable:</strong> start soundtouch-player with <code>--service-url</code>.`}
                 <br/>
-                The service URL is fixed server-side and can't be edited here: soundtouch-web
+                The service URL is fixed server-side and can't be edited here: soundtouch-player
                 makes the request itself, so a browser-supplied URL would let anyone use it as
                 an SSRF proxy.
             </div>

@@ -19,7 +19,7 @@ import (
 
 func TestPrintRoutes(t *testing.T) {
 	// Initialize a minimal server to get the router. Pass a web app so the
-	// snapshot also captures the embedded soundtouch-web surface
+	// snapshot also captures the embedded soundtouch-player surface
 	// (/api/control + /app); discovery is nil since we only register routes.
 	server := handlers.NewServer(nil, nil, "http://localhost:8000", true, true, true)
 	r := setupRouter(server, nil, soundtouchweb.NewWebApp())

@@ -87,7 +87,7 @@ export function PlayURL({ devices, serverServiceUrl }) {
                 />
             </div>
             ${serverServiceUrl
-                ? html`<div class="track-meta" style="margin-top:.2rem; opacity:.85">Configured server-side (soundtouch-web --service-url); edits here would be ignored.</div>`
+                ? html`<div class="track-meta" style="margin-top:.2rem; opacity:.85">Configured server-side (soundtouch-player --service-url); edits here would be ignored.</div>`
                 : null}
             ${status && html`<div class="track-meta" style="margin-top:.6rem">${status}</div>`}
 

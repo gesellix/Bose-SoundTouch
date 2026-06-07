@@ -95,7 +95,7 @@ func (app *WebApp) AddDeviceByHost(host string, port int, source string) {
 // SeedExtraDevices registers any devices reported by the ExtraDeviceHosts hook
 // (if set) via AddDeviceByHost. Idempotent: already-known hosts are skipped.
 // Used by the embedded build to surface the service datastore's devices even
-// when network discovery is disabled; a no-op for standalone soundtouch-web.
+// when network discovery is disabled; a no-op for standalone soundtouch-player.
 //
 // Hosts are probed concurrently: AddDeviceByHost makes a blocking /info call
 // (up to its 10 s timeout) for each unknown host, so an offline speaker in the
@@ -130,7 +130,7 @@ func (app *WebApp) SeedExtraDevices() {
 // (embedded build), it runs the host service's discovery so the shared store is
 // refreshed, then re-syncs from ExtraDeviceHosts — it does NOT run its own
 // mDNS/UPnP, so the embedded build never duplicates the service's discovery.
-// When discoveryService is non-nil (standalone soundtouch-web), it runs an
+// When discoveryService is non-nil (standalone soundtouch-player), it runs an
 // mDNS/UPnP sweep and registers any found devices via AddDeviceByHost.
 // Used by the startup goroutine in main and by the /api/control/discover route
 // inside MountWeb.

@@ -11,14 +11,14 @@ Bose shut down SoundTouch cloud services on **May 6, 2026**. Per the [official e
 
 What **continues to work** regardless:
 - The official SoundTouch app for local control (play/pause/volume/source selection)
-- Local playback controls via `soundtouch-cli`, `soundtouch-web`, or any app that uses the local Web API
+- Local playback controls via `soundtouch-cli`, `soundtouch-player`, or any app that uses the local Web API
 - Bluetooth, AUX, and AirPlay inputs
 - Multiroom zones (local, peer-to-peer)
 
 **AfterTouch** — the `soundtouch-service` — restores the first three:
 
 - **Presets** — full preset management including long-press assignment and recently-played sync; music service presets (Spotify, TuneIn, etc.) work once the service is linked (see [Connecting Music Services](MUSIC-SERVICES.md))
-- **Music browsing and playback** — TuneIn, Internet Radio, and RadioBrowser via `soundtouch-web`; direct station/URL playback via `soundtouch-cli`; Spotify via Spotify Connect (speaker-native) or AfterTouch's OAuth integration; Amazon Music OAuth infrastructure is in place but streaming is not yet verified
+- **Music browsing and playback** — TuneIn, Internet Radio, and RadioBrowser via `soundtouch-player`; direct station/URL playback via `soundtouch-cli`; Spotify via Spotify Connect (speaker-native) or AfterTouch's OAuth integration; Amazon Music OAuth infrastructure is in place but streaming is not yet verified
 - **Stereo pairing** — via `soundtouch-cli`
 
 Alexa voice commands are not currently supported.

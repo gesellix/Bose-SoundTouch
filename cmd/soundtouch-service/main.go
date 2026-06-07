@@ -588,7 +588,7 @@ func main() {
 				}
 			}
 
-			// Embedded web UI (soundtouch-web): LAN control UI under /app, control
+			// Embedded web UI (soundtouch-player): LAN control UI under /app, control
 			// API under /api/control. Same LAN-trust tier as /setup, no auth.
 			webApp := newEmbeddedWebApp(server, config.serverURL, ds)
 
@@ -1088,7 +1088,7 @@ func startDeviceDiscovery(server *handlers.Server) {
 	}()
 }
 
-// newEmbeddedWebApp builds the soundtouch-web application for embedding in the
+// newEmbeddedWebApp builds the soundtouch-player application for embedding in the
 // service router: release metadata from the build vars, a loopback ServiceURL
 // for the TTS / Play URL proxy (plain HTTP, no CA trust needed), and device
 // state sourced entirely from the service.

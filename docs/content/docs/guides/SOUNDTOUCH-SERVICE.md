@@ -30,7 +30,7 @@ The service consists of several key components:
 - **Service Registry**: Media service discovery and configuration
 - **Playback Control**: Stream URL resolution and audio metadata
 
-![soundtouch-web TuneIn search — browsing smooth jazz stations](/images/soundtouch-web-tunein.png)
+![soundtouch-player TuneIn search — browsing smooth jazz stations](/images/soundtouch-player-tunein.png)
 
 ### Marge Services (Account & Device Management)
 - **Account Management**: User account simulation and device association

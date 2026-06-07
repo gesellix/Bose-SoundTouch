@@ -18,7 +18,7 @@ Key binaries:
   (status, play, presets, groups, migration, …).
 - `soundtouch-service` — replacement for `streaming.bose.com`
   and the `bmx` services, default port `8000`.
-- `soundtouch-web` — Web UI for Radio browsing and device control.
+- `soundtouch-player` — Web UI for Radio browsing and device control.
 - `soundtouch-backup` — Helper for on-device backup and restore.
 
 Per-session pickup notes live in two local files at the repo root (they are `.gitignore`d and only exist if created during a session):
@@ -105,7 +105,7 @@ retrospective diffing whenever something goes sideways.
 cmd/
   soundtouch-cli/      # CLI tool for device control
   soundtouch-service/  # Local cloud service emulator
-  soundtouch-web/      # Web UI (TuneIn browser, device control)
+  soundtouch-player/      # Web UI (TuneIn browser, device control)
   soundtouch-backup/   # On-device backup helper
   example-*/           # Usage examples
 pkg/

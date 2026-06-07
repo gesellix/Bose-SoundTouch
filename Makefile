@@ -17,8 +17,11 @@ BINARY_NAME=soundtouch-cli
 BINARY_PATH=./cmd/$(BINARY_NAME)
 SERVICE_NAME=soundtouch-service
 SERVICE_PATH=./cmd/$(SERVICE_NAME)
+PLAYER_NAME=soundtouch-player
+PLAYER_PATH=./cmd/$(PLAYER_NAME)
+# WEB_NAME is the previous name for the player, kept as a transitional alias
+# built from the same PLAYER_PATH source. It will be dropped in a future release.
 WEB_NAME=soundtouch-web
-WEB_PATH=./cmd/$(WEB_NAME)
 EXAMPLE_MDNS_NAME=example-mdns
 EXAMPLE_MDNS_PATH=./cmd/$(EXAMPLE_MDNS_NAME)
 EXAMPLE_UPNP_NAME=example-upnp
@@ -52,7 +55,7 @@ AUTH_SERVICE_URL   ?= $(BACKEND_URL)
 
 all: check build
 
-build: build-cli build-service build-web build-examples build-favicon-gen build-backup
+build: build-cli build-service build-player build-web build-examples build-favicon-gen build-backup
 
 build-cli:
 	@echo "Building $(BINARY_NAME)..."
@@ -64,10 +67,17 @@ build-service:
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME) $(SERVICE_PATH)
 
-build-web:
-	@echo "Building $(WEB_NAME)..."
+build-player:
+	@echo "Building $(PLAYER_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(WEB_NAME) $(WEB_PATH)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(PLAYER_NAME) $(PLAYER_PATH)
+
+# Transitional alias: builds the same source as build-player under the old
+# soundtouch-web name. Drop this target once the alias is retired.
+build-web:
+	@echo "Building $(WEB_NAME) (transitional alias of $(PLAYER_NAME))..."
+	@mkdir -p $(BUILD_DIR)
+	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(WEB_NAME) $(PLAYER_PATH)
 
 build-examples:
 	@echo "Building $(EXAMPLE_MDNS_NAME)..."
@@ -334,17 +344,17 @@ dev-scan-http: build-examples
 	@echo "Scanning for HTTP mDNS services..."
 	$(BUILD_DIR)/$(SCANNER_NAME) -service _http._tcp -v
 
-dev-web: build-web
-	@echo "Starting web UI (default port 8080)..."
-	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME)
+dev-player: build-player
+	@echo "Starting web player (default port 8080)..."
+	cd cmd/soundtouch-player && ../../$(BUILD_DIR)/$(PLAYER_NAME)
 
-dev-web-port: build-web
-	@echo "Starting web UI on custom port..."
+dev-player-port: build-player
+	@echo "Starting web player on custom port..."
 	@if [ -z "$(PORT)" ]; then \
-		echo "Usage: make dev-web-port PORT=8888"; \
+		echo "Usage: make dev-player-port PORT=8888"; \
 		exit 1; \
 	fi
-	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME) -port $(PORT)
+	cd cmd/soundtouch-player && ../../$(BUILD_DIR)/$(PLAYER_NAME) -port $(PORT)
 
 dev-backup: build-backup
 	@echo "Running backup tool..."
@@ -358,18 +368,19 @@ dev-backup-local: build-backup
 	@echo "Running local backup (auto-discover)..."
 	$(BUILD_DIR)/$(BACKUP_NAME) local --discover
 
-dev-web-host: build-web
-	@echo "Starting web UI with specific host..."
+dev-player-host: build-player
+	@echo "Starting web player with specific host..."
 	@if [ -z "$(HOST)" ]; then \
-		echo "Usage: make dev-web-host HOST=192.0.2.10"; \
+		echo "Usage: make dev-player-host HOST=192.0.2.10"; \
 		exit 1; \
 	fi
-	cd cmd/soundtouch-web && ../../$(BUILD_DIR)/$(WEB_NAME) -host $(HOST)
+	cd cmd/soundtouch-player && ../../$(BUILD_DIR)/$(PLAYER_NAME) -host $(HOST)
 
-install: build-cli build-service build-web build-backup
+install: build-cli build-service build-player build-web build-backup
 	@echo "Installing binaries to $(GOPATH)/bin..."
 	cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(SERVICE_NAME) $(GOPATH)/bin/
+	cp $(BUILD_DIR)/$(PLAYER_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(WEB_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(BACKUP_NAME) $(GOPATH)/bin/
 
@@ -530,9 +541,9 @@ help:
 	@echo "  dev-backup       - Build and show backup tool help"
 	@echo "  dev-backup-cloud - Build and run cloud backup (prompts for credentials)"
 	@echo "  dev-backup-local - Build and run local backup (auto-discover speakers)"
-	@echo "  dev-web          - Build and run web UI (default port 8080)"
-	@echo "  dev-web-port     - Build and run web UI on custom port (PORT=8888)"
-	@echo "  dev-web-host     - Build and run web UI with specific device (HOST=ip)"
+	@echo "  dev-player       - Build and run web player (default port 8080)"
+	@echo "  dev-player-port  - Build and run web player on custom port (PORT=8888)"
+	@echo "  dev-player-host  - Build and run web player with specific device (HOST=ip)"
 	@echo "  install       - Install binaries to GOPATH/bin"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  release       - Create release binaries"
@@ -557,8 +568,8 @@ help:
 	@echo "  make dev-upnp-timeout TIMEOUT=10s"
 	@echo "  make dev-scan-all"
 	@echo "  make dev-scan-soundtouch"
-	@echo "  make dev-web"
-	@echo "  make dev-web-port PORT=8888"
-	@echo "  make dev-web-host HOST=192.0.2.10"
+	@echo "  make dev-player"
+	@echo "  make dev-player-port PORT=8888"
+	@echo "  make dev-player-host HOST=192.0.2.10"
 	@echo "  make test"
 	@echo "  make build-all"

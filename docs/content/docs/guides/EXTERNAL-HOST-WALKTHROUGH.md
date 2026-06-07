@@ -167,16 +167,16 @@ curl -s http://192.0.2.1:8090/sources
 
 ## Step 7 — Set up preset buttons (optional)
 
-### Via soundtouch-web
+### Via soundtouch-player
 
 The Radio Browser, TuneIn tabs, and preset saving live in
-**soundtouch-web**, a separate binary from the service. Once running,
+**soundtouch-player**, a separate binary from the service. Once running,
 open **`http://<host-ip>:8080`** in your browser (default port 8080).
 
-### Installing soundtouch-web on a Raspberry Pi
+### Installing soundtouch-player on a Raspberry Pi
 
 `install.sh` only installs `soundtouch-service`. Use the dedicated
-`install-web.sh` script to add soundtouch-web:
+`install-web.sh` script to add soundtouch-player:
 
 ```bash
 curl -fsSL -o install-web.sh \
@@ -185,22 +185,22 @@ sudo bash install-web.sh
 ```
 
 For configuration, service management, updates, and removal see the
-[Raspberry Pi guide → soundtouch-web](RASPBERRY-PI.md#soundtouch-web).
+[Raspberry Pi guide → soundtouch-player](RASPBERRY-PI.md#soundtouch-player).
 
-### Installing soundtouch-web on other hosts
+### Installing soundtouch-player on other hosts
 
 Download the binary for your OS and architecture from the
 [Releases page](https://github.com/gesellix/Bose-SoundTouch/releases)
 and run it directly:
 
 ```bash
-./soundtouch-web --port 8080
+./soundtouch-player --port 8080
 ```
 
 Or install it as a systemd service following the same unit-file pattern
 described in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-soundtouch-web provides two ways to save what's currently playing to a
+soundtouch-player provides two ways to save what's currently playing to a
 preset slot:
 
 **★ Star button in the Now Playing card**

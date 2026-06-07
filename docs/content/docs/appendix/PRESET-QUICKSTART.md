@@ -7,11 +7,11 @@ sidebar:
 
 ## Overview
 
-SoundTouch devices support 6 preset slots that can store your favorite content for instant access. This guide shows you how to manage presets using the soundtouch-web UI, the CLI, or the Go library.
+SoundTouch devices support 6 preset slots that can store your favorite content for instant access. This guide shows you how to manage presets using the soundtouch-player UI, the CLI, or the Go library.
 
-## Via soundtouch-web (browser UI)
+## Via soundtouch-player (browser UI)
 
-**soundtouch-web** (default port **8080**) is the easiest way to manage presets without the command line.  Two save paths are available whenever content is playing:
+**soundtouch-player** (default port **8080**) is the easiest way to manage presets without the command line.  Two save paths are available whenever content is playing:
 
 ### ★ Star button — save from Now Playing
 

@@ -143,7 +143,9 @@ jobs:
 
           mkdir -p build
 
-          for binary in soundtouch-cli soundtouch-service soundtouch-web soundtouch-backup; do
+          # soundtouch-web is now a transitional alias of soundtouch-player
+          # (same source); building the player is enough to verify both.
+          for binary in soundtouch-cli soundtouch-service soundtouch-player soundtouch-backup; do
             OUTPUT="build/${binary}-${ARCH_SUFFIX}${EXT}"
             echo "Building $OUTPUT"
             go build -trimpath -ldflags="-s -w" -o "$OUTPUT" "./cmd/$binary"
@@ -360,26 +362,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Extract metadata (tags, labels) for soundtouch-web
-        id: meta-web
+      - name: Extract metadata (tags, labels) for soundtouch-player
+        id: meta-player
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
         with:
-          images: ghcr.io/${{ github.repository }}-web
+          images: ghcr.io/${{ github.repository }}-player
           tags: |
             type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=pr,prefix=preview-pr-
             type=sha,prefix=preview-sha-,format=short,enable=${{ github.event_name == 'pull_request' }}
             type=ref,event=branch,prefix=preview-branch-,enable=${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
 
-      - name: Build and push soundtouch-web Docker image
+      - name: Build and push soundtouch-player Docker image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
-          target: soundtouch-web
+          target: soundtouch-player
           platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
           push: ${{ steps.push-check.outputs.should-push == 'true' }}
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
+          tags: ${{ steps.meta-player.outputs.tags }}
+          labels: ${{ steps.meta-player.outputs.labels }}
           build-args: |
             COMMIT=${{ github.sha }}
             DATE=${{ steps.build_date.outputs.date }}
@@ -390,7 +392,7 @@ jobs:
         if: steps.push-check.outputs.should-push == 'true'
         env:
           SERVICE_TAGS: ${{ steps.meta-service.outputs.tags }}
-          WEB_TAGS: ${{ steps.meta-web.outputs.tags }}
+          PLAYER_TAGS: ${{ steps.meta-player.outputs.tags }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REF_NAME: ${{ github.ref_name }}
@@ -414,12 +416,12 @@ jobs:
             done <<< "$SERVICE_TAGS"
             echo '```'
             echo ""
-            echo "### soundtouch-web"
+            echo "### soundtouch-player"
             echo ""
             echo '```bash'
             while IFS= read -r tag; do
               [[ -n "$tag" ]] && echo "docker pull $tag"
-            done <<< "$WEB_TAGS"
+            done <<< "$PLAYER_TAGS"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

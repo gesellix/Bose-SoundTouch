@@ -53,20 +53,20 @@ type WebApp struct {
 	// register alongside mDNS/UPnP discovery. The embedded build in
 	// soundtouch-service points it at the service datastore's known devices so
 	// the UI shows manually-added speakers even when network discovery is
-	// disabled. Standalone soundtouch-web leaves it nil.
+	// disabled. Standalone soundtouch-player leaves it nil.
 	ExtraDeviceHosts func() []string
 
 	// TriggerDiscovery, when set, runs an external discovery sweep instead of
 	// this app's own mDNS/UPnP. The embedded build wires it to the host
 	// service's discovery (the single source of truth, which updates the shared
 	// datastore); DiscoverDevices then re-syncs from ExtraDeviceHosts. Standalone
-	// soundtouch-web leaves it nil and runs its own sweep.
+	// soundtouch-player leaves it nil and runs its own sweep.
 	TriggerDiscovery func(ctx context.Context)
 
 	// RemoveDeviceHook, when set, removes a device from the backing store by
 	// its device ID (MAC). The embedded build wires it to the service's
 	// datastore removal so a removal from the player UI also clears the
-	// persisted device; standalone soundtouch-web leaves it nil (no store, so
+	// persisted device; standalone soundtouch-player leaves it nil (no store, so
 	// removal only prunes the in-memory registry).
 	RemoveDeviceHook func(deviceID string) error
 
@@ -277,7 +277,7 @@ func (app *WebApp) HandleDeleteDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cascade to the backing store (embedded build only). Standalone
-	// soundtouch-web has no datastore and leaves the hook nil, so removal
+	// soundtouch-player has no datastore and leaves the hook nil, so removal
 	// only prunes the in-memory registry below.
 	if app.RemoveDeviceHook != nil {
 		deviceID := ""
@@ -1206,7 +1206,7 @@ func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
 	if serviceURL == "" {
 		app.sendError(w,
 			"AfterTouch service URL is required for LOCAL_INTERNET_RADIO playback. "+
-				"Start soundtouch-web with --service-url <https://your-aftertouch-host> or enter it in the Play URL settings.",
+				"Start soundtouch-player with --service-url <https://your-aftertouch-host> or enter it in the Play URL settings.",
 			http.StatusBadRequest)
 
 		return

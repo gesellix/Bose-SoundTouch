@@ -1,4 +1,11 @@
-// Package main provides a web UI for controlling Bose SoundTouch devices.
+// Package main provides soundtouch-player, the LAN-resident web player for
+// controlling Bose SoundTouch devices. It reaches speakers directly on the
+// local network and optionally delegates cloud-only features (e.g. TTS) to a
+// remote AfterTouch service via --service-url, which is why it stays useful
+// when soundtouch-service runs off-LAN (e.g. in the cloud).
+//
+// It was previously named soundtouch-web; that name is still published as a
+// transitional alias and will be dropped in a future release.
 package main
 
 import (
@@ -8,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -47,12 +55,30 @@ func updateBuildInfo() {
 	}
 }
 
+// warnIfInvokedAsWeb prints a one-line deprecation notice when the binary is
+// run under its old name (soundtouch-web). The soundtouch-web artifact is a
+// transitional alias built from this same source; this nudges operators to
+// switch to soundtouch-player before the alias is dropped.
+func warnIfInvokedAsWeb() {
+	if len(os.Args) == 0 {
+		return
+	}
+
+	name := filepath.Base(os.Args[0])
+	if name == "soundtouch-web" || name == "soundtouch-web.exe" {
+		log.Println("notice: 'soundtouch-web' has been renamed to 'soundtouch-player'. " +
+			"This name is a transitional alias and will stop being published in a future release; " +
+			"please switch to 'soundtouch-player'.")
+	}
+}
+
 func main() {
 	updateBuildInfo()
+	warnIfInvokedAsWeb()
 
 	app := &cli.App{
-		Name:  "soundtouch-web",
-		Usage: "Web UI for controlling Bose SoundTouch devices",
+		Name:  "soundtouch-player",
+		Usage: "LAN web player for controlling Bose SoundTouch devices",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "port",

@@ -129,8 +129,8 @@ A Java-based middleware that hosts the original Bose Stockholm frontend (extract
 
 ---
 
-### 8. jaas666/bose-soundtouch-web-api (Reference)
-**[github.com/jaas666/bose-soundtouch-web-api](https://github.com/jaas666/bose-soundtouch-web-api)**
+### 8. jaas666/bose-soundtouch-player-api (Reference)
+**[github.com/jaas666/bose-soundtouch-player-api](https://github.com/jaas666/bose-soundtouch-player-api)**
 
 Community-maintained Markdown conversion of the official Bose SoundTouch Web API PDF (v1.0, January 7, 2026). Useful as a developer reference. Not a deployable tool.
 
@@ -198,7 +198,7 @@ The web UI is already fully responsive — it has Bootstrap grid columns, `@medi
 ### Priority 2 — RadioBrowser as a first-class provider
 
 AfterTouch can proxy and play any stream URL, but there is no built-in station search. OpenCloudTouch's RadioBrowser integration is the reference. Tasks:
-- Wire the [RadioBrowser API](https://www.radio-browser.info/) into the `soundtouch-web` web UI as a browsable/searchable source.
+- Wire the [RadioBrowser API](https://www.radio-browser.info/) into the `soundtouch-player` web UI as a browsable/searchable source.
 - Make discovered stations directly presetable to hardware buttons.
 - This is the most common replacement for TuneIn for users who listened to internet radio via presets.
 
@@ -242,7 +242,7 @@ These exist in soundcork but are deliberate architectural choices in AfterTouch,
 
 | Area                     | soundcork                             | AfterTouch                                                |
 |--------------------------|---------------------------------------|-----------------------------------------------------------|
-| Web UI                   | FastAPI + Jinja2 miniapp and admin UI | Separate `soundtouch-web` component (Go + plain HTML/JS)  |
+| Web UI                   | FastAPI + Jinja2 miniapp and admin UI | Separate `soundtouch-player` component (Go + plain HTML/JS)  |
 | Direct device management | SSH/SCP access into speakers          | HTTP API only; no SSH                                     |
 | Device discovery client  | Python `upnpclient` library           | mDNS + UPnP in Go, with dedicated DNS interception server |
 | Token delivery           | Push (ZeroConf priming to port 8200)  | Pull (device calls back to fetch)                         |
@@ -288,7 +288,7 @@ Bose's decision to release API documentation rather than simply shutting down is
 
 - [Bose SoundTouch Plus (Home Assistant component)](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus) — comprehensive HA integration by Todd Lucas, extensive API wiki
 - [Bose SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook) — `LD_PRELOAD`-based reverse engineering framework used by AfterTouch for protocol research
-- [Bose SoundTouch Web API (community Markdown)](https://github.com/jaas666/bose-soundtouch-web-api) — official API PDF converted to Markdown
+- [Bose SoundTouch Web API (community Markdown)](https://github.com/jaas666/bose-soundtouch-player-api) — official API PDF converted to Markdown
 - [Bose Wiki — SoundTouch App Alternatives](https://bose.fandom.com/wiki/SoundTouch_app_alternatives) — community-maintained living list of workarounds and projects
 - [Reddit megathread — Bose alternatives](https://www.reddit.com/r/bose) — ongoing community discussion
 - [Radio Browser](https://www.radio-browser.info/) — the free, community-maintained internet radio directory used as a TuneIn replacement

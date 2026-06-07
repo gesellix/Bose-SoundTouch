@@ -333,7 +333,7 @@ soundtouch-cli speaker tts-cloud \
   --method speaker
 ```
 
-Web UI: the TTS source view has a "Say something…" box. soundtouch-web proxies
+Web UI: the TTS source view has a "Say something…" box. soundtouch-player proxies
 it to the service, so it must be started with `--service-url` (the target is
 server-configured, not entered in the browser, to avoid an SSRF proxy).
 

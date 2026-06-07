@@ -184,7 +184,7 @@ func TestHandleTTSSpeakValidation(t *testing.T) {
 }
 
 // TestResolveTTSHost covers the SSRF guard plus the host-normalization that
-// lets a base URL (what a client's Host() returns, e.g. soundtouch-web sends
+// lets a base URL (what a client's Host() returns, e.g. soundtouch-player sends
 // "http://ip:8090") resolve to a known device. The result is always the
 // datastore's bare IP, never the caller's value.
 func TestResolveTTSHost(t *testing.T) {

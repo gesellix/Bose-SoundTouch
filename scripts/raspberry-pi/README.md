@@ -1,7 +1,7 @@
 # Raspberry Pi installers
 
 Full documentation — installation, configuration, service management, updates,
-and removal for both `soundtouch-service` and `soundtouch-web` — lives in the
+and removal for both `soundtouch-service` and `soundtouch-player` — lives in the
 project docs:
 
 **[docs/content/docs/guides/RASPBERRY-PI.md](../../docs/content/docs/guides/RASPBERRY-PI.md)**
@@ -18,7 +18,7 @@ curl -fsSL -o install.sh \
 sudo bash install.sh
 ```
 
-**soundtouch-web** (browser control panel):
+**soundtouch-player** (browser control panel):
 
 ```bash
 curl -fsSL -o install-web.sh \

@@ -665,7 +665,7 @@ soundtouch --device 192.0.2.100 preset 1
 soundtouch interactive
 
 # Web interface
-soundtouch-webapp --port 8080
+soundtouch-playerapp --port 8080
 ```
 
 ### JavaScript/WASM Usage
@@ -727,10 +727,10 @@ client.startEventStream((event) => {
 ./soundtouch-linux-amd64 --device IP play
 
 # Web Application (embedded assets)
-./soundtouch-webapp-linux-amd64 --port 8080
+./soundtouch-playerapp-linux-amd64 --port 8080
 
 # Docker
-docker run -p 8080:8080 soundtouch-webapp
+docker run -p 8080:8080 soundtouch-playerapp
 ```
 
 ### Development Environment

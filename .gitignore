@@ -15,6 +15,7 @@ dist/
 /soundtouch-backup
 /soundtouch-cli
 /soundtouch-service
+/soundtouch-player
 /soundtouch-web
 /dummy-speaker
 /example-mdns

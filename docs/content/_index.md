@@ -35,7 +35,7 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Music Browsing"
-    subtitle="TuneIn, Internet Radio, RadioBrowser, and Spotify via soundtouch-web and soundtouch-cli."
+    subtitle="TuneIn, Internet Radio, RadioBrowser, and Spotify via soundtouch-player and soundtouch-cli."
     icon="speakerphone"
   >}}
   {{< hextra/feature-card

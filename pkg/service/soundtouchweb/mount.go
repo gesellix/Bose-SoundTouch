@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// MountWeb registers the portable soundtouch-web surface on r: the embedded
+// MountWeb registers the portable soundtouch-player surface on r: the embedded
 // assets (/app/static/*), the control API (/api/control/*), and the SPA
 // (/app/*). It is self-contained under /api/control and /app, registering
 // nothing outside those subtrees (no /, no /health), so it can be mounted into
@@ -128,7 +128,7 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 	r.Get("/app/tts", app.serveIndex)
 }
 
-// Mount is the standalone soundtouch-web entry point: the portable web surface
+// Mount is the standalone soundtouch-player entry point: the portable web surface
 // (see MountWeb) plus the standalone-only liveness endpoint and a / redirect
 // into the app. soundtouch-service does not call this — it mounts MountWeb and
 // keeps its own / (landing page) and /health.

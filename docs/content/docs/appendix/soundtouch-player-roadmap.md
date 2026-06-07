@@ -1,9 +1,9 @@
 ---
-title: "soundtouch-web: remaining features"
+title: "soundtouch-player: remaining features"
 sidebar:
   exclude: true
 ---
-Four features complete the parity gap between soundtouch-web and the Stockholm
+Four features complete the parity gap between soundtouch-player and the Stockholm
 app's local-control functionality. Everything else in Stockholm (OAuth flows,
 setup wizard, service account linking, onboarding, analytics) is cloud
 infrastructure that is either shut down or already handled by soundtouch-service.
@@ -48,7 +48,7 @@ func (c *Client) Seek(positionSeconds int) error {
 > **Note:** This section is about the speaker's **built-in** `/favorites` API —
 > a separate concept from the 6 preset slots.  Preset-slot saving (★ star /
 > **+** button) is already shipped; the native Favorites API is not yet
-> surfaced in soundtouch-web.
+> surfaced in soundtouch-player.
 
 Mark or unmark the currently playing track as a device favourite directly from
 the Now Playing card.  Unlike presets (maximum 6, numbered slots), the device
@@ -103,7 +103,7 @@ rename and network/firmware info.
 
 ## 4. Render stereo pairs as a single device
 
-Today soundtouch-web shows the two halves of a stereo pair (formed via
+Today soundtouch-player shows the two halves of a stereo pair (formed via
 `/addGroup` — see issue #252) as independent entries in the device list. The
 Bose app collapsed a paired ST10 set into one "L+R" entry; restoring that
 presentation closes the perception gap BirdyBA flagged at
@@ -139,7 +139,7 @@ end-to-end — `pkg/client` group endpoints + `cmd/soundtouch-cli/cmd_group.go`,
 covered by tests in `cmd/soundtouch-cli/cmd_group_test.go` and exercisable
 against the fake speaker's group routes
 (`pkg/service/testing/fakespeaker/fakespeaker.go`). This task is purely about
-presentation in soundtouch-web's device list — no protocol work required.
+presentation in soundtouch-player's device list — no protocol work required.
 
 ---
 
