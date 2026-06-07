@@ -1726,7 +1726,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const deviceCount = await fetchDevices();
     // Only sweep automatically on a cold start (no devices known yet). When
     // devices are already in the store, rely on the cached list plus the
-    // periodic sweep and the explicit Discover button — re-probing offline
+    // periodic sweep and the explicit Discover button. Re-probing offline
     // speakers on every admin page load was slow and surprising.
     if (deviceCount === 0 && cfg?.discovery_enabled !== false) {
         triggerDiscovery();
@@ -4145,14 +4145,6 @@ async function applyCustomPlan() {
         if (applyBtn) applyBtn.disabled = false;
     }
 }
-
-document.addEventListener("DOMContentLoaded", async () => {
-    fetchDevices();
-    const cfg = await fetchSettings();
-    if (cfg?.discovery_enabled !== false) {
-        triggerDiscovery();
-    }
-});
 
 // ---------------------------------------------------------------------------
 // Health tab
