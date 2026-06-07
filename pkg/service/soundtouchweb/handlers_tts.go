@@ -75,7 +75,7 @@ func (app *WebApp) HandleAPISpeakText(w http.ResponseWriter, r *http.Request) {
 	// (that would let any LAN caller use this endpoint as an SSRF proxy). This
 	// differs from Play URL, where the URL is handed to the speaker, not fetched
 	// by soundtouch-player.
-	serviceURL := strings.TrimRight(app.ServiceURL, "/")
+	serviceURL := strings.TrimRight(app.proxyServiceURL(), "/")
 	if serviceURL == "" {
 		app.sendError(w,
 			"TTS requires the AfterTouch service URL. Start soundtouch-player with --service-url <https://your-aftertouch-host>.",

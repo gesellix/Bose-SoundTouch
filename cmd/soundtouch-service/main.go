@@ -590,7 +590,15 @@ func main() {
 
 			// Embedded web UI (soundtouch-player): LAN control UI under /app, control
 			// API under /api/control. Same LAN-trust tier as /setup, no auth.
-			webApp := newEmbeddedWebApp(server, config.serverURL, ds)
+			// Server-side self-calls (TTS proxy) use the service's own loopback
+			// HTTP listener so they never depend on TLS / the service CA.
+			loopbackHost := config.bindAddr
+			if loopbackHost == "" {
+				loopbackHost = "127.0.0.1"
+			}
+
+			internalURL := "http://" + net.JoinHostPort(loopbackHost, config.port)
+			webApp := newEmbeddedWebApp(server, config.serverURL, internalURL, ds)
 
 			r := setupRouter(server, stockholmHandler, webApp)
 
@@ -1133,8 +1141,10 @@ func startDeviceDiscovery(server *handlers.Server) {
 }
 
 // newEmbeddedWebApp builds the soundtouch-player application for embedding in the
-// service router: release metadata from the build vars, a loopback ServiceURL
-// for the TTS / Play URL proxy (plain HTTP, no CA trust needed), and device
+// service router: release metadata from the build vars, the service's public
+// ServiceURL (used by Play URL for speaker-fetched stream URLs and shown in the
+// UI), a loopback InternalServiceURL for the player's own server-side self-calls
+// (the TTS proxy) so they never depend on TLS or the service CA, and device
 // state sourced entirely from the service.
 //
 // The web UI shares the service's discovery rather than running its own (the
@@ -1142,13 +1152,23 @@ func startDeviceDiscovery(server *handlers.Server) {
 // TriggerDiscovery runs the service sweep on a UI-initiated "discover", and the
 // devices-changed hook re-syncs the UI registry whenever the service's
 // discovery or a manual add changes the set.
-func newEmbeddedWebApp(server *handlers.Server, serverURL string, ds *datastore.DataStore) *soundtouchweb.WebApp {
+func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, ds *datastore.DataStore) *soundtouchweb.WebApp {
 	webApp := soundtouchweb.NewWebApp()
 	webApp.Version = version
 	webApp.Commit = commit
 	webApp.Date = date
 	webApp.RepoURL = repoURL
 	webApp.ServiceURL = strings.TrimRight(serverURL, "/")
+
+	// The player's own server-side calls (the TTS proxy hits
+	// /api/setup/tts/speak) go to the service's loopback HTTP listener, not the
+	// public ServiceURL. That avoids the "service doesn't trust its own CA"
+	// x509 failure entirely: loopback is plain HTTP, so it needs no CA and
+	// works on HTTP and HTTPS deployments alike — and before the CA is even
+	// generated. ServiceURL stays the public URL because Play URL bakes it into
+	// stream URLs the speaker fetches and the UI displays it.
+	webApp.InternalServiceURL = internalURL
+
 	webApp.ExtraDeviceHosts = func() []string {
 		devices, listErr := ds.ListAllDevices()
 		if listErr != nil {

@@ -43,6 +43,14 @@ type WebApp struct {
 	RepoURL    string
 	ServiceURL string
 
+	// InternalServiceURL is the base URL the player uses for its own
+	// server-side calls back to the AfterTouch service (currently the TTS
+	// proxy at /api/setup/tts/speak). The embedded build sets it to the
+	// service's loopback HTTP listener so those self-calls never depend on TLS
+	// or the service's self-signed CA. Standalone soundtouch-player leaves it
+	// empty and falls back to ServiceURL.
+	InternalServiceURL string
+
 	// ServiceClient is used for server-side calls to the AfterTouch service
 	// (currently the TTS proxy). When nil, serviceHTTPClient falls back to
 	// http.DefaultClient. Set it via NewServiceHTTPClient to trust the
@@ -82,6 +90,18 @@ func (app *WebApp) serviceHTTPClient() *http.Client {
 	}
 
 	return http.DefaultClient
+}
+
+// proxyServiceURL returns the base URL for the player's own server-side calls
+// back to the AfterTouch service (the TTS proxy). It prefers the loopback
+// InternalServiceURL (plain HTTP, no CA needed) and falls back to the public
+// ServiceURL for the standalone build where no internal URL is set.
+func (app *WebApp) proxyServiceURL() string {
+	if app.InternalServiceURL != "" {
+		return app.InternalServiceURL
+	}
+
+	return app.ServiceURL
 }
 
 // DeviceEntry pairs a device id with its connection. Used by
