@@ -564,6 +564,14 @@ func setupEnableSSHCmd() *cli.Command {
 				Name:  "no-persist",
 				Usage: "Skip persisting the remote_services marker (SSH would not survive a reboot)",
 			},
+			&cli.StringFlag{
+				Name:  "authorized-key",
+				Usage: "Opt-in hardening: install this SSH public key for root (key auth instead of the empty-password login). Pass the key text, e.g. --authorized-key \"$(cat id_ed25519.pub)\"",
+			},
+			&cli.BoolFlag{
+				Name:  "close-17000",
+				Usage: "Opt-in hardening: block port 17000 from the LAN (firewall rule applied now + persisted); loopback access is kept",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			cfg := GetClientConfig(c)
@@ -630,13 +638,46 @@ func setupEnableSSHCmd() *cli.Command {
 				}
 			}
 
+			if key := c.String("authorized-key"); key != "" {
+				fmt.Println("Installing authorized_keys for root (key auth)...")
+
+				klogs, kerr := m.InstallAuthorizedKey(cfg.Host, key)
+				if klogs != "" {
+					fmt.Print(klogs)
+				}
+
+				if kerr != nil {
+					PrintError(kerr.Error())
+					return kerr
+				}
+			}
+
+			closed17000 := c.Bool("close-17000")
+			if closed17000 {
+				fmt.Println("Closing port 17000 to the LAN (loopback kept)...")
+
+				clogs, cerr := m.Close17000(cfg.Host)
+				if clogs != "" {
+					fmt.Print(clogs)
+				}
+
+				if cerr != nil {
+					PrintError(cerr.Error())
+					return cerr
+				}
+			}
+
 			PrintSuccess("Done — SSH enabled on " + cfg.Host + ". From here, the usual migration / CA-install / inspect commands work.")
 
 			if placeholder {
 				fmt.Println("No --service-url was given, so the speaker's boseurls now point at a placeholder; run your migration next to set the real service URLs.")
 			}
 
-			fmt.Println("Note: port 17000 is left open and root login is unchanged (securing/closing 17000 is opt-in, not done here).")
+			if closed17000 {
+				fmt.Println("Port 17000 is now blocked from the LAN (loopback kept).")
+			} else {
+				fmt.Println("Note: port 17000 is left open (opt-in --close-17000 to block it from the LAN).")
+			}
 
 			return nil
 		},

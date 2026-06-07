@@ -78,6 +78,93 @@ func (m *Manager) setBoseURLsViaTelnet(deviceIP, marge, swUpdate string) (string
 	return logs.String(), nil
 }
 
+// fwScript is the speaker's persistent iptables script; appending here makes a
+// rule survive reboot (it is re-applied on boot).
+const fwScript = "/etc/init.d/Firewalls/update_iptables"
+
+// block17000Marker guards the appended rule so Close17000 is idempotent.
+const block17000Marker = "# Block 17000 (added by AfterTouch)"
+
+// Close17000 blocks the port-17000 diagnostic shell from the LAN over SSH:
+// it persists an iptables rule in the firewall script (idempotent, keyed on
+// block17000Marker) and applies the rule immediately, keeping loopback access.
+// Opt-in — the caller decides whether to harden. Needs SSH already enabled.
+func (m *Manager) Close17000(deviceIP string) (string, error) {
+	if m.NewSSH == nil {
+		return "", errors.New("ssh not configured: Manager.NewSSH is nil")
+	}
+
+	persist := "grep -q '" + block17000Marker + "' " + fwScript + " 2>/dev/null || cat >> " + fwScript + " <<'AFTEREOF'\n\n" +
+		block17000Marker + "\n" +
+		"iptables -I INPUT -p tcp --dport 17000 -j DROP\n" +
+		"iptables -I INPUT -p tcp --dport 17000 -i lo -j ACCEPT\n" +
+		"AFTEREOF"
+
+	steps := []struct{ desc, cmd string }{
+		{"remount / read-write", "mount / -o rw,remount"},
+		{"persist firewall rule", persist},
+		{"apply firewall rule now", "iptables -I INPUT -p tcp --dport 17000 -j DROP; iptables -I INPUT -p tcp --dport 17000 -i lo -j ACCEPT"},
+	}
+
+	return m.runSSHSteps(deviceIP, steps)
+}
+
+// InstallAuthorizedKey installs an SSH public key for root so access no longer
+// relies on the empty-password login. Opt-in. Needs SSH already enabled.
+func (m *Manager) InstallAuthorizedKey(deviceIP, publicKey string) (string, error) {
+	if m.NewSSH == nil {
+		return "", errors.New("ssh not configured: Manager.NewSSH is nil")
+	}
+
+	key := strings.TrimSpace(publicKey)
+	if key == "" {
+		return "", errors.New("public key is empty")
+	}
+
+	c := m.NewSSH(deviceIP)
+
+	var logs strings.Builder
+
+	if out, err := c.Run("mount / -o rw,remount && mkdir -p -m 700 /home/root/.ssh"); err != nil {
+		fmt.Fprintf(&logs, "→ prepare /home/root/.ssh\n%s\n", strings.TrimSpace(out))
+		return logs.String(), fmt.Errorf("prepare /home/root/.ssh: %w", err)
+	}
+
+	if err := c.UploadContent([]byte(key+"\n"), "/home/root/.ssh/authorized_keys"); err != nil {
+		return logs.String(), fmt.Errorf("upload authorized_keys: %w", err)
+	}
+
+	if out, err := c.Run("chmod 600 /home/root/.ssh/authorized_keys"); err != nil {
+		fmt.Fprintf(&logs, "→ chmod authorized_keys\n%s\n", strings.TrimSpace(out))
+		return logs.String(), fmt.Errorf("chmod authorized_keys: %w", err)
+	}
+
+	logs.WriteString("Installed authorized_keys for root.\n")
+
+	return logs.String(), nil
+}
+
+// runSSHSteps runs an ordered list of shell commands over a single-shot SSH
+// client, aborting on the first failure. Commands MUST be service-controlled
+// literals, never built from untrusted HTTP input.
+func (m *Manager) runSSHSteps(deviceIP string, steps []struct{ desc, cmd string }) (string, error) {
+	c := m.NewSSH(deviceIP)
+
+	var logs strings.Builder
+
+	for _, s := range steps {
+		out, err := c.Run(s.cmd)
+
+		fmt.Fprintf(&logs, "→ %s\n%s\n", s.desc, strings.TrimSpace(out))
+
+		if err != nil {
+			return logs.String(), fmt.Errorf("%s: %w", s.desc, err)
+		}
+	}
+
+	return logs.String(), nil
+}
+
 // WaitForSSHPort polls TCP :22 on the speaker until it accepts a connection or
 // timeout elapses. Used after EnableSSHViaTelnet, since sshd starts only when
 // the speaker next reads its boseurls (up to ~60s later).

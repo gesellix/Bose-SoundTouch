@@ -1,6 +1,9 @@
 package setup
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestEnableSSHViaTelnet_BuildsInjectedCommand(t *testing.T) {
 	const svc = "https://192.0.2.10:8443"
@@ -41,5 +44,63 @@ func TestSetBoseURLs_RejectsDoubleQuote(t *testing.T) {
 
 	if _, err := m.EnableSSHViaTelnet("192.0.2.10", `https://x"evil`); err == nil {
 		t.Fatal("expected an error when the service URL contains a double quote")
+	}
+}
+
+func TestClose17000_RunsFirewallSteps(t *testing.T) {
+	var ran []string
+
+	m := &Manager{NewSSH: func(string) SSHClient {
+		return &mockSSH{runFunc: func(cmd string) (string, error) {
+			ran = append(ran, cmd)
+			return "", nil
+		}}
+	}}
+
+	if _, err := m.Close17000("192.0.2.10"); err != nil {
+		t.Fatalf("Close17000: %v", err)
+	}
+
+	joined := strings.Join(ran, "\n")
+	for _, want := range []string{
+		"mount / -o rw,remount",
+		block17000Marker,
+		"iptables -I INPUT -p tcp --dport 17000 -j DROP",
+		"--dport 17000 -i lo -j ACCEPT",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("Close17000 commands missing %q\nran:\n%s", want, joined)
+		}
+	}
+}
+
+func TestInstallAuthorizedKey_UploadsKey(t *testing.T) {
+	m := &Manager{NewSSH: func(string) SSHClient {
+		return &mockSSH{runFunc: func(string) (string, error) { return "", nil }}
+	}}
+
+	if _, err := m.InstallAuthorizedKey("192.0.2.10", "  ssh-ed25519 AAAATEST comment  "); err != nil {
+		t.Fatalf("InstallAuthorizedKey: %v", err)
+	}
+	// A fresh mockSSH is created per NewSSH call, so re-run against a captured
+	// one to assert the upload.
+	var captured *mockSSH
+
+	m.NewSSH = func(string) SSHClient {
+		captured = &mockSSH{runFunc: func(string) (string, error) { return "", nil }}
+		return captured
+	}
+
+	if _, err := m.InstallAuthorizedKey("192.0.2.10", "ssh-ed25519 AAAATEST comment"); err != nil {
+		t.Fatalf("InstallAuthorizedKey: %v", err)
+	}
+
+	got, ok := captured.uploaded["/home/root/.ssh/authorized_keys"]
+	if !ok {
+		t.Fatal("authorized_keys was not uploaded")
+	}
+
+	if strings.TrimSpace(string(got)) != "ssh-ed25519 AAAATEST comment" {
+		t.Errorf("uploaded key = %q", string(got))
 	}
 }
