@@ -811,7 +811,7 @@ async function fetchVersion() {
                 const shortCommit = data.commit.substring(0, 7);
                 commitStr = `<a href="${data.commit_url}" target="_blank" style="color: inherit; text-decoration: underline;">${shortCommit}</a>`;
             }
-            info.innerHTML = `AfterTouch ${versionStr} (${commitStr}) - ${data.date}`;
+            info.innerHTML = `AfterTouch ${versionStr} (${commitStr}) • ${data.date}`;
         }
     } catch (error) {
         console.error("Failed to fetch version info", error);

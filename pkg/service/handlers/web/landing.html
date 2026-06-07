@@ -70,14 +70,6 @@
         .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
         .brand-name { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.02em; }
         .brand-subtitle { font-size: 0.7rem; font-weight: 400; opacity: 0.7; }
-        .bar-links a {
-            font-size: 0.85rem;
-            opacity: 0.8;
-            padding: 0.35rem 0.5rem;
-            border-radius: 4px;
-            transition: opacity 0.15s, background 0.15s;
-        }
-        .bar-links a:hover { opacity: 1; background: rgba(127, 127, 127, 0.18); }
 
         /* ── Chooser ─────────────────────────────────────────────────── */
         main {
@@ -148,17 +140,28 @@
             padding: 0.1rem 0.5rem;
         }
 
-        /* ── Footer (version line, like the app and admin) ───────────── */
+        /* Prominent docs link, distinct from the two destination rows. */
+        .docs-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            font-size: 0.95rem;
+            color: var(--text-dim);
+            transition: color 0.15s;
+        }
+        .docs-link:hover { color: var(--text); }
+        .docs-link svg { flex-shrink: 0; }
+
+        /* ── Footer (version line, identical to the app and admin) ────── */
         footer {
-            max-width: 32rem;
-            margin: 0 auto;
-            padding: 1.5rem;
+            padding: 1.5rem 1rem;
+            text-align: center;
             font-size: 0.8rem;
             color: var(--text-dim);
         }
         footer a { text-decoration: underline; text-underline-offset: 2px; }
         footer a:hover { color: var(--text); }
-        .dot { opacity: 0.5; padding: 0 0.15rem; }
     </style>
 </head>
 <body>
@@ -170,9 +173,6 @@
                 <span class="brand-subtitle">Bose SoundTouch Toolkit</span>
             </span>
         </a>
-        <nav class="bar-links">
-            <a href="https://gesellix.github.io/Bose-SoundTouch/" target="_blank" rel="noopener">Documentation</a>
-        </nav>
     </header>
 
     <main>
@@ -196,12 +196,18 @@
                 <span class="arrow" aria-hidden="true">&rarr;</span>
             </a>
         </nav>
+
+        <a class="docs-link" href="https://gesellix.github.io/Bose-SoundTouch/" target="_blank" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
+            Documentation
+        </a>
     </main>
 
     <footer>
         <span id="version-info">AfterTouch</span>
-        <span class="dot">&middot;</span>
-        <a href="https://gesellix.github.io/Bose-SoundTouch/" target="_blank" rel="noopener">Documentation</a>
     </footer>
 
     <script>

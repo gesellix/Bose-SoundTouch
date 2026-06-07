@@ -18,7 +18,11 @@ body { font-family: sans-serif; margin: 20px; }
 .topbar .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
 .topbar .brand-name { font-size: 1.1rem; font-weight: 600; letter-spacing: .02em; }
 .topbar .brand-subtitle { font-size: .7rem; font-weight: 400; opacity: .7; }
+.topbar .bar-links { display: flex; align-items: center; gap: .25rem; }
 .topbar .bar-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
     color: #fff;
     font-size: .85rem;
     opacity: .85;
