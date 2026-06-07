@@ -515,6 +515,32 @@ async function updateSettings() {
     }
 }
 
+// LIVE_INFO_CONCURRENCY caps how many live /info probes run at once. The
+// browser allows ~6 connections per origin over HTTP/1.1; staying below
+// that leaves sockets free so a navigation (or other request) is never
+// stuck behind a batch of slow/offline-device probes.
+const LIVE_INFO_CONCURRENCY = 3;
+
+// mapLimit runs fn over items with at most `limit` concurrent invocations,
+// resolving when all have settled. fn may be async; its rejections are
+// swallowed so one failure does not stop the rest.
+async function mapLimit(items, limit, fn) {
+    let next = 0;
+    const worker = async () => {
+        while (next < items.length) {
+            const item = items[next++];
+            try {
+                await fn(item);
+            } catch (_) {
+                /* individual probe failures are non-fatal */
+            }
+        }
+    };
+    await Promise.all(
+        Array.from({ length: Math.min(limit, items.length) }, worker),
+    );
+}
+
 async function fetchDevices() {
     try {
         const response = await fetch("/api/setup/devices");
@@ -584,8 +610,14 @@ async function fetchDevices() {
             if (currentMigrationVal) migrationSelector.value = currentMigrationVal;
             if (eventSelector && currentEventVal) eventSelector.value = currentEventVal;
 
-            // Asynchronously fetch live info for each device
-            devices.forEach((d) => updateDeviceInfo(d.device_id, d.ip_address));
+            // Refresh each device's live /info, but cap how many run at
+            // once. A browser only opens ~6 connections per origin over
+            // HTTP/1.1; an offline speaker holds its /info request until the
+            // timeout, so probing every device at once can starve the pool
+            // and make the whole page (including navigating away) wait for
+            // those requests to clear. Capping below the limit keeps sockets
+            // free for navigation and other requests.
+            mapLimit(devices, LIVE_INFO_CONCURRENCY, (d) => updateDeviceInfo(d.device_id, d.ip_address));
             fetchSpotifyStatus();
         }
 
