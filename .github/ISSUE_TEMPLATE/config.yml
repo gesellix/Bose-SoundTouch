@@ -1,0 +1,12 @@
+# Free-form blank issues stay enabled for anything that doesn't fit a template.
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Questions & Support (Discussions)
+    url: https://github.com/gesellix/Bose-SoundTouch/discussions
+    about: "\"How do I...?\", setup help, and general support. AfterTouch is a community effort: ask here, and help others when you can."
+  - name: 🚑 Survival Guide
+    url: https://gesellix.github.io/Bose-SoundTouch/docs/guides/SURVIVAL-GUIDE/
+    about: "Getting your speakers working again after the Bose cloud shutdown. Start here."
+  - name: 🔧 Troubleshooting Guide
+    url: https://gesellix.github.io/Bose-SoundTouch/docs/guides/TROUBLESHOOTING/
+    about: "Common problems and their fixes. Please check this before filing a bug."

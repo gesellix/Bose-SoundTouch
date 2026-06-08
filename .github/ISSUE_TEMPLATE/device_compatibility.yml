@@ -1,0 +1,74 @@
+name: Device Compatibility Report
+description: Tell us how AfterTouch works (or doesn't) with your SoundTouch model
+title: "[Compatibility]: "
+labels: ["compatibility", "documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping map out which speakers AfterTouch supports! 📋
+
+        Reports like yours help everyone with the same model, and feed our
+        compatibility notes in the docs.
+
+  - type: input
+    id: model
+    attributes:
+      label: Speaker model
+      placeholder: "SoundTouch 20, Wave SoundTouch IV, SoundTouch Portable, ..."
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: From the admin UI, the Bose app, or the device's `/info`.
+      placeholder: "27.0.6"
+    validations:
+      required: false
+
+  - type: textarea
+    id: works
+    attributes:
+      label: What works?
+      placeholder: |
+        - Discovery
+        - Playback and presets
+        - Stereo pair / multiroom
+        - Migration off the Bose cloud
+    validations:
+      required: false
+
+  - type: textarea
+    id: broken
+    attributes:
+      label: What doesn't work?
+      placeholder: "Anything that failed or behaved unexpectedly on this model."
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: Diagnostic report
+      description: |
+        Optional, but very helpful. In the AfterTouch **admin UI**, open the
+        **Health tab** and click **Download diagnostic report**. GitHub blocks
+        `.age` uploads, so rename the file to `.age.txt` (or zip it) before
+        attaching, or email it to aftertouch-support@gesellix.net. It is encrypted
+        to the maintainer's key. The raw datastore files inside are included as-is,
+        so if you have linked services like Spotify or Amazon, unlink them first or
+        send the file privately.
+      placeholder: "Attach the aftertouch-diagnostic-*.age.txt (or .zip) file here."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: coc
+    attributes:
+      label: Code of Conduct
+      description: This project follows a [Code of Conduct](https://github.com/gesellix/Bose-SoundTouch/blob/main/CODE_OF_CONDUCT.md).
+      options:
+        - label: "I agree to follow this project's Code of Conduct"
+          required: true

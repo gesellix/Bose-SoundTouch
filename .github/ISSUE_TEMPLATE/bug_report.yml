@@ -1,201 +1,118 @@
 name: Bug Report
-description: File a bug report to help us improve the library
+description: Something in AfterTouch isn't working the way it should
 title: "[Bug]: "
 labels: ["bug", "triage"]
-assignees: []
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible to help us diagnose and fix the issue.
+        Thanks for helping improve **AfterTouch**! 🙏
 
-  - type: input
-    id: version
-    attributes:
-      label: Library Version
-      description: What version of the library are you using?
-      placeholder: "v1.0.0"
-    validations:
-      required: true
+        AfterTouch is a community-built toolkit that keeps Bose SoundTouch speakers
+        working after the Bose cloud shutdown. We both give and ask for support here,
+        so don't worry about getting every field perfect.
 
-  - type: dropdown
-    id: go-version
-    attributes:
-      label: Go Version
-      description: What version of Go are you using?
-      options:
-        - "1.25.5+"
-        - "1.25"
-        - "1.24"
-        - "1.23"
-        - "Other (please specify in description)"
-    validations:
-      required: true
-
-  - type: dropdown
-    id: operating-system
-    attributes:
-      label: Operating System
-      description: What operating system are you running on?
-      options:
-        - "Linux"
-        - "macOS"
-        - "Windows"
-        - "FreeBSD"
-        - "Other (please specify in description)"
-    validations:
-      required: true
-
-  - type: input
-    id: device-model
-    attributes:
-      label: Bose Device Model
-      description: What Bose SoundTouch device are you trying to control?
-      placeholder: "SoundTouch 10, SoundTouch 20, etc."
-    validations:
-      required: true
-
-  - type: input
-    id: device-firmware
-    attributes:
-      label: Device Firmware Version
-      description: What firmware version is your device running? (Check in Bose app or via /info endpoint)
-      placeholder: "4.8.1.4567.891234567"
+        A quick look at the
+        [Troubleshooting Guide](https://gesellix.github.io/Bose-SoundTouch/docs/guides/TROUBLESHOOTING/)
+        often saves time. For "how do I...?" questions, please use
+        [Discussions](https://github.com/gesellix/Bose-SoundTouch/discussions) instead.
 
   - type: textarea
     id: description
     attributes:
-      label: Bug Description
-      description: A clear and concise description of what the bug is.
-      placeholder: "Describe what happened and what you expected to happen..."
+      label: What happened?
+      description: What went wrong, and what did you expect to happen instead?
+      placeholder: "When I play a radio station from the player UI, the speaker shows an orange light and nothing plays. I expected it to start playing."
     validations:
       required: true
 
   - type: textarea
-    id: reproduction-steps
+    id: steps
     attributes:
-      label: Steps to Reproduce
-      description: Steps to reproduce the behavior
+      label: Steps to reproduce
+      description: How can we trigger it? Rough steps are fine.
       placeholder: |
-        1. Go to '...'
-        2. Click on '....'
-        3. Scroll down to '....'
-        4. See error
+        1. Open the player UI
+        2. Search for a station
+        3. Press play
+        4. ...
     validations:
-      required: true
+      required: false
 
   - type: textarea
-    id: expected-behavior
+    id: diagnostic
     attributes:
-      label: Expected Behavior
-      description: A clear and concise description of what you expected to happen.
-      placeholder: "What should have happened instead?"
+      label: Diagnostic report (the most helpful thing you can attach)
+      description: |
+        In the AfterTouch **admin UI**, open the **Health tab** and click
+        **Download diagnostic report**. It is by far the best way to help us
+        diagnose a bug. GitHub blocks `.age` uploads, so rename the file to
+        `.age.txt` (or zip it) before dragging it into this box. You can also email
+        it instead: aftertouch-support@gesellix.net.
+
+        The file is **encrypted** to the maintainer's key, so only the maintainer
+        can open it. The structured summary has credentials redacted, but the raw
+        datastore files (for example `Sources.xml`) are included as-is and can
+        contain the access tokens your speaker uses for linked services like
+        Spotify or Amazon. If that is a concern, unlink those services before
+        exporting, or email the report privately instead.
+      placeholder: "Attach the aftertouch-diagnostic-*.age.txt (or .zip) file here."
     validations:
-      required: true
+      required: false
 
-  - type: textarea
-    id: code-sample
+  - type: input
+    id: device
     attributes:
-      label: Code Sample
-      description: Please provide a minimal code sample that reproduces the issue
-      render: go
-      placeholder: |
-        package main
+      label: Speaker model & firmware
+      description: Which speaker, and (if you know it) the firmware version.
+      placeholder: "SoundTouch 10, firmware 27.0.6"
+    validations:
+      required: false
 
-        import (
-            "fmt"
-            "github.com/gesellix/bose-soundtouch/pkg/client"
-        )
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How are you running AfterTouch?
+      options:
+        - "Docker / docker compose"
+        - "Prebuilt binary"
+        - "Built from source"
+        - "Not sure"
+    validations:
+      required: false
 
-        func main() {
-            // Your code that demonstrates the issue
-        }
+  - type: input
+    id: version
+    attributes:
+      label: AfterTouch version
+      description: Shown in the admin UI footer, or via the binary's `--version`.
+      placeholder: "v0.111.2"
     validations:
       required: false
 
   - type: textarea
     id: logs
     attributes:
-      label: Error Messages / Logs
-      description: Please include any relevant error messages, stack traces, or log output
+      label: Logs / error messages
+      description: Any relevant output from the service, CLI, or browser console. Please mask real LAN IPs if you can.
       render: shell
-      placeholder: |
-        Error: connection refused
-        at github.com/gesellix/bose-soundtouch/pkg/client.(*Client).makeRequest
-        ...
-    validations:
-      required: false
-
-  - type: dropdown
-    id: component
-    attributes:
-      label: Component
-      description: Which component is affected?
-      multiple: true
-      options:
-        - "Client Library (pkg/client)"
-        - "WebSocket Events"
-        - "Device Discovery"
-        - "CLI Tool"
-        - "Models/XML Parsing"
-        - "Documentation"
-        - "Examples"
-        - "Build/Release"
-    validations:
-      required: false
-
-  - type: dropdown
-    id: severity
-    attributes:
-      label: Severity
-      description: How severe is this bug?
-      options:
-        - "Low - Minor inconvenience"
-        - "Medium - Affects functionality but workaround exists"
-        - "High - Blocks major functionality"
-        - "Critical - Application crashes or data loss"
-    validations:
-      required: true
-
-  - type: textarea
-    id: network-info
-    attributes:
-      label: Network Configuration
-      description: Details about your network setup (if relevant to the issue)
-      placeholder: |
-        - Device IP: 192.0.2.100
-        - Network type: WiFi/Ethernet
-        - Router model:
-        - Any firewalls or network restrictions:
-    validations:
-      required: false
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Add any other context about the problem here
-      placeholder: "Screenshots, network traces, related issues, etc."
     validations:
       required: false
 
   - type: checkboxes
-    id: troubleshooting
+    id: checklist
     attributes:
-      label: Troubleshooting Steps
-      description: Have you tried these troubleshooting steps?
+      label: Before you submit
       options:
-        - label: "I have checked the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)"
-        - label: "I have verified my device is reachable (ping test)"
-        - label: "I have tested with the CLI tool"
-        - label: "I have checked for similar existing issues"
-        - label: "I am using the latest version of the library"
+        - label: "I checked the [Troubleshooting Guide](https://gesellix.github.io/Bose-SoundTouch/docs/guides/TROUBLESHOOTING/)"
+        - label: "I searched [existing issues](https://github.com/gesellix/Bose-SoundTouch/issues) for a duplicate"
+        - label: "I'm on a recent AfterTouch version"
 
   - type: checkboxes
-    id: terms
+    id: coc
     attributes:
       label: Code of Conduct
-      description: By submitting this issue, you agree to follow our Code of Conduct
+      description: This project follows a [Code of Conduct](https://github.com/gesellix/Bose-SoundTouch/blob/main/CODE_OF_CONDUCT.md).
       options:
         - label: "I agree to follow this project's Code of Conduct"
           required: true
