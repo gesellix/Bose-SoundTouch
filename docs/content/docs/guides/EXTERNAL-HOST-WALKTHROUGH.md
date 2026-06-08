@@ -34,10 +34,10 @@ sudo bash install.sh
 ```
 
 The installer detects your Pi's architecture (armv7, arm64, or amd64), downloads
-the binary, creates a `soundtouch` system user, and registers a systemd unit that
-starts on boot.
+the latest release binary, creates a `soundtouch` system user, and registers a
+systemd unit that starts on boot.
 
-To install a specific version:
+To pin a specific version instead of the latest:
 
 ```bash
 sudo bash install.sh v0.111.3

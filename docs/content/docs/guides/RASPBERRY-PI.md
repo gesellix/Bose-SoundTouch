@@ -13,6 +13,8 @@ Two scripts are available, one per binary:
 
 Both auto-detect CPU architecture (armv7 / arm64 / amd64), create a `soundtouch`
 system user, and install a systemd unit. They are safe to re-run for updates.
+Run without a version argument, they install the **latest release** (resolved
+from GitHub's `releases/latest` redirect); pass a tag to pin a specific version.
 Each installer has a matching uninstaller (`uninstall.sh`, `uninstall-player.sh`).
 
 > `install-web.sh` is the previous name for `install-player.sh`. It still works

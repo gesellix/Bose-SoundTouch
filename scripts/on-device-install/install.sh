@@ -1,15 +1,14 @@
 #!/bin/bash
 set -eo pipefail
 
-# Default version installed when no override is provided.  Update this value
-# each time a new release is cut so that running the canonical one-liner
+# Version to install. Left empty by default so the canonical one-liner
 #   curl -sSL .../install.sh | sh
-# picks up the latest binary without extra arguments.
+# resolves and installs the latest release automatically (see below).
 #
-# Override via environment variable or the --version/-v flag:
+# Pin a specific version via environment variable or the --version/-v flag:
 #   VERSION=0.111.3 curl -sSL .../install.sh | sh
 #   curl -sSL .../install.sh | sh -s -- --version 0.111.3
-VERSION=${VERSION:-0.111.3}
+VERSION=${VERSION:-}
 
 # Parse optional command-line arguments so the script can be invoked as:
 #   install.sh --version 0.111.3
@@ -27,6 +26,30 @@ while [ $# -gt 0 ]; do
 done
 
 GH_REPO=${GH_REPO:-gesellix/Bose-SoundTouch}
+
+# Used only when the latest-release lookup fails (offline / rate-limited /
+# a curl without -w support).
+FALLBACK_VERSION=${FALLBACK_VERSION:-0.111.3}
+
+# Resolve the latest release when no explicit version was provided, by
+# following the stable redirect https://github.com/<repo>/releases/latest
+# -> .../releases/tag/vX.Y.Z and taking the tag from the final URL. The
+# leading "v" is stripped because the URLs below add it back (v$VERSION).
+if [ -z "$VERSION" ]; then
+  LATEST_URL="https://github.com/$GH_REPO/releases/latest"
+  echo "Resolving latest release via $LATEST_URL ..."
+  EFFECTIVE=$(curl -sSLI -o /dev/null -w '%{url_effective}' "$LATEST_URL" 2>/dev/null) || true
+  TAG=${EFFECTIVE##*/}
+  VER=${TAG#v}
+  case "$VER" in
+    [0-9]*.[0-9]*) VERSION="$VER" ;;
+    *)
+      VERSION="$FALLBACK_VERSION"
+      echo "WARNING: could not resolve latest release; using fallback $VERSION" >&2
+      ;;
+  esac
+fi
+
 BINARY_URL=${BINARY_URL:-https://github.com/$GH_REPO/releases/download/v$VERSION/soundtouch-service-v$VERSION-linux-armv7}
 INIT_SCRIPT_URL=${INIT_SCRIPT_URL:-https://raw.githubusercontent.com/$GH_REPO/v$VERSION/scripts/on-device-install/aftertouch}
 

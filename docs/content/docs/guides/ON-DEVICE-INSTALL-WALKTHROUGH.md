@@ -81,7 +81,8 @@ currently running binary, and starts the service:
 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
 ```
 
-To target a specific version instead of the default:
+By default this installs the **latest release** — the script resolves it from
+GitHub's `releases/latest` redirect. To target a specific version instead:
 
 ```bash
 # Via environment variable (works with pipe-to-sh)

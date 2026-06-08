@@ -26,7 +26,9 @@ curl -fsSL -o install-player.sh \
 sudo bash install-player.sh
 ```
 
-Pass a version tag as the first argument to pin a specific release:
+Both install the **latest release** by default (resolved from GitHub's
+`releases/latest` redirect). Pass a version tag as the first argument to pin a
+specific release:
 
 ```bash
 sudo bash install.sh v0.111.3
