@@ -29,8 +29,8 @@ sudo bash install-player.sh
 Pass a version tag as the first argument to pin a specific release:
 
 ```bash
-sudo bash install.sh v0.107.0
-sudo bash install-player.sh v0.107.0
+sudo bash install.sh v0.111.3
+sudo bash install-player.sh v0.111.3
 ```
 
 > `install-web.sh` is the old name for `install-player.sh` and still works as a

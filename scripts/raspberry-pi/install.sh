@@ -10,7 +10,7 @@ set -euo pipefail
 # Examples (override defaults via env vars):
 #
 #   sudo \
-#     VERSION=v0.107.0 \
+#     VERSION=v0.111.3 \
 #     HOSTNAME_FQDN=soundtouch.local \
 #     HTTP_PORT=80 \
 #     HTTPS_PORT=443 \
@@ -18,7 +18,7 @@ set -euo pipefail
 #     bash install.sh
 #
 # Or with a version argument to perform an update:
-#   sudo bash install.sh v0.107.0
+#   sudo bash install.sh v0.111.3
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
@@ -28,7 +28,7 @@ set -euo pipefail
 # - Safe to re-run; it will update binary/config/unit and restart the service.
 # ==============================================================================
 
-VERSION="${1:-${VERSION:-v0.107.0}}"
+VERSION="${1:-${VERSION:-v0.111.3}}"
 # Normalize version prefix
 if [[ ! "$VERSION" =~ ^v ]]; then
   VERSION="v${VERSION}"
@@ -117,7 +117,7 @@ detect_arch_asset() {
 download_url_for() {
   local asset="$1"
   # Release asset pattern used by you earlier:
-  # soundtouch-service-v0.107.0-linux-armv7
+  # soundtouch-service-v0.111.3-linux-armv7
   echo "https://github.com/gesellix/Bose-SoundTouch/releases/download/${VERSION}/soundtouch-service-${VERSION}-${asset}"
 }
 

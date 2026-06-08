@@ -40,14 +40,14 @@ sudo bash install.sh
 Install a specific version:
 
 ```bash
-sudo bash install.sh v0.107.0
+sudo bash install.sh v0.111.3
 ```
 
 Override defaults at install time:
 
 ```bash
 sudo \
-  VERSION=v0.107.0 \
+  VERSION=v0.111.3 \
   HOSTNAME_FQDN=soundtouch.local \
   HTTP_PORT=80 \
   HTTPS_PORT=443 \
@@ -105,7 +105,7 @@ journalctl -u soundtouch-service -b               # this boot only
 
 ```bash
 sudo bash install.sh              # update to latest release
-sudo bash install.sh v0.107.0     # update to a specific version
+sudo bash install.sh v0.111.3     # update to a specific version
 ```
 
 The script stops the service, downloads the new binary (backs up the old one to
@@ -157,14 +157,14 @@ sudo bash install-player.sh
 Install a specific version:
 
 ```bash
-sudo bash install-player.sh v0.107.0
+sudo bash install-player.sh v0.111.3
 ```
 
 Override defaults at install time:
 
 ```bash
 sudo \
-  VERSION=v0.107.0 \
+  VERSION=v0.111.3 \
   HTTP_PORT=8081 \
   bash install-player.sh
 ```
@@ -252,7 +252,7 @@ journalctl -u soundtouch-player -f
 
 ```bash
 sudo bash install-player.sh              # update to latest release
-sudo bash install-player.sh v0.107.0     # update to a specific version
+sudo bash install-player.sh v0.111.3     # update to a specific version
 ```
 
 ### Removal

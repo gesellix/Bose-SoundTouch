@@ -10,7 +10,7 @@ set -euo pipefail
 # Examples (override defaults via env vars):
 #
 #   sudo \
-#     VERSION=v0.107.0 \
+#     VERSION=v0.111.3 \
 #     HTTP_PORT=8081 \
 #     bash install-player.sh
 #
@@ -21,7 +21,7 @@ set -euo pipefail
 #     bash install-player.sh
 #
 # Or with a version argument to perform an update:
-#   sudo bash install-player.sh v0.107.0
+#   sudo bash install-player.sh v0.111.3
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
@@ -32,7 +32,7 @@ set -euo pipefail
 # - Safe to re-run; it will update the binary, env file, and unit and restart.
 # ==============================================================================
 
-VERSION="${1:-${VERSION:-v0.107.0}}"
+VERSION="${1:-${VERSION:-v0.111.3}}"
 # Normalize version prefix
 if [[ ! "$VERSION" =~ ^v ]]; then
   VERSION="v${VERSION}"

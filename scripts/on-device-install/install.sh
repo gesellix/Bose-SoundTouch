@@ -7,13 +7,13 @@ set -eo pipefail
 # picks up the latest binary without extra arguments.
 #
 # Override via environment variable or the --version/-v flag:
-#   VERSION=0.107.0 curl -sSL .../install.sh | sh
-#   curl -sSL .../install.sh | sh -s -- --version 0.107.0
-VERSION=${VERSION:-0.107.0}
+#   VERSION=0.111.3 curl -sSL .../install.sh | sh
+#   curl -sSL .../install.sh | sh -s -- --version 0.111.3
+VERSION=${VERSION:-0.111.3}
 
 # Parse optional command-line arguments so the script can be invoked as:
-#   install.sh --version 0.107.0
-#   install.sh -v 0.107.0
+#   install.sh --version 0.111.3
+#   install.sh -v 0.111.3
 while [ $# -gt 0 ]; do
   case "$1" in
     --version|-v)

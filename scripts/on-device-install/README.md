@@ -91,14 +91,14 @@ Run the installer again with the version you want to install. The script backs u
 
 ```bash
 # 1. Environment variable (works when piping into sh)
-VERSION=0.107.0 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
+VERSION=0.111.3 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
 
 # 2. Command-line flag (pass args after `sh -s --`)
-rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.107.0
+rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.111.3
 
 # 3. Download first, then run with a flag
 curl -sSLo install.sh https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh
-sh install.sh --version 0.107.0
+sh install.sh --version 0.111.3
 ```
 
 Running **without** a version override installs the version hard-coded in the script (the latest release at the time the script was published). That default is updated with each release; if you're running from `main`, it reflects the most recent tagged version.
