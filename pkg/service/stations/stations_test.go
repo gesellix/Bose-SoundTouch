@@ -68,14 +68,14 @@ func TestResolveContentItem_TuneIn_ContainerArt(t *testing.T) {
 func TestResolveContentItem_RadioBrowser(t *testing.T) {
 	item := PlayItem{
 		Provider: ProviderRadioBrowser,
-		Location: "https://all.api.radio-browser.info/soundtouch/stations/byuuid/abc-123",
+		Location: "/stations/byuuid/abc-123",
 		Name:     "Radio Paradise",
 	}
 
 	ci := ResolveContentItem(item)
 
-	if ci.Source != "URL" {
-		t.Errorf("expected Source URL, got %q", ci.Source)
+	if ci.Source != "RADIO_BROWSER" {
+		t.Errorf("expected Source RADIO_BROWSER, got %q", ci.Source)
 	}
 
 	if ci.Type != "stationurl" {
@@ -131,21 +131,21 @@ func TestResolveContentItem_SourceAccountGuard_RealAccountKept(t *testing.T) {
 	}
 }
 
-// TestResolveContentItem_SourceAccountGuard_RadioBrowserURLSource checks the
-// guard for RadioBrowser where Source is "URL".
-func TestResolveContentItem_SourceAccountGuard_RadioBrowserURLSource(t *testing.T) {
-	// SourceAccount == "URL" is the echo value — must be dropped.
+// TestResolveContentItem_SourceAccountGuard_RadioBrowserEchoDropped checks the
+// guard for RadioBrowser where Source is "RADIO_BROWSER".
+func TestResolveContentItem_SourceAccountGuard_RadioBrowserEchoDropped(t *testing.T) {
+	// SourceAccount == "RADIO_BROWSER" is the echo value — must be dropped.
 	item := PlayItem{
 		Provider:      ProviderRadioBrowser,
-		Location:      "https://all.api.radio-browser.info/soundtouch/stations/byuuid/xyz",
+		Location:      "/stations/byuuid/xyz",
 		Name:          "Test",
-		SourceAccount: "URL",
+		SourceAccount: "RADIO_BROWSER",
 	}
 
 	ci := ResolveContentItem(item)
 
 	if ci.SourceAccount != "" {
-		t.Errorf("expected SourceAccount dropped for URL source, got %q", ci.SourceAccount)
+		t.Errorf("expected SourceAccount dropped for RADIO_BROWSER source, got %q", ci.SourceAccount)
 	}
 }
 

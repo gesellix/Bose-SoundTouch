@@ -1850,7 +1850,7 @@ func classifyLearnedSource(src *models.ConfiguredSource, sourceID, location, sou
 		classifyAsSpotify(src)
 	case strings.Contains(location, "amazon") || sourceID == constants.ProviderAmazon || sourceProviderID == strconv.Itoa(constants.AmazonProviderID):
 		classifyAsAmazon(src)
-	case sourceProviderID == strconv.Itoa(constants.RadioBrowserProviderID) || strings.Contains(location, "/soundtouch/stations/byuuid/"):
+	case sourceProviderID == strconv.Itoa(constants.RadioBrowserProviderID) || strings.Contains(location, "/stations/byuuid/"):
 		classifyAsRadioBrowser(src)
 	}
 	// If we can't classify, leave SourceKey.Type empty so the canonical-by-ID

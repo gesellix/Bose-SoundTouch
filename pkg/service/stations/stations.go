@@ -9,6 +9,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 )
 
 // Provider identifies the radio station source backend.
@@ -132,7 +133,13 @@ func ResolveContentItem(item PlayItem) *models.ContentItem {
 		ci.Location = item.Location
 		ci.ContainerArt = item.ContainerArt
 	case ProviderRadioBrowser:
-		ci.Source = "URL"
+		// Native RADIO_BROWSER source: the speaker prepends the BMX-registry
+		// base URL (https://all.api.radio-browser.info/soundtouch) to the
+		// relative location and talks to Radio Browser directly. Using
+		// source="URL" here makes the speaker fetch the location as a raw
+		// audio stream, but it returns station JSON, not audio -> the speaker
+		// reports INVALID_SOURCE (issue #479).
+		ci.Source = constants.ProviderRadioBrowser
 		ci.Type = "stationurl"
 		ci.IsPresetable = true
 		ci.ItemName = item.Name

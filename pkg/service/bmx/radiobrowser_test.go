@@ -45,6 +45,16 @@ func TestRadioBrowserSearch(t *testing.T) {
 	if item.Name != "Radio Paradise" {
 		t.Errorf("expected name 'Radio Paradise', got %q", item.Name)
 	}
+
+	// The playback href must be the relative /stations/byuuid/<uuid> form so a
+	// RADIO_BROWSER select resolves against the BMX-registry base URL (#479).
+	if item.Links == nil || item.Links.BmxPlayback == nil {
+		t.Fatal("expected a bmx_playback link on the station item")
+	}
+
+	if want := "/stations/byuuid/123-456"; item.Links.BmxPlayback.Href != want {
+		t.Errorf("expected playback href %q, got %q", want, item.Links.BmxPlayback.Href)
+	}
 }
 
 // makeStationsJSON returns a JSON array of n station objects.

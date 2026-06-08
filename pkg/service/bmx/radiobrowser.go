@@ -67,8 +67,10 @@ func RadioBrowserSearchPage(query string, offset int) (*models.BmxNavResponse, e
 			subtitle += tags
 		}
 
-		// SoundTouch format location for RadioBrowser
-		location := fmt.Sprintf("%s/soundtouch/stations/byuuid/%s", radioBrowserBaseURL, uuid)
+		// Relative SoundTouch playback location for RadioBrowser. The speaker
+		// prepends the BMX-registry base URL (radioBrowserBaseURL + "/soundtouch")
+		// when it follows a RADIO_BROWSER source, so the href must stay relative.
+		location := fmt.Sprintf("/stations/byuuid/%s", uuid)
 
 		item := models.BmxNavItem{
 			Name:     name,

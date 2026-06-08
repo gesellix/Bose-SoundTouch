@@ -67,13 +67,21 @@ func TestClassifyLearnedSource_RadioBrowserByProviderID(t *testing.T) {
 
 // TestClassifyLearnedSource_RadioBrowserByLocation verifies that the dispatcher
 // routes to classifyAsRadioBrowser when the location contains the RadioBrowser
-// byuuid path segment (Source "URL" play path).
+// byuuid path segment, for both the relative form the native RADIO_BROWSER play
+// path now emits and the legacy absolute form (#479).
 func TestClassifyLearnedSource_RadioBrowserByLocation(t *testing.T) {
-	src := &models.ConfiguredSource{}
+	locations := []string{
+		"/stations/byuuid/abc-123", // native relative location
+		"https://all.api.radio-browser.info/soundtouch/stations/byuuid/abc-123", // legacy absolute location
+	}
 
-	classifyLearnedSource(src, "", "https://all.api.radio-browser.info/soundtouch/stations/byuuid/abc-123", "")
+	for _, location := range locations {
+		src := &models.ConfiguredSource{}
 
-	if src.SourceKey.Type != constants.ProviderRadioBrowser {
-		t.Errorf("expected RADIO_BROWSER from byuuid location, got %q", src.SourceKey.Type)
+		classifyLearnedSource(src, "", location, "")
+
+		if src.SourceKey.Type != constants.ProviderRadioBrowser {
+			t.Errorf("expected RADIO_BROWSER from byuuid location %q, got %q", location, src.SourceKey.Type)
+		}
 	}
 }
