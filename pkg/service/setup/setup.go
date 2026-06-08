@@ -1077,7 +1077,37 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 		}
 	}
 
+	logs += m.resyncBoseURLsAfterXML(deviceIP, cfg.MargeServerUrl, cfg.SwUpdateUrl)
+
 	return logs, nil
+}
+
+// resyncBoseURLsAfterXML re-applies the boseurls over telnet so the runtime
+// URL layer matches the XML just written by migrateViaXML.
+//
+// The XML migration only updates the persisted SoundTouchSdkPrivateCfg.xml; it
+// does not touch the runtime/persistence layer that `getpdo
+// CurrentSystemConfiguration` reports. When SSH was bootstrapped via #471
+// (`enable-ssh`), that layer still points at the placeholder boseurls
+// (https://aftertouch.invalid), so the preflight cross-check keeps warning that
+// margeServerUrl/swUpdateUrl differ between transports until a reboot.
+// Re-applying the real boseurls over telnet :17000 reconciles it immediately.
+//
+// Best-effort: telnet may be unavailable (no port 17000, or it was closed via
+// --close-17000), in which case a reboot still reconciles the layers, so this
+// only returns a note and never fails the migration. Returns the log lines to
+// append.
+func (m *Manager) resyncBoseURLsAfterXML(deviceIP, marge, swUpdate string) string {
+	if m.NewTelnet == nil {
+		return ""
+	}
+
+	rlogs, rerr := m.setBoseURLsViaTelnet(deviceIP, marge, swUpdate)
+	if rerr != nil {
+		return fmt.Sprintf("Note: could not re-sync boseurls over telnet (%v); a device reboot will reconcile the runtime layer.\n", rerr)
+	}
+
+	return "Re-applied boseurls over telnet so the runtime layer matches the new configuration:\n" + rlogs
 }
 
 // BackupConfigOffDevice creates a local backup of the speaker's configuration files in the DataStore.

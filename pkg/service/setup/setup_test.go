@@ -2018,3 +2018,69 @@ func TestMigrateSpeaker_ResolvBlocking(t *testing.T) {
 		t.Errorf("Did not expect pre-flight DNS errors, got %v", err)
 	}
 }
+
+// TestMigrateViaXML_ReappliesBoseURLsOverTelnet verifies the #471 follow-up:
+// after an XML migration, the runtime boseurls layer is re-applied over telnet
+// so it matches the persisted config (otherwise the preflight cross-check keeps
+// warning about the enable-ssh placeholder until a reboot).
+func TestMigrateViaXML_ReappliesBoseURLsOverTelnet(t *testing.T) {
+	cm := certmanager.NewCertificateManager(filepath.Join(t.TempDir(), "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("EnsureCA: %v", err)
+	}
+
+	target := "https://192.0.2.10:8443"
+	m := NewManager(target, nil, cm)
+	m.NewSSH = func(string) SSHClient {
+		return &mockSSH{runFunc: func(string) (string, error) { return "", nil }}
+	}
+
+	ft := &fakeTelnet{banner: "->", responses: map[string]string{}}
+	m.NewTelnet = func(string) TelnetClient { return ft }
+
+	if _, err := m.MigrateSpeaker("192.0.2.10", target, "", nil, MigrationMethodXML); err != nil {
+		t.Fatalf("MigrateSpeaker: %v", err)
+	}
+
+	want := `envswitch boseurls set "` + target + `" "` + target + `/updates/soundtouch"`
+
+	var found bool
+	for _, c := range ft.commands {
+		if c == want {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("expected boseurls re-apply %q after XML migration; sent: %v", want, ft.commands)
+	}
+}
+
+// TestMigrateViaXML_BoseURLsResyncIsBestEffort verifies that a telnet failure
+// during the post-migration boseurls re-apply does not fail the migration (a
+// device reboot still reconciles the runtime layer).
+func TestMigrateViaXML_BoseURLsResyncIsBestEffort(t *testing.T) {
+	cm := certmanager.NewCertificateManager(filepath.Join(t.TempDir(), "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("EnsureCA: %v", err)
+	}
+
+	target := "https://192.0.2.10:8443"
+	m := NewManager(target, nil, cm)
+	m.NewSSH = func(string) SSHClient {
+		return &mockSSH{runFunc: func(string) (string, error) { return "", nil }}
+	}
+	m.NewTelnet = func(string) TelnetClient {
+		return &fakeTelnet{dialErr: errors.New("connection refused")}
+	}
+
+	logs, err := m.MigrateSpeaker("192.0.2.10", target, "", nil, MigrationMethodXML)
+	if err != nil {
+		t.Fatalf("MigrateSpeaker should not fail when the telnet re-sync fails: %v", err)
+	}
+
+	if !strings.Contains(logs, "could not re-sync boseurls over telnet") {
+		t.Errorf("expected a best-effort note about the failed telnet re-sync; logs:\n%s", logs)
+	}
+}

@@ -604,8 +604,25 @@ func setupEnableSSHCmd() *cli.Command {
 			fmt.Printf("Waiting up to %s for sshd (:22) to come up...\n", c.Duration("wait"))
 
 			if err := setup.WaitForSSHPort(cfg.Host, c.Duration("wait")); err != nil {
-				PrintError(err.Error())
-				return err
+				// Not a hard failure: on some devices (e.g. the Wireless Link
+				// Adapter, see #471) the envswitch injection is accepted but
+				// sshd only actually starts after the speaker restarts. We
+				// deliberately leave the injected boseurls in place (no reset)
+				// so a power-cycle re-triggers the unlock, and guide the user
+				// to reboot and retry rather than exiting with an error.
+				fmt.Println()
+				PrintWarning(fmt.Sprintf("sshd (:22) did not come up within %s, but the speaker accepted the SSH-enable command.", c.Duration("wait")))
+				fmt.Println("On some devices sshd only starts after a restart. Next steps:")
+				fmt.Println("  1. Power-cycle the speaker (unplug it, wait a few seconds, plug it back in).")
+				fmt.Println("  2. Once it is back online, run this same command again, or just connect with:")
+				fmt.Printf("       ssh -o HostKeyAlgorithms=+ssh-rsa,ssh-dss root@%s\n", cfg.Host)
+				fmt.Println("The temporary boseurls were left in place on purpose, so the restart re-triggers the unlock.")
+
+				if placeholder {
+					fmt.Println("(No --service-url was given; you'll set the real service URLs later during migration.)")
+				}
+
+				return nil
 			}
 
 			PrintSuccess("SSH is up on " + cfg.Host)
