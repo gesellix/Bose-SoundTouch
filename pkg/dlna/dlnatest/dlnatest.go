@@ -79,6 +79,8 @@ func DefaultTree() *Tree {
 				ParentID: "1$4",
 				Title:    "track01",
 				Class:    "object.item.audioItem.musicTrack",
+				Artist:   "Test Artist",
+				Album:    "Test Album",
 				MimeType: "audio/x-wav",
 				DurSec:   1.0,
 				Payload:  track01,
@@ -88,6 +90,8 @@ func DefaultTree() *Tree {
 				ParentID: "1$4",
 				Title:    "track02",
 				Class:    "object.item.audioItem.musicTrack",
+				Artist:   "Test Artist",
+				Album:    "Test Album",
 				MimeType: "audio/x-wav",
 				DurSec:   1.0,
 				Payload:  track02,
@@ -412,7 +416,11 @@ func (s *Server) browseContainer(c *Container, start, count int, base string) (s
 		b.WriteString(`<dc:title>` + xmlEsc(it.Title) + `</dc:title>`)
 
 		if it.Artist != "" {
-			b.WriteString(`<dc:creator>` + xmlEsc(it.Artist) + `</dc:creator>`)
+			b.WriteString(`<upnp:artist>` + xmlEsc(it.Artist) + `</upnp:artist>`)
+		}
+
+		if it.Album != "" {
+			b.WriteString(`<upnp:album>` + xmlEsc(it.Album) + `</upnp:album>`)
 		}
 
 		b.WriteString(`<upnp:class>` + xmlEsc(it.Class) + `</upnp:class>`)
