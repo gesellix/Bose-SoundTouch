@@ -19,14 +19,15 @@ responses and community testing.
 > **Reconciliation note (June 2026).** Verified against `pkg/client`. Since the
 > last update these are **now implemented** and have been re-marked below:
 > `setMusicServiceAccount` / `removeMusicServiceAccount` (`SetMusicServiceAccount`,
-> `RemoveMusicServiceAccount`) and the full stereo-pair group set
+> `RemoveMusicServiceAccount`), the full stereo-pair group set
 > `getGroup` / `addGroup` / `removeGroup` / `updateGroup`
-> (`GetGroup`, `AddGroup`, `RemoveGroup`, `UpdateGroup`). The priority-matrix
-> counts further down are historical and have not all been recomputed; trust the
-> per-endpoint ✅ markers over the section totals. Endpoints still listed as
-> candidates (e.g. `/search`, `/standby`, `/powerManagement`, `/bluetoothInfo`,
-> `/language`, `/listMediaServers`) were confirmed absent from `pkg/client`
-> (some appear only in test fixtures).
+> (`GetGroup`, `AddGroup`, `RemoveGroup`, `UpdateGroup`), and
+> `listMediaServers` (`ListMediaServers`, with app-side SSDP in `pkg/discovery`).
+> The priority-matrix counts further down are historical and have not all been
+> recomputed; trust the per-endpoint ✅ markers over the section totals.
+> Endpoints still listed as candidates (e.g. `/search`, `/standby`,
+> `/powerManagement`, `/bluetoothInfo`, `/language`) were confirmed absent from
+> `pkg/client` (some appear only in test fixtures).
 
 ---
 
@@ -294,8 +295,10 @@ Rates currently playing media (Pandora only).
 
 
 
-#### GET /listMediaServers 🔥 **CRITICAL**
-Returns detected UPnP/DLNA media servers.
+#### ~~GET /listMediaServers~~ ✅ **IMPLEMENTED**
+~~Returns detected UPnP/DLNA media servers.~~
+
+**Implementation Status:** ✅ Complete - Available in `pkg/client/client.go` as `ListMediaServers()`; response model in `pkg/models/mediaservers.go` as `ListMediaServersResponse`. The CLI exposes this via `soundtouch-cli library servers --via-speaker`. App-side SSDP discovery (without `--via-speaker`) is in `pkg/discovery`.
 
 **Response Example:**
 ```xml
@@ -1016,7 +1019,7 @@ func TestDeviceCompatibility(t *testing.T) {
 1. **Power Management**: `standby`, `powerManagement`, `lowPowerStandby`
 2. **Notifications**: `speaker`, `playNotification` 
 3. **Network Management**: `performWirelessSiteSurvey`, `addWirelessProfile`
-4. **System Info**: ~~`serviceAvailability`~~ (✅ implemented), `listMediaServers`, `language`
+4. **System Info**: ~~`serviceAvailability`~~ (✅ implemented), ~~`listMediaServers`~~ (✅ implemented), `language`
 
 ### Phase 3: Advanced Features (3 weeks)
 1. **Bluetooth**: `enterBluetoothPairing`, `clearBluetoothPaired`
