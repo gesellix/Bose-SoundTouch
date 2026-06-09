@@ -76,6 +76,14 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				r.Post("/action/{action}", app.HandleAPIControl)
 				r.Get("/ws", app.HandleDeviceWebSocket)
 
+				r.Route("/library", func(r chi.Router) {
+					r.Get("/servers", app.HandleDeviceLibraryServers)
+					r.Post("/servers", app.HandleAddLibraryServer)
+					r.Delete("/servers/{account}", app.HandleRemoveLibraryServer)
+					r.Get("/browse", app.HandleLibraryBrowse)
+					r.Post("/play", app.HandlePlayLibrary)
+				})
+
 				r.Route("/zone", func(r chi.Router) {
 					r.Get("/", app.HandleGetZone)
 					r.Post("/add/{slaveId}", app.HandleZoneAdd)
@@ -111,6 +119,10 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 			r.Route("/radiobrowser", func(r chi.Router) {
 				r.Get("/search", app.HandleRadioBrowserSearch)
 			})
+
+			r.Route("/library", func(r chi.Router) {
+				r.Get("/servers", app.HandleDiscoverLibraryServers)
+			})
 		})
 	})
 
@@ -126,6 +138,7 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 	r.Get("/app/radiobrowser", app.serveIndex)
 	r.Get("/app/playurl", app.serveIndex)
 	r.Get("/app/tts", app.serveIndex)
+	r.Get("/app/library", app.serveIndex)
 }
 
 // Mount is the standalone soundtouch-player entry point: the portable web surface
