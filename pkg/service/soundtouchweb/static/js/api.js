@@ -56,4 +56,19 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify({ text }),
     }),
+    libraryDiscover: (timeout) => req(`/api/control/providers/library/servers${timeout ? `?timeout=${timeout}` : ''}`),
+    libraryServers: (id) => req(`/api/control/devices/${id}/library/servers`),
+    libraryAddServer: (id, body) => req(`/api/control/devices/${id}/library/servers`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) }),
+    libraryRemoveServer: (id, account) => req(`/api/control/devices/${id}/library/servers/${encodeURIComponent(account)}`, { method: 'DELETE' }),
+    libraryBrowse: (id, { account, location, type, start, count }) => {
+        const qs = [
+            `account=${encodeURIComponent(account)}`,
+            location !== undefined && location !== '' ? `location=${encodeURIComponent(location)}` : null,
+            type ? `type=${encodeURIComponent(type)}` : null,
+            start !== undefined ? `start=${encodeURIComponent(start)}` : null,
+            count !== undefined ? `count=${encodeURIComponent(count)}` : null,
+        ].filter(Boolean).join('&');
+        return req(`/api/control/devices/${id}/library/browse?${qs}`);
+    },
+    libraryPlay: (id, body) => req(`/api/control/devices/${id}/library/play`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) }),
 };

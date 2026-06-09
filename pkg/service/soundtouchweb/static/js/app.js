@@ -10,6 +10,7 @@ import { Zone } from './components/Zone.js';
 import { Recents } from './components/Recents.js';
 import { TuneInBrowser } from './components/TuneInBrowser.js';
 import { RadioBrowser } from './components/RadioBrowser.js';
+import { Library } from './components/Library.js';
 import { PlayURL } from './components/PlayURL.js';
 import { TTS } from './components/TTS.js';
 import { api } from './api.js';
@@ -75,6 +76,7 @@ function App() {
         }
         if (page === 'tunein') return 'TuneIn';
         if (page === 'radiobrowser') return 'RadioBrowser';
+        if (page === 'library') return 'Library';
         if (page === 'playurl') return 'Play URL';
         if (page === 'tts') return 'TTS';
         return 'AfterTouch';
@@ -203,6 +205,11 @@ function App() {
                     >
                         <img src="/app/static/img/link-mono.svg" alt="Play URL" class="nav-url-icon" />
                     </a>
+                    <a href="#" class="${page === 'library' ? 'active' : ''}"
+                        onClick=${(e) => { e.preventDefault(); navigate('library'); }}
+                        title="Library"
+                        style="font-size:.75rem;font-weight:600;letter-spacing:.02em"
+                    >Lib</a>
                     <a href="#" class="${page === 'tts' ? 'active' : ''}"
                         onClick=${(e) => { e.preventDefault(); navigate('tts'); }}
                         title="TTS"
@@ -251,6 +258,8 @@ function App() {
                     <${PlayURL} key="play-url" devices=${devices} serverServiceUrl=${version?.service_url || ''} />
                 ` : page === 'tts' ? html`
                     <${TTS} key="tts" devices=${devices} serverServiceUrl=${version?.service_url || ''} />
+                ` : page === 'library' ? html`
+                    <${Library} key="library" devices=${devices} />
                 ` : null}
             </main>
 
