@@ -47,8 +47,19 @@ func TestMediaServerFromDescription_WithCDS(t *testing.T) {
 		t.Errorf("IconURL %q is not absolute", srv.IconURL)
 	}
 
-	t.Logf("MediaServer: UDN=%q FriendlyName=%q CDSControlURL=%q IconURL=%q",
-		srv.UDN, srv.FriendlyName, srv.CDSControlURL, srv.IconURL)
+	// Address must be the host:port from the CDS control URL.
+	// cannedDescriptionXML has URLBase http://192.0.2.1:49000 and CDS
+	// controlURL /ctl/ContentDir, so Address = "192.0.2.1:49000".
+	if srv.Address == "" {
+		t.Error("Address is empty")
+	}
+
+	if srv.Address != "192.0.2.1:49000" {
+		t.Errorf("Address = %q, want %q", srv.Address, "192.0.2.1:49000")
+	}
+
+	t.Logf("MediaServer: UDN=%q FriendlyName=%q CDSControlURL=%q IconURL=%q Address=%q",
+		srv.UDN, srv.FriendlyName, srv.CDSControlURL, srv.IconURL, srv.Address)
 }
 
 // TestMediaServerFromDescription_WithoutCDS verifies that a description
@@ -146,6 +157,12 @@ func TestMediaServerFromDescription_FlatServer(t *testing.T) {
 	wantIcon := "http://198.51.100.20:8200/icons/sm.png"
 	if srv.IconURL != wantIcon {
 		t.Errorf("IconURL = %q, want %q", srv.IconURL, wantIcon)
+	}
+
+	// Address must reflect the host:port of the CDS control URL.
+	// URLBase is http://198.51.100.20:8200 and CDS controlURL is /ctl/ContentDir.
+	if srv.Address != "198.51.100.20:8200" {
+		t.Errorf("Address = %q, want %q", srv.Address, "198.51.100.20:8200")
 	}
 }
 

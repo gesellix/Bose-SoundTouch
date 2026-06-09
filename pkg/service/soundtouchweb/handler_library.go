@@ -46,6 +46,14 @@ type libraryPage struct {
 	TotalItems int            `json:"totalItems"`
 }
 
+// normalizeUDN strips the "uuid:" prefix that UPnP device descriptions include
+// in the UDN field (e.g. "uuid:fa095ecc-e13e-40e7-8e6c-e0286d5bc000") so the
+// result matches the bare UUID that a SoundTouch speaker uses as the
+// STORED_MUSIC sourceAccount before the "/0" suffix is appended.
+func normalizeUDN(s string) string {
+	return strings.TrimPrefix(s, "uuid:")
+}
+
 // HandleDiscoverLibraryServers performs a LAN-wide SSDP sweep for DLNA media
 // servers and returns them as a JSON array. An optional ?timeout= query
 // parameter (in seconds, integer) overrides the default 5-second budget.
@@ -69,7 +77,7 @@ func (app *WebApp) HandleDiscoverLibraryServers(w http.ResponseWriter, r *http.R
 	out := make([]libraryServer, 0, len(servers))
 	for _, s := range servers {
 		out = append(out, libraryServer{
-			UDN:           s.UDN,
+			UDN:           normalizeUDN(s.UDN),
 			Name:          s.FriendlyName,
 			Manufacturer:  s.Manufacturer,
 			Model:         s.ModelName,
@@ -164,7 +172,7 @@ func (app *WebApp) HandleAddLibraryServer(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	account := req.UDN + "/0"
+	account := normalizeUDN(req.UDN) + "/0"
 
 	if err := device.Client.AddStoredMusicAccount(account, req.Name); err != nil {
 		// Error code 1024 means the account is already registered on the speaker.

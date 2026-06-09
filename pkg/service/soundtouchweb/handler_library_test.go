@@ -467,48 +467,121 @@ func TestHandleDeviceLibraryServers_UnknownDevice(t *testing.T) {
 
 // ---- HandleAddLibraryServer --------------------------------------------
 
+// TestDiscoverLibraryServers_UDNNormalization verifies the mapping logic used
+// inside HandleDiscoverLibraryServers: a MediaServer with a "uuid:"-prefixed
+// UDN must produce a libraryServer DTO with the bare UUID (no prefix), because
+// SoundTouch STORED_MUSIC sourceAccounts use the bare form.
+// This exercises normalizeUDN indirectly through the same code path used in
+// the handler loop; HandleDiscoverLibraryServers itself cannot be called in a
+// unit test because it invokes the real SSDP stack.
+func TestDiscoverLibraryServers_UDNNormalization(t *testing.T) {
+	prefixedUDN := "uuid:fa095ecc-e13e-40e7-8e6c-e0286d5bc000"
+	want := "fa095ecc-e13e-40e7-8e6c-e0286d5bc000"
+
+	got := libraryServer{
+		UDN: normalizeUDN(prefixedUDN),
+	}
+
+	if got.UDN != want {
+		t.Errorf("libraryServer UDN after normalizeUDN = %q, want %q", got.UDN, want)
+	}
+}
+
+// TestNormalizeUDN verifies that normalizeUDN strips the "uuid:" prefix and
+// is a no-op when the prefix is absent.
+func TestNormalizeUDN(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"uuid:fa095ecc-e13e-40e7-8e6c-e0286d5bc000", "fa095ecc-e13e-40e7-8e6c-e0286d5bc000"},
+		{"fa095ecc-e13e-40e7-8e6c-e0286d5bc000", "fa095ecc-e13e-40e7-8e6c-e0286d5bc000"},
+		{"uuid:nas-udn", "nas-udn"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		got := normalizeUDN(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeUDN(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 // TestHandleAddLibraryServer_AccountFormat verifies that the speaker receives
-// a setMusicServiceAccount call with the account set to "<udn>/0".
+// a setMusicServiceAccount call with the account set to "<bare-uuid>/0", i.e.
+// any "uuid:" prefix is stripped before the "/0" suffix is appended.
 func TestHandleAddLibraryServer_AccountFormat(t *testing.T) {
-	// The client parses the response XML and checks for the success sentinel.
-	speaker, captured := setupSpeakerMock(t, map[string]string{
-		"/setMusicServiceAccount": `<status>/setMusicServiceAccount</status>`,
-	})
-	defer speaker.Close()
-
-	app := newLibraryTestApp(speaker.URL)
-
-	body := strings.NewReader(`{"udn":"uuid:nas-udn","name":"My NAS"}`)
-	req := httptest.NewRequest("POST",
-		"/api/control/devices/lib-device/library/servers",
-		body)
-	req.Header.Set("Content-Type", "application/json")
-	req = withChiParams(req, map[string]string{"id": "lib-device"})
-	w := httptest.NewRecorder()
-
-	app.HandleAddLibraryServer(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	tests := []struct {
+		name        string
+		requestUDN  string
+		wantAccount string
+	}{
+		{
+			name:        "bare UDN",
+			requestUDN:  "nas-udn",
+			wantAccount: "nas-udn/0",
+		},
+		{
+			name:        "uuid-prefixed UDN is normalised",
+			requestUDN:  "uuid:nas-udn",
+			wantAccount: "nas-udn/0",
+		},
 	}
 
-	var resp webtypes.APIResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The client parses the response XML and checks for the success sentinel.
+			speaker, captured := setupSpeakerMock(t, map[string]string{
+				"/setMusicServiceAccount": `<status>/setMusicServiceAccount</status>`,
+			})
+			defer speaker.Close()
 
-	if !resp.Success {
-		t.Fatalf("expected success=true, error=%s", resp.Error)
-	}
+			app := newLibraryTestApp(speaker.URL)
 
-	// The speaker should have been called at the setMusicServiceAccount endpoint.
-	setXML := captured["/setMusicServiceAccount"]
-	if setXML == "" {
-		t.Fatal("speaker /setMusicServiceAccount was never called")
-	}
+			bodyStr := `{"udn":"` + tt.requestUDN + `","name":"My NAS"}`
+			req := httptest.NewRequest("POST",
+				"/api/control/devices/lib-device/library/servers",
+				strings.NewReader(bodyStr))
+			req.Header.Set("Content-Type", "application/json")
+			req = withChiParams(req, map[string]string{"id": "lib-device"})
+			w := httptest.NewRecorder()
 
-	if !strings.Contains(setXML, "uuid:nas-udn/0") {
-		t.Errorf("setMusicServiceAccount XML should contain 'uuid:nas-udn/0', got:\n%s", setXML)
+			app.HandleAddLibraryServer(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			var resp webtypes.APIResponse
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+
+			if !resp.Success {
+				t.Fatalf("expected success=true, error=%s", resp.Error)
+			}
+
+			// The speaker should have been called at the setMusicServiceAccount endpoint.
+			setXML := captured["/setMusicServiceAccount"]
+			if setXML == "" {
+				t.Fatal("speaker /setMusicServiceAccount was never called")
+			}
+
+			if !strings.Contains(setXML, tt.wantAccount) {
+				t.Errorf("setMusicServiceAccount XML should contain %q, got:\n%s", tt.wantAccount, setXML)
+			}
+
+			// The response account field must also be the bare form.
+			data, ok := resp.Data.(map[string]interface{})
+			if !ok {
+				t.Fatalf("resp.Data is not a map: %T", resp.Data)
+			}
+
+			if got, _ := data["account"].(string); got != tt.wantAccount {
+				t.Errorf("response account = %q, want %q", got, tt.wantAccount)
+			}
+		})
 	}
 }
 

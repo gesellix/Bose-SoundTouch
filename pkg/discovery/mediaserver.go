@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"log/slog"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -138,6 +139,13 @@ func mediaServerFromDescription(desc *Description) (MediaServer, bool) {
 		Manufacturer:  desc.Root.Manufacturer,
 		ModelName:     desc.Root.ModelName,
 		CDSControlURL: svc.ControlURL,
+	}
+
+	// Populate Address from the CDS control URL host so callers know which
+	// host:port to reach the device on. The control URL is absolute after
+	// FetchDescription resolves it; parse errors leave Address empty.
+	if u, err := url.Parse(svc.ControlURL); err == nil {
+		srv.Address = u.Host
 	}
 
 	// Walk sub-devices to fill in UDN / FriendlyName if the root is sparse
