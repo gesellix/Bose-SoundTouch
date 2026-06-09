@@ -73,12 +73,14 @@ func setupSpeakerMock(t *testing.T, responseMap map[string]string) (*httptest.Se
 }
 
 // newLibraryTestApp builds a WebApp with a single device whose Client points
-// at the given speaker URL. The device is registered under "lib-device".
+// at the given speaker URL. The device is registered under "lib-device" with
+// a non-empty DeviceID so HandleAddLibraryServer can resolve the Bose ID from
+// the cached DeviceInfo without a /info fallback.
 func newLibraryTestApp(speakerURL string) *WebApp {
 	app := NewWebApp()
 
 	c := client.NewClient(&client.Config{Host: speakerURL})
-	info := &models.DeviceInfo{Name: "Library Test Speaker"}
+	info := &models.DeviceInfo{Name: "Library Test Speaker", DeviceID: "AABBCCDDEEFF"}
 	conn := webtypes.NewDeviceConnection(c, info)
 	conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
 	app.AddDevice("lib-device", conn)
@@ -511,6 +513,8 @@ func TestNormalizeUDN(t *testing.T) {
 // TestHandleAddLibraryServer_AccountFormat verifies that the speaker receives
 // a setMusicServiceAccount call with the account set to "<bare-uuid>/0", i.e.
 // any "uuid:" prefix is stripped before the "/0" suffix is appended.
+// It also asserts that a POST /notification (sourcesUpdated nudge) is sent
+// after a successful registration and that the response carries refreshed=true.
 func TestHandleAddLibraryServer_AccountFormat(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -532,8 +536,10 @@ func TestHandleAddLibraryServer_AccountFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// The client parses the response XML and checks for the success sentinel.
+			// Also handle /notification so NotifySourcesUpdated succeeds.
 			speaker, captured := setupSpeakerMock(t, map[string]string{
 				"/setMusicServiceAccount": `<status>/setMusicServiceAccount</status>`,
+				"/notification":           `<status>/notification</status>`,
 			})
 			defer speaker.Close()
 
@@ -572,7 +578,17 @@ func TestHandleAddLibraryServer_AccountFormat(t *testing.T) {
 				t.Errorf("setMusicServiceAccount XML should contain %q, got:\n%s", tt.wantAccount, setXML)
 			}
 
-			// The response account field must also be the bare form.
+			// A sourcesUpdated nudge must have been POSTed to /notification.
+			notifXML := captured["/notification"]
+			if notifXML == "" {
+				t.Fatal("speaker /notification was never called (sourcesUpdated nudge missing)")
+			}
+
+			if !strings.Contains(notifXML, "sourcesUpdated") {
+				t.Errorf("/notification body should contain 'sourcesUpdated', got:\n%s", notifXML)
+			}
+
+			// The response must carry the account and refreshed=true.
 			data, ok := resp.Data.(map[string]interface{})
 			if !ok {
 				t.Fatalf("resp.Data is not a map: %T", resp.Data)
@@ -581,7 +597,68 @@ func TestHandleAddLibraryServer_AccountFormat(t *testing.T) {
 			if got, _ := data["account"].(string); got != tt.wantAccount {
 				t.Errorf("response account = %q, want %q", got, tt.wantAccount)
 			}
+
+			if refreshed, _ := data["refreshed"].(bool); !refreshed {
+				t.Errorf("response refreshed should be true, got %v", data["refreshed"])
+			}
 		})
+	}
+}
+
+// TestHandleAddLibraryServer_NudgeSentAfterAlreadyRegistered verifies that
+// the sourcesUpdated nudge is also fired for the 1024 (already-registered)
+// idempotent path, since the source still needs to be re-registered on the
+// speaker.
+func TestHandleAddLibraryServer_NudgeSentAfterAlreadyRegistered(t *testing.T) {
+	alreadyRegistered := `<errors deviceID="AABBCCDDEEFF">
+		<error value="1024">1024: Account already exists</error>
+	</errors>`
+
+	var notifCalled int
+
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/setMusicServiceAccount":
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(alreadyRegistered))
+		case "/notification":
+			notifCalled++
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<status>/notification</status>`))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	body := strings.NewReader(`{"udn":"uuid:nas-udn","name":"My NAS"}`)
+	req := httptest.NewRequest("POST",
+		"/api/control/devices/lib-device/library/servers",
+		body)
+	req.Header.Set("Content-Type", "application/json")
+	req = withChiParams(req, map[string]string{"id": "lib-device"})
+	w := httptest.NewRecorder()
+
+	app.HandleAddLibraryServer(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp webtypes.APIResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("expected success=true when error contains 1024, got error=%s", resp.Error)
+	}
+
+	if notifCalled == 0 {
+		t.Error("expected /notification to be called for already-registered path, but it was not")
 	}
 }
 

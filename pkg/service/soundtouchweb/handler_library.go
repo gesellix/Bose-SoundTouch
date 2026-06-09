@@ -143,6 +143,12 @@ func (app *WebApp) HandleDeviceLibraryServers(w http.ResponseWriter, r *http.Req
 // contain {udn, name}. The account sent to the speaker is "<udn>/0" as
 // required by the STORED_MUSIC protocol. Error code 1024 from the speaker
 // means the account is already registered and is treated as success.
+//
+// After a successful registration the handler fires a best-effort
+// sourcesUpdated notification so the speaker re-fetches its account list and
+// registers the new source without requiring a power-cycle. The notification
+// outcome is reflected in the response field "refreshed" but never fails the
+// request.
 func (app *WebApp) HandleAddLibraryServer(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
 
@@ -183,11 +189,33 @@ func (app *WebApp) HandleAddLibraryServer(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Resolve the Bose device ID for the sourcesUpdated nudge. Prefer the
+	// cached DeviceInfo (no extra round-trip); fall back to a live /info
+	// fetch only if the cached value is absent or empty.
+	boseDeviceID := ""
+	if device.DeviceInfo != nil && device.DeviceInfo.DeviceID != "" {
+		boseDeviceID = device.DeviceInfo.DeviceID
+	} else {
+		if info, infoErr := device.Client.GetDeviceInfo(); infoErr == nil && info != nil {
+			boseDeviceID = info.DeviceID
+		}
+	}
+
+	// Send the sourcesUpdated nudge best-effort: the registration already
+	// succeeded, so an error here must never fail the request.
+	refreshed := false
+
+	if boseDeviceID != "" {
+		if nudgeErr := device.Client.NotifySourcesUpdated(boseDeviceID); nudgeErr == nil {
+			refreshed = true
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 
 	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
 		Success: true,
-		Data:    map[string]string{"account": account},
+		Data:    map[string]interface{}{"account": account, "refreshed": refreshed},
 	}); encErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}

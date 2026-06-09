@@ -318,7 +318,7 @@ func removePandoraAccount(c *cli.Context) error {
 func addStoredMusicAccount(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
 
-	client, err := CreateSoundTouchClient(clientConfig)
+	stClient, err := CreateSoundTouchClient(clientConfig)
 	if err != nil {
 		return err
 	}
@@ -340,12 +340,25 @@ func addStoredMusicAccount(c *cli.Context) error {
 	fmt.Printf("  Display Name: %s\n", displayName)
 	fmt.Printf("  Type: UPnP/DLNA Media Server\n")
 
-	err = client.AddStoredMusicAccount(user, displayName)
+	err = stClient.AddStoredMusicAccount(user, displayName)
 	if err != nil {
 		return fmt.Errorf("failed to add network music library: %w", err)
 	}
 
 	PrintSuccess("Network music library added successfully")
+
+	// Send a sourcesUpdated nudge so the speaker re-fetches its account list and
+	// registers the new source without requiring a power-cycle. This is
+	// best-effort: a failure here does not abort the command.
+	if info, infoErr := stClient.GetDeviceInfo(); infoErr == nil && info != nil && info.DeviceID != "" {
+		if nudgeErr := stClient.NotifySourcesUpdated(info.DeviceID); nudgeErr == nil {
+			fmt.Println("  Sent a sources refresh to the speaker (no reboot needed).")
+		} else {
+			fmt.Println("  Warning: could not send sources refresh; you may need to power-cycle the speaker for the new source to register.")
+		}
+	} else {
+		fmt.Println("  Warning: could not retrieve device ID; you may need to power-cycle the speaker for the new source to register.")
+	}
 
 	// Show next steps
 	fmt.Printf("\n💡 Next Steps:\n")
