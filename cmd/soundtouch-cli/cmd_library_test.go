@@ -87,9 +87,17 @@ func TestLibraryPlayFlags(t *testing.T) {
 
 		flags := flagNames(s.Flags)
 
-		for _, want := range []string{"url", "name", "art", "mode"} {
+		// source-account and location are required; name, type, art are optional.
+		for _, want := range []string{"source-account", "location", "name", "type", "art"} {
 			if !contains(flags, want) {
 				t.Errorf("play subcommand missing flag %q; got %v", want, flags)
+			}
+		}
+
+		// Old URL-mode flags must no longer be present.
+		for _, gone := range []string{"url", "mode"} {
+			if contains(flags, gone) {
+				t.Errorf("play subcommand should not have flag %q", gone)
 			}
 		}
 

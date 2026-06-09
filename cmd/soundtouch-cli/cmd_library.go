@@ -5,8 +5,7 @@
 //   - library servers: discover DLNA media servers on the LAN, either via an
 //     app-side SSDP sweep (default) or via the speaker's own list (--via-speaker).
 //   - library browse: walk a DLNA ContentDirectory tree by UDN.
-//   - library play: send a track URL to a speaker using one of the four
-//     existing playback paths so we can A/B which mode works for DLNA streams.
+//   - library play: play a DLNA track on a speaker via native STORED_MUSIC playback.
 package main
 
 import (
@@ -61,27 +60,31 @@ func libraryCommand() *cli.Command {
 			},
 			{
 				Name:   "play",
-				Usage:  "Play a DLNA track URL on a speaker",
+				Usage:  "Play a DLNA track on a speaker via native STORED_MUSIC playback",
 				Action: libraryPlay,
 				Before: RequireHost,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "art",
-						Usage: "Album art URL (optional)",
-					},
-					&cli.StringFlag{
-						Name:  "mode",
-						Usage: "Playback mode: local-internet-radio, local-music, stored-music, content-item",
-						Value: "local-internet-radio",
+						Usage: "Container art URL (optional)",
 					},
 					&cli.StringFlag{
 						Name:  "name",
-						Usage: "Track / item name shown on the speaker display",
-						Value: "DLNA Track",
+						Usage: "Display name shown on the speaker (optional)",
 					},
 					&cli.StringFlag{
-						Name:     "url",
-						Usage:    "Stream URL to play (required)",
+						Name:     "source-account",
+						Usage:    "STORED_MUSIC source account (media-server UDN with /0 suffix, e.g. fa095ecc-e13e-40e7-8e6c-e0286d5bc000/0)",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:  "type",
+						Usage: `ContentItem type: "track" or "dir"`,
+						Value: "track",
+					},
+					&cli.StringFlag{
+						Name:     "location",
+						Usage:    "Object ID from a browse result (e.g. 5:audio5:part13:3171:5 TRACK)",
 						Required: true,
 					},
 				},
@@ -333,12 +336,25 @@ func libraryBrowse(c *cli.Context) error {
 	return nil
 }
 
-// libraryPlay implements `library play`.
+// libraryPlay implements `library play` using native STORED_MUSIC playback.
 func libraryPlay(c *cli.Context) error {
-	streamURL := c.String("url")
+	sourceAccount := strings.TrimSpace(c.String("source-account"))
+	location := strings.TrimSpace(c.String("location"))
 	name := c.String("name")
+	itemType := c.String("type")
 	art := c.String("art")
-	mode := c.String("mode")
+
+	if sourceAccount == "" {
+		PrintError("--source-account is required")
+
+		return fmt.Errorf("--source-account is required")
+	}
+
+	if location == "" {
+		PrintError("--location is required")
+
+		return fmt.Errorf("--location is required")
+	}
 
 	clientConfig := GetClientConfig(c)
 
@@ -349,46 +365,79 @@ func libraryPlay(c *cli.Context) error {
 		return err
 	}
 
-	PrintDeviceHeader("DLNA play", clientConfig.Host, clientConfig.Port)
-	fmt.Printf("  Mode: %s\n", mode)
-	fmt.Printf("  URL:  %s\n", streamURL)
-	fmt.Printf("  Name: %s\n", name)
+	// Check that the STORED_MUSIC source for this account is READY before
+	// attempting playback. Re-registering an already-READY account can flip
+	// it to UNAVAILABLE, so we intentionally do NOT auto-register here.
+	sources, err := speakerClient.GetSources()
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to retrieve sources: %v", err))
+
+		return err
+	}
+
+	ready := false
+
+	for _, si := range sources.SourceItem {
+		if si.Source == "STORED_MUSIC" && si.SourceAccount == sourceAccount {
+			if si.Status.IsReady() {
+				ready = true
+			}
+
+			break
+		}
+	}
+
+	if !ready {
+		host := clientConfig.Host
+		PrintError(fmt.Sprintf(
+			"STORED_MUSIC source account %q is not READY on the speaker.\n"+
+				"Register it first:\n"+
+				"  soundtouch-cli --host %s account add-nas --user %s --name <server-display-name>",
+			sourceAccount, host, sourceAccount,
+		))
+
+		return fmt.Errorf("STORED_MUSIC source account %q not ready", sourceAccount)
+	}
+
+	PrintDeviceHeader("STORED_MUSIC play", clientConfig.Host, clientConfig.Port)
+	fmt.Printf("  Source account: %s\n", sourceAccount)
+	fmt.Printf("  Location:       %s\n", location)
+	fmt.Printf("  Type:           %s\n", itemType)
+
+	if name != "" {
+		fmt.Printf("  Name:           %s\n", name)
+	}
 
 	if art != "" {
-		fmt.Printf("  Art:  %s\n", art)
+		fmt.Printf("  Art:            %s\n", art)
 	}
 
 	fmt.Println()
 
-	switch mode {
-	case "local-internet-radio":
-		err = speakerClient.SelectLocalInternetRadio(streamURL, "", name, art)
-	case "local-music":
-		err = speakerClient.SelectLocalMusic(streamURL, "", name, art)
-	case "stored-music":
-		err = speakerClient.SelectStoredMusic(streamURL, "", name, art)
-	case "content-item":
-		item := &models.ContentItem{
-			Source:       "LOCAL_MUSIC",
-			Type:         "track",
-			Location:     streamURL,
-			ItemName:     name,
-			ContainerArt: art,
-			IsPresetable: true,
-		}
-
-		err = speakerClient.SelectContentItem(item)
-	default:
-		return fmt.Errorf("unknown --mode %q; valid values: local-internet-radio, local-music, stored-music, content-item", mode)
+	// SelectStoredMusic does not set Type, so we build the ContentItem directly
+	// so we can pass the correct type ("track" or "dir") to the speaker.
+	ci := &models.ContentItem{
+		Source:        "STORED_MUSIC",
+		SourceAccount: sourceAccount,
+		Location:      location,
+		Type:          itemType,
+		ItemName:      name,
+		ContainerArt:  art,
+		IsPresetable:  true,
 	}
 
-	if err != nil {
+	if err = speakerClient.SelectContentItem(ci); err != nil {
 		PrintError(fmt.Sprintf("Playback command failed: %v", err))
 
 		return err
 	}
 
-	PrintSuccess(fmt.Sprintf("Playback started via mode=%s", mode))
+	label := name
+	if label == "" {
+		label = location
+	}
+
+	PrintSuccess(fmt.Sprintf("Playing %q (STORED_MUSIC, location=%s)", label, location))
 
 	return nil
 }
