@@ -5,6 +5,7 @@ DELETE   /accounts/{account}/group                                    handlers.(
 DELETE   /accounts/{account}/group/                                   handlers.(*Server).HandleUnsupported-fm
 DELETE   /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleUnsupported-fm
 DELETE   /api/control/devices/{id}/                                   soundtouchweb.(*WebApp).HandleDeleteDevice-fm
+DELETE   /api/control/devices/{id}/library/servers/{account}          soundtouchweb.(*WebApp).HandleRemoveLibraryServer-fm
 DELETE   /api/setup/devices/{deviceId}                                handlers.(*Server).HandleRemoveDevice-fm
 DELETE   /api/setup/dns-discoveries                                   handlers.(*Server).HandleClearDNSDiscoveries-fm
 DELETE   /api/setup/interactions/sessions                             handlers.(*Server).HandleCleanupSessions-fm
@@ -38,10 +39,13 @@ GET      /admin                                                       handlers.(
 GET      /api/control/devices/                                        soundtouchweb.(*WebApp).HandleAPIDevices-fm
 GET      /api/control/devices/{id}/                                   soundtouchweb.(*WebApp).HandleAPIDevice-fm
 GET      /api/control/devices/{id}/action/{action}                    soundtouchweb.(*WebApp).HandleAPIControl-fm
+GET      /api/control/devices/{id}/library/browse                     soundtouchweb.(*WebApp).HandleLibraryBrowse-fm
+GET      /api/control/devices/{id}/library/servers                    soundtouchweb.(*WebApp).HandleDeviceLibraryServers-fm
 GET      /api/control/devices/{id}/power-status                       soundtouchweb.(*WebApp).HandleDevicePowerStatus-fm
 GET      /api/control/devices/{id}/recents                            soundtouchweb.(*WebApp).HandleDeviceRecents-fm
 GET      /api/control/devices/{id}/ws                                 soundtouchweb.(*WebApp).HandleDeviceWebSocket-fm
 GET      /api/control/devices/{id}/zone/                              soundtouchweb.(*WebApp).HandleGetZone-fm
+GET      /api/control/providers/library/servers                       soundtouchweb.(*WebApp).HandleDiscoverLibraryServers-fm
 GET      /api/control/providers/radiobrowser/search                   soundtouchweb.(*WebApp).HandleRadioBrowserSearch-fm
 GET      /api/control/providers/tunein/navigate                       soundtouchweb.(*WebApp).HandleTuneInNavigate-fm
 GET      /api/control/providers/tunein/navigate/*                     soundtouchweb.(*WebApp).HandleTuneInNavigate-fm
@@ -81,6 +85,7 @@ GET      /api/setup/version                                           handlers.(
 GET      /app                                                         soundtouchweb.(*WebApp).serveIndex-fm
 GET      /app/device/*                                                soundtouchweb.(*WebApp).serveIndex-fm
 GET      /app/devices                                                 soundtouchweb.(*WebApp).serveIndex-fm
+GET      /app/library                                                 soundtouchweb.(*WebApp).serveIndex-fm
 GET      /app/playurl                                                 soundtouchweb.(*WebApp).serveIndex-fm
 GET      /app/radiobrowser                                            soundtouchweb.(*WebApp).serveIndex-fm
 GET      /app/static/*                                                http.Handler.ServeHTTP-fm
@@ -179,6 +184,8 @@ POST     /accounts/{account}/group/{groupId}                          handlers.(
 POST     /alexa/certificate                                           handlers.(*Server).HandleAlexaCertificate-fm
 POST     /api/control/devices/{id}/action/{action}                    soundtouchweb.(*WebApp).HandleAPIControl-fm
 POST     /api/control/devices/{id}/key/{key}                          soundtouchweb.(*WebApp).HandleDeviceKey-fm
+POST     /api/control/devices/{id}/library/play                       soundtouchweb.(*WebApp).HandlePlayLibrary-fm
+POST     /api/control/devices/{id}/library/servers                    soundtouchweb.(*WebApp).HandleAddLibraryServer-fm
 POST     /api/control/devices/{id}/play                               soundtouchweb.(*WebApp).HandleDevicePlay-fm
 POST     /api/control/devices/{id}/power                              soundtouchweb.(*WebApp).HandleDevicePower-fm
 POST     /api/control/devices/{id}/providers/radiobrowser/play        soundtouchweb.(*WebApp).HandlePlayRadioBrowser-fm
