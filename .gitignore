@@ -21,6 +21,7 @@ dist/
 /example-mdns
 /example-upnp
 /example-unified
+/example-dlna-server
 /mdns-scanner
 /websocket-demo
 /main
