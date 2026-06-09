@@ -2317,6 +2317,10 @@ func main() {
 	// Defined in cmd_cloud.go.
 	app.Commands = append(app.Commands, cloudCommand())
 
+	// DLNA music library (server discovery, browse, play).
+	// Defined in cmd_library.go.
+	app.Commands = append(app.Commands, libraryCommand())
+
 	// Sort commands alphabetically (including subcommands and flags recursively)
 	sortCommands(app.Commands)
 

@@ -301,6 +301,19 @@ func (c *Client) GetServiceAvailability() (*models.ServiceAvailability, error) {
 	return &serviceAvailability, nil
 }
 
+// ListMediaServers returns the DLNA media servers that the speaker itself has
+// discovered on the LAN (via its own UPnP sweep). The response may be empty
+// when the speaker has not yet discovered any servers; that is not an error.
+func (c *Client) ListMediaServers() (*models.ListMediaServersResponse, error) {
+	var resp models.ListMediaServersResponse
+
+	if err := c.get("/listMediaServers", &resp); err != nil {
+		return nil, fmt.Errorf("failed to list media servers: %w", err)
+	}
+
+	return &resp, nil
+}
+
 // GetName retrieves the device name from the /name endpoint
 func (c *Client) GetName() (*models.Name, error) {
 	var name models.Name
