@@ -46,7 +46,7 @@ RUN if [ "${TARGETARCH}" = "arm" ] && [ -n "${TARGETVARIANT}" ]; then \
     fi
 
 # soundtouch-service image
-FROM alpine:3.23 AS soundtouch-service
+FROM alpine:3.24 AS soundtouch-service
 
 RUN apk add --no-cache ca-certificates tzdata
 
@@ -95,7 +95,7 @@ EXPOSE 8000
 ENTRYPOINT ["/app/soundtouch-service"]
 
 # soundtouch-player image
-FROM alpine:3.23 AS soundtouch-player
+FROM alpine:3.24 AS soundtouch-player
 
 RUN apk add --no-cache ca-certificates tzdata
 
@@ -116,7 +116,7 @@ ENTRYPOINT ["/app/soundtouch-player"]
 # soundtouch-web image: transitional alias of soundtouch-player. Built from the
 # same binary; the entrypoint name makes the binary print a rename notice on
 # start. Will be dropped in a future release.
-FROM alpine:3.23 AS soundtouch-web
+FROM alpine:3.24 AS soundtouch-web
 
 RUN apk add --no-cache ca-certificates tzdata
 
