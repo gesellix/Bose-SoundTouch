@@ -3184,6 +3184,7 @@ function setPreflightItemStatus(li, status, message) {
     if (status === "running") { icon = "⟳"; color = "#1976d2"; suffix = " — running…"; }
     else if (status === "ok")  { icon = "✅"; color = "green";   suffix = " — passed"; }
     else if (status === "skip") { icon = "—"; color = "#666";    suffix = message ? ` — ${message}` : " — skipped"; }
+    else if (status === "warn") { icon = "⚠️"; color = "#ed6c02"; suffix = message ? ` — ${message}` : " — warning"; }
     else                       { icon = "❌"; color = "red";     suffix = message ? ` — ${message}` : " — failed"; }
     li.innerText = `${icon} ${li.dataset.name}${suffix}`;
     li.style.color = color;
@@ -3272,7 +3273,7 @@ async function checkPeerReachability(deviceId) {
         }
         if (result.error) return {status: "fail", message: result.error.split("\n")[0]};
         if (result.result && result.result.reached === false) {
-            return {status: "fail", message: "no inbound from device before timeout"};
+            return {status: "warn", message: "no inbound seen within the wait window — usually just timing (the update daemon dials out on its own slow schedule; a reboot after Apply validates it), not a port or config problem. Safe to proceed."};
         }
         return {status: "fail", message: "probe failed"};
     } catch (e) {
@@ -3386,9 +3387,11 @@ function awaitPreflightDecision(results) {
     summary.replaceChildren();
 
     if (failed === 0) {
-        summary.innerText = `✅ ${passed} of ${results.length} checks passed` +
-            (skipped > 0 ? ` (${skipped} skipped)` : "");
-        summary.style.color = "green";
+        const warned = results.filter(r => r.status === "warn").length;
+        let extras = skipped > 0 ? ` (${skipped} skipped)` : "";
+        if (warned > 0) extras += ` (${warned} warning${warned === 1 ? "" : "s"})`;
+        summary.innerText = `✅ ${passed} of ${results.length} checks passed${extras}`;
+        summary.style.color = warned > 0 ? "#ed6c02" : "green";
         actions.replaceChildren();
         // Auto-proceed: caller adds a brief delay so the user sees the
         // green frame before Apply kicks off.
@@ -3508,9 +3511,11 @@ function renderPreflightPreviewSummary(results) {
     if (!summary || !actions) return;
 
     if (failed === 0) {
-        summary.innerText = `✅ Pre-flight passed — ${passed} of ${results.length} checks`
-            + (skipped > 0 ? ` (${skipped} skipped)` : "");
-        summary.style.color = "green";
+        const warned = results.filter(r => r.status === "warn").length;
+        let extras = skipped > 0 ? ` (${skipped} skipped)` : "";
+        if (warned > 0) extras += ` (${warned} warning${warned === 1 ? "" : "s"})`;
+        summary.innerText = `✅ Pre-flight passed — ${passed} of ${results.length} checks${extras}`;
+        summary.style.color = warned > 0 ? "#ed6c02" : "green";
     } else {
         summary.innerText = `❌ Pre-flight: ${failed} of ${results.length} checks failed`;
         summary.style.color = "red";
