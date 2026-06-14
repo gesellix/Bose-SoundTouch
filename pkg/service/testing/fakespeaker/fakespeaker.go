@@ -12,6 +12,7 @@ package fakespeaker
 import (
 	"context"
 	"embed"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -324,41 +325,48 @@ func handleRemoveGroup(w http.ResponseWriter, r *http.Request) {
 // not contain </group>, it falls back to a minimal canned success
 // response so callers still see a 200 + parseable XML.
 func buildAddGroupResponse(posted []byte) []byte {
-	const closeTag = "</group>"
-
-	const okFragment = "    <status>GROUP_OK</status>\n"
+	type groupPayload struct {
+		XMLName xml.Name `xml:"group"`
+		Name    string   `xml:"name,omitempty"`
+		Master  string   `xml:"master,omitempty"`
+		Slave   string   `xml:"slave,omitempty"`
+		Status  string   `xml:"status,omitempty"`
+	}
 
 	if len(posted) == 0 {
-		return []byte(`<?xml version="1.0" encoding="UTF-8"?>` + "\n<group>\n" + okFragment + closeTag + "\n")
+		return []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<group>
+    <status>GROUP_OK</status>
+</group>
+`)
 	}
 
-	idx := indexOfClose(posted, closeTag)
-	if idx < 0 {
-		return []byte(`<?xml version="1.0" encoding="UTF-8"?>` + "\n<group>\n" + okFragment + closeTag + "\n")
+	var in groupPayload
+	if err := xml.Unmarshal(posted, &in); err != nil {
+		return []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<group>
+    <status>GROUP_OK</status>
+</group>
+`)
 	}
 
-	out := make([]byte, 0, len(posted)+len(okFragment))
-	out = append(out, posted[:idx]...)
-	out = append(out, []byte(okFragment)...)
-	out = append(out, posted[idx:]...)
+	out := groupPayload{
+		Name:   in.Name,
+		Master: in.Master,
+		Slave:  in.Slave,
+		Status: "GROUP_OK",
+	}
 
-	return out
+	data, err := xml.Marshal(out)
+	if err != nil {
+		return []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<group>
+    <status>GROUP_OK</status>
+</group>
+`)
+	}
+
+	return append([]byte(`<?xml version="1.0" encoding="UTF-8"?>`+"\n"), data...)
 }
 
-// indexOfClose returns the index of the last occurrence of needle in b,
-// or -1 if not present. We scan from the right because real-world
-// payloads can technically nest <group> blocks (e.g. inside <roles>),
-// even though the documented stereo-pair payload does not.
-func indexOfClose(b []byte, needle string) int {
-	if len(needle) == 0 || len(b) < len(needle) {
-		return -1
-	}
 
-	for i := len(b) - len(needle); i >= 0; i-- {
-		if string(b[i:i+len(needle)]) == needle {
-			return i
-		}
-	}
-
-	return -1
-}

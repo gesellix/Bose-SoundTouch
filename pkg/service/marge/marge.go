@@ -616,20 +616,40 @@ func recentToXML(r *models.ServiceRecent, matchingSrc *models.ConfiguredSource) 
 
 // ProviderSettingsToXML generates provider settings XML for the specified account.
 func ProviderSettingsToXML(account string) string {
-	return constants.XMLHeader + fmt.Sprintf(`<providerSettings>
-    <providerSetting>
-      <boseId>%s</boseId>
-      <keyName>ELIGIBLE_FOR_TRIAL</keyName>
-      <value>false</value>
-      <providerId>14</providerId>
-    </providerSetting>
-    <providerSetting>
-      <boseId>%s</boseId>
-      <keyName>STREAMING_QUALITY</keyName>
-      <value>2</value>
-      <providerId>15</providerId>
-    </providerSetting>
-  </providerSettings>`, EscapeXML(account), EscapeXML(account))
+	type providerSetting struct {
+		BoseID     string `xml:"boseId"`
+		KeyName    string `xml:"keyName"`
+		Value      string `xml:"value"`
+		ProviderID string `xml:"providerId"`
+	}
+	type providerSettings struct {
+		XMLName  xml.Name          `xml:"providerSettings"`
+		Settings []providerSetting `xml:"providerSetting"`
+	}
+
+	payload := providerSettings{
+		Settings: []providerSetting{
+			{
+				BoseID:     account,
+				KeyName:    "ELIGIBLE_FOR_TRIAL",
+				Value:      "false",
+				ProviderID: "14",
+			},
+			{
+				BoseID:     account,
+				KeyName:    "STREAMING_QUALITY",
+				Value:      "2",
+				ProviderID: "15",
+			},
+		},
+	}
+
+	out, err := xml.Marshal(payload)
+	if err != nil {
+		return constants.XMLHeader + `<providerSettings></providerSettings>`
+	}
+
+	return constants.XMLHeader + string(out)
 }
 
 // SoftwareUpdateToXML generates software update configuration XML.
