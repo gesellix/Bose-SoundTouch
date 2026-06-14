@@ -4,6 +4,8 @@ package marge
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"log"
@@ -2322,11 +2324,27 @@ func RemoveSourceFromAccount(ds *datastore.DataStore, account, sourceID string) 
 	return nil
 }
 
+// newSourceID returns a unique opaque source ID. SaveConfiguredSources dedups
+// by ID, so it must be collision-free even for sources created in the same
+// instant; it uses crypto/rand (64 bits) and falls back to a nanosecond
+// timestamp only if the RNG ever fails.
+func newSourceID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "SRC_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	}
+
+	return "SRC_" + hex.EncodeToString(b[:])
+}
+
 // AddSource adds a new music source to the account and returns the generated source ID.
 func AddSource(ds *datastore.DataStore, account, username, providerID, secret, secretType, sourceName string) (string, error) {
 	now := time.Now()
 	createdOn := FormatTime(now)
-	sourceID := "SRC_" + strconv.FormatInt(now.Unix(), 10)
+	// SaveConfiguredSources dedups by ID, so IDs must be unique even when two
+	// sources are added in the same instant. Use a random ID rather than a
+	// timestamp (which can collide on coarse clocks or rapid calls).
+	sourceID := newSourceID()
 
 	// List accounts directly from the account directory to be sure we find them.
 	devicesDir := ds.AccountDevicesDir(account)
@@ -2368,11 +2386,24 @@ func AddSource(ds *datastore.DataStore, account, username, providerID, secret, s
 
 		PrepareConfiguredSource(&newSrc)
 
-		// Update or append. If it's the same provider, we replace it.
+		// Update or append. Most providers are singletons (one account each), so
+		// the same provider replaces the existing entry. STORED_MUSIC is the
+		// exception: each DLNA media server is a separate account (username =
+		// "<UDN>/0"), so it must only replace when the account also matches.
+		// Otherwise registering a second media server overwrites the first, which
+		// then vanishes from /full + /sources and the speaker drops it (only one
+		// media server could ever stay registered).
 		replaced := false
 
 		for i := range sources {
-			if sources[i].SourceProviderID == providerID ||
+			sameProvider := sources[i].SourceProviderID == providerID
+			if providerID == strconv.Itoa(constants.StoredMusicProviderID) {
+				// Match on the persisted account identity (SourceKey.Account),
+				// not Username, which does not round-trip through the datastore.
+				sameProvider = sameProvider && sources[i].SourceKey.Account == username
+			}
+
+			if sameProvider ||
 				(providerID == strconv.Itoa(constants.SpotifyProviderID) && sources[i].SourceKey.Type == constants.ProviderSpotify) {
 				sources[i] = newSrc
 				replaced = true
