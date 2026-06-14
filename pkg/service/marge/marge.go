@@ -2019,11 +2019,22 @@ func updateOrCreateRecent(recents []models.ServiceRecent, name string, matchingS
 		if sourceMatch && r.Location == location {
 			recents[i].UtcTime = strconv.FormatInt(utcTime, 10)
 			recents[i].UpdatedOn = FormatTime(time.Now())
-			recentObj = &recents[i]
-			// Move to front
-			recents = append([]models.ServiceRecent{*recentObj}, append(recents[:i], recents[i+1:]...)...)
 
-			return recentObj, recents
+			// Move the matched recent to the front. Copy the value out FIRST,
+			// then rebuild the slice into a fresh backing array. The previous
+			// in-place `append(recents[:i], recents[i+1:]...)` shuffle aliased
+			// the shared backing array and overwrote index i, which both
+			// corrupted the returned pointer (it pointed at the neighbour) and,
+			// because Go does not specify evaluation order between `*recentObj`
+			// and the inner append, could drop the matched recent and duplicate
+			// its neighbour in the saved list.
+			matched := recents[i]
+			reordered := make([]models.ServiceRecent, 0, len(recents))
+			reordered = append(reordered, matched)
+			reordered = append(reordered, recents[:i]...)
+			reordered = append(reordered, recents[i+1:]...)
+
+			return &reordered[0], reordered
 		}
 	}
 
