@@ -225,6 +225,27 @@ func (p presetParityXML) MarshalXML(e *xml.Encoder, start xml.StartElement) erro
 	return e.EncodeElement(Alias(p), start)
 }
 
+// recentSourceUsername returns the account/username to emit in a recent's
+// <source> block. The account (e.g. STORED_MUSIC's "<UDN>/0") is persisted in
+// SourceKey.Account, not Username, which does not round-trip through the
+// datastore — so fall back to SourceKeyAccount. Without this, STORED_MUSIC
+// media-server recents get an empty <username>, the speaker falls back to the
+// provider id (e.g. "7") as the account, and replay fails with INVALID_SOURCE.
+// Mirrors the fallback in mapToFullResponseSource; TuneIn / Internet Radio /
+// Local Internet Radio intentionally keep an empty username (parity).
+func recentSourceUsername(src *models.ConfiguredSource) string {
+	if src.Username != "" {
+		return src.Username
+	}
+
+	switch src.SourceKeyType {
+	case constants.ProviderTunein, constants.ProviderInternetRadio, constants.ProviderLocalInternetRadio:
+		return ""
+	}
+
+	return src.SourceKeyAccount
+}
+
 func prepareRecentItemParitySource(src *models.ConfiguredSource) *models.RecentItemParitySource {
 	sxml := &models.RecentItemParitySource{
 		ID:               src.ID,
@@ -234,7 +255,7 @@ func prepareRecentItemParitySource(src *models.ConfiguredSource) *models.RecentI
 		Name:             src.DisplayName,
 		SourceProviderID: src.SourceProviderID,
 		SourceName:       src.SourceName,
-		Username:         src.Username,
+		Username:         recentSourceUsername(src),
 		Credential: &models.RecentItemParityCredential{
 			Type:  src.Credential.Type,
 			Value: src.Credential.Value,
@@ -2118,7 +2139,7 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 			Name:             matchingSrc.DisplayName,
 			SourceProviderID: matchingSrc.SourceProviderID,
 			SourceName:       matchingSrc.SourceName,
-			Username:         matchingSrc.Username,
+			Username:         recentSourceUsername(matchingSrc),
 		}
 
 		if res.Source.Name == "TuneIn" || res.Source.Name == "LOCAL_INTERNET_RADIO" {
