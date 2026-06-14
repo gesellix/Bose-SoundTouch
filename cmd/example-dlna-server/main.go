@@ -17,14 +17,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -47,6 +51,11 @@ const (
 func main() {
 	port := flag.Int("port", 8200, "HTTP port to bind")
 	name := flag.String("name", "AfterTouch Test Library", "UPnP friendlyName advertised over SSDP")
+	mediaDir := flag.String("media-dir", "", "serve real audio files + artwork from this directory "+
+		"(searched recursively, so an artist/album tree works) instead of the built-in silent test "+
+		"tracks. Audio: .mp3/.wav/.flac/.m4a/.ogg. Art per track: a sibling <name>.jpg/.png, else a "+
+		"cover.jpg/cover.png/folder.jpg in the same album folder. Files are loaded into memory, so "+
+		"point it at an album or a modest folder, not your whole library")
 
 	flag.Parse()
 
@@ -62,11 +71,33 @@ func main() {
 	addr := fmt.Sprintf("0.0.0.0:%d", *port)
 	location := fmt.Sprintf("http://%s:%d/rootDesc.xml", lanIP, *port)
 
-	srv := dlnatest.NewServer(dlnatest.WithFriendlyName(*name))
+	// Join the SSDP multicast group on the interface that owns the LAN IP. On
+	// macOS net.Interfaces() lists lo0 (UP+MULTICAST) first, so picking the
+	// "first" multicast interface would join on loopback and never receive the
+	// LAN M-SEARCH from clients like AfterTouch.
+	lanIface := interfaceForIP(lanIP)
+	if lanIface != nil {
+		logger.Info("SSDP: will join multicast on LAN interface", "iface", lanIface.Name, "ip", lanIP)
+	}
+
+	opts := []dlnatest.Option{dlnatest.WithFriendlyName(*name)}
+
+	if *mediaDir != "" {
+		tree, n, err := loadTreeFromDir(*mediaDir, *name)
+		if err != nil {
+			logger.Error("failed to load --media-dir", "dir", *mediaDir, "err", err)
+			os.Exit(1)
+		}
+
+		opts = append(opts, dlnatest.WithTree(tree))
+		logger.Info("serving real media from directory", "dir", *mediaDir, "tracks", n)
+	}
+
+	srv := dlnatest.NewServer(opts...)
 
 	httpSrv := &http.Server{
 		Addr:    addr,
-		Handler: srv.HTTPHandler(),
+		Handler: withAccessLog(logger, srv.HTTPHandler()),
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -87,7 +118,7 @@ func main() {
 	udn := srv.UDN
 
 	// Start SSDP listener + responder.
-	go runSSDPListener(ctx, logger, udn, location)
+	go runSSDPListener(ctx, logger, udn, location, lanIface)
 
 	// Start periodic ssdp:alive announcements.
 	go runSSDPAlive(ctx, logger, udn, location)
@@ -116,27 +147,25 @@ func main() {
 // SSDP listener: answers M-SEARCH requests
 // ----------------------------------------------------------------------------
 
-func runSSDPListener(ctx context.Context, logger *slog.Logger, udn, location string) {
+func runSSDPListener(ctx context.Context, logger *slog.Logger, udn, location string, ifi *net.Interface) {
 	group := &net.UDPAddr{IP: net.ParseIP(ssdpMulticastIP), Port: ssdpPort}
 
-	// ListenMulticastUDP joins the multicast group on a system-chosen interface.
-	// We iterate over all UP multicast-capable interfaces and listen on each.
-	ifaces, err := multicastInterfaces()
-	if err != nil {
-		logger.Warn("SSDP: cannot list interfaces, using system default", "err", err)
+	// Join the group on the LAN interface. If we could not resolve it, fall back
+	// to the first non-loopback multicast interface (never loopback, which would
+	// only ever receive same-host loopback traffic).
+	if ifi == nil {
+		if cands, err := multicastInterfaces(); err == nil {
+			for _, c := range cands {
+				if c != nil && c.Flags&net.FlagLoopback == 0 {
+					ifi = c
 
-		ifaces = []*net.Interface{nil} // nil = system default
+					break
+				}
+			}
+		}
 	}
 
-	if len(ifaces) == 0 {
-		ifaces = []*net.Interface{nil}
-	}
-
-	// We only need one listening socket; use the first usable interface.
-	// net.ListenMulticastUDP binds to 0.0.0.0:1900 internally, so a single
-	// call is sufficient to receive multicast traffic on all interfaces on
-	// most platforms.
-	conn, err := net.ListenMulticastUDP("udp4", ifaces[0], group)
+	conn, err := net.ListenMulticastUDP("udp4", ifi, group)
 	if err != nil {
 		logger.Warn("SSDP: ListenMulticastUDP failed (try running as root or check firewall)", "err", err)
 
@@ -383,6 +412,255 @@ func primaryLANIP() (string, error) {
 	}
 
 	return "", fmt.Errorf("no usable LAN IPv4 address found")
+}
+
+// ----------------------------------------------------------------------------
+// --media-dir loader
+// ----------------------------------------------------------------------------
+
+// loadTreeFromDir walks dir recursively and builds a single flat content folder
+// from every audio file found, so an artist/album tree works. Album art for a
+// track is, in order of preference: a sibling <basename>.<img>, then a
+// cover.jpg/cover.png/folder.jpg in the track's own directory. Returns the tree
+// and track count.
+func loadTreeFromDir(dir, albumName string) (*dlnatest.Tree, int, error) {
+	music := &dlnatest.Container{
+		ID:       "1",
+		ParentID: "0",
+		Title:    albumName,
+		Class:    "object.container.storageFolder",
+	}
+
+	// Cache the resolved cover per directory so we read each album's folder.jpg
+	// once rather than for every track in it.
+	type cover struct {
+		data []byte
+		mime string
+	}
+
+	coverCache := map[string]cover{}
+
+	dirCover := func(d string) ([]byte, string) {
+		if c, ok := coverCache[d]; ok {
+			return c.data, c.mime
+		}
+
+		var c cover
+
+		for _, n := range []string{"cover.jpg", "cover.jpeg", "cover.png", "folder.jpg", "folder.png", "albumart.jpg", "albumart.png"} {
+			if b, err := os.ReadFile(filepath.Join(d, n)); err == nil {
+				c = cover{data: b, mime: imageMimeForExt(filepath.Ext(n))}
+
+				break
+			}
+		}
+
+		coverCache[d] = c
+
+		return c.data, c.mime
+	}
+
+	idx := 0
+
+	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil //nolint:nilerr // skip unreadable entries and directories
+		}
+
+		mime := audioMimeForExt(filepath.Ext(path))
+		if mime == "" {
+			return nil // not an audio file we recognise
+		}
+
+		payload, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return nil // skip unreadable file
+		}
+
+		trackDir := filepath.Dir(path)
+		base := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+
+		// Prefer a per-track image sibling; fall back to the album-folder cover.
+		art, artMime := dirCover(trackDir)
+
+		for _, ae := range []string{".jpg", ".jpeg", ".png", ".webp"} {
+			if b, aerr := os.ReadFile(filepath.Join(trackDir, base+ae)); aerr == nil {
+				art = b
+				artMime = imageMimeForExt(ae)
+
+				break
+			}
+		}
+
+		music.Children = append(music.Children, &dlnatest.Item{
+			ID:         fmt.Sprintf("1$4$%d", idx),
+			ParentID:   "1$4",
+			Title:      base,
+			Class:      "object.item.audioItem.musicTrack",
+			Artist:     "Test Artist",
+			Album:      filepath.Base(trackDir),
+			MimeType:   mime,
+			Payload:    payload,
+			ArtPayload: art,
+			ArtMime:    artMime,
+		})
+		idx++
+
+		return nil
+	})
+	if walkErr != nil {
+		return nil, 0, walkErr
+	}
+
+	if len(music.Children) == 0 {
+		return nil, 0, fmt.Errorf("no audio files (.mp3/.wav/.flac/.m4a/.ogg) found under %s", dir)
+	}
+
+	return &dlnatest.Tree{Containers: []*dlnatest.Container{music}}, len(music.Children), nil
+}
+
+// audioMimeForExt maps an audio file extension to a MIME type, or "" if the
+// extension is not a recognised audio format.
+func audioMimeForExt(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".mp3":
+		return "audio/mpeg"
+	case ".wav":
+		return "audio/x-wav"
+	case ".flac":
+		return "audio/flac"
+	case ".m4a", ".mp4":
+		return "audio/mp4"
+	case ".ogg":
+		return "audio/ogg"
+	}
+
+	return ""
+}
+
+// imageMimeForExt maps an image file extension to a MIME type.
+func imageMimeForExt(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	}
+
+	return "application/octet-stream"
+}
+
+// ----------------------------------------------------------------------------
+// HTTP access logging (debugging aid)
+// ----------------------------------------------------------------------------
+
+// statusRecorder captures the status code and byte count of a response.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	n, err := r.ResponseWriter.Write(b)
+	r.bytes += n
+
+	return n, err
+}
+
+// withAccessLog logs every HTTP request the server handles. For ContentDirectory
+// Browse POSTs it also surfaces the ObjectID and BrowseFlag so the speaker's
+// browse sequence (and whether it ever resolves a track's metadata) is visible.
+func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		var browseAttrs []any
+
+		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "ContentDir") {
+			body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+			_ = r.Body.Close()
+			r.Body = io.NopCloser(bytes.NewReader(body))
+
+			browseAttrs = []any{
+				"objectID", between(string(body), "<ObjectID>", "</ObjectID>"),
+				"browseFlag", between(string(body), "<BrowseFlag>", "</BrowseFlag>"),
+			}
+		}
+
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+
+		attrs := []any{
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rec.status,
+			"bytes", rec.bytes,
+			"from", r.RemoteAddr,
+			"dur", time.Since(start).String(),
+		}
+		attrs = append(attrs, browseAttrs...)
+
+		logger.Info("HTTP", attrs...)
+	})
+}
+
+// between returns the text between the first occurrence of open and the next
+// close, or "" if not found. Used for lightweight SOAP field extraction in logs.
+func between(s, open, close string) string {
+	i := strings.Index(s, open)
+	if i < 0 {
+		return ""
+	}
+
+	i += len(open)
+
+	j := strings.Index(s[i:], close)
+	if j < 0 {
+		return ""
+	}
+
+	return s[i : i+j]
+}
+
+// interfaceForIP returns the UP, multicast-capable interface that owns the given
+// IPv4 address, or nil if none is found.
+func interfaceForIP(ip string) *net.Interface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	for i := range ifaces {
+		iface := &ifaces[i]
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagMulticast == 0 {
+			continue
+		}
+
+		addrs, aerr := iface.Addrs()
+		if aerr != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				if v4 := ipNet.IP.To4(); v4 != nil && v4.String() == ip {
+					return iface
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // extractHeader extracts a header value from a raw HTTP-style SSDP message.

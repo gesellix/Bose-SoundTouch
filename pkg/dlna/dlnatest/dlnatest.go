@@ -13,13 +13,19 @@
 package dlnatest
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// serveModTime is a fixed modification time used for ServeContent so that
+// range requests and caching headers behave deterministically.
+var serveModTime = time.Unix(1136214245, 0)
 
 // ----------------------------------------------------------------------------
 // Content tree model
@@ -45,6 +51,12 @@ type Item struct {
 	MimeType string
 	DurSec   float64 // duration in seconds
 	Payload  []byte  // raw audio bytes served at /MediaItems/<ID>.<ext>
+
+	// ArtPayload, when non-empty, is album-art image bytes served at
+	// /AlbumArt/<ID>.<ext> and advertised in DIDL-Lite via <upnp:albumArtURI>.
+	// ArtMime is the art image MIME type (e.g. "image/jpeg").
+	ArtPayload []byte
+	ArtMime    string
 }
 
 // mediaExt returns the file extension for this item's MIME type.
@@ -52,8 +64,32 @@ func (it *Item) mediaExt() string {
 	switch it.MimeType {
 	case "audio/x-wav", "audio/wav":
 		return "wav"
+	case "audio/mpeg":
+		return "mp3"
+	case "audio/flac", "audio/x-flac":
+		return "flac"
+	case "audio/mp4", "audio/m4a", "audio/x-m4a":
+		return "m4a"
+	case "audio/ogg":
+		return "ogg"
 	default:
 		return "bin"
+	}
+}
+
+// artExt returns the file extension for an album-art MIME type.
+func artExt(mime string) string {
+	switch mime {
+	case "image/jpeg", "image/jpg":
+		return "jpg"
+	case "image/png":
+		return "png"
+	case "image/webp":
+		return "webp"
+	case "image/gif":
+		return "gif"
+	default:
+		return "img"
 	}
 }
 
@@ -75,26 +111,30 @@ func DefaultTree() *Tree {
 		Class:    "object.container.storageFolder",
 		Children: []*Item{
 			{
-				ID:       "1$4$0",
-				ParentID: "1$4",
-				Title:    "track01",
-				Class:    "object.item.audioItem.musicTrack",
-				Artist:   "Test Artist",
-				Album:    "Test Album",
-				MimeType: "audio/x-wav",
-				DurSec:   1.0,
-				Payload:  track01,
+				ID:         "1$4$0",
+				ParentID:   "1$4",
+				Title:      "track01",
+				Class:      "object.item.audioItem.musicTrack",
+				Artist:     "Test Artist",
+				Album:      "Test Album",
+				MimeType:   "audio/x-wav",
+				DurSec:     1.0,
+				Payload:    track01,
+				ArtPayload: tinyPNG,
+				ArtMime:    "image/png",
 			},
 			{
-				ID:       "1$4$1",
-				ParentID: "1$4",
-				Title:    "track02",
-				Class:    "object.item.audioItem.musicTrack",
-				Artist:   "Test Artist",
-				Album:    "Test Album",
-				MimeType: "audio/x-wav",
-				DurSec:   1.0,
-				Payload:  track02,
+				ID:         "1$4$1",
+				ParentID:   "1$4",
+				Title:      "track02",
+				Class:      "object.item.audioItem.musicTrack",
+				Artist:     "Test Artist",
+				Album:      "Test Album",
+				MimeType:   "audio/x-wav",
+				DurSec:     1.0,
+				Payload:    track02,
+				ArtPayload: tinyPNG,
+				ArtMime:    "image/png",
 			},
 		},
 	}
@@ -186,6 +226,7 @@ func (s *Server) HTTPHandler() http.Handler {
 	mux.HandleFunc("/ctl/ContentDir", s.serveContentDir)
 	mux.HandleFunc("/icons/sm.png", s.serveIcon)
 	mux.HandleFunc("/MediaItems/", s.serveMediaItem)
+	mux.HandleFunc("/AlbumArt/", s.serveAlbumArt)
 
 	return mux
 }
@@ -322,18 +363,24 @@ func (s *Server) serveContentDir(w http.ResponseWriter, r *http.Request) {
 
 	var total int
 
-	switch objectID {
-	case "0":
-		// Root: return containers.
-		didl, total = s.browseRoot(startIndex, reqCount)
-	default:
-		// Try as a container ID.
-		if c := s.tree.containerByID(objectID); c != nil {
-			didl, total = s.browseContainer(c, startIndex, reqCount, base)
-		} else {
-			// Unknown object: return empty result.
-			didl = emptyDIDL()
-			total = 0
+	if req.Body.Browse.BrowseFlag == "BrowseMetadata" {
+		// Metadata for a single object (the speaker resolves a track's <res>
+		// this way before playing it).
+		didl, total = s.browseMetadata(objectID, base)
+	} else {
+		switch objectID {
+		case "0":
+			// Root: return containers.
+			didl, total = s.browseRoot(startIndex, reqCount)
+		default:
+			// Try as a container ID.
+			if c := s.tree.containerByID(objectID); c != nil {
+				didl, total = s.browseContainer(c, startIndex, reqCount, base)
+			} else {
+				// Unknown object: return empty result.
+				didl = emptyDIDL()
+				total = 0
+			}
 		}
 	}
 
@@ -391,6 +438,44 @@ func (s *Server) browseRoot(start, count int) (string, int) {
 	return b.String(), total
 }
 
+// didlOpen is the opening tag (with namespaces) shared by all DIDL-Lite results.
+const didlOpen = `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" ` +
+	`xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" ` +
+	`xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" ` +
+	`xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">`
+
+// writeItemDIDL writes a single DIDL-Lite <item> (title, artist/album, class,
+// optional albumArtURI, and the <res> media URL) into b.
+func writeItemDIDL(b *strings.Builder, it *Item, base string) {
+	size := len(it.Payload)
+	dur := formatDuration(it.DurSec)
+	resURL := fmt.Sprintf("%s/MediaItems/%s.%s", base, urlPathEsc(it.ID), it.mediaExt())
+
+	_, _ = fmt.Fprintf(b, `<item id=%s parentID=%s restricted="1">`, xmlAttr(it.ID), xmlAttr(it.ParentID))
+	b.WriteString(`<dc:title>` + xmlEsc(it.Title) + `</dc:title>`)
+
+	if it.Artist != "" {
+		b.WriteString(`<upnp:artist>` + xmlEsc(it.Artist) + `</upnp:artist>`)
+	}
+
+	if it.Album != "" {
+		b.WriteString(`<upnp:album>` + xmlEsc(it.Album) + `</upnp:album>`)
+	}
+
+	b.WriteString(`<upnp:class>` + xmlEsc(it.Class) + `</upnp:class>`)
+
+	if len(it.ArtPayload) > 0 {
+		artURL := fmt.Sprintf("%s/AlbumArt/%s.%s", base, urlPathEsc(it.ID), artExt(it.ArtMime))
+		b.WriteString(`<upnp:albumArtURI>` + xmlEsc(artURL) + `</upnp:albumArtURI>`)
+	}
+
+	_, _ = fmt.Fprintf(b,
+		`<res size="%d" duration="%s" bitrate="128000" sampleFrequency="8000" nrAudioChannels="1" protocolInfo="http-get:*:%s:*">%s</res>`,
+		size, dur, xmlEsc(it.MimeType), xmlEsc(resURL),
+	)
+	b.WriteString(`</item>`)
+}
+
 // browseContainer returns DIDL-Lite for the items inside a container.
 func (s *Server) browseContainer(c *Container, start, count int, base string) (string, int) {
 	items := c.Children
@@ -399,41 +484,52 @@ func (s *Server) browseContainer(c *Container, start, count int, base string) (s
 
 	var b strings.Builder
 
-	b.WriteString(`<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" `)
-	b.WriteString(`xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" `)
-	b.WriteString(`xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" `)
-	b.WriteString(`xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">`)
+	b.WriteString(didlOpen)
 
 	for _, it := range pageItems {
-		size := len(it.Payload)
-		dur := formatDuration(it.DurSec)
-		resURL := fmt.Sprintf("%s/MediaItems/%s.%s", base, urlPathEsc(it.ID), it.mediaExt())
-
-		_, _ = fmt.Fprintf(&b,
-			`<item id=%s parentID=%s restricted="1">`,
-			xmlAttr(it.ID), xmlAttr(it.ParentID),
-		)
-		b.WriteString(`<dc:title>` + xmlEsc(it.Title) + `</dc:title>`)
-
-		if it.Artist != "" {
-			b.WriteString(`<upnp:artist>` + xmlEsc(it.Artist) + `</upnp:artist>`)
-		}
-
-		if it.Album != "" {
-			b.WriteString(`<upnp:album>` + xmlEsc(it.Album) + `</upnp:album>`)
-		}
-
-		b.WriteString(`<upnp:class>` + xmlEsc(it.Class) + `</upnp:class>`)
-		_, _ = fmt.Fprintf(&b,
-			`<res size="%d" duration="%s" bitrate="128000" sampleFrequency="8000" nrAudioChannels="1" protocolInfo="http-get:*:%s:*">%s</res>`,
-			size, dur, xmlEsc(it.MimeType), xmlEsc(resURL),
-		)
-		b.WriteString(`</item>`)
+		writeItemDIDL(&b, it, base)
 	}
 
 	b.WriteString(`</DIDL-Lite>`)
 
 	return b.String(), total
+}
+
+// browseMetadata returns DIDL-Lite describing a single object (BrowseMetadata),
+// which speakers request to resolve a track's <res> URL before playing it.
+// Without this, a STORED_MUSIC select of a track ID returns empty metadata and
+// the speaker reports INVALID_SOURCE.
+func (s *Server) browseMetadata(objectID, base string) (string, int) {
+	var b strings.Builder
+
+	b.WriteString(didlOpen)
+
+	switch {
+	case objectID == "0":
+		_, _ = fmt.Fprintf(&b,
+			`<container id="0" parentID="-1" restricted="1" childCount="%d"><dc:title>Root</dc:title><upnp:class>object.container.storageFolder</upnp:class></container>`,
+			len(s.tree.Containers),
+		)
+	case s.tree.containerByID(objectID) != nil:
+		c := s.tree.containerByID(objectID)
+		_, _ = fmt.Fprintf(&b,
+			`<container id=%s parentID=%s restricted="1" childCount="%d">`,
+			xmlAttr(c.ID), xmlAttr(c.ParentID), len(c.Children),
+		)
+		b.WriteString(`<dc:title>` + xmlEsc(c.Title) + `</dc:title>`)
+		b.WriteString(`<upnp:class>` + xmlEsc(c.Class) + `</upnp:class>`)
+		b.WriteString(`</container>`)
+	case s.tree.itemByID(objectID) != nil:
+		writeItemDIDL(&b, s.tree.itemByID(objectID), base)
+	default:
+		b.WriteString(`</DIDL-Lite>`)
+
+		return b.String(), 0
+	}
+
+	b.WriteString(`</DIDL-Lite>`)
+
+	return b.String(), 1
 }
 
 func emptyDIDL() string {
@@ -489,9 +585,41 @@ func (s *Server) serveMediaItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", item.MimeType)
-	w.Header().Set("Content-Length", strconv.Itoa(len(item.Payload)))
-	_, _ = w.Write(item.Payload)
+	// ServeContent gives us byte-range support, which real speakers use when
+	// streaming audio (raw io.Writer with a fixed Content-Length does not).
+	if item.MimeType != "" {
+		w.Header().Set("Content-Type", item.MimeType)
+	}
+
+	http.ServeContent(w, r, "media."+item.mediaExt(), serveModTime, bytes.NewReader(item.Payload))
+}
+
+// ----------------------------------------------------------------------------
+// /AlbumArt/<id>.<ext>
+// ----------------------------------------------------------------------------
+
+func (s *Server) serveAlbumArt(w http.ResponseWriter, r *http.Request) {
+	rel := strings.TrimPrefix(r.URL.Path, "/AlbumArt/")
+
+	dot := strings.LastIndexByte(rel, '.')
+	id := rel
+
+	if dot >= 0 {
+		id = rel[:dot]
+	}
+
+	item := s.tree.itemByID(id)
+	if item == nil || len(item.ArtPayload) == 0 {
+		http.NotFound(w, r)
+
+		return
+	}
+
+	if item.ArtMime != "" {
+		w.Header().Set("Content-Type", item.ArtMime)
+	}
+
+	http.ServeContent(w, r, "art."+artExt(item.ArtMime), serveModTime, bytes.NewReader(item.ArtPayload))
 }
 
 // ----------------------------------------------------------------------------
