@@ -91,6 +91,7 @@ func main() {
 		}
 
 		opts = append(opts, dlnatest.WithTree(tree))
+
 		logger.Info("serving real media from directory", "dir", *mediaDir, "tracks", n)
 	}
 
@@ -482,7 +483,7 @@ func loadTreeFromDir(dir, fallbackName string) (*dlnatest.Tree, int, error) {
 
 		payload, rerr := os.ReadFile(path)
 		if rerr != nil {
-			return nil // skip unreadable file
+			return nil //nolint:nilerr // skip unreadable file, keep walking
 		}
 
 		trackDir := filepath.Dir(path)
@@ -675,17 +676,17 @@ func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
 	})
 }
 
-// between returns the text between the first occurrence of open and the next
-// close, or "" if not found. Used for lightweight SOAP field extraction in logs.
-func between(s, open, close string) string {
-	i := strings.Index(s, open)
+// between returns the text between the first occurrence of openTag and the next
+// closeTag, or "" if not found. Used for lightweight SOAP field extraction in logs.
+func between(s, openTag, closeTag string) string {
+	i := strings.Index(s, openTag)
 	if i < 0 {
 		return ""
 	}
 
-	i += len(open)
+	i += len(openTag)
 
-	j := strings.Index(s[i:], close)
+	j := strings.Index(s[i:], closeTag)
 	if j < 0 {
 		return ""
 	}
