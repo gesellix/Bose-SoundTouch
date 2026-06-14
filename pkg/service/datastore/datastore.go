@@ -1436,6 +1436,27 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 		Recents []RecentXML `xml:"recent"`
 	}
 
+	// Deduplicate by ID before saving; first occurrence wins. A speaker<->marge
+	// recents sync can otherwise re-store the same recent (same ID) multiple
+	// times — it then crowds the capped list and evicts other sources from the
+	// speaker's recents. Mirrors SaveConfiguredSources.
+	seen := make(map[string]bool)
+	deduped := make([]models.ServiceRecent, 0, len(recents))
+
+	for i := range recents {
+		if id := recents[i].ID; id != "" {
+			if seen[id] {
+				continue
+			}
+
+			seen[id] = true
+		}
+
+		deduped = append(deduped, recents[i])
+	}
+
+	recents = deduped
+
 	wrap := RecentsXML{
 		Recents: make([]RecentXML, 0, len(recents)),
 	}
