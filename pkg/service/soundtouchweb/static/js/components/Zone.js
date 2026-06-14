@@ -52,7 +52,7 @@ export function Zone({ deviceId, devices }) {
     const zoneIps = new Set([zone.masterIp, ...(zone.members || []).map(m => m.ip)].filter(Boolean));
     const available = Object.entries(devices || {}).filter(([ip]) => !zoneIps.has(ip));
 
-    const deviceName = (ip) => devices[ip]?.info?.Name ?? ip;
+    const deviceName = (ip) => devices[ip]?.info?.name || ip;
 
     return html`
         <div class="zone-section">
@@ -76,7 +76,7 @@ export function Zone({ deviceId, devices }) {
                     ${(zone.members || []).map(m => html`
                         <div class="zone-member" key=${m.ip}>
                             <span class="zone-badge slave">Member</span>
-                            <span class="zone-member-name">${m.name || m.ip}</span>
+                            <span class="zone-member-name">${m.name || deviceName(m.ip)}</span>
                             <button class="btn-icon zone-remove" title="Remove from zone"
                                 onClick=${() => removeDevice(m.ip)}>✕</button>
                         </div>
@@ -93,7 +93,7 @@ export function Zone({ deviceId, devices }) {
             ${zone.isSlave && html`
                 <div class="zone-row">
                     <span class="zone-badge slave">Member</span>
-                    <span class="zone-member-name">Zone: ${zone.masterName || zone.masterIp}</span>
+                    <span class="zone-member-name">Zone: ${zone.masterName || deviceName(zone.masterIp)}</span>
                     <button class="btn-secondary zone-btn" onClick=${leave}>Leave zone</button>
                 </div>
             `}
@@ -105,7 +105,10 @@ export function Zone({ deviceId, devices }) {
                         <div class="picker-devices">
                             ${available.map(([ip, d]) => html`
                                 <button class="picker-device-btn" key=${ip} onClick=${() => addDevice(ip)}>
-                                    ${d.info?.Name ?? ip}
+                                    <div class="picker-device-info">
+                                        <span class="picker-device-name">${d.info?.name || ip}</span>
+                                        <span class="picker-device-ip">${d.info?.ip_address || ip}</span>
+                                    </div>
                                 </button>
                             `)}
                         </div>

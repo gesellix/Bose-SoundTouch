@@ -146,6 +146,37 @@ img { display: block; max-width: 100%; }
     font-family: monospace;
 }
 
+/* Small screens (phones, portrait): the absolutely-centered page title and the
+   right-aligned icon bar share the same space in the fixed-height navbar and
+   collide (#500). Let the navbar wrap into two rows: row 1 keeps the logo with
+   the title beside it (the title fills the remaining width and ellipsizes), and
+   the icon bar drops onto its own full-width row below. */
+@media (max-width: 600px) {
+    .navbar {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 52px;
+        row-gap: 0.25rem;
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+    }
+
+    .page-title {
+        position: static;
+        transform: none;
+        flex: 1 1 auto;   /* sit next to the logo and fill the rest of row 1 */
+        width: auto;
+        min-width: 0;     /* allow the title to shrink + ellipsize */
+    }
+
+    .nav-links {
+        order: 1;          /* force the icon bar onto its own row below */
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+}
+
 .nav-logo {
     width: 24px;
     height: 24px;
