@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -423,13 +424,8 @@ func primaryLANIP() (string, error) {
 // track is, in order of preference: a sibling <basename>.<img>, then a
 // cover.jpg/cover.png/folder.jpg in the track's own directory. Returns the tree
 // and track count.
-func loadTreeFromDir(dir, albumName string) (*dlnatest.Tree, int, error) {
-	music := &dlnatest.Container{
-		ID:       "1",
-		ParentID: "0",
-		Title:    albumName,
-		Class:    "object.container.storageFolder",
-	}
+func loadTreeFromDir(dir, fallbackName string) (*dlnatest.Tree, int, error) {
+	rootClean := filepath.Clean(dir)
 
 	// Cache the resolved cover per directory so we read each album's folder.jpg
 	// once rather than for every track in it.
@@ -460,7 +456,19 @@ func loadTreeFromDir(dir, albumName string) (*dlnatest.Tree, int, error) {
 		return c.data, c.mime
 	}
 
-	idx := 0
+	// Group tracks by their containing directory (preserving first-seen order),
+	// so each real album folder becomes its own browsable + playable container
+	// named after the directory, rather than one flat list named after --name.
+	type group struct {
+		dir   string
+		items []*dlnatest.Item
+	}
+
+	groups := map[string]*group{}
+
+	var order []string
+
+	total := 0
 
 	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -492,19 +500,24 @@ func loadTreeFromDir(dir, albumName string) (*dlnatest.Tree, int, error) {
 			}
 		}
 
-		music.Children = append(music.Children, &dlnatest.Item{
-			ID:         fmt.Sprintf("1$4$%d", idx),
-			ParentID:   "1$4",
+		g := groups[trackDir]
+		if g == nil {
+			g = &group{dir: trackDir}
+			groups[trackDir] = g
+			order = append(order, trackDir)
+		}
+
+		g.items = append(g.items, &dlnatest.Item{
 			Title:      base,
 			Class:      "object.item.audioItem.musicTrack",
-			Artist:     "Test Artist",
-			Album:      filepath.Base(trackDir),
+			Artist:     artistForDir(trackDir, rootClean),
+			Album:      albumTitle(trackDir, rootClean, fallbackName),
 			MimeType:   mime,
 			Payload:    payload,
 			ArtPayload: art,
 			ArtMime:    artMime,
 		})
-		idx++
+		total++
 
 		return nil
 	})
@@ -512,11 +525,59 @@ func loadTreeFromDir(dir, albumName string) (*dlnatest.Tree, int, error) {
 		return nil, 0, walkErr
 	}
 
-	if len(music.Children) == 0 {
+	if total == 0 {
 		return nil, 0, fmt.Errorf("no audio files (.mp3/.wav/.flac/.m4a/.ogg) found under %s", dir)
 	}
 
-	return &dlnatest.Tree{Containers: []*dlnatest.Container{music}}, len(music.Children), nil
+	containers := make([]*dlnatest.Container, 0, len(order))
+
+	for ci, d := range order {
+		cid := strconv.Itoa(ci + 1)
+		g := groups[d]
+
+		for ti, it := range g.items {
+			it.ID = fmt.Sprintf("%s$%d", cid, ti)
+			it.ParentID = cid
+		}
+
+		containers = append(containers, &dlnatest.Container{
+			ID:       cid,
+			ParentID: "0",
+			Title:    albumTitle(d, rootClean, fallbackName),
+			Class:    "object.container.storageFolder",
+			Children: g.items,
+		})
+	}
+
+	return &dlnatest.Tree{Containers: containers}, total, nil
+}
+
+// albumTitle returns the display name for a track directory: the directory's own
+// name, or the fallback (the --name) when the tracks sit directly in the root.
+func albumTitle(trackDir, root, fallback string) string {
+	if filepath.Clean(trackDir) == root {
+		return fallback
+	}
+
+	return filepath.Base(trackDir)
+}
+
+// artistForDir derives the artist from the directory above the album folder
+// (e.g. <root>/<artist>/<album>/track.mp3 → "<artist>"). Falls back to
+// "Unknown Artist" when there is no artist level (album directly under root, or
+// tracks directly in root).
+func artistForDir(trackDir, root string) string {
+	clean := filepath.Clean(trackDir)
+	if clean == root {
+		return "Unknown Artist"
+	}
+
+	parent := filepath.Dir(clean)
+	if parent == root {
+		return "Unknown Artist"
+	}
+
+	return filepath.Base(parent)
 }
 
 // audioMimeForExt maps an audio file extension to a MIME type, or "" if the
