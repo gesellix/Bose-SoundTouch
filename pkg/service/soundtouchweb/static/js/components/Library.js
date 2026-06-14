@@ -96,10 +96,13 @@ export function Library({ devices }) {
     }
 
     async function playEntry(entry) {
+        // Pass the entry's own type so a folder selects as a container ("dir")
+        // rather than a single track — that lets the speaker queue the folder so
+        // next/previous and auto-advance work, instead of stopping after one item.
         await api.libraryPlay(deviceId, {
             account: server.account,
             location: entry.location,
-            type: 'track',
+            type: entry.type || 'track',
             name: entry.name,
         });
         setPlayingName(entry.name);
@@ -251,10 +254,10 @@ export function Library({ devices }) {
                                     <span class="tunein-item-name">${entry.name}</span>
                                     ${entry.type ? html`<span class="tunein-item-desc">${entry.type}</span>` : null}
                                 </div>
-                                ${entry.playable && !entry.isDir ? html`
+                                ${entry.playable || entry.isDir ? html`
                                     <button
                                         class="tunein-play-btn"
-                                        title="Play on ${devices[deviceId]?.info?.name || deviceId}"
+                                        title="${entry.isDir ? 'Play folder' : 'Play'} on ${devices[deviceId]?.info?.name || deviceId}"
                                         onClick=${(e) => { e.stopPropagation(); playEntry(entry); }}
                                     >▶</button>
                                 ` : null}
