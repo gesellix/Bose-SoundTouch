@@ -622,6 +622,7 @@ func ProviderSettingsToXML(account string) string {
 		Value      string `xml:"value"`
 		ProviderID string `xml:"providerId"`
 	}
+
 	type providerSettings struct {
 		XMLName  xml.Name          `xml:"providerSettings"`
 		Settings []providerSetting `xml:"providerSetting"`

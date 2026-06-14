@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
 //go:embed testdata/info.xml testdata/presets.xml testdata/recents.xml testdata/networkinfo.xml testdata/sources.xml testdata/supportedurls.xml testdata/now_playing.xml
@@ -320,53 +322,37 @@ func handleRemoveGroup(w http.ResponseWriter, r *http.Request) {
 	serveEmptyGroup(w, r)
 }
 
-// buildAddGroupResponse inserts <status>GROUP_OK</status> before the
-// closing </group> tag of the posted body. If the body is empty or does
-// not contain </group>, it falls back to a minimal canned success
-// response so callers still see a 200 + parseable XML.
+// buildAddGroupResponse echoes the posted group payload back with a
+// <status>GROUP_OK</status> appended, mimicking a real speaker's success
+// response. The body is parsed into typed fields and re-marshalled (rather
+// than splicing raw bytes) so every echoed value is XML-escaped. If the body
+// is empty or unparseable, it falls back to a minimal canned success response
+// so callers still see a 200 + parseable XML.
 func buildAddGroupResponse(posted []byte) []byte {
-	type groupPayload struct {
-		XMLName xml.Name `xml:"group"`
-		Name    string   `xml:"name,omitempty"`
-		Master  string   `xml:"master,omitempty"`
-		Slave   string   `xml:"slave,omitempty"`
-		Status  string   `xml:"status,omitempty"`
-	}
+	cannedOK := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<group>
+    <status>GROUP_OK</status>
+</group>
+`)
 
 	if len(posted) == 0 {
-		return []byte(`<?xml version="1.0" encoding="UTF-8"?>
-<group>
-    <status>GROUP_OK</status>
-</group>
-`)
+		return cannedOK
 	}
 
-	var in groupPayload
+	// Parse into the canonical request type and re-marshal it (rather than
+	// splicing the raw bytes) so every echoed value is XML-escaped and the
+	// fake stays in lock-step with whatever fields the client actually sends.
+	var in models.Group
 	if err := xml.Unmarshal(posted, &in); err != nil {
-		return []byte(`<?xml version="1.0" encoding="UTF-8"?>
-<group>
-    <status>GROUP_OK</status>
-</group>
-`)
+		return cannedOK
 	}
 
-	out := groupPayload{
-		Name:   in.Name,
-		Master: in.Master,
-		Slave:  in.Slave,
-		Status: "GROUP_OK",
-	}
+	in.Status = "GROUP_OK"
 
-	data, err := xml.Marshal(out)
+	data, err := xml.Marshal(in)
 	if err != nil {
-		return []byte(`<?xml version="1.0" encoding="UTF-8"?>
-<group>
-    <status>GROUP_OK</status>
-</group>
-`)
+		return cannedOK
 	}
 
 	return append([]byte(`<?xml version="1.0" encoding="UTF-8"?>`+"\n"), data...)
 }
-
-
