@@ -1114,6 +1114,19 @@ func (app *WebApp) HandleDeviceRecents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// storedMusicTypeForReplay derives a STORED_MUSIC ContentItem type from the
+// speaker-native location, which ends with the item kind (e.g. "1$4$2 TRACK"
+// or a container's "… DIR"). Recents don't store the type, and the speaker
+// rejects an empty-type STORED_MUSIC select with INVALID_SOURCE. Falls back to
+// "track" when the location has no kind suffix.
+func storedMusicTypeForReplay(location string) string {
+	if fields := strings.Fields(location); len(fields) >= 2 {
+		return strings.ToLower(fields[len(fields)-1])
+	}
+
+	return "track"
+}
+
 // HandleDevicePlay plays an arbitrary content item on a device. Generic
 // counterpart to HandlePlayTuneIn — used by the Recents panel to replay
 // items the speaker reports under /recents, regardless of their source.
@@ -1151,9 +1164,18 @@ func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Recents don't carry a contentItemType for STORED_MUSIC, and the speaker
+	// rejects an empty-type STORED_MUSIC select with INVALID_SOURCE. The
+	// speaker-native location ends with the item kind (e.g. "1$4$2 TRACK"), so
+	// derive the type from it when the caller didn't supply one.
+	ciType := req.Type
+	if ciType == "" && req.Source == "STORED_MUSIC" {
+		ciType = storedMusicTypeForReplay(req.Location)
+	}
+
 	contentItem := &models.ContentItem{
 		Source:       req.Source,
-		Type:         req.Type,
+		Type:         ciType,
 		Location:     req.Location,
 		ItemName:     req.ItemName,
 		ContainerArt: req.ContainerArt,
