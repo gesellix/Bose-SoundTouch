@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
-	github.com/hashicorp/mdns v1.0.6
+	github.com/hashicorp/mdns v1.0.7
 	github.com/miekg/dns v1.1.72
 	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/sergi/go-diff v1.4.0
