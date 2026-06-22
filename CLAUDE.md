@@ -43,7 +43,7 @@ Per-session pickup notes live in two local files at the repo root (they are `.gi
 make build          # All binaries
 make build-cli      # Just CLI
 make build-service  # Just service
-make build-web      # Just web UI
+make build-player   # Just web player
 make build-all      # Cross-platform builds (Linux, macOS, Windows)
 make install        # Install to $GOPATH/bin
 

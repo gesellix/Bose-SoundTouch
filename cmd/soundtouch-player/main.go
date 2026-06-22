@@ -4,8 +4,9 @@
 // remote AfterTouch service via --service-url, which is why it stays useful
 // when soundtouch-service runs off-LAN (e.g. in the cloud).
 //
-// It was previously named soundtouch-web; that name is still published as a
-// transitional alias and will be dropped in a future release.
+// It was previously named soundtouch-web; that name is no longer published.
+// If you still run the binary under the old name, it prints a rename notice
+// and otherwise behaves identically.
 package main
 
 import (
@@ -56,9 +57,8 @@ func updateBuildInfo() {
 }
 
 // warnIfInvokedAsWeb prints a one-line deprecation notice when the binary is
-// run under its old name (soundtouch-web). The soundtouch-web artifact is a
-// transitional alias built from this same source; this nudges operators to
-// switch to soundtouch-player before the alias is dropped.
+// run under its old name (soundtouch-web). That name is no longer published,
+// but anyone who renamed the binary still gets nudged to soundtouch-player.
 func warnIfInvokedAsWeb() {
 	if len(os.Args) == 0 {
 		return
@@ -67,8 +67,7 @@ func warnIfInvokedAsWeb() {
 	name := filepath.Base(os.Args[0])
 	if name == "soundtouch-web" || name == "soundtouch-web.exe" {
 		log.Println("notice: 'soundtouch-web' has been renamed to 'soundtouch-player'. " +
-			"This name is a transitional alias and will stop being published in a future release; " +
-			"please switch to 'soundtouch-player'.")
+			"The 'soundtouch-web' name is no longer published; please switch to 'soundtouch-player'.")
 	}
 }
 

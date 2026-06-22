@@ -19,9 +19,6 @@ SERVICE_NAME=soundtouch-service
 SERVICE_PATH=./cmd/$(SERVICE_NAME)
 PLAYER_NAME=soundtouch-player
 PLAYER_PATH=./cmd/$(PLAYER_NAME)
-# WEB_NAME is the previous name for the player, kept as a transitional alias
-# built from the same PLAYER_PATH source. It will be dropped in a future release.
-WEB_NAME=soundtouch-web
 EXAMPLE_MDNS_NAME=example-mdns
 EXAMPLE_MDNS_PATH=./cmd/$(EXAMPLE_MDNS_NAME)
 EXAMPLE_UPNP_NAME=example-upnp
@@ -55,7 +52,7 @@ AUTH_SERVICE_URL   ?= $(BACKEND_URL)
 
 all: check build
 
-build: build-cli build-service build-player build-web build-examples build-favicon-gen build-backup
+build: build-cli build-service build-player build-examples build-favicon-gen build-backup
 
 build-cli:
 	@echo "Building $(BINARY_NAME)..."
@@ -71,13 +68,6 @@ build-player:
 	@echo "Building $(PLAYER_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(PLAYER_NAME) $(PLAYER_PATH)
-
-# Transitional alias: builds the same source as build-player under the old
-# soundtouch-web name. Drop this target once the alias is retired.
-build-web:
-	@echo "Building $(WEB_NAME) (transitional alias of $(PLAYER_NAME))..."
-	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(WEB_NAME) $(PLAYER_PATH)
 
 build-examples:
 	@echo "Building $(EXAMPLE_MDNS_NAME)..."
@@ -376,12 +366,11 @@ dev-player-host: build-player
 	fi
 	cd cmd/soundtouch-player && ../../$(BUILD_DIR)/$(PLAYER_NAME) -host $(HOST)
 
-install: build-cli build-service build-player build-web build-backup
+install: build-cli build-service build-player build-backup
 	@echo "Installing binaries to $(GOPATH)/bin..."
 	cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(SERVICE_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(PLAYER_NAME) $(GOPATH)/bin/
-	cp $(BUILD_DIR)/$(WEB_NAME) $(GOPATH)/bin/
 	cp $(BUILD_DIR)/$(BACKUP_NAME) $(GOPATH)/bin/
 
 update-static-deps:

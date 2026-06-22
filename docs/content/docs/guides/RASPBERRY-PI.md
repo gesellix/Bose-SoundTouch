@@ -6,10 +6,10 @@ host) using the provided installer scripts.
 
 Two scripts are available, one per binary:
 
-| Script           | Binary               | Role                                | Default port |
-|------------------|----------------------|-------------------------------------|--------------|
-| `install.sh`     | `soundtouch-service` | Cloud-replacement relay — always-on | 80 / 443     |
-| `install-web.sh` | `soundtouch-player`     | Browser control panel               | 8080         |
+| Script              | Binary               | Role                                | Default port |
+|---------------------|----------------------|-------------------------------------|--------------|
+| `install.sh`        | `soundtouch-service` | Cloud-replacement relay — always-on | 80 / 443     |
+| `install-player.sh` | `soundtouch-player`  | Browser control panel               | 8080         |
 
 Both auto-detect CPU architecture (armv7 / arm64 / amd64), create a `soundtouch`
 system user, and install a systemd unit. They are safe to re-run for updates.
@@ -126,15 +126,15 @@ data and can be stopped or restarted at any time without data loss.
 ### Installation
 
 ```bash
-curl -fsSL -o install-web.sh \
-  https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/raspberry-pi/install-web.sh
-sudo bash install-web.sh
+curl -fsSL -o install-player.sh \
+  https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/raspberry-pi/install-player.sh
+sudo bash install-player.sh
 ```
 
 Install a specific version:
 
 ```bash
-sudo bash install-web.sh v0.107.0
+sudo bash install-player.sh v0.107.0
 ```
 
 Override defaults at install time:
@@ -143,7 +143,7 @@ Override defaults at install time:
 sudo \
   VERSION=v0.107.0 \
   HTTP_PORT=8081 \
-  bash install-web.sh
+  bash install-player.sh
 ```
 
 Once running, open **`http://<pi-ip>:8080`** in a browser.
@@ -228,8 +228,8 @@ journalctl -u soundtouch-player -f
 ### Updates
 
 ```bash
-sudo bash install-web.sh              # update to latest release
-sudo bash install-web.sh v0.107.0     # update to a specific version
+sudo bash install-player.sh              # update to latest release
+sudo bash install-player.sh v0.107.0     # update to a specific version
 ```
 
 ### Removal
@@ -258,7 +258,7 @@ Override if needed:
 
 ```bash
 sudo ARCH_ASSET=linux-arm64 bash install.sh
-sudo ARCH_ASSET=linux-arm64 bash install-web.sh
+sudo ARCH_ASSET=linux-arm64 bash install-player.sh
 ```
 
 ---

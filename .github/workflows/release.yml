@@ -173,10 +173,6 @@ jobs:
           # Build Player (formerly soundtouch-web)
           build_binary "soundtouch-player" "./cmd/soundtouch-player"
 
-          # Build Web: transitional alias of the player, built from the same
-          # source. Dropped in a future release; keep in sync with player.
-          build_binary "soundtouch-web" "./cmd/soundtouch-player"
-
           # Build Backup
           build_binary "soundtouch-backup" "./cmd/soundtouch-backup"
         id: build
@@ -186,7 +182,6 @@ jobs:
           CLI_NAME="${{ steps.build.outputs.soundtouch-cli }}"
           SVC_NAME="${{ steps.build.outputs.soundtouch-service }}"
           PLAYER_NAME="${{ steps.build.outputs.soundtouch-player }}"
-          WEB_NAME="${{ steps.build.outputs.soundtouch-web }}"
           BCK_NAME="${{ steps.build.outputs.soundtouch-backup }}"
 
           # Use atomic operations to avoid conflicts
@@ -204,7 +199,6 @@ jobs:
           generate_checksums "$CLI_NAME"
           generate_checksums "$SVC_NAME"
           generate_checksums "$PLAYER_NAME"
-          generate_checksums "$WEB_NAME"
           generate_checksums "$BCK_NAME"
 
           # Cleanup
@@ -219,7 +213,6 @@ jobs:
             build/soundtouch-cli-v*
             build/soundtouch-service-v*
             build/soundtouch-player-v*
-            build/soundtouch-web-v*
             build/soundtouch-backup-v*
           retention-days: 1
 
@@ -247,7 +240,7 @@ jobs:
           mkdir -p release-files
 
           # Move all files from subdirectories to the collection directory
-          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" -o -name "soundtouch-player-*" -o -name "soundtouch-web-*" -o -name "soundtouch-backup-*" \) -exec mv {} release-files/ \;
+          find . -mindepth 2 -type f \( -name "soundtouch-cli-*" -o -name "soundtouch-service-*" -o -name "soundtouch-player-*" -o -name "soundtouch-backup-*" \) -exec mv {} release-files/ \;
 
           # Remove empty directories
           find . -type d -empty -delete
@@ -262,14 +255,14 @@ jobs:
           # Generate combined checksums (exclude individual .sha256/.sha512 files)
           if ls soundtouch-* 1> /dev/null 2>&1; then
             # Only checksum the actual binaries, not the .sha256/.sha512 files
-            ls soundtouch-cli-* soundtouch-service-* soundtouch-player-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
-            ls soundtouch-cli-* soundtouch-service-* soundtouch-player-* soundtouch-web-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
+            ls soundtouch-cli-* soundtouch-service-* soundtouch-player-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha256sum > checksums.sha256
+            ls soundtouch-cli-* soundtouch-service-* soundtouch-player-* soundtouch-backup-* | grep -v '\.sha256$' | grep -v '\.sha512$' | xargs sha512sum > checksums.sha512
 
             echo "📋 Generated combined checksums:"
             cat checksums.sha256
 
             # Verify all expected files are present (binaries only, not checksum files)
-            EXPECTED_COUNT=35  # 7 platforms * 5 binaries (player + its web alias)
+            EXPECTED_COUNT=28  # 7 platforms * 4 binaries
             ACTUAL_COUNT=$(ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | wc -l)
 
             if [[ $ACTUAL_COUNT -ne $EXPECTED_COUNT ]]; then
@@ -332,148 +325,41 @@ jobs:
           fi
           VERSION="${TAG_NAME#v}"
 
-          # Generate comprehensive release notes
+          # Short, accurate header. GitHub's auto-generated "What's Changed"
+          # + "Full Changelog" are appended after this (generate_release_notes).
           cat > release_notes.md << EOF
-          # Bose SoundTouch Go Library $TAG_NAME
+          # AfterTouch $TAG_NAME
 
-          A comprehensive Go library for controlling Bose SoundTouch speakers with 100% API coverage, real-time WebSocket events, and production-ready features.
+          **Bose SoundTouch Toolkit.** Keep your Bose SoundTouch speakers alive after the Bose cloud shutdown. No Bose infrastructure required.
 
-          ## 🎯 Key Features
+          ## What's included
 
-          - **100% API Coverage**: All 19 official endpoints + 6 useful extensions (25 total)
-          - **Real-time Events**: WebSocket support with auto-reconnect and comprehensive event handling
-          - **Multiroom Control**: Complete zone management and coordination
-          - **Production Ready**: Connection pooling, error handling, circuit breakers, monitoring
-          - **Excellent Documentation**: 4000+ lines including Getting Started, Cookbook, Troubleshooting, and Deployment guides
-          - **CLI Tool**: Full-featured command-line interface with all endpoints
+          Pre-built binaries for Linux (amd64, arm64, armv7), macOS (Intel & Apple Silicon), Windows (amd64), and FreeBSD (amd64):
 
-          ## 🚀 Quick Start
+          - **soundtouch-service**: local server that replaces the Bose cloud. Point your speaker at it and you keep full control; the built-in web UI on port 8000 handles setup.
+          - **soundtouch-player**: standalone LAN web UI for device control: play/pause, volume, presets, live status. (Formerly \`soundtouch-web\`.)
+          - **soundtouch-cli**: command-line control of any device: playback, presets, sources, multiroom zones, discovery, and migration. Good for scripting and home automation.
+          - **soundtouch-backup**: back up your Bose cloud account and each speaker's local state. \`soundtouch-backup all\` captures everything in one step.
+
+          ## Documentation
+
+          Full guides, setup walkthroughs, and troubleshooting: https://gesellix.github.io/Bose-SoundTouch/
+
+          ## Use as a Go library
+
+          The core client is also importable:
 
           \`\`\`bash
           go get github.com/gesellix/bose-soundtouch@$TAG_NAME
           \`\`\`
 
-          \`\`\`go
-          package main
+          ## Verifying downloads
 
-          import (
-              "fmt"
-              "log"
-
-              "github.com/gesellix/bose-soundtouch/pkg/client"
-          )
-
-          func main() {
-              // Create client
-              c := client.New("192.0.2.100", 8090)
-
-              // Get device info
-              info, err := c.GetInfo()
-              if err != nil {
-                  log.Fatal(err)
-              }
-
-              fmt.Printf("Device: %s\\n", info.Name)
-          }
-          \`\`\`
-
-          ## 📚 Documentation
-
-          - [Getting Started Guide](docs/GETTING-STARTED.md) - 10-minute tutorial from discovery to WebSocket monitoring
-          - [API Cookbook](docs/API-COOKBOOK.md) - 1000+ lines of real-world patterns and examples
-          - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Systematic issue resolution
-          - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment examples (Docker, K8s, systemd)
-
-          ## 🔧 CLI & Service Tools
-
-          Download the tools for your platform from the assets below:
-
-          ### CLI Tool
-          \`\`\`bash
-          # Quick device discovery
-          ./soundtouch-cli -discover
-          \`\`\`
-
-          ### SoundTouch Service
-          \`\`\`bash
-          # Start the service
-          ./soundtouch-service
-          \`\`\`
-
-          ### SoundTouch Player (formerly soundtouch-web)
-          \`\`\`bash
-          # Start the LAN web player
-          ./soundtouch-player
-          \`\`\`
-          > Note: \`soundtouch-web\` has been renamed to \`soundtouch-player\`.
-          > The \`soundtouch-web\` assets are still published as a transitional
-          > alias and will be removed in a future release. Please switch your
-          > downloads and scripts to \`soundtouch-player\`.
-
-          ### SoundTouch Backup
-          \`\`\`bash
-          # Back up cloud account and all paired speakers in one go
-          ./soundtouch-backup all
-          \`\`\`
-
-          ## 🧪 Tested Hardware
-
-          - Bose SoundTouch 10
-          - Bose SoundTouch 20
-          - All core functionality validated on real devices
-
-          ## 📈 What's New in $TAG_NAME
-
-          $(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD^)..HEAD 2>/dev/null || echo "- Initial release with complete feature set")
-
-          ## 🏗️ Supported Platforms
-
-          This release includes pre-built binaries for:
-          - Linux (amd64, arm64, armv7)
-          - macOS (Intel & Apple Silicon)
-          - Windows (amd64)
-          - FreeBSD (amd64)
-
-          `soundtouch-cli`, `soundtouch-service`, `soundtouch-player` (with `soundtouch-web` as a transitional alias), and `soundtouch-backup` are included.
-
-          ## 🔐 Checksums
-
-          Multiple checksum options are provided for download verification:
-
-          ### Combined Checksums (Recommended)
-          - \`checksums.sha256\` - SHA256 checksums for all binaries
-          - \`checksums.sha512\` - SHA512 checksums for all binaries
+          Each binary has its own \`.sha256\`/\`.sha512\`, and combined \`checksums.sha256\` / \`checksums.sha512\` cover all of them:
 
           \`\`\`bash
-          # Download any binary + combined checksums
-          curl -L -O https://github.com/.../soundtouch-cli-v$TAG_NAME-linux-amd64
-          curl -L -O https://github.com/.../checksums.sha256
-
-          # Verify your specific download
           sha256sum -c checksums.sha256 --ignore-missing
           \`\`\`
-
-          ### Individual Checksums (Per Binary)
-          Each binary also has its own dedicated checksum files:
-          - \`soundtouch-cli-v$TAG_NAME-platform.sha256\`
-          - \`soundtouch-cli-v$TAG_NAME-platform.sha512\`
-
-          \`\`\`bash
-          # Download binary + its individual checksum
-          curl -L -O https://github.com/.../soundtouch-cli-v$TAG_NAME-linux-amd64
-          curl -L -O https://github.com/.../soundtouch-cli-v$TAG_NAME-linux-amd64.sha256
-
-          # Verify with individual checksum
-          sha256sum -c soundtouch-cli-v$TAG_NAME-linux-amd64.sha256
-          \`\`\`
-
-          ## 🤝 Contributing
-
-          Contributions welcome! See our documentation for examples and patterns.
-
-          ## 📄 License
-
-          MIT License - see [LICENSE](LICENSE) file.
           EOF
 
           echo "release_notes_file=release_notes.md" >> $GITHUB_OUTPUT
@@ -482,15 +368,15 @@ jobs:
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ github.event.inputs.tag }}
-          name: "Bose SoundTouch Go Library ${{ github.event.inputs.tag }}"
+          name: ${{ github.event.inputs.tag }}
           body_path: ${{ steps.release_notes.outputs.release_notes_file }}
+          generate_release_notes: true
           draft: false
           prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
           files: |
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
             release-assets/soundtouch-player-v*
-            release-assets/soundtouch-web-v*
             release-assets/soundtouch-backup-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
@@ -519,7 +405,6 @@ jobs:
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
             release-assets/soundtouch-player-v*
-            release-assets/soundtouch-web-v*
             release-assets/soundtouch-backup-v*
             release-assets/checksums.sha256
             release-assets/checksums.sha512
@@ -602,33 +487,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Transitional alias image (formerly the only web image). Dropped later.
-      - name: Extract metadata (tags, labels) for soundtouch-web
-        id: meta-web
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
-        with:
-          images: ghcr.io/${{ github.repository }}-web
-          tags: |
-            type=semver,pattern={{version}},value=v${{ needs.validate.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.validate.outputs.version }}
-            type=raw,value=latest,enable=${{ needs.validate.outputs.is_prerelease == 'false' }}
-
-      - name: Build and push soundtouch-web Docker image
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        with:
-          context: .
-          target: soundtouch-web
-          platforms: linux/amd64,linux/arm64,linux/arm64/v8,linux/arm/v7
-          push: true
-          tags: ${{ steps.meta-web.outputs.tags }}
-          labels: ${{ steps.meta-web.outputs.labels }}
-          build-args: |
-            VERSION=v${{ needs.validate.outputs.version }}
-            COMMIT=${{ github.sha }}
-            DATE=${{ steps.build_date.outputs.date }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   notify:
     name: Post-Release Notifications
     runs-on: ubuntu-latest
@@ -639,7 +497,7 @@ jobs:
       - name: Notify success
         run: |
           echo "🎉 Release ${{ needs.validate.outputs.version }} completed successfully!"
-          echo "📦 Binaries built for 7 platforms (CLI, Service, Web, and Backup)"
+          echo "📦 Binaries built for 7 platforms (CLI, Service, Player, and Backup)"
           echo "🐳 Docker image published to ghcr.io"
           echo "🔐 Checksums generated and verified"
           echo "📋 Release notes automatically generated"

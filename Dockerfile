@@ -112,22 +112,3 @@ EXPOSE 8080
 USER nobody
 
 ENTRYPOINT ["/app/soundtouch-player"]
-
-# soundtouch-web image: transitional alias of soundtouch-player. Built from the
-# same binary; the entrypoint name makes the binary print a rename notice on
-# start. Will be dropped in a future release.
-FROM alpine:3.24 AS soundtouch-web
-
-RUN apk add --no-cache ca-certificates tzdata
-
-WORKDIR /app
-
-COPY --from=builder /soundtouch-player /app/soundtouch-web
-
-ENV PORT=8080
-
-EXPOSE 8080
-
-USER nobody
-
-ENTRYPOINT ["/app/soundtouch-web"]

@@ -176,12 +176,12 @@ open **`http://<host-ip>:8080`** in your browser (default port 8080).
 ### Installing soundtouch-player on a Raspberry Pi
 
 `install.sh` only installs `soundtouch-service`. Use the dedicated
-`install-web.sh` script to add soundtouch-player:
+`install-player.sh` script to add soundtouch-player:
 
 ```bash
-curl -fsSL -o install-web.sh \
-  https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/raspberry-pi/install-web.sh
-sudo bash install-web.sh
+curl -fsSL -o install-player.sh \
+  https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/raspberry-pi/install-player.sh
+sudo bash install-player.sh
 ```
 
 For configuration, service management, updates, and removal see the
