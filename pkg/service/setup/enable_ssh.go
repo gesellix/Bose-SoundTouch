@@ -36,6 +36,88 @@ func (m *Manager) ResetBoseURLs(deviceIP, serviceURL string) (string, error) {
 	return m.setBoseURLsViaTelnet(deviceIP, serviceURL, serviceURL+"/update")
 }
 
+// EnableSSHViaTelnetFullConfig is the #515 variant of EnableSSHViaTelnet for
+// devices where the single-envswitch injection is accepted and persisted but
+// sshd never starts (ST Portable, CineMate 520; see also memory note #471). It
+// replicates the sequence @Henri-be confirmed by hand over telnet :17000: it
+// writes all four `sys configuration` URL keys with the remote_services
+// injection on margeServerUrl (the runtime layer, not just the envswitch
+// persistence layer), mirrors the injection into `envswitch boseurls set`, and
+// verifies with getpdo. The caller should reboot afterwards (the injection
+// fires on the speaker's next full config re-parse at boot) and then
+// WaitForSSHPort.
+//
+// serviceURL is the AfterTouch service base the speaker should point at
+// (e.g. https://192.0.2.10:8443). It must not contain a double quote.
+func (m *Manager) EnableSSHViaTelnetFullConfig(deviceIP, serviceURL string) (string, error) {
+	u := defaultTelnetURLs(serviceURL)
+	margeInjected := serviceURL + remoteServicesInjection
+
+	// All values are double-quoted: margeInjected contains spaces and
+	// semicolons, so the device's command parser needs the quotes to keep it
+	// one argument (the unquoted telnetURLs.Commands() is only safe for clean
+	// migration URLs).
+	cmds := []string{
+		`sys configuration bmxRegistryUrl "` + u.BmxRegistry + `"`,
+		`sys configuration statsServerUrl "` + u.Stats + `"`,
+		`sys configuration margeServerUrl "` + margeInjected + `"`,
+		`sys configuration swUpdateUrl "` + u.SwUpdate + `"`,
+		`envswitch boseurls set "` + margeInjected + `" "` + u.SwUpdate + `"`,
+	}
+
+	return m.runTelnetInjection(deviceIP, []string{serviceURL, u.SwUpdate}, cmds)
+}
+
+// runTelnetInjection opens the port-17000 shell, runs an ordered list of
+// commands (aborting on the first transport error or "command not found"
+// rejection), then logs a getpdo verification. forbidQuote values are checked
+// for an embedded double quote, which would break the command parsing.
+// Verification is best-effort (logged, never fatal) to match enable-ssh's
+// forgiving philosophy and tolerate the aftertouch.invalid placeholder.
+func (m *Manager) runTelnetInjection(deviceIP string, forbidQuote, cmds []string) (string, error) {
+	if m.NewTelnet == nil {
+		return "", errors.New("telnet not configured: Manager.NewTelnet is nil")
+	}
+
+	for _, v := range forbidQuote {
+		if strings.Contains(v, `"`) {
+			return "", errors.New("boseurls values must not contain a double quote")
+		}
+	}
+
+	var logs strings.Builder
+
+	t := m.NewTelnet(deviceIP)
+	if err := t.Dial(); err != nil {
+		return logs.String(), fmt.Errorf("telnet dial %s:17000: %w", deviceIP, err)
+	}
+
+	defer func() { _ = t.Close() }()
+
+	if banner, _ := t.Probe(); banner != "" {
+		fmt.Fprintf(&logs, "Telnet banner: %q\n", strings.TrimSpace(banner))
+	}
+
+	for _, cmd := range cmds {
+		resp, err := t.SendCommand(cmd)
+		if err != nil {
+			return logs.String(), fmt.Errorf("telnet command %q failed: %w", cmd, err)
+		}
+
+		fmt.Fprintf(&logs, "→ %s\n%s\n", cmd, strings.TrimRight(resp, "\r\n"))
+
+		if isCommandNotFound(resp) {
+			return logs.String(), fmt.Errorf("device rejected %q (firmware does not expose this command)", cmd)
+		}
+	}
+
+	if verify, err := t.SendCommand("getpdo CurrentSystemConfiguration"); err == nil {
+		fmt.Fprintf(&logs, "→ getpdo CurrentSystemConfiguration\n%s\n", strings.TrimRight(verify, "\r\n"))
+	}
+
+	return logs.String(), nil
+}
+
 // setBoseURLsViaTelnet runs `envswitch boseurls set "<marge>" "<swUpdate>"`
 // over the port-17000 shell. Both arguments are double-quoted so values
 // containing spaces or semicolons (the SSH-enable injection) survive the

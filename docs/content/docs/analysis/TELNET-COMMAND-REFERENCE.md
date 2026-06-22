@@ -225,7 +225,7 @@ These show up in `getpdo`, `network status`, and SSH-side hostnames. Useful for 
 
 - **Firmware 1.x–7.x** (S1 era): everything — `help`, `remote_services on`, full `scm`, and an in-shell login prompt. `flarn2006` documents the original Linux insides.
 - **Firmware 8.x–14.x** (S2 era): `remote_services on` removed; `network`, `sys`, `envswitch`, `getpdo` still present. `local_services on` works on some Wave/SA-5 models.
-- **Firmware 27.x** (S5/S6 era — the long-lived "frozen" build that survived through EOS): `help`, `remote_services on`, and `sys ver` removed in some builds; `sys configuration …` and `envswitch …` confirmed working on ST 10, ST 20, ST 300, Wave III, Wave IV. **This is the firmware our migration targets**. The Portable on more recent firmware drops further commands and is the hardest target.
+- **Firmware 27.x** (S5/S6 era — the long-lived "frozen" build that survived through EOS): `help`, `remote_services on`, and `sys ver` removed in some builds; `sys configuration …` and `envswitch …` confirmed working on ST 10, ST 20, ST 300, Wave III, Wave IV. **This is the firmware our migration targets**. The Portable on more recent firmware drops further commands and is the hardest target; on the ST Portable (Series I, FW `27.0.6.46330.5043500`) and some CineMate 520 units the SSH-enable injection persists but `sshd` does not start via the default path, which is what `setup enable-ssh --full-config` addresses (see "What we use to enable SSH" above).
 
   S5 enumerated the **top-level command roots** that don't return "Command not found" on a vanilla ST 10 (`rhino`) running `27.0.6.46330.5043500`:
 
@@ -262,6 +262,38 @@ envswitch accountid set <7-digit-id>
 ```
 
 Reboot is **not** part of these sequences — it stays a user-initiated action via the existing reboot button, which now accepts `?method=telnet|ssh` and sends `sys reboot` when telnet is picked.
+
+---
+
+## What we use to enable SSH (`setup enable-ssh`, #471)
+
+To open SSH on a speaker that has never had it (no USB recovery), the CLI abuses the boseurls value as a command-injection vehicle: when the device next parses it, the appended shell snippet touches the `remote_services` marker and starts `sshd`. The injected suffix is:
+
+```
+;touch /tmp/remote_services;/etc/init.d/sshd start
+```
+
+**Default path** (`soundtouch-cli setup enable-ssh`) writes that injection only via the persistence layer, then waits for `:22`:
+
+```
+envswitch boseurls set "<serverURL>;touch /tmp/remote_services;/etc/init.d/sshd start" "<serverURL>/update"
+```
+
+This is field-confirmed on the Wireless Link Adapter and on the CineMate 520 `lisa` variant (FW 27.0.6).
+
+**`--full-config` path** (`soundtouch-cli setup enable-ssh --full-config`) is for devices where the default injection is *accepted and persisted* (`getpdo` confirms the value) but `sshd` never comes up, so `:22` stays "Connection refused". It mirrors the manual telnet sequence @Henri-be confirmed by hand on issue #515: it puts the injection on the runtime `sys configuration margeServerUrl` key as well as `envswitch`, writes all four URL keys, then reboots so the device re-parses the config at boot:
+
+```
+sys configuration bmxRegistryUrl "<serverURL>/bmx/registry/v1/services"
+sys configuration statsServerUrl "<serverURL>"
+sys configuration margeServerUrl "<serverURL>;touch /tmp/remote_services;/etc/init.d/sshd start"
+sys configuration swUpdateUrl    "<serverURL>/updates/soundtouch"
+envswitch boseurls set "<serverURL>;touch /tmp/remote_services;/etc/init.d/sshd start" "<serverURL>/updates/soundtouch"
+getpdo CurrentSystemConfiguration
+sys reboot
+```
+
+**Which devices need `--full-config`:** observed on the **SoundTouch Portable (Series I, model 412540, FW `27.0.6.46330.5043500`)** (#515) and on some **CineMate 520** units where the default path leaves `sshd` down. The structural differences from the default path that appear to matter are (1) the injection riding `sys configuration margeServerUrl`, not just `envswitch`, and (2) the explicit `sys reboot`. The `--full-config` automation is **candidate behaviour awaiting reporter confirmation** — the manual sequence is confirmed working on the ST Portable, but the flag that automates it has not yet been re-confirmed on hardware. Not every device responds even to the manual sequence (some ST10 and CineMate 520 units never start `sshd` over telnet at all and need the serial / U-Boot route).
 
 ---
 

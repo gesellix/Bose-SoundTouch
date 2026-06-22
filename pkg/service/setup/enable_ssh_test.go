@@ -22,6 +22,43 @@ func TestEnableSSHViaTelnet_BuildsInjectedCommand(t *testing.T) {
 	}
 }
 
+func TestEnableSSHViaTelnetFullConfig_BuildsInjectedSequence(t *testing.T) {
+	const svc = "https://192.0.2.10:8443"
+
+	const injected = `https://192.0.2.10:8443;touch /tmp/remote_services;/etc/init.d/sshd start`
+
+	want := []string{
+		`sys configuration bmxRegistryUrl "https://192.0.2.10:8443/bmx/registry/v1/services"`,
+		`sys configuration statsServerUrl "https://192.0.2.10:8443"`,
+		`sys configuration margeServerUrl "` + injected + `"`,
+		`sys configuration swUpdateUrl "https://192.0.2.10:8443/updates/soundtouch"`,
+		`envswitch boseurls set "` + injected + `" "https://192.0.2.10:8443/updates/soundtouch"`,
+		`getpdo CurrentSystemConfiguration`,
+	}
+
+	resp := map[string]string{}
+	for _, c := range want {
+		resp[c] = "OK\n"
+	}
+
+	f := &fakeTelnet{responses: resp}
+	m := newFakeTelnetManager(f)
+
+	if _, err := m.EnableSSHViaTelnetFullConfig("192.0.2.10", svc); err != nil {
+		t.Fatalf("EnableSSHViaTelnetFullConfig: %v", err)
+	}
+
+	if len(f.commands) != len(want) {
+		t.Fatalf("sent %d commands %q\n want %d %q", len(f.commands), f.commands, len(want), want)
+	}
+
+	for i, c := range want {
+		if f.commands[i] != c {
+			t.Errorf("command %d = %q\n want %q", i, f.commands[i], c)
+		}
+	}
+}
+
 func TestResetBoseURLs_BuildsCleanCommand(t *testing.T) {
 	const svc = "https://192.0.2.10:8443"
 

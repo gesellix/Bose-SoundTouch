@@ -538,6 +538,53 @@ func setupSSHCheckCmd() *cli.Command {
 	}
 }
 
+// runEnableSSHInjection runs the port-17000 SSH-enable injection over telnet,
+// printing the device transcript as it goes. With fullConfig it sends the
+// #515 sequence (all four config URLs with the injection on margeServerUrl, not
+// just envswitch) and reboots afterwards; otherwise it sends the single-
+// envswitch default that fires on the speaker's next boseurls check.
+func runEnableSSHInjection(m *setup.Manager, host, serviceURL string, fullConfig bool) error {
+	var (
+		logs string
+		err  error
+	)
+
+	if fullConfig {
+		fmt.Printf("Enabling SSH on %s via telnet :17000 (full #515 sequence: all four config URLs with the injection on margeServerUrl, then reboot)...\n", host)
+		logs, err = m.EnableSSHViaTelnetFullConfig(host, serviceURL)
+	} else {
+		fmt.Printf("Enabling SSH on %s via telnet :17000 (runs on the speaker's next boseurls check, up to ~60s)...\n", host)
+		logs, err = m.EnableSSHViaTelnet(host, serviceURL)
+	}
+
+	if logs != "" {
+		fmt.Print(logs)
+	}
+
+	if err != nil {
+		PrintError(err.Error())
+		return err
+	}
+
+	if !fullConfig {
+		return nil
+	}
+
+	fmt.Println("Rebooting the speaker to apply the new configuration...")
+
+	rlogs, rerr := m.Reboot(host, setup.RebootMethodTelnet)
+	if rlogs != "" {
+		fmt.Print(rlogs)
+	}
+
+	if rerr != nil {
+		PrintError(rerr.Error())
+		return rerr
+	}
+
+	return nil
+}
+
 func setupEnableSSHCmd() *cli.Command {
 	return &cli.Command{
 		Name: "enable-ssh",
@@ -555,6 +602,11 @@ func setupEnableSSHCmd() *cli.Command {
 				Name:  "wait",
 				Value: 90 * time.Second,
 				Usage: "How long to wait for sshd (:22) after the envswitch injection (it runs on the speaker's next boseurls check, ~60s)",
+			},
+			&cli.BoolFlag{
+				Name: "full-config",
+				Usage: "For stubborn devices (ST Portable, CineMate 520) where the default single-envswitch injection is accepted but sshd never starts: " +
+					"replicate the #515 manual sequence — write all four sys configuration URL keys with the SSH-enable injection on margeServerUrl (not just envswitch), then reboot",
 			},
 			&cli.BoolFlag{
 				Name:  "no-reset-urls",
@@ -589,15 +641,7 @@ func setupEnableSSHCmd() *cli.Command {
 				serviceURL = "https://aftertouch.invalid"
 			}
 
-			fmt.Printf("Enabling SSH on %s via telnet :17000 (runs on the speaker's next boseurls check, up to ~60s)...\n", cfg.Host)
-
-			logs, err := m.EnableSSHViaTelnet(cfg.Host, serviceURL)
-			if logs != "" {
-				fmt.Print(logs)
-			}
-
-			if err != nil {
-				PrintError(err.Error())
+			if err := runEnableSSHInjection(m, cfg.Host, serviceURL, c.Bool("full-config")); err != nil {
 				return err
 			}
 

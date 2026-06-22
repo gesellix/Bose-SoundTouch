@@ -21,13 +21,17 @@ Most SoundTouch devices run a modified Linux distribution. Accessing these logs 
 
 Community research (SoundCork Issue #112) has identified a "backdoor" to enable developer services:
 
-1.  **USB Method**:
+1.  **CLI Method (recommended, no USB needed)**:
+    -   `soundtouch-cli --host <device-ip> setup enable-ssh` drives the port-17000 diagnostic shell to inject the `remote_services` marker and start `sshd`, then waits for `:22`. This is the #471 bootstrap; it needs no prior SSH and no USB stick.
+    -   If the command is accepted (the device persists it, confirmed by `getpdo`) but `sshd` never comes up and `:22` stays "Connection refused", retry with `--full-config`. That variant mirrors the manual telnet sequence confirmed on issue #515: it puts the injection on `sys configuration margeServerUrl` as well as `envswitch`, writes all four URL keys, and reboots.
+    -   **`--full-config` is meant for:** the **SoundTouch Portable (Series I, model 412540, FW `27.0.6.46330.5043500`)** and some **CineMate 520** units, where the default single-`envswitch` path leaves `sshd` down. The default path is sufficient on the Wireless Link Adapter and the CineMate 520 `lisa` variant. Some units (e.g. certain ST10 and CineMate 520 firmwares) do not respond to either path and need the serial / U-Boot console route instead. See [TELNET-COMMAND-REFERENCE.md](../analysis/TELNET-COMMAND-REFERENCE.md#what-we-use-to-enable-ssh-setup-enable-ssh-471) for the exact commands and current confirmation status.
+2.  **USB Method**:
     -   Format a USB stick to **FAT32**.
     -   Create an empty file named `remote_services` (no extension) in the root of the USB stick.
     -   Insert the stick into the SoundTouch device.
     -   Reboot the device (power cycle).
     -   On some models, you may need to hold **4** and **Volume -** on the device while powering on to force a USB check.
-2.  **TAP Command (Legacy)**:
+3.  **TAP Command (Legacy)**:
     -   On older firmware versions, you can connect to port 17000 via Telnet and issue the command: `remote_services on`.
 
 ### Making Root Access Persistent
