@@ -23,6 +23,7 @@ jobs:
     name: Validate Release
     runs-on: ubuntu-latest
     outputs:
+      tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
       is_prerelease: ${{ steps.version.outputs.is_prerelease }}
 
@@ -30,16 +31,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          # Both triggers resolve to the same thing: the release tag. On a
+          # `release` event inputs.tag is empty, so this falls back to the
+          # published release's tag. Every other job checks out this same
+          # tag (via needs.validate.outputs.tag) so the build is always the
+          # tagged commit, never whatever branch the dispatch ran on (#525).
+          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
           fetch-depth: 0
 
       - name: Validate tag format
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG_NAME="${{ github.event.inputs.tag }}"
-          else
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-          fi
+          # Single source of truth for the tag, regardless of trigger.
+          TAG_NAME="${{ github.event.inputs.tag || github.event.release.tag_name }}"
 
           echo "Tag name: $TAG_NAME"
 
@@ -49,6 +53,15 @@ jobs:
             echo "Expected format: v1.2.3 or v1.2.3-beta.1"
             exit 1
           fi
+
+          # Confirm the tag actually exists in git. The dispatch path
+          # re-releases an existing tag; it never creates one from a branch.
+          if ! git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            echo "❌ Tag $TAG_NAME does not exist in git. Push the tag first, then re-run."
+            exit 1
+          fi
+
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
 
           # Extract version without 'v' prefix
           VERSION=${TAG_NAME#v}
@@ -103,6 +116,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
 
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -125,6 +140,11 @@ jobs:
           CGO_ENABLED: 0
         run: |
           # Common variables
+          # Single build timestamp shared across every binary in this job.
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Commit of the checked-out tag (not GITHUB_SHA, which on a manual
+          # dispatch is the branch HEAD the run started from, not the tag).
+          COMMIT_SHA="$(git rev-parse HEAD)"
           ARCH_SUFFIX="${{ matrix.goos }}-${{ matrix.goarch }}"
           if [[ "${{ matrix.goarm }}" != "" ]]; then
             ARCH_SUFFIX="${ARCH_SUFFIX}v${{ matrix.goarm }}"
@@ -150,9 +170,13 @@ jobs:
             # Ensure clean build environment for this binary
             rm -f "$OUTPUT_NAME" "$OUTPUT_NAME.sha256" "$OUTPUT_NAME.sha512"
 
+            # Inject the validated version (plus commit/date) so the binary
+            # reports the right version regardless of git checkout state.
+            # Relying on Go's VCS stamping alone yields v0.0.0-… when built
+            # from a shallow checkout or a non-tagged commit (see #525).
             if ! go build \
               -trimpath \
-              -ldflags="-s -w" \
+              -ldflags="-s -w -X main.version=${{ needs.validate.outputs.tag }} -X main.commit=${COMMIT_SHA} -X main.date=${BUILD_DATE}" \
               -o "$OUTPUT_NAME" \
               "$CMD_PATH"; then
               echo "❌ Build failed for $BINARY_NAME"
@@ -307,6 +331,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ needs.validate.outputs.tag }}
           fetch-depth: 0
 
       - name: Download release assets
@@ -318,11 +343,7 @@ jobs:
       - name: Generate release notes
         id: release_notes
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG_NAME="${{ github.event.inputs.tag }}"
-          else
-            TAG_NAME="${{ github.event.release.tag_name }}"
-          fi
+          TAG_NAME="${{ needs.validate.outputs.tag }}"
           VERSION="${TAG_NAME#v}"
 
           # Short, accurate header. GitHub's auto-generated "What's Changed"
@@ -367,8 +388,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: ${{ needs.validate.outputs.tag }}
           body_path: ${{ steps.release_notes.outputs.release_notes_file }}
           generate_release_notes: true
           draft: false
@@ -400,7 +421,7 @@ jobs:
       - name: Upload additional assets to existing release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ needs.validate.outputs.tag }}
           files: |
             release-assets/soundtouch-cli-v*
             release-assets/soundtouch-service-v*
@@ -420,10 +441,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
 
-      - name: Set build date
+      - name: Set build metadata
         id: build_date
-        run: echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+        run: |
+          echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+          # Commit of the checked-out tag, not github.sha (the dispatch HEAD).
+          echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -455,8 +481,8 @@ jobs:
           tags: ${{ steps.meta-service.outputs.tags }}
           labels: ${{ steps.meta-service.outputs.labels }}
           build-args: |
-            VERSION=v${{ needs.validate.outputs.version }}
-            COMMIT=${{ github.sha }}
+            VERSION=${{ needs.validate.outputs.tag }}
+            COMMIT=${{ steps.build_date.outputs.commit }}
             DATE=${{ steps.build_date.outputs.date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -481,8 +507,8 @@ jobs:
           tags: ${{ steps.meta-player.outputs.tags }}
           labels: ${{ steps.meta-player.outputs.labels }}
           build-args: |
-            VERSION=v${{ needs.validate.outputs.version }}
-            COMMIT=${{ github.sha }}
+            VERSION=${{ needs.validate.outputs.tag }}
+            COMMIT=${{ steps.build_date.outputs.commit }}
             DATE=${{ steps.build_date.outputs.date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -502,7 +528,7 @@ jobs:
           echo "🔐 Checksums generated and verified"
           echo "📋 Release notes automatically generated"
           echo ""
-          TAG_NAME="${{ github.event.inputs.tag || github.event.release.tag_name }}"
+          TAG_NAME="${{ needs.validate.outputs.tag }}"
           echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${TAG_NAME}"
           echo ""
           echo "Next steps:"

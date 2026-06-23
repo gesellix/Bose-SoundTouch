@@ -39,7 +39,11 @@ func updateBuildInfo() {
 			repoURL = "https://" + info.Main.Path
 		}
 
-		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		// Only fall back to build info when the version was not injected via
+		// -ldflags (i.e. still the "dev" default, e.g. `go install …@vX.Y.Z`).
+		// This keeps an explicitly stamped release version from being clobbered
+		// by a VCS pseudo-version (e.g. v0.0.0-… from a shallow checkout).
+		if version == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
 			version = info.Main.Version
 		}
 
