@@ -35,10 +35,6 @@ sudo bash install.sh v0.111.3
 sudo bash install-player.sh v0.111.3
 ```
 
-> `install-web.sh` is the old name for `install-player.sh` and still works as a
-> deprecated alias. If you installed `soundtouch-web` previously, remove it with
-> `uninstall-web.sh` (see below) and switch to `install-player.sh`.
-
 ## Removal
 
 Matching uninstallers reverse each installer (stop and disable the service,

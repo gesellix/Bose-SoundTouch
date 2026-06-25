@@ -17,11 +17,6 @@ Run without a version argument, they install the **latest release** (resolved
 from GitHub's `releases/latest` redirect); pass a tag to pin a specific version.
 Each installer has a matching uninstaller (`uninstall.sh`, `uninstall-player.sh`).
 
-> `install-web.sh` is the previous name for `install-player.sh`. It still works
-> as a deprecated alias but will be removed in a future release. If you installed
-> `soundtouch-web` before the rename, see
-> [Migrating from soundtouch-web](#migrating-from-soundtouch-web).
-
 For a complete install-through-migration walkthrough see
 [EXTERNAL-HOST-WALKTHROUGH.md](EXTERNAL-HOST-WALKTHROUGH.md).
 Not sure whether to use a Pi or run AfterTouch on the speaker itself? See
@@ -279,34 +274,6 @@ sudo rm -rf /etc/soundtouch-player
 sudo rm /usr/local/bin/soundtouch-player
 sudo systemctl daemon-reload
 ```
-
----
-
-## Migrating from soundtouch-web
-
-`soundtouch-web` was renamed to `soundtouch-player`. The old `install-web.sh`
-installer and the `soundtouch-web` release asset still exist as deprecated
-aliases and will be removed in a future release.
-
-If you have an existing `soundtouch-web` install, remove it and switch to
-`soundtouch-player`:
-
-```bash
-# 1. Remove the old soundtouch-web service:
-curl -fsSL -o uninstall-web.sh \
-  https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/raspberry-pi/uninstall-web.sh
-sudo bash uninstall-web.sh
-
-# 2. Install soundtouch-player (see the section above):
-curl -fsSL -o install-player.sh \
-  https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/raspberry-pi/install-player.sh
-sudo bash install-player.sh
-```
-
-`uninstall-web.sh` stops and disables the `soundtouch-web` service and removes
-its unit, binary, and `/etc/soundtouch-web` config. Both binaries are stateless,
-so there is no data to migrate; re-create any per-host settings in
-`/etc/soundtouch-player/soundtouch-player.env` (the variables are identical).
 
 ---
 
