@@ -86,42 +86,6 @@ func (zr *ZoneRequest) AddMemberByDeviceID(deviceID string) {
 	zr.Members = append(zr.Members, member)
 }
 
-// RemoveMember removes a device from the zone configuration.
-//
-// Deprecated: unused. Zone members are removed with the /removeZoneSlave
-// endpoint (client.RemoveZoneSlave), not by rebuilding the zone via /setZone, so
-// this helper has no callers. To be removed. See #511.
-func (zr *ZoneRequest) RemoveMember(deviceID string) {
-	for i, member := range zr.Members {
-		if member.DeviceID == deviceID {
-			zr.Members = append(zr.Members[:i], zr.Members[i+1:]...)
-			return
-		}
-	}
-}
-
-// ClearMembers removes all members from the zone (creates standalone configuration).
-//
-// Deprecated: unused. To make a device standalone, dissolve the zone instead
-// (client.DissolveZone, i.e. NewZoneRequest(master) with no members). To be
-// removed. See #511.
-func (zr *ZoneRequest) ClearMembers() {
-	zr.Members = []MemberEntry{}
-}
-
-// HasMember checks if a device is in the zone configuration.
-//
-// Deprecated: unused. To be removed. See #511.
-func (zr *ZoneRequest) HasMember(deviceID string) bool {
-	for _, member := range zr.Members {
-		if member.DeviceID == deviceID {
-			return true
-		}
-	}
-
-	return false
-}
-
 // GetMemberCount returns the number of members in the zone
 func (zr *ZoneRequest) GetMemberCount() int {
 	return len(zr.Members)

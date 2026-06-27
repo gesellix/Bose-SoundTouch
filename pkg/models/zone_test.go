@@ -56,63 +56,6 @@ func TestZoneRequest_AddMemberByDeviceID(t *testing.T) {
 	}
 }
 
-func TestZoneRequest_RemoveMember(t *testing.T) {
-	zr := NewZoneRequest("MASTER123")
-	zr.AddMember("DEVICE456", "192.0.2.10")
-	zr.AddMember("DEVICE789", "192.0.2.11")
-	zr.AddMember("DEVICEABC", "192.0.2.12")
-
-	// Remove middle member
-	zr.RemoveMember("DEVICE789")
-
-	if len(zr.Members) != 2 {
-		t.Errorf("Expected 2 members after removal, got %d", len(zr.Members))
-	}
-
-	// Check that the correct member was removed
-	for _, member := range zr.Members {
-		if member.DeviceID == "DEVICE789" {
-			t.Error("DEVICE789 should have been removed")
-		}
-	}
-
-	// Remove non-existent member (should not change anything)
-	zr.RemoveMember("NONEXISTENT")
-
-	if len(zr.Members) != 2 {
-		t.Errorf("Expected 2 members after removing non-existent, got %d", len(zr.Members))
-	}
-}
-
-func TestZoneRequest_ClearMembers(t *testing.T) {
-	zr := NewZoneRequest("MASTER123")
-	zr.AddMember("DEVICE456", "192.0.2.10")
-	zr.AddMember("DEVICE789", "192.0.2.11")
-
-	zr.ClearMembers()
-
-	if len(zr.Members) != 0 {
-		t.Errorf("Expected 0 members after clear, got %d", len(zr.Members))
-	}
-}
-
-func TestZoneRequest_HasMember(t *testing.T) {
-	zr := NewZoneRequest("MASTER123")
-	zr.AddMember("DEVICE456", "192.0.2.10")
-
-	if !zr.HasMember("DEVICE456") {
-		t.Error("Expected HasMember to return true for DEVICE456")
-	}
-
-	if zr.HasMember("NONEXISTENT") {
-		t.Error("Expected HasMember to return false for non-existent device")
-	}
-
-	if zr.HasMember("MASTER123") {
-		t.Error("Expected HasMember to return false for master device")
-	}
-}
-
 func TestZoneRequest_GetMemberCount(t *testing.T) {
 	zr := NewZoneRequest("MASTER123")
 
