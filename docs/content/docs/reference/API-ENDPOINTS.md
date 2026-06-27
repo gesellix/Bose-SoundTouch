@@ -338,6 +338,19 @@ Configures the clock display.
 ### POST /speaker ✅ **Implemented**
 Plays TTS messages or URL content for notifications (ST-10 Series only).
 
+> **Requires DNS interception.** Before playing a `play_info` notification the
+> speaker validates the `app_key` by calling `GET /v1/auth` against a hardcoded
+> Bose host (`audionotification.api.bosecm.com`, on some firmware the
+> `...dev...` variant). After the cloud shutdown that host no longer exists, so
+> unless the speaker resolves Bose hostnames through AfterTouch (DNS server +
+> the `/etc/resolv.conf` hook, so `*.api.bosecm.com` points at AfterTouch, which
+> answers `/v1/auth`), the request hangs and returns
+> `ALLEGROWEBSERVER_TIMEOUT` (error `1046`) after ~60s. If you cannot use DNS
+> interception, play the clip via the `LOCAL_INTERNET_RADIO` path instead (the
+> "radio" method used by the web player's TTS): it needs no `app_key` and no DNS
+> redirection, but it replaces the current source rather than ducking and
+> resuming it.
+
 **TTS Request XML:**
 ```xml
 <play_info>

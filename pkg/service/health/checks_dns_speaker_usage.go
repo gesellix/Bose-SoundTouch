@@ -100,7 +100,10 @@ func runDNSSpeakerUsageCheck(
 				"Bose hostnames. It may simply not have played a TuneIn stream since the " +
 				"last restart, or it may be using a different DNS resolver. " +
 				"Click 'Test DNS path' to run an active probe that sends a silent " +
-				"notification and waits for the speaker to call back through AfterTouch's DNS.",
+				"notification and waits for the speaker to call back through AfterTouch's DNS. " +
+				"The same DNS path is required for TTS / `/speaker` `play_info` notifications: " +
+				"the speaker validates the app_key against a hardcoded Bose host, so without " +
+				"DNS interception those requests time out with ALLEGROWEBSERVER_TIMEOUT (1046).",
 			QuickFixes: []QuickFix{probeDNSPathQuickFix},
 		})
 	}
