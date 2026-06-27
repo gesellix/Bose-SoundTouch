@@ -154,6 +154,46 @@ logread -f | grep -v '127.0.0.1:'
 
 > **Note on the firmware-internal placeholder sources.** The `<sourceItem source="SPOTIFY" sourceAccount="SpotifyConnectUserName" ...>`, `SpotifyAlexaUserName`, `UPNP/UPnPUserName`, `STORED_MUSIC_MEDIA_RENDERER/StoredMusicUserName`, and `QPLAY/QPlay{1,2}UserName` entries that appear in `/sources` even on a broken or unpaired speaker are *firmware-synthesized*. They show up regardless of AfterTouch's source list — their `status="UNAVAILABLE"` does not indicate an AfterTouch problem. Use the three checks above to diagnose the actual cause.
 
+### ❌ On-device install fails with `curl: (60) ... certificate is not yet valid`
+
+**Symptoms:**
+
+- Running the on-device installer over SSH (`curl -sSL .../install.sh | sh`)
+  fails immediately, before anything is downloaded:
+
+  ```
+  curl: (60) SSL certificate problem: certificate is not yet valid
+  ```
+
+- The same error appears for *any* HTTPS fetch from the speaker (GitHub,
+  `raw.githubusercontent.com`, …).
+
+**Cause:**
+
+The speaker's clock is set in the past. SoundTouch speakers have no
+battery-backed clock and rely on NTP, which is no longer reliable after the Bose
+cloud shutdown, so the clock can fall back to a date years ago. TLS validation
+then rejects the (recently issued) server certificate as "not yet valid" — its
+validity period starts *after* the speaker's notion of "now". This is the same
+stuck-clock condition behind several TuneIn / TLS failures (see issue #345).
+
+**Fix:**
+
+Set the speaker's clock to roughly the current time over SSH, then re-run the
+installer:
+
+```bash
+# On the speaker, over SSH. Replace with the current UTC date/time —
+# it only needs to be close enough to fall inside the certificate's validity
+# window, not exact.
+date -u -s "2026-06-27 12:00:00"
+```
+
+Then re-run the on-device install one-liner. Once AfterTouch is installed and
+running, its **`speaker_clock` health check** (with a `set_clock` quick-fix)
+keeps the speaker's clock corrected, so this is a one-time hurdle to get the
+installer through.
+
 ### ❌ Speaker logs `Curl 7, http 0` and AfterTouch sees no HTTP requests
 
 **Symptoms:**
