@@ -485,6 +485,12 @@ func main() {
 
 			if persisted.ServerURL == "" {
 				log.Printf("Creating default settings.json in %s", sanitizeLog(config.dataDir))
+				log.Printf("Data directory %s looks empty (first run). If you did NOT expect this "+
+					"(e.g. after recreating a Docker container), your previous settings, datastore and "+
+					"CA were not persisted; mount a persistent volume at the data dir (Docker: "+
+					"-v <volume>:/app/data) so device state and the CA survive restarts. A lost CA "+
+					"forces re-migrating speakers and re-trusting the new CA.",
+					sanitizeLog(config.dataDir))
 				persisted = createDefaultSettings(ds, config)
 			}
 

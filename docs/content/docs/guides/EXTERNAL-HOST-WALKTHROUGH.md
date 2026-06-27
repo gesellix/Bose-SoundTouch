@@ -66,12 +66,27 @@ docker run -d \
   --name aftertouch \
   --network host \
   -e SERVER_URL=http://192.0.2.10:8000 \
-  -v aftertouch-data:/data \
+  -v aftertouch-data:/app/data \
   ghcr.io/gesellix/bose-soundtouch:latest
 ```
 
 Replace `192.0.2.10` with the host machine's LAN IP. The `--network host` flag
 is required so AfterTouch can reach the speakers and respond to mDNS discovery.
+
+> **Persist the data directory.** The container stores everything stateful under
+> `/app/data` (`DATA_DIR`): the datastore, `settings.json`, and the service CA.
+> Mount a volume there (`-v <volume>:/app/data`, as above) or this state is lost
+> when the container is recreated. Losing the CA forces you to re-migrate every
+> speaker and re-trust the new CA, so back this volume up before upgrading.
+
+> **Windows / macOS (Docker Desktop):** `--network host` does not work the same
+> way as on Linux, so publish the ports explicitly instead, e.g.
+> `-p 8000:8000 -p 8443:8443`. mDNS discovery across the Docker Desktop network
+> boundary is unreliable; add speakers by IP in the Devices tab. If you also use
+> DNS interception (so the speaker resolves Bose hostnames to AfterTouch), you
+> additionally need to publish the DNS port (`-p 53:53/udp -p 53:53/tcp`) and
+> make AfterTouch reachable on `:443` (the hardcoded Bose hosts are plain HTTPS),
+> e.g. `-p 443:8443`. Keep the same `-v <volume>:/app/data` mount.
 
 ---
 
