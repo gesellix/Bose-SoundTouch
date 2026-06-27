@@ -477,7 +477,7 @@ If `soundtouch-cli source content --source TUNEIN ...` returns `1005` on a reset
 
 **Cause:**
 
-Not fully understood. After an in-place migration the firmware does not activate the radio source **types** in its runtime, even though the entries exist in the speaker's persisted `Sources.xml`. This is firmware behaviour and we have not confirmed the exact trigger. (If you hit this, an [encrypted diagnostic report](#getting-more-help) taken **before** you reset the speaker is very helpful — it now includes the speaker's on-device `Sources.xml`.)
+Not fully understood. After an in-place migration the firmware does not activate the radio source **types** in its runtime, even though the entries exist in the speaker's persisted `Sources.xml`. This is firmware behaviour and we have not confirmed the exact trigger. (If you hit this, an encrypted diagnostic report taken **before** you reset the speaker is very helpful, and now includes the speaker's on-device `Sources.xml`. See the "Getting More Help" section below.)
 
 **Workaround (confirmed by users):**
 
