@@ -43,6 +43,8 @@ curl -v -X POST http://<speaker-ip>:8090/notification \
 
 Replace `<speaker-ip>` with your speaker's IP address and `<deviceID>` with its device ID (visible in `/info`). After this call the speaker re-fetches its sources from the service. Step 2 (source-type registration) still requires a reboot.
 
+> **If a reboot doesn't help after an in-place migration:** on some speakers the radio source types (`LOCAL_INTERNET_RADIO`, `TUNEIN`, `RADIO_BROWSER`) never activate after an in-place migration, even though the entries are present in the device-local `Sources.xml` and you have rebooted and sent `sourcesUpdated`. The cause isn't fully understood; the confirmed remedy is a factory reset + re-migrate. See [Troubleshooting: Radio sources never activate after an in-place migration](../../guides/TROUBLESHOOTING/#radio-sources-after-migration).
+
 ### Search for stations
 
 - Go to https://www.radio-browser.info and find a station you like.

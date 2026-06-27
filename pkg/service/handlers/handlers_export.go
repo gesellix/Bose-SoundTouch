@@ -22,6 +22,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/export"
 	"github.com/gesellix/bose-soundtouch/pkg/service/health"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
+	"github.com/gesellix/bose-soundtouch/pkg/speaker"
 	speakerssh "github.com/gesellix/bose-soundtouch/pkg/ssh"
 	"github.com/gesellix/bose-soundtouch/pkg/telnet"
 )
@@ -312,6 +313,11 @@ var speakerSSHPaths = []string{
 	"/etc/pki/tls/certs/ca-bundle.crt",
 	"/etc/pki/tls/certs/ca-bundle.crt.original", // pre-migration CA bundle backup
 	"/etc/ssl/certs/ca-certificates.crt",
+	// The speaker's own persisted source list. The firmware registers source
+	// types from this file at boot; comparing it against the service's
+	// Sources.xml (and the runtime /sources) is the key evidence when radio
+	// source types won't activate after an in-place migration.
+	speaker.SourcesFileLocation,
 	// Redirection-relevant state: where the speaker resolves Bose hostnames
 	// and what it had before migration. (The live marge/BMX URL config in
 	// SoundTouchSdkPrivateCfg.xml is handled by collectSpeakerRedirectConfig,

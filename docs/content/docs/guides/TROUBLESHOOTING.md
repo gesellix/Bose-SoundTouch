@@ -465,6 +465,30 @@ Once the source plays once, it gets persisted to `/mnt/nv/BoseApp-Persistence/1/
 
 If `soundtouch-cli source content --source TUNEIN ...` returns `1005` on a reset device that has never had TuneIn, the speaker is refusing because the source isn't registered yet — chicken-and-egg. The SoundTouch app is then the only practical path to register it; we can't write `Sources.xml` directly over telnet on most models.
 
+### ❌ Radio sources never activate after an in-place migration {#radio-sources-after-migration}
+
+**Symptoms:**
+
+- The speaker was migrated **in place** (not factory-reset first) and is reachable; account-bound sources (for example a music-streaming login) work and presets for them play.
+- **Every** radio-type source fails: selecting any `LOCAL_INTERNET_RADIO`, `TUNEIN`, or `RADIO_BROWSER` content returns `1005`, including the Health tab's "Play ding" test.
+- `curl http://<speaker-ip>:8090/sources` lists no radio source types at all.
+- The Health check warns that the speaker is "missing N source type(s) the service advertises".
+- The entries are present on disk in **both** the service-side `Sources.xml` **and** the speaker's own `/mnt/nv/BoseApp-Persistence/1/Sources.xml`, yet a reboot and a `sourcesUpdated` notification do not make them activate.
+
+**Cause:**
+
+Not fully understood. After an in-place migration the firmware does not activate the radio source **types** in its runtime, even though the entries exist in the speaker's persisted `Sources.xml`. This is firmware behaviour and we have not confirmed the exact trigger. (If you hit this, an [encrypted diagnostic report](#getting-more-help) taken **before** you reset the speaker is very helpful — it now includes the speaker's on-device `Sources.xml`.)
+
+**Workaround (confirmed by users):**
+
+Factory reset the speaker, then re-migrate it:
+
+1. Factory reset (on most models: hold `1` + `−` for ~10 seconds).
+2. Reconnect the speaker to your network.
+3. Re-migrate it in AfterTouch.
+
+After this the radio sources activate normally. Note the factory reset rewrites the speaker's `Sources.xml` to defaults, so any **account-bound** source (for example a music-streaming login) has to be re-added afterwards; your presets for it come back once the source is present again.
+
 ## 🔊 **Volume & Audio Issues**
 
 ### ❌ "Volume control not working"
