@@ -453,6 +453,67 @@ func TestCheckCACertTrusted(t *testing.T) {
 	}
 }
 
+// TestCheckCACertTrustedStaleLabel is the #517 regression: a previous
+// migration's CALabel survived a service-CA regeneration, so the label is in the
+// bundle but the *current* CA payload is not. The device must then be treated as
+// NOT trusting the new CA (so the migration re-installs it), instead of being
+// falsely skipped on the stale label.
+func TestCheckCACertTrustedStaleLabel(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "ca-trust-stale")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cm := certmanager.NewCertificateManager(filepath.Join(tempDir, "certs"))
+	if err := cm.EnsureCA(); err != nil {
+		t.Fatalf("Failed to ensure CA: %v", err)
+	}
+
+	m := NewManager("http://localhost:8000", nil, cm)
+	m.NewSSH = func(_ string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				// Stale label is still present...
+				if strings.Contains(command, CALabel) {
+					return CALabel, nil
+				}
+				// ...but the current CA payload is not in the bundle.
+				return "", fmt.Errorf("not found")
+			},
+		}
+	}
+
+	summary := &MigrationSummary{}
+	m.checkCACertTrusted(summary, "192.0.2.10")
+	if summary.CACertTrusted {
+		t.Error("stale label without a matching CA payload must not count as trusted (should re-install)")
+	}
+}
+
+// TestCheckCACertTrustedNoCryptoFallback verifies that when the service CA is
+// not available (e.g. a CLI caller without Crypto), the injected label remains
+// the trust signal.
+func TestCheckCACertTrustedNoCryptoFallback(t *testing.T) {
+	m := NewManager("http://localhost:8000", nil, nil)
+	m.NewSSH = func(_ string) SSHClient {
+		return &mockSSH{
+			runFunc: func(command string) (string, error) {
+				if strings.Contains(command, CALabel) {
+					return CALabel, nil
+				}
+				return "", fmt.Errorf("not found")
+			},
+		}
+	}
+
+	summary := &MigrationSummary{}
+	m.checkCACertTrusted(summary, "192.0.2.10")
+	if !summary.CACertTrusted {
+		t.Error("without Crypto, a present label should count as trusted")
+	}
+}
+
 func TestTestConnection(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "test-connection")
 	if err != nil {

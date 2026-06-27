@@ -807,56 +807,60 @@ func applyURLOverrides(cfg *PrivateCfg, options map[string]string) {
 	}
 }
 
-// checkCACertTrusted checks if the local CA certificate is already in
-// the device's trust store. The CALabel grep works regardless of whether
-// Manager.Crypto is configured — only the secondary "match cert payload"
-// fallback needs it. CLI callers without Crypto can therefore still
-// detect a previously-trusted CA.
+// checkCACertTrusted decides whether the device already trusts *this* service's
+// CA.
+//
+// When the service CA is available (Manager.Crypto set), the certificate
+// *payload* is authoritative: a previous migration may have left our label
+// (CALabel) in the bundle even though the actual CA has since changed — e.g. the
+// service CA was regenerated after its data dir was recreated without a
+// persistent volume. Matching the label alone would then falsely report the
+// device as trusted and skip re-installing the new CA, leaving the speaker
+// unable to validate TLS to the service (the symptom seen in #517). So we match
+// the current CA's payload and deliberately ignore the (possibly stale) label.
+//
+// Only when the CA can't be read (e.g. a CLI caller without Crypto) do we fall
+// back to the label, which is the best signal available there.
 func (m *Manager) checkCACertTrusted(summary *MigrationSummary, deviceIP string) {
 	client := m.NewSSH(deviceIP)
 	bundlePath := "/etc/pki/tls/certs/ca-bundle.crt"
 
-	// Primary check: our injected label.
-	output, err := client.Run(fmt.Sprintf("grep -F %q %s", CALabel, bundlePath))
-	if err == nil && strings.Contains(output, CALabel) {
-		summary.CACertTrusted = true
-		return
-	}
+	if m.Crypto != nil {
+		if certData, ok := m.firstCACertBodyLine(); ok {
+			// Payload present -> trusted; absent -> not trusted (re-install),
+			// regardless of a possibly-stale label.
+			if _, err := client.Run(fmt.Sprintf("grep -F %q %s", certData, bundlePath)); err == nil {
+				summary.CACertTrusted = true
+			}
 
-	// Secondary check (only when Manager.Crypto is configured): match
-	// the actual cert payload — covers older injections that lack the
-	// label.
-	if m.Crypto == nil {
-		return
-	}
-
-	caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
-	if err != nil {
-		return
-	}
-
-	// We look for the first part of the certificate (e.g. the first 64 chars of the base64 data)
-	// to see if it's already in the bundle.
-	lines := strings.Split(string(caCertPEM), "\n")
-
-	var certData string
-
-	for _, line := range lines {
-		if !strings.Contains(line, "BEGIN CERTIFICATE") && !strings.Contains(line, "END CERTIFICATE") && line != "" {
-			certData = line
-			break
+			return
 		}
 	}
 
-	if certData == "" {
-		return
-	}
-
-	// Use grep to check for the certificate data in the bundle
-	_, err = client.Run(fmt.Sprintf("grep -F %q %s", certData, bundlePath))
-	if err == nil {
+	// Fallback for callers without the CA at hand: match our injected label.
+	output, err := client.Run(fmt.Sprintf("grep -F %q %s", CALabel, bundlePath))
+	if err == nil && strings.Contains(output, CALabel) {
 		summary.CACertTrusted = true
 	}
+}
+
+// firstCACertBodyLine returns the first base64 body line of the service CA
+// certificate, used as a cheap fingerprint to check whether this exact CA is
+// already present in a device's trust bundle. Returns false when the cert can't
+// be read or has no body line.
+func (m *Manager) firstCACertBodyLine() (string, bool) {
+	caCertPEM, err := os.ReadFile(m.Crypto.GetCACertPath())
+	if err != nil {
+		return "", false
+	}
+
+	for _, line := range strings.Split(string(caCertPEM), "\n") {
+		if line != "" && !strings.Contains(line, "BEGIN CERTIFICATE") && !strings.Contains(line, "END CERTIFICATE") {
+			return line, true
+		}
+	}
+
+	return "", false
 }
 
 // MigrateSpeaker configures the speaker at the given IP to use this service.
