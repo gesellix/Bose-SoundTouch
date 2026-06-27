@@ -162,6 +162,11 @@ type Client struct {
 	httpClient *http.Client
 	timeout    time.Duration
 	userAgent  string
+
+	// avTransportURLOverride, when set, replaces the UPnP AVTransport control
+	// URL that is otherwise derived from baseURL (host + speaker.UPnPPort). Used
+	// only by tests to point the SOAP requests at an httptest server.
+	avTransportURLOverride string
 }
 
 // Config holds configuration for the SoundTouch client

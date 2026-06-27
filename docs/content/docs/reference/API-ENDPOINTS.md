@@ -386,6 +386,47 @@ Plays TTS messages or URL content for notifications (ST-10 Series only).
 - Custom metadata for NowPlaying display
 - Pauses current content, plays notification, then resumes
 
+#### Alternative: play a URL via UPnP / AVTransport (no app key, no DNS)
+
+If the `play_info` DNS requirement above is a problem (for example a home
+automation hub that just wants to push a TTS or notification clip), the speaker's
+UPnP `AVTransport` service can play a URL directly with no app key and no DNS
+interception. POST a SOAP `SetAVTransportURI` to the MediaRenderer control
+endpoint on port **8091** (not 8090), then `Play`:
+
+```
+POST http://<speaker-ip>:8091/AVTransport/Control
+Content-Type: text/xml; charset="utf-8"
+SOAPAction: "urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI"
+
+<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:SetAVTransportURI xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <InstanceID>0</InstanceID>
+      <CurrentURI>http://&lt;host&gt;/clip.mp3</CurrentURI>
+      <CurrentURIMetaData></CurrentURIMetaData>
+    </u:SetAVTransportURI>
+  </s:Body>
+</s:Envelope>
+```
+
+The URL must be plain **`http://`**: the speaker's AVTransport rejects `https://`
+("URI must start with http://, qplay:// or Stored Music XML") and then reports a
+misleading `402 "No URI supplied"`. For an `https`-only source, host the clip
+over HTTP or use a method that proxies it (the service TTS / `LOCAL_INTERNET_RADIO`
+path).
+
+Trade-offs versus `play_info`: this switches the speaker to the `UPNP` source and
+**replaces** the current playback (it does not duck and resume), and the speaker
+itself must be able to reach the URL. The CLI wraps both steps:
+
+```bash
+soundtouch-cli --host <speaker-ip> speaker url-upnp --url http://<host>/clip.mp3
+```
+
+(Thanks to @dagrider in #517 for surfacing this approach.)
+
 ### GET /playNotification ✅ **Implemented**
 Plays a notification beep sound (ST-10 Series only).
 

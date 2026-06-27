@@ -13,6 +13,11 @@ package speaker
 // API on (e.g. /info, /presets, /group).
 const HTTPPort = 8090
 
+// UPnPPort is the port the SoundTouch device exposes its UPnP/DLNA
+// MediaRenderer on, including the AVTransport control endpoint
+// (/AVTransport/Control). Distinct from HTTPPort.
+const UPnPPort = 8091
+
 // Well-known HTTP paths the SoundTouch device serves on HTTPPort.
 const (
 	DeviceInfoPath = "/info"

@@ -1927,6 +1927,20 @@ func main() {
 						},
 					},
 					{
+						Name:   "url-upnp",
+						Usage:  "Play a URL via UPnP/AVTransport (no app-key, no DNS; replaces current source)",
+						Action: playURLUPnP,
+						Before: RequireHost,
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "url",
+								Aliases:  []string{"u"},
+								Usage:    "URL of the audio content to play (must be reachable by the speaker)",
+								Required: true,
+							},
+						},
+					},
+					{
 						Name:   "notify",
 						Usage:  "Play a notification sound or local file",
 						Action: playNotification,
