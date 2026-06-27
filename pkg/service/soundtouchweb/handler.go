@@ -998,22 +998,22 @@ func (app *WebApp) HandleZoneRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if masterConn.Client == nil || slaveConn.DeviceInfo == nil {
+	if masterConn.Client == nil || masterConn.DeviceInfo == nil || slaveConn.DeviceInfo == nil {
 		app.sendError(w, "Device not ready", http.StatusInternalServerError)
 		return
 	}
 
-	zone, err := masterConn.Client.GetZone()
-	if err != nil {
-		app.sendError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	masterHwID := masterConn.DeviceInfo.DeviceID
+	slaveHwID := slaveConn.DeviceInfo.DeviceID
 
-	zoneReq := zone.ToZoneRequest()
-	zoneReq.RemoveMember(slaveConn.DeviceInfo.DeviceID)
-
+	// Remove a single member with the dedicated /removeZoneSlave endpoint.
+	// Rebuilding the zone via /setZone with the remaining members does not
+	// reliably drop a member when the zone has more than one: the speaker only
+	// goes standalone when the resulting member set is empty, so removing one of
+	// several members appeared to do nothing (#511). /removeZoneSlave targets the
+	// specific member.
 	w.Header().Set("Content-Type", "application/json")
-	app.sendControlResponse(w, masterConn.Client.SetZone(zoneReq), "Device removed from zone")
+	app.sendControlResponse(w, masterConn.Client.RemoveZoneSlave(masterHwID, slaveHwID, slaveIP), "Device removed from zone")
 }
 
 // HandleZoneDissolve dissolves the zone, making all devices standalone.
@@ -1073,17 +1073,15 @@ func (app *WebApp) HandleZoneLeave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	masterZone, err := masterConn.Client.GetZone()
-	if err != nil {
-		app.sendError(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	zoneReq := masterZone.ToZoneRequest()
-	zoneReq.RemoveMember(slaveConn.DeviceInfo.DeviceID)
-
+	// Drop this slave with the dedicated /removeZoneSlave endpoint sent to the
+	// master. Rebuilding the zone via /setZone with the remaining members does
+	// not drop a member from a multi-member zone (the master only goes standalone
+	// when the resulting set is empty), so leaving a 3+ device zone did nothing
+	// (#511). zone.Master is the master's hwID.
 	w.Header().Set("Content-Type", "application/json")
-	app.sendControlResponse(w, masterConn.Client.SetZone(zoneReq), "Left zone")
+	app.sendControlResponse(w,
+		masterConn.Client.RemoveZoneSlave(zone.Master, slaveConn.DeviceInfo.DeviceID, slaveIP),
+		"Left zone")
 }
 
 // HandleDeviceRecents returns recently played items for a device.

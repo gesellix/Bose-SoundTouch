@@ -1,6 +1,7 @@
 package client
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -295,12 +296,15 @@ func TestClient_RemoveFromZone(t *testing.T) {
 	getZoneCalled := false
 	setZoneCalled := false
 
+	var removeBody string
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 
-		if r.URL.Path == "/getZone" && r.Method == http.MethodGet {
+		switch {
+		case r.URL.Path == "/getZone" && r.Method == http.MethodGet:
 			getZoneCalled = true
-			// Return existing zone with members
+			// Return existing zone with two members.
 			response := `<?xml version="1.0" encoding="UTF-8" ?>
 <zone master="ABCD1234EFGH">
 	<member ipaddress="192.0.2.11">EFGH5678IJKL</member>
@@ -309,11 +313,16 @@ func TestClient_RemoveFromZone(t *testing.T) {
 
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(response))
-		} else if r.URL.Path == "/setZone" && r.Method == http.MethodPost {
+		case r.URL.Path == "/removeZoneSlave" && r.Method == http.MethodPost:
+			b, _ := io.ReadAll(r.Body)
+			removeBody = string(b)
+
+			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/setZone" && r.Method == http.MethodPost:
 			setZoneCalled = true
 
 			w.WriteHeader(http.StatusOK)
-		} else {
+		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
@@ -321,6 +330,9 @@ func TestClient_RemoveFromZone(t *testing.T) {
 
 	client := createTestClient(server.URL)
 
+	// Removing one of two members must target that member via /removeZoneSlave,
+	// not rebuild the zone via /setZone (which does not drop a member from a
+	// multi-member zone). Regression for #511.
 	err := client.RemoveFromZone("EFGH5678IJKL")
 	if err != nil {
 		t.Errorf("Expected no error, but got: %v", err)
@@ -330,8 +342,20 @@ func TestClient_RemoveFromZone(t *testing.T) {
 		t.Error("Expected GetZone to be called")
 	}
 
-	if !setZoneCalled {
-		t.Error("Expected SetZone to be called")
+	if setZoneCalled {
+		t.Error("RemoveFromZone must not use /setZone to drop a member from a multi-member zone")
+	}
+
+	if !strings.Contains(removeBody, "EFGH5678IJKL") {
+		t.Errorf("removeZoneSlave body should target the member, got: %s", removeBody)
+	}
+
+	if !strings.Contains(removeBody, `master="ABCD1234EFGH"`) {
+		t.Errorf("removeZoneSlave body should name the master, got: %s", removeBody)
+	}
+
+	if !strings.Contains(removeBody, `ipaddress="192.0.2.11"`) {
+		t.Errorf("removeZoneSlave body should carry the member IP from the zone, got: %s", removeBody)
 	}
 }
 

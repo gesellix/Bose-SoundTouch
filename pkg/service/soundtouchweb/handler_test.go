@@ -769,3 +769,127 @@ func TestHandleSourceControl_ForwardsAccount(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleZoneRemove_UsesRemoveZoneSlave is the #511 regression: removing one
+// member from a multi-member zone must target that member via /removeZoneSlave.
+// The previous implementation rebuilt the zone with /setZone and the remaining
+// members, which the speaker only honoured when the resulting member set was
+// empty — so removing one of several members appeared to do nothing, while
+// removing the last member (empty set == dissolve) worked.
+func TestHandleZoneRemove_UsesRemoveZoneSlave(t *testing.T) {
+	var gotPath, gotBody string
+
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer speaker.Close()
+
+	app := NewWebApp()
+
+	// Registry is IP-keyed; use RFC-5737 documentation addresses.
+	master := webtypes.NewDeviceConnection(
+		client.NewClient(&client.Config{Host: speaker.URL}),
+		&models.DeviceInfo{Name: "Master", DeviceID: "MASTERHW01"},
+	)
+	master.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
+	app.AddDevice("192.0.2.10", master)
+
+	slave := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{Name: "Slave", DeviceID: "SLAVEHW02"})
+	app.AddDevice("192.0.2.20", slave)
+
+	req := httptest.NewRequest("POST", "/api/control/devices/192.0.2.10/zone/remove/192.0.2.20", nil)
+	req = withChiParams(req, map[string]string{"id": "192.0.2.10", "slaveId": "192.0.2.20"})
+	w := httptest.NewRecorder()
+
+	app.HandleZoneRemove(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if gotPath != "/removeZoneSlave" {
+		t.Errorf("expected POST to /removeZoneSlave, got %q (a /setZone rebuild does not drop a member from a multi-member zone)", gotPath)
+	}
+
+	if !strings.Contains(gotBody, "SLAVEHW02") {
+		t.Errorf("removeZoneSlave body should target the slave device ID, got: %s", gotBody)
+	}
+
+	if !strings.Contains(gotBody, `master="MASTERHW01"`) {
+		t.Errorf("removeZoneSlave body should name the master, got: %s", gotBody)
+	}
+}
+
+// TestHandleZoneLeave_UsesRemoveZoneSlave is the #511 regression for the slave's
+// "Leave zone" path: it must drop the slave via /removeZoneSlave on the master,
+// not rebuild the master's zone with /setZone (which leaves a 3+ device zone
+// unchanged). The leaving slave's "id" is its IP; it carries the master's hwID
+// in its /getZone, which we resolve to the master's registry entry.
+func TestHandleZoneLeave_UsesRemoveZoneSlave(t *testing.T) {
+	var masterPath, masterBody string
+
+	// Master speaker captures the /removeZoneSlave call.
+	masterSpeaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		masterPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		masterBody = string(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer masterSpeaker.Close()
+
+	// Slave speaker answers /getZone naming the master by hwID.
+	slaveSpeaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/getZone" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8" ?>
+<zone master="MASTERHW01">
+	<member ipaddress="192.0.2.20">SLAVEHW02</member>
+	<member ipaddress="192.0.2.30">SLAVEHW03</member>
+</zone>`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer slaveSpeaker.Close()
+
+	app := NewWebApp()
+
+	master := webtypes.NewDeviceConnection(
+		client.NewClient(&client.Config{Host: masterSpeaker.URL}),
+		&models.DeviceInfo{Name: "Master", DeviceID: "MASTERHW01"},
+	)
+	master.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
+	app.AddDevice("192.0.2.10", master)
+
+	slave := webtypes.NewDeviceConnection(
+		client.NewClient(&client.Config{Host: slaveSpeaker.URL}),
+		&models.DeviceInfo{Name: "Slave", DeviceID: "SLAVEHW02"},
+	)
+	slave.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
+	app.AddDevice("192.0.2.20", slave)
+
+	req := httptest.NewRequest("POST", "/api/control/devices/192.0.2.20/zone/leave", nil)
+	req = withChiParams(req, map[string]string{"id": "192.0.2.20"})
+	w := httptest.NewRecorder()
+
+	app.HandleZoneLeave(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if masterPath != "/removeZoneSlave" {
+		t.Errorf("expected POST to master's /removeZoneSlave, got %q", masterPath)
+	}
+
+	if !strings.Contains(masterBody, "SLAVEHW02") {
+		t.Errorf("removeZoneSlave body should target the leaving slave, got: %s", masterBody)
+	}
+
+	if !strings.Contains(masterBody, `master="MASTERHW01"`) {
+		t.Errorf("removeZoneSlave body should name the master, got: %s", masterBody)
+	}
+}
