@@ -481,9 +481,18 @@ func main() {
 			config := loadConfig(c)
 			ds := initDataStore(config.dataDir)
 
+			// Detect a genuinely fresh data dir by the ABSENCE of settings.json,
+			// not by an empty server_url. A hand-authored settings.json (e.g. one
+			// that only sets trust_forwarded_headers and leaves server_url to the
+			// --server-url flag) exists but has no server_url; keying the "first
+			// run" default-write off server_url would treat it as fresh and
+			// clobber the operator's file, dropping fields createDefaultSettings
+			// doesn't know about.
+			settingsExisted := settingsFileExists(config.dataDir)
+
 			persisted := applyPersistedSettings(ds, &config)
 
-			if persisted.ServerURL == "" {
+			if !settingsExisted {
 				log.Printf("Creating default settings.json in %s", sanitizeLog(config.dataDir))
 				log.Printf("Data directory %s looks empty (first run). If you did NOT expect this "+
 					"(e.g. after recreating a Docker container), your previous settings, datastore and "+
@@ -911,6 +920,20 @@ func getDomains(serverURL, httpsServerURL, hostname string, extraHosts []string)
 	}
 
 	return domains
+}
+
+// settingsFileExists reports whether a settings.json is already present in the
+// data dir. It's the first-run discriminator: an existing file (even an
+// incomplete, hand-authored one) must never be overwritten by the default
+// seed, while a truly empty data dir gets defaults plus the lost-volume notice.
+func settingsFileExists(dataDir string) bool {
+	if dataDir == "" {
+		return false
+	}
+
+	_, err := os.Stat(filepath.Join(dataDir, "settings.json"))
+
+	return err == nil
 }
 
 func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) datastore.Settings {

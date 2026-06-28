@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
@@ -186,4 +187,84 @@ func contains(haystack []string, needle string) bool {
 	}
 
 	return false
+}
+
+func TestSettingsFileExists(t *testing.T) {
+	dir := t.TempDir()
+
+	if settingsFileExists(dir) {
+		t.Fatal("expected false for a dir without settings.json")
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write settings.json: %v", err)
+	}
+
+	if !settingsFileExists(dir) {
+		t.Fatal("expected true once settings.json is present")
+	}
+
+	if settingsFileExists("") {
+		t.Fatal("expected false for an empty data dir")
+	}
+}
+
+// applyFirstRunSeed mirrors the startup gate in the CLI Action: a default
+// settings.json is written only when none exists yet, so a hand-authored file
+// is never clobbered.
+func applyFirstRunSeed(ds *datastore.DataStore, config *serviceConfig) {
+	existed := settingsFileExists(config.dataDir)
+
+	applyPersistedSettings(ds, config)
+
+	if !existed {
+		createDefaultSettings(ds, *config)
+	}
+}
+
+func TestFirstRunSeed_PreservesHandAuthoredSettings(t *testing.T) {
+	dir := t.TempDir()
+
+	// Operator pre-seeds proxy trust but leaves server_url to the --server-url
+	// flag. Before the fix this was treated as "first run" and overwritten.
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"),
+		[]byte(`{"trust_forwarded_headers":true,"trusted_proxy_cidrs":["10.0.0.0/8"]}`), 0o644); err != nil {
+		t.Fatalf("write settings.json: %v", err)
+	}
+
+	ds := datastore.NewDataStore(dir)
+	config := &serviceConfig{dataDir: dir, serverURL: "http://192.0.2.1:8000"}
+
+	applyFirstRunSeed(ds, config)
+
+	got, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+
+	if !got.TrustForwardedHeaders {
+		t.Error("trust_forwarded_headers was clobbered on startup")
+	}
+
+	if len(got.TrustedProxyCIDRs) != 1 || got.TrustedProxyCIDRs[0] != "10.0.0.0/8" {
+		t.Errorf("trusted_proxy_cidrs was clobbered, got %v", got.TrustedProxyCIDRs)
+	}
+}
+
+func TestFirstRunSeed_WritesDefaultsWhenAbsent(t *testing.T) {
+	dir := t.TempDir()
+
+	ds := datastore.NewDataStore(dir)
+	config := &serviceConfig{dataDir: dir, serverURL: "http://192.0.2.1:8000"}
+
+	applyFirstRunSeed(ds, config)
+
+	got, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+
+	if got.ServerURL != "http://192.0.2.1:8000" {
+		t.Errorf("expected defaults to be written with server_url, got %q", got.ServerURL)
+	}
 }
