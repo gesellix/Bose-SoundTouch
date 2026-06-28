@@ -85,6 +85,12 @@ other, sharing setups (the FRITZ!Box and AdGuard DNS notes came straight from a 
 own working configuration), and debugging together. That's the project moving in the
 right direction. AfterTouch works best as a community, not a support desk.
 
+And a heartfelt thank you to everyone who sponsors AfterTouch. The project is free and
+maintained in spare time, so every contribution, recurring or one-off, directly funds the
+hosting, the test hardware, and the hours that keep these speakers alive. It genuinely
+makes a difference, and it's deeply appreciated. If you'd like to chip in, the
+[sponsor page](../sponsor.md) has the details.
+
 ## The road to 1.0
 
 So what does **v1.0.0** mean? Mostly: stability. A version number that signals a proper,
