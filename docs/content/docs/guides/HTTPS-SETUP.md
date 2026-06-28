@@ -125,20 +125,11 @@ server {
 }
 ```
 
-> **Tell the service to resolve the client IP from `X-Forwarded-For`.** When
-> deploying behind a reverse proxy, set `"trust_forwarded_headers": true` in
-> `data/settings.json`. With that flag on, the service reads the real client
-> IP from `X-Forwarded-For` (chi walks the chain right-to-left, skipping your
-> trusted-proxy IPs), so handlers that act on the source IP (e.g. the Spotify
-> priming from `/marge/streaming/support/power_on`) see the speaker's real
-> address instead of the proxy's.
->
-> By default only `127.0.0.0/8` and `::1/128` are trusted proxy ranges. If
-> your reverse proxy lives on a different host, list its CIDR(s) in
-> `"trusted_proxy_cidrs"` (the proxy's own IP ranges, e.g.
-> `["10.0.0.0/8"]`). Do **not** enable `trust_forwarded_headers` on a flat
-> LAN with no proxy: a malicious speaker on the LAN could send
-> `X-Forwarded-For` itself and spoof its source IP.
+> **Client IP behind a proxy.** A reverse proxy changes the source IP the
+> service sees, which matters for the handlers that act on it. Configuring
+> AfterTouch to recover the real speaker IP from `X-Forwarded-For`
+> (`trust_forwarded_headers` / `trusted_proxy_cidrs`) is covered under
+> [Client IP behind a proxy or load balancer](CLOUD-DEPLOY-WALKTHROUGH.md#client-ip-behind-a-proxy-or-load-balancer).
 
 ---
 

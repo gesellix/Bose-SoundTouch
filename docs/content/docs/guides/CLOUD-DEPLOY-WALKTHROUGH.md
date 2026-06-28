@@ -46,6 +46,40 @@ Minimum mitigations before going live:
 
 ---
 
+## Client IP behind a proxy or load balancer
+
+Behind a reverse proxy or load balancer, the connection AfterTouch sees comes
+from the proxy, not from the speaker. A few handlers act on the source IP (for
+example the Spotify priming triggered by `/marge/streaming/support/power_on`,
+and the device IP AfterTouch records), so in a proxied setup you usually want
+it to recover the real speaker IP from the `X-Forwarded-For` header.
+
+Enable it in `data/settings.json`:
+
+- Set `"trust_forwarded_headers": true`.
+- Set `"trusted_proxy_cidrs"` to your proxy's own IP range(s), for example
+  `["10.0.0.0/8"]`. It defaults to loopback (`127.0.0.0/8`, `::1/128`), which
+  already covers a proxy running on the same host.
+
+Make sure the proxy sets the header (nginx:
+`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Only
+`X-Forwarded-For` is consulted (not `X-Real-IP` or `True-Client-IP`).
+
+| Deployment                                        | `trust_forwarded_headers` | Client IP AfterTouch uses                                                              |
+|---------------------------------------------------|---------------------------|----------------------------------------------------------------------------------------|
+| Direct LAN / on-device (no proxy)                 | `false` (default)         | the connecting socket's IP; `X-Forwarded-For` is ignored                               |
+| Behind a proxy listed in `trusted_proxy_cidrs`    | `true`                    | the rightmost `X-Forwarded-For` entry outside `trusted_proxy_cidrs` (the real speaker) |
+| A request that did not arrive via a trusted proxy | `true`                    | the socket IP; its `X-Forwarded-For` is ignored (spoofing protection)                  |
+
+> **Do not enable `trust_forwarded_headers` on a flat LAN with no proxy.** A
+> malicious speaker could then send `X-Forwarded-For` itself and spoof its
+> source IP. A missing or unparseable header always falls back to the socket IP.
+
+For terminating TLS at the proxy (serving the certificate on `:443`), see the
+[reverse proxy section of the HTTPS guide](HTTPS-SETUP.md#reverse-proxy-optional).
+
+---
+
 ## Step 1 — Deploy AfterTouch on your server
 
 ### Docker / Docker Compose (any VPS)
