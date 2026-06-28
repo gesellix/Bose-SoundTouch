@@ -120,25 +120,25 @@ server {
     location / {
         proxy_pass http://localhost:8000;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
 ```
 
-> **Tell the service to honour `X-Real-IP`/`X-Forwarded-For`.** When deploying
-> behind a reverse proxy on the same host as above, set
-> `"trust_forwarded_headers": true` in `data/settings.json`. With that flag
-> on, the service rewrites `r.RemoteAddr` from the proxy-supplied headers,
-> so handlers that act on the source IP (e.g. the Spotify priming triggered
-> by `/marge/streaming/support/power_on`) see the speaker's real address
-> instead of the proxy's loopback peer.
+> **Tell the service to resolve the client IP from `X-Forwarded-For`.** When
+> deploying behind a reverse proxy, set `"trust_forwarded_headers": true` in
+> `data/settings.json`. With that flag on, the service reads the real client
+> IP from `X-Forwarded-For` (chi walks the chain right-to-left, skipping your
+> trusted-proxy IPs), so handlers that act on the source IP (e.g. the Spotify
+> priming from `/marge/streaming/support/power_on`) see the speaker's real
+> address instead of the proxy's.
 >
-> By default only `127.0.0.0/8` and `::1/128` are trusted to set those
-> headers. If your reverse proxy lives on a different host, list its CIDR(s)
-> in `"trusted_proxy_cidrs"` (e.g. `["10.0.0.0/8"]`). Do **not** enable
-> `trust_forwarded_headers` on a flat LAN deployment without a proxy: a
-> malicious speaker on the LAN can send the headers itself and spoof its
-> source IP.
+> By default only `127.0.0.0/8` and `::1/128` are trusted proxy ranges. If
+> your reverse proxy lives on a different host, list its CIDR(s) in
+> `"trusted_proxy_cidrs"` (the proxy's own IP ranges, e.g.
+> `["10.0.0.0/8"]`). Do **not** enable `trust_forwarded_headers` on a flat
+> LAN with no proxy: a malicious speaker on the LAN could send
+> `X-Forwarded-For` itself and spoof its source IP.
 
 ---
 

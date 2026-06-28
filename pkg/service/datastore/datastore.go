@@ -2613,17 +2613,17 @@ type Settings struct {
 	TTSVolume           int            `json:"tts_volume,omitempty"`
 
 	// TrustForwardedHeaders enables proxy-aware client IP resolution: when the
-	// immediate TCP peer is one of the TrustedProxyCIDRs, the X-Real-IP /
-	// X-Forwarded-For / True-Client-IP headers are honoured and replace
-	// r.RemoteAddr. Required when the service is fronted by nginx, Caddy, or
-	// any other reverse proxy. Default false — direct LAN deployments must
-	// not enable this, otherwise a malicious LAN-resident client could spoof
-	// its source IP via these headers.
+	// immediate TCP peer is one of the TrustedProxyCIDRs, the client IP is
+	// resolved from the X-Forwarded-For header (read via the request context;
+	// it does not rewrite r.RemoteAddr). Required when the service is fronted
+	// by nginx, Caddy, or any other reverse proxy. Default false - direct LAN
+	// deployments must not enable this, otherwise a malicious LAN-resident
+	// client could spoof its source IP via the X-Forwarded-For header.
 	TrustForwardedHeaders bool `json:"trust_forwarded_headers,omitempty"`
 
 	// TrustedProxyCIDRs is the list of CIDR blocks whose immediate TCP peers
-	// are allowed to set X-Forwarded-* headers when TrustForwardedHeaders is
-	// true. Defaults to loopback (127.0.0.0/8 and ::1/128) — i.e. only a
+	// are allowed to set X-Forwarded-For headers when TrustForwardedHeaders is
+	// true. Defaults to loopback (127.0.0.0/8 and ::1/128) - i.e. only a
 	// reverse proxy on the same host. Override only if the proxy lives on a
 	// different host within a known-good private subnet.
 	TrustedProxyCIDRs []string `json:"trusted_proxy_cidrs,omitempty"`
