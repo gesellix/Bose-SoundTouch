@@ -57,19 +57,27 @@ it to recover the real speaker IP from the `X-Forwarded-For` header.
 Enable it in `data/settings.json`:
 
 - Set `"trust_forwarded_headers": true`.
-- Set `"trusted_proxy_cidrs"` to your proxy's own IP range(s), for example
-  `["10.0.0.0/8"]`. It defaults to loopback (`127.0.0.0/8`, `::1/128`), which
-  already covers a proxy running on the same host.
+- Set `"trusted_proxy_cidrs"` to your proxy's own source IP range(s) **as
+  AfterTouch sees them**, for example `["10.0.0.0/8"]`. It defaults to loopback
+  (`127.0.0.0/8`, `::1/128`), which already covers a proxy on the same host.
+  When the proxy runs in a separate Docker container, the address AfterTouch
+  sees is usually the Docker bridge gateway/subnet (e.g. `172.16.0.0/12`), not
+  the proxy's published address.
 
 Make sure the proxy sets the header (nginx:
 `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Only
 `X-Forwarded-For` is consulted (not `X-Real-IP` or `True-Client-IP`).
 
-| Deployment                                        | `trust_forwarded_headers` | Client IP AfterTouch uses                                                              |
-|---------------------------------------------------|---------------------------|----------------------------------------------------------------------------------------|
-| Direct LAN / on-device (no proxy)                 | `false` (default)         | the connecting socket's IP; `X-Forwarded-For` is ignored                               |
-| Behind a proxy listed in `trusted_proxy_cidrs`    | `true`                    | the rightmost `X-Forwarded-For` entry outside `trusted_proxy_cidrs` (the real speaker) |
-| A request that did not arrive via a trusted proxy | `true`                    | the socket IP; its `X-Forwarded-For` is ignored (spoofing protection)                  |
+The trust decision is made on the **immediate TCP connection**: AfterTouch
+reads `X-Forwarded-For` only when the connecting socket's own source IP is in
+`trusted_proxy_cidrs`. That socket address is the real connection, so an
+`X-Forwarded-For` header cannot forge it.
+
+| Deployment                                                          | `trust_forwarded_headers` | Client IP AfterTouch uses                                                              |
+|---------------------------------------------------------------------|---------------------------|----------------------------------------------------------------------------------------|
+| Direct LAN / on-device (no proxy)                                   | `false` (default)         | the connecting socket's IP; `X-Forwarded-For` is ignored                               |
+| Behind a proxy whose socket IP is in `trusted_proxy_cidrs`          | `true`                    | the rightmost `X-Forwarded-For` entry outside `trusted_proxy_cidrs` (the real speaker) |
+| A direct connection whose socket IP is not in `trusted_proxy_cidrs` | `true`                    | the socket IP; `X-Forwarded-For` is ignored (spoofing protection)                      |
 
 > **Do not enable `trust_forwarded_headers` on a flat LAN with no proxy.** A
 > malicious speaker could then send `X-Forwarded-For` itself and spoof its
