@@ -93,5 +93,6 @@ Older planning artefacts ("Enhanced State Management System", "Upstream Service 
 - **Questions & Discussion**: [GitHub Discussions](https://github.com/gesellix/Bose-SoundTouch/discussions)
 - **Documentation**: Check troubleshooting guides first
 - **Community**: Share experiences and help others
+- **Direct chat (last resort)**: There's a small Discord for the rare case where an email exchange or an issue/discussion thread needs real-time back-and-forth. It's not a primary support channel: please start with Issues or Discussions. If a conversation genuinely needs it, ask in your thread and I'll share an invite.
 
 For a complete list of all documents, browse the sections in the sidebar.
