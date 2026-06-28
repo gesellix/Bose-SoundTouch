@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"math/big"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -244,7 +243,7 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Marge] Failed to parse power_on body: %v", err)
 
 		// Fallback to remote address if body parsing fails
-		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if host := clientHost(r); host != "" {
 			go s.PrimeDeviceWithSpotify(host)
 		}
 
@@ -292,14 +291,11 @@ func (s *Server) HandleMargePowerOn(w http.ResponseWriter, r *http.Request) {
 	// Prefer the TCP source address over the body's self-reported IP for
 	// any outbound credential push. The body field is attacker-controllable
 	// (a malicious LAN-resident speaker can set it to any value), while
-	// r.RemoteAddr is the actual peer — and if the service runs behind a
-	// trusted reverse proxy, the TrustedRealIP middleware has already
-	// rewritten it from X-Real-IP / X-Forwarded-For. We log when the two
+	// clientHost(r) is the actual peer — and if the service runs behind a
+	// trusted reverse proxy, the ClientIP middleware has already populated
+	// the context from X-Forwarded-For. We log when the two
 	// disagree so the discrepancy is investigable but never trust the body.
-	remoteHost := ""
-	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		remoteHost = h
-	}
+	remoteHost := clientHost(r)
 
 	if deviceIP != "" && remoteHost != "" && deviceIP != remoteHost {
 		log.Printf("[Marge] power_on body IP %q differs from TCP source %q for device %s — using TCP source for credential push",
@@ -588,7 +584,7 @@ func (s *Server) HandleMargeAddDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body, r.RemoteAddr)
+	deviceID, data, err := marge.AddDeviceToAccount(s.ds, account, body, clientHost(r))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -657,7 +653,7 @@ func (s *Server) HandleMargeUpdateDevice(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, data, err := marge.AddDeviceToAccount(s.ds, account, body, r.RemoteAddr)
+	_, data, err := marge.AddDeviceToAccount(s.ds, account, body, clientHost(r))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

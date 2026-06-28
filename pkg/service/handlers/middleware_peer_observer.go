@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"net"
 	"net/http"
 	"time"
 
@@ -21,8 +20,7 @@ import (
 // request.
 func (s *Server) PeerObserverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err == nil && host != "" {
+		if host := clientHost(r); host != "" {
 			s.peerObserver.Signal(host, setup.PeerHit{Path: r.URL.Path, At: time.Now()})
 		}
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const (
@@ -145,6 +146,17 @@ func clientHostFromRemoteAddr(remoteAddr string) string {
 	}
 
 	return remoteAddr
+}
+
+// clientHost returns the resolved client IP for r: chi's middleware.GetClientIP
+// (populated by the ClientIP middleware) when set, falling back to the socket
+// peer host from r.RemoteAddr. Returns a bare IP (no port).
+func clientHost(r *http.Request) string {
+	if ip := middleware.GetClientIP(r.Context()); ip != "" {
+		return ip
+	}
+
+	return clientHostFromRemoteAddr(r.RemoteAddr)
 }
 
 // dnsProbeSpeakerRequest is the JSON body for POST /setup/health/dns-path-probe.

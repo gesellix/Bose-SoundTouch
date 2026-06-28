@@ -151,7 +151,7 @@ func buildCustomPlaybackURL(base, audioURL, name string) string {
 func (s *Server) HandleSpeakerAuth(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get("Apikeyheader")
 	if token != "" && s.authProbes != nil {
-		if s.authProbes.observe(token, clientHostFromRemoteAddr(r.RemoteAddr)) {
+		if s.authProbes.observe(token, clientHost(r)) {
 			// Active DNS-path probe: the callback arrival already proved the
 			// speaker resolved a Bose host through AfterTouch. Returning 403
 			// makes the speaker treat the key as invalid and refuse the

@@ -2224,11 +2224,11 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 // handlers — the persistence layer doesn't distinguish; only the
 // response status differs.
 //
-// remoteAddr is the speaker's address as seen by the HTTP server
-// (r.RemoteAddr, "host:port"). When the request body doesn't carry
-// an `<ipaddress>` and the datastore has no IP for this device yet,
-// we fall back to remoteAddr's host portion. An empty remoteAddr
-// is treated as "no fallback available" — never errors.
+// clientHost is the speaker's resolved client IP (bare IP, no port),
+// as returned by handlers.clientHost(r). When the request body doesn't
+// carry an `<ipaddress>` and the datastore has no IP for this device
+// yet, we fall back to clientHost. An empty or non-IP clientHost is
+// treated as "no fallback available" — never errors.
 //
 // Timestamps:
 //   - CreatedOn is preserved from any existing datastore record so a
@@ -2238,7 +2238,7 @@ func formatRecentResponse(recentObj *models.ServiceRecent, matchingSrc *models.C
 //
 // Returns the persisted deviceID and the marge XML response shape
 // (`<device deviceid="…"><createdOn/><ipaddress/><name/><updatedOn/></device>`).
-func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte, remoteAddr string) (string, []byte, error) {
+func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byte, clientHost string) (string, []byte, error) {
 	var newDeviceElem struct {
 		DeviceID   string `xml:"deviceid,attr"`
 		Name       string `xml:"name"`
@@ -2277,14 +2277,12 @@ func AddDeviceToAccount(ds *datastore.DataStore, account string, sourceXML []byt
 	// hitting us through a different network path right now, e.g.
 	// SSH port-forward, and the persisted IP is the one other
 	// flows like DNS hints care about). Fall back to the inbound
-	// connection's remote address only when there's no existing
-	// IP to preserve. Invalid remoteAddr leaves info.IPAddress
-	// empty, which the merge then handles.
+	// connection's client host only when there's no existing
+	// IP to preserve. An empty or non-IP clientHost leaves
+	// info.IPAddress empty, which the merge then handles.
 	if existing == nil || existing.IPAddress == "" {
-		if remoteAddr != "" {
-			if host, _, splitErr := net.SplitHostPort(remoteAddr); splitErr == nil {
-				info.IPAddress = host
-			}
+		if clientHost != "" && net.ParseIP(clientHost) != nil {
+			info.IPAddress = clientHost
 		}
 	}
 

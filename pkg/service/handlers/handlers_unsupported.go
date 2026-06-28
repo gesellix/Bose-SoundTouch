@@ -25,7 +25,7 @@ const maxUnsupportedBodyLog = 2048
 // relies on the route we find out and restore it instead of silently breaking
 // it during the refactor.
 func (s *Server) HandleUnsupported(w http.ResponseWriter, r *http.Request) {
-	client := clientHostFromRemoteAddr(r.RemoteAddr)
+	client := clientHost(r)
 
 	var body []byte
 	if r.Body != nil {

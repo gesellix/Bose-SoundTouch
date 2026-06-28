@@ -78,7 +78,7 @@ func (s *Server) DeprecatedRouteMiddleware(next http.Handler) http.Handler {
 		if s.deprecatedRoutes.record(key) {
 			log.Printf("[deprecated-route] %s used by client=%s — use /api%s instead; "+
 				"the legacy path still works but is slated for removal in a future major release",
-				sanitizeLog(key), sanitizeLog(clientHostFromRemoteAddr(r.RemoteAddr)), sanitizeLog(pattern))
+				sanitizeLog(key), sanitizeLog(clientHost(r)), sanitizeLog(pattern))
 		}
 	})
 }
