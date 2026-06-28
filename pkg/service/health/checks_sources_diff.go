@@ -41,7 +41,7 @@ type speakerSourcesXML struct {
 func RegisterSourcesXMLDiff(r *Registry, ds *datastore.DataStore) {
 	r.Register(Check{
 		ID:    CheckIDSourcesXMLDiff,
-		Title: "Speaker /sources matches service Sources.xml",
+		Title: "Speaker /sources should match service Sources.xml",
 		Run: func() []Finding {
 			return runSourcesXMLDiff(ds)
 		},
