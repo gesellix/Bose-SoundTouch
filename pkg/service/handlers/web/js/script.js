@@ -4305,14 +4305,16 @@ function renderFinding(checkId, finding) {
     row.appendChild(title);
 
     const target = finding.target || {};
-    if (target.account || target.device) {
+    if (target.account || target.device || target.name || target.ip) {
         const t = document.createElement("div");
         t.style.fontSize = "0.8em";
         t.style.color = "#666";
         t.style.marginTop = "4px";
         const parts = [];
+        if (target.name) parts.push(target.name);
         if (target.account) parts.push(`account ${target.account}`);
         if (target.device) parts.push(`device ${target.device}`);
+        if (target.ip) parts.push(target.ip);
         t.textContent = parts.join(" · ");
         row.appendChild(t);
     }

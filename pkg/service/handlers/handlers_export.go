@@ -781,7 +781,7 @@ func (s *Server) buildDiagnosticReport(redirectCfgs map[string]*redirectConfig) 
 	}
 
 	if s.healthRegistry != nil {
-		report.HealthChecks = s.healthRegistry.RunAll()
+		report.HealthChecks = s.runHealthChecks()
 	}
 
 	devices, err := s.ds.ListAllDevices()

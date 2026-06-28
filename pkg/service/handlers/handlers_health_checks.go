@@ -44,7 +44,7 @@ func (s *Server) HandleHealthChecks(w http.ResponseWriter, _ *http.Request) {
 
 	resp := healthChecksResponse{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		Checks:      s.healthRegistry.RunAll(),
+		Checks:      s.runHealthChecks(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -53,6 +53,38 @@ func (s *Server) HandleHealthChecks(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+// runHealthChecks runs every registered check and enriches each
+// per-device finding's Target with the device name and IP (display
+// only) so the UI and the diagnostic export can show a friendly label
+// instead of bare IDs. Shared by the live health endpoint and the
+// diagnostic export.
+func (s *Server) runHealthChecks() []health.CheckResult {
+	results := s.healthRegistry.RunAll()
+
+	if s.ds == nil {
+		return results
+	}
+
+	devices, err := s.ds.ListAllDevices()
+	if err != nil {
+		return results
+	}
+
+	name := make(map[string]string, len(devices))
+	ip := make(map[string]string, len(devices))
+
+	for i := range devices {
+		name[devices[i].DeviceID] = devices[i].Name
+		ip[devices[i].DeviceID] = devices[i].IPAddress
+	}
+
+	health.EnrichTargets(results, func(deviceID string) (string, string) {
+		return name[deviceID], ip[deviceID]
+	})
+
+	return results
 }
 
 // HandleHealthFix dispatches a quick-fix identified by

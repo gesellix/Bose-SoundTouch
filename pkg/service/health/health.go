@@ -32,14 +32,21 @@ const (
 	SeverityError   Severity = "error"
 )
 
-// Target identifies what a Finding is about. Both fields are
+// Target identifies what a Finding is about. Account and Device are
 // optional: a service-wide finding leaves both empty, a
 // per-account finding fills Account only, and the common
 // per-device case fills both. The UI displays the populated fields
 // as a small label next to the finding.
+//
+// Name and IP are display-only conveniences for per-device findings,
+// filled in centrally by EnrichTargets after the checks run (the
+// checks themselves don't all have them in scope). Fixes match on
+// Account+Device only, so these never affect RunFix dispatch.
 type Target struct {
 	Account string `json:"account,omitempty"`
 	Device  string `json:"device,omitempty"`
+	Name    string `json:"name,omitempty"`
+	IP      string `json:"ip,omitempty"`
 }
 
 // QuickFix is a remediation a user can trigger from the UI with a
@@ -205,6 +212,36 @@ func (r *Registry) RunAll() []CheckResult {
 	}
 
 	return out
+}
+
+// EnrichTargets fills the display-only Name and IP on every finding
+// Target that carries a Device but doesn't already have them, using
+// resolve. resolve should return ("", "") for an unknown device, which
+// leaves the Target unchanged. A nil resolve is a no-op. This is a
+// post-processing pass so individual checks don't each have to look up
+// the device record just to label their findings.
+func EnrichTargets(results []CheckResult, resolve func(deviceID string) (name, ip string)) {
+	if resolve == nil {
+		return
+	}
+
+	for i := range results {
+		for j := range results[i].Findings {
+			t := &results[i].Findings[j].Target
+			if t.Device == "" || (t.Name != "" && t.IP != "") {
+				continue
+			}
+
+			name, ip := resolve(t.Device)
+			if t.Name == "" {
+				t.Name = name
+			}
+
+			if t.IP == "" {
+				t.IP = ip
+			}
+		}
+	}
 }
 
 // RunFix dispatches to the FixFunc registered for (checkID, fixID).

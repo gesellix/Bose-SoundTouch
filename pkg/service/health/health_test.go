@@ -99,3 +99,46 @@ func TestRegistry_Register_ReplacesByID(t *testing.T) {
 		t.Errorf("expected title to be replaced, got %q", results[0].Title)
 	}
 }
+
+func TestEnrichTargets_FillsNameAndIPForDeviceFindings(t *testing.T) {
+	results := []CheckResult{{
+		ID: "c1",
+		Findings: []Finding{
+			{Target: Target{Account: "3230304", Device: "08DF1F0BA325"}}, // per-device: enriched
+			{Target: Target{Account: "3230304"}},                         // account-only: untouched
+			{Target: Target{}},                                           // service-wide: untouched
+			{Target: Target{Device: "UNKNOWNDEV"}},                       // not in resolver: left as-is
+		},
+	}}
+
+	resolve := func(deviceID string) (string, string) {
+		if deviceID == "08DF1F0BA325" {
+			return "Cantina", "192.0.2.9"
+		}
+		return "", ""
+	}
+
+	EnrichTargets(results, resolve)
+
+	got := results[0].Findings
+	if got[0].Target.Name != "Cantina" || got[0].Target.IP != "192.0.2.9" {
+		t.Errorf("per-device finding not enriched: %+v", got[0].Target)
+	}
+	if got[1].Target.Name != "" || got[1].Target.IP != "" {
+		t.Errorf("account-only finding should be untouched: %+v", got[1].Target)
+	}
+	if got[2].Target.Name != "" || got[2].Target.IP != "" {
+		t.Errorf("service-wide finding should be untouched: %+v", got[2].Target)
+	}
+	if got[3].Target.Name != "" || got[3].Target.IP != "" {
+		t.Errorf("unknown device should be left as-is: %+v", got[3].Target)
+	}
+}
+
+func TestEnrichTargets_NilResolveIsNoOp(t *testing.T) {
+	results := []CheckResult{{Findings: []Finding{{Target: Target{Device: "D1"}}}}}
+	EnrichTargets(results, nil) // must not panic
+	if results[0].Findings[0].Target.Name != "" {
+		t.Error("nil resolve should be a no-op")
+	}
+}
