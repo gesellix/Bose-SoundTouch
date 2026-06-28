@@ -1232,14 +1232,12 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 	// every downstream middleware and the recorder see the cleaned path.
 	r.Use(middleware.CleanPath)
 
-	// TrustedRealIP must run before any handler that reads r.RemoteAddr —
+	// ClientIPMiddleware must run before any handler that reads the client IP —
 	// SnapshotMiddleware captures the request, and several handlers
-	// (HandleMargePowerOn, etc.) inspect the source IP. The middleware is
-	// gated on Settings.TrustForwardedHeaders; when off (the safe default),
-	// it returns nil and we skip Use'ing it entirely.
-	if mw := server.TrustedRealIPMiddleware(); mw != nil {
-		r.Use(mw)
-	}
+	// (HandleMargePowerOn, etc.) inspect the source IP via middleware.GetClientIP.
+	// Always wired: at minimum the socket peer is recorded; when
+	// TrustForwardedHeaders is on and the peer is trusted, XFF is resolved.
+	r.Use(server.ClientIPMiddleware())
 
 	r.Use(server.SnapshotMiddleware)
 	r.Use(server.OriginMiddleware)

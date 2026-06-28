@@ -485,33 +485,26 @@ func (s *Server) loadOwnCACert() *x509.Certificate {
 	return s.ownCACache.cert
 }
 
-// TrustedRealIPMiddleware returns a chi middleware that rewrites
-// r.RemoteAddr from X-Real-IP / X-Forwarded-For / True-Client-IP, but only
-// when the immediate TCP peer is in the configured trusted-proxy list.
-// Returns nil when Settings.TrustForwardedHeaders is false (the safe
-// default), so the caller can skip wiring the middleware entirely.
+// ClientIPMiddleware returns a chi middleware that resolves the client IP into
+// the request context (read via middleware.GetClientIP). Always returns a
+// non-nil middleware: at minimum, the socket peer is recorded.
+//
+// When Settings.TrustForwardedHeaders is true and the immediate TCP peer is in
+// the configured trusted-proxy list, the X-Forwarded-For header is also
+// consulted: chi walks the chain right-to-left, skipping entries that fall
+// within the trusted CIDRs, and stores the first untrusted entry as the client.
 //
 // The trusted-peer gate prevents the typical X-Forwarded-* spoofing surface:
 // on a flat LAN where a malicious speaker could send the headers itself, we
 // won't honour them; behind a documented reverse proxy on loopback we will.
-func (s *Server) TrustedRealIPMiddleware() func(http.Handler) http.Handler {
+func (s *Server) ClientIPMiddleware() func(http.Handler) http.Handler {
 	settings, err := s.ds.GetSettings()
 	if err != nil {
-		log.Printf("[RealIP] failed to load settings: %v — skipping forwarded-header trust", err)
-		return nil
+		log.Printf("[ClientIP] failed to load settings: %v - falling back to peer-only", err)
+		return clientIPMiddleware(false, nil, nil)
 	}
 
-	if !settings.TrustForwardedHeaders {
-		return nil
-	}
-
-	cidrs, err := ParseTrustedProxyCIDRs(settings.TrustedProxyCIDRs)
-	if err != nil {
-		log.Printf("[RealIP] invalid trusted_proxy_cidrs: %v — skipping forwarded-header trust", err)
-		return nil
-	}
-
-	return TrustedRealIP(cidrs)
+	return buildClientIPMiddleware(settings.TrustForwardedHeaders, settings.TrustedProxyCIDRs)
 }
 
 // SetVersionInfo sets the version information for the server.
