@@ -16,16 +16,37 @@ import (
 )
 
 func TestCertChain_EmptyURLSkips(t *testing.T) {
-	got := runCertChainCheck("", nil)
+	got := runCertChainCheck("", "", nil)
 	if len(got) != 0 {
 		t.Errorf("expected no findings for empty URL, got %+v", got)
 	}
 }
 
 func TestCertChain_UnparseableURLWarns(t *testing.T) {
-	got := runCertChainCheck("://nope", nil)
+	got := runCertChainCheck("://nope", "", nil)
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning, got %+v", got)
+	}
+}
+
+func TestCertChain_PortMismatch_NamesBothPortsAndFix(t *testing.T) {
+	// Regression for issue #355: the advertised HTTPS URL carries a
+	// different port (here the 443 default, from a port-less URL)
+	// than the actual listener (8443). When that endpoint is also
+	// unreachable, the warning must name both ports and offer the
+	// corrected HTTPS_SERVER_URL, since the URL isn't editable in
+	// the web UI. 127.0.0.1:443 is unreachable in the test sandbox.
+	got := runCertChainCheck("https://127.0.0.1/", "8443", nil)
+	if len(got) != 1 || got[0].Severity != SeverityWarning {
+		t.Fatalf("expected one warning for port mismatch, got %+v", got)
+	}
+
+	if !strings.Contains(got[0].Message, "443") || !strings.Contains(got[0].Message, "8443") {
+		t.Errorf("expected message to name both the advertised (443) and listener (8443) ports, got %q", got[0].Message)
+	}
+
+	if len(got[0].ManualCommands) == 0 || !strings.Contains(got[0].ManualCommands[0].Command, "https://127.0.0.1:8443") {
+		t.Errorf("expected a corrected HTTPS_SERVER_URL suggestion, got %+v", got[0].ManualCommands)
 	}
 }
 
@@ -39,7 +60,7 @@ func TestCertChain_UnreachableEndpoint_IsWarningNotError(t *testing.T) {
 	// explains the expected case and offers a client-side check.
 	//
 	// 127.0.0.1:1 refuses; using https:// to force the TLS path.
-	got := runCertChainCheck("https://127.0.0.1:1/", nil)
+	got := runCertChainCheck("https://127.0.0.1:1/", "", nil)
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning for unreachable endpoint, got %+v", got)
 	}
@@ -60,7 +81,7 @@ func TestCertChain_SelfSigned_SubjectEqualsIssuerFallback(t *testing.T) {
 	// No CA provided → fallback to Subject==Issuer heuristic.
 	// This is informational, not a warning — a self-signed
 	// AfterTouch chain is the expected default deployment shape.
-	got := runCertChainCheck(srv.URL, nil)
+	got := runCertChainCheck(srv.URL, "", nil)
 	if len(got) != 1 || got[0].Severity != SeverityInfo {
 		t.Fatalf("expected one info finding for self-signed cert, got %+v", got)
 	}
@@ -111,7 +132,7 @@ func TestCertChain_LeafSignedByOwnCA_IsInformationalNotAWarning(t *testing.T) {
 	srv.StartTLS()
 	defer srv.Close()
 
-	got := runCertChainCheck(srv.URL, func() *x509.Certificate { return ca })
+	got := runCertChainCheck(srv.URL, "", func() *x509.Certificate { return ca })
 	if len(got) != 1 {
 		t.Fatalf("expected one finding, got %+v", got)
 	}
@@ -160,7 +181,7 @@ func TestCertChain_ForeignChain_SuggestsOpenSSL(t *testing.T) {
 	// Different CA — pretend it's "our" AfterTouch CA.
 	_, ourCA := generateInternalCA(t)
 
-	got := runCertChainCheck(srv.URL, func() *x509.Certificate { return ourCA })
+	got := runCertChainCheck(srv.URL, "", func() *x509.Certificate { return ourCA })
 	if len(got) != 1 || got[0].Severity != SeverityWarning {
 		t.Fatalf("expected one warning, got %+v", got)
 	}

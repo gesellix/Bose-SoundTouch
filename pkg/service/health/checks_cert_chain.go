@@ -29,27 +29,40 @@ const CheckIDCertChain = "service_cert_chain"
 //     something else → warning with an `openssl s_client`
 //     investigation prompt (foreign chain / reverse proxy /
 //     ingress cert).
-//   - endpoint not reachable from inside the service (no cert
-//     presented) → warning, not error: the advertised HTTPS URL
-//     is often intentionally unreachable from the service itself
-//     (reverse proxy, Docker-published port, LAN-only hostname).
+//   - endpoint not reachable AND the advertised URL's port differs
+//     from the actual listener port → warning naming both ports
+//     and the fix (issue #355: the advertised URL, invisible in
+//     the web UI, defaulted to 443 while the listener was on 8443).
+//   - endpoint not reachable with no port mismatch → warning, not
+//     error: the advertised HTTPS URL is often intentionally
+//     unreachable from the service itself (reverse proxy,
+//     Docker-published port, LAN-only hostname).
 //   - HTTPS URL not configured → skip silently.
 //
 // caCertFn returns AfterTouch's own CA leaf certificate (nil if
 // unavailable). It's called per check run; the handler-side
 // implementation caches the parse via sync.Once so we don't
 // re-read the PEM on every poll.
-func RegisterCertChainCheck(r *Registry, httpsURLFn func() string, caCertFn func() *x509.Certificate) {
+// actualHTTPSPortFn returns the port the HTTPS listener is actually
+// bound to (e.g. "8443"), or "" if unknown. It lets the check
+// distinguish a genuine "advertised URL points at the wrong port"
+// misconfiguration from an intentionally-unreachable advertised URL.
+func RegisterCertChainCheck(r *Registry, httpsURLFn, actualHTTPSPortFn func() string, caCertFn func() *x509.Certificate) {
 	r.Register(Check{
 		ID:    CheckIDCertChain,
 		Title: "HTTPS endpoint TLS configuration",
 		Run: func() []Finding {
-			return runCertChainCheck(httpsURLFn(), caCertFn)
+			actualPort := ""
+			if actualHTTPSPortFn != nil {
+				actualPort = actualHTTPSPortFn()
+			}
+
+			return runCertChainCheck(httpsURLFn(), actualPort, caCertFn)
 		},
 	})
 }
 
-func runCertChainCheck(httpsURL string, caCertFn func() *x509.Certificate) []Finding {
+func runCertChainCheck(httpsURL, actualHTTPSPort string, caCertFn func() *x509.Certificate) []Finding {
 	if strings.TrimSpace(httpsURL) == "" {
 		return nil
 	}
@@ -87,12 +100,39 @@ func runCertChainCheck(httpsURL string, caCertFn func() *x509.Certificate) []Fin
 	leaf := leafFromVerifyError(err)
 	if leaf == nil {
 		// The dial failed before any certificate was presented
-		// (connection refused, timeout, handshake reset). From
-		// inside the service we can't tell "the endpoint is down"
-		// apart from "the advertised HTTPS URL simply isn't
-		// reachable from here" — the latter is a normal, healthy
-		// setup (TLS terminated by a reverse proxy, or a
-		// Docker-published port / external hostname that only
+		// (connection refused, timeout, handshake reset).
+		//
+		// Special-case the misconfiguration behind issue #355: the
+		// HTTPS URL the service advertises (and points speakers at)
+		// carries a different port than the one the listener is
+		// actually bound to. This is easy to hit because the URL
+		// comes from --https-server-url / HTTPS_SERVER_URL / the
+		// settings file and, when it omits the port, defaults to
+		// 443 here — while the listener stays on --https-port
+		// (default 8443). The URL isn't editable in the web UI, so
+		// the mismatch is otherwise invisible. Call it out with the
+		// fix. (A reachable endpoint never gets here — a working
+		// reverse proxy on the advertised port dials fine above.)
+		if actualHTTPSPort != "" && port != actualHTTPSPort {
+			return []Finding{{
+				Severity: SeverityWarning,
+				Message:  fmt.Sprintf("Configured HTTPS URL %s uses port %s, but the service is listening on port %s and nothing answered on port %s.", httpsURL, port, actualHTTPSPort, port),
+				Details: fmt.Sprintf("Speakers are pointed at the configured HTTPS URL, so if its port doesn't match the listener they connect to the wrong place. This URL is set via --https-server-url / HTTPS_SERVER_URL (or the persisted settings file) and isn't editable in the web UI, which makes the mismatch easy to miss. Set it to include the listener's port, e.g. https://%s:%s. If a reverse proxy intentionally forwards port %s to %s, this is expected and can be ignored. Underlying error: %v.",
+					host, actualHTTPSPort, port, actualHTTPSPort, err),
+				ManualCommands: []ManualCommand{{
+					Label:   "Point the HTTPS URL at the listener's port (restart required):",
+					Command: fmt.Sprintf("HTTPS_SERVER_URL=https://%s:%s", host, actualHTTPSPort),
+					Hint:    "Or pass --https-server-url. Skip this if a reverse proxy already maps the ports.",
+				}},
+			}}
+		}
+
+		// Otherwise: a reachability failure with no port mismatch to
+		// point at. From inside the service we can't tell "the
+		// endpoint is down" apart from "the advertised HTTPS URL
+		// simply isn't reachable from here" — the latter is a
+		// normal, healthy setup (TLS terminated by a reverse proxy,
+		// or a Docker-published port / external hostname that only
 		// resolves on the LAN). Reporting a hard error there is a
 		// false alarm (issue #355), so this is a warning with the
 		// context to tell the two apart.

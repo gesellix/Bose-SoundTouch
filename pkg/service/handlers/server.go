@@ -41,6 +41,7 @@ type Server struct {
 	mu                       sync.RWMutex
 	serverURL                string
 	httpsServerURL           string
+	httpsListenAddr          string
 	discovering              bool
 	redactLogs               bool
 	logBodies                bool
@@ -149,6 +150,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 			_, httpsURL := s.GetSettings()
 			return httpsURL
 		},
+		s.actualHTTPSPort,
 		s.loadOwnCACert,
 	)
 	health.RegisterCACertExpiryCheck(s.healthRegistry, s.loadOwnCACert, s.ownCACertPath)
@@ -799,6 +801,35 @@ func (s *Server) SetHTTPServerURL(url string) {
 	defer s.mu.Unlock()
 
 	s.httpsServerURL = url
+}
+
+// SetHTTPSListenAddr records the address the HTTPS listener is bound
+// to (e.g. ":8443"). The cert-chain health check uses its port to
+// detect an advertised-URL/listener port mismatch (issue #355).
+func (s *Server) SetHTTPSListenAddr(addr string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.httpsListenAddr = addr
+}
+
+// actualHTTPSPort returns the port the HTTPS listener is bound to, or
+// "" if unknown/unparseable.
+func (s *Server) actualHTTPSPort() string {
+	s.mu.RLock()
+	addr := s.httpsListenAddr
+	s.mu.RUnlock()
+
+	if addr == "" {
+		return ""
+	}
+
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return ""
+	}
+
+	return port
 }
 
 // SetRecorder sets the recorder for the server.

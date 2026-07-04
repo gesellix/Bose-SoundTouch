@@ -519,6 +519,7 @@ func main() {
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetLogBuffer(logBuf)
 			server.SetHTTPServerURL(config.httpsServerURL)
+			server.SetHTTPSListenAddr(config.httpsAddr)
 			server.SetExpectedHosts(config.domains)
 			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
