@@ -641,27 +641,28 @@ func (s *Server) addSystemFiles(tw *tar.Writer) {
 // diagSettings is a copy of datastore.Settings with secrets zeroed out so the
 // struct can be marshalled into the archive without exposing credentials.
 type diagSettings struct {
-	ServerURL             string         `json:"server_url"`
-	HTTPSServerURL        string         `json:"https_server_url,omitempty"`
-	RedactLogs            bool           `json:"redact_logs"`
-	LogBodies             bool           `json:"log_bodies"`
-	RecordInteractions    bool           `json:"record_interactions"`
-	DiscoveryInterval     string         `json:"discovery_interval,omitempty"`
-	DiscoveryEnabled      bool           `json:"discovery_enabled"`
-	DNSEnabled            bool           `json:"dns_enabled"`
-	DNSUpstream           []string       `json:"dns_upstream,omitempty"`
-	DNSBindAddr           string         `json:"dns_bind_addr,omitempty"`
-	InternalPaths         []string       `json:"internal_paths,omitempty"`
-	Shortcuts             map[string]int `json:"shortcuts,omitempty"`
-	SpotifyClientID       string         `json:"spotify_client_id,omitempty"`
-	SpotifyClientSecret   string         `json:"spotify_client_secret,omitempty"`
-	SpotifyRedirectURI    string         `json:"spotify_redirect_uri,omitempty"`
-	AmazonClientID        string         `json:"amazon_client_id,omitempty"`
-	AmazonClientSecret    string         `json:"amazon_client_secret,omitempty"`
-	AmazonRedirectURI     string         `json:"amazon_redirect_uri,omitempty"`
-	TrustForwardedHeaders bool           `json:"trust_forwarded_headers,omitempty"`
-	TrustedProxyCIDRs     []string       `json:"trusted_proxy_cidrs,omitempty"`
-	TuneInStreamFormats   string         `json:"tunein_stream_formats,omitempty"`
+	ServerURL              string         `json:"server_url"`
+	HTTPSServerURL         string         `json:"https_server_url,omitempty"`
+	HTTPSServerURLOverride string         `json:"https_server_url_override,omitempty"`
+	RedactLogs             bool           `json:"redact_logs"`
+	LogBodies              bool           `json:"log_bodies"`
+	RecordInteractions     bool           `json:"record_interactions"`
+	DiscoveryInterval      string         `json:"discovery_interval,omitempty"`
+	DiscoveryEnabled       bool           `json:"discovery_enabled"`
+	DNSEnabled             bool           `json:"dns_enabled"`
+	DNSUpstream            []string       `json:"dns_upstream,omitempty"`
+	DNSBindAddr            string         `json:"dns_bind_addr,omitempty"`
+	InternalPaths          []string       `json:"internal_paths,omitempty"`
+	Shortcuts              map[string]int `json:"shortcuts,omitempty"`
+	SpotifyClientID        string         `json:"spotify_client_id,omitempty"`
+	SpotifyClientSecret    string         `json:"spotify_client_secret,omitempty"`
+	SpotifyRedirectURI     string         `json:"spotify_redirect_uri,omitempty"`
+	AmazonClientID         string         `json:"amazon_client_id,omitempty"`
+	AmazonClientSecret     string         `json:"amazon_client_secret,omitempty"`
+	AmazonRedirectURI      string         `json:"amazon_redirect_uri,omitempty"`
+	TrustForwardedHeaders  bool           `json:"trust_forwarded_headers,omitempty"`
+	TrustedProxyCIDRs      []string       `json:"trusted_proxy_cidrs,omitempty"`
+	TuneInStreamFormats    string         `json:"tunein_stream_formats,omitempty"`
 }
 
 // addSettingsJSON serialises the service settings into the archive as
@@ -683,28 +684,35 @@ func (s *Server) addSettingsJSON(tw *tar.Writer) {
 		return ""
 	}
 
+	// st.HTTPServerURL is the HTTPS override (empty = derive). Report the
+	// effective URL actually in use plus the override, so a diagnostic
+	// makes an advertised-URL/listener mismatch (issue #355) legible
+	// instead of showing an empty field when the URL is derived.
+	_, effectiveHTTPSURL := s.GetSettings()
+
 	ds := diagSettings{
-		ServerURL:             st.ServerURL,
-		HTTPSServerURL:        st.HTTPServerURL,
-		RedactLogs:            st.RedactLogs,
-		LogBodies:             st.LogBodies,
-		RecordInteractions:    st.RecordInteractions,
-		DiscoveryInterval:     st.DiscoveryInterval,
-		DiscoveryEnabled:      st.DiscoveryEnabled,
-		DNSEnabled:            st.DNSEnabled,
-		DNSUpstream:           st.DNSUpstream,
-		DNSBindAddr:           st.DNSBindAddr,
-		InternalPaths:         st.InternalPaths,
-		Shortcuts:             st.Shortcuts,
-		SpotifyClientID:       st.SpotifyClientID,
-		SpotifyClientSecret:   redact(st.SpotifyClientSecret),
-		SpotifyRedirectURI:    st.SpotifyRedirectURI,
-		AmazonClientID:        st.AmazonClientID,
-		AmazonClientSecret:    redact(st.AmazonClientSecret),
-		AmazonRedirectURI:     st.AmazonRedirectURI,
-		TrustForwardedHeaders: st.TrustForwardedHeaders,
-		TrustedProxyCIDRs:     st.TrustedProxyCIDRs,
-		TuneInStreamFormats:   st.TuneInStreamFormats,
+		ServerURL:              st.ServerURL,
+		HTTPSServerURL:         effectiveHTTPSURL,
+		HTTPSServerURLOverride: st.HTTPServerURL,
+		RedactLogs:             st.RedactLogs,
+		LogBodies:              st.LogBodies,
+		RecordInteractions:     st.RecordInteractions,
+		DiscoveryInterval:      st.DiscoveryInterval,
+		DiscoveryEnabled:       st.DiscoveryEnabled,
+		DNSEnabled:             st.DNSEnabled,
+		DNSUpstream:            st.DNSUpstream,
+		DNSBindAddr:            st.DNSBindAddr,
+		InternalPaths:          st.InternalPaths,
+		Shortcuts:              st.Shortcuts,
+		SpotifyClientID:        st.SpotifyClientID,
+		SpotifyClientSecret:    redact(st.SpotifyClientSecret),
+		SpotifyRedirectURI:     st.SpotifyRedirectURI,
+		AmazonClientID:         st.AmazonClientID,
+		AmazonClientSecret:     redact(st.AmazonClientSecret),
+		AmazonRedirectURI:      st.AmazonRedirectURI,
+		TrustForwardedHeaders:  st.TrustForwardedHeaders,
+		TrustedProxyCIDRs:      st.TrustedProxyCIDRs,
+		TuneInStreamFormats:    st.TuneInStreamFormats,
 	}
 
 	data, err := json.MarshalIndent(ds, "", "  ")
