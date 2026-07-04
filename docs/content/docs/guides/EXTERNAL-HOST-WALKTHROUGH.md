@@ -55,7 +55,7 @@ installer defaults to port 80, not 8000) — open it in a browser.
 ### Other Linux hosts (systemd)
 
 Download the binary for your architecture from the
-[Releases page](https://github.com/gesellix/Bose-SoundTouch/releases), then
+[Downloads page](../downloads/_index.md), then
 install it as a systemd service — see [DEPLOYMENT.md](DEPLOYMENT.md) for the
 unit file template.
 
@@ -205,7 +205,7 @@ For configuration, service management, updates, and removal see the
 ### Installing soundtouch-player on other hosts
 
 Download the binary for your OS and architecture from the
-[Releases page](https://github.com/gesellix/Bose-SoundTouch/releases)
+[Downloads page](../downloads/_index.md)
 and run it directly:
 
 ```bash
@@ -239,7 +239,7 @@ slot.
 ### Alternatively — storing presets via soundtouch-cli (any machine on the LAN)
 
 Download the CLI for your machine from the
-[Releases page](https://github.com/gesellix/Bose-SoundTouch/releases), then:
+[Downloads page](../downloads/_index.md), then:
 
 ```bash
 # Play a custom radio stream on the speaker

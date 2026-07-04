@@ -362,6 +362,8 @@ jobs:
           - **soundtouch-cli**: command-line control of any device: playback, presets, sources, multiroom zones, discovery, and migration. Good for scripting and home automation.
           - **soundtouch-backup**: back up your Bose cloud account and each speaker's local state. \`soundtouch-backup all\` captures everything in one step.
 
+          Not sure which file to grab? The [Downloads page](https://gesellix.github.io/Bose-SoundTouch/docs/downloads/) explains which tool you need and which \`<os>-<arch>\` build matches your computer.
+
           ## Documentation
 
           Full guides, setup walkthroughs, and troubleshooting: https://gesellix.github.io/Bose-SoundTouch/

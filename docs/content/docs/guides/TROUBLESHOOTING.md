@@ -517,11 +517,27 @@ If `soundtouch-cli source content --source TUNEIN ...` returns `1005` on a reset
 
 **Cause:**
 
-Not fully understood. After an in-place migration the firmware does not activate the radio source **types** in its runtime, even though the entries exist in the speaker's persisted `Sources.xml`. This is firmware behaviour and we have not confirmed the exact trigger. (If you hit this, an encrypted diagnostic report taken **before** you reset the speaker is very helpful, and now includes the speaker's on-device `Sources.xml`. See the "Getting More Help" section below.)
+After some in-place migrations the speaker's **runtime** `bmxRegistryUrl` (and often `statsServerUrl`) are still pointing at the dead Bose cloud (`content.api.bose.io` / `events.api.bosecm.com`), even though the persisted config and `Sources.xml` look correct. Radio sources (TUNEIN, RADIO_BROWSER, LOCAL_INTERNET_RADIO, …) are published through the **BMX registry**, so while `bmxRegistryUrl` points at the dead cloud the speaker can't fetch them and they never mount. On some models a full reboot reconciles all four service URLs from the stored config; on others it does not. (If you hit this, an encrypted diagnostic report taken **before** you reset the speaker is very helpful, and now includes the speaker's on-device `Sources.xml`. See the "Getting More Help" section below.)
 
-**Workaround (confirmed by users):**
+**Workaround (preferred — non-destructive):**
 
-Factory reset the speaker, then re-migrate it:
+Re-run the migration with the **telnet** method, which writes all four service URLs directly onto the speaker's runtime. No factory reset, no DNS, no SSH:
+
+```bash
+soundtouch-cli --host <speaker-ip> setup migrate --method telnet --service-url http://<aftertouch-host>:8000
+```
+
+Then reboot the speaker (or use "Refresh sources"). Afterwards the Migration tab's cross-check should show `bmxRegistryUrl` / `statsServerUrl` on AfterTouch, and the radio sources activate.
+
+Notes:
+
+- This needs the speaker's telnet diagnostic port (`17000`) to be reachable. Most SoundTouch models expose it; some hardened firmware builds do not, in which case use the factory-reset fallback below.
+- It writes AfterTouch's address (`http://<aftertouch-host>:8000`) **straight onto the speaker**, so there is no `bose:8000` hostname for the speaker to resolve. That is why pointing the service at `http://bose:8000` and adding a `bose` entry to your server's `/etc/hosts` does **not** help: the speaker is a separate device and never reads that file. If you prefer to redirect in the network instead of writing on the device, enable AfterTouch's built-in DNS (Settings) and have the speaker use AfterTouch as its resolver — see the FRITZ!Box + AdGuard guide.
+- Get `soundtouch-cli` from the [Downloads page](../downloads/_index.md) if you don't already have it.
+
+**Workaround (fallback — factory reset):**
+
+If the telnet method isn't available for your model, factory reset the speaker, then re-migrate it:
 
 1. Factory reset (on most models: hold `1` + `−` for ~10 seconds).
 2. Reconnect the speaker to your network.

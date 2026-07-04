@@ -1,6 +1,6 @@
 ---
 title: "User Guides"
-weight: 1
+weight: 2
 sidebar:
   open: true
 ---

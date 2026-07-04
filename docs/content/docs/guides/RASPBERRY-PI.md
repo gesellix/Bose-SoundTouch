@@ -17,6 +17,9 @@ Run without a version argument, they install the **latest release** (resolved
 from GitHub's `releases/latest` redirect); pass a tag to pin a specific version.
 Each installer has a matching uninstaller (`uninstall.sh`, `uninstall-player.sh`).
 
+Prefer to grab a binary by hand, or need `soundtouch-cli` / `soundtouch-backup`
+too? See the [Downloads page](../downloads/_index.md).
+
 For a complete install-through-migration walkthrough see
 [EXTERNAL-HOST-WALKTHROUGH.md](EXTERNAL-HOST-WALKTHROUGH.md).
 Not sure whether to use a Pi or run AfterTouch on the speaker itself? See

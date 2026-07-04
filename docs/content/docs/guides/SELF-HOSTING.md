@@ -21,18 +21,18 @@ Good choices: a Raspberry Pi, a NAS (like Synology or QNAP), an always-on PC or 
 
 ## Step 1: Get the software
 
-Go to the [AfterTouch releases page](https://github.com/gesellix/Bose-SoundTouch/releases) and download the latest release for your operating system:
+See the **[Downloads page](../downloads/_index.md)** for the full list of builds and how to pick the right one for your system. You want the `soundtouch-service` tool; download the build whose suffix matches your computer:
 
 | Your system           | File to download                         |
 |-----------------------|------------------------------------------|
-| Raspberry Pi (64-bit) | `soundtouch-service_linux_arm64.tar.gz`  |
-| Raspberry Pi (32-bit) | `soundtouch-service_linux_arm.tar.gz`    |
-| Linux (64-bit PC)     | `soundtouch-service_linux_amd64.tar.gz`  |
-| macOS (Apple Silicon) | `soundtouch-service_darwin_arm64.tar.gz` |
-| macOS (Intel)         | `soundtouch-service_darwin_amd64.tar.gz` |
-| Windows               | `soundtouch-service_windows_amd64.zip`   |
+| Raspberry Pi (64-bit) | `soundtouch-service-vX.Y.Z-linux-arm64`  |
+| Raspberry Pi (32-bit) | `soundtouch-service-vX.Y.Z-linux-armv7`  |
+| Linux (64-bit PC)     | `soundtouch-service-vX.Y.Z-linux-amd64`  |
+| macOS (Apple Silicon) | `soundtouch-service-vX.Y.Z-darwin-arm64` |
+| macOS (Intel)         | `soundtouch-service-vX.Y.Z-darwin-amd64` |
+| Windows               | `soundtouch-service-vX.Y.Z-windows-amd64.exe` |
 
-Extract the archive. You will find a single file called `soundtouch-service` (or `soundtouch-service.exe` on Windows).
+(`X.Y.Z` is the current release version.) The download is a single ready-to-run executable called `soundtouch-service` (or `soundtouch-service.exe` on Windows) — no archive to extract.
 
 ### Alternative: Docker
 

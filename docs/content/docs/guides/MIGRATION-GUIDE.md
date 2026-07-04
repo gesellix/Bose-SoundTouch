@@ -22,9 +22,9 @@ Choose the option that fits your setup.
 
 ### Download a pre-built binary (no Go required)
 
-Download the latest release for your platform from the
-[GitHub releases page](https://github.com/gesellix/Bose-SoundTouch/releases).
-Unzip, make executable, and run:
+Download the `soundtouch-service` build for your platform from the
+[Downloads page](../downloads/_index.md) (it explains which file to pick).
+Make it executable and run:
 
 ```bash
 # Linux / macOS example

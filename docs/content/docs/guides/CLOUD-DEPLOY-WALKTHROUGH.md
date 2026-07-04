@@ -160,7 +160,7 @@ migration must be driven from `soundtouch-cli` **running on your own machine
 on the same LAN as the speaker**.
 
 Download `soundtouch-cli` for your OS from the
-[Releases page](https://github.com/gesellix/Bose-SoundTouch/releases).
+[Downloads page](../downloads/_index.md).
 
 ### Check the migration plan first
 
