@@ -342,6 +342,38 @@ avahi-resolve -n soundtouch.local
 
 ---
 
+### ⚠️ Health tab: "HTTPS endpoint TLS configuration" warns about the wrong port / not reachable {#https-endpoint-tls-config}
+
+**Symptoms:**
+
+- The Health tab's **HTTPS endpoint TLS configuration** check shows a warning like
+  *"Configured HTTPS URL … uses port 443, but the service is listening on port 8443"*,
+  or *"Configured HTTPS endpoint … isn't reachable from inside the service."*
+- You run AfterTouch on non-default ports (for example HTTP `8080`, HTTPS `8443`).
+
+**Cause:**
+
+AfterTouch advertises an HTTPS URL (used for the DNS-based redirect, Spotify/Amazon
+login, and certificate trust) separately from the HTTP one. If that URL's port
+doesn't match the port the HTTPS listener is actually bound to, the check dials the
+wrong place. This most often happened when the HTTPS URL had been set without a port
+(so it defaulted to `443`) while the listener was on `8443`.
+
+**Fix:**
+
+- Open **Settings → Service URLs**. The **HTTPS URL** line shows the effective value.
+  By default it now *derives* from the Target Domain (same host, on the HTTPS port),
+  so simply saving a correct Target Domain fixes it. Expand the ⓘ next to **HTTPS URL**
+  to set an **override** only if a reverse proxy serves HTTPS on a different host/port.
+- Equivalent CLI/env: set `--https-server-url` / `HTTPS_SERVER_URL` to include the
+  right port, e.g. `https://<host>:8443`, then restart.
+
+**Not always a problem:** if a reverse proxy intentionally terminates TLS on one port
+(e.g. `443`) and forwards to AfterTouch on another (e.g. `8443`), the warning is
+expected and can be ignored — the check can't see your proxy from inside the service.
+
+---
+
 ## 🎵 **Playback Control Issues**
 
 ### ❌ "Play/Pause not working"

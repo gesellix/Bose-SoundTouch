@@ -21,7 +21,7 @@ The service includes a built-in HTTPS listener (default port `8443`) that presen
 - Wildcard: `*.api.bose.io`, `*.api.bosecm.com`
 - Specific: `streaming.bose.com`, `bmx.bose.com`, `stats.bose.com`, `updates.bose.com`, `worldwide.bose.com`, `bose-prod.apigee.net`, `media.bose.io`, `downloads.bose.com`, `voice.api.bose.io`, and more
 
-> **Note**: The hostname you configure as `HTTPS_SERVER_URL` (e.g. `https://soundtouch.fritz.box:8443`) is also added as a Subject Alternative Name, ensuring valid TLS for direct browser or API access.
+> **Note**: The HTTPS endpoint is only needed for certain features (the DNS-based redirect, Spotify/Amazon login, and certificate trust). Its URL is added as a Subject Alternative Name, ensuring valid TLS for direct browser or API access. By default this URL is **derived from the Target Domain** (same host, `https`, on the HTTPS port), so you usually don't configure it separately. If you don't need plain HTTP at all, you can set the Target Domain itself to an `https://` URL — it is then used as the HTTPS endpoint as-is, with no separate override. Settings → **HTTPS URL** shows the effective value; set an override (`HTTPS_SERVER_URL` / `--https-server-url`, or the "advanced" field in Settings) only when a reverse proxy serves HTTPS on a different host or port.
 
 ---
 
