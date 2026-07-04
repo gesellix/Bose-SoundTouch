@@ -162,6 +162,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 
 	s.mu.RLock()
 	serverURL, httpsServerURL := s.serverURL, s.httpsServerURL
+	httpsOverride := s.httpsOverride
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
 	dnsEnabled := s.dnsEnabled
@@ -230,6 +231,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"server_url_resolved_ip":        serverURLResolvedIP,
 		"server_url_resolve_error":      serverURLResolveError,
 		"https_server_url":              httpsServerURL,
+		"https_server_url_override":     httpsOverride,
 		"https_listener_port":           httpsListenerPort,
 		"https_443_check_skipped":       probe443.Skipped,
 		"https_443_not_applicable":      probe443.NotApplicable,
@@ -278,28 +280,29 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 // HandleUpdateSettings updates the service settings.
 func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
-		ServerURL           string         `json:"server_url"`
-		DiscoveryInterval   string         `json:"discovery_interval"`
-		DiscoveryEnabled    bool           `json:"discovery_enabled"`
-		DNSEnabled          bool           `json:"dns_enabled"`
-		DNSUpstream         string         `json:"dns_upstream"`
-		DNSBindAddr         string         `json:"dns_bind_addr"`
-		InternalPaths       []string       `json:"internal_paths"`
-		Shortcuts           map[string]int `json:"shortcuts"`
-		SpotifyClientID     string         `json:"spotify_client_id"`
-		SpotifyClientSecret string         `json:"spotify_client_secret"`
-		SpotifyRedirectURI  string         `json:"spotify_redirect_uri"`
-		AmazonClientID      string         `json:"amazon_client_id"`
-		AmazonClientSecret  string         `json:"amazon_client_secret"`
-		AmazonRedirectURI   string         `json:"amazon_redirect_uri"`
-		TTSProvider         string         `json:"tts_provider"`
-		TTSGoogleAPIKey     string         `json:"tts_google_api_key"`
-		TTSAppKey           string         `json:"tts_app_key"`
-		TTSLanguage         string         `json:"tts_language"`
-		TTSVoice            string         `json:"tts_voice"`
-		TTSVolume           int            `json:"tts_volume"`
-		TLSExtraHosts       *[]string      `json:"tls_extra_hosts"`
-		DefaultLanding      string         `json:"default_landing"`
+		ServerURL              string         `json:"server_url"`
+		HTTPSServerURLOverride *string        `json:"https_server_url_override"`
+		DiscoveryInterval      string         `json:"discovery_interval"`
+		DiscoveryEnabled       bool           `json:"discovery_enabled"`
+		DNSEnabled             bool           `json:"dns_enabled"`
+		DNSUpstream            string         `json:"dns_upstream"`
+		DNSBindAddr            string         `json:"dns_bind_addr"`
+		InternalPaths          []string       `json:"internal_paths"`
+		Shortcuts              map[string]int `json:"shortcuts"`
+		SpotifyClientID        string         `json:"spotify_client_id"`
+		SpotifyClientSecret    string         `json:"spotify_client_secret"`
+		SpotifyRedirectURI     string         `json:"spotify_redirect_uri"`
+		AmazonClientID         string         `json:"amazon_client_id"`
+		AmazonClientSecret     string         `json:"amazon_client_secret"`
+		AmazonRedirectURI      string         `json:"amazon_redirect_uri"`
+		TTSProvider            string         `json:"tts_provider"`
+		TTSGoogleAPIKey        string         `json:"tts_google_api_key"`
+		TTSAppKey              string         `json:"tts_app_key"`
+		TTSLanguage            string         `json:"tts_language"`
+		TTSVoice               string         `json:"tts_voice"`
+		TTSVolume              int            `json:"tts_volume"`
+		TLSExtraHosts          *[]string      `json:"tls_extra_hosts"`
+		DefaultLanding         string         `json:"default_landing"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -343,6 +346,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	s.serverURL = settings.ServerURL
+	// nil override = "field omitted, preserve"; recompute regardless, since
+	// the Target Domain (which the derived URL follows) may have changed.
+	s.applyHTTPSOverrideLocked(settings.HTTPSServerURLOverride)
 
 	s.discoveryEnabled = settings.DiscoveryEnabled
 	if settings.DiscoveryInterval != "" {
@@ -397,7 +403,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	currentRedact := s.redactLogs
 	currentLogBody := s.logBodies
 	currentRecord := s.recordEnabled
-	currentHTTPS := s.httpsServerURL
+	// Persist the override (empty = derive), not the effective URL, so the
+	// HTTPS URL keeps following the Target Domain across restarts.
+	currentHTTPS := s.httpsOverride
 
 	// Resolve TLS extra hosts: nil pointer means "field omitted, preserve existing";
 	// non-nil (even empty) means "replace with this list".
@@ -1008,14 +1016,15 @@ func (s *Server) HandleUpdateLoggingSettings(w http.ResponseWriter, r *http.Requ
 
 	// Persist to datastore
 	// Access fields directly since we already hold the lock
-	serverURL, httpsServerURL := s.serverURL, s.httpsServerURL
+	// Persist the HTTPS override (empty = derive), not the effective URL.
+	serverURL, httpsOverride := s.serverURL, s.httpsOverride
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
 
 	log.Printf("Saving updated proxy settings to %s/settings.json", s.ds.DataDir)
 	err := s.ds.SaveSettings(datastore.Settings{
 		ServerURL:          serverURL,
-		HTTPServerURL:      httpsServerURL,
+		HTTPServerURL:      httpsOverride,
 		RedactLogs:         s.redactLogs,
 		LogBodies:          s.logBodies,
 		RecordInteractions: s.recordEnabled,

@@ -250,6 +250,20 @@ async function fetchSettings() {
         if (settings.server_url) {
             document.getElementById("target-domain").value = settings.server_url;
         }
+        const httpsEff = document.getElementById("https-url-effective");
+        if (httpsEff) {
+            httpsEff.textContent = settings.https_server_url || "—";
+        }
+        const httpsOverrideInput = document.getElementById("https-url-override");
+        if (httpsOverrideInput) {
+            httpsOverrideInput.value = settings.https_server_url_override || "";
+        }
+        const httpsEffNote = document.getElementById("https-url-effective-note");
+        if (httpsEffNote) {
+            httpsEffNote.textContent = settings.https_server_url_override
+                ? "(override)"
+                : "(derived from Target Domain)";
+        }
         const resolved = document.getElementById("target-domain-resolved");
         if (resolved) {
             if (settings.server_url_resolved_ip) {
@@ -461,8 +475,10 @@ async function updateLoggingSettings() {
 }
 
 async function updateSettings() {
+    const httpsOverrideEl = document.getElementById("https-url-override");
     const settings = {
         server_url: document.getElementById("target-domain").value,
+        https_server_url_override: httpsOverrideEl ? httpsOverrideEl.value.trim() : "",
         default_landing: document.getElementById("default-landing").value,
         discovery_interval: document.getElementById("discovery-interval").value,
         discovery_enabled: document.getElementById("discovery-enabled").checked,

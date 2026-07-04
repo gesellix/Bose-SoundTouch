@@ -40,7 +40,10 @@ type Server struct {
 	sm                       *setup.Manager
 	mu                       sync.RWMutex
 	serverURL                string
-	httpsServerURL           string
+	httpsServerURL           string // effective (derived or overridden) HTTPS URL
+	httpsOverride            string // explicit HTTPS URL override; "" means derive from serverURL
+	httpsPort                string // configured HTTPS port, used when deriving
+	httpsDefaultURL          string // startup hostname-based fallback when serverURL has no host
 	httpsListenAddr          string
 	discovering              bool
 	redactLogs               bool
@@ -796,11 +799,55 @@ func (s *Server) GetDiscoverySettings() (time.Duration, bool) {
 }
 
 // SetHTTPServerURL sets the external HTTPS URL of the service.
+//
+// Deprecated: prefer SetHTTPSSettings, which tracks the override vs the
+// derived value so the effective URL follows the Target Domain. Kept for
+// callers that set the effective URL directly.
 func (s *Server) SetHTTPServerURL(url string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.httpsServerURL = url
+}
+
+// SetHTTPSSettings records the HTTPS URL override (empty = derive from
+// the Target Domain), the configured HTTPS port, and the startup
+// hostname-based fallback, then recomputes the effective HTTPS URL.
+func (s *Server) SetHTTPSSettings(override, httpsPort, defaultURL string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.httpsOverride = strings.TrimSpace(override)
+	s.httpsPort = httpsPort
+	s.httpsDefaultURL = defaultURL
+	s.recomputeHTTPSURLLocked()
+}
+
+// recomputeHTTPSURLLocked refreshes the effective HTTPS URL from the
+// current serverURL + override + port. Callers must hold s.mu.
+func (s *Server) recomputeHTTPSURLLocked() {
+	s.httpsServerURL = DeriveHTTPSURL(s.serverURL, s.httpsOverride, s.httpsPort, s.httpsDefaultURL)
+}
+
+// applyHTTPSOverrideLocked sets the HTTPS override from an optional
+// request value (nil = preserve the current one, non-nil replaces it,
+// empty re-enables deriving) and recomputes the effective URL. Callers
+// must hold s.mu.
+func (s *Server) applyHTTPSOverrideLocked(override *string) {
+	if override != nil {
+		s.httpsOverride = strings.TrimSpace(*override)
+	}
+
+	s.recomputeHTTPSURLLocked()
+}
+
+// HTTPSOverride returns the explicit HTTPS URL override, or "" when the
+// effective URL is derived from the Target Domain.
+func (s *Server) HTTPSOverride() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.httpsOverride
 }
 
 // SetHTTPSListenAddr records the address the HTTPS listener is bound

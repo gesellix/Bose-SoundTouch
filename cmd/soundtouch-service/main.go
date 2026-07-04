@@ -518,8 +518,8 @@ func main() {
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetLogBuffer(logBuf)
-			server.SetHTTPServerURL(config.httpsServerURL)
 			server.SetHTTPSListenAddr(config.httpsAddr)
+			server.SetHTTPSSettings(config.httpsOverride, config.httpsPort, config.httpsDefaultURL)
 			server.SetExpectedHosts(config.domains)
 			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
@@ -683,7 +683,10 @@ type serviceConfig struct {
 	dataDir             string
 	hostname            string
 	serverURL           string
-	httpsServerURL      string
+	httpsServerURL      string // effective (derived or overridden)
+	httpsOverride       string // explicit override; "" = derive from serverURL
+	httpsPort           string
+	httpsDefaultURL     string // hostname-based fallback
 	httpsAddr           string
 	redact              bool
 	logBody             bool
@@ -756,10 +759,13 @@ func loadConfig(c *cli.Context) serviceConfig {
 		httpsAddr = ":" + httpsPort
 	}
 
-	httpsServerURL := c.String("https-server-url")
-	if httpsServerURL == "" {
-		httpsServerURL = "https://" + hostname + ":" + httpsPort
-	}
+	// The HTTPS URL is an override (from the flag/env); when empty it is
+	// derived from serverURL + https port so one setting (Target Domain)
+	// drives both. httpsDefaultURL is the hostname-based fallback used
+	// before a Target Domain is configured.
+	httpsOverride := c.String("https-server-url")
+	httpsDefaultURL := "https://" + hostname + ":" + httpsPort
+	httpsServerURL := handlers.DeriveHTTPSURL(serverURL, httpsOverride, httpsPort, httpsDefaultURL)
 
 	tlsExtraHosts := c.StringSlice("tls-extra-host")
 	domains := getDomains(serverURL, httpsServerURL, hostname, tlsExtraHosts)
@@ -817,6 +823,9 @@ func loadConfig(c *cli.Context) serviceConfig {
 		hostname:            hostname,
 		serverURL:           serverURL,
 		httpsServerURL:      httpsServerURL,
+		httpsOverride:       httpsOverride,
+		httpsPort:           httpsPort,
+		httpsDefaultURL:     httpsDefaultURL,
 		httpsAddr:           httpsAddr,
 		redact:              redact,
 		logBody:             logBody,
@@ -954,9 +963,12 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 		config.serverURL = handlers.NormalizeServerURL(persisted.ServerURL)
 	}
 
-	if persisted.HTTPServerURL != "" {
-		config.httpsServerURL = persisted.HTTPServerURL
-	}
+	// persisted.HTTPServerURL is the HTTPS override (empty = derive).
+	// Existing installs carry their old effective value here, so it is
+	// preserved as an override; recompute the effective URL either way,
+	// since serverURL may have come from the persisted settings above.
+	config.httpsOverride = persisted.HTTPServerURL
+	config.httpsServerURL = handlers.DeriveHTTPSURL(config.serverURL, config.httpsOverride, config.httpsPort, config.httpsDefaultURL)
 
 	config.discoveryEnabled = persisted.DiscoveryEnabled
 	if persisted.DiscoveryInterval != "" {
@@ -1076,7 +1088,7 @@ func applyPersistedMusicServiceCredentials(config *serviceConfig, persisted data
 func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datastore.Settings {
 	settings := datastore.Settings{
 		ServerURL:          config.serverURL,
-		HTTPServerURL:      config.httpsServerURL,
+		HTTPServerURL:      config.httpsOverride,
 		RedactLogs:         config.redact,
 		LogBodies:          config.logBody,
 		RecordInteractions: config.record,

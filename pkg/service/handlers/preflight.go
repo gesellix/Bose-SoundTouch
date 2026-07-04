@@ -130,6 +130,42 @@ func schemeOf(s string) string {
 	return strings.ToLower(u.Scheme)
 }
 
+// DeriveHTTPSURL resolves the effective HTTPS URL AfterTouch advertises.
+//
+// The rules, in order:
+//   - a non-empty override wins verbatim (set via --https-server-url /
+//     HTTPS_SERVER_URL or the "advanced" field in the web UI; needed for
+//     reverse-proxy setups where the public HTTPS endpoint differs).
+//   - if the Target Domain is itself an https:// URL, use it as-is: the
+//     operator has already named an HTTPS endpoint (host and, if given,
+//     port), so we must not second-guess its port.
+//   - otherwise derive from the http:// serverURL: same host, https
+//     scheme, on httpsPort. This keeps the common single-host case to one
+//     setting — change the Target Domain and the HTTPS URL follows.
+//   - if serverURL has no usable host (e.g. not configured yet), fall
+//     back to the startup default (hostname-based).
+func DeriveHTTPSURL(serverURL, override, httpsPort, fallback string) string {
+	if strings.TrimSpace(override) != "" {
+		return override
+	}
+
+	if u, err := url.Parse(serverURL); err == nil && u.Hostname() != "" {
+		// Target Domain already points at HTTPS: honour it verbatim
+		// (scheme + host + whatever port the operator specified, or none).
+		if strings.EqualFold(u.Scheme, "https") {
+			return "https://" + u.Host
+		}
+
+		if httpsPort != "" {
+			return "https://" + net.JoinHostPort(u.Hostname(), httpsPort)
+		}
+
+		return "https://" + u.Hostname()
+	}
+
+	return fallback
+}
+
 // PortFromHTTPSServerURL extracts the numeric port from httpsServerURL. It
 // returns 0 if the URL is empty, malformed, or has no explicit port — in
 // that case the caller cannot make a determination about :443 and should

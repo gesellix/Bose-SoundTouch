@@ -184,6 +184,27 @@
             <div id="https-443-status" style="font-size: 0.85em; margin-top: 4px; min-height: 1.2em"></div>
         </div>
         <div style="margin-bottom: 20px">
+            <label>HTTPS URL:</label>
+            <code id="https-url-effective">—</code>
+            <span id="https-url-effective-note" style="font-size: 0.8em; color: #666"></span>
+            <div style="margin-top: 6px">
+                <span class="info-toggle" onclick="toggleInfo('https-url-override-info')">Advanced: override HTTPS URL ⓘ</span>
+                <div id="https-url-override-info" class="info-details">
+                    <p style="font-size: 0.85em; color: #666; margin: 4px 0">
+                        AfterTouch also serves an HTTPS endpoint (used for the
+                        DNS-based redirect, music-service login, and certificate
+                        trust). By default it follows the Target Domain above
+                        (same host, on the HTTPS port), so you normally don't
+                        set anything here. Provide an override only when a
+                        reverse proxy serves HTTPS on a different host or port.
+                        Leave it empty to go back to deriving it automatically.
+                        Takes effect after saving.
+                    </p>
+                    <input type="text" id="https-url-override" placeholder="https://host:8443 (empty = derive)" style="width: 300px"/>
+                </div>
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
             <label for="default-landing">Landing page (<code>/</code>):</label>
             <select id="default-landing" style="margin-left: 4px">
                 <option value="chooser">Chooser (pick Player or Admin)</option>

@@ -137,6 +137,37 @@ func TestPortFromHTTPSServerURL(t *testing.T) {
 	}
 }
 
+func TestDeriveHTTPSURL(t *testing.T) {
+	const fallback = "https://myhost:8443"
+
+	cases := []struct {
+		name                           string
+		serverURL, override, httpsPort string
+		want                           string
+	}{
+		{"override wins verbatim", "http://192.0.2.10:8000", "https://proxy.example:443", "8443", "https://proxy.example:443"},
+		{"override wins over https serverURL", "https://192.0.2.10:9000", "https://proxy.example", "8443", "https://proxy.example"},
+		{"http derives to https on https port", "http://192.0.2.10:8000", "", "8443", "https://192.0.2.10:8443"},
+		{"http host without port still derives on https port", "http://192.0.2.10", "", "8443", "https://192.0.2.10:8443"},
+		// The Target Domain is already HTTPS: honour it verbatim, do not
+		// re-impose the configured https port (issue #355 follow-up).
+		{"https serverURL with port kept as-is", "https://192.0.2.10:8443", "", "8443", "https://192.0.2.10:8443"},
+		{"https serverURL with custom port kept as-is", "https://192.0.2.10:9000", "", "8443", "https://192.0.2.10:9000"},
+		{"https serverURL without port kept as-is", "https://192.0.2.10", "", "8443", "https://192.0.2.10"},
+		{"empty serverURL falls back", "", "", "8443", fallback},
+		{"unparseable serverURL falls back", "://nope", "", "8443", fallback},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := DeriveHTTPSURL(tc.serverURL, tc.override, tc.httpsPort, fallback)
+			if got != tc.want {
+				t.Errorf("DeriveHTTPSURL(%q, %q, %q) = %q, want %q", tc.serverURL, tc.override, tc.httpsPort, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestFormatPreflightGuidance_SkippedAndAllOK(t *testing.T) {
 	if FormatPreflightGuidance(443, Probe443Result{Skipped: true}) != "" {
 		t.Errorf("expected empty guidance when skipped")
