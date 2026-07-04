@@ -169,47 +169,56 @@
     <!-- Tab 1: Settings -->
     <div id="tab-settings" class="tab-content">
         <h2>System Settings</h2>
-        <p style="font-size: 0.9em; color: #555; margin-bottom: 20px">
-            <strong>Note:</strong> These URLs must be
-            <strong>accessible from your SoundTouch devices</strong>.
-            Use the IP address of this server on your local network
-            (e.g., <code>http://192.0.2.100:8000</code>) rather than
-            <code>localhost</code>.
-        </p>
         <div style="margin-bottom: 20px">
-            <label for="target-domain">Target Domain:</label>
-            <input type="text" id="target-domain" placeholder="http://192.168.x.x:8000" style="width: 300px"/>
-            <span style="font-size: 0.8em; color: #666">(Standard services URL)</span>
-            <div id="target-domain-resolved" style="font-size: 0.85em; margin-top: 4px; min-height: 1.2em"></div>
-            <div id="https-443-status" style="font-size: 0.85em; margin-top: 4px; min-height: 1.2em"></div>
-        </div>
-        <div style="margin-bottom: 20px">
-            <label>HTTPS URL:</label>
-            <code id="https-url-effective">—</code>
-            <span id="https-url-effective-note" style="font-size: 0.8em; color: #666"></span>
-            <span class="info-toggle" onclick="toggleInfo('https-url-override-info')">ⓘ</span>
-            <div id="https-url-override-info" class="info-details">
-                <p style="margin: 0 0 8px 0">
-                    AfterTouch also serves an HTTPS endpoint (used for the
-                    DNS-based redirect, music-service login, and certificate
-                    trust). By default it follows the Target Domain above
-                    (same host, on the HTTPS port), so you normally don't set
-                    anything here. Provide an override only when a reverse
-                    proxy serves HTTPS on a different host or port. Leave it
-                    empty to go back to deriving it automatically. Takes effect
-                    after saving.
-                </p>
-                <label for="https-url-override">Override:</label>
-                <input type="text" id="https-url-override" placeholder="https://host:8443 (empty = derive)" style="width: 300px"/>
+            <strong>Service URLs</strong>
+            <p style="font-size: 0.9em; color: #555; margin: 6px 0 12px 0">
+                <strong>Note:</strong> These URLs must be
+                <strong>accessible from your SoundTouch devices</strong>.
+                Use the IP address of this server on your local network
+                (e.g., <code>http://192.0.2.100:8000</code>) rather than
+                <code>localhost</code>.
+            </p>
+            <div style="margin-bottom: 6px">
+                <label for="target-domain">Target Domain:</label>
+                <input type="text" id="target-domain" placeholder="http://192.168.x.x:8000" style="width: 300px"/>
+                <span style="font-size: 0.8em; color: #666">(Standard services URL)</span>
+                <div id="target-domain-resolved" style="font-size: 0.85em; margin-top: 4px"></div>
+                <div id="https-443-status" style="font-size: 0.85em; margin-top: 4px"></div>
+            </div>
+            <div>
+                <label>HTTPS URL:</label>
+                <code id="https-url-effective">—</code>
+                <span id="https-url-effective-note" style="font-size: 0.8em; color: #666"></span>
+                <span class="info-toggle" onclick="toggleInfo('https-url-override-info')">ⓘ</span>
+                <div id="https-url-override-info" class="info-details">
+                    <p style="margin: 0 0 8px 0">
+                        AfterTouch's HTTPS endpoint is only needed for certain
+                        features — the DNS-based redirect, music-service
+                        (Spotify/Amazon) login, and certificate trust. When you
+                        use them, its URL is derived from the Target Domain above
+                        by default (same host, on the HTTPS port), so you
+                        normally don't set anything here. If you don't need plain
+                        HTTP at all, you can set the Target Domain itself to an
+                        <code>https://</code> URL and it's used as the HTTPS
+                        endpoint as-is. Otherwise, set an override only when a
+                        reverse proxy serves HTTPS on a different host or port.
+                        Leave it empty to derive automatically. Takes effect
+                        after saving.
+                    </p>
+                    <label for="https-url-override">Override:</label>
+                    <input type="text" id="https-url-override" placeholder="https://host:8443 (empty = derive)" style="width: 300px"/>
+                </div>
             </div>
         </div>
         <div style="margin-bottom: 20px">
-            <label for="default-landing">Landing page (<code>/</code>):</label>
-            <select id="default-landing" style="margin-left: 4px">
-                <option value="chooser">Chooser (pick Player or Admin)</option>
-                <option value="app">Go straight to the Player</option>
-                <option value="admin">Go straight to Admin &amp; Setup</option>
-            </select>
+            <strong>Landing page (<code>/</code>):</strong>
+            <div style="margin-top: 6px">
+                <select id="default-landing">
+                    <option value="chooser">Chooser (pick Player or Admin)</option>
+                    <option value="app">Go straight to the Player</option>
+                    <option value="admin">Go straight to Admin &amp; Setup</option>
+                </select>
+            </div>
             <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
                 What a browser sees at the root URL. The Player and Admin pages
                 stay reachable at <code>/app</code> and <code>/admin</code> either way.
