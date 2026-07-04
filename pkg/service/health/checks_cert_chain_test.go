@@ -29,11 +29,27 @@ func TestCertChain_UnparseableURLWarns(t *testing.T) {
 	}
 }
 
-func TestCertChain_UnreachableEndpoint(t *testing.T) {
-	// 127.0.0.1:1 refuses; using https:// to force TLS path.
+func TestCertChain_UnreachableEndpoint_IsWarningNotError(t *testing.T) {
+	// Regression for issue #355: the service dialing its own
+	// configured HTTPS URL and finding it unreachable is NOT a hard
+	// error. The advertised URL is frequently unreachable from
+	// inside the service on purpose (TLS terminated by a reverse
+	// proxy, a Docker-published port, or a LAN-only hostname), so a
+	// red error there is a false alarm. It must be a warning that
+	// explains the expected case and offers a client-side check.
+	//
+	// 127.0.0.1:1 refuses; using https:// to force the TLS path.
 	got := runCertChainCheck("https://127.0.0.1:1/", nil)
-	if len(got) != 1 || got[0].Severity != SeverityError {
-		t.Fatalf("expected one error for unreachable endpoint, got %+v", got)
+	if len(got) != 1 || got[0].Severity != SeverityWarning {
+		t.Fatalf("expected one warning for unreachable endpoint, got %+v", got)
+	}
+
+	if !strings.Contains(got[0].Details, "reverse proxy") {
+		t.Errorf("expected details to name the reverse-proxy / unreachable-advertised-URL case, got %q", got[0].Details)
+	}
+
+	if len(got[0].ManualCommands) == 0 || !strings.Contains(got[0].ManualCommands[0].Command, "openssl s_client") {
+		t.Errorf("expected an openssl s_client client-side verification command, got %+v", got[0].ManualCommands)
 	}
 }
 

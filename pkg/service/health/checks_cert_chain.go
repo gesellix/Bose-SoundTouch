@@ -29,6 +29,10 @@ const CheckIDCertChain = "service_cert_chain"
 //     something else → warning with an `openssl s_client`
 //     investigation prompt (foreign chain / reverse proxy /
 //     ingress cert).
+//   - endpoint not reachable from inside the service (no cert
+//     presented) → warning, not error: the advertised HTTPS URL
+//     is often intentionally unreachable from the service itself
+//     (reverse proxy, Docker-published port, LAN-only hostname).
 //   - HTTPS URL not configured → skip silently.
 //
 // caCertFn returns AfterTouch's own CA leaf certificate (nil if
@@ -82,10 +86,27 @@ func runCertChainCheck(httpsURL string, caCertFn func() *x509.Certificate) []Fin
 	// reachability problem.
 	leaf := leafFromVerifyError(err)
 	if leaf == nil {
+		// The dial failed before any certificate was presented
+		// (connection refused, timeout, handshake reset). From
+		// inside the service we can't tell "the endpoint is down"
+		// apart from "the advertised HTTPS URL simply isn't
+		// reachable from here" — the latter is a normal, healthy
+		// setup (TLS terminated by a reverse proxy, or a
+		// Docker-published port / external hostname that only
+		// resolves on the LAN). Reporting a hard error there is a
+		// false alarm (issue #355), so this is a warning with the
+		// context to tell the two apart.
 		return []Finding{{
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("Could not connect to %s: %v", addr, err),
-			Details:  "AfterTouch's HTTPS endpoint isn't reachable from inside the service, or the peer dropped the handshake before presenting a certificate. Check that the listener is bound and the URL host:port resolves correctly.",
+			Severity: SeverityWarning,
+			Message:  fmt.Sprintf("Configured HTTPS endpoint %s isn't reachable from inside the service.", addr),
+			Details: fmt.Sprintf("AfterTouch dialed its own configured HTTPS URL (%s) and the connection failed before any certificate was presented: %v. "+
+				"This is expected — and not a problem — if TLS is terminated by a reverse proxy in front of AfterTouch, or the advertised HTTPS URL isn't reachable from inside the container (for example a Docker-published port, or a hostname that only resolves elsewhere on your network). In that case, verify the endpoint from a client instead (see below). "+
+				"If AfterTouch is meant to serve HTTPS directly, check that the HTTPS listener is bound and that the URL host:port is correct.", httpsURL, err),
+			ManualCommands: []ManualCommand{{
+				Label:   "Verify the endpoint from a machine on your network:",
+				Command: fmt.Sprintf("openssl s_client -connect %s -servername %s </dev/null", addr, host),
+				Hint:    "Run from a client that reaches the advertised URL (not necessarily the service host). A successful handshake there means the endpoint is fine and this warning is expected for your setup.",
+			}},
 		}}
 	}
 
