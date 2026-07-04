@@ -964,10 +964,17 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	}
 
 	// persisted.HTTPServerURL is the HTTPS override (empty = derive).
-	// Existing installs carry their old effective value here, so it is
-	// preserved as an override; recompute the effective URL either way,
-	// since serverURL may have come from the persisted settings above.
+	// Existing installs carry their old effective value here; if it is
+	// exactly what we would derive anyway, treat it as "derive" so those
+	// installs don't show a spurious override in the UI. A genuinely custom
+	// value is kept as an override. Recompute either way, since serverURL
+	// may have come from the persisted settings above.
 	config.httpsOverride = persisted.HTTPServerURL
+	if config.httpsOverride != "" &&
+		config.httpsOverride == handlers.DeriveHTTPSURL(config.serverURL, "", config.httpsPort, config.httpsDefaultURL) {
+		config.httpsOverride = ""
+	}
+
 	config.httpsServerURL = handlers.DeriveHTTPSURL(config.serverURL, config.httpsOverride, config.httpsPort, config.httpsDefaultURL)
 
 	config.discoveryEnabled = persisted.DiscoveryEnabled
