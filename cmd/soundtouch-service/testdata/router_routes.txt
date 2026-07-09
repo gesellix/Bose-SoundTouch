@@ -291,5 +291,7 @@ PUT      /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter handler
 PUT      /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter/* handlers.(*Server).HandleSiriusXMLiveAdapterSubpath-fm
 PUT      /streaming/account/{account}/device/{device}                 handlers.(*Server).HandleMargeUpdateDevice-fm
 PUT      /streaming/account/{account}/device/{device}/preset/{presetNumber} handlers.(*Server).HandleMargeUpdatePreset-fm
+QUERY    /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter handlers.(*Server).HandleSiriusXMLiveAdapter-fm
+QUERY    /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter/* handlers.(*Server).HandleSiriusXMLiveAdapterSubpath-fm
 TRACE    /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter handlers.(*Server).HandleSiriusXMLiveAdapter-fm
 TRACE    /core02/svc-bmx-adapter-siriusxm-everest-eco1/prod/live-adapter/* handlers.(*Server).HandleSiriusXMLiveAdapterSubpath-fm
