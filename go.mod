@@ -1,6 +1,6 @@
 module github.com/gesellix/bose-soundtouch
 
-go 1.26.4
+go 1.26.5
 
 require (
 	filippo.io/age v1.3.1
