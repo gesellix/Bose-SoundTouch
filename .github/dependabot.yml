@@ -125,6 +125,13 @@ updates:
     allow:
       - dependency-type: "all"
     groups:
+      # Group all codeql-action sub-actions (init/analyze/upload-sarif)
+      # so they bump together. They are separate dependencies to
+      # Dependabot but must stay on the same version, or CodeQL fails
+      # with "Loaded a configuration file for version X, but running Y".
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
       # Group actions from the same organization
       actions-core:
         patterns:
