@@ -147,6 +147,15 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	health.RegisterSpeakerInfoReachable(s.healthRegistry, ds)
 	health.RegisterSourcesXMLDiff(s.healthRegistry, ds)
 	health.RegisterSpeakerMargeURLCheck(s.healthRegistry, ds, s.ExpectedHosts)
+	health.RegisterRuntimeBmxURLStaleCheck(
+		s.healthRegistry,
+		ds,
+		s.readSpeakerBmxRegistryURL,
+		func() bool {
+			running, _ := s.GetDNSRunning()
+			return running
+		},
+	)
 	health.RegisterCertChainCheck(
 		s.healthRegistry,
 		func() string {

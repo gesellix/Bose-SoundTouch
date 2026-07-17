@@ -593,6 +593,36 @@ func (s *Server) collectSpeakerRedirectConfig(tw *tar.Writer) map[string]*redire
 	return out
 }
 
+// readSpeakerBmxRegistryURL reads a single speaker's runtime bmxRegistryUrl from
+// its on-device SoundTouchSdkPrivateCfg.xml (via SSH), falling back to `getpdo
+// CurrentSystemConfiguration` over telnet. It returns the URL and whether the
+// runtime config could be read at all (SSH or telnet succeeded). Unlike
+// collectSpeakerRedirectConfig it archives nothing; it's the lightweight read
+// used by the runtime_bmx_url_stale health check.
+func (s *Server) readSpeakerBmxRegistryURL(ip string) (string, bool) {
+	if ip == "" {
+		return "", false
+	}
+
+	// 1. Prefer the persisted XML over SSH.
+	sc := speakerssh.NewClient(ip)
+	if data, err := sc.ReadFile(setup.SoundTouchSdkPrivateCfgPath); err == nil {
+		var cfg setup.PrivateCfg
+		if xml.Unmarshal(data, &cfg) == nil {
+			return cfg.BmxRegistryUrl, true
+		}
+	}
+
+	// 2. Fall back to telnet getpdo when SSH gave us nothing.
+	if raw, ok := readTelnetSystemConfig(ip); ok {
+		if fields := setup.ParseGetpdoConfig(raw); len(fields) > 0 {
+			return fields["bmxRegistryUrl"], true
+		}
+	}
+
+	return "", false
+}
+
 // addServiceLog appends the in-memory service log buffer as logs/service.txt.
 // Each entry is formatted as "2006-01-02T15:04:05Z <message>".
 func (s *Server) addServiceLog(tw *tar.Writer) {
