@@ -1,7 +1,25 @@
 import { h } from 'preact';
+import { useState } from 'preact/hooks';
 import htm from 'htm';
 
 const html = htm.bind(h);
+
+const SORT_LS_KEY = 'aftertouch_device_sort';
+
+function sortEntries(entries, mode) {
+    const copy = [...entries];
+    if (mode === 'name') {
+        // Sort by the speaker's display name, falling back to the map key (its IP)
+        // when a device has no name yet.
+        copy.sort(([idA, a], [idB, b]) =>
+            (a?.info?.name || idA).localeCompare(b?.info?.name || idB, undefined, { sensitivity: 'base' }));
+    } else {
+        // Default: by IP (the map key), ordered numerically so .2 precedes .10.
+        copy.sort(([idA], [idB]) =>
+            idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' }));
+    }
+    return copy;
+}
 
 function DeviceCard({ id, device, onSelect, onRemove }) {
     const { info, status } = device;
@@ -37,7 +55,14 @@ function DeviceCard({ id, device, onSelect, onRemove }) {
 }
 
 export function DeviceList({ devices, isDiscovering, onSelect, onDiscover, onRemove }) {
-    const entries = Object.entries(devices);
+    const [sortMode, setSortMode] = useState(() => localStorage.getItem(SORT_LS_KEY) || 'ip');
+
+    function changeSort(mode) {
+        setSortMode(mode);
+        localStorage.setItem(SORT_LS_KEY, mode);
+    }
+
+    const entries = sortEntries(Object.entries(devices), sortMode);
 
     return html`
         <div class="device-list-container">
@@ -51,6 +76,13 @@ export function DeviceList({ devices, isDiscovering, onSelect, onDiscover, onRem
                     </button>
                 </div>`
             : html`
+                <div class="device-sort" key="sort">
+                    <span class="device-sort-label">Sort by</span>
+                    <button class="sort-btn ${sortMode === 'name' ? 'active' : ''}"
+                            onClick=${() => changeSort('name')}>Name</button>
+                    <button class="sort-btn ${sortMode === 'ip' ? 'active' : ''}"
+                            onClick=${() => changeSort('ip')}>IP</button>
+                </div>
                 <div class="device-grid" key="grid">
                     ${entries.map(([id, device]) => html`
                         <${DeviceCard} key=${id} id=${id} device=${device} onSelect=${onSelect} onRemove=${onRemove} />

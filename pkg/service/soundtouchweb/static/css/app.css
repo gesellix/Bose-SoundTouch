@@ -324,6 +324,30 @@ img { display: block; max-width: 100%; }
 }
 .back-btn:hover { background: var(--bg); }
 
+/* ── Device sort toggle ──────────────────────────────────────────────────── */
+.device-sort {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: 1rem;
+}
+.device-sort-label {
+    font-size: .85rem;
+    opacity: .65;
+    margin-right: .1rem;
+}
+.sort-btn {
+    padding: .25rem .7rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: inherit;
+    font-size: .85rem;
+    cursor: pointer;
+}
+.sort-btn:hover { background: var(--bg); }
+.sort-btn.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
 /* ── Device grid ─────────────────────────────────────────────────────────── */
 .device-grid {
     display: grid;
