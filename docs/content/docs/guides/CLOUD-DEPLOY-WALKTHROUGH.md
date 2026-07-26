@@ -37,8 +37,11 @@ internet-facing, those endpoints are reachable by anyone who knows the URL.
 
 Minimum mitigations before going live:
 
-- Enable **HTTP Basic Auth** on the management UI (set via `MGMT_USERNAME` /
-  `MGMT_PASSWORD` or the `--mgmt-username` / `--mgmt-password` flags).
+- **Change the Management API password** — HTTP Basic Auth on the management
+  UI is always on, but ships with a published default
+  (`admin` / `change_me!`); set your own via `MGMT_USERNAME` /
+  `MGMT_PASSWORD` (or the `--mgmt-username` / `--mgmt-password` flags — see
+  [Configuration Options](SOUNDTOUCH-SERVICE.md#configuration-options)).
 - Run AfterTouch **behind a reverse proxy** (Nginx, Caddy, Coolify, Traefik)
   and consider blocking the `/streaming/*` paths to all but your speaker's
   IP address at the proxy level if your server/firewall allows it.

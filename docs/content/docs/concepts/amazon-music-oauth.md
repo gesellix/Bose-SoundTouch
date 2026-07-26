@@ -279,6 +279,10 @@ Or set the equivalent environment variables: `AMAZON_CLIENT_ID`, `AMAZON_CLIENT_
 
 ### 3. Trigger the OAuth flow
 
+> The commands below use the published default Management API credentials
+> (`admin` / `change_me!`); substitute your own if you've changed them (see
+> [Configuration Options](../guides/SOUNDTOUCH-SERVICE.md#configuration-options)).
+
 ```bash
 # Get the LWA authorization URL
 curl -u admin:change_me! -X POST http://localhost:8000/mgmt/amazon/init

@@ -118,6 +118,6 @@ sequenceDiagram
 ## Security
 
 - `/mgmt/spotify/callback` is intentionally outside Basic Auth to allow direct redirects from Spotify's authorization server.
-- All other `/mgmt/*` endpoints require Basic Auth as configured by `--mgmt-username` and `--mgmt-password`.
+- All other `/mgmt/*` endpoints require Basic Auth as configured by `--mgmt-username` and `--mgmt-password` (defaults documented in [Configuration Options](../guides/SOUNDTOUCH-SERVICE.md#configuration-options)).
 - Tokens are persisted to disk as JSON with restricted file permissions (`0600`).
 - The `GetAccounts` endpoint strips sensitive tokens from the response.

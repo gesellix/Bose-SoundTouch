@@ -122,12 +122,12 @@ The easiest solution is to assign a **static (fixed) IP address** to the compute
 
 ## Security note
 
-AfterTouch's web interface and management API have no login by default. On a typical home network this is fine, since only devices on your local network can reach it.
+The main web interface has no login by default — on a typical home network this is fine, since only devices on your local network can reach it.
 
-If you want to restrict access — for example, on a shared network — start the service with a username and password:
+The Management API (Spotify/Amazon account linking, the Local Accounts page) is a separate area that's *always* protected by HTTP Basic Auth, but ships with a published default (`admin` / `change_me!`) — anyone who has read the docs can use it. If you want real protection — for example, on a shared network — set your own:
 
 ```
 ./soundtouch-service --mgmt-username admin --mgmt-password yourpassword
 ```
 
-This protects the Settings tab (where your Spotify and Amazon credentials are stored) from being read or changed by others on the network.
+See [Configuration Options](SOUNDTOUCH-SERVICE.md#configuration-options) for the full list of settings and env-var equivalents. Note that this does *not* cover the Settings tab, where your Spotify/Amazon Client ID and Secret are stored — that tab has no separate protection today.
