@@ -196,6 +196,21 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		},
 		s.GetDNSRunning,
 	)
+	health.RegisterSpotifyAccountLinkedCheck(
+		s.healthRegistry,
+		func() bool { return s.spotifyService != nil },
+		func() int {
+			if s.spotifyService == nil {
+				return 0
+			}
+
+			return len(s.spotifyService.GetAccounts())
+		},
+	)
+	health.RegisterMgmtDefaultCredentialsCheck(
+		s.healthRegistry,
+		func() (string, string) { return s.mgmtUsername, s.mgmtPassword },
+	)
 
 	// Health QuickFix executor for the empty-margeAccountUUID
 	// finding from RegisterSpeakerInfoReachable. Lives here (not in

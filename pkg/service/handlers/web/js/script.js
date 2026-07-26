@@ -112,6 +112,8 @@ async function fetchSpotifyStatus() {
         const settingsResponse = await fetch("/api/setup/settings");
         const settings = await settingsResponse.json();
         const header = document.getElementById("spotify-status-header");
+        const nameEl = document.getElementById("spotify-account-name");
+        const linkBtn = document.getElementById("link-spotify-btn");
 
         if (!settings.spotify_configured) {
             if (header) header.style.display = "none";
@@ -121,10 +123,22 @@ async function fetchSpotifyStatus() {
         if (header) header.style.display = "flex";
 
         const response = await fetch("/api/mgmt/spotify/accounts");
-        if (!response.ok) return;
+        if (!response.ok) {
+            // Don't fail silently: a stale/hidden Spotify status here is exactly
+            // what made #269 look like a Spotify bug instead of a Management API
+            // login that never completed.
+            if (header) {
+                header.style.background = "#f8d7da";
+                header.style.border = "1px solid #dc3545";
+            }
+            if (nameEl) {
+                nameEl.innerText = response.status === 401
+                    ? "Unable to check (Management login required — retry, or reload the page)"
+                    : `Unable to check (HTTP ${response.status})`;
+            }
+            return;
+        }
         const data = await response.json();
-        const nameEl = document.getElementById("spotify-account-name");
-        const linkBtn = document.getElementById("link-spotify-btn");
 
         if (data.accounts && data.accounts.length > 0) {
             header.style.background = "#e6ffed";
@@ -162,8 +176,12 @@ async function linkSpotify() {
     try {
         const response = await fetch("/api/mgmt/spotify/init", {method: "POST"});
         if (!response.ok) {
-            const err = await response.text();
-            alert("Failed to initialize Spotify link: " + err);
+            if (response.status === 401) {
+                alert("Management login failed or was cancelled. Please try again — your browser should prompt for the Management API username/password.");
+            } else {
+                const err = await response.text();
+                alert("Failed to initialize Spotify link: " + err);
+            }
             return;
         }
         const data = await response.json();
@@ -837,7 +855,15 @@ async function fetchVersion() {
 async function fetchAccountList() {
     try {
         const response = await fetch("/api/mgmt/accounts");
-        if (!response.ok) return;
+        if (!response.ok) {
+            const selector = document.getElementById("account-selector");
+            if (selector) {
+                selector.innerHTML = response.status === 401
+                    ? `<option value="">Management login required — retry or reload the page</option>`
+                    : `<option value="">Unable to load accounts (HTTP ${response.status})</option>`;
+            }
+            return;
+        }
         const data = await response.json();
         const selector = document.getElementById("account-selector");
         if (selector) {
