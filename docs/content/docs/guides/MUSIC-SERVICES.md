@@ -11,6 +11,15 @@ This guide explains how to link your Spotify or Amazon Music account to AfterTou
 
 ---
 
+> **The Local Account tab requires a login.** Authorizing a Spotify or
+> Amazon account (Step 3 below) happens on the **Local Account** tab, which
+> is protected by AfterTouch's Management API login (HTTP Basic Auth).
+> Unless you've set your own via the `MGMT_USERNAME` / `MGMT_PASSWORD`
+> environment variables (or the matching CLI flags), the default is
+> username `admin`, password `change_me!`. Your browser will prompt for
+> this the first time you open a protected page or click a management
+> action — if nothing happens, try reloading the page.
+
 ## How it works
 
 Connecting a music service happens in three separate steps, each done once:
