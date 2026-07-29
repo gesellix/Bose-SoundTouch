@@ -162,6 +162,103 @@ func TestProxySettingsAPI(t *testing.T) {
 	}
 }
 
+// TestSettingsSavePreservesUnmanagedFields is the regression test for
+// issue #589: saving settings via either the main settings form or the
+// logging/proxy panel must not drop fields that have no counterpart in
+// their respective request DTOs (e.g. hand-edited trust_forwarded_headers /
+// trusted_proxy_cidrs, or the other handler's owned fields).
+func TestSettingsSavePreservesUnmanagedFields(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "settings-preserve-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	// Seed settings.json with fields neither handler's DTO exposes.
+	seeded := datastore.Settings{
+		ServerURL:             "http://127.0.0.1:8000",
+		TrustForwardedHeaders: true,
+		TrustedProxyCIDRs:     []string{"10.42.0.0/16"},
+	}
+	if err := ds.SaveSettings(seeded); err != nil {
+		t.Fatalf("Failed to seed settings: %v", err)
+	}
+
+	r, server := setupRouter("http://127.0.0.1:8000", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// Simulate a credential already loaded into the running server (as
+	// main.go's startup wiring does) but not managed by the logging panel's
+	// DTO, to catch HandleUpdateLoggingSettings resetting fields it doesn't
+	// own back to their zero value.
+	server.spotifyClientID = "seeded-spotify-client-id"
+
+	// Saving the main settings form (which knows nothing about
+	// trust_forwarded_headers / trusted_proxy_cidrs) must not drop them.
+	sysUpdate := map[string]string{"server_url": "http://127.0.0.1:8000"}
+	sysBody, err := json.Marshal(sysUpdate)
+	if err != nil {
+		t.Fatalf("Failed to marshal update: %v", err)
+	}
+
+	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(sysBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /setup/settings: expected status OK, got %v", res.Status)
+	}
+
+	persisted, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("Failed to reload settings: %v", err)
+	}
+	if !persisted.TrustForwardedHeaders {
+		t.Errorf("POST /setup/settings dropped TrustForwardedHeaders: %+v", persisted)
+	}
+	if len(persisted.TrustedProxyCIDRs) != 1 || persisted.TrustedProxyCIDRs[0] != "10.42.0.0/16" {
+		t.Errorf("POST /setup/settings dropped TrustedProxyCIDRs: %+v", persisted)
+	}
+
+	// Saving the logging/proxy panel (which only knows redact/log_body/record)
+	// must not drop these fields, or the SpotifyClientID it also doesn't manage.
+	logUpdate := map[string]bool{"redact": true, "log_body": true, "record": false}
+	logBody, err := json.Marshal(logUpdate)
+	if err != nil {
+		t.Fatalf("Failed to marshal logging update: %v", err)
+	}
+
+	res, err = http.Post(ts.URL+"/setup/logging-settings", "application/json", bytes.NewBuffer(logBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /setup/logging-settings: expected status OK, got %v", res.Status)
+	}
+
+	persisted, err = ds.GetSettings()
+	if err != nil {
+		t.Fatalf("Failed to reload settings: %v", err)
+	}
+	if !persisted.TrustForwardedHeaders {
+		t.Errorf("POST /setup/logging-settings dropped TrustForwardedHeaders: %+v", persisted)
+	}
+	if len(persisted.TrustedProxyCIDRs) != 1 || persisted.TrustedProxyCIDRs[0] != "10.42.0.0/16" {
+		t.Errorf("POST /setup/logging-settings dropped TrustedProxyCIDRs: %+v", persisted)
+	}
+	if persisted.SpotifyClientID != "seeded-spotify-client-id" {
+		t.Errorf("POST /setup/logging-settings dropped SpotifyClientID: %+v", persisted)
+	}
+}
+
 func TestMigrationAndCA(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "handlers-test")
 	if err != nil {

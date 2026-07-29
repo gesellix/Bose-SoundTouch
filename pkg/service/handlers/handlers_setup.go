@@ -277,6 +277,25 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// parseDNSUpstreamList splits a comma-separated DNS upstream list into its
+// trimmed, non-empty entries. Returns nil for an empty input.
+func parseDNSUpstreamList(dnsUpstream string) []string {
+	if dnsUpstream == "" {
+		return nil
+	}
+
+	var upstreamList []string
+
+	for _, u := range strings.Split(dnsUpstream, ",") {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			upstreamList = append(upstreamList, u)
+		}
+	}
+
+	return upstreamList
+}
+
 // HandleUpdateSettings updates the service settings.
 func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
@@ -360,20 +379,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.dnsEnabled = settings.DNSEnabled
-
-	// Handle comma-separated upstream DNS servers
-	var upstreamList []string
-
-	if settings.DNSUpstream != "" {
-		for _, u := range strings.Split(settings.DNSUpstream, ",") {
-			u = strings.TrimSpace(u)
-			if u != "" {
-				upstreamList = append(upstreamList, u)
-			}
-		}
-	}
-
-	s.dnsUpstream = upstreamList
+	s.dnsUpstream = parseDNSUpstreamList(settings.DNSUpstream)
 	s.dnsBindAddr = settings.DNSBindAddr
 
 	s.internalPaths = settings.InternalPaths
@@ -407,42 +413,55 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	// HTTPS URL keeps following the Target Domain across restarts.
 	currentHTTPS := s.httpsOverride
 
+	// Load the persisted settings first and overlay only the fields this
+	// handler owns, instead of building a fresh struct from scratch. Fields
+	// with no in-memory counterpart on Server (e.g. TrustForwardedHeaders,
+	// TrustedProxyCIDRs, TuneInStreamFormats) are only ever set by hand-editing
+	// settings.json; overwriting with a fresh struct would silently drop them
+	// (issue #589).
+	persisted, err := s.ds.GetSettings()
+	if err != nil {
+		s.mu.Unlock()
+		http.Error(w, "Failed to load existing settings: "+err.Error(), http.StatusInternalServerError)
+
+		return
+	}
+
 	// Resolve TLS extra hosts: nil pointer means "field omitted, preserve existing";
 	// non-nil (even empty) means "replace with this list".
-	resolvedTLSExtraHosts := s.persistedTLSExtraHosts()
+	resolvedTLSExtraHosts := persisted.TLSExtraHosts
 	if settings.TLSExtraHosts != nil {
 		resolvedTLSExtraHosts = normaliseTLSExtraHosts(*settings.TLSExtraHosts)
 	}
 
 	log.Printf("Saving updated settings to %s/settings.json", s.ds.DataDir)
-	err = s.ds.SaveSettings(datastore.Settings{
-		ServerURL:           s.serverURL,
-		HTTPServerURL:       currentHTTPS,
-		RedactLogs:          currentRedact,
-		LogBodies:           currentLogBody,
-		RecordInteractions:  currentRecord,
-		DiscoveryInterval:   s.discoveryInterval.String(),
-		DiscoveryEnabled:    s.discoveryEnabled,
-		DNSEnabled:          s.dnsEnabled,
-		DNSUpstream:         s.dnsUpstream,
-		DNSBindAddr:         s.dnsBindAddr,
-		InternalPaths:       s.internalPaths,
-		Shortcuts:           s.shortcuts,
-		SpotifyClientID:     s.spotifyClientID,
-		SpotifyClientSecret: s.spotifyClientSecret,
-		SpotifyRedirectURI:  s.spotifyRedirectURI,
-		AmazonClientID:      s.amazonClientID,
-		AmazonClientSecret:  s.amazonClientSecret,
-		AmazonRedirectURI:   s.amazonRedirectURI,
-		TTSProvider:         s.ttsProvider,
-		TTSGoogleAPIKey:     s.ttsGoogleAPIKey,
-		TTSAppKey:           s.ttsAppKey,
-		TTSLanguage:         s.ttsLanguage,
-		TTSVoice:            s.ttsVoice,
-		TTSVolume:           s.ttsVolume,
-		TLSExtraHosts:       resolvedTLSExtraHosts,
-		DefaultLanding:      defaultLanding,
-	})
+	persisted.ServerURL = s.serverURL
+	persisted.HTTPServerURL = currentHTTPS
+	persisted.RedactLogs = currentRedact
+	persisted.LogBodies = currentLogBody
+	persisted.RecordInteractions = currentRecord
+	persisted.DiscoveryInterval = s.discoveryInterval.String()
+	persisted.DiscoveryEnabled = s.discoveryEnabled
+	persisted.DNSEnabled = s.dnsEnabled
+	persisted.DNSUpstream = s.dnsUpstream
+	persisted.DNSBindAddr = s.dnsBindAddr
+	persisted.InternalPaths = s.internalPaths
+	persisted.Shortcuts = s.shortcuts
+	persisted.SpotifyClientID = s.spotifyClientID
+	persisted.SpotifyClientSecret = s.spotifyClientSecret
+	persisted.SpotifyRedirectURI = s.spotifyRedirectURI
+	persisted.AmazonClientID = s.amazonClientID
+	persisted.AmazonClientSecret = s.amazonClientSecret
+	persisted.AmazonRedirectURI = s.amazonRedirectURI
+	persisted.TTSProvider = s.ttsProvider
+	persisted.TTSGoogleAPIKey = s.ttsGoogleAPIKey
+	persisted.TTSAppKey = s.ttsAppKey
+	persisted.TTSLanguage = s.ttsLanguage
+	persisted.TTSVoice = s.ttsVoice
+	persisted.TTSVolume = s.ttsVolume
+	persisted.TLSExtraHosts = resolvedTLSExtraHosts
+	persisted.DefaultLanding = defaultLanding
+	err = s.ds.SaveSettings(persisted)
 
 	dnsEnabled := s.dnsEnabled
 	dnsUpstreamStr := strings.Join(s.dnsUpstream, ",")
@@ -1021,17 +1040,31 @@ func (s *Server) HandleUpdateLoggingSettings(w http.ResponseWriter, r *http.Requ
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
 
+	// Load the persisted settings first and overlay only the fields this
+	// handler owns, instead of building a fresh struct from scratch. This
+	// handler's DTO only ever covers 3 of ~25 fields, so a from-scratch
+	// struct used to reset everything else (credentials, DNS config,
+	// TrustForwardedHeaders/TrustedProxyCIDRs, ...) to its zero value on
+	// every save (issue #589).
+	persisted, err := s.ds.GetSettings()
+	if err != nil {
+		s.mu.Unlock()
+		http.Error(w, "Failed to load existing settings: "+err.Error(), http.StatusInternalServerError)
+
+		return
+	}
+
+	persisted.ServerURL = serverURL
+	persisted.HTTPServerURL = httpsOverride
+	persisted.RedactLogs = s.redactLogs
+	persisted.LogBodies = s.logBodies
+	persisted.RecordInteractions = s.recordEnabled
+	persisted.DiscoveryInterval = discoveryInterval
+	persisted.DiscoveryEnabled = discoveryEnabled
+	persisted.Shortcuts = s.shortcuts
+
 	log.Printf("Saving updated proxy settings to %s/settings.json", s.ds.DataDir)
-	err := s.ds.SaveSettings(datastore.Settings{
-		ServerURL:          serverURL,
-		HTTPServerURL:      httpsOverride,
-		RedactLogs:         s.redactLogs,
-		LogBodies:          s.logBodies,
-		RecordInteractions: s.recordEnabled,
-		DiscoveryInterval:  discoveryInterval,
-		DiscoveryEnabled:   discoveryEnabled,
-		Shortcuts:          s.shortcuts,
-	})
+	err = s.ds.SaveSettings(persisted)
 	s.mu.Unlock()
 
 	if err != nil {
