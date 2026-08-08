@@ -911,3 +911,34 @@ img { display: block; max-width: 100%; }
     animation: fade-in .2s ease;
 }
 @keyframes fade-in { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+
+/* ── Announcements ───────────────────────────────────────────────────────── */
+.announcements-banner {
+    padding: .5rem 1rem 0;
+}
+.announcement {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .6rem .9rem;
+    margin-bottom: .5rem;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: .85rem;
+}
+.announcement-dismiss {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    padding: 0;
+}
+.announcement-dismiss:hover {
+    color: var(--text);
+}

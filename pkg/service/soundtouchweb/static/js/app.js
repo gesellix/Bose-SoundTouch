@@ -13,6 +13,7 @@ import { RadioBrowser } from './components/RadioBrowser.js';
 import { Library } from './components/Library.js';
 import { PlayURL } from './components/PlayURL.js';
 import { TTS } from './components/TTS.js';
+import { Announcements } from './components/Announcements.js';
 import { api } from './api.js';
 
 const html = htm.bind(h);
@@ -232,6 +233,8 @@ function App() {
                     </a>
                 </div>
             </nav>
+
+            <${Announcements} />
 
             <main class="main-content">
                 ${page === 'devices' ? html`
