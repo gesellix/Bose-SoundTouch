@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -1357,6 +1358,19 @@ func (s *Server) HandleGetVersionInfo(w http.ResponseWriter, _ *http.Request) {
 	repoURL := s.RepoURL
 	s.mu.RUnlock()
 
+	var dataDir string
+
+	if s.ds != nil && s.ds.DataDir != "" {
+		// Resolve to absolute: the default ("data") and any relative
+		// --data-dir/DATA_DIR value are otherwise ambiguous without knowing
+		// the process's working directory at startup.
+		if abs, err := filepath.Abs(s.ds.DataDir); err == nil {
+			dataDir = abs
+		} else {
+			dataDir = s.ds.DataDir
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 
 	var (
@@ -1381,6 +1395,7 @@ func (s *Server) HandleGetVersionInfo(w http.ResponseWriter, _ *http.Request) {
 		"repo_url":    repoURL,
 		"release_url": releaseURL,
 		"commit_url":  commitURL,
+		"data_dir":    dataDir,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return

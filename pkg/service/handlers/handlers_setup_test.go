@@ -443,6 +443,46 @@ func TestAdminAreaAuthRoundTrip(t *testing.T) {
 	}
 }
 
+// TestHandleGetVersionInfo_IncludesAbsoluteDataDir verifies /api/setup/version
+// reports the actual data directory in use, resolved to an absolute path —
+// added so operators running the service locally (not in Docker, where the
+// path is obvious from the bind mount) can find it without having to
+// inspect the running process. See NEXT.md/#419 session notes.
+func TestHandleGetVersionInfo_IncludesAbsoluteDataDir(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "version-info-datadir-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	r, _ := setupRouter("http://127.0.0.1:8000", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/setup/version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	var got map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	wantAbs, err := filepath.Abs(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to resolve expected absolute path: %v", err)
+	}
+
+	if got["data_dir"] != wantAbs {
+		t.Errorf("Expected data_dir %q, got %q", wantAbs, got["data_dir"])
+	}
+}
+
 func TestMigrationAndCA(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "handlers-test")
 	if err != nil {

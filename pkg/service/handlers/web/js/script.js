@@ -891,6 +891,11 @@ async function fetchVersion() {
             }
             info.innerHTML = `AfterTouch ${versionStr} (${commitStr}) • ${data.date}`;
         }
+
+        const dataDirEl = document.getElementById("settings-data-dir");
+        if (dataDirEl && data.data_dir) {
+            dataDirEl.textContent = data.data_dir;
+        }
     } catch (error) {
         console.error("Failed to fetch version info", error);
     }
