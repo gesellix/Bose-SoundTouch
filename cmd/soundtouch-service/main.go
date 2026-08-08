@@ -1295,7 +1295,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 	r.Use(server.RecordMiddleware)
 
 	r.Get("/", server.HandleRoot)
-	r.Get("/admin", server.HandleAdmin)
+	r.With(server.BasicAuthAdmin()).Get("/admin", server.HandleAdmin)
 	r.Get("/health", server.HandleHealth)
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		// The favicon lives in the embedded web/img bundle, not under
@@ -1582,7 +1582,23 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 	// /api/setup (new canonical) from one shared registration. The Stockholm
 	// setup-wizard static catch-all is a frontend concern and stays under /setup
 	// only — /api/setup serves data only.
-	mountSetupAPI := func(r chi.Router) {
+	//
+	// Split in two: mountSetupAPIShared is reachable regardless of
+	// AdminAreaAuth — soundtouch-cli and the embedded player call these
+	// directly without Management API credentials (ca.crt for `setup
+	// install-ca`, tts/speak+tts/config for the Play URL / TTS integration
+	// surface). mountSetupAPIAdmin is everything else — genuinely admin-UI-only,
+	// gated by BasicAuthAdmin() once #419's admin-area toggle is enabled.
+	mountSetupAPIShared := func(r chi.Router) {
+		r.Get("/ca.crt", server.HandleGetCACert)
+		// TTS lives under /setup (LAN-trust, like the rest of the integration
+		// surface and Play URL), not /mgmt: the API key is already configured
+		// via /setup/settings, and -web/CLI reach this without mgmt credentials.
+		r.Post("/tts/speak", server.HandleTTSSpeak)
+		r.Get("/tts/config", server.HandleTTSConfig)
+	}
+
+	mountSetupAPIAdmin := func(r chi.Router) {
 		r.Get("/devices", server.HandleListDiscoveredDevices)
 		r.Post("/devices", server.HandleAddManualDevice)
 		r.Delete("/devices/{deviceId}", server.HandleRemoveDevice)
@@ -1590,11 +1606,6 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 		r.Get("/discovery-status", server.HandleGetDiscoveryStatus)
 		r.Get("/settings", server.HandleGetSettings)
 		r.Post("/settings", server.HandleUpdateSettings)
-		// TTS lives under /setup (LAN-trust, like the rest of the integration
-		// surface and Play URL), not /mgmt: the API key is already configured
-		// via /setup/settings, and -web/CLI reach this without mgmt credentials.
-		r.Post("/tts/speak", server.HandleTTSSpeak)
-		r.Get("/tts/config", server.HandleTTSConfig)
 		r.Get("/info/{deviceId}", server.HandleGetDeviceInfo)
 		r.Get("/summary/{deviceId}", server.HandleGetMigrationSummary)
 		r.Post("/migrate/{deviceId}", server.HandleMigrateDevice)
@@ -1616,7 +1627,6 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 		r.Post("/test-connection/{deviceId}", server.HandleTestConnection)
 		r.Post("/test-hosts/{deviceId}", server.HandleTestHostsRedirection)
 		r.Post("/test-dns/{deviceId}", server.HandleTestDNSRedirection)
-		r.Get("/ca.crt", server.HandleGetCACert)
 		r.Get("/logging-settings", server.HandleGetLoggingSettings)
 		r.Post("/logging-settings", server.HandleUpdateLoggingSettings)
 		r.Get("/version", server.HandleGetVersionInfo)
@@ -1648,12 +1658,19 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 		// Stockholm wizard catch-all below is frontend, not a deprecated API path.
 		r.Group(func(r chi.Router) {
 			r.Use(server.DeprecatedRouteMiddleware)
-			mountSetupAPI(r)
+			mountSetupAPIShared(r)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(server.DeprecatedRouteMiddleware)
+			r.Use(server.BasicAuthAdmin())
+			mountSetupAPIAdmin(r)
 		})
 
 		// Serve Stockholm setup wizard pages for paths not matched by the
 		// management API. The Stockholm frontend has a setup/ directory that must
 		// be accessible at /setup/*. Frontend-only — not mirrored under /api/setup.
+		// Not gated by AdminAreaAuth: Stockholm is a separate, off-by-default
+		// (--stockholm-dir) legacy wizard, out of scope for #419.
 		if stockholmHandler != nil {
 			r.Get("/*", stockholmHandler.HandleStatic)
 			r.Get("/", stockholmHandler.HandleStatic)
@@ -1661,7 +1678,11 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 	})
 
 	r.Route("/api/setup", func(r chi.Router) {
-		mountSetupAPI(r)
+		mountSetupAPIShared(r)
+		r.Group(func(r chi.Router) {
+			r.Use(server.BasicAuthAdmin())
+			mountSetupAPIAdmin(r)
+		})
 	})
 
 	// Embedded web UI: control API under /api/control and the SPA under /app

@@ -265,3 +265,113 @@ func TestBasicAuthMgmt(t *testing.T) {
 		}
 	})
 }
+
+// TestBasicAuthAdmin covers the #419 admin-area gate: unlike BasicAuthMgmt
+// (credentials captured once at router-setup time), BasicAuthAdmin must
+// read the live AdminAreaAuth mode and credentials on every request, so a
+// live toggle via the Settings UI takes effect without a restart.
+func TestBasicAuthAdmin(t *testing.T) {
+	s := NewServer(nil, nil, "http://localhost", false, false, false)
+	s.SetMgmtConfig("admin", "secret123")
+
+	handler := s.BasicAuthAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+
+	t.Run("Unset mode passes through unauthenticated (today's default)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected status %d for unset mode, got %d", http.StatusOK, rr.Code)
+		}
+	})
+
+	t.Run("Disabled mode passes through unauthenticated", func(t *testing.T) {
+		s.SetAdminAreaAuth("disabled")
+		defer s.SetAdminAreaAuth("")
+
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected status %d for disabled mode, got %d", http.StatusOK, rr.Code)
+		}
+	})
+
+	t.Run("Enabled mode requires valid credentials", func(t *testing.T) {
+		s.SetAdminAreaAuth("enabled")
+		defer s.SetAdminAreaAuth("")
+
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		req.SetBasicAuth("admin", "secret123")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected status %d with valid credentials, got %d", http.StatusOK, rr.Code)
+		}
+	})
+
+	t.Run("Enabled mode rejects missing credentials", func(t *testing.T) {
+		s.SetAdminAreaAuth("enabled")
+		defer s.SetAdminAreaAuth("")
+
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d with no credentials, got %d", http.StatusUnauthorized, rr.Code)
+		}
+		if rr.Header().Get("WWW-Authenticate") == "" {
+			t.Error("expected WWW-Authenticate header to be set")
+		}
+	})
+
+	t.Run("Enabled mode rejects wrong credentials", func(t *testing.T) {
+		s.SetAdminAreaAuth("enabled")
+		defer s.SetAdminAreaAuth("")
+
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		req.SetBasicAuth("admin", "wrongpass")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("expected status %d with wrong credentials, got %d", http.StatusUnauthorized, rr.Code)
+		}
+	})
+
+	t.Run("Toggling mode live changes behavior without rebuilding the handler", func(t *testing.T) {
+		// The whole point of reading s.adminAreaAuth per-request rather than
+		// capturing it once: the same handler value must reflect a live change.
+		s.SetAdminAreaAuth("")
+		reqOpen := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		rrOpen := httptest.NewRecorder()
+		handler.ServeHTTP(rrOpen, reqOpen)
+
+		if rrOpen.Code != http.StatusOK {
+			t.Fatalf("expected open access before toggling, got %d", rrOpen.Code)
+		}
+
+		s.SetAdminAreaAuth("enabled")
+		defer s.SetAdminAreaAuth("")
+
+		reqGated := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		rrGated := httptest.NewRecorder()
+		handler.ServeHTTP(rrGated, reqGated)
+
+		if rrGated.Code != http.StatusUnauthorized {
+			t.Errorf("expected the SAME handler to enforce auth immediately after toggling, got %d", rrGated.Code)
+		}
+	})
+}

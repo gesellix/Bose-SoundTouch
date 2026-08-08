@@ -380,8 +380,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	// Guard rail: refuse to enable the admin-area gate while the Management
 	// API credentials are still the published default — that would let
 	// anyone in with admin/change_me! anyway, just with extra friction.
-	if adminAreaAuth == "enabled" &&
-		s.mgmtUsername == health.DefaultMgmtUsername && s.mgmtPassword == health.DefaultMgmtPassword {
+	if blocksAdminAreaAuthEnable(adminAreaAuth, s.mgmtUsername, s.mgmtPassword) {
 		s.mu.Unlock()
 		http.Error(w, "Cannot enable admin_area_auth while Management API credentials are still the "+
 			"published default (admin/change_me!). Set MGMT_USERNAME and MGMT_PASSWORD to your own "+
@@ -540,6 +539,16 @@ func NormalizeAdminAreaAuth(v string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// blocksAdminAreaAuthEnable reports whether enabling the admin-area gate
+// must be refused because the Management API credentials are still the
+// published default (admin/change_me!) — enabling it in that state would
+// give a false sense of security. Extracted from HandleUpdateSettings to
+// keep its cyclomatic complexity in check.
+func blocksAdminAreaAuthEnable(mode, mgmtUsername, mgmtPassword string) bool {
+	return mode == "enabled" &&
+		mgmtUsername == health.DefaultMgmtUsername && mgmtPassword == health.DefaultMgmtPassword
 }
 
 // normaliseTLSExtraHosts trims whitespace from each entry, drops empty

@@ -277,10 +277,13 @@ func TestAdminAreaAuthInvalidValue(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	body, _ := json.Marshal(map[string]string{
+	body, err := json.Marshal(map[string]string{
 		"server_url":      "http://127.0.0.1:8000",
 		"admin_area_auth": "sometimes",
 	})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
 
 	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(body))
 	if err != nil {
@@ -322,10 +325,13 @@ func TestAdminAreaAuthGuardRailBlocksDefaultCreds(t *testing.T) {
 	server.mgmtUsername = health.DefaultMgmtUsername
 	server.mgmtPassword = health.DefaultMgmtPassword
 
-	body, _ := json.Marshal(map[string]string{
+	body, err := json.Marshal(map[string]string{
 		"server_url":      "http://127.0.0.1:8000",
 		"admin_area_auth": "enabled",
 	})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
 
 	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(body))
 	if err != nil {
@@ -370,10 +376,13 @@ func TestAdminAreaAuthRoundTrip(t *testing.T) {
 	server.mgmtUsername = "custom-admin"
 	server.mgmtPassword = "custom-password"
 
-	enableBody, _ := json.Marshal(map[string]string{
+	enableBody, err := json.Marshal(map[string]string{
 		"server_url":      "http://127.0.0.1:8000",
 		"admin_area_auth": "Enabled", // mixed case must normalise
 	})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
 
 	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(enableBody))
 	if err != nil {
@@ -411,10 +420,13 @@ func TestAdminAreaAuthRoundTrip(t *testing.T) {
 		t.Errorf("GET /setup/settings: expected admin_area_auth \"enabled\", got %+v", got["admin_area_auth"])
 	}
 
-	disableBody, _ := json.Marshal(map[string]string{
+	disableBody, err := json.Marshal(map[string]string{
 		"server_url":      "http://127.0.0.1:8000",
 		"admin_area_auth": "disabled",
 	})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
 
 	res, err = http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(disableBody))
 	if err != nil {

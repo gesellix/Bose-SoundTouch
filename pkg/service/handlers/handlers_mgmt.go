@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +28,46 @@ func (s *Server) BasicAuthMgmt() func(http.Handler) http.Handler {
 	s.mu.RUnlock()
 
 	return middleware.BasicAuth("Management API", map[string]string{username: password})
+}
+
+// BasicAuthAdmin returns a middleware gating the whole admin area (/admin,
+// /setup, /api/setup — minus the small set of routes shared with
+// soundtouch-cli/soundtouch-player) behind the same credentials as
+// BasicAuthMgmt. Unlike BasicAuthMgmt, which captures username/password once
+// at router-setup time (main.go builds the router once at startup),
+// BasicAuthAdmin reads the live AdminAreaAuth mode and credentials on every
+// request, so toggling the setting via the Settings UI (HandleUpdateSettings
+// -> SetAdminAreaAuth) takes effect immediately — no restart. When the mode
+// isn't "enabled", every request passes through unauthenticated, i.e.
+// today's default behavior. See #419 and
+// _/i419/design-admin-area-auth-gate.md.
+func (s *Server) BasicAuthAdmin() func(http.Handler) http.Handler {
+	const realm = "Admin Area"
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			s.mu.RLock()
+			mode := s.adminAreaAuth
+			username := s.mgmtUsername
+			password := s.mgmtPassword
+			s.mu.RUnlock()
+
+			if mode != "enabled" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			user, pass, ok := r.BasicAuth()
+			if !ok || user != username || subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
+				w.WriteHeader(http.StatusUnauthorized)
+
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // HandleMgmtListSpeakers returns discovered speakers for the given account.
