@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,6 +33,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/gesellix/bose-soundtouch/pkg/service/stockholm"
+	"github.com/gesellix/bose-soundtouch/pkg/service/updatecheck"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/urfave/cli/v2"
@@ -313,6 +315,18 @@ func main() {
 				Usage:   "Device discovery interval",
 				Value:   "5m",
 				EnvVars: []string{"DISCOVERY_INTERVAL"},
+			},
+			&cli.BoolFlag{
+				Name:    "update-check-enabled",
+				Usage:   "Periodically check GitHub for a newer release (opt-in; the only network call this makes beyond speaker/provider traffic)",
+				Value:   false,
+				EnvVars: []string{"UPDATE_CHECK_ENABLED"},
+			},
+			&cli.StringFlag{
+				Name:    "update-check-interval",
+				Usage:   "Update check interval",
+				Value:   "24h",
+				EnvVars: []string{"UPDATE_CHECK_INTERVAL"},
 			},
 			&cli.BoolFlag{
 				Name:    "dns-discovery",
@@ -600,6 +614,10 @@ func main() {
 
 			startDeviceDiscovery(server)
 
+			updateChecker := updatecheck.NewChecker(ds, "gesellix/Bose-SoundTouch", version)
+			server.SetUpdateChecker(updateChecker)
+			startUpdateCheck(updateChecker, config.updateCheckEnabled, config.updateCheckInterval)
+
 			var stockholmHandler *stockholm.Handler
 
 			if config.stockholmDir != "" {
@@ -703,6 +721,8 @@ type serviceConfig struct {
 	tlsExtraHosts       []string
 	discoveryEnabled    bool
 	discoveryInterval   time.Duration
+	updateCheckEnabled  bool
+	updateCheckInterval time.Duration
 	domains             []string
 	spotifyClientID     string
 	spotifyClientSecret string
@@ -793,6 +813,16 @@ func loadConfig(c *cli.Context) serviceConfig {
 		discoveryInterval = 5 * time.Minute
 	}
 
+	updateCheckEnabled := c.Bool("update-check-enabled")
+	updateCheckIntervalStr := c.String("update-check-interval")
+
+	updateCheckInterval, err := time.ParseDuration(updateCheckIntervalStr)
+	if err != nil {
+		log.Printf("Warning: Failed to parse update check interval %s, using default 24h: %v", sanitizeLog(updateCheckIntervalStr), err)
+
+		updateCheckInterval = 24 * time.Hour
+	}
+
 	spotifyClientID := c.String("spotify-client-id")
 	spotifyClientSecret := c.String("spotify-client-secret")
 	spotifyRedirectURI := c.String("spotify-redirect-uri")
@@ -842,6 +872,8 @@ func loadConfig(c *cli.Context) serviceConfig {
 		tlsExtraHosts:       tlsExtraHosts,
 		discoveryEnabled:    discoveryEnabled,
 		discoveryInterval:   discoveryInterval,
+		updateCheckEnabled:  updateCheckEnabled,
+		updateCheckInterval: updateCheckInterval,
 		domains:             domains,
 		spotifyClientID:     spotifyClientID,
 		spotifyClientSecret: spotifyClientSecret,
@@ -1196,6 +1228,96 @@ func startDeviceDiscovery(server *handlers.Server) {
 			time.Sleep(currentInterval)
 		}
 	}()
+}
+
+// startUpdateCheck runs the opt-in periodic check against GitHub Releases
+// in the background (#591, _/i591/design-update-check.md). Unlike
+// discovery, enabled/interval are fixed at startup (env-only for v1, no
+// Settings-tab control — see the design doc's answer on that trade-off),
+// so they're plain arguments, not read live from Settings each tick.
+func startUpdateCheck(checker *updatecheck.Checker, enabled bool, interval time.Duration) {
+	if !enabled {
+		return
+	}
+
+	go func() {
+		time.Sleep(randomJitter(5 * time.Minute))
+
+		lastResult := checker.LastResult()
+		lastLoggedVersion := lastResult.LatestVersion
+
+		var lastErrorAt time.Time
+
+		if shouldCheckImmediately(lastResult.CheckedAt, interval, time.Now()) {
+			lastErrorAt, lastLoggedVersion = runUpdateCheckTick(checker, lastLoggedVersion)
+		}
+
+		for {
+			time.Sleep(interval)
+
+			if shouldSkipDueToBackoff(lastErrorAt, time.Now()) {
+				continue
+			}
+
+			lastErrorAt, lastLoggedVersion = runUpdateCheckTick(checker, lastLoggedVersion)
+		}
+	}()
+}
+
+// randomJitter returns a random duration in [0, upperBound) — the startup
+// delay so many installs restarting together (e.g. after a Docker image
+// bump) don't all hit GitHub at once. Not a security-sensitive use of
+// randomness.
+func randomJitter(upperBound time.Duration) time.Duration {
+	if upperBound <= 0 {
+		return 0
+	}
+
+	return time.Duration(rand.Int63n(int64(upperBound))) //nolint:gosec
+}
+
+// shouldCheckImmediately reports whether a check should run right at
+// startup (after jitter) rather than waiting a full interval: true when
+// there's no persisted last-check time, or it's stale (older than one
+// interval). Pure/testable — no sleeping.
+func shouldCheckImmediately(lastCheckedAt time.Time, interval time.Duration, now time.Time) bool {
+	return lastCheckedAt.IsZero() || now.Sub(lastCheckedAt) >= interval
+}
+
+// shouldSkipDueToBackoff reports whether a tick should be skipped because
+// the last attempt failed less than an hour ago — so a short
+// UPDATE_CHECK_INTERVAL doesn't hammer GitHub while it's erroring. A zero
+// lastErrorAt means "no recent failure", never skip. Pure/testable.
+func shouldSkipDueToBackoff(lastErrorAt, now time.Time) bool {
+	return !lastErrorAt.IsZero() && now.Sub(lastErrorAt) < time.Hour
+}
+
+// logUpdateIfNewlyAvailable logs once when result reports a version newer
+// than lastLoggedVersion, and returns the version to remember as "already
+// logged" — unchanged when there's nothing new, so a persistently-available
+// update doesn't spam the log every tick. Pure/testable.
+func logUpdateIfNewlyAvailable(result updatecheck.Result, lastLoggedVersion string) string {
+	if result.Available && result.LatestVersion != "" && result.LatestVersion != lastLoggedVersion {
+		log.Printf("[UpdateCheck] Update available: %s (current %s) — %s",
+			result.LatestVersion, result.CurrentVersion, result.ReleaseURL)
+
+		return result.LatestVersion
+	}
+
+	return lastLoggedVersion
+}
+
+// runUpdateCheckTick performs one check, logs on failure, and returns the
+// updated (lastErrorAt, lastLoggedVersion) pair for the caller to carry
+// into the next iteration.
+func runUpdateCheckTick(checker *updatecheck.Checker, lastLoggedVersion string) (time.Time, string) {
+	result, err := checker.CheckNow(context.Background())
+	if err != nil {
+		log.Printf("[UpdateCheck] check failed: %v", err)
+		return time.Now(), lastLoggedVersion
+	}
+
+	return time.Time{}, logUpdateIfNewlyAvailable(result, lastLoggedVersion)
 }
 
 // newEmbeddedWebApp builds the soundtouch-player application for embedding in the

@@ -30,6 +30,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/gesellix/bose-soundtouch/pkg/service/spotify"
 	"github.com/gesellix/bose-soundtouch/pkg/service/tts"
+	"github.com/gesellix/bose-soundtouch/pkg/service/updatecheck"
 	"github.com/gesellix/bose-soundtouch/pkg/ssh"
 	"github.com/miekg/dns"
 )
@@ -70,6 +71,7 @@ type Server struct {
 	mgmtPassword             string
 	adminAreaAuth            string               // "" (unset) / "enabled" / "disabled" — see datastore.Settings.AdminAreaAuth
 	dismissedAnnouncements   map[string]time.Time // announcement id -> most recent dismissal; see RecordDismissal
+	updateChecker            *updatecheck.Checker // nil unless SetUpdateChecker was called (opt-in, see #591)
 	spotifyClientID          string
 	spotifyClientSecret      string
 	spotifyRedirectURI       string
@@ -1124,6 +1126,30 @@ func (s *Server) IsAnnouncementDismissed(id string) bool {
 	_, ok := s.dismissedAnnouncements[id]
 
 	return ok
+}
+
+// SetUpdateChecker registers the opt-in periodic update checker (#591). Not
+// called at all unless UPDATE_CHECK_ENABLED — leave nil otherwise;
+// UpdateCheckResult handles that safely.
+func (s *Server) SetUpdateChecker(c *updatecheck.Checker) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.updateChecker = c
+}
+
+// UpdateCheckResult returns the last known update-check result, or the
+// zero value (Available: false) if the check was never enabled.
+func (s *Server) UpdateCheckResult() updatecheck.Result {
+	s.mu.RLock()
+	checker := s.updateChecker
+	s.mu.RUnlock()
+
+	if checker == nil {
+		return updatecheck.Result{}
+	}
+
+	return checker.LastResult()
 }
 
 // SetInternalPaths sets the internal paths for the server.
