@@ -1388,14 +1388,22 @@ func (s *Server) HandleGetVersionInfo(w http.ResponseWriter, _ *http.Request) {
 		releaseURL = fmt.Sprintf("%s/releases/tag/%s", repoURL, version)
 	}
 
-	if err := json.NewEncoder(w).Encode(map[string]string{
-		"version":     version,
-		"commit":      commit,
-		"date":        date,
-		"repo_url":    repoURL,
-		"release_url": releaseURL,
-		"commit_url":  commitURL,
-		"data_dir":    dataDir,
+	// Opt-in periodic update check (#591) — UpdateCheckResult is nil-safe and
+	// returns the zero value (Available: false) when the check was never
+	// enabled, which is the common case.
+	updateCheck := s.UpdateCheckResult()
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"version":            version,
+		"commit":             commit,
+		"date":               date,
+		"repo_url":           repoURL,
+		"release_url":        releaseURL,
+		"commit_url":         commitURL,
+		"data_dir":           dataDir,
+		"update_available":   updateCheck.Available,
+		"latest_version":     updateCheck.LatestVersion,
+		"latest_release_url": updateCheck.ReleaseURL,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return

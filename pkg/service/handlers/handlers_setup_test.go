@@ -468,7 +468,7 @@ func TestHandleGetVersionInfo_IncludesAbsoluteDataDir(t *testing.T) {
 	}
 	defer res.Body.Close()
 
-	var got map[string]string
+	var got map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
@@ -480,6 +480,45 @@ func TestHandleGetVersionInfo_IncludesAbsoluteDataDir(t *testing.T) {
 
 	if got["data_dir"] != wantAbs {
 		t.Errorf("Expected data_dir %q, got %q", wantAbs, got["data_dir"])
+	}
+}
+
+// TestHandleGetVersionInfo_UpdateCheckFields verifies the #591 fields are
+// present and reflect a nil-checker default (Available: false) when the
+// update check was never enabled — the common case.
+func TestHandleGetVersionInfo_UpdateCheckFields(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "version-info-updatecheck-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	r, _ := setupRouter("http://127.0.0.1:8000", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/setup/version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	var got map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if got["update_available"] != false {
+		t.Errorf("Expected update_available=false by default, got %v", got["update_available"])
+	}
+	if _, ok := got["latest_version"]; !ok {
+		t.Error("Expected a latest_version key in the response")
+	}
+	if _, ok := got["latest_release_url"]; !ok {
+		t.Error("Expected a latest_release_url key in the response")
 	}
 }
 
