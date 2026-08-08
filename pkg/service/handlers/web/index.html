@@ -227,6 +227,29 @@
             </div>
         </div>
         <div style="margin-bottom: 20px">
+            <strong>Admin area login:</strong>
+            <div style="margin-top: 6px">
+                <select id="admin-area-auth">
+                    <option value="">Not decided yet (today: open to anyone on the network)</option>
+                    <option value="enabled">Require login for the entire admin area now</option>
+                    <option value="disabled">Keep the admin area open (explicit opt-out)</option>
+                </select>
+            </div>
+            <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                Today, only Spotify/Amazon linking and the Local Account tab
+                require login (the same credentials as
+                <code>MGMT_USERNAME</code>/<code>MGMT_PASSWORD</code>). This
+                setting extends that login to the entire admin area —
+                Overview, Devices, Settings, Migration, Health, Logs. A
+                future release is expected to make this the default; set it
+                to "Keep the admin area open" now if you want to opt out
+                ahead of that. See
+                <a href="https://github.com/gesellix/Bose-SoundTouch/issues/419" target="_blank" rel="noopener">issue #419</a>
+                for background. Requires non-default management credentials
+                to enable.
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
             <strong>TLS extra hosts:</strong>
             <span class="info-toggle" onclick="toggleInfo('tls-extra-hosts-info')">ⓘ</span>
             <div id="tls-extra-hosts-info" class="info-details">

@@ -357,6 +357,9 @@ async function fetchSettings() {
         if (settings.default_landing) {
             document.getElementById("default-landing").value = settings.default_landing;
         }
+        if (settings.admin_area_auth !== undefined) {
+            document.getElementById("admin-area-auth").value = settings.admin_area_auth || "";
+        }
         if (settings.dns_enabled !== undefined) {
             document.getElementById("dns-enabled").checked = settings.dns_enabled;
         }
@@ -498,6 +501,7 @@ async function updateSettings() {
         server_url: document.getElementById("target-domain").value,
         https_server_url_override: httpsOverrideEl ? httpsOverrideEl.value.trim() : "",
         default_landing: document.getElementById("default-landing").value,
+        admin_area_auth: document.getElementById("admin-area-auth").value,
         discovery_interval: document.getElementById("discovery-interval").value,
         discovery_enabled: document.getElementById("discovery-enabled").checked,
         dns_enabled: document.getElementById("dns-enabled").checked,
