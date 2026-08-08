@@ -901,7 +901,7 @@ async function fetchAccountDetails(accountId) {
         if (metadataEl) {
             const warningNotice = data.account.is_placeholder ?
                 `<div style="background: #fff3cd; color: #856404; padding: 10px; border: 1px solid #ffeeba; border-radius: 4px; margin-bottom: 10px; font-size: 0.85em;">
-                    <strong>Notice:</strong> Account data (account.json) was not found in the expected location for this account ID.
+                    <strong>Notice:</strong> This account hasn't saved any custom settings yet (language, provider preferences). Defaults are in effect — they'll be saved once you change something below.
                 </div>` : "";
 
             metadataEl.innerHTML = `
