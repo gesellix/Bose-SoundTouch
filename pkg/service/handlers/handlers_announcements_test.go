@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/updatecheck"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -161,5 +162,112 @@ func TestHandleDismissAnnouncement_Success(t *testing.T) {
 	_, active := listAnnouncements(t, s, announcementTargetAdmin)
 	if containsAnnouncementID(active, "admin-area-auth-419") {
 		t.Errorf("expected the notice to be gone from the list after dismissal, got %+v", active)
+	}
+}
+
+// newServerWithUpdateAvailable builds a Server whose registered
+// updatecheck.Checker reports a newer version than currentVersion, via the
+// same persisted-state-seeding path a real restart would use (not a mock —
+// exercises the real NewChecker/UpdateCheckResult round trip).
+func newServerWithUpdateAvailable(t *testing.T, currentVersion, latestVersion string) *Server {
+	t.Helper()
+
+	s := newAnnouncementsTestServer(t)
+
+	ds := datastore.NewDataStore(t.TempDir())
+	if err := ds.SaveUpdateCheckState(datastore.UpdateCheckState{
+		LastCheckedAt:   "2026-08-09T00:00:00Z",
+		LastSeenVersion: latestVersion,
+	}); err != nil {
+		t.Fatalf("Failed to seed update-check state: %v", err)
+	}
+
+	s.SetUpdateChecker(updatecheck.NewChecker(ds, "owner/repo", currentVersion))
+
+	return s
+}
+
+// TestHandleListAnnouncements_UpdateAvailable is the regression test for
+// #591's reuse of the #419 announcements mechanism: the update-available
+// entry's dynamic message/target/dismissal behavior end to end.
+func TestHandleListAnnouncements_UpdateAvailable(t *testing.T) {
+	t.Run("visible for both admin and app targets when available", func(t *testing.T) {
+		s := newServerWithUpdateAvailable(t, "v1.0.0", "v1.2.0")
+
+		for _, target := range []string{announcementTargetAdmin, announcementTargetApp} {
+			_, active := listAnnouncements(t, s, target)
+
+			var found *announcementDTO
+			for i := range active {
+				if active[i].ID == "update-available-v1.2.0" {
+					found = &active[i]
+				}
+			}
+
+			if found == nil {
+				t.Fatalf("target=%s: expected an update-available-v1.2.0 entry, got %+v", target, active)
+			}
+			if found.Message == "" {
+				t.Errorf("target=%s: expected a non-empty dynamic message", target)
+			}
+		}
+	})
+
+	t.Run("not visible when already up to date", func(t *testing.T) {
+		s := newServerWithUpdateAvailable(t, "v1.2.0", "v1.2.0")
+
+		_, active := listAnnouncements(t, s, announcementTargetAdmin)
+		if containsAnnouncementID(active, "update-available-v1.2.0") {
+			t.Errorf("expected no update-available entry when up to date, got %+v", active)
+		}
+	})
+
+	t.Run("dismissing one version does not suppress a later version", func(t *testing.T) {
+		s := newServerWithUpdateAvailable(t, "v1.0.0", "v1.2.0")
+
+		if err := s.RecordDismissal("update-available-v1.2.0"); err != nil {
+			t.Fatalf("RecordDismissal failed: %v", err)
+		}
+
+		_, active := listAnnouncements(t, s, announcementTargetAdmin)
+		if containsAnnouncementID(active, "update-available-v1.2.0") {
+			t.Error("expected the v1.2.0 notice to be dismissed")
+		}
+
+		// A later check finds a newer version still: must reappear under a
+		// DIFFERENT dismissal key, not stay suppressed.
+		newDS := datastore.NewDataStore(t.TempDir())
+		if err := newDS.SaveUpdateCheckState(datastore.UpdateCheckState{
+			LastCheckedAt:   "2026-08-10T00:00:00Z",
+			LastSeenVersion: "v1.3.0",
+		}); err != nil {
+			t.Fatalf("Failed to seed newer state: %v", err)
+		}
+		s.SetUpdateChecker(updatecheck.NewChecker(newDS, "owner/repo", "v1.0.0"))
+
+		_, active = listAnnouncements(t, s, announcementTargetAdmin)
+		if !containsAnnouncementID(active, "update-available-v1.3.0") {
+			t.Errorf("expected the v1.3.0 notice to appear despite v1.2.0 being dismissed, got %+v", active)
+		}
+	})
+}
+
+func TestHandleDismissAnnouncement_UpdateAvailable(t *testing.T) {
+	s := newServerWithUpdateAvailable(t, "v1.0.0", "v1.2.0")
+
+	r := chi.NewRouter()
+	r.Post("/api/announcements/{id}/dismiss", s.HandleDismissAnnouncement)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/announcements/update-available-v1.2.0/dismiss", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	_, active := listAnnouncements(t, s, announcementTargetAdmin)
+	if containsAnnouncementID(active, "update-available-v1.2.0") {
+		t.Errorf("expected the notice to be gone after dismissal, got %+v", active)
 	}
 }

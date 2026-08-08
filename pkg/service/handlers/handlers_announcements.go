@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -22,12 +23,42 @@ const (
 // _/i419/design-admin-area-auth-gate.md. ShowWhile lets an entry key off
 // live server state (e.g. "only while the admin-area gate hasn't been
 // decided yet"); nil means always show (until dismissed).
+//
+// MessageFunc and DismissKeyFunc (added for #591,
+// _/i591/design-update-check.md) are the dynamic counterparts of Message
+// and ID: nil means "use the static field", as before; set means "compute
+// it from live state". The update-check notice needs both — its text names
+// a specific version, and dismissing the notice for v1.2.0 must not
+// suppress a later notice for v1.3.0, so its dismissal key has to change
+// with the detected version.
 type Announcement struct {
-	ID        string
-	Message   string
-	Level     string
-	Targets   []string
-	ShowWhile func(*Server) bool
+	ID             string
+	Message        string
+	MessageFunc    func(*Server) string
+	Level          string
+	Targets        []string
+	ShowWhile      func(*Server) bool
+	DismissKeyFunc func(*Server) string
+}
+
+// message returns the effective text: MessageFunc(s) if set, else the
+// static Message.
+func (a Announcement) message(s *Server) string {
+	if a.MessageFunc != nil {
+		return a.MessageFunc(s)
+	}
+
+	return a.Message
+}
+
+// dismissKey returns the effective dismissal/DTO id: DismissKeyFunc(s) if
+// set, else the static ID.
+func (a Announcement) dismissKey(s *Server) string {
+	if a.DismissKeyFunc != nil {
+		return a.DismissKeyFunc(s)
+	}
+
+	return a.ID
 }
 
 // announcements is the full, in-code list. announcementTargetChooser is
@@ -46,6 +77,25 @@ var announcements = []Announcement{
 			"dismiss this once you've decided. See issue #419 for details.",
 		ShowWhile: func(s *Server) bool {
 			return s.AdminAreaAuthMode() == ""
+		},
+	},
+	{
+		ID:      "update-available",
+		Level:   "info",
+		Targets: []string{announcementTargetApp, announcementTargetAdmin},
+		ShowWhile: func(s *Server) bool {
+			return s.UpdateCheckResult().Available
+		},
+		MessageFunc: func(s *Server) string {
+			r := s.UpdateCheckResult()
+
+			return fmt.Sprintf("AfterTouch %s is available (you're on %s). %s",
+				r.LatestVersion, r.CurrentVersion, r.ReleaseURL)
+		},
+		// Per-version, not per-family: dismissing the notice for one version
+		// must not silently suppress a later, different version's notice.
+		DismissKeyFunc: func(s *Server) string {
+			return "update-available-" + s.UpdateCheckResult().LatestVersion
 		},
 	},
 }
@@ -97,11 +147,12 @@ func (s *Server) HandleListAnnouncements(w http.ResponseWriter, r *http.Request)
 			continue
 		}
 
-		if s.IsAnnouncementDismissed(a.ID) {
+		key := a.dismissKey(s)
+		if s.IsAnnouncementDismissed(key) {
 			continue
 		}
 
-		active = append(active, announcementDTO{ID: a.ID, Message: a.Message, Level: a.Level})
+		active = append(active, announcementDTO{ID: key, Message: a.message(s), Level: a.Level})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -124,7 +175,7 @@ func (s *Server) HandleDismissAnnouncement(w http.ResponseWriter, r *http.Reques
 	found := false
 
 	for _, a := range announcements {
-		if a.ID == id {
+		if a.dismissKey(s) == id {
 			found = true
 			break
 		}
