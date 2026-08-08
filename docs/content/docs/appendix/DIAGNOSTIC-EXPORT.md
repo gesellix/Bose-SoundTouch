@@ -22,12 +22,32 @@ The encrypted `.age` file decrypts to a `.tar.gz` archive with:
     Source, SourceID, location), device product code, firmware version, IP, name
 - `datastore/accounts/{id}/devices/{id}/*.xml` — raw XML files verbatim from
   the sender's datastore (`Presets.xml`, `Sources.xml`, `Recents.xml`, …)
+- `stats/activity/{kind}/*.json` — the local admin-UI activity log (e.g.
+  announcement-banner dismissals), verbatim, one file per recorded event
 
 Having both the structured JSON and the raw XML lets you compare what the
 service serves via HTTP against what is actually stored on disk.
 
 **What is excluded from the JSON:** authentication tokens, credentials, OAuth
 secrets, Spotify refresh tokens. The raw XML files are included as-is.
+
+---
+
+## Local activity log
+
+AfterTouch records a small local activity log for admin-UI actions —
+today, just announcement-banner dismissals (e.g. the admin-area-gate notice
+from issue #419) — under `stats/activity/{kind}/` in the data directory.
+Each event is its own plain JSON file (id, timestamp, and any detail),
+readable with a text editor; there is no encoding or opaque format to
+decode.
+
+This follows the same "[all data stays on your
+network](SOUNDTOUCH-SERVICE-ANNOUNCEMENT.md)" principle as the rest of
+AfterTouch: nothing here is ever transmitted automatically. The only way it
+leaves the operator's network is the same as everything else in this
+document — an explicitly-triggered diagnostic export, which the operator
+has to click a button and choose to send.
 
 ---
 

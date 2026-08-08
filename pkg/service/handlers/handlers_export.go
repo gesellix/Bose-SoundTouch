@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -189,6 +190,7 @@ func (s *Server) buildDiagnosticArchive() ([]byte, error) {
 	s.addSystemFiles(tw)
 	s.addServiceLog(tw)
 	s.addSettingsJSON(tw)
+	s.addActivityLog(tw)
 	addEnvVars(tw)
 
 	if err := tw.Close(); err != nil {
@@ -698,6 +700,56 @@ type diagSettings struct {
 // addSettingsJSON serialises the service settings into the archive as
 // settings.json. OAuth client secrets are replaced with "[REDACTED]" so the
 // file is safe to share.
+// addActivityLog bundles the local admin-UI activity log (announcement
+// dismissals, and any other kind recorded via datastore.RecordActivity)
+// into the diagnostic archive verbatim, one file per event — same idea as
+// the per-device XML bundling above, but for stats/activity/. This is what
+// makes the "local-only, but included in an explicitly-triggered diagnostic
+// export" claim in DIAGNOSTIC-EXPORT.md actually true. A missing directory
+// (nothing recorded yet) is not an error.
+func (s *Server) addActivityLog(tw *tar.Writer) {
+	if s.ds == nil || s.ds.DataDir == "" {
+		return
+	}
+
+	root := filepath.Join(s.ds.DataDir, "stats", "activity")
+
+	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			log.Printf("[Export] read activity log %s: %v", sanitizeLog(path), readErr)
+			return nil
+		}
+
+		rel, relErr := filepath.Rel(s.ds.DataDir, path)
+		if relErr != nil {
+			log.Printf("[Export] rel path for %s: %v", sanitizeLog(path), relErr)
+			return nil
+		}
+
+		if addErr := addTarBytes(tw, rel, data); addErr != nil {
+			log.Printf("[Export] add %s: %v", sanitizeLog(rel), addErr)
+		}
+
+		return nil
+	})
+	if walkErr != nil {
+		log.Printf("[Export] walk activity log: %v", walkErr)
+	}
+}
+
 func (s *Server) addSettingsJSON(tw *tar.Writer) {
 	st, err := s.ds.GetSettings()
 	if err != nil {
