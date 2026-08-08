@@ -672,6 +672,21 @@ type ErrorStats struct {
 	Details      string `json:"details,omitempty" xml:"details,omitempty"`
 }
 
+// ActivityRecord is one entry in AfterTouch's local, append-only admin-UI
+// activity log (e.g. an announcement banner dismissal). Local-only: written
+// to plain JSON on disk, never transmitted automatically — the only way it
+// leaves the operator's network is an explicitly-triggered diagnostic
+// export. The same ID can recur with a new Timestamp (e.g. a dismissed
+// notification shown and dismissed again later); this is a log, not a
+// keyed map. Intentionally generic so it can back other admin-UI action
+// kinds beyond dismissals later, not just this one feature.
+type ActivityRecord struct {
+	Kind      string                 `json:"kind"`
+	ID        string                 `json:"id"`
+	Timestamp string                 `json:"timestamp"`
+	Detail    map[string]interface{} `json:"detail,omitempty"`
+}
+
 // DeviceEvent represents an event that occurred on a device.
 type DeviceEvent struct {
 	Type     string                 `json:"type"`

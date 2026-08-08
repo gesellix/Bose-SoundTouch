@@ -2738,6 +2738,82 @@ func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 	return ds.atomicWriteFile(path, data)
 }
 
+// RecordActivity appends one entry to the local admin-UI activity log, under
+// DataDir/stats/activity/<kind>/, one file per event (same shape as
+// SaveUsageStats/SaveErrorStats above). kind is meant to be a small,
+// developer-defined constant (e.g. "notification_dismissed") used directly
+// as a directory name — callers must not pass untrusted/user-supplied
+// values. id may recur across calls with a new timestamp each time; this is
+// an append-only log, not a keyed store. See models.ActivityRecord for the
+// local-only/never-transmitted-automatically guarantee this backs.
+func (ds *DataStore) RecordActivity(kind, id string, detail map[string]interface{}) error {
+	dir := filepath.Join(ds.DataDir, "stats", "activity", kind)
+	if err := ds.rootMkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	now := time.Now()
+	record := models.ActivityRecord{
+		Kind:      kind,
+		ID:        id,
+		Timestamp: now.UTC().Format(time.RFC3339Nano),
+		Detail:    detail,
+	}
+
+	// The random suffix guards against two events for the same id landing in
+	// the same nanosecond (observed as flaky on coarser-resolution clocks)
+	// silently overwriting one another instead of both being recorded.
+	filename := fmt.Sprintf("%d_%d_%s.json", now.UnixNano(), rand.Int63n(1_000_000), id) //nolint:gosec
+	path := filepath.Join(dir, filename)
+
+	data, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return ds.atomicWriteFile(path, data)
+}
+
+// GetActivityRecords reads back every entry recorded via RecordActivity for
+// the given kind. Unreadable or malformed files are skipped rather than
+// failing the whole read — a single corrupt event shouldn't make the rest of
+// the log unreadable. Returns an empty slice (not an error) when the
+// directory doesn't exist yet, matching the "nothing recorded yet" case.
+func (ds *DataStore) GetActivityRecords(kind string) ([]models.ActivityRecord, error) {
+	dir := filepath.Join(ds.DataDir, "stats", "activity", kind)
+
+	entries, err := ds.rootReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	records := make([]models.ActivityRecord, 0, len(entries))
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		data, readErr := ds.rootReadFile(filepath.Join(dir, entry.Name()))
+		if readErr != nil {
+			continue
+		}
+
+		var record models.ActivityRecord
+		if unmarshalErr := json.Unmarshal(data, &record); unmarshalErr != nil {
+			continue
+		}
+
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
 // SaveErrorStats saves error statistics to the datastore.
 func (ds *DataStore) SaveErrorStats(stats models.ErrorStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "error")

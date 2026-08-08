@@ -458,6 +458,88 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 }
 
+// TestRecordActivity_EmptyKindReturnsNilNotError verifies GetActivityRecords
+// for a kind that was never recorded returns an empty, non-error result —
+// the "nothing recorded yet" case, not a failure.
+func TestRecordActivity_EmptyKindReturnsNilNotError(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "activity-empty-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := NewDataStore(tempDir)
+
+	records, err := ds.GetActivityRecords("notification_dismissed")
+	if err != nil {
+		t.Fatalf("GetActivityRecords on empty kind should not error, got: %v", err)
+	}
+	if len(records) != 0 {
+		t.Errorf("Expected no records, got %d", len(records))
+	}
+}
+
+// TestRecordActivity_SameIDRecursWithNewTimestamp is the regression test for
+// the append-only shape agreed in the #419 design: dismissing the same
+// announcement twice must produce two records, not overwrite one — this is
+// a log, not a keyed map.
+func TestRecordActivity_SameIDRecursWithNewTimestamp(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "activity-recur-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := NewDataStore(tempDir)
+
+	if err := ds.RecordActivity("notification_dismissed", "admin-gate-notice", nil); err != nil {
+		t.Fatalf("First RecordActivity failed: %v", err)
+	}
+	if err := ds.RecordActivity("notification_dismissed", "admin-gate-notice", nil); err != nil {
+		t.Fatalf("Second RecordActivity failed: %v", err)
+	}
+
+	records, err := ds.GetActivityRecords("notification_dismissed")
+	if err != nil {
+		t.Fatalf("GetActivityRecords failed: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("Expected 2 records for the same recurring id, got %d: %+v", len(records), records)
+	}
+	for _, r := range records {
+		if r.ID != "admin-gate-notice" || r.Kind != "notification_dismissed" || r.Timestamp == "" {
+			t.Errorf("Unexpected record shape: %+v", r)
+		}
+	}
+}
+
+// TestRecordActivity_DetailRoundTrips verifies the optional detail payload
+// survives a write/read round trip.
+func TestRecordActivity_DetailRoundTrips(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "activity-detail-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := NewDataStore(tempDir)
+
+	if err := ds.RecordActivity("some_kind", "some-id", map[string]interface{}{"note": "hello"}); err != nil {
+		t.Fatalf("RecordActivity failed: %v", err)
+	}
+
+	records, err := ds.GetActivityRecords("some_kind")
+	if err != nil {
+		t.Fatalf("GetActivityRecords failed: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("Expected 1 record, got %d", len(records))
+	}
+	if records[0].Detail["note"] != "hello" {
+		t.Errorf("Expected detail to round-trip, got: %+v", records[0].Detail)
+	}
+}
+
 func TestMoveDeviceMigratesData(t *testing.T) {
 	tempDir := t.TempDir()
 	ds := NewDataStore(tempDir)

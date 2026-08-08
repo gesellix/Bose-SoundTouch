@@ -68,7 +68,8 @@ type Server struct {
 	RepoURL                  string
 	mgmtUsername             string
 	mgmtPassword             string
-	adminAreaAuth            string // "" (unset) / "enabled" / "disabled" — see datastore.Settings.AdminAreaAuth
+	adminAreaAuth            string               // "" (unset) / "enabled" / "disabled" — see datastore.Settings.AdminAreaAuth
+	dismissedAnnouncements   map[string]time.Time // announcement id -> most recent dismissal; see RecordDismissal
 	spotifyClientID          string
 	spotifyClientSecret      string
 	spotifyRedirectURI       string
@@ -317,6 +318,8 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 			return msg, nil
 		},
 	)
+
+	s.dismissedAnnouncements = loadDismissedAnnouncements(ds)
 
 	return s
 }
@@ -1047,6 +1050,79 @@ func (s *Server) AdminAreaAuthMode() string {
 	defer s.mu.RUnlock()
 
 	return s.adminAreaAuth
+}
+
+// activityKindNotificationDismissed is the datastore.RecordActivity "kind"
+// used for announcement-banner dismissals (see #419 design,
+// _/i419/design-admin-area-auth-gate.md).
+const activityKindNotificationDismissed = "notification_dismissed"
+
+// loadDismissedAnnouncements scans the local activity log once at startup
+// and folds it into an id -> most-recent-dismissal-timestamp map. Called
+// from NewServer so the read path (IsAnnouncementDismissed) never touches
+// disk — only this one, scoped, boot-time scan does, regardless of how
+// large the log grows over time. Errors are logged, not fatal: a missing or
+// unreadable activity log means "nothing dismissed yet", not a startup failure.
+func loadDismissedAnnouncements(ds *datastore.DataStore) map[string]time.Time {
+	dismissed := make(map[string]time.Time)
+
+	if ds == nil {
+		return dismissed
+	}
+
+	records, err := ds.GetActivityRecords(activityKindNotificationDismissed)
+	if err != nil {
+		log.Printf("[Announcements] Failed to load dismissal history, treating as none: %v", err)
+		return dismissed
+	}
+
+	for _, record := range records {
+		ts, parseErr := time.Parse(time.RFC3339Nano, record.Timestamp)
+		if parseErr != nil {
+			continue
+		}
+
+		if existing, ok := dismissed[record.ID]; !ok || ts.After(existing) {
+			dismissed[record.ID] = ts
+		}
+	}
+
+	return dismissed
+}
+
+// RecordDismissal marks an announcement as dismissed: appends to the local
+// activity log (write-through) and updates the in-memory cache immediately,
+// so IsAnnouncementDismissed reflects it without re-reading disk. The same
+// id can be dismissed again later (e.g. if re-shown) — each call is a new
+// log entry, not an overwrite.
+func (s *Server) RecordDismissal(id string) error {
+	if s.ds != nil {
+		if err := s.ds.RecordActivity(activityKindNotificationDismissed, id, nil); err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.dismissedAnnouncements == nil {
+		s.dismissedAnnouncements = make(map[string]time.Time)
+	}
+
+	s.dismissedAnnouncements[id] = time.Now()
+
+	return nil
+}
+
+// IsAnnouncementDismissed reports whether the given announcement id has
+// been dismissed, from the in-memory cache only — never touches disk.
+func (s *Server) IsAnnouncementDismissed(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.dismissedAnnouncements[id]
+
+	return ok
 }
 
 // SetInternalPaths sets the internal paths for the server.
