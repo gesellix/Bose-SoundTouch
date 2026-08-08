@@ -2818,7 +2818,10 @@ func (ds *DataStore) RecordActivity(kind, id string, detail map[string]interface
 
 	// The random suffix guards against two events for the same id landing in
 	// the same nanosecond (observed as flaky on coarser-resolution clocks)
-	// silently overwriting one another instead of both being recorded.
+	// silently overwriting one another instead of both being recorded. Not
+	// a security-sensitive use of randomness — only affects filename
+	// uniqueness, not any value that's compared or kept secret.
+	// nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used
 	filename := fmt.Sprintf("%d_%d_%s.json", now.UnixNano(), rand.Int63n(1_000_000), id) //nolint:gosec
 	path := filepath.Join(dir, filename)
 

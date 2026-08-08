@@ -1273,6 +1273,7 @@ func randomJitter(upperBound time.Duration) time.Duration {
 		return 0
 	}
 
+	// nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used
 	return time.Duration(rand.Int63n(int64(upperBound))) //nolint:gosec
 }
 
