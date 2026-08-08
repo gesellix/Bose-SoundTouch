@@ -222,6 +222,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		s.healthRegistry,
 		func() (string, string) { return s.mgmtUsername, s.mgmtPassword },
 	)
+	health.RegisterAdminAreaAuthCheck(s.healthRegistry, s.AdminAreaAuthMode)
 
 	// Health QuickFix executor for the empty-margeAccountUUID
 	// finding from RegisterSpeakerInfoReachable. Lives here (not in
