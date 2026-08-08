@@ -529,6 +529,11 @@ func main() {
 			server.SetAmazonConfig(config.amazonClientID, config.amazonClientSecret, config.amazonRedirectURI)
 			server.SetMgmtConfig(config.mgmtUsername, config.mgmtPassword)
 
+			// Invalid values (e.g. a hand-edited settings.json) fall back to the
+			// unset default rather than failing startup.
+			adminAreaAuth, _ := handlers.NormalizeAdminAreaAuth(persisted.AdminAreaAuth)
+			server.SetAdminAreaAuth(adminAreaAuth)
+
 			initMusicServices(config, server)
 			initTTSService(config, server)
 

@@ -14,6 +14,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/health"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 )
 
@@ -256,6 +257,177 @@ func TestSettingsSavePreservesUnmanagedFields(t *testing.T) {
 	}
 	if persisted.SpotifyClientID != "seeded-spotify-client-id" {
 		t.Errorf("POST /setup/logging-settings dropped SpotifyClientID: %+v", persisted)
+	}
+}
+
+// TestAdminAreaAuthInvalidValue is a regression test for #419: an
+// unrecognised admin_area_auth value must be rejected outright, not
+// silently coerced to the unset default.
+func TestAdminAreaAuthInvalidValue(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "admin-area-auth-invalid-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	r, _ := setupRouter("http://127.0.0.1:8000", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	body, _ := json.Marshal(map[string]string{
+		"server_url":      "http://127.0.0.1:8000",
+		"admin_area_auth": "sometimes",
+	})
+
+	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid admin_area_auth, got %v", res.Status)
+	}
+
+	persisted, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("Failed to reload settings: %v", err)
+	}
+	if persisted.AdminAreaAuth != "" {
+		t.Errorf("Invalid admin_area_auth must not be persisted, got %q", persisted.AdminAreaAuth)
+	}
+}
+
+// TestAdminAreaAuthGuardRailBlocksDefaultCreds is a regression test for
+// #419: enabling the admin-area gate while the Management API credentials
+// are still the published default (admin/change_me!) must be rejected —
+// otherwise the gate would give a false sense of security.
+func TestAdminAreaAuthGuardRailBlocksDefaultCreds(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "admin-area-auth-guard-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	r, server := setupRouter("http://127.0.0.1:8000", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	server.mgmtUsername = health.DefaultMgmtUsername
+	server.mgmtPassword = health.DefaultMgmtPassword
+
+	body, _ := json.Marshal(map[string]string{
+		"server_url":      "http://127.0.0.1:8000",
+		"admin_area_auth": "enabled",
+	})
+
+	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 when enabling admin_area_auth with default creds, got %v", res.Status)
+	}
+
+	if server.AdminAreaAuthMode() != "" {
+		t.Errorf("Guard rail must not flip the live mode, got %q", server.AdminAreaAuthMode())
+	}
+
+	persisted, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("Failed to reload settings: %v", err)
+	}
+	if persisted.AdminAreaAuth != "" {
+		t.Errorf("Guard rail must not persist the change, got %q", persisted.AdminAreaAuth)
+	}
+}
+
+// TestAdminAreaAuthRoundTrip verifies enabling (with non-default creds) and
+// later disabling admin_area_auth updates both the live server field and
+// the persisted settings.json, and is reflected back by GET /setup/settings.
+func TestAdminAreaAuthRoundTrip(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "admin-area-auth-roundtrip-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	r, server := setupRouter("http://127.0.0.1:8000", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	server.mgmtUsername = "custom-admin"
+	server.mgmtPassword = "custom-password"
+
+	enableBody, _ := json.Marshal(map[string]string{
+		"server_url":      "http://127.0.0.1:8000",
+		"admin_area_auth": "Enabled", // mixed case must normalise
+	})
+
+	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(enableBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /setup/settings (enable): expected 200, got %v", res.Status)
+	}
+
+	if server.AdminAreaAuthMode() != "enabled" {
+		t.Errorf("Expected live mode \"enabled\", got %q", server.AdminAreaAuthMode())
+	}
+
+	persisted, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("Failed to reload settings: %v", err)
+	}
+	if persisted.AdminAreaAuth != "enabled" {
+		t.Errorf("Expected persisted admin_area_auth \"enabled\", got %q", persisted.AdminAreaAuth)
+	}
+
+	res, err = http.Get(ts.URL + "/setup/settings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	var got map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatalf("Failed to decode GET /setup/settings: %v", err)
+	}
+	if got["admin_area_auth"] != "enabled" {
+		t.Errorf("GET /setup/settings: expected admin_area_auth \"enabled\", got %+v", got["admin_area_auth"])
+	}
+
+	disableBody, _ := json.Marshal(map[string]string{
+		"server_url":      "http://127.0.0.1:8000",
+		"admin_area_auth": "disabled",
+	})
+
+	res, err = http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(disableBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /setup/settings (disable): expected 200, got %v", res.Status)
+	}
+
+	if server.AdminAreaAuthMode() != "disabled" {
+		t.Errorf("Expected live mode \"disabled\" after explicit opt-out, got %q", server.AdminAreaAuthMode())
 	}
 }
 

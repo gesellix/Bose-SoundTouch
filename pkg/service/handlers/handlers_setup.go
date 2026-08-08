@@ -16,6 +16,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/health"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
 )
@@ -170,6 +171,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dnsBindAddr := s.dnsBindAddr
 	internalPaths := s.internalPaths
 	redact, logBody, record := s.redactLogs, s.logBodies, s.recordEnabled
+	adminAreaAuth := s.adminAreaAuth
 	shortcuts := s.shortcuts
 	spotifyConfigured := s.spotifyService != nil
 	spotifyClientID := s.spotifyClientID
@@ -271,6 +273,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"tts_voice":                     ttsVoice,
 		"tts_volume":                    ttsVolume,
 		"default_landing":               defaultLanding,
+		"admin_area_auth":               adminAreaAuth,
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -322,6 +325,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		TTSVolume              int            `json:"tts_volume"`
 		TLSExtraHosts          *[]string      `json:"tls_extra_hosts"`
 		DefaultLanding         string         `json:"default_landing"`
+		AdminAreaAuth          string         `json:"admin_area_auth"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -334,6 +338,14 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	case "", "chooser", "app", "admin":
 	default:
 		http.Error(w, "Invalid default_landing: must be chooser, app, or admin", http.StatusBadRequest)
+		return
+	}
+
+	// Normalise + validate the admin-area auth mode. Empty means "unset"
+	// (today: not enforced — see datastore.Settings.AdminAreaAuth, #419).
+	adminAreaAuth, validAdminAreaAuth := NormalizeAdminAreaAuth(settings.AdminAreaAuth)
+	if !validAdminAreaAuth {
+		http.Error(w, "Invalid admin_area_auth: must be empty, enabled, or disabled", http.StatusBadRequest)
 		return
 	}
 
@@ -364,6 +376,21 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mu.Lock()
+
+	// Guard rail: refuse to enable the admin-area gate while the Management
+	// API credentials are still the published default — that would let
+	// anyone in with admin/change_me! anyway, just with extra friction.
+	if adminAreaAuth == "enabled" &&
+		s.mgmtUsername == health.DefaultMgmtUsername && s.mgmtPassword == health.DefaultMgmtPassword {
+		s.mu.Unlock()
+		http.Error(w, "Cannot enable admin_area_auth while Management API credentials are still the "+
+			"published default (admin/change_me!). Set MGMT_USERNAME and MGMT_PASSWORD to your own "+
+			"values first.", http.StatusBadRequest)
+
+		return
+	}
+
+	s.adminAreaAuth = adminAreaAuth
 	s.serverURL = settings.ServerURL
 	// nil override = "field omitted, preserve"; recompute regardless, since
 	// the Target Domain (which the derived URL follows) may have changed.
@@ -461,6 +488,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	persisted.TTSVolume = s.ttsVolume
 	persisted.TLSExtraHosts = resolvedTLSExtraHosts
 	persisted.DefaultLanding = defaultLanding
+	persisted.AdminAreaAuth = s.adminAreaAuth
 	err = s.ds.SaveSettings(persisted)
 
 	dnsEnabled := s.dnsEnabled
@@ -495,6 +523,22 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Settings updated"}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
+	}
+}
+
+// NormalizeAdminAreaAuth trims/lowercases the admin-area auth mode and
+// reports whether it's one of the three valid tri-state values ("", the
+// unset default; "enabled"; "disabled" — see datastore.Settings.AdminAreaAuth,
+// #419). Exported so main.go can apply the same validation to a persisted
+// settings.json value at startup that HandleUpdateSettings applies on write.
+func NormalizeAdminAreaAuth(v string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(v))
+
+	switch normalized {
+	case "", "enabled", "disabled":
+		return normalized, true
+	default:
+		return "", false
 	}
 }
 

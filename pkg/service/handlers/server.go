@@ -68,6 +68,7 @@ type Server struct {
 	RepoURL                  string
 	mgmtUsername             string
 	mgmtPassword             string
+	adminAreaAuth            string // "" (unset) / "enabled" / "disabled" — see datastore.Settings.AdminAreaAuth
 	spotifyClientID          string
 	spotifyClientSecret      string
 	spotifyRedirectURI       string
@@ -1025,6 +1026,27 @@ func (s *Server) SetMgmtConfig(username, password string) {
 
 	s.mgmtUsername = username
 	s.mgmtPassword = password
+}
+
+// SetAdminAreaAuth sets the live admin-area auth mode ("" / "enabled" /
+// "disabled", see datastore.Settings.AdminAreaAuth). Does not validate —
+// callers (HandleUpdateSettings, startup settings application) are
+// responsible for only passing already-validated values.
+func (s *Server) SetAdminAreaAuth(mode string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.adminAreaAuth = mode
+}
+
+// AdminAreaAuthMode returns the live admin-area auth mode. Exported so
+// packages that can't import handlers directly (e.g. health checks, which
+// take it via a callback to avoid a circular import) can read it.
+func (s *Server) AdminAreaAuthMode() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.adminAreaAuth
 }
 
 // SetInternalPaths sets the internal paths for the server.

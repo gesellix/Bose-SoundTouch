@@ -2657,6 +2657,23 @@ type Settings struct {
 	// API/speaker clients (non-HTML Accept) always get the version JSON
 	// regardless of this setting.
 	DefaultLanding string `json:"default_landing,omitempty"`
+
+	// AdminAreaAuth is a tri-state toggle for gating the entire admin area
+	// (/admin, /setup, /api/setup — minus a small set of routes shared with
+	// soundtouch-cli/soundtouch-player) behind the same Basic Auth used for
+	// /api/mgmt/*, rather than just the Local Account / Spotify / Amazon
+	// linking endpoints as today. Values:
+	//   ""         — unset (default). Today this means "not enforced"; a
+	//                later release is expected to flip the *meaning* of ""
+	//                to "enforced" as the project moves the entire admin
+	//                area to require login by default. See #419.
+	//   "enabled"  — the whole admin area requires Basic Auth now.
+	//   "disabled" — explicit opt-out. Kept open even after the default
+	//                flips, so an operator's deliberate choice survives
+	//                the upgrade.
+	// The tri-state (rather than a plain bool) is what lets "never decided"
+	// be told apart from "explicitly chose off" once that default flips.
+	AdminAreaAuth string `json:"admin_area_auth,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.
