@@ -2720,6 +2720,62 @@ func (ds *DataStore) SaveSettings(settings Settings) error {
 	return ds.atomicWriteFile(path, data)
 }
 
+// UpdateCheckState is the small persisted state for the opt-in periodic
+// update check (#591, _/i591/design-update-check.md): when it last ran and
+// what it last saw, so a restart doesn't lose the "already logged this
+// version" and "don't hammer GitHub on every startup" context. Separate
+// from Settings, which is operator-editable config, not runtime state.
+type UpdateCheckState struct {
+	LastCheckedAt   string `json:"last_checked_at,omitempty"`
+	LastSeenVersion string `json:"last_seen_version,omitempty"`
+}
+
+// GetUpdateCheckState retrieves the persisted update-check state. Same
+// missing-file-is-not-an-error shape as GetSettings — a fresh install (or
+// one that has never had the check enabled) has no file yet.
+func (ds *DataStore) GetUpdateCheckState() (UpdateCheckState, error) {
+	if ds == nil || ds.DataDir == "" {
+		return UpdateCheckState{}, nil
+	}
+
+	path := filepath.Join(ds.DataDir, "update-check.json")
+	if !ds.rootExists(path) {
+		return UpdateCheckState{}, nil
+	}
+
+	data, err := ds.rootReadFile(path)
+	if err != nil {
+		return UpdateCheckState{}, err
+	}
+
+	var state UpdateCheckState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return UpdateCheckState{}, err
+	}
+
+	return state, nil
+}
+
+// SaveUpdateCheckState persists the update-check state.
+func (ds *DataStore) SaveUpdateCheckState(state UpdateCheckState) error {
+	if ds == nil || ds.DataDir == "" {
+		return nil
+	}
+
+	if err := ds.rootMkdirAll(ds.DataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	path := filepath.Join(ds.DataDir, "update-check.json")
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return ds.atomicWriteFile(path, data)
+}
+
 // SaveUsageStats saves usage statistics to the datastore.
 func (ds *DataStore) SaveUsageStats(stats models.UsageStats) error {
 	dir := filepath.Join(ds.DataDir, "stats", "usage")

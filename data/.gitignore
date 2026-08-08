@@ -8,3 +8,4 @@ parity_mismatches/
 stats/
 patterns.json
 settings.json
+update-check.json

@@ -458,6 +458,57 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 }
 
+// TestUpdateCheckState_MissingFileReturnsZeroValue verifies a fresh install
+// (or one where the update check has never run) gets a zero-value state,
+// not an error — same shape as GetSettings on a missing settings.json.
+func TestUpdateCheckState_MissingFileReturnsZeroValue(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "update-check-missing-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := NewDataStore(tempDir)
+
+	state, err := ds.GetUpdateCheckState()
+	if err != nil {
+		t.Fatalf("GetUpdateCheckState on a fresh install should not error, got: %v", err)
+	}
+	if state != (UpdateCheckState{}) {
+		t.Errorf("Expected zero-value state, got %+v", state)
+	}
+}
+
+// TestUpdateCheckState_Persistence is the roundtrip test, mirroring
+// TestSettingsPersistence.
+func TestUpdateCheckState_Persistence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "update-check-persist-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := NewDataStore(tempDir)
+
+	state := UpdateCheckState{
+		LastCheckedAt:   "2026-08-09T12:00:00Z",
+		LastSeenVersion: "v0.122.0",
+	}
+
+	if err := ds.SaveUpdateCheckState(state); err != nil {
+		t.Fatalf("SaveUpdateCheckState failed: %v", err)
+	}
+
+	loaded, err := ds.GetUpdateCheckState()
+	if err != nil {
+		t.Fatalf("GetUpdateCheckState failed: %v", err)
+	}
+
+	if loaded != state {
+		t.Errorf("Expected %+v, got %+v", state, loaded)
+	}
+}
+
 // TestRecordActivity_EmptyKindReturnsNilNotError verifies GetActivityRecords
 // for a kind that was never recorded returns an empty, non-error result —
 // the "nothing recorded yet" case, not a failure.
