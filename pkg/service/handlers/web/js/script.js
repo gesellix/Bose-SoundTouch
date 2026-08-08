@@ -830,6 +830,46 @@ async function startSync() {
     }
 }
 
+// fetchAnnouncements loads and renders the active announcements for this
+// area (see #419 design doc, _/i419/design-admin-area-auth-gate.md). Not
+// tab-scoped: the container lives outside the tab-content divs so a banner
+// stays visible regardless of which tab is open.
+async function fetchAnnouncements() {
+    const container = document.getElementById("announcements-banner");
+    if (!container) return;
+
+    try {
+        const response = await fetch("/api/announcements?target=admin");
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const announcements = data.announcements || [];
+
+        container.innerHTML = announcements.map(a => `
+            <div class="announcement-banner announcement-${a.level || "info"}" data-announcement-id="${a.id}" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:10px 14px; margin-bottom:10px; border-radius:4px; background:#e7f3ff; border:1px solid #b6d9f7; color:#1a4a6e; font-size:0.9em;">
+                <span>${a.message}</span>
+                <button onclick="dismissAnnouncement('${a.id}')" title="Dismiss" style="background:none; border:none; cursor:pointer; font-size:1.1em; line-height:1; color:inherit; flex-shrink:0;">&times;</button>
+            </div>
+        `).join("");
+    } catch (error) {
+        console.error("Failed to fetch announcements", error);
+    }
+}
+
+// dismissAnnouncement records the dismissal server-side (so it stays
+// dismissed across sessions/devices — not a client-only localStorage flag)
+// and removes it from the DOM immediately rather than waiting on a refetch.
+async function dismissAnnouncement(id) {
+    try {
+        await fetch(`/api/announcements/${encodeURIComponent(id)}/dismiss`, {method: "POST"});
+    } catch (error) {
+        console.error("Failed to dismiss announcement", error);
+    }
+
+    const el = document.querySelector(`[data-announcement-id="${id}"]`);
+    if (el) el.remove();
+}
+
 async function fetchVersion() {
     try {
         const response = await fetch("/api/setup/version");
@@ -1797,6 +1837,7 @@ function formatXML(xml) {
 document.addEventListener("DOMContentLoaded", async () => {
     const cfg = await fetchSettings();
     fetchVersion();
+    fetchAnnouncements();
     const deviceCount = await fetchDevices();
     // Only sweep automatically on a cold start (no devices known yet). When
     // devices are already in the store, rely on the cached list plus the
