@@ -1297,6 +1297,10 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 	r.Get("/", server.HandleRoot)
 	r.With(server.BasicAuthAdmin()).Get("/admin", server.HandleAdmin)
 	r.Get("/health", server.HandleHealth)
+	// Deliberately not behind BasicAuthAdmin — see HandleListAnnouncements'
+	// doc comment. #419.
+	r.Get("/api/announcements", server.HandleListAnnouncements)
+	r.Post("/api/announcements/{id}/dismiss", server.HandleDismissAnnouncement)
 	r.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		// The favicon lives in the embedded web/img bundle, not under
 		// static/media — HandleMedia would 404. HandleWeb serves from

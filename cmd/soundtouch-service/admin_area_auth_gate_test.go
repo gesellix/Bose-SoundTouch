@@ -17,10 +17,12 @@ import (
 // BasicAuthAdmin middleware in isolation, to pin two things at once:
 //  1. /admin and /api/setup/* (and their /setup/* legacy aliases) are open
 //     by default and become gated once AdminAreaAuth is "enabled".
-//  2. The three routes shared with soundtouch-cli/soundtouch-player
-//     (ca.crt, tts/speak, tts/config) stay reachable WITHOUT credentials
-//     regardless of the gate — the whole reason mountSetupAPI was split
-//     into mountSetupAPIShared/mountSetupAPIAdmin.
+//  2. A handful of routes deliberately stay reachable WITHOUT credentials
+//     regardless of the gate: ca.crt/tts/speak/tts/config because
+//     soundtouch-cli/soundtouch-player call them directly (the whole reason
+//     mountSetupAPI was split into mountSetupAPIShared/mountSetupAPIAdmin),
+//     and /api/announcements because it specifically needs to reach
+//     operators who haven't set up credentials yet.
 func TestAdminAreaAuthGate(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -46,11 +48,12 @@ func TestAdminAreaAuthGate(t *testing.T) {
 		"/setup/settings",
 		"/api/setup/settings",
 	}
-	sharedUngatedPaths := []string{
+	alwaysUngatedPaths := []string{
 		"/setup/ca.crt",
 		"/api/setup/ca.crt",
 		"/setup/tts/config",
 		"/api/setup/tts/config",
+		"/api/announcements?target=admin",
 	}
 
 	t.Run("open by default (AdminAreaAuth unset)", func(t *testing.T) {
@@ -83,8 +86,8 @@ func TestAdminAreaAuthGate(t *testing.T) {
 		}
 	})
 
-	t.Run("shared cli/player routes stay reachable without credentials", func(t *testing.T) {
-		for _, path := range sharedUngatedPaths {
+	t.Run("routes intentionally left outside the gate stay reachable without credentials", func(t *testing.T) {
+		for _, path := range alwaysUngatedPaths {
 			status := getStatus(t, ts.URL, path, "", "")
 			if status != http.StatusOK {
 				t.Errorf("%s: expected 200 without credentials even with the gate enabled, got %d", path, status)
