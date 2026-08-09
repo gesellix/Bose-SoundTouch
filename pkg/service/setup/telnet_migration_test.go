@@ -90,7 +90,7 @@ func TestMigrateViaTelnet_HappyPath(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(logs, "succeeded") {
+	if !strings.Contains(logs, "accepted") {
 		t.Errorf("logs missing success marker:\n%s", logs)
 	}
 

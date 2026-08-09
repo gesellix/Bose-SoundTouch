@@ -135,7 +135,7 @@ func (m *Manager) runTelnetInjection(deviceIP string, forbidQuote, cmds []string
 	}
 
 	if verify, err := t.SendCommand("getpdo CurrentSystemConfiguration"); err == nil {
-		fmt.Fprintf(&logs, "→ getpdo CurrentSystemConfiguration\n%s\n", strings.TrimRight(verify, "\r\n"))
+		fmt.Fprintf(&logs, "→ getpdo CurrentSystemConfiguration (runtime layer only — confirms the writes were accepted, not that they'll survive a reboot)\n%s\n", strings.TrimRight(verify, "\r\n"))
 	}
 
 	return logs.String(), nil

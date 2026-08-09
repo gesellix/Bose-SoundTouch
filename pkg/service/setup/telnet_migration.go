@@ -130,13 +130,13 @@ func (m *Manager) migrateViaTelnet(deviceIP, targetURL string, urls telnetURLs) 
 		return logs.String(), fmt.Errorf("verification command failed: %w", err)
 	}
 
-	fmt.Fprintf(&logs, "→ getpdo CurrentSystemConfiguration\n%s\n", strings.TrimRight(verify, "\r\n"))
+	fmt.Fprintf(&logs, "→ getpdo CurrentSystemConfiguration (runtime layer only — confirms the writes were accepted, not that they'll survive a reboot)\n%s\n", strings.TrimRight(verify, "\r\n"))
 
 	if !strings.Contains(verify, targetURL) {
 		return logs.String(), fmt.Errorf("verification failed: getpdo response does not contain %q (device may have rejected the new URLs)", targetURL)
 	}
 
-	logs.WriteString("Telnet migration succeeded. Reboot the device to apply.\n")
+	logs.WriteString("Telnet writes accepted (runtime layer). Reboot the device so the envswitch-persisted layer takes over.\n")
 
 	return logs.String(), nil
 }

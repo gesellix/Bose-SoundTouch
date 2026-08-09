@@ -123,7 +123,11 @@ in-band equivalent to the HTTP `/setMargeAccount` call, useful when the
   about.
 - Useful read-only verification command: `getpdo CurrentSystemConfiguration` —
   prints the URLs after the changes have been applied so we can verify before
-  rebooting.
+  rebooting. **It only reflects the runtime (`sys configuration`) layer, not
+  the `envswitch`-persisted layer, so a matching `getpdo` here confirms the
+  writes were accepted, not that they will survive the reboot** — see the
+  layer-visibility caveat in
+  [TELNET-COMMAND-REFERENCE.md](TELNET-COMMAND-REFERENCE.md).
 - `sys reboot` is the trigger that re-reads both layers.
 
 ### 2.4 What Telnet:17000 cannot do
