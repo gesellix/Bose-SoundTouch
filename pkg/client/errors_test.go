@@ -59,8 +59,9 @@ func TestClient_Post_ErrorsResponse(t *testing.T) {
 		t.Errorf("expected message '%s', got '%s'", expectedMsg, errs.Errors[0].Message)
 	}
 
-	if err.Error() != expectedMsg {
-		t.Errorf("expected Error() to return '%s', got '%s'", expectedMsg, err.Error())
+	expectedErr := "UNKNOWN_ACTION_ERROR: " + expectedMsg
+	if err.Error() != expectedErr {
+		t.Errorf("expected Error() to return '%s', got '%s'", expectedErr, err.Error())
 	}
 }
 

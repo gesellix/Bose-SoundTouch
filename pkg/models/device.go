@@ -2,6 +2,8 @@ package models
 
 import (
 	"encoding/xml"
+	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -80,7 +82,7 @@ type ErrorsResponse struct {
 // Error implements the error interface for ErrorsResponse
 func (e *ErrorsResponse) Error() string {
 	if len(e.Errors) > 0 {
-		return e.Errors[0].Message
+		return e.Errors[0].Error()
 	}
 
 	return "unknown API error"
@@ -91,6 +93,27 @@ type DeviceError struct {
 	Value   int    `xml:"value,attr"`
 	Name    string `xml:"name,attr"`
 	Message string `xml:",chardata"`
+}
+
+// Error implements the error interface for DeviceError. Some speakers
+// return a Message that just restates Value as text (e.g. a bare "1047"
+// for an error the firmware has no localized string for) — Name is the
+// only informative part in that case, so it's always included unless
+// Message already carries it.
+func (e DeviceError) Error() string {
+	if e.Name == "" {
+		if e.Message == "" {
+			return fmt.Sprintf("device error %d", e.Value)
+		}
+
+		return e.Message
+	}
+
+	if e.Message == "" || e.Message == e.Name || e.Message == strconv.Itoa(e.Value) {
+		return fmt.Sprintf("%s (%d)", e.Name, e.Value)
+	}
+
+	return fmt.Sprintf("%s: %s", e.Name, e.Message)
 }
 
 // DiscoveredDevice represents a device found through network discovery
