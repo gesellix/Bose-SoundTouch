@@ -47,7 +47,7 @@ func (s *Server) HandleTuneInPlayback(w http.ResponseWriter, r *http.Request) {
 			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
-	stationID := chi.URLParam(r, "stationID")
+	stationID := strings.TrimSpace(chi.URLParam(r, "stationID"))
 
 	resp, err := bmx.TuneInPlayback(stationID, s.tuneInStreamFormats())
 	if err != nil {
@@ -74,8 +74,8 @@ func (s *Server) HandleTuneInPodcastInfo(w http.ResponseWriter, r *http.Request)
 			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
-	podcastID := chi.URLParam(r, "podcastID")
-	encodedName := r.URL.Query().Get("encoded_name")
+	podcastID := strings.TrimSpace(chi.URLParam(r, "podcastID"))
+	encodedName := strings.TrimSpace(r.URL.Query().Get("encoded_name"))
 
 	resp, err := bmx.TuneInPodcastInfo(podcastID, encodedName)
 	if err != nil {
@@ -102,7 +102,7 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
-	podcastID := chi.URLParam(r, "podcastID")
+	podcastID := strings.TrimSpace(chi.URLParam(r, "podcastID"))
 
 	resp, err := bmx.TuneInPlaybackPodcast(podcastID, s.tuneInStreamFormats())
 	if err != nil {
@@ -271,7 +271,7 @@ func (s *Server) HandleTuneInSearch(w http.ResponseWriter, r *http.Request) {
 			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
-	query := r.URL.Query().Get("q")
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" {
 		http.Error(w, "query parameter 'q' is required", http.StatusBadRequest)
 		return
@@ -298,7 +298,7 @@ func (s *Server) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request) 
 			sanitizeLog(r.URL.Path), sanitizeLog(r.UserAgent()))
 	}
 
-	cursor := r.URL.Query().Get("cursor")
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
 	if cursor == "" {
 		http.Error(w, "cursor parameter required", http.StatusBadRequest)
 		return
@@ -319,7 +319,7 @@ func (s *Server) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request) 
 
 // HandleTuneInFavorite handles POST /bmx/tunein/v1/favorite/{stationID}.
 func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
-	stationID := chi.URLParam(r, "stationID")
+	stationID := strings.TrimSpace(chi.URLParam(r, "stationID"))
 	if err := s.ds.SaveTuneInFavorite(stationID); err != nil {
 		log.Printf("Failed to persist TuneIn favorite %s: %s", sanitizeLog(stationID), sanitizeErr(err))
 	}
@@ -331,7 +331,7 @@ func (s *Server) HandleTuneInFavorite(w http.ResponseWriter, r *http.Request) {
 
 // HandleTuneInDeleteFavorite handles DELETE /bmx/tunein/v1/favorite/{stationID}.
 func (s *Server) HandleTuneInDeleteFavorite(w http.ResponseWriter, r *http.Request) {
-	stationID := chi.URLParam(r, "stationID")
+	stationID := strings.TrimSpace(chi.URLParam(r, "stationID"))
 	if err := s.ds.DeleteTuneInFavorite(stationID); err != nil {
 		log.Printf("Failed to delete TuneIn favorite %s: %s", sanitizeLog(stationID), sanitizeErr(err))
 	}
