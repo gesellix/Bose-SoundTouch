@@ -36,6 +36,17 @@ func (m *Manager) ResetBoseURLs(deviceIP, serviceURL string) (string, error) {
 	return m.setBoseURLsViaTelnet(deviceIP, serviceURL, serviceURL+"/update")
 }
 
+// DefaultTelnetCommandDelay is the pause between successive commands in
+// EnableSSHViaTelnetFullConfig's sequence. Confirmed necessary on a real
+// device (#515, issue comment 5228449448): the same six commands sent
+// back-to-back left sshd down after reboot, but succeeded when sent one at a
+// time with ~7s gaps — sending fast enough may not let the device fully
+// process one command before the next arrives. 3s is a reasonable middle
+// ground (the reporter didn't try to find the true minimum); the caller
+// exposes it as a flag so a specific device can be tuned without a code
+// change.
+const DefaultTelnetCommandDelay = 3 * time.Second
+
 // EnableSSHViaTelnetFullConfig is the #515 variant of EnableSSHViaTelnet for
 // devices where the single-envswitch injection is accepted and persisted but
 // sshd never starts (ST Portable, CineMate 520; see also memory note #471). It
@@ -43,13 +54,15 @@ func (m *Manager) ResetBoseURLs(deviceIP, serviceURL string) (string, error) {
 // writes all four `sys configuration` URL keys with the remote_services
 // injection on margeServerUrl (the runtime layer, not just the envswitch
 // persistence layer), mirrors the injection into `envswitch boseurls set`, and
-// verifies with getpdo. The caller should reboot afterwards (the injection
-// fires on the speaker's next full config re-parse at boot) and then
-// WaitForSSHPort.
+// verifies with getpdo. The caller should pause commandDelay again, reboot
+// (the injection fires on the speaker's next full config re-parse at boot),
+// and then WaitForSSHPort.
 //
 // serviceURL is the AfterTouch service base the speaker should point at
 // (e.g. https://192.0.2.10:8443). It must not contain a double quote.
-func (m *Manager) EnableSSHViaTelnetFullConfig(deviceIP, serviceURL string) (string, error) {
+// commandDelay is the pause between each command (see
+// DefaultTelnetCommandDelay); 0 sends them back-to-back.
+func (m *Manager) EnableSSHViaTelnetFullConfig(deviceIP, serviceURL string, commandDelay time.Duration) (string, error) {
 	u := defaultTelnetURLs(serviceURL)
 	margeInjected := serviceURL + remoteServicesInjection
 
@@ -65,16 +78,18 @@ func (m *Manager) EnableSSHViaTelnetFullConfig(deviceIP, serviceURL string) (str
 		`envswitch boseurls set "` + margeInjected + `" "` + u.SwUpdate + `"`,
 	}
 
-	return m.runTelnetInjection(deviceIP, []string{serviceURL, u.SwUpdate}, cmds)
+	return m.runTelnetInjection(deviceIP, []string{serviceURL, u.SwUpdate}, cmds, commandDelay)
 }
 
 // runTelnetInjection opens the port-17000 shell, runs an ordered list of
 // commands (aborting on the first transport error or "command not found"
-// rejection), then logs a getpdo verification. forbidQuote values are checked
-// for an embedded double quote, which would break the command parsing.
-// Verification is best-effort (logged, never fatal) to match enable-ssh's
-// forgiving philosophy and tolerate the aftertouch.invalid placeholder.
-func (m *Manager) runTelnetInjection(deviceIP string, forbidQuote, cmds []string) (string, error) {
+// rejection), pausing commandDelay after each one (see
+// DefaultTelnetCommandDelay), then logs a getpdo verification. forbidQuote
+// values are checked for an embedded double quote, which would break the
+// command parsing. Verification is best-effort (logged, never fatal) to
+// match enable-ssh's forgiving philosophy and tolerate the
+// aftertouch.invalid placeholder.
+func (m *Manager) runTelnetInjection(deviceIP string, forbidQuote, cmds []string, commandDelay time.Duration) (string, error) {
 	if m.NewTelnet == nil {
 		return "", errors.New("telnet not configured: Manager.NewTelnet is nil")
 	}
@@ -108,6 +123,10 @@ func (m *Manager) runTelnetInjection(deviceIP string, forbidQuote, cmds []string
 
 		if isCommandNotFound(resp) {
 			return logs.String(), fmt.Errorf("device rejected %q (firmware does not expose this command)", cmd)
+		}
+
+		if commandDelay > 0 {
+			time.Sleep(commandDelay)
 		}
 	}
 

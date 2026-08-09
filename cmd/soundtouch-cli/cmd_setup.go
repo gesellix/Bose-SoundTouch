@@ -546,17 +546,23 @@ func setupSSHCheckCmd() *cli.Command {
 // runEnableSSHInjection runs the port-17000 SSH-enable injection over telnet,
 // printing the device transcript as it goes. With fullConfig it sends the
 // #515 sequence (all four config URLs with the injection on margeServerUrl, not
-// just envswitch) and reboots afterwards; otherwise it sends the single-
-// envswitch default that fires on the speaker's next boseurls check.
-func runEnableSSHInjection(m *setup.Manager, host, serviceURL string, fullConfig bool) error {
+// just envswitch), pausing commandDelay between each of the 6 steps (5
+// commands + reboot) — see setup.DefaultTelnetCommandDelay for why the pause
+// exists — then reboots; otherwise it sends the single-envswitch default that
+// fires on the speaker's next boseurls check (no pause needed, it's one
+// command).
+func runEnableSSHInjection(m *setup.Manager, host, serviceURL string, fullConfig bool, commandDelay time.Duration) error {
 	var (
 		logs string
 		err  error
 	)
 
 	if fullConfig {
-		fmt.Printf("Enabling SSH on %s via telnet :17000 (full #515 sequence: all four config URLs with the injection on margeServerUrl, then reboot)...\n", host)
-		logs, err = m.EnableSSHViaTelnetFullConfig(host, serviceURL)
+		// 6 steps total (5 commands + reboot), so 6 gaps between/around them.
+		fmt.Printf("Enabling SSH on %s via telnet :17000 (full #515 sequence: all four config URLs with "+
+			"the injection on margeServerUrl, %s between each of 6 steps — about %s before the reboot fires "+
+			"— then reboot)...\n", host, commandDelay, 6*commandDelay)
+		logs, err = m.EnableSSHViaTelnetFullConfig(host, serviceURL, commandDelay)
 	} else {
 		fmt.Printf("Enabling SSH on %s via telnet :17000 (runs on the speaker's next boseurls check, up to ~60s)...\n", host)
 		logs, err = m.EnableSSHViaTelnet(host, serviceURL)
@@ -573,6 +579,10 @@ func runEnableSSHInjection(m *setup.Manager, host, serviceURL string, fullConfig
 
 	if !fullConfig {
 		return nil
+	}
+
+	if commandDelay > 0 {
+		time.Sleep(commandDelay)
 	}
 
 	fmt.Println("Rebooting the speaker to apply the new configuration...")
@@ -613,6 +623,13 @@ func setupEnableSSHCmd() *cli.Command {
 				Usage: "For stubborn devices (ST Portable, CineMate 520) where the default single-envswitch injection is accepted but sshd never starts: " +
 					"replicate the #515 manual sequence — write all four sys configuration URL keys with the SSH-enable injection on margeServerUrl (not just envswitch), then reboot",
 			},
+			&cli.DurationFlag{
+				Name:  "command-delay",
+				Value: setup.DefaultTelnetCommandDelay,
+				Usage: "Only affects --full-config: pause between each of its 6 steps (5 commands + reboot). Confirmed necessary on a real device (#515) — " +
+					"the same commands sent back-to-back left sshd down after reboot, but succeeded sent one at a time with ~7s gaps. Raise this if the " +
+					"default doesn't work on your device; 0 sends everything back-to-back (the old behavior)",
+			},
 			&cli.BoolFlag{
 				Name:  "no-reset-urls",
 				Usage: "Skip restoring clean boseurls after SSH is up (leaves the injected marge URL in place)",
@@ -646,7 +663,7 @@ func setupEnableSSHCmd() *cli.Command {
 				serviceURL = "https://aftertouch.invalid"
 			}
 
-			if err := runEnableSSHInjection(m, cfg.Host, serviceURL, c.Bool("full-config")); err != nil {
+			if err := runEnableSSHInjection(m, cfg.Host, serviceURL, c.Bool("full-config"), c.Duration("command-delay")); err != nil {
 				return err
 			}
 

@@ -3,6 +3,7 @@ package setup
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEnableSSHViaTelnet_BuildsInjectedCommand(t *testing.T) {
@@ -44,7 +45,7 @@ func TestEnableSSHViaTelnetFullConfig_BuildsInjectedSequence(t *testing.T) {
 	f := &fakeTelnet{responses: resp}
 	m := newFakeTelnetManager(f)
 
-	if _, err := m.EnableSSHViaTelnetFullConfig("192.0.2.10", svc); err != nil {
+	if _, err := m.EnableSSHViaTelnetFullConfig("192.0.2.10", svc, 0); err != nil {
 		t.Fatalf("EnableSSHViaTelnetFullConfig: %v", err)
 	}
 
@@ -56,6 +57,78 @@ func TestEnableSSHViaTelnetFullConfig_BuildsInjectedSequence(t *testing.T) {
 		if f.commands[i] != c {
 			t.Errorf("command %d = %q\n want %q", i, f.commands[i], c)
 		}
+	}
+}
+
+// fullConfigResponses builds the {command: "OK"} map for
+// EnableSSHViaTelnetFullConfig's fixed 6-step sequence (5 commands + the
+// getpdo verification) against svc, matching
+// TestEnableSSHViaTelnetFullConfig_BuildsInjectedSequence's command list.
+func fullConfigResponses(svc string) map[string]string {
+	injected := svc + `;touch /tmp/remote_services;/etc/init.d/sshd start`
+
+	cmds := []string{
+		`sys configuration bmxRegistryUrl "` + svc + `/bmx/registry/v1/services"`,
+		`sys configuration statsServerUrl "` + svc + `"`,
+		`sys configuration margeServerUrl "` + injected + `"`,
+		`sys configuration swUpdateUrl "` + svc + `/updates/soundtouch"`,
+		`envswitch boseurls set "` + injected + `" "` + svc + `/updates/soundtouch"`,
+		`getpdo CurrentSystemConfiguration`,
+	}
+
+	resp := make(map[string]string, len(cmds))
+	for _, c := range cmds {
+		resp[c] = "OK\n"
+	}
+
+	return resp
+}
+
+// TestEnableSSHViaTelnetFullConfig_PausesBetweenCommands is the regression
+// test for #515 comment 5228449448: the same commands sent back-to-back
+// left sshd down on a real device, but succeeded sent one at a time with
+// gaps. Uses a small real duration rather than a fake clock/injectable
+// sleeper — simplest thing that actually proves time.Sleep is in the loop,
+// and small enough (5 gaps x 5ms) not to slow the suite down.
+func TestEnableSSHViaTelnetFullConfig_PausesBetweenCommands(t *testing.T) {
+	const svc = "https://192.0.2.10:8443"
+	const delay = 5 * time.Millisecond
+
+	f := &fakeTelnet{responses: fullConfigResponses(svc)}
+	m := newFakeTelnetManager(f)
+
+	start := time.Now()
+
+	if _, err := m.EnableSSHViaTelnetFullConfig("192.0.2.10", svc, delay); err != nil {
+		t.Fatalf("EnableSSHViaTelnetFullConfig: %v", err)
+	}
+
+	elapsed := time.Since(start)
+	// 5 real commands = 5 gaps (see runTelnetInjection: delay after each
+	// command in the loop, including before the getpdo verification).
+	wantMin := 5 * delay
+
+	if elapsed < wantMin {
+		t.Errorf("elapsed %v, want at least %v (delay not applied between commands)", elapsed, wantMin)
+	}
+}
+
+// TestEnableSSHViaTelnetFullConfig_ZeroDelayIsInstant verifies 0 keeps the
+// old back-to-back behavior — no accidental minimum sleep.
+func TestEnableSSHViaTelnetFullConfig_ZeroDelayIsInstant(t *testing.T) {
+	const svc = "https://192.0.2.10:8443"
+
+	f := &fakeTelnet{responses: fullConfigResponses(svc)}
+	m := newFakeTelnetManager(f)
+
+	start := time.Now()
+
+	if _, err := m.EnableSSHViaTelnetFullConfig("192.0.2.10", svc, 0); err != nil {
+		t.Fatalf("EnableSSHViaTelnetFullConfig: %v", err)
+	}
+
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Errorf("elapsed %v with a 0 delay, expected near-instant", elapsed)
 	}
 }
 
