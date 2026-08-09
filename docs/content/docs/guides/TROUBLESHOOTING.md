@@ -456,6 +456,63 @@ client.SelectAux()
 
 ---
 
+## 🎛️ **Lifestyle / Console Device Behavior** {#lifestyle-console-devices}
+
+### ❌ "Console-style device (Lifestyle, CineMate) plays the first test station but every later one reports INVALID_SOURCE"
+
+On a Bose Lifestyle or CineMate console, the SoundTouch module is one input
+among several (TV, AUX, Bluetooth, ...). As already established in #160,
+the console's active input cannot be switched from the SoundTouch side —
+there is no API call that forces it back onto SoundTouch.
+
+**Symptoms:**
+- `/now_playing` reports `source="LOCAL"` with an empty `ContentItem`:
+  ```xml
+  <nowPlaying deviceID="..." source="LOCAL">
+    <ContentItem source="LOCAL" isPresetable="true" />
+  </nowPlaying>
+  ```
+- `LOCAL` does not appear in `/sources` at all.
+- `POST /select` and `POST /key` (e.g. `PRESET_1`) are accepted
+  (`<status>/select</status>`) but have no observable effect.
+
+This means the console is sitting on its own (non-SoundTouch) input, not
+that the content/station itself is invalid. The input has to be selected
+on the console's own remote or front panel; there is no way to do it via
+the SoundTouch API.
+
+**The trap:** `POST /key POWER` does not behave like it does on a plain
+speaker. On a speaker, `POWER` is a harmless way to stop playback between
+test runs. On a console, it puts the whole unit into standby — and on
+waking, the console returns to **its own** input, not back to SoundTouch.
+A test loop that stops playback with `POWER` between trials silently
+switches the device off SoundTouch after the *first* trial, so every
+station from the second one onward reports `INVALID_SOURCE` — including
+stations that would otherwise play perfectly fine. This is easy to
+misread as a per-station problem (e.g. "this console can't handle TLS/
+https streams") when it is actually a test-methodology artifact: whichever
+station happens to run first in the loop is the only one actually tested
+against SoundTouch input.
+
+**Solutions:**
+
+1. Before testing anything, select the SoundTouch input on the console
+   itself (remote or front panel), not via the API.
+2. Do not use `POST /key POWER` to stop playback between trials on these
+   devices. If you need to interrupt playback, use a different key
+   (e.g. `PAUSE`/`STOP`) or simply move directly to selecting the next
+   station.
+3. If `/now_playing` shows `source="LOCAL"` with `LOCAL` absent from
+   `/sources`, treat that as "console is on a different input" — re-select
+   SoundTouch on the console and retest before concluding anything about
+   the station or migration itself.
+
+See #597 for the original report, including a packet capture confirming a
+station that appeared to fail actually completed a full TLS handshake and
+streamed normally once the console was back on the SoundTouch input.
+
+---
+
 ## 🎶 **Music Service & Preset Issues**
 
 ### ❌ Spotify preset fails with "Current content cannot be saved as preset"
