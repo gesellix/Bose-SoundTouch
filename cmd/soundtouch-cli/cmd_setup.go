@@ -600,6 +600,41 @@ func runEnableSSHInjection(m *setup.Manager, host, serviceURL string, fullConfig
 	return nil
 }
 
+// ensureMargeAccountPaired checks /info and pairs an unpaired device before
+// the SSH-enable injection runs — see setup.EnsureMargeAccountPaired for why.
+// Pairing failure is logged as a warning, not fatal: the claim that an
+// unpaired device never polls margeServerUrl is not yet confirmed on every
+// device this command targets, so the injection is still worth attempting
+// even if the pairing step itself couldn't be verified.
+func ensureMargeAccountPaired(m *setup.Manager, deviceIP, wantAccountID string) {
+	var t setup.TelnetClient
+
+	if m.NewTelnet != nil {
+		t = m.NewTelnet(deviceIP)
+
+		if dialErr := t.Dial(); dialErr != nil {
+			t = nil
+		} else {
+			defer func() { _ = t.Close() }()
+		}
+	}
+
+	accountID, alreadyPaired, logs, err := m.EnsureMargeAccountPaired(deviceIP, wantAccountID, t)
+	if logs != "" {
+		fmt.Print(logs)
+	}
+
+	switch {
+	case err != nil:
+		PrintWarning(fmt.Sprintf("Pairing check failed (%v) — continuing anyway; the SSH-enable injection may not "+
+			"fire on an unpaired device (#515).", err))
+	case alreadyPaired:
+		fmt.Printf("Device already paired (margeAccountUUID=%s).\n", accountID)
+	default:
+		fmt.Printf("Device was unpaired — paired it with generated account %s so margeServerUrl gets polled (#515).\n", accountID)
+	}
+}
+
 func setupEnableSSHCmd() *cli.Command {
 	return &cli.Command{
 		Name: "enable-ssh",
@@ -629,6 +664,18 @@ func setupEnableSSHCmd() *cli.Command {
 				Usage: "Only affects --full-config: pause between each of its 6 steps (5 commands + reboot). Confirmed necessary on a real device (#515) — " +
 					"the same commands sent back-to-back left sshd down after reboot, but succeeded sent one at a time with ~7s gaps. Raise this if the " +
 					"default doesn't work on your device; 0 sends everything back-to-back (the old behavior)",
+			},
+			&cli.BoolFlag{
+				Name: "no-auto-pair",
+				Usage: "Skip the automatic pairing check: by default, enable-ssh reads /info first and pairs an unpaired " +
+					"(factory-reset) device with an account ID, since an unpaired device reportedly never " +
+					"polls margeServerUrl at all (#515) — the injection would have nothing to fire on otherwise",
+			},
+			&cli.StringFlag{
+				Name: "account",
+				Usage: "Only used when the device is unpaired and --no-auto-pair is not set: 7-digit account ID to pair " +
+					"with (empty = generate one). Use this if you already know which account this device should end up " +
+					"on (e.g. to match one already in the datastore) rather than getting a random one now",
 			},
 			&cli.BoolFlag{
 				Name:  "no-reset-urls",
@@ -661,6 +708,10 @@ func setupEnableSSHCmd() *cli.Command {
 
 			if placeholder {
 				serviceURL = "https://aftertouch.invalid"
+			}
+
+			if !c.Bool("no-auto-pair") {
+				ensureMargeAccountPaired(m, cfg.Host, c.String("account"))
 			}
 
 			if err := runEnableSSHInjection(m, cfg.Host, serviceURL, c.Bool("full-config"), c.Duration("command-delay")); err != nil {

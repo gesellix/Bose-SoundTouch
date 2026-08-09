@@ -2,6 +2,7 @@ package setup
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -21,6 +22,7 @@ type fakeDevice struct {
 	postStatus       int // status code returned for POST /setMargeAccount
 	postDelay        time.Duration
 	gotPostBody      string
+	margeAccountUUID string // served by /info; empty means "unpaired"
 }
 
 func newFakeDevice(t *testing.T) *fakeDevice {
@@ -53,6 +55,11 @@ func newFakeDevice(t *testing.T) *fakeDevice {
 		d.gotPostBody = string(body)
 
 		w.WriteHeader(d.postStatus)
+	})
+
+	mux.HandleFunc("/info", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<info deviceID="AABBCCDDEE0A"><margeAccountUUID>%s</margeAccountUUID></info>`, d.margeAccountUUID)
 	})
 
 	d.srv = httptest.NewServer(mux)
@@ -251,6 +258,105 @@ func TestPairAccount_TelnetTransportErrorReturned(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "connection reset") {
 		t.Errorf("err = %v, want to wrap connection reset", err)
+	}
+}
+
+func TestEnsureMargeAccountPaired_AlreadyPairedSkipsPairing(t *testing.T) {
+	d := newFakeDevice(t)
+	d.margeAccountUUID = "1234567"
+
+	f := &fakeTelnet{}
+
+	m := NewManager("", nil, nil)
+
+	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(d.addr, "", f)
+	if err != nil {
+		t.Fatalf("EnsureMargeAccountPaired: %v", err)
+	}
+
+	if !alreadyPaired {
+		t.Error("alreadyPaired should be true")
+	}
+
+	if accountID != "1234567" {
+		t.Errorf("accountID = %q, want the existing margeAccountUUID", accountID)
+	}
+
+	if len(f.commands) != 0 || d.gotPostBody != "" {
+		t.Error("pairing should not have been attempted for an already-paired device")
+	}
+}
+
+func TestEnsureMargeAccountPaired_UnpairedGeneratesAndPairs(t *testing.T) {
+	d := newFakeDevice(t)
+	d.margeAccountUUID = ""
+
+	m := NewManager("", nil, nil)
+
+	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(d.addr, "", nil)
+	if err != nil {
+		t.Fatalf("EnsureMargeAccountPaired: %v", err)
+	}
+
+	if alreadyPaired {
+		t.Error("alreadyPaired should be false for an unpaired device")
+	}
+
+	if !IsValidAccountID(accountID) {
+		t.Errorf("accountID %q is not a valid generated ID", accountID)
+	}
+
+	if !strings.Contains(d.gotPostBody, "<accountId>"+accountID+"</accountId>") {
+		t.Errorf("device received %q, want it to be paired with the generated %q", d.gotPostBody, accountID)
+	}
+}
+
+func TestEnsureMargeAccountPaired_UnpairedUsesWantAccountID(t *testing.T) {
+	d := newFakeDevice(t)
+	d.margeAccountUUID = ""
+
+	m := NewManager("", nil, nil)
+
+	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(d.addr, "7654321", nil)
+	if err != nil {
+		t.Fatalf("EnsureMargeAccountPaired: %v", err)
+	}
+
+	if alreadyPaired {
+		t.Error("alreadyPaired should be false for an unpaired device")
+	}
+
+	if accountID != "7654321" {
+		t.Errorf("accountID = %q, want the requested 7654321", accountID)
+	}
+
+	if !strings.Contains(d.gotPostBody, "<accountId>7654321</accountId>") {
+		t.Errorf("device received %q, want the requested account id", d.gotPostBody)
+	}
+}
+
+func TestEnsureMargeAccountPaired_RejectsInvalidWantAccountID(t *testing.T) {
+	d := newFakeDevice(t)
+	d.margeAccountUUID = ""
+
+	m := NewManager("", nil, nil)
+
+	_, _, _, err := m.EnsureMargeAccountPaired(d.addr, "not-7-digits", nil)
+	if err == nil {
+		t.Fatal("expected an error for an invalid --account value")
+	}
+}
+
+func TestEnsureMargeAccountPaired_PropagatesPairingFailure(t *testing.T) {
+	d := newFakeDevice(t)
+	d.margeAccountUUID = ""
+	d.supportsSetMarge = false
+
+	m := NewManager("", nil, nil)
+
+	_, _, _, err := m.EnsureMargeAccountPaired(d.addr, "1234567", nil)
+	if err == nil {
+		t.Fatal("expected an error when HTTP pairing is unsupported and no telnet client is given")
 	}
 }
 

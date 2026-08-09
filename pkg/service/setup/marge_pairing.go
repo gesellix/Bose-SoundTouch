@@ -108,6 +108,45 @@ func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairA
 	return result, logs.String(), nil
 }
 
+// EnsureMargeAccountPaired reads the device's /info and, if margeAccountUUID
+// is empty (a genuinely unpaired, factory-reset device), pairs it via
+// PairAccount using wantAccountID if given, otherwise a freshly generated ID.
+// See #515 comment 5230833551: on an unpaired device, margeServerUrl is
+// reportedly never polled at all, so the boseurls SSH-enable injection has no
+// read cycle to fire on regardless of command delay — pairing first gives it
+// one. accountID is empty when GetLiveDeviceInfo itself fails; otherwise it
+// is either the device's existing margeAccountUUID (alreadyPaired=true) or
+// the account ID just paired with.
+func (m *Manager) EnsureMargeAccountPaired(deviceIP, wantAccountID string, t TelnetClient) (accountID string, alreadyPaired bool, logs string, err error) {
+	info, infoErr := m.GetLiveDeviceInfo(deviceIP)
+	if infoErr != nil {
+		return "", false, "", fmt.Errorf("read /info: %w", infoErr)
+	}
+
+	if info.MargeAccountUUID != "" {
+		return info.MargeAccountUUID, true, "", nil
+	}
+
+	target := wantAccountID
+	if target == "" {
+		generated, genErr := GenerateAccountID(nil)
+		if genErr != nil {
+			return "", false, "", fmt.Errorf("generate account id: %w", genErr)
+		}
+
+		target = generated
+	} else if !IsValidAccountID(target) {
+		return "", false, "", fmt.Errorf("invalid account id %q: must be exactly 7 digits", target)
+	}
+
+	_, pairLogs, pairErr := m.PairAccount(deviceIP, target, t)
+	if pairErr != nil {
+		return target, false, pairLogs, pairErr
+	}
+
+	return target, false, pairLogs, nil
+}
+
 // probeSetMargeAccount fetches /supportedURLs and reports whether
 // /setMargeAccount is in the listing.
 func (m *Manager) probeSetMargeAccount(deviceIP string) (bool, error) {
