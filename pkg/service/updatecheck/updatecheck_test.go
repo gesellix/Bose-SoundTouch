@@ -96,6 +96,9 @@ func TestCheckNow_NewerVersionAvailable(t *testing.T) {
 	if persisted.LastSeenVersion != "v1.1.0" {
 		t.Errorf("Expected persisted LastSeenVersion v1.1.0, got %q", persisted.LastSeenVersion)
 	}
+	if persisted.LastReleaseURL != "https://example.invalid/v1.1.0" {
+		t.Errorf("Expected persisted LastReleaseURL to be set, got %q", persisted.LastReleaseURL)
+	}
 }
 
 func TestCheckNow_CurrentVersionIsUpToDate(t *testing.T) {
@@ -257,6 +260,7 @@ func TestNewChecker_SeedsFromPersistedState(t *testing.T) {
 	if err := ds.SaveUpdateCheckState(datastore.UpdateCheckState{
 		LastCheckedAt:   checkedAt.Format(time.RFC3339),
 		LastSeenVersion: "v1.1.0",
+		LastReleaseURL:  "https://example.invalid/v1.1.0",
 	}); err != nil {
 		t.Fatalf("Failed to seed state: %v", err)
 	}
@@ -269,6 +273,11 @@ func TestNewChecker_SeedsFromPersistedState(t *testing.T) {
 	}
 	if result.LatestVersion != "v1.1.0" {
 		t.Errorf("Expected seeded LatestVersion v1.1.0, got %q", result.LatestVersion)
+	}
+	// Regression check: the announcement's link needs this populated
+	// immediately after a restart, not just after the next live check.
+	if result.ReleaseURL != "https://example.invalid/v1.1.0" {
+		t.Errorf("Expected seeded ReleaseURL to be set, got %q", result.ReleaseURL)
 	}
 	if !result.CheckedAt.Equal(checkedAt) {
 		t.Errorf("Expected seeded CheckedAt %v, got %v", checkedAt, result.CheckedAt)

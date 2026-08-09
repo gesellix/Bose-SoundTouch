@@ -72,6 +72,7 @@ func NewChecker(ds *datastore.DataStore, repo, currentVersion string) *Checker {
 	}
 
 	c.last.LatestVersion = state.LastSeenVersion
+	c.last.ReleaseURL = state.LastReleaseURL
 
 	if ts, parseErr := time.Parse(time.RFC3339, state.LastCheckedAt); parseErr == nil {
 		c.last.CheckedAt = ts
@@ -168,6 +169,7 @@ func (c *Checker) persist(result Result) {
 	_ = c.ds.SaveUpdateCheckState(datastore.UpdateCheckState{
 		LastCheckedAt:   result.CheckedAt.UTC().Format(time.RFC3339),
 		LastSeenVersion: result.LatestVersion,
+		LastReleaseURL:  result.ReleaseURL,
 	})
 }
 

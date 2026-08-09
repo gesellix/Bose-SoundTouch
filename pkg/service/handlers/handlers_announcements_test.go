@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
@@ -178,6 +179,7 @@ func newServerWithUpdateAvailable(t *testing.T, currentVersion, latestVersion st
 	if err := ds.SaveUpdateCheckState(datastore.UpdateCheckState{
 		LastCheckedAt:   "2026-08-09T00:00:00Z",
 		LastSeenVersion: latestVersion,
+		LastReleaseURL:  "https://example.invalid/releases/" + latestVersion,
 	}); err != nil {
 		t.Fatalf("Failed to seed update-check state: %v", err)
 	}
@@ -209,6 +211,18 @@ func TestHandleListAnnouncements_UpdateAvailable(t *testing.T) {
 			}
 			if found.Message == "" {
 				t.Errorf("target=%s: expected a non-empty dynamic message", target)
+			}
+			// The release URL belongs in the structured link field, not
+			// embedded as text in the message — the message must stay
+			// generic across other future announcements too.
+			if strings.Contains(found.Message, "http") {
+				t.Errorf("target=%s: expected the URL out of Message, got %q", target, found.Message)
+			}
+			if found.LinkURL == "" {
+				t.Errorf("target=%s: expected a non-empty LinkURL", target)
+			}
+			if found.LinkText == "" {
+				t.Errorf("target=%s: expected a non-empty LinkText", target)
 			}
 		}
 	})

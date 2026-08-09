@@ -493,6 +493,7 @@ func TestUpdateCheckState_Persistence(t *testing.T) {
 	state := UpdateCheckState{
 		LastCheckedAt:   "2026-08-09T12:00:00Z",
 		LastSeenVersion: "v0.122.0",
+		LastReleaseURL:  "https://github.com/gesellix/Bose-SoundTouch/releases/tag/v0.122.0",
 	}
 
 	if err := ds.SaveUpdateCheckState(state); err != nil {

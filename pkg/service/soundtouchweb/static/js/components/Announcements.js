@@ -35,7 +35,10 @@ export function Announcements() {
         <div class="announcements-banner">
             ${announcements.map(a => html`
                 <div class="announcement announcement-${a.level || 'info'}" key=${a.id}>
-                    <span>${a.message}</span>
+                    <span>
+                        ${a.message}
+                        ${a.link_url ? html` <a href=${a.link_url} target="_blank" rel="noopener">${a.link_text || a.link_url}</a>` : null}
+                    </span>
                     <button class="announcement-dismiss" onClick=${() => dismiss(a.id)} title="Dismiss">&times;</button>
                 </div>
             `)}

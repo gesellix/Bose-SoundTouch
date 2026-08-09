@@ -2728,6 +2728,7 @@ func (ds *DataStore) SaveSettings(settings Settings) error {
 type UpdateCheckState struct {
 	LastCheckedAt   string `json:"last_checked_at,omitempty"`
 	LastSeenVersion string `json:"last_seen_version,omitempty"`
+	LastReleaseURL  string `json:"last_release_url,omitempty"`
 }
 
 // GetUpdateCheckState retrieves the persisted update-check state. Same

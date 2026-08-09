@@ -39,6 +39,16 @@ type Announcement struct {
 	Targets        []string
 	ShowWhile      func(*Server) bool
 	DismissKeyFunc func(*Server) string
+	// LinkText/LinkURL add an optional link alongside Message — e.g. a
+	// release's notes, or a docs page for a future announcement. LinkURLFunc
+	// is the dynamic counterpart of LinkURL (nil = use the static field),
+	// for links whose target depends on live state (e.g. which version was
+	// detected). LinkText has no *Func counterpart: nothing here needs
+	// dynamic link *text*, only a dynamic *URL* — add one only once
+	// something actually needs it, per this project's KISS convention.
+	LinkText    string
+	LinkURL     string
+	LinkURLFunc func(*Server) string
 }
 
 // message returns the effective text: MessageFunc(s) if set, else the
@@ -49,6 +59,16 @@ func (a Announcement) message(s *Server) string {
 	}
 
 	return a.Message
+}
+
+// linkURL returns the effective link URL: LinkURLFunc(s) if set, else the
+// static LinkURL (which may be "" — no link).
+func (a Announcement) linkURL(s *Server) string {
+	if a.LinkURLFunc != nil {
+		return a.LinkURLFunc(s)
+	}
+
+	return a.LinkURL
 }
 
 // dismissKey returns the effective dismissal/DTO id: DismissKeyFunc(s) if
@@ -74,7 +94,9 @@ var announcements = []Announcement{
 		Targets: []string{announcementTargetAdmin},
 		Message: "A future release will require login for this entire admin area by default (today, only " +
 			"Spotify/Amazon linking and the Local Account tab do). You can opt in now in Settings, or " +
-			"dismiss this once you've decided. See issue #419 for details.",
+			"dismiss this once you've decided.",
+		LinkText: "Issue #419",
+		LinkURL:  "https://github.com/gesellix/Bose-SoundTouch/issues/419",
 		ShowWhile: func(s *Server) bool {
 			return s.AdminAreaAuthMode() == ""
 		},
@@ -89,8 +111,11 @@ var announcements = []Announcement{
 		MessageFunc: func(s *Server) string {
 			r := s.UpdateCheckResult()
 
-			return fmt.Sprintf("AfterTouch %s is available (you're on %s). %s",
-				r.LatestVersion, r.CurrentVersion, r.ReleaseURL)
+			return fmt.Sprintf("AfterTouch %s is available (you're on %s).", r.LatestVersion, r.CurrentVersion)
+		},
+		LinkText: "Release notes",
+		LinkURLFunc: func(s *Server) string {
+			return s.UpdateCheckResult().ReleaseURL
 		},
 		// Per-version, not per-family: dismissing the notice for one version
 		// must not silently suppress a later, different version's notice.
@@ -104,9 +129,11 @@ var announcements = []Announcement{
 // deliberately smaller than Announcement (no ShowWhile func, no Targets;
 // the caller already asked for a specific target).
 type announcementDTO struct {
-	ID      string `json:"id"`
-	Message string `json:"message"`
-	Level   string `json:"level"`
+	ID       string `json:"id"`
+	Message  string `json:"message"`
+	Level    string `json:"level"`
+	LinkText string `json:"link_text,omitempty"`
+	LinkURL  string `json:"link_url,omitempty"`
 }
 
 func containsString(haystack []string, needle string) bool {
@@ -138,7 +165,9 @@ func (s *Server) HandleListAnnouncements(w http.ResponseWriter, r *http.Request)
 
 	active := make([]announcementDTO, 0, len(announcements))
 
-	for _, a := range announcements {
+	for i := range announcements {
+		a := &announcements[i]
+
 		if !containsString(a.Targets, target) {
 			continue
 		}
@@ -152,7 +181,13 @@ func (s *Server) HandleListAnnouncements(w http.ResponseWriter, r *http.Request)
 			continue
 		}
 
-		active = append(active, announcementDTO{ID: key, Message: a.message(s), Level: a.Level})
+		active = append(active, announcementDTO{
+			ID:       key,
+			Message:  a.message(s),
+			Level:    a.Level,
+			LinkText: a.LinkText,
+			LinkURL:  a.linkURL(s),
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -174,8 +209,8 @@ func (s *Server) HandleDismissAnnouncement(w http.ResponseWriter, r *http.Reques
 
 	found := false
 
-	for _, a := range announcements {
-		if a.dismissKey(s) == id {
+	for i := range announcements {
+		if announcements[i].dismissKey(s) == id {
 			found = true
 			break
 		}

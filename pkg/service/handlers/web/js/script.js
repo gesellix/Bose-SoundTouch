@@ -851,7 +851,7 @@ async function fetchAnnouncements() {
 
         container.innerHTML = announcements.map(a => `
             <div class="announcement-banner announcement-${a.level || "info"}" data-announcement-id="${a.id}" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:10px 14px; margin-bottom:10px; border-radius:4px; background:#e7f3ff; border:1px solid #b6d9f7; color:#1a4a6e; font-size:0.9em;">
-                <span>${a.message}</span>
+                <span>${escapeHtml(a.message)}${a.link_url ? ` <a href="${escapeHtml(a.link_url)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">${escapeHtml(a.link_text || a.link_url)}</a>` : ""}</span>
                 <button onclick="dismissAnnouncement('${a.id}')" title="Dismiss" style="background:none; border:none; cursor:pointer; font-size:1.1em; line-height:1; color:inherit; flex-shrink:0;">&times;</button>
             </div>
         `).join("");
