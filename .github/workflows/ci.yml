@@ -197,7 +197,7 @@ jobs:
       - name: Check documentation links
         run: |
           npm install -g markdown-link-check
-          find . -name "*.md" -not -path "./tests/*" -not -path "./node_modules/*" -print0 | xargs -0 -n1 markdown-link-check -q -v -c .github/markdown-link-check.json
+          ./scripts/check-doc-links.sh
 
       - name: Warn on pending images
         run: |
