@@ -634,6 +634,20 @@ If the telnet method isn't available for your model, factory reset the speaker, 
 
 After this the radio sources activate normally. Note the factory reset rewrites the speaker's `Sources.xml` to defaults, so any **account-bound** source (for example a music-streaming login) has to be re-added afterwards; your presets for it come back once the source is present again.
 
+### ❌ `setup enable-ssh` (or a telnet command) fails right after a power-cycle, but works if you wait
+
+**Symptoms:**
+
+- You power-cycled the speaker — as our own retry guidance suggests after a `setup enable-ssh` timeout — and immediately re-ran the command (or a telnet migration/pairing step).
+- You get `telnet dial <ip>:17000: connection refused` or the command otherwise fails as if the port were closed.
+- Running the exact same command again a minute or two later works fine, on the same device.
+
+**Cause:**
+
+Confirmed on hardware across five device variants (2026-08-09): different ports on the same speaker become ready at very different times after a cold boot. HTTP `:8090` typically answers first, but the diagnostic telnet shell on `:17000` — and the config subsystem behind it that `getpdo` reads — takes longer: 55–92 seconds observed, median ~70s. "The box answers on one port" is a weaker signal than "the box can answer on the specific port you need." See [TELNET-COMMAND-REFERENCE.md](../analysis/TELNET-COMMAND-REFERENCE.md) for the underlying mechanism.
+
+**Fix:** After a power-cycle, wait at least 90 seconds before retrying any telnet-based command. If it still fails after that, wait a full 2 minutes before assuming the port is genuinely closed on that firmware rather than just slow to come up.
+
 ## 🔊 **Volume & Audio Issues**
 
 ### ❌ "Volume control not working"
