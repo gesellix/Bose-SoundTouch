@@ -82,6 +82,16 @@ Three important details from the discussion:
    silently restored on reboot — i.e. there is a parallel "envswitch" persistence
    layer that wins on next boot if you don't also write to it. **We must always
    issue both.**
+
+   A later, more precise measurement ([#515 comment 5231931569](https://github.com/gesellix/Bose-SoundTouch/issues/515#issuecomment-5231931569), confirmed on
+   five variants: `lisa`/`mojo`/`spotty`/`ginger`/`taigan`) explains *why*
+   order matters: `envswitch boseurls set` is not just a two-field setter, it
+   **commits whatever is currently in the runtime layer at the moment it
+   runs**. A `sys configuration` write only survives a reboot if `envswitch
+   boseurls set` runs **after** it; the same commands in reverse order lose
+   the `sys configuration` values silently on reboot, with every individual
+   command still answering normally. This is why the sequence above is
+   ordered all-four-`sys-configuration`-then-`envswitch`, never the reverse.
 2. **margeServerUrl path is bare for `soundtouch-service`.** We mount the marge
    endpoints at the **root** of port 8000, matching what the existing XML
    migration writes (`Manager.migrateViaXML` in `pkg/service/setup/setup.go`
@@ -91,8 +101,15 @@ Three important details from the discussion:
    routes marge under that sub-path. **For our service: bare URL. For users
    redirecting to soundcork: append `/marge`** to both `margeServerUrl` and
    the first argument of `envswitch boseurls set`.
-3. **Each command must be sent one at a time, waiting for the device's `OK`
-   response** before sending the next one (`foob61451`'s explicit warning).
+3. **Each command must be sent one at a time, waiting for the device's
+   response** before sending the next one (`foob61451`'s original warning).
+   Note the exception: `sys configuration` commands ack with `OK`, but
+   `envswitch boseurls set` does **not** — it acks with a different string
+   entirely (observed: `Setting Bose Server URLs to <a> and <b> ->`, no `OK`
+   substring; [#515 comment 5231931569](https://github.com/gesellix/Bose-SoundTouch/issues/515#issuecomment-5231931569)). An implementation that waits for the
+   literal token `OK` will time out on exactly that command. Wait for the
+   shell's prompt (or, as our own `pkg/telnet.Client` does, for the
+   connection to go idle) rather than string-matching `OK`.
 
 ### 2.2 Account pairing fallback
 
@@ -145,6 +162,22 @@ The values are not validated by the local service, so any numeric `accountId`
 will work — soundcork's runbook (#228) literally calls the token
 `soundcorkdoesntcare` to make the point.
 
+> **Booby trap, confirmed on hardware: never send an empty or truncated body
+> to this endpoint.** On one firmware, a `POST /setMargeAccount` with an
+> empty body returned `HTTP 200` and cleared `margeAccountUUID`, un-pairing
+> an already-working speaker
+> ([#471 comment 5231977172](https://github.com/gesellix/Bose-SoundTouch/issues/471#issuecomment-5231977172)).
+> A later retry on the same device instead returned `400` and changed
+> nothing, so the same reporter corrected the finding to
+> **state-dependent, not a reliable rule you can rely on either way**
+> ([#471 comment 5232232575](https://github.com/gesellix/Bose-SoundTouch/issues/471#issuecomment-5232232575)). A `400` is not proof the
+> endpoint rejected a bad request (a booting device also answers a bare
+> `400` with an empty body before its services are ready, per
+> `JRpersonal`), and a `200` is not proof it did what you wanted. Practical
+> takeaway: our own `postSetMargeAccount` always sends a well-formed XML
+> body, so this doesn't affect the CLI/service — but don't probe this
+> endpoint by hand against a speaker that currently works.
+
 ### 3.2 Why it's broken in practice
 
 There are **three independent failure modes** observed:
@@ -189,10 +222,16 @@ control:
      recipes).
   3. **Randomize.** A "Generate" button that picks a 7-digit number and
      re-rolls if it collides with an existing account in the local datastore.
-- **Telnet read-back (best-effort).** `envswitch accountid get` is plausible by
-  symmetry with `envswitch accountid set` (#221) but is not yet confirmed
-  across firmwares. We will probe it during preflight; if it returns a value
-  we cross-check it against `:8090/info` and warn on mismatch.
+- **Telnet read-back: confirmed unsupported.** `envswitch accountid get` was
+  originally listed as "plausible by symmetry with `envswitch accountid set`
+  (#221), not yet confirmed." It's now confirmed the other way: on
+  `lisa`/`mojo`/`spotty`, `envswitch` has **no read form at all** — both bare
+  `envswitch` and `envswitch boseurls` answer `Invalid Command Option`
+  ([#515 comment 5231931569](https://github.com/gesellix/Bose-SoundTouch/issues/515#issuecomment-5231931569)).
+  The persisted layer can only be written, then
+  observed indirectly after a reboot (e.g. via `getpdo`, mindful of the
+  layer-visibility caveat in
+  [TELNET-COMMAND-REFERENCE.md](TELNET-COMMAND-REFERENCE.md)).
 
 This means the user is never *forced* to invent a number — the common path is
 "the device already has an ID, reuse it" — and the manual/randomize controls

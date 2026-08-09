@@ -661,9 +661,8 @@ func setupEnableSSHCmd() *cli.Command {
 			&cli.DurationFlag{
 				Name:  "command-delay",
 				Value: setup.DefaultTelnetCommandDelay,
-				Usage: "Only affects --full-config: pause between each of its 6 steps (5 commands + reboot). Confirmed necessary on a real device (#515) — " +
-					"the same commands sent back-to-back left sshd down after reboot, but succeeded sent one at a time with ~7s gaps. Raise this if the " +
-					"default doesn't work on your device; 0 sends everything back-to-back (the old behavior)",
+				Usage: "Only affects --full-config: pause between each of its 6 steps (5 commands + reboot). " +
+					"Raise this if the default doesn't work on your device; 0 sends everything back-to-back",
 			},
 			&cli.BoolFlag{
 				Name: "no-auto-pair",

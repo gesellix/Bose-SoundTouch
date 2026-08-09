@@ -37,16 +37,19 @@ func (m *Manager) ResetBoseURLs(deviceIP, serviceURL string) (string, error) {
 }
 
 // DefaultTelnetCommandDelay is the pause between successive commands in
-// EnableSSHViaTelnetFullConfig's sequence. Confirmed necessary on a real
-// device (#515, issue comment 5228449448): the same six commands sent
-// back-to-back left sshd down after reboot, but succeeded when sent one at a
-// time with ~7s gaps — sending fast enough may not let the device fully
-// process one command before the next arrives. Settled on 5s as the default
-// (issue comment 5230881285): a bit more headroom than the original 3s
-// guess, still well under the ~7s the reporter used without having tried to
-// find the true minimum; the caller exposes it as a flag so a specific
-// device can be tuned without a code change.
-const DefaultTelnetCommandDelay = 5 * time.Second
+// EnableSSHViaTelnetFullConfig's sequence. Originally set based on #515
+// comment 5228449448 (same six commands, back-to-back left sshd down after
+// reboot but succeeded with ~7s gaps). That inter-command-delay theory was
+// RETRACTED by the same reporter after a controlled A/B on three variants
+// (issue comment 5231931569): back-to-back and 5s-gapped runs produced
+// identical results (all writes applied, confirmed via verified reboots),
+// so the delay itself does not appear to be the mechanism — the likely real
+// gate was the account-pairing precondition (see EnsureMargeAccountPaired),
+// fixed independently. The flag is kept at a small non-zero default (3s)
+// as a low-cost hedge for firmware variants nobody has A/B-tested yet
+// (only lisa/mojo/spotty/ginger/taigan are confirmed); 0 sends everything
+// back-to-back.
+const DefaultTelnetCommandDelay = 3 * time.Second
 
 // EnableSSHViaTelnetFullConfig is the #515 variant of EnableSSHViaTelnet for
 // devices where the single-envswitch injection is accepted and persisted but
