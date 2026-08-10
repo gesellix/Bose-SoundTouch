@@ -320,6 +320,12 @@
                 <div style="margin-left: 20px">
                     <label for="update-check-interval">Check Interval:</label>
                     <input type="text" id="update-check-interval" placeholder="24h" style="width: 100px"/>
+                    <span class="info-toggle" onclick="toggleInfo('update-check-interval-info')">ⓘ</span>
+                    <div id="update-check-interval-info" class="info-details">
+                        Go duration syntax: a number followed by a unit, optionally combined
+                        (e.g. <code>24h</code>, <code>90m</code>, <code>1h30m</code>, <code>45s</code>).<br/>
+                        Units: <code>h</code> (hours), <code>m</code> (minutes), <code>s</code> (seconds).
+                    </div>
                 </div>
                 <div style="font-size: 0.8em; color: #666; margin-top: 4px;">
                     Makes one unauthenticated GET request to api.github.com per interval when enabled.
