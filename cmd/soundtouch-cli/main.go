@@ -2339,6 +2339,9 @@ func main() {
 	// Defined in cmd_library.go.
 	app.Commands = append(app.Commands, libraryCommand())
 
+	// On-demand GitHub release check (#591). Defined in cmd_updatecheck.go.
+	app.Commands = append(app.Commands, updateCheckCommand())
+
 	// Sort commands alphabetically (including subcommands and flags recursively)
 	sortCommands(app.Commands)
 

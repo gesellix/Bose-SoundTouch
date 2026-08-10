@@ -33,6 +33,7 @@ func main() {
 			allCommand(),
 			cloudCommand(),
 			localCommand(),
+			updateCheckCommand(),
 		},
 	}
 	if err := app.Run(os.Args); err != nil {
