@@ -733,3 +733,118 @@ func TestHandleAddLibraryServer_AlreadyRegistered(t *testing.T) {
 		t.Errorf("expected success=true when error contains 1024, got error=%s", resp.Error)
 	}
 }
+
+// ---- discoverDeviceMediaServers (speaker-side /listMediaServers) --------
+
+// cannedListMediaServersResponse is a minimal /listMediaServers XML response
+// with one server, used to exercise the speaker-side discovery merge path
+// that complements our own SSDP sweep.
+const cannedListMediaServersResponse = `<?xml version="1.0" encoding="UTF-8" ?>
+<ListMediaServersResponse>
+  <media_server id="uuid:fa095ecc-uuid" ip="198.51.100.10" manufacturer="AVM" model_name="FRITZ!Mediaserver" friendly_name="FRITZ!Mediaserver"/>
+</ListMediaServersResponse>`
+
+// newMediaServerTestDevice registers a device backed by speakerURL under id,
+// mirroring newLibraryTestApp's setup but for tests that need more than one
+// device on the same WebApp.
+func newMediaServerTestDevice(app *WebApp, id, speakerURL string) {
+	c := client.NewClient(&client.Config{Host: speakerURL})
+	info := &models.DeviceInfo{DeviceID: id}
+	app.AddDevice(id, webtypes.NewDeviceConnection(c, info))
+}
+
+// TestDiscoverDeviceMediaServers_QueriesEveryPairedSpeaker verifies that
+// discoverDeviceMediaServers calls /listMediaServers on every paired device
+// and returns the union of what they report. This is the path that lets
+// discovery see a server the AfterTouch service's own SSDP sweep might miss
+// because it isn't co-located with the speaker's LAN segment.
+func TestDiscoverDeviceMediaServers_QueriesEveryPairedSpeaker(t *testing.T) {
+	speakerA, _ := setupSpeakerMock(t, map[string]string{
+		"/listMediaServers": cannedListMediaServersResponse,
+	})
+	defer speakerA.Close()
+
+	speakerB, _ := setupSpeakerMock(t, map[string]string{
+		"/listMediaServers": `<?xml version="1.0" encoding="UTF-8" ?>
+<ListMediaServersResponse>
+  <media_server id="uuid:other-udn" ip="198.51.100.20" manufacturer="Synology" model_name="DS220" friendly_name="NAS"/>
+</ListMediaServersResponse>`,
+	})
+	defer speakerB.Close()
+
+	app := NewWebApp()
+	newMediaServerTestDevice(app, "dev-a", speakerA.URL)
+	newMediaServerTestDevice(app, "dev-b", speakerB.URL)
+
+	got := app.discoverDeviceMediaServers()
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 servers across both speakers, got %d: %+v", len(got), got)
+	}
+
+	udns := map[string]bool{}
+	for _, s := range got {
+		udns[normalizeUDN(s.ID)] = true
+	}
+
+	if !udns["fa095ecc-uuid"] || !udns["other-udn"] {
+		t.Errorf("expected both UDNs present, got %+v", udns)
+	}
+}
+
+// TestDiscoverDeviceMediaServers_DedupesAcrossSpeakers verifies that the same
+// server reported by two speakers (e.g. two boxes on the same LAN both seeing
+// one NAS) is returned only once, keyed by normalized UDN, even when the two
+// speakers report the UDN in different forms (with/without "uuid:" prefix).
+func TestDiscoverDeviceMediaServers_DedupesAcrossSpeakers(t *testing.T) {
+	speakerA, _ := setupSpeakerMock(t, map[string]string{
+		"/listMediaServers": cannedListMediaServersResponse,
+	})
+	defer speakerA.Close()
+
+	speakerB, _ := setupSpeakerMock(t, map[string]string{
+		"/listMediaServers": `<?xml version="1.0" encoding="UTF-8" ?>
+<ListMediaServersResponse>
+  <media_server id="fa095ecc-uuid" ip="198.51.100.10" manufacturer="AVM" model_name="FRITZ!Mediaserver" friendly_name="FRITZ!Mediaserver"/>
+</ListMediaServersResponse>`,
+	})
+	defer speakerB.Close()
+
+	app := NewWebApp()
+	newMediaServerTestDevice(app, "dev-a", speakerA.URL)
+	newMediaServerTestDevice(app, "dev-b", speakerB.URL)
+
+	got := app.discoverDeviceMediaServers()
+
+	if len(got) != 1 {
+		t.Fatalf("expected 1 deduplicated server, got %d: %+v", len(got), got)
+	}
+}
+
+// TestDiscoverDeviceMediaServers_UnreachableSpeakerSkippedSilently verifies
+// that a speaker whose /listMediaServers call fails (offline, old firmware
+// without the endpoint) does not prevent results from other, reachable
+// speakers, and does not error the overall call.
+func TestDiscoverDeviceMediaServers_UnreachableSpeakerSkippedSilently(t *testing.T) {
+	speakerA, _ := setupSpeakerMock(t, map[string]string{
+		"/listMediaServers": cannedListMediaServersResponse,
+	})
+	defer speakerA.Close()
+
+	speakerB, _ := setupSpeakerMock(t, nil)
+	speakerB.Close() // closed before use: every request to it fails outright.
+
+	app := NewWebApp()
+	newMediaServerTestDevice(app, "dev-a", speakerA.URL)
+	newMediaServerTestDevice(app, "dev-b", speakerB.URL)
+
+	got := app.discoverDeviceMediaServers()
+
+	if len(got) != 1 {
+		t.Fatalf("expected 1 server from the reachable speaker, got %d: %+v", len(got), got)
+	}
+
+	if normalizeUDN(got[0].ID) != "fa095ecc-uuid" {
+		t.Errorf("expected the reachable speaker's server, got %+v", got[0])
+	}
+}

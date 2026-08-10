@@ -6,8 +6,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
@@ -55,10 +57,17 @@ func normalizeUDN(s string) string {
 }
 
 // HandleDiscoverLibraryServers performs a LAN-wide SSDP sweep for DLNA media
-// servers and returns them as a JSON array. An optional ?timeout= query
-// parameter (in seconds, integer) overrides the default 5-second budget.
+// servers, plus a query to every paired speaker's own /listMediaServers, and
+// returns the merged set as a JSON array. An optional ?timeout= query
+// parameter (in seconds, integer) overrides the default 5-second SSDP budget.
 // This handler is global (not device-scoped) and lives under
 // /api/control/providers/library/servers.
+//
+// The two sources see different networks: our SSDP sweep runs from the
+// AfterTouch service host, while each speaker's /listMediaServers reflects
+// what that speaker sees on its own LAN segment. They can disagree when the
+// service isn't co-located with the speaker (different subnet/VLAN), so a
+// server invisible to one path may still be visible via the other.
 func (app *WebApp) HandleDiscoverLibraryServers(w http.ResponseWriter, r *http.Request) {
 	timeout := 5 * time.Second
 
@@ -74,15 +83,44 @@ func (app *WebApp) HandleDiscoverLibraryServers(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	out := make([]libraryServer, 0, len(servers))
+	byUDN := make(map[string]libraryServer, len(servers))
+	order := make([]string, 0, len(servers))
+
 	for _, s := range servers {
-		out = append(out, libraryServer{
-			UDN:           normalizeUDN(s.UDN),
+		udn := normalizeUDN(s.UDN)
+		byUDN[udn] = libraryServer{
+			UDN:           udn,
 			Name:          s.FriendlyName,
 			Manufacturer:  s.Manufacturer,
 			Model:         s.ModelName,
 			CDSControlURL: s.CDSControlURL,
-		})
+		}
+		order = append(order, udn)
+	}
+
+	deviceFound := app.discoverDeviceMediaServers()
+	for i := range deviceFound {
+		found := &deviceFound[i]
+
+		udn := normalizeUDN(found.ID)
+		if _, exists := byUDN[udn]; exists {
+			// Already found via SSDP, which carries CDSControlURL; keep that
+			// entry since registration itself only needs the UDN and name.
+			continue
+		}
+
+		byUDN[udn] = libraryServer{
+			UDN:          udn,
+			Name:         found.FriendlyName,
+			Manufacturer: found.Manufacturer,
+			Model:        found.ModelName,
+		}
+		order = append(order, udn)
+	}
+
+	out := make([]libraryServer, 0, len(order))
+	for _, udn := range order {
+		out = append(out, byUDN[udn])
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -90,6 +128,71 @@ func (app *WebApp) HandleDiscoverLibraryServers(w http.ResponseWriter, r *http.R
 	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: out}); encErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+// discoverDeviceMediaServers queries every paired speaker's own
+// /listMediaServers endpoint concurrently and returns the union of what they
+// report, deduplicated by UDN. A speaker that is offline, times out, or runs
+// firmware without the endpoint is skipped silently: this is a best-effort
+// second discovery path, and one unreachable speaker must not fail or delay
+// the overall response.
+func (app *WebApp) discoverDeviceMediaServers() []models.MediaServerInfo {
+	devices := app.DeviceSnapshot()
+
+	type result struct {
+		servers []models.MediaServerInfo
+	}
+
+	results := make(chan result, len(devices))
+
+	var wg sync.WaitGroup
+
+	for _, entry := range devices {
+		deviceClient := entry.Device.Client
+		if deviceClient == nil {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *client.Client) {
+			defer wg.Done()
+
+			resp, err := c.ListMediaServers()
+			if err != nil || resp == nil {
+				results <- result{}
+				return
+			}
+
+			results <- result{servers: resp.MediaServers}
+		}(deviceClient)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	seen := make(map[string]bool)
+
+	out := make([]models.MediaServerInfo, 0, len(devices))
+
+	for r := range results {
+		for i := range r.servers {
+			s := &r.servers[i]
+
+			udn := normalizeUDN(s.ID)
+			if udn == "" || seen[udn] {
+				continue
+			}
+
+			seen[udn] = true
+
+			out = append(out, *s)
+		}
+	}
+
+	return out
 }
 
 // HandleDeviceLibraryServers returns the STORED_MUSIC sources currently

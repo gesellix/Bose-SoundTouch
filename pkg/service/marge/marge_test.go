@@ -1,6 +1,7 @@
 package marge
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
@@ -782,5 +784,174 @@ func TestAccountFullToXML_WithBackupStructure(t *testing.T) {
 	fullXML2, _ := AccountFullToXML(ds, account)
 	if !strings.Contains(string(fullXML2), `<name/>`) && !strings.Contains(string(fullXML2), `<name></name>`) && !strings.Contains(string(fullXML2), `<name>SoundTouch`) && !strings.Contains(string(fullXML2), `<name>PANDORA`) && !strings.Contains(string(fullXML2), `<name>001122334455</name>`) {
 		t.Errorf("Expected <name/> or <name></name> or fallback name, got %s", string(fullXML2))
+	}
+}
+
+// extractSourceFragment returns the raw `<source id="id" ...>...</source>`
+// substring for one source out of a rendered account document. Tests need the
+// raw wire text, not an unmarshaled struct, because Go's XML decoder can't
+// distinguish "element present but empty" from "element absent" — and that
+// distinction is exactly what has broken parsing on real speakers before
+// (issue #195, #334).
+func extractSourceFragment(t *testing.T, doc, id string) string {
+	t.Helper()
+
+	marker := `<source id="` + id + `"`
+
+	start := strings.Index(doc, marker)
+	if start < 0 {
+		t.Fatalf("source id=%q not found in document:\n%s", id, doc)
+	}
+
+	end := strings.Index(doc[start:], "</source>")
+	if end < 0 {
+		t.Fatalf("source id=%q has no closing </source>:\n%s", id, doc)
+	}
+
+	return doc[start : start+end+len("</source>")]
+}
+
+// xmlElementNames returns the ordered sequence of start-tag element names in
+// an XML fragment (attributes and closing tags are ignored). Used to compare
+// the "shape" of two rendered <source> entries without caring about their
+// differing content.
+func xmlElementNames(fragment string) []string {
+	var out []string
+
+	for _, part := range strings.Split(fragment, "<") {
+		if i := strings.IndexAny(part, " >/"); i > 0 {
+			out = append(out, part[:i])
+		}
+	}
+
+	return out
+}
+
+// TestSourceXMLShapeConsistencyAcrossTypes guards against a known Bose
+// firmware failure mode: a <source> entry that omits an element the firmware
+// expects makes the speaker reject the *whole* account document, not just
+// that entry (see the AccountFullToXML sourceproviderid comment above, and
+// issues #195/#334). A newly added source type (here STORED_MUSIC, as used by
+// the DLNA/UPnP media-library feature) must render with the exact same
+// element set, in the same order, as an existing known-good default source —
+// content may legitimately differ, element names may not.
+func TestSourceXMLShapeConsistencyAcrossTypes(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "marge-test-shape-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	ds := datastore.NewDataStore(tempDir)
+	account := "7654321"
+	device := "AABBCCDDEE0B"
+
+	info := &models.ServiceDeviceInfo{
+		DeviceID: device,
+		Name:     "Office SoundTouch",
+	}
+	_ = ds.SaveDeviceInfo(account, device, info)
+	_ = ds.SavePresets(account, device, []models.ServicePreset{})
+	_ = ds.SaveRecents(account, device, []models.ServiceRecent{})
+
+	// A STORED_MUSIC entry as HandleAddLibraryServer's registration flow would
+	// produce it: no SourceProviderID set explicitly, so PrepareConfiguredSource
+	// must resolve it via constants.StaticProviders at render time, exactly like
+	// a freshly registered DLNA media server would.
+	stored := models.ConfiguredSource{
+		ID:          "20001",
+		DisplayName: "FRITZ!Mediaserver",
+		Type:        "Audio",
+		Name:        "FRITZ!Mediaserver",
+		SourceName:  constants.ProviderStoredMusic,
+		Username:    "fa095ecc-uuid/0",
+	}
+	stored.SourceKey.Type = constants.ProviderStoredMusic
+	stored.SourceKey.Account = "fa095ecc-uuid/0"
+	stored.SourceKeyType = constants.ProviderStoredMusic
+	stored.SourceKeyAccount = "fa095ecc-uuid/0"
+
+	if err := ds.SaveConfiguredSources(account, device, []models.ConfiguredSource{stored}); err != nil {
+		t.Fatalf("SaveConfiguredSources: %v", err)
+	}
+
+	tunein := strconv.Itoa(constants.TuneinProviderID)
+	storedMusicID := strconv.Itoa(constants.StoredMusicProviderID)
+
+	cases := []struct {
+		name   string
+		render func() ([]byte, error)
+	}{
+		{"AccountFullToXML", func() ([]byte, error) { return AccountFullToXML(ds, account) }},
+		{"AccountSourcesToXML", func() ([]byte, error) { return AccountSourcesToXML(ds, account) }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := tc.render()
+			if err != nil {
+				t.Fatalf("%s failed: %v", tc.name, err)
+			}
+
+			var sources []models.FullResponseSource
+
+			switch tc.name {
+			case "AccountFullToXML":
+				var resp models.AccountFullResponse
+				if uerr := xml.Unmarshal(data, &resp); uerr != nil {
+					t.Fatalf("%s: whole-document unmarshal failed: %v\n%s", tc.name, uerr, data)
+				}
+				sources = resp.Sources
+			case "AccountSourcesToXML":
+				var resp models.AccountSourcesResponse
+				if uerr := xml.Unmarshal(data, &resp); uerr != nil {
+					t.Fatalf("%s: whole-document unmarshal failed: %v\n%s", tc.name, uerr, data)
+				}
+				sources = resp.Sources
+			}
+
+			// Defaults minus AUX (filtered out of /full and /sources on purpose,
+			// see the getAccountSources comment) plus our one extra STORED_MUSIC entry.
+			wantCount := len(ds.GetInitialSources()) - 1 + 1
+			if len(sources) != wantCount {
+				t.Fatalf("%s: got %d sources, want %d:\n%s", tc.name, len(sources), wantCount, data)
+			}
+
+			var tuneinSource, storedMusicSource *models.FullResponseSource
+			for i := range sources {
+				switch sources[i].SourceProviderID {
+				case tunein:
+					tuneinSource = &sources[i]
+				case storedMusicID:
+					storedMusicSource = &sources[i]
+				}
+			}
+
+			if tuneinSource == nil {
+				t.Fatalf("%s: TUNEIN source missing from rendered document:\n%s", tc.name, data)
+			}
+			if storedMusicSource == nil {
+				t.Fatalf("%s: STORED_MUSIC source missing, or its sourceproviderid did not resolve to %q:\n%s", tc.name, storedMusicID, data)
+			}
+			if storedMusicSource.ID == tuneinSource.ID {
+				t.Errorf("%s: STORED_MUSIC source id %q collides with a default source id", tc.name, storedMusicSource.ID)
+			}
+
+			tuneinFragment := extractSourceFragment(t, string(data), tuneinSource.ID)
+			storedFragment := extractSourceFragment(t, string(data), storedMusicSource.ID)
+
+			wantShape := xmlElementNames(tuneinFragment)
+			gotShape := xmlElementNames(storedFragment)
+
+			if len(wantShape) != len(gotShape) {
+				t.Fatalf("%s: element count differs from a known-good default source:\n default (TUNEIN): %v\n STORED_MUSIC:      %v", tc.name, wantShape, gotShape)
+			}
+
+			for i := range wantShape {
+				if wantShape[i] != gotShape[i] {
+					t.Errorf("%s: element %d differs: default (TUNEIN) %q, STORED_MUSIC %q", tc.name, i, wantShape[i], gotShape[i])
+				}
+			}
+		})
 	}
 }
