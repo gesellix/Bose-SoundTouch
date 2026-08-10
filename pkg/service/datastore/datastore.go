@@ -2594,6 +2594,8 @@ type Settings struct {
 	RecordInteractions  bool           `json:"record_interactions"`
 	DiscoveryInterval   string         `json:"discovery_interval,omitempty"`
 	DiscoveryEnabled    bool           `json:"discovery_enabled"`
+	UpdateCheckInterval string         `json:"update_check_interval,omitempty"`
+	UpdateCheckEnabled  bool           `json:"update_check_enabled"`
 	DNSEnabled          bool           `json:"dns_enabled"`
 	DNSUpstream         []string       `json:"dns_upstream,omitempty"`
 	DNSBindAddr         string         `json:"dns_bind_addr,omitempty"`

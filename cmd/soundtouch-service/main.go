@@ -537,6 +537,7 @@ func main() {
 			server.SetExpectedHosts(config.domains)
 			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
+			server.SetUpdateCheckSettings(config.updateCheckInterval, config.updateCheckEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
 			server.SetInternalPaths(persisted.InternalPaths)
 			server.SetSpotifyConfig(config.spotifyClientID, config.spotifyClientSecret, config.spotifyRedirectURI)
@@ -616,7 +617,7 @@ func main() {
 
 			updateChecker := updatecheck.NewChecker(ds, "gesellix/Bose-SoundTouch", version)
 			server.SetUpdateChecker(updateChecker)
-			startUpdateCheck(updateChecker, config.updateCheckEnabled, config.updateCheckInterval)
+			startUpdateCheck(server, updateChecker)
 
 			var stockholmHandler *stockholm.Handler
 
@@ -1021,6 +1022,22 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 		}
 	}
 
+	// Installs upgraded from a build that predates the Settings-page toggle
+	// have no update_check_* keys at all, and an absent JSON bool decodes as
+	// false — taking it at face value would silently switch the check off for
+	// everyone who had opted in via UPDATE_CHECK_ENABLED. The interval is
+	// always written together with the flag (createDefaultSettings and
+	// HandleUpdateSettings both set both, and a time.Duration never
+	// stringifies to ""), so a non-empty interval is the marker for
+	// "settings.json genuinely carries an update-check preference".
+	if persisted.UpdateCheckInterval != "" {
+		config.updateCheckEnabled = persisted.UpdateCheckEnabled
+
+		if d, durErr := time.ParseDuration(persisted.UpdateCheckInterval); durErr == nil {
+			config.updateCheckInterval = d
+		}
+	}
+
 	config.redact = persisted.RedactLogs
 	config.logBody = persisted.LogBodies
 	config.record = persisted.RecordInteractions
@@ -1138,10 +1155,15 @@ func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datast
 		RecordInteractions: config.record,
 		DiscoveryEnabled:   config.discoveryEnabled,
 		DiscoveryInterval:  config.discoveryInterval.String(),
-		DNSEnabled:         config.dnsEnabled,
-		DNSUpstream:        strings.Split(config.dnsUpstream, ","),
-		DNSBindAddr:        config.dnsBind,
-		InternalPaths:      config.internalPaths,
+		// Seed the update-check preference from the CLI/env flags so a fresh
+		// install's settings.json matches what the operator asked for (and so
+		// the Settings page shows it) instead of silently reverting to off.
+		UpdateCheckEnabled:  config.updateCheckEnabled,
+		UpdateCheckInterval: config.updateCheckInterval.String(),
+		DNSEnabled:          config.dnsEnabled,
+		DNSUpstream:         strings.Split(config.dnsUpstream, ","),
+		DNSBindAddr:         config.dnsBind,
+		InternalPaths:       config.internalPaths,
 		Shortcuts: map[string]int{
 			"/.well-known/appspecific/com.chrome.devtools.json": http.StatusNotFound,
 			"/sw.js": http.StatusNotFound,
@@ -1230,16 +1252,45 @@ func startDeviceDiscovery(server *handlers.Server) {
 	}()
 }
 
-// startUpdateCheck runs the opt-in periodic check against GitHub Releases
-// in the background (#591, _/i591/design-update-check.md). Unlike
-// discovery, enabled/interval are fixed at startup (env-only for v1, no
-// Settings-tab control — see the design doc's answer on that trade-off),
-// so they're plain arguments, not read live from Settings each tick.
-func startUpdateCheck(checker *updatecheck.Checker, enabled bool, interval time.Duration) {
-	if !enabled {
-		return
-	}
+// updateCheckPollTick is how often the background update-check goroutine
+// re-reads the live settings. It is deliberately much shorter than the
+// check interval itself: sleeping a full (possibly 24h) interval between
+// reads would make flipping the Settings-page toggle on appear to do
+// nothing for up to a day.
+const updateCheckPollTick = time.Minute
 
+// shouldRunUpdateCheckNow reports whether the background goroutine should
+// perform a real GitHub request on this poll tick. Pure/testable — no
+// sleeping, no I/O.
+//
+// A zero interval is treated as "don't check": with interval 0 every tick
+// would look due (shouldCheckImmediately), so an enabled check would hit
+// GitHub once a minute forever. HandleUpdateSettings also refuses to keep
+// the check enabled with a zero interval; this is the same guard for values
+// that arrive via the CLI flag or a hand-edited settings.json.
+func shouldRunUpdateCheckNow(
+	enabled bool,
+	lastCheckedAt time.Time,
+	interval time.Duration,
+	lastErrorAt, now time.Time,
+) bool {
+	return enabled &&
+		interval > 0 &&
+		shouldCheckImmediately(lastCheckedAt, interval, now) &&
+		!shouldSkipDueToBackoff(lastErrorAt, now)
+}
+
+// startUpdateCheck runs the opt-in periodic check against GitHub Releases in
+// the background (#591, _/i591/design-update-check.md). Unlike the original
+// v1 design, enabled/interval are now live-reloadable from Settings (see
+// handlers.Server.SetUpdateCheckSettings) — so this goroutine always runs,
+// mirroring startDeviceDiscovery's live-settings pattern, and re-reads the
+// current settings every updateCheckPollTick. It only performs the actual
+// GitHub request when the check is enabled and the configured interval has
+// elapsed since the last check, so "always running" does not mean "always
+// talking to GitHub": with the check disabled it does nothing but wake up
+// once a minute and go back to sleep.
+func startUpdateCheck(server *handlers.Server, checker *updatecheck.Checker) {
 	go func() {
 		time.Sleep(randomJitter(5 * time.Minute))
 
@@ -1248,18 +1299,15 @@ func startUpdateCheck(checker *updatecheck.Checker, enabled bool, interval time.
 
 		var lastErrorAt time.Time
 
-		if shouldCheckImmediately(lastResult.CheckedAt, interval, time.Now()) {
-			lastErrorAt, lastLoggedVersion = runUpdateCheckTick(checker, lastLoggedVersion)
-		}
-
 		for {
-			time.Sleep(interval)
+			interval, enabled := server.GetUpdateCheckSettings()
 
-			if shouldSkipDueToBackoff(lastErrorAt, time.Now()) {
-				continue
+			if shouldRunUpdateCheckNow(enabled, lastResult.CheckedAt, interval, lastErrorAt, time.Now()) {
+				lastErrorAt, lastLoggedVersion = runUpdateCheckTick(checker, lastLoggedVersion)
+				lastResult = checker.LastResult()
 			}
 
-			lastErrorAt, lastLoggedVersion = runUpdateCheckTick(checker, lastLoggedVersion)
+			time.Sleep(updateCheckPollTick)
 		}
 	}()
 }

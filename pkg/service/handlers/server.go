@@ -52,6 +52,8 @@ type Server struct {
 	recordEnabled            bool
 	discoveryInterval        time.Duration
 	discoveryEnabled         bool
+	updateCheckInterval      time.Duration // live update-check interval; see SetUpdateCheckSettings
+	updateCheckEnabled       bool          // live update-check opt-in; defaults off (#591)
 	dnsEnabled               bool
 	dnsUpstream              []string
 	dnsBindAddr              string
@@ -71,7 +73,7 @@ type Server struct {
 	mgmtPassword             string
 	adminAreaAuth            string               // "" (unset) / "enabled" / "disabled" — see datastore.Settings.AdminAreaAuth
 	dismissedAnnouncements   map[string]time.Time // announcement id -> most recent dismissal; see RecordDismissal
-	updateChecker            *updatecheck.Checker // nil unless SetUpdateChecker was called (opt-in, see #591)
+	updateChecker            *updatecheck.Checker // the HTTP-checking object; nil unless SetUpdateChecker was called
 	spotifyClientID          string
 	spotifyClientSecret      string
 	spotifyRedirectURI       string
@@ -141,10 +143,14 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		recordEnabled:     recordEnabled,
 		discoveryInterval: 5 * time.Minute,
 		discoveryEnabled:  true,
-		peerObserver:      newPeerObserver(),
-		healthRegistry:    health.NewRegistry(),
-		authProbes:        newAuthProbeRegistry(defaultAuthProbeTTL),
-		deprecatedRoutes:  newDeprecatedRouteTracker(),
+		// The update check is opt-in (#591): only the interval gets a default,
+		// updateCheckEnabled stays false so no install starts making outbound
+		// GitHub calls without an explicit yes.
+		updateCheckInterval: 24 * time.Hour,
+		peerObserver:        newPeerObserver(),
+		healthRegistry:      health.NewRegistry(),
+		authProbes:          newAuthProbeRegistry(defaultAuthProbeTTL),
+		deprecatedRoutes:    newDeprecatedRouteTracker(),
 	}
 
 	health.RegisterSourcesXMLPresent(s.healthRegistry, ds)
@@ -581,6 +587,28 @@ func (s *Server) SetDiscoverySettings(interval time.Duration, enabled bool) {
 
 	s.discoveryInterval = interval
 	s.discoveryEnabled = enabled
+}
+
+// SetUpdateCheckSettings sets the live update-check settings for the server.
+//
+// Kept adjacent to its getter (rather than next to GetDiscoverySettings
+// further down) so the pair reads as one unit; the background goroutine in
+// soundtouch-service re-reads them on every poll, which is what makes the
+// Settings-page toggle take effect without a restart.
+func (s *Server) SetUpdateCheckSettings(interval time.Duration, enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.updateCheckInterval = interval
+	s.updateCheckEnabled = enabled
+}
+
+// GetUpdateCheckSettings returns the current update-check interval and enabled state.
+func (s *Server) GetUpdateCheckSettings() (time.Duration, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.updateCheckInterval, s.updateCheckEnabled
 }
 
 // SetDevicesChangedHook registers a callback fired after the known device set
@@ -1128,9 +1156,13 @@ func (s *Server) IsAnnouncementDismissed(id string) bool {
 	return ok
 }
 
-// SetUpdateChecker registers the opt-in periodic update checker (#591). Not
-// called at all unless UPDATE_CHECK_ENABLED — leave nil otherwise;
-// UpdateCheckResult handles that safely.
+// SetUpdateChecker registers the update checker (#591). The checker itself is
+// always constructed and registered, regardless of whether the periodic check
+// is enabled, so /api/setup/version and the Announcements banner can read
+// LastResult() (e.g. a result persisted by an earlier run) even before the
+// periodic check has ever run. Only the periodic background check is gated by
+// the live enabled setting — see SetUpdateCheckSettings. Callers that leave
+// this nil are still safe: UpdateCheckResult returns the zero value.
 func (s *Server) SetUpdateChecker(c *updatecheck.Checker) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

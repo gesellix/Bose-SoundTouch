@@ -354,6 +354,12 @@ async function fetchSettings() {
         if (settings.discovery_enabled !== undefined) {
             document.getElementById("discovery-enabled").checked = settings.discovery_enabled;
         }
+        if (settings.update_check_interval) {
+            document.getElementById("update-check-interval").value = settings.update_check_interval;
+        }
+        if (settings.update_check_enabled !== undefined) {
+            document.getElementById("update-check-enabled").checked = settings.update_check_enabled;
+        }
         if (settings.default_landing) {
             document.getElementById("default-landing").value = settings.default_landing;
         }
@@ -504,6 +510,8 @@ async function updateSettings() {
         admin_area_auth: document.getElementById("admin-area-auth").value,
         discovery_interval: document.getElementById("discovery-interval").value,
         discovery_enabled: document.getElementById("discovery-enabled").checked,
+        update_check_interval: document.getElementById("update-check-interval").value,
+        update_check_enabled: document.getElementById("update-check-enabled").checked,
         dns_enabled: document.getElementById("dns-enabled").checked,
         dns_upstream: document.getElementById("dns-upstream").value,
         dns_bind_addr: document.getElementById("dns-bind").value,

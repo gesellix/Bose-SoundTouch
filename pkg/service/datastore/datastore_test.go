@@ -428,10 +428,12 @@ func TestSettingsPersistence(t *testing.T) {
 	ds := NewDataStore(tempDir)
 
 	settings := Settings{
-		ServerURL:         "http://myserver:8000",
-		LogBodies:         true,
-		DiscoveryInterval: "10m",
-		DiscoveryEnabled:  true,
+		ServerURL:           "http://myserver:8000",
+		LogBodies:           true,
+		DiscoveryInterval:   "10m",
+		DiscoveryEnabled:    true,
+		UpdateCheckInterval: "12h",
+		UpdateCheckEnabled:  true,
 	}
 
 	err = ds.SaveSettings(settings)
@@ -455,6 +457,12 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	if loaded.DiscoveryEnabled != settings.DiscoveryEnabled {
 		t.Errorf("Expected DiscoveryEnabled %v, got %v", settings.DiscoveryEnabled, loaded.DiscoveryEnabled)
+	}
+	if loaded.UpdateCheckInterval != settings.UpdateCheckInterval {
+		t.Errorf("Expected UpdateCheckInterval %s, got %s", settings.UpdateCheckInterval, loaded.UpdateCheckInterval)
+	}
+	if loaded.UpdateCheckEnabled != settings.UpdateCheckEnabled {
+		t.Errorf("Expected UpdateCheckEnabled %v, got %v", settings.UpdateCheckEnabled, loaded.UpdateCheckEnabled)
 	}
 }
 

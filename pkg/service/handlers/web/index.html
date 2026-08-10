@@ -312,6 +312,23 @@
             </div>
         </div>
         <div style="margin-bottom: 20px">
+            <strong>Update Check:</strong>
+            <div style="margin-top: 5px">
+                <label style="display: block; margin-bottom: 5px">
+                    <input type="checkbox" id="update-check-enabled"/> Check GitHub for new releases
+                </label>
+                <div style="margin-left: 20px">
+                    <label for="update-check-interval">Check Interval:</label>
+                    <input type="text" id="update-check-interval" placeholder="24h" style="width: 100px"/>
+                </div>
+                <div style="font-size: 0.8em; color: #666; margin-top: 4px;">
+                    Makes one unauthenticated GET request to api.github.com per interval when enabled.
+                    No other data leaves this install. Applies live, no restart needed — takes effect
+                    within a minute (worst case).
+                </div>
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
             <strong>DNS Discovery:</strong>
             <div style="margin-top: 5px">
                 <label style="display: block; margin-bottom: 5px">

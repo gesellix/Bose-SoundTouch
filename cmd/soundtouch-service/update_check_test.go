@@ -104,9 +104,53 @@ func TestRandomJitter(t *testing.T) {
 	}
 }
 
-func TestStartUpdateCheck_DisabledIsANoOp(t *testing.T) {
-	// Must return immediately without spawning anything that could touch a
-	// nil-repo Checker or block — disabled is the default, so this path
-	// runs on every install that hasn't opted in.
-	startUpdateCheck(nil, false, time.Hour)
+// There is deliberately no test for startUpdateCheck itself, matching
+// startDeviceDiscovery (its equally untested sibling): both are thin,
+// forever-looping goroutine wrappers whose only decisions live in pure
+// helpers, which is what the tests above and below cover. The former
+// TestStartUpdateCheck_DisabledIsANoOp asserted a contract that no longer
+// exists — the goroutine now always starts, precisely so that enabling the
+// check from the Settings page takes effect without a restart, and an
+// early return for "disabled" would defeat that.
+func TestShouldRunUpdateCheckNow(t *testing.T) {
+	now := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+	interval := 24 * time.Hour
+	stale := now.Add(-25 * time.Hour)
+	fresh := now.Add(-1 * time.Hour)
+
+	cases := []struct {
+		name          string
+		enabled       bool
+		lastCheckedAt time.Time
+		interval      time.Duration
+		lastErrorAt   time.Time
+		want          bool
+	}{
+		{"disabled, never checked", false, time.Time{}, interval, time.Time{}, false},
+		{"disabled, due", false, stale, interval, time.Time{}, false},
+		{"enabled, never checked", true, time.Time{}, interval, time.Time{}, true},
+		{"enabled, due", true, stale, interval, time.Time{}, true},
+		{"enabled, not due yet", true, fresh, interval, time.Time{}, false},
+		{"enabled and due, but in error backoff", true, stale, interval, now.Add(-30 * time.Minute), false},
+		{"enabled and due, backoff expired", true, stale, interval, now.Add(-2 * time.Hour), true},
+		// A zero interval must not turn every poll tick into a GitHub request.
+		{"enabled with a zero interval", true, stale, 0, time.Time{}, false},
+	}
+
+	for _, tc := range cases {
+		got := shouldRunUpdateCheckNow(tc.enabled, tc.lastCheckedAt, tc.interval, tc.lastErrorAt, now)
+		if got != tc.want {
+			t.Errorf("%s: shouldRunUpdateCheckNow() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestUpdateCheckPollTickIsShorterThanTheDefaultInterval guards the property
+// that makes the Settings-page toggle feel live: the goroutine must re-read
+// the settings far more often than the check interval itself, otherwise
+// switching the check on would appear to do nothing for up to a day.
+func TestUpdateCheckPollTickIsShorterThanTheDefaultInterval(t *testing.T) {
+	if updateCheckPollTick >= 24*time.Hour {
+		t.Errorf("updateCheckPollTick = %v, want well below the 24h default interval", updateCheckPollTick)
+	}
 }

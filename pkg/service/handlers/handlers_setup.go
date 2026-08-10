@@ -167,6 +167,11 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	httpsOverride := s.httpsOverride
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
+	// Read the update-check fields directly rather than via
+	// GetUpdateCheckSettings(): that getter takes s.mu.RLock itself, and Go's
+	// sync.RWMutex is not reentrant-safe against a concurrent writer.
+	updateCheckInterval := s.updateCheckInterval.String()
+	updateCheckEnabled := s.updateCheckEnabled
 	dnsEnabled := s.dnsEnabled
 	dnsUpstream := s.dnsUpstream
 	dnsBindAddr := s.dnsBindAddr
@@ -248,6 +253,8 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"https_443_lan_host":            probe443.LANHost,
 		"discovery_interval":            discoveryInterval,
 		"discovery_enabled":             discoveryEnabled,
+		"update_check_interval":         updateCheckInterval,
+		"update_check_enabled":          updateCheckEnabled,
 		"dns_enabled":                   dnsEnabled,
 		"dns_running":                   dnsRunning,
 		"dns_actual_bind":               actualBind,
@@ -300,6 +307,40 @@ func parseDNSUpstreamList(dnsUpstream string) []string {
 	return upstreamList
 }
 
+// parseOptionalDuration parses a duration string that the client is allowed to
+// omit. An empty value yields a zero duration and no error, so callers can
+// treat "field omitted" as "keep the current value" while still rejecting a
+// value that was supplied but is unparseable.
+func parseOptionalDuration(value string) (time.Duration, error) {
+	if value == "" {
+		return 0, nil
+	}
+
+	return time.ParseDuration(value)
+}
+
+// resolvePeriodicSetting computes the new (interval, enabled) pair for one of
+// the background pollers (device discovery, update check) from a settings
+// request. When the request omitted the interval, the current one is kept. A
+// zero interval always forces the task off: both pollers treat zero as
+// "always due", so leaving the task enabled would make their poll tick the
+// work rate.
+func resolvePeriodicSetting(
+	currentInterval, requestedInterval time.Duration,
+	requestedIntervalProvided, requestedEnabled bool,
+) (time.Duration, bool) {
+	interval := currentInterval
+	if requestedIntervalProvided {
+		interval = requestedInterval
+	}
+
+	if interval == 0 {
+		return interval, false
+	}
+
+	return interval, requestedEnabled
+}
+
 // HandleUpdateSettings updates the service settings.
 func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
@@ -307,6 +348,8 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		HTTPSServerURLOverride *string        `json:"https_server_url_override"`
 		DiscoveryInterval      string         `json:"discovery_interval"`
 		DiscoveryEnabled       bool           `json:"discovery_enabled"`
+		UpdateCheckInterval    string         `json:"update_check_interval"`
+		UpdateCheckEnabled     bool           `json:"update_check_enabled"`
 		DNSEnabled             bool           `json:"dns_enabled"`
 		DNSUpstream            string         `json:"dns_upstream"`
 		DNSBindAddr            string         `json:"dns_bind_addr"`
@@ -370,9 +413,15 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	interval, err := time.ParseDuration(settings.DiscoveryInterval)
-	if err != nil && settings.DiscoveryInterval != "" {
+	interval, err := parseOptionalDuration(settings.DiscoveryInterval)
+	if err != nil {
 		http.Error(w, "Invalid discovery interval: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	updateCheckInterval, err := parseOptionalDuration(settings.UpdateCheckInterval)
+	if err != nil {
+		http.Error(w, "Invalid update check interval: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -396,14 +445,11 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	// the Target Domain (which the derived URL follows) may have changed.
 	s.applyHTTPSOverrideLocked(settings.HTTPSServerURLOverride)
 
-	s.discoveryEnabled = settings.DiscoveryEnabled
-	if settings.DiscoveryInterval != "" {
-		s.discoveryInterval = interval
-	}
+	s.discoveryInterval, s.discoveryEnabled = resolvePeriodicSetting(
+		s.discoveryInterval, interval, settings.DiscoveryInterval != "", settings.DiscoveryEnabled)
 
-	if s.discoveryInterval == 0 {
-		s.discoveryEnabled = false
-	}
+	s.updateCheckInterval, s.updateCheckEnabled = resolvePeriodicSetting(
+		s.updateCheckInterval, updateCheckInterval, settings.UpdateCheckInterval != "", settings.UpdateCheckEnabled)
 
 	s.dnsEnabled = settings.DNSEnabled
 	s.dnsUpstream = parseDNSUpstreamList(settings.DNSUpstream)
@@ -469,6 +515,8 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	persisted.RecordInteractions = currentRecord
 	persisted.DiscoveryInterval = s.discoveryInterval.String()
 	persisted.DiscoveryEnabled = s.discoveryEnabled
+	persisted.UpdateCheckInterval = s.updateCheckInterval.String()
+	persisted.UpdateCheckEnabled = s.updateCheckEnabled
 	persisted.DNSEnabled = s.dnsEnabled
 	persisted.DNSUpstream = s.dnsUpstream
 	persisted.DNSBindAddr = s.dnsBindAddr

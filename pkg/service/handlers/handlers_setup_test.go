@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
@@ -440,6 +441,170 @@ func TestAdminAreaAuthRoundTrip(t *testing.T) {
 
 	if server.AdminAreaAuthMode() != "disabled" {
 		t.Errorf("Expected live mode \"disabled\" after explicit opt-out, got %q", server.AdminAreaAuthMode())
+	}
+}
+
+// TestResolvePeriodicSetting covers the shared interval/enabled resolution
+// used by both background pollers (device discovery, update check).
+func TestResolvePeriodicSetting(t *testing.T) {
+	cases := []struct {
+		name             string
+		current          time.Duration
+		requested        time.Duration
+		provided         bool
+		enabled          bool
+		wantInterval     time.Duration
+		wantEnabledState bool
+	}{
+		{"interval omitted keeps the current one", 24 * time.Hour, 0, false, true, 24 * time.Hour, true},
+		{"interval supplied replaces the current one", 24 * time.Hour, 6 * time.Hour, true, true, 6 * time.Hour, true},
+		{"disabling keeps the interval", 24 * time.Hour, 0, false, false, 24 * time.Hour, false},
+		{"a zero interval forces it off", 24 * time.Hour, 0, true, true, 0, false},
+		{"a zero current interval forces it off too", 0, 0, false, true, 0, false},
+	}
+
+	for _, tc := range cases {
+		gotInterval, gotEnabled := resolvePeriodicSetting(tc.current, tc.requested, tc.provided, tc.enabled)
+		if gotInterval != tc.wantInterval || gotEnabled != tc.wantEnabledState {
+			t.Errorf("%s: resolvePeriodicSetting() = %v/%v, want %v/%v",
+				tc.name, gotInterval, gotEnabled, tc.wantInterval, tc.wantEnabledState)
+		}
+	}
+}
+
+// TestParseOptionalDuration verifies an omitted duration is not an error,
+// while a supplied-but-invalid one is.
+func TestParseOptionalDuration(t *testing.T) {
+	if d, err := parseOptionalDuration(""); err != nil || d != 0 {
+		t.Errorf("parseOptionalDuration(\"\") = %v/%v, want 0/nil", d, err)
+	}
+
+	if d, err := parseOptionalDuration("90m"); err != nil || d != 90*time.Minute {
+		t.Errorf("parseOptionalDuration(\"90m\") = %v/%v, want 1h30m0s/nil", d, err)
+	}
+
+	if _, err := parseOptionalDuration("nope"); err == nil {
+		t.Error("parseOptionalDuration(\"nope\") = nil error, want a parse error")
+	}
+}
+
+// TestUpdateCheckSettingsRoundTrip covers the Settings-page control for the
+// opt-in update check (#591 follow-up): POST /setup/settings must update the
+// live values the background poller reads, persist them, and hand them back
+// on GET so the UI reflects what was saved.
+func TestUpdateCheckSettingsRoundTrip(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "update-check-settings-roundtrip-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	ds := datastore.NewDataStore(tempDir)
+	_ = ds.Initialize()
+
+	r, server := setupRouter("http://127.0.0.1:8000", ds)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// Default state: opted out, with a nonzero interval so enabling it later
+	// doesn't need an interval to be supplied.
+	if interval, enabled := server.GetUpdateCheckSettings(); enabled || interval == 0 {
+		t.Fatalf("Expected the check to default to disabled with a nonzero interval, got %v/%v", interval, enabled)
+	}
+
+	enableBody, err := json.Marshal(map[string]interface{}{
+		"server_url":            "http://127.0.0.1:8000",
+		"update_check_enabled":  true,
+		"update_check_interval": "6h",
+	})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
+
+	res, err := http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(enableBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /setup/settings (enable): expected 200, got %v", res.Status)
+	}
+
+	interval, enabled := server.GetUpdateCheckSettings()
+	if !enabled || interval != 6*time.Hour {
+		t.Errorf("Expected live settings 6h/true, got %v/%v", interval, enabled)
+	}
+
+	persisted, err := ds.GetSettings()
+	if err != nil {
+		t.Fatalf("Failed to reload settings: %v", err)
+	}
+	if !persisted.UpdateCheckEnabled || persisted.UpdateCheckInterval != "6h0m0s" {
+		t.Errorf("Expected persisted 6h0m0s/true, got %q/%v",
+			persisted.UpdateCheckInterval, persisted.UpdateCheckEnabled)
+	}
+
+	res, err = http.Get(ts.URL + "/setup/settings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	var got map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatalf("Failed to decode GET /setup/settings: %v", err)
+	}
+	if got["update_check_enabled"] != true {
+		t.Errorf("GET /setup/settings: expected update_check_enabled true, got %+v", got["update_check_enabled"])
+	}
+	if got["update_check_interval"] != "6h0m0s" {
+		t.Errorf("GET /setup/settings: expected update_check_interval 6h0m0s, got %+v", got["update_check_interval"])
+	}
+
+	// An unparseable interval must be rejected before anything is applied.
+	badBody, err := json.Marshal(map[string]interface{}{
+		"server_url":            "http://127.0.0.1:8000",
+		"update_check_enabled":  true,
+		"update_check_interval": "not-a-duration",
+	})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
+
+	res, err = http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(badBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("POST /setup/settings (bad interval): expected 400, got %v", res.Status)
+	}
+
+	// A zero interval must force the check off rather than leave the poller
+	// hitting GitHub on every tick.
+	zeroBody, err := json.Marshal(map[string]interface{}{
+		"server_url":            "http://127.0.0.1:8000",
+		"update_check_enabled":  true,
+		"update_check_interval": "0s",
+	})
+	if err != nil {
+		t.Fatalf("Failed to marshal request body: %v", err)
+	}
+
+	res, err = http.Post(ts.URL+"/setup/settings", "application/json", bytes.NewBuffer(zeroBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("POST /setup/settings (zero interval): expected 200, got %v", res.Status)
+	}
+
+	if _, enabled := server.GetUpdateCheckSettings(); enabled {
+		t.Error("Expected a zero interval to disable the update check")
 	}
 }
 
