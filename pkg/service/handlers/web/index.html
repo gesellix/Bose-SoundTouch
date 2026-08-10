@@ -308,6 +308,12 @@
                 <div style="margin-left: 20px">
                     <label for="discovery-interval">Discovery Interval:</label>
                     <input type="text" id="discovery-interval" placeholder="5m" style="width: 100px"/>
+                    <span class="info-toggle" onclick="toggleInfo('discovery-interval-info')">ⓘ</span>
+                    <div id="discovery-interval-info" class="info-details">
+                        Go duration syntax: a number followed by a unit, optionally combined
+                        (e.g. <code>5m</code>, <code>90s</code>, <code>1h30m</code>).<br/>
+                        Units: <code>h</code> (hours), <code>m</code> (minutes), <code>s</code> (seconds).
+                    </div>
                 </div>
             </div>
         </div>
