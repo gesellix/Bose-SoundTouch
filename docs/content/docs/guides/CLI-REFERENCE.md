@@ -1157,6 +1157,32 @@ soundtouch-cli --host 192.0.2.10 events subscribe --filter zone --no-reconnect
 - Events are displayed in real-time with emoji indicators
 - Verbose mode shows additional technical details
 
+### Update Check
+
+#### `update-check`
+
+Check GitHub Releases for a newer `soundtouch-cli` version. Unlike
+`soundtouch-service`'s periodic background check, this doesn't need a
+`--host` or any device on the network: it's a single, on-demand GitHub API
+request. Running the command is itself the opt-in, so there's no config
+flag or persisted state.
+
+**Usage:**
+```bash
+soundtouch-cli update-check
+```
+
+**Example output:**
+```
+A newer version is available: v1.3.0 (you're on v1.2.0)
+https://github.com/gesellix/Bose-SoundTouch/releases/tag/v1.3.0
+```
+
+**Notes:**
+- `soundtouch-backup` has the same `update-check` command.
+- If the running binary isn't a released version (e.g. a dev build),
+  the command reports that and skips the comparison.
+
 ## Common Usage Patterns
 
 ### Quick Device Setup
