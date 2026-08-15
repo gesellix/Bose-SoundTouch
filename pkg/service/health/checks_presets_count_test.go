@@ -188,8 +188,17 @@ func TestPresetsCount_SpeakerEmptyOffersRestoreQuickFix(t *testing.T) {
 		t.Fatalf("expected one finding, got %+v", got)
 	}
 
-	if len(got[0].QuickFixes) != 1 || got[0].QuickFixes[0].ID != FixIDRestorePresetsToSpeaker {
-		t.Errorf("expected the restore-presets QuickFix, got %+v", got[0].QuickFixes)
+	// Offers both the cheap, unconfirmed pull-style nudge (sourcesUpdated,
+	// which makes the speaker re-fetch /full — /full does carry presets,
+	// but firmware re-applying them locally is unconfirmed) and the
+	// guaranteed push (restore_presets_to_speaker) — see #614 discussion.
+	fixIDs := map[string]bool{}
+	for _, qf := range got[0].QuickFixes {
+		fixIDs[qf.ID] = true
+	}
+
+	if len(got[0].QuickFixes) != 2 || !fixIDs[FixIDRestorePresetsToSpeaker] || !fixIDs[FixIDPostSourcesUpdated] {
+		t.Errorf("expected both the sourcesUpdated nudge and the restore-presets QuickFix, got %+v", got[0].QuickFixes)
 	}
 }
 

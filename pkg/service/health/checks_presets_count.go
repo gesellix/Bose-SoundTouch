@@ -50,6 +50,17 @@ func RegisterPresetsCountCheck(r *Registry, ds *datastore.DataStore) {
 	r.RegisterFix(CheckIDPresetsCount, FixIDRestorePresetsToSpeaker, func(target Target) (string, error) {
 		return restorePresetsToSpeaker(ds, target)
 	})
+
+	// Same underlying nudge as the refresh_sources check (FixIDPostSourcesUpdated,
+	// checks_refresh_sources.go): POSTs sourcesUpdated so the speaker re-fetches
+	// /full. Confirmed that /full carries presets alongside sources
+	// (marge.AccountFullToXML); NOT confirmed that firmware re-applies the
+	// presets section locally (see issue253_regression_test.go — that exact
+	// link is documented as untested). Offered as a cheap, non-destructive
+	// thing to try before the guaranteed-but-heavier restore-to-speaker push.
+	r.RegisterFix(CheckIDPresetsCount, FixIDPostSourcesUpdated, func(target Target) (string, error) {
+		return postSourcesUpdated(ds, target)
+	})
 }
 
 func runPresetsCountCheck(ds *datastore.DataStore) []Finding {
@@ -149,11 +160,18 @@ func comparePresetsForDeviceWithURL(ds *datastore.DataStore, account, deviceID, 
 		// (reboot and/or Sync leaving the speaker's own preset
 		// slots empty while the service's Presets.xml is untouched).
 		severity = SeverityWarning
-		quickFixes = []QuickFix{{
-			ID:      FixIDRestorePresetsToSpeaker,
-			Label:   "Restore presets to speaker",
-			Confirm: "This pushes AfterTouch's stored presets onto the speaker's own preset slots, one at a time. Doesn't require a reboot.",
-		}}
+		quickFixes = []QuickFix{
+			{
+				ID:      FixIDPostSourcesUpdated,
+				Label:   "Try a sourcesUpdated nudge first",
+				Confirm: "Asks the speaker to re-fetch /full (the same nudge used to refresh sources). /full does include presets, but whether the speaker applies them back to its own preset table isn't confirmed — this is free and non-destructive, worth trying before the push below.",
+			},
+			{
+				ID:      FixIDRestorePresetsToSpeaker,
+				Label:   "Restore presets to speaker",
+				Confirm: "This pushes AfterTouch's stored presets onto the speaker's own preset slots, one at a time. Doesn't require a reboot.",
+			},
+		}
 	}
 
 	return []Finding{{
