@@ -52,10 +52,12 @@ func setupCommand() *cli.Command {
 			setupRemoteServicesCmd(),
 			setupInstallCACmd(),
 			setupMigrateCmd(),
+			setupRevertCmd(),
 			setupRebootCmd(),
 			setupVerifyCmd(),
 			setupPlanCmd(),
 			setupPairCmd(),
+			setupSyncCmd(),
 		},
 	}
 }
@@ -1013,6 +1015,116 @@ func promptBasicAuth() (string, string, error) {
 	return user, string(pass), nil
 }
 
+// setupSyncCmd wraps POST /api/setup/sync/{deviceId} — the same operation
+// as the web UI's Devices → Sync Data button. It only reads from the
+// speaker (presets, recents, sources) into AfterTouch's datastore; it never
+// writes anything back to the speaker. Useful for scripting or reproducing
+// what Sync does in isolation (see issue #614: Sync's own code cannot wipe
+// the speaker's preset table, since it never sends anything back).
+func setupSyncCmd() *cli.Command {
+	return &cli.Command{
+		Name:   "sync",
+		Usage:  "Pull presets/recents/sources from the speaker into AfterTouch's datastore (same as the web UI's \"Sync Data\" button)",
+		Before: RequireHost,
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "service-url", Required: true, Usage: "AfterTouch base URL"},
+			&cli.StringFlag{Name: "auth", Usage: "Basic-auth credentials for AfterTouch as user:pass (omit to be prompted on 401)"},
+		},
+		Action: func(c *cli.Context) error {
+			cfg := GetClientConfig(c)
+			serviceURL := strings.TrimRight(c.String("service-url"), "/")
+
+			if err := validateServiceURL(serviceURL); err != nil {
+				PrintError(err.Error())
+				return err
+			}
+
+			client, err := CreateSoundTouchClient(cfg)
+			if err != nil {
+				PrintError(fmt.Sprintf("Failed to create client: %v", err))
+				return err
+			}
+
+			deviceInfo, err := client.GetDeviceInfo()
+			if err != nil {
+				PrintError(fmt.Sprintf("Failed to get device info from speaker: %v", err))
+				return err
+			}
+
+			if deviceInfo.DeviceID == "" {
+				err := fmt.Errorf("speaker at %s did not report a DeviceID", cfg.Host)
+				PrintError(err.Error())
+
+				return err
+			}
+
+			PrintDeviceHeader(fmt.Sprintf("Syncing %s into AfterTouch", deviceInfo.DeviceID), cfg.Host, cfg.Port)
+
+			if err := postSetupSync(serviceURL, deviceInfo.DeviceID, c.String("auth")); err != nil {
+				PrintError(err.Error())
+				return err
+			}
+
+			PrintSuccess(fmt.Sprintf("Synced presets, recents, and sources for %s.", deviceInfo.DeviceID))
+
+			return nil
+		},
+	}
+}
+
+// postSetupSync POSTs to AfterTouch's /api/setup/sync/{deviceId}, prompting
+// for basic-auth credentials on 401 (matches fetchCACert's pattern).
+func postSetupSync(serviceURL, deviceID, authFlag string) error {
+	endpoint := fmt.Sprintf("%s/api/setup/sync/%s", serviceURL, deviceID)
+
+	doRequest := func(user, pass string) (*http.Response, error) {
+		req, err := http.NewRequest(http.MethodPost, endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		if user != "" {
+			req.SetBasicAuth(user, pass)
+		}
+
+		client := &http.Client{Timeout: 30 * time.Second}
+
+		return client.Do(req)
+	}
+
+	user, pass := splitAuth(authFlag)
+
+	resp, err := doRequest(user, pass)
+	if err != nil {
+		return fmt.Errorf("POST %s: %w", endpoint, err)
+	}
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		_ = resp.Body.Close()
+
+		fmt.Printf("%s requires basic auth.\n", endpoint)
+
+		user, pass, err = promptBasicAuth()
+		if err != nil {
+			return err
+		}
+
+		resp, err = doRequest(user, pass)
+		if err != nil {
+			return fmt.Errorf("POST %s (with auth): %w", endpoint, err)
+		}
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("POST %s returned %d: %s", endpoint, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return nil
+}
+
 func setupMigrateCmd() *cli.Command {
 	return &cli.Command{
 		Name:   "migrate",
@@ -1383,6 +1495,45 @@ func renderMigrationSummary(deviceIP, serviceURL string, s *setup.MigrationSumma
 		fmt.Printf("Resolve IP source : %s (%d ms)\n", s.ResolveIPSource, s.ResolveIPDurationMS)
 	} else if s.ResolveIPDurationMS > 0 {
 		fmt.Printf("Resolve IP        : %d ms\n", s.ResolveIPDurationMS)
+	}
+}
+
+// setupRevertCmd wraps setup.Manager.RevertMigration — the same operation
+// as the web UI's "Revert to Defaults" button (Migrate tab). Restores
+// SoundTouchSdkPrivateCfg.xml, /etc/hosts, and /etc/resolv.conf from their
+// .original backups, removes the AfterTouch DNS-hook artifacts, and strips
+// just the AfterTouch-labeled cert out of the trust bundle. No --service-url
+// needed: everything it touches already lives on the speaker.
+//
+// Deliberately out of scope (matches the web UI button): SSH/remote_services
+// persistence (use `setup remote-services --remove`) and account pairing
+// (use `account unpair`) — see #614 self-test notes for the full checklist.
+func setupRevertCmd() *cli.Command {
+	return &cli.Command{
+		Name:   "revert",
+		Usage:  "Undo a migration: restore SoundTouchSdkPrivateCfg.xml/hosts/resolv.conf from backups and remove the AfterTouch CA cert",
+		Before: RequireHost,
+		Action: func(c *cli.Context) error {
+			cfg := GetClientConfig(c)
+			m := setup.NewManager("", nil, nil)
+
+			fmt.Printf("Reverting migration on %s...\n", cfg.Host)
+
+			logs, err := m.RevertMigration(cfg.Host)
+			if logs != "" {
+				fmt.Print(logs)
+			}
+
+			if err != nil {
+				PrintError(err.Error())
+				return err
+			}
+
+			PrintSuccess("Migration reverted. SSH access and account pairing are untouched by this — " +
+				"see `setup remote-services --remove` and `account unpair` if you want those cleared too.")
+
+			return nil
+		},
 	}
 }
 

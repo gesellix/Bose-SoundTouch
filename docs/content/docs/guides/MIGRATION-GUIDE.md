@@ -107,6 +107,8 @@ Open `http://<server>:8000` and go to the **Settings** tab.
 
 Set the **Target Domain** to the address your speakers can reach — for example `https://soundtouch.fritz.box` or `http://192.0.2.100:8000`. This must be the host's address on your local network, not `localhost`.
 
+> **On-device install:** this "not `localhost`" rule is for the local-network-host and cloud/VPS scenarios above, where the service runs on a *different* machine than the speaker. If you're running AfterTouch directly on the speaker itself (see the [On-Device Install Walkthrough](ON-DEVICE-INSTALL-WALKTHROUGH.md)), the speaker and the service are the same machine — `http://localhost:8000` is exactly right there, and is the recommended value: it needs no DNS/mDNS to resolve and survives DHCP address changes since it never depends on the LAN address at all.
+
 If you plan to use DNS/DHCP redirect, enable the **DNS Discovery Server** and set the **DNS Bind Address** to `:53`. The upstream DNS should be your router's IP, not the service's own address.
 
 > **Tip**: If you change settings and they don't seem to take effect, check `data/settings.json` — settings saved in the UI take precedence over environment variables.
@@ -126,6 +128,14 @@ The XML migration writes updated configuration to the speaker's filesystem, whic
 3. Insert the drive into the speaker's USB port while it is powered on.
 4. Power-cycle the speaker (unplug the power cable, wait 10 seconds, reconnect).
 5. After boot, root SSH is available with no password: `ssh -oHostKeyAlgorithms=+ssh-rsa root@<SPEAKER-IP>`
+
+**Or, without a USB stick:** `soundtouch-cli setup enable-ssh` (#471) bootstraps SSH purely over the network, using the speaker's telnet:17000 diagnostic shell (open by default on most firmware) to inject the SSH-enable command:
+
+```shell
+soundtouch-cli --host <SPEAKER-IP> setup enable-ssh
+```
+
+It waits for `:22` to come up and persists the change (survives a reboot) by default. Falls back to the USB-stick method above if telnet:17000 is closed or the injection doesn't take on your model.
 
 You only need to do this once per speaker. SSH can remain enabled for future maintenance or be disabled after migration — your choice.
 

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -41,6 +43,46 @@ func captureStdout(t *testing.T, fn func()) string {
 	<-done
 
 	return buf.String()
+}
+
+func TestPostSetupSync_PostsToDeviceScopedURL(t *testing.T) {
+	var gotMethod, gotPath string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok": true}`))
+	}))
+	defer srv.Close()
+
+	if err := postSetupSync(srv.URL, "DEVICEID01", ""); err != nil {
+		t.Fatalf("postSetupSync: %v", err)
+	}
+
+	if gotMethod != http.MethodPost {
+		t.Errorf("expected POST, got %s", gotMethod)
+	}
+
+	if want := "/api/setup/sync/DEVICEID01"; gotPath != want {
+		t.Errorf("expected path %q, got %q", want, gotPath)
+	}
+}
+
+func TestPostSetupSync_PropagatesServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "device not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	err := postSetupSync(srv.URL, "DEVICEID01", "")
+	if err == nil {
+		t.Fatal("expected an error for a 404 response")
+	}
+
+	if !strings.Contains(err.Error(), "device not found") {
+		t.Errorf("expected error to include server body, got %q", err.Error())
+	}
 }
 
 func TestRenderSourceTable_AlignsColumnsAndDedupsDisplayName(t *testing.T) {

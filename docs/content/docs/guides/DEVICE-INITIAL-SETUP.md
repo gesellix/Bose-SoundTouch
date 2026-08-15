@@ -99,16 +99,26 @@ After factory restore the speaker enters setup mode automatically; no power-cycl
 
 ## 6. AP Mode Wi-Fi Provisioning via Console
 
-When BLE is unavailable (e.g. when using an Android emulator), use AP mode to push Wi-Fi credentials from the Mac command line.
+When BLE is unavailable (e.g. when using an Android emulator), use AP mode to push Wi-Fi credentials from the command line. The HTTP steps below (6.2, 6.3) are OS-agnostic; only the Wi-Fi-network-switching commands (6.1, 6.4) are platform-specific — macOS is shown inline, with Linux and Windows equivalents alongside.
 
-### 6.1 Connect Mac to Speaker AP
+### 6.1 Connect your machine to the Speaker AP
 
-After factory reset the speaker broadcasts an SSID like `Bose SoundTouch XXXX`. Connect the Mac to it:
+After factory reset the speaker broadcasts an SSID like `Bose SoundTouch XXXX`. Connect to it:
 
 ```bash
-# List nearby SSIDs — use System Settings → Wi-Fi (the airport command was removed in macOS Sequoia+)
-# Connect (replace with actual SSID)
+# macOS — list nearby SSIDs via System Settings → Wi-Fi (the `airport`
+# command was removed in macOS Sequoia+); connect (replace with actual SSID):
 networksetup -setairportnetwork en0 "Bose SoundTouch XXXX"
+```
+
+```bash
+# Linux (NetworkManager) — one-shot connect, no password (open AP):
+nmcli device wifi connect "Bose SoundTouch XXXX"
+```
+
+```powershell
+# Windows — connect via the built-in Wi-Fi menu, or from PowerShell:
+netsh wlan connect name="Bose SoundTouch XXXX"
 ```
 
 The speaker's web UI gateway is at `192.0.2.1` (verified: ST10 assigns `192.0.2.2` to the client via DHCP).
@@ -143,19 +153,36 @@ Expected response: `<?xml version="1.0" encoding="UTF-8" ?><AddWirelessProfileRe
 
 The speaker will disconnect from AP mode and join the home network within ~15–30 s.
 
-### 6.4 Reconnect Mac to Home Network
+### 6.4 Reconnect to your Home Network
 
 ```bash
+# macOS
 networksetup -setairportnetwork en0 "MyHomeNetwork" "MyPassword"
+```
+
+```bash
+# Linux (NetworkManager) — assumes the connection profile already exists
+# (e.g. from a prior manual connect); use `nmcli device wifi connect
+# "MyHomeNetwork" password "MyPassword"` instead for a first-time connect.
+nmcli connection up "MyHomeNetwork"
+```
+
+```powershell
+# Windows
+netsh wlan connect name="MyHomeNetwork"
 ```
 
 Wait ~15 s for the speaker to join the home network, then verify:
 
 ```bash
-# Discover the speaker's new IP via mDNS
-dns-sd -B _soundtouch._tcp local &
-sleep 5 ; kill %1
+# macOS/Linux — discover the speaker's new IP via mDNS.
+# macOS: dns-sd ships with the OS. Linux: use avahi-browse (avahi-utils package).
+dns-sd -B _soundtouch._tcp local &      # macOS
+avahi-browse -r _soundtouch._tcp        # Linux — Ctrl-C to stop
+sleep 5 ; kill %1 2>/dev/null           # only needed for the dns-sd form
 ```
+
+Windows has no equivalent built-in mDNS browser; use `soundtouch-cli discover devices` (this repo's own mDNS/UPnP discovery, cross-platform) or check your router's DHCP client list instead.
 
 ---
 

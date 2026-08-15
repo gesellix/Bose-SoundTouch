@@ -592,6 +592,9 @@ soundtouch-cli --host <device> account remove-amazon --user <USER>
 soundtouch-cli --host <device> account remove-deezer --user <USER>
 soundtouch-cli --host <device> account remove-iheart --user <USER>
 soundtouch-cli --host <device> account remove-nas --user <GUID/0> [--name <NAME>]
+
+# Unpair the device from its Marge cloud account entirely
+soundtouch-cli --host <device> account unpair
 ```
 
 **Supported Services:**
@@ -648,6 +651,11 @@ soundtouch-cli --host 192.0.2.10 account remove \
 - Network music libraries (STORED_MUSIC) don't require passwords, only the UPnP server GUID
 - After adding an account, use `source list` to verify it appears as available
 - Some services may require additional authentication steps through their mobile apps
+- `account unpair` is different from the above: it sends `UnPairDeviceWithAccount`
+  over the speaker's own local WebSocket to remove its **Marge cloud account**
+  pairing entirely (`margeAccountUUID`), not a single streaming-service login.
+  See `setup revert` for the related "undo a migration" operation, which
+  deliberately does *not* call this — the two are separate steps.
 
 ### Bass Control
 
@@ -1182,6 +1190,238 @@ https://github.com/gesellix/Bose-SoundTouch/releases/tag/v1.3.0
 - `soundtouch-backup` has the same `update-check` command.
 - If the running binary isn't a released version (e.g. a dev build),
   the command reports that and skips the comparison.
+
+### Setup & Migration
+
+The `setup <subcommand>` group provisions a speaker end-to-end: enabling
+SSH, factory-reset + Wi-Fi re-provisioning, pointing it at AfterTouch, CA
+trust, account pairing, reverting, and one-shot data sync. Each subcommand
+wraps an existing `pkg/service/setup` helper directly — there's no separate
+business logic in the CLI layer. Manual provisioning-loop background:
+[docs/analysis/SETUP-WEBSOCKET-EXPERIMENT.md](../analysis/SETUP-WEBSOCKET-EXPERIMENT.md)
+and [Device Initial Setup](DEVICE-INITIAL-SETUP.md).
+
+#### `setup inspect`
+
+Non-destructive snapshot of the speaker: identity, pairing state, Wi-Fi,
+sources, presets, and (with `--telnet`) the runtime URL configuration via
+`getpdo`. Good first command to run against an unfamiliar speaker.
+
+```bash
+soundtouch-cli --host <device> setup inspect
+soundtouch-cli --host <device> setup inspect --telnet   # also reads runtime URLs (slower)
+```
+
+#### `setup ssh-check`
+
+Probes whether port 22 is reachable. On failure, prints the `enable-ssh`
+suggestion and the USB-stick fallback procedure.
+
+```bash
+soundtouch-cli --host <device> setup ssh-check [--timeout 3s]
+```
+
+#### `setup enable-ssh`
+
+Bootstraps SSH on a speaker with no prior access, via the port-17000
+`envswitch` trick (#471) — no USB stick needed. Auto-pairs an unpaired
+(factory-reset) device first by default (the injection needs something to
+poll), waits for `:22`, and persists the `remote_services` marker so SSH
+survives a reboot.
+
+```bash
+soundtouch-cli --host <device> setup enable-ssh
+soundtouch-cli --host <device> setup enable-ssh --service-url https://192.0.2.10:8443
+```
+
+Flags:
+- `--service-url` — optional; only the vehicle for the injection, no live
+  server required. Set the real URL later via `setup migrate`.
+- `--wait` (default `90s`) — how long to wait for `:22` after injection.
+- `--full-config` — for stubborn devices (ST Portable, CineMate 520) where
+  the default injection is accepted but `sshd` never starts: writes all
+  four config URLs (the #515 sequence) and reboots.
+- `--command-delay` — only affects `--full-config`; pause between its 6
+  steps.
+- `--no-auto-pair` / `--account` — skip or control the automatic pairing
+  check.
+- `--no-reset-urls` — skip restoring clean `boseurls` after SSH is up.
+- `--no-persist` — skip persisting `remote_services` (SSH won't survive a
+  reboot).
+- `--authorized-key` — opt-in hardening: install an SSH public key instead
+  of relying on the empty-password login.
+- `--close-17000` — opt-in hardening: firewall off port 17000 from the LAN
+  (loopback access kept).
+
+#### `setup remote-services`
+
+Enables (default) or removes the `remote_services` SSH-enablement marker.
+
+```bash
+soundtouch-cli --host <device> setup remote-services            # ensure it's present
+soundtouch-cli --host <device> setup remote-services --remove   # disable SSH after next reboot
+```
+
+#### `setup factory-reset`
+
+Issues `sys factorydefault` over telnet — wipes account, presets, and
+Wi-Fi, and reboots the speaker into its own setup-mode AP. Prints the next
+steps (`wait-ap`, then `wifi-push`).
+
+```bash
+soundtouch-cli --host <device> setup factory-reset
+```
+
+> **Heads-up:** just before resetting, the speaker sends
+> `DELETE /streaming/account/{id}/device/{id}` to whatever `margeURL` is
+> *currently* configured. If that still points at `streaming.bose.com`
+> (not AfterTouch), AfterTouch keeps a stale datastore entry — migrate
+> first if you want a clean record.
+
+#### `setup wait-ap`
+
+Polls the speaker's setup-mode AP (default `192.0.2.1`) until `/info`
+responds, after a factory reset.
+
+```bash
+soundtouch-cli setup wait-ap [--ap-host 192.0.2.1] [--interval 2s] [--timeout 5m]
+```
+
+#### `setup wifi-push`
+
+POSTs `AddWirelessProfile` to the speaker's setup-mode endpoint — pushes
+your home Wi-Fi credentials while connected to the speaker's AP.
+
+```bash
+soundtouch-cli setup wifi-push --ssid="YourHomeSSID" --pass='your-password'
+```
+
+Flags: `--security` (default `wpa_or_wpa2`), `--ap-host` (default
+`192.0.2.1`), `--request-timeout` (default `30s` — the speaker can be slow
+to ACK before tearing down AP mode; 10s often races).
+
+#### `setup wait-online`
+
+Polls mDNS until a speaker matching `--match` comes online on the home
+network — run this after switching back from the speaker's AP.
+
+```bash
+soundtouch-cli setup wait-online --match=<last-6-hex-of-deviceID>
+```
+
+`--match` is empty by default (first speaker seen); `--interval` (`3s`) and
+`--timeout` (`5m`) control the poll.
+
+#### `setup install-ca`
+
+Fetches AfterTouch's CA cert from `/api/setup/ca.crt` and injects it into
+the speaker's trust store via SSH.
+
+```bash
+soundtouch-cli --host <device> setup install-ca --service-url https://192.0.2.10:8443
+```
+
+`--auth` (`user:pass`) supplies basic-auth credentials up front; omit it to
+be prompted interactively if the endpoint returns 401.
+
+#### `setup migrate`
+
+Applies a migration method to point the speaker at AfterTouch — the CLI
+equivalent of the web UI's Migrate tab.
+
+```bash
+soundtouch-cli --host <device> setup migrate --service-url http://192.0.2.10:8000 --method telnet
+```
+
+`--method` is one of `telnet` (default) | `hosts` | `resolv` | `xml`.
+`--proxy-url` sets an optional upstream proxy (only used by `--method=xml`).
+`--skip-preflight` skips AfterTouch's settings preflight check (useful when
+that endpoint is unreachable).
+
+#### `setup revert`
+
+Undoes a migration — the CLI equivalent of the web UI's "Revert to
+Defaults" button. Restores `SoundTouchSdkPrivateCfg.xml`, `/etc/hosts`, and
+`/etc/resolv.conf` from their `.original` backups, removes the AfterTouch
+DNS-hook artifacts, and strips just the AfterTouch-labeled certificate out
+of the trust bundle. No `--service-url` needed — everything it touches
+already lives on the speaker.
+
+```bash
+soundtouch-cli --host <device> setup revert
+```
+
+**Out of scope for this command** (matches the web UI button): SSH /
+`remote_services` persistence (use `setup remote-services --remove`) and
+account pairing (use `account unpair`) are untouched — revert them
+separately if you want a fully clean speaker.
+
+#### `setup reboot`
+
+Reboots the speaker — useful to force the envswitch parallel-persistence
+layer to apply after a migration.
+
+```bash
+soundtouch-cli --host <device> setup reboot [--method telnet|ssh]
+```
+
+`--method` defaults to `telnet`, which works without SSH on modern
+firmware.
+
+#### `setup verify`
+
+Read-only status probe across every migration axis (transports, URL
+configuration, DNS interception, CA/TLS, pairing) — doubles as a preflight
+check before applying changes and a verification step afterward. Exits
+non-zero if nothing reports migrated, so it's usable as a CI gate.
+
+```bash
+soundtouch-cli --host <device> setup verify --service-url http://192.0.2.10:8000
+```
+
+#### `setup plan`
+
+Recommends the next setup/migration steps based on `inspect` + `verify`
+state — prints a ready-to-run command for each recommended step.
+
+```bash
+soundtouch-cli --host <device> setup plan --service-url http://192.0.2.10:8000
+soundtouch-cli --host <device> setup plan --service-url http://192.0.2.10:8000 --reset   # plan a full factory-reset → Wi-Fi → migrate → pair flow
+```
+
+`--wifi-ssid` overrides the SSID used for the `wifi-push` step in a reset
+plan (default: reuse the SSID `inspect` found). `--include-pair` (default
+`true`) can be disabled if you'll pair manually.
+
+#### `setup pair`
+
+Pairs the speaker with an account via the WebSocket `SETUP` state machine
+(`--mode=full`, matching the Bose app's own flow) or a minimal
+`setMargeAccount`-only call (`--mode=bare`, the same underlying call the
+Health tab's "empty margeAccountUUID" QuickFix uses).
+
+```bash
+soundtouch-cli --host <device> setup pair --mode=full --account=1111111 --service-url http://192.0.2.10:8000
+soundtouch-cli --host <device> setup pair --mode=bare --account=1111111 --service-url http://192.0.2.10:8000
+```
+
+`--account` empty generates a fresh 7-digit ID. `--name` sets the speaker
+name during pairing (empty keeps current). `--language` defaults to `2`
+(English). `--token` defaults to a built-in placeholder matching the Bose
+app's token shape.
+
+#### `setup sync`
+
+Pulls presets, recents, and sources from the speaker into AfterTouch's
+datastore — the CLI equivalent of the web UI's Devices → Sync Data button.
+Read-only towards the speaker: it never writes anything back.
+
+```bash
+soundtouch-cli --host <device> setup sync --service-url http://192.0.2.10:8000
+```
+
+`--auth` (`user:pass`) supplies basic-auth credentials up front; omit it to
+be prompted interactively if the endpoint returns 401.
 
 ## Common Usage Patterns
 
