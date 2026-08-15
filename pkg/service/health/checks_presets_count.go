@@ -4,14 +4,23 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/client"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
 // CheckIDPresetsCount is the registry id of the speaker-vs-service
 // preset count check.
 const CheckIDPresetsCount = "speaker_presets_count"
+
+// FixIDRestorePresetsToSpeaker is the quick-fix that replays the
+// service's stored presets onto the speaker via its :8090/storePreset
+// endpoint, without requiring a reboot or re-entering them by hand.
+const FixIDRestorePresetsToSpeaker = "restore_presets_to_speaker"
 
 // speakerPresetsXML mirrors just enough of the speaker's :8090/presets
 // XML to count slots. The schema is the same as on the service side
@@ -36,6 +45,10 @@ func RegisterPresetsCountCheck(r *Registry, ds *datastore.DataStore) {
 		Run: func() []Finding {
 			return runPresetsCountCheck(ds)
 		},
+	})
+
+	r.RegisterFix(CheckIDPresetsCount, FixIDRestorePresetsToSpeaker, func(target Target) (string, error) {
+		return restorePresetsToSpeaker(ds, target)
 	})
 }
 
@@ -127,12 +140,20 @@ func comparePresetsForDeviceWithURL(ds *datastore.DataStore, account, deviceID, 
 	}
 
 	severity := SeverityInfo
+
+	var quickFixes []QuickFix
+
 	if speakerCount == 0 && serviceCount > 0 {
 		// Speaker shows nothing while the service has presets —
 		// the post-reset preset-loss pattern confirmed in #614
 		// (reboot and/or Sync leaving the speaker's own preset
 		// slots empty while the service's Presets.xml is untouched).
 		severity = SeverityWarning
+		quickFixes = []QuickFix{{
+			ID:      FixIDRestorePresetsToSpeaker,
+			Label:   "Restore presets to speaker",
+			Confirm: "This pushes AfterTouch's stored presets onto the speaker's own preset slots, one at a time. Doesn't require a reboot.",
+		}}
 	}
 
 	return []Finding{{
@@ -142,8 +163,84 @@ func comparePresetsForDeviceWithURL(ds *datastore.DataStore, account, deviceID, 
 			"Speaker shows %d preset slot(s); service Presets.xml has %d.",
 			speakerCount, serviceCount,
 		),
-		Details: "If the speaker shows fewer than the service, a sourcesUpdated notification sometimes re-syncs it. Don't power-cycle as a fix for this — it has itself been reported to wipe the speaker's presets (#614), so it may make things worse. If the speaker shows more than the service, the service may have stale entries or the speaker is still holding pre-migration state.",
+		Details:    "If the speaker shows fewer than the service, a sourcesUpdated notification sometimes re-syncs it. Don't power-cycle as a fix for this — it has itself been reported to wipe the speaker's presets (#614), so it may make things worse. If the speaker shows more than the service, the service may have stale entries or the speaker is still holding pre-migration state.",
+		QuickFixes: quickFixes,
 	}}
+}
+
+// restorePresetsToSpeaker replays every preset in the service's
+// Presets.xml onto the live speaker via :8090/storePreset, one slot
+// at a time. Unlike Sync (which only ever reads from the speaker),
+// this is the one direction that can put presets back after they've
+// been wiped, without needing to re-enter them by hand — see #614.
+func restorePresetsToSpeaker(ds *datastore.DataStore, target Target) (string, error) {
+	if target.Account == "" || target.Device == "" {
+		return "", fmt.Errorf("account and device are required")
+	}
+
+	dev, err := ds.GetDeviceInfo(target.Account, target.Device)
+	if err != nil || dev == nil {
+		return "", fmt.Errorf("device %s not found in datastore", target.Device)
+	}
+
+	if dev.IPAddress == "" {
+		return "", fmt.Errorf("device %s has no IP address recorded", target.Device)
+	}
+
+	presets, err := ds.GetPresets(target.Account, target.Device)
+	if err != nil {
+		return "", fmt.Errorf("read service Presets.xml: %w", err)
+	}
+
+	if len(presets) == 0 {
+		return "", fmt.Errorf("service has no presets recorded for %s", target.Device)
+	}
+
+	c := client.NewClientFromHost(dev.IPAddress)
+
+	restored := 0
+
+	var failures []string
+
+	for i := range presets {
+		p := &presets[i]
+
+		slot, atoiErr := strconv.Atoi(p.ID)
+		if atoiErr != nil || slot < 1 || slot > 6 {
+			failures = append(failures, fmt.Sprintf("slot %q: invalid preset id", p.ID))
+			continue
+		}
+
+		isPresetable, _ := strconv.ParseBool(p.IsPresetable)
+
+		ci := &models.ContentItem{
+			Source:        p.Source,
+			Type:          p.Type,
+			Location:      p.Location,
+			SourceAccount: p.SourceAccount,
+			IsPresetable:  isPresetable,
+			ItemName:      p.Name,
+			ContainerArt:  p.ContainerArt,
+		}
+
+		if storeErr := c.StorePreset(slot, ci); storeErr != nil {
+			failures = append(failures, fmt.Sprintf("slot %d: %v", slot, storeErr))
+			continue
+		}
+
+		restored++
+	}
+
+	if restored == 0 {
+		return "", fmt.Errorf("failed to restore any presets: %s", strings.Join(failures, "; "))
+	}
+
+	msg := fmt.Sprintf("Restored %d/%d preset(s) to %s.", restored, len(presets), displayName(dev.Name, target.Device))
+	if len(failures) > 0 {
+		msg += " Some slots failed: " + strings.Join(failures, "; ")
+	}
+
+	return msg, nil
 }
 
 // countNonEmpty returns the number of <preset> entries with a

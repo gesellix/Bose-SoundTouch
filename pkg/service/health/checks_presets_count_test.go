@@ -1,6 +1,7 @@
 package health
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -171,6 +172,112 @@ func TestPresetsCount_UnreachableSpeaker(t *testing.T) {
 
 	if len(got[0].ManualCommands) != 1 {
 		t.Errorf("expected manual command on unreachable case, got %+v", got[0].ManualCommands)
+	}
+}
+
+func TestPresetsCount_SpeakerEmptyOffersRestoreQuickFix(t *testing.T) {
+	account, device := "1000001", "DEVICEID01"
+
+	ds := newPresetsCountDS(t, account, device)
+	writeServicePresets(t, ds, account, device, 3)
+
+	probeURL := stubSpeakerPresetsServer(t, 0)
+
+	got := comparePresetsForDeviceWithURL(ds, account, device, probeURL)
+	if len(got) != 1 {
+		t.Fatalf("expected one finding, got %+v", got)
+	}
+
+	if len(got[0].QuickFixes) != 1 || got[0].QuickFixes[0].ID != FixIDRestorePresetsToSpeaker {
+		t.Errorf("expected the restore-presets QuickFix, got %+v", got[0].QuickFixes)
+	}
+}
+
+func TestPresetsCount_SpeakerHasMoreOffersNoQuickFix(t *testing.T) {
+	account, device := "1000001", "DEVICEID01"
+
+	ds := newPresetsCountDS(t, account, device)
+	writeServicePresets(t, ds, account, device, 1)
+
+	probeURL := stubSpeakerPresetsServer(t, 3)
+
+	got := comparePresetsForDeviceWithURL(ds, account, device, probeURL)
+	if len(got) != 1 {
+		t.Fatalf("expected one finding, got %+v", got)
+	}
+
+	if len(got[0].QuickFixes) != 0 {
+		t.Errorf("expected no QuickFix when speaker has more than the service, got %+v", got[0].QuickFixes)
+	}
+}
+
+func TestRestorePresetsToSpeaker_PushesEachSlot(t *testing.T) {
+	account, device := "1000001", "DEVICEID01"
+
+	ds := newPresetsCountDS(t, account, device)
+	writeServicePresets(t, ds, account, device, 3)
+
+	var storedSlots []string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/storePreset" {
+			http.NotFound(w, r)
+			return
+		}
+
+		body, _ := io.ReadAll(r.Body)
+		storedSlots = append(storedSlots, string(body))
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	u, _ := url.Parse(srv.URL)
+	if err := ds.SaveDeviceInfo(account, device, &models.ServiceDeviceInfo{
+		DeviceID:  device,
+		AccountID: account,
+		IPAddress: u.Host,
+	}); err != nil {
+		t.Fatalf("SaveDeviceInfo: %v", err)
+	}
+
+	msg, err := restorePresetsToSpeaker(ds, Target{Account: account, Device: device})
+	if err != nil {
+		t.Fatalf("restorePresetsToSpeaker: %v", err)
+	}
+
+	if !strings.Contains(msg, "3/3") {
+		t.Errorf("expected message to report 3/3 restored, got %q", msg)
+	}
+
+	if len(storedSlots) != 3 {
+		t.Fatalf("expected 3 /storePreset calls, got %d", len(storedSlots))
+	}
+
+	for i, body := range storedSlots {
+		if !strings.Contains(body, `id="`+itoa(i+1)+`"`) {
+			t.Errorf("call %d: expected preset id %d in body, got %q", i, i+1, body)
+		}
+
+		if !strings.Contains(body, `source="TUNEIN"`) {
+			t.Errorf("call %d: expected source TUNEIN in body, got %q", i, body)
+		}
+	}
+}
+
+func TestRestorePresetsToSpeaker_NoServicePresets(t *testing.T) {
+	account, device := "1000001", "DEVICEID01"
+	ds := newPresetsCountDS(t, account, device)
+
+	if err := ds.SaveDeviceInfo(account, device, &models.ServiceDeviceInfo{
+		DeviceID:  device,
+		AccountID: account,
+		IPAddress: "127.0.0.1:1",
+	}); err != nil {
+		t.Fatalf("SaveDeviceInfo: %v", err)
+	}
+
+	if _, err := restorePresetsToSpeaker(ds, Target{Account: account, Device: device}); err == nil {
+		t.Error("expected an error when the service has no presets to restore")
 	}
 }
 
