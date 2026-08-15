@@ -86,7 +86,7 @@ body:
     attributes:
       label: AfterTouch version
       description: Shown in the admin UI footer, or via the binary's `--version`.
-      placeholder: "v0.111.2"
+      placeholder: "v0.123.0"
     validations:
       required: false
 

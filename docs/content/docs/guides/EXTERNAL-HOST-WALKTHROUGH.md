@@ -40,7 +40,7 @@ systemd unit that starts on boot.
 To pin a specific version instead of the latest:
 
 ```bash
-sudo bash install.sh v0.111.3
+sudo bash install.sh v0.123.0
 ```
 
 Check that the service is running:
@@ -278,7 +278,7 @@ curl -s http://192.0.2.1:8090/presets
 
 ```bash
 sudo bash install.sh              # updates to latest release
-sudo bash install.sh v0.111.3     # updates to a specific version
+sudo bash install.sh v0.123.0     # updates to a specific version
 ```
 
 The installer stops the service, downloads the new binary, and restarts

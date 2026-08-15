@@ -6,13 +6,13 @@ set -eo pipefail
 # resolves and installs the latest release automatically (see below).
 #
 # Pin a specific version via environment variable or the --version/-v flag:
-#   VERSION=0.111.3 curl -sSL .../install.sh | sh
-#   curl -sSL .../install.sh | sh -s -- --version 0.111.3
+#   VERSION=0.123.0 curl -sSL .../install.sh | sh
+#   curl -sSL .../install.sh | sh -s -- --version 0.123.0
 VERSION=${VERSION:-}
 
 # Parse optional command-line arguments so the script can be invoked as:
-#   install.sh --version 0.111.3
-#   install.sh -v 0.111.3
+#   install.sh --version 0.123.0
+#   install.sh -v 0.123.0
 while [ $# -gt 0 ]; do
   case "$1" in
     --version|-v)
@@ -29,7 +29,7 @@ GH_REPO=${GH_REPO:-gesellix/Bose-SoundTouch}
 
 # Used only when the latest-release lookup fails (offline / rate-limited /
 # a curl without -w support).
-FALLBACK_VERSION=${FALLBACK_VERSION:-0.111.3}
+FALLBACK_VERSION=${FALLBACK_VERSION:-0.123.0}
 
 # Resolve the latest release when no explicit version was provided, by
 # following the stable redirect https://github.com/<repo>/releases/latest

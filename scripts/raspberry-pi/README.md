@@ -31,8 +31,8 @@ Both install the **latest release** by default (resolved from GitHub's
 specific release:
 
 ```bash
-sudo bash install.sh v0.111.3
-sudo bash install-player.sh v0.111.3
+sudo bash install.sh v0.123.0
+sudo bash install-player.sh v0.123.0
 ```
 
 ## Removal
