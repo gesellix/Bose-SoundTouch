@@ -1135,6 +1135,10 @@ func setupMigrateCmd() *cli.Command {
 			&cli.StringFlag{Name: "method", Value: string(setup.MigrationMethodTelnet), Usage: "telnet | hosts | resolv | xml"},
 			&cli.StringFlag{Name: "proxy-url", Usage: "Optional upstream proxy URL (for --method=xml)"},
 			&cli.BoolFlag{Name: "skip-preflight", Usage: "Skip the AfterTouch settings preflight (use when AfterTouch's settings endpoint is unreachable)"},
+			&cli.StringFlag{Name: "marge-url", Usage: "Override margeServerUrl instead of deriving it from --service-url (e.g. to restore the original Bose cloud URL). Applies to --method=telnet and --method=xml"},
+			&cli.StringFlag{Name: "stats-url", Usage: "Override statsServerUrl (telnet/xml)"},
+			&cli.StringFlag{Name: "sw-update-url", Usage: "Override swUpdateUrl (telnet/xml)"},
+			&cli.StringFlag{Name: "bmx-url", Usage: "Override bmxRegistryUrl (telnet/xml)"},
 		},
 		Action: func(c *cli.Context) error {
 			cfg := GetClientConfig(c)
@@ -1144,6 +1148,13 @@ func setupMigrateCmd() *cli.Command {
 			if err := validateServiceURL(serviceURL); err != nil {
 				PrintError(err.Error())
 				return err
+			}
+
+			options := map[string]string{
+				"marge_url":     c.String("marge-url"),
+				"stats_url":     c.String("stats-url"),
+				"sw_update_url": c.String("sw-update-url"),
+				"bmx_url":       c.String("bmx-url"),
 			}
 
 			m := setup.NewManager(serviceURL, nil, nil)
@@ -1169,7 +1180,7 @@ func setupMigrateCmd() *cli.Command {
 
 			fmt.Printf("Migrating %s → %s using method=%s\n", cfg.Host, serviceURL, method)
 
-			logs, err := m.MigrateSpeaker(cfg.Host, serviceURL, c.String("proxy-url"), nil, method)
+			logs, err := m.MigrateSpeaker(cfg.Host, serviceURL, c.String("proxy-url"), options, method)
 			if logs != "" {
 				fmt.Print(logs)
 			}

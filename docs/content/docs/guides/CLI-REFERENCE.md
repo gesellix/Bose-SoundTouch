@@ -1338,6 +1338,23 @@ soundtouch-cli --host <device> setup migrate --service-url http://192.0.2.10:800
 `--skip-preflight` skips AfterTouch's settings preflight check (useful when
 that endpoint is unreachable).
 
+`--marge-url`/`--stats-url`/`--sw-update-url`/`--bmx-url` override the
+corresponding field instead of deriving it from `--service-url` (applies to
+both `--method=telnet` and `--method=xml`). Useful beyond soundcork-style
+setups: e.g. pointing a speaker back at the **original Bose cloud URLs**
+without a full `setup revert` — telnet writes both the runtime and
+persisted layers in a single connection, no SSH or `.original` backup
+needed:
+
+```bash
+soundtouch-cli --host <device> setup migrate --method telnet \
+  --service-url https://streaming.bose.com \
+  --marge-url https://streaming.bose.com \
+  --stats-url https://events.api.bosecm.com \
+  --sw-update-url https://worldwide.bose.com/updates/soundtouch \
+  --bmx-url https://content.api.bose.io/bmx/registry/v1/services
+```
+
 #### `setup revert`
 
 Undoes a migration — the CLI equivalent of the web UI's "Revert to

@@ -648,6 +648,40 @@ Confirmed on hardware across five device variants (2026-08-09): different ports 
 
 **Fix:** After a power-cycle, wait at least 90 seconds before retrying any telnet-based command. If it still fails after that, wait a full 2 minutes before assuming the port is genuinely closed on that firmware rather than just slow to come up.
 
+### ❌ Speaker gets slower/less responsive over time after `setup enable-ssh` with no `--service-url`
+
+**Symptoms:**
+
+- You ran `soundtouch-cli setup enable-ssh` without `--service-url` (or via the Admin UI's equivalent) to bootstrap SSH, and never followed up with a real `setup migrate`.
+- Over time (hours to days), the speaker becomes progressively less responsive — slow to answer `:8090`, SSH connections time out, the Admin UI shows it as flaky or offline.
+
+**Cause:**
+
+`enable-ssh` without `--service-url` writes a deliberately-invalid placeholder (`https://aftertouch.invalid`) into `margeServerUrl`/`swUpdateUrl`/etc — by design, since the SSH-enable injection only needs *a* URL to round-trip through, not a working one. But unless you run `setup migrate` (or the Admin UI's Migrate step) afterward, that placeholder **stays persisted** — the command's own success message says so explicitly. The firmware then retries a failing DNS/curl lookup against it on a background loop (same class of failure as the `mojo`/`taigan` unresolvable-hostname case, #546) — an ongoing resource drain that isn't dramatic on its own, but confirmed on real hardware (2026-08-16) to compound badly if anything else (e.g. a burst of SSH connections — see the `setup revert` entry below) puts the speaker under load at the same time.
+
+**Fix:** Always follow `enable-ssh` (when run without `--service-url`) with a real `setup migrate` before walking away. If you're recovering a speaker that's already stuck like this: power-cycle it, confirm it's reachable (`ping`, `curl :8090/info`, a single plain `ssh ... echo ok`) before doing anything else, then run `setup migrate` with the real URLs. If you want to point it back at the **original Bose cloud** URLs instead of AfterTouch (e.g. to fully decommission it), use the per-field overrides on `--method=telnet` — see the `setup migrate` section of [CLI-REFERENCE.md](CLI-REFERENCE.md) — which writes over a single telnet connection, no SSH required:
+
+```bash
+soundtouch-cli --host <SPEAKER-IP> setup migrate --method telnet \
+  --service-url https://streaming.bose.com \
+  --marge-url https://streaming.bose.com \
+  --stats-url https://events.api.bosecm.com \
+  --sw-update-url https://worldwide.bose.com/updates/soundtouch \
+  --bmx-url https://content.api.bose.io/bmx/registry/v1/services
+```
+
+### ❌ `setup revert` (or the Admin UI's "Revert to Defaults") fails with "backup .original not found" even though the file exists
+
+**Symptoms:**
+
+- You confirm via a separate SSH session that `/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original` genuinely exists.
+- `setup revert` (or clicking "Revert to Defaults") still reports `backup .../SoundTouchSdkPrivateCfg.xml.original not found, cannot revert`.
+- A follow-up plain SSH command to the same speaker fails with `Operation timed out` at the TCP level — not an auth or shell error.
+
+**Cause — confirmed on hardware, not yet fixed:** `RevertMigration`'s full call graph opens **17 separate SSH connections** in rapid succession (`pkg/ssh.Client.Run()` dials fresh every call, with no connection reuse across `revertXMLConfig`/`revertHosts`/`revertResolvConf`/`revertAftertouchHook`/`removeRcLocalHooks`/`revertCACert`). Hitting a resource-constrained embedded speaker with that many rapid reconnects can overwhelm it — confirmed on real hardware (2026-08-16), where the speaker became unreachable shortly after. On top of that, `revertXMLConfig`'s error handling collapses *any* non-nil error from its file-existence check into "not found," so a dial failure gets misreported as a missing backup — the message doesn't mean what it says.
+
+**Fix (workaround, until the underlying dial-reuse issue is fixed):** Don't retry `setup revert` back-to-back. If it fails, wait a minute, confirm the speaker is reachable again (`ping`, a single plain `ssh ... echo ok`) before retrying — hammering it again while it's already struggling makes this worse, not better. If all you actually need is to point the speaker's URLs somewhere else (back to AfterTouch, or back to the original Bose cloud), prefer the lighter-weight `setup migrate --method telnet` with explicit URL overrides (previous entry) over a full `setup revert` — it uses one telnet connection instead of 17 SSH connections.
+
 ## 🔊 **Volume & Audio Issues**
 
 ### ❌ "Volume control not working"
