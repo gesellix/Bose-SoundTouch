@@ -129,8 +129,9 @@ func comparePresetsForDeviceWithURL(ds *datastore.DataStore, account, deviceID, 
 	severity := SeverityInfo
 	if speakerCount == 0 && serviceCount > 0 {
 		// Speaker shows nothing while the service has presets —
-		// this is the post-reset preset-loss class from
-		// discussion #295 and #235.
+		// the post-reset preset-loss pattern confirmed in #614
+		// (reboot and/or Sync leaving the speaker's own preset
+		// slots empty while the service's Presets.xml is untouched).
 		severity = SeverityWarning
 	}
 
@@ -141,7 +142,7 @@ func comparePresetsForDeviceWithURL(ds *datastore.DataStore, account, deviceID, 
 			"Speaker shows %d preset slot(s); service Presets.xml has %d.",
 			speakerCount, serviceCount,
 		),
-		Details: "If the speaker shows fewer than the service, a power-cycle or a sourcesUpdated notification usually re-syncs. If it shows more, the service may have stale entries or the speaker is still holding pre-migration state.",
+		Details: "If the speaker shows fewer than the service, a sourcesUpdated notification sometimes re-syncs it. Don't power-cycle as a fix for this — it has itself been reported to wipe the speaker's presets (#614), so it may make things worse. If the speaker shows more than the service, the service may have stale entries or the speaker is still holding pre-migration state.",
 	}}
 }
 
