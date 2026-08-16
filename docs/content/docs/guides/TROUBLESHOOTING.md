@@ -672,15 +672,17 @@ soundtouch-cli --host <SPEAKER-IP> setup migrate --method telnet \
 
 ### ❌ `setup revert` (or the Admin UI's "Revert to Defaults") fails with "backup .original not found" even though the file exists
 
+**Status: fixed** (branch `docs-ondevice-install-gaps`, not yet in a numbered release as of this writing) — kept below for anyone hitting this on an older build, and because the underlying "don't hammer a struggling speaker" advice is still good practice generally.
+
 **Symptoms:**
 
 - You confirm via a separate SSH session that `/opt/Bose/etc/SoundTouchSdkPrivateCfg.xml.original` genuinely exists.
 - `setup revert` (or clicking "Revert to Defaults") still reports `backup .../SoundTouchSdkPrivateCfg.xml.original not found, cannot revert`.
 - A follow-up plain SSH command to the same speaker fails with `Operation timed out` at the TCP level — not an auth or shell error.
 
-**Cause — confirmed on hardware, not yet fixed:** `RevertMigration`'s full call graph opens **17 separate SSH connections** in rapid succession (`pkg/ssh.Client.Run()` dials fresh every call, with no connection reuse across `revertXMLConfig`/`revertHosts`/`revertResolvConf`/`revertAftertouchHook`/`removeRcLocalHooks`/`revertCACert`). Hitting a resource-constrained embedded speaker with that many rapid reconnects can overwhelm it — confirmed on real hardware (2026-08-16), where the speaker became unreachable shortly after. On top of that, `revertXMLConfig`'s error handling collapses *any* non-nil error from its file-existence check into "not found," so a dial failure gets misreported as a missing backup — the message doesn't mean what it says.
+**Cause:** `RevertMigration`'s full call graph opened **17 separate SSH connections** in rapid succession (`pkg/ssh.Client.Run()` dialed fresh every call, with no connection reuse across `revertXMLConfig`/`revertHosts`/`revertResolvConf`/`revertAftertouchHook`/`removeRcLocalHooks`/`revertCACert`). Hitting a resource-constrained embedded speaker with that many rapid reconnects could overwhelm it — confirmed on real hardware (2026-08-16), where the speaker became unreachable shortly after. On top of that, `revertXMLConfig`'s error handling collapses *any* non-nil error from its file-existence check into "not found," so a dial failure got misreported as a missing backup — the message didn't mean what it said.
 
-**Fix (workaround, until the underlying dial-reuse issue is fixed):** Don't retry `setup revert` back-to-back. If it fails, wait a minute, confirm the speaker is reachable again (`ping`, a single plain `ssh ... echo ok`) before retrying — hammering it again while it's already struggling makes this worse, not better. If all you actually need is to point the speaker's URLs somewhere else (back to AfterTouch, or back to the original Bose cloud), prefer the lighter-weight `setup migrate --method telnet` with explicit URL overrides (previous entry) over a full `setup revert` — it uses one telnet connection instead of 17 SSH connections.
+**Fix:** `pkg/ssh.Client` now supports an opt-in persistent connection (`Connect()`/`Close()`) that `RevertMigration` uses to collapse those 17 connections into 1 — confirmed on the same real hardware (2026-08-16): a subsequent `setup revert` completed quickly, and the restored config file diffed byte-identical against `.original`. If you're on a build that predates this fix, don't retry `setup revert` back-to-back — if it fails, wait a minute and confirm the speaker is reachable again (`ping`, a single plain `ssh ... echo ok`) before retrying. If all you actually need is to point the speaker's URLs somewhere else (back to AfterTouch, or back to the original Bose cloud), the lighter-weight `setup migrate --method telnet` with explicit URL overrides (previous entry) uses one telnet connection instead of SSH entirely.
 
 ## 🔊 **Volume & Audio Issues**
 
