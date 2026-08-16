@@ -684,6 +684,35 @@ soundtouch-cli --host <SPEAKER-IP> setup migrate --method telnet \
 
 **Fix:** `pkg/ssh.Client` now supports an opt-in persistent connection (`Connect()`/`Close()`) that `RevertMigration` uses to collapse those 17 connections into 1 — confirmed on the same real hardware (2026-08-16): a subsequent `setup revert` completed quickly, and the restored config file diffed byte-identical against `.original`. If you're on a build that predates this fix, don't retry `setup revert` back-to-back — if it fails, wait a minute and confirm the speaker is reachable again (`ping`, a single plain `ssh ... echo ok`) before retrying. If all you actually need is to point the speaker's URLs somewhere else (back to AfterTouch, or back to the original Bose cloud), the lighter-weight `setup migrate --method telnet` with explicit URL overrides (previous entry) uses one telnet connection instead of SSH entirely.
 
+### ❌ On-device install: AfterTouch answers on the speaker but not from other machines on the LAN
+
+**Symptoms:**
+
+- On the speaker itself, `curl http://localhost:8000/health` works and `/etc/init.d/aftertouch status` is green.
+- From any other machine, `http://<speaker-ip>:8000` fails immediately (connection refused/reset, not a timeout).
+- SSH to the same speaker works fine, so it is clearly reachable in general.
+
+**Cause:**
+
+Some SoundTouch chassis carry a BCO ("SMSC") Wi-Fi/Bluetooth co-processor, and inbound LAN traffic reaches the main Linux SoC only for a fixed set of Bose's *own* service ports, a list that appears to be compiled into the co-processor's firmware. AfterTouch's `:8000` was never part of that original design, so the connection never arrives at the SoC at all. Confirmed on an ST20 (`spotty`, FW 27.0.6) in 2026-08: `tcpdump -i eth0` on the speaker saw **zero packets** for `:8000` while Bose's `:8090`/`:8091`/`:17000` answered normally from the same client. This is not a firewall (the speaker's `iptables` is empty) and not a binding problem (the service does listen on `0.0.0.0:8000`).
+
+**Fix:**
+
+The on-device installer handles this automatically: on an affected speaker it redirects a relayed Bose port to AfterTouch, so use:
+
+```
+http://<speaker-ip>:17008
+```
+
+To check or change it, on the speaker:
+
+```bash
+/etc/init.d/aftertouch status              # reports the LAN port when active
+iptables -t nat -S PREROUTING              # shows the redirect rule
+```
+
+Set `AFTERTOUCH_LAN_PORT` in `/opt/aftertouch/aftertouch.conf` to a different port, or to `none` to disable the redirect and use an SSH tunnel instead; then `/etc/init.d/aftertouch restart`. Note that **linking music-service accounts still works best through the tunnel** (`http://localhost:8000`), because Spotify only accepts `https://` or loopback OAuth redirect URIs. If you also run the `streborn` project on the same speaker, note it defaults to the same port, so change one of them. Which models are affected is tracked in [MODEL-SUPPORT-MATRIX.md](../reference/MODEL-SUPPORT-MATRIX.md).
+
 ## 🔊 **Volume & Audio Issues**
 
 ### ❌ "Volume control not working"

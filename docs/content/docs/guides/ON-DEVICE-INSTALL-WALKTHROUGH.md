@@ -153,9 +153,19 @@ ssh -oHostKeyAlgorithms=+ssh-rsa -L 8000:localhost:8000 root@192.0.2.1
 Keep this terminal open. Navigate to **http://localhost:8000** in your
 browser.
 
-> Skip this step if your speaker's firmware exposes port 8000 on the LAN
-> directly — you can reach `http://192.0.2.1:8000` without a tunnel in that
-> case.
+> **You may not need the tunnel at all.** Try `http://192.0.2.1:8000` first.
+> If that doesn't load, try **`http://192.0.2.1:17008`**: on speakers whose
+> Wi-Fi co-processor refuses to pass `:8000` through (the ST20 and likely
+> others), the installer automatically redirects port `17008` to AfterTouch,
+> so the Admin UI is reachable from the LAN without any tunnel. Check with
+> `/etc/init.d/aftertouch status` on the speaker, which reports the LAN port
+> when the redirect is active. Details and per-model status:
+> [Model Support Matrix](../../reference/MODEL-SUPPORT-MATRIX/).
+>
+> Keep the tunnel in mind anyway for **linking music-service accounts**:
+> Spotify only accepts `https://` or *loopback* OAuth redirect URIs, so
+> `http://localhost:8000` through a tunnel succeeds where a plain LAN
+> address is rejected.
 
 ---
 

@@ -15,6 +15,7 @@ DESC="Bose AfterTouch service"
 DAEMON="/opt/aftertouch/aftertouch-service"
 PIDFILE="/var/run/$NAME.pid"
 DATADIR="/opt/aftertouch/data"
+CONFFILE="/opt/aftertouch/aftertouch.conf"
 SCRIPTNAME="/etc/init.d/$NAME"
 USER="root"
 LOG_TAG="aftertouch"
@@ -24,10 +25,120 @@ LOG_TAG="aftertouch"
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 
 
+# Optional settings written by install.sh (AFTERTOUCH_LAN_PORT, SERVICE_PORT).
+# Sourced before the defaults below so it can override either.
+# shellcheck source=/dev/null
+[ -r "$CONFFILE" ] && . "$CONFFILE"
+
+# Port the daemon binds locally. Kept in one variable because it appears in
+# the daemon arguments, the readiness poll and `status` -- three places that
+# used to hardcode 8000 independently, so changing one silently broke the
+# other two.
+SERVICE_PORT="${SERVICE_PORT:-8000}"
+
+# LAN entry port: a port number, "auto" (default), or "none".
+LAN_PORT_MODE="${AFTERTOUCH_LAN_PORT:-auto}"
+
+
 # Sanity check executable
 test -x "$DAEMON" || {
   echo "ERROR: Cannot execute $DAEMON (check path and permissions)." >&2
   exit 1
+}
+
+
+# ---------------------------------------------------------------------------
+# LAN entry-port redirect
+#
+# On chassis built around a BCO ("SMSC") Wi-Fi/Bluetooth co-processor,
+# inbound LAN traffic only reaches this Linux SoC for a fixed set of Bose's
+# own service ports, which appears to be compiled into the co-processor's
+# firmware. AfterTouch's :8000 is not on that list, so a LAN client's SYN
+# never arrives here at all -- confirmed on an ST20 (`spotty`), where
+# `tcpdump -i eth0` on the speaker saw zero packets for :8000 while Bose's
+# own :8090/:8091/:17000 answered normally from the same client. The usual
+# suspects were all ruled out: the service does bind 0.0.0.0 correctly, the
+# speaker's iptables is empty, and SSH over the same path works.
+#
+# Workaround: NAT one of the relayed Bose ports to ours. The default, 17008,
+# is Bose's SoftwareUpdate listener -- its cloud is gone, so taking over its
+# inbound traffic costs nothing real. Only external traffic is matched
+# (`! -i lo`), so anything running on the speaker still reaches both the real
+# service on loopback and AfterTouch on :8000 as before.
+#
+# Credit: the STR / SoundTouch Reborn project (github.com/JRpersonal/streborn)
+# documented and shipped this REDIRECT technique first, using the same entry
+# port for the same reason.
+#
+# Which models need this is tracked in
+# docs/content/docs/reference/MODEL-SUPPORT-MATRIX.md.
+# ---------------------------------------------------------------------------
+
+# Resolve LAN_PORT_MODE into $LAN_PORT. Returns non-zero when no redirect
+# should be installed.
+lan_redirect_port() {
+    case "$LAN_PORT_MODE" in
+        none|off|disabled|0)
+            return 1
+            ;;
+        auto|"")
+            # Only auto-enable where direct LAN access is known not to work.
+            # has-bco is Bose's own helper: [ "$(cat /proc/module_type)" = scm ]
+            has-bco >/dev/null 2>&1 || return 1
+            LAN_PORT=17008
+            ;;
+        *[!0-9]*)
+            echo "WARNING: ignoring AFTERTOUCH_LAN_PORT='$LAN_PORT_MODE'; expected a port number, 'auto' or 'none'." >&2
+            return 1
+            ;;
+        *)
+            LAN_PORT="$LAN_PORT_MODE"
+            ;;
+    esac
+    return 0
+}
+
+# Remove every PREROUTING rule pointing at our service port, whatever entry
+# port it used, so changing AFTERTOUCH_LAN_PORT cannot orphan the old rule.
+lan_redirect_purge() {
+    iptables -t nat -S PREROUTING 2>/dev/null \
+      | grep -- "--to-ports $SERVICE_PORT" \
+      | sed 's/^-A /-D /' \
+      | while read -r rule; do
+            # shellcheck disable=SC2086
+            iptables -t nat $rule 2>/dev/null || true
+        done
+}
+
+lan_redirect_apply() {
+    lan_redirect_port || return 0
+
+    if ! iptables -t nat -L PREROUTING -n >/dev/null 2>&1; then
+        echo "WARNING: this kernel has no iptables nat table; :$LAN_PORT was not" >&2
+        echo "         redirected. Reach AfterTouch over an SSH tunnel instead." >&2
+        return 0
+    fi
+
+    lan_redirect_purge
+
+    # Safety net for a kernel whose iptables lacks -S (purge would no-op):
+    # without this, every restart would stack another duplicate rule.
+    if iptables -t nat -C PREROUTING ! -i lo -p tcp --dport "$LAN_PORT" \
+         -j REDIRECT --to-ports "$SERVICE_PORT" 2>/dev/null; then
+        echo "LAN access already active on port $LAN_PORT."
+        return 0
+    fi
+
+    if iptables -t nat -I PREROUTING 1 ! -i lo -p tcp --dport "$LAN_PORT" \
+         -j REDIRECT --to-ports "$SERVICE_PORT" 2>/dev/null; then
+        echo "LAN access: port $LAN_PORT now reaches AfterTouch on :$SERVICE_PORT."
+    else
+        echo "WARNING: could not install the :$LAN_PORT -> :$SERVICE_PORT redirect." >&2
+    fi
+}
+
+lan_redirect_remove() {
+    lan_redirect_purge
 }
 
 
@@ -102,19 +213,22 @@ case "$1" in
         --background \
         --chuid "$USER" \
         --startas "/bin/sh" \
-        -- -c "logger -t $LOG_TAG <'$LOGFIFO' & \"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false --discovery-interval=60m >'$LOGFIFO' 2>&1 & echo \$! >'$PIDFILE'; wait"
+        -- -c "logger -t $LOG_TAG <'$LOGFIFO' & \"$DAEMON\" --data-dir '$DATADIR' --port '$SERVICE_PORT' --record-interactions=false --discovery-interval=60m >'$LOGFIFO' 2>&1 & echo \$! >'$PIDFILE'; wait"
 
     tries=0
     max_tries=60
     while [ $tries -lt $max_tries ]; do
-        if curl -fsS http://localhost:8000 >/dev/null 2>&1; then
+        if curl -fsS "http://localhost:$SERVICE_PORT" >/dev/null 2>&1; then
+          # Only once the service actually answers is it worth pointing LAN
+          # traffic at it.
+          lan_redirect_apply
           exit 0
         fi
         sleep 2
         tries=$((tries + 1))
     done
 
-    echo "ERROR: daemon started but http://localhost:8000 never responded within $((max_tries * 2))s." >&2
+    echo "ERROR: daemon started but http://localhost:$SERVICE_PORT never responded within $((max_tries * 2))s." >&2
     echo "       Inspect the daemon's syslog output:" >&2
     echo "         logread | grep $LOG_TAG | tail -20" >&2
     exit 1
@@ -122,6 +236,9 @@ case "$1" in
 
   stop)
     echo "Stopping $DESC..."
+    # Drop the LAN redirect first: leaving it in place while nothing listens
+    # would silently blackhole the entry port.
+    lan_redirect_remove
     if [ -f "$PIDFILE" ]; then
       PID=$(cat "$PIDFILE")
       start-stop-daemon --stop \
@@ -162,11 +279,19 @@ case "$1" in
         # (Gustour's ST30: status said running, curl said
         # connection-refused). Distinguish the two states here so
         # status isn't a false-positive.
-        if curl -fsS --max-time 3 http://localhost:8000 >/dev/null 2>&1; then
-          echo "$NAME is running (PID $PID, http://localhost:8000 responding)."
+        if curl -fsS --max-time 3 "http://localhost:$SERVICE_PORT" >/dev/null 2>&1; then
+          echo "$NAME is running (PID $PID, http://localhost:$SERVICE_PORT responding)."
+          if lan_redirect_port; then
+            if iptables -t nat -C PREROUTING ! -i lo -p tcp --dport "$LAN_PORT" \
+                 -j REDIRECT --to-ports "$SERVICE_PORT" 2>/dev/null; then
+              echo "LAN access: reachable from other machines on port $LAN_PORT."
+            else
+              echo "LAN access: redirect for port $LAN_PORT is NOT installed." >&2
+            fi
+          fi
           exit 0
         else
-          echo "$NAME PID $PID is alive but http://localhost:8000 is not responding." >&2
+          echo "$NAME PID $PID is alive but http://localhost:$SERVICE_PORT is not responding." >&2
           echo "Recent log:" >&2
           logread 2>/dev/null | grep "$LOG_TAG" | tail -10 >&2
           exit 3

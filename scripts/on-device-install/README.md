@@ -56,7 +56,53 @@ After the installation check if you can access AfterTouch from your local device
 
 ### If `http://<IP_ADDRESS_OF_SPEAKER>:8000` fails: SSH port forwarding
 
-Some firmware images only bind the AfterTouch HTTP port to loopback (see issue #196). The workaround is an SSH tunnel — your machine talks to its own local `:8000`, the SSH connection forwards to the speaker's `:8000` on loopback.
+On some device models AfterTouch's port is reachable from other machines on
+your LAN out of the box. On others (see issue #196) it isn't, and (unlike
+the phrasing this README used to have) that's not AfterTouch or its
+firewall configuration choosing to bind loopback-only. AfterTouch itself
+binds `0.0.0.0` (all interfaces) correctly, confirmed by inspecting the
+running device directly, and there's no firewall rule (`iptables`,
+`nftables`, or otherwise) blocking it either.
+
+**Current knowledge (2026-08-16), confirmed on real hardware via a
+decrypted firmware backup plus simultaneous packet captures on both the
+speaker and a client machine:** some SoundTouch models built around a
+"combo" WiFi/Bluetooth co-processor (used for AirPlay) route LAN traffic
+through that co-processor before it reaches the main application
+processor where AfterTouch actually runs. That co-processor only relays a
+fixed set of the device's own original service ports (the same ones the
+stock SoundTouch app and companion services always used), a list that,
+as far as we can tell, is compiled into the co-processor's own firmware.
+AfterTouch's ports were never part of that original design, so they never
+got included. This isn't a bug in AfterTouch, a router/firewall setting,
+or WiFi client isolation; all three were separately ruled out.
+
+**The installer works around this automatically.** On an affected speaker
+it redirects one of the ports the co-processor *does* relay to AfterTouch,
+so the UI is reachable from the LAN without any tunnel:
+
+```
+http://<IP_ADDRESS_OF_SPEAKER>:17008
+```
+
+Port `17008` is Bose's software-update listener; that cloud service no
+longer exists, so taking over its inbound traffic costs nothing. Only
+traffic from other machines is affected; anything running on the speaker
+still reaches AfterTouch on `:8000` as before. Change or disable this with
+`AFTERTOUCH_LAN_PORT` (`auto` / `none` / a port number) in
+`/opt/aftertouch/aftertouch.conf`, or pass it at install time:
+
+```bash
+rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | AFTERTOUCH_LAN_PORT=none sh
+```
+
+Which models need this, and how to report one that isn't listed yet, is
+tracked in
+[MODEL-SUPPORT-MATRIX.md](../../docs/content/docs/reference/MODEL-SUPPORT-MATRIX.md).
+The SSH tunnel below still works, and remains the better route for
+**linking music-service accounts**: Spotify only accepts `https://` or
+loopback OAuth redirect URIs, so `http://localhost:8000` through a tunnel
+succeeds where a plain LAN address is rejected.
 
 **Open a fresh terminal on your own machine** (Linux/macOS/Windows — NOT another shell inside the speaker's SSH session — see issue #250 for the trap that catches everyone here) and run:
 

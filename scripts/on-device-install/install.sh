@@ -127,6 +127,29 @@ if [ -n "$BACKUP_FILE" ]; then
   echo "Disk usage after GC:"; df -h "$INSTALL_DIR"
 fi
 
+# Settings file sourced by the init script. Written before the service is
+# (re)started so the very first start already sees it.
+#
+# An existing file is left alone on upgrade -- it may carry the operator's own
+# choices -- unless AFTERTOUCH_LAN_PORT was passed to this script explicitly.
+CONF_FILE="$INSTALL_DIR/aftertouch.conf"
+if [ -n "${AFTERTOUCH_LAN_PORT:-}" ] || [ ! -f "$CONF_FILE" ]; then
+  cat > "$CONF_FILE" <<CONFEOF
+# AfterTouch on-device settings. Sourced by /etc/init.d/aftertouch.
+#
+# AFTERTOUCH_LAN_PORT: how AfterTouch is reached from other machines.
+#   auto   (default) redirect a spare Bose port to AfterTouch, but only on
+#          speakers whose Wi-Fi co-processor refuses to pass :8000 through.
+#   none   never redirect; use an SSH tunnel instead.
+#   <port> always redirect this inbound port to AfterTouch.
+# See docs: reference/MODEL-SUPPORT-MATRIX.md
+AFTERTOUCH_LAN_PORT=${AFTERTOUCH_LAN_PORT:-auto}
+CONFEOF
+  echo "Wrote settings to $CONF_FILE (AFTERTOUCH_LAN_PORT=${AFTERTOUCH_LAN_PORT:-auto})"
+else
+  echo "Keeping existing settings in $CONF_FILE"
+fi
+
 echo "Creating init script..."
 curl \
   -sSL \
@@ -162,10 +185,35 @@ echo "Installation complete. (Re)starting the service..."
 # daemon's stdout/stderr through `logger -t aftertouch`, so panics
 # land in busybox syslog and `logread` reads them out.
 if curl -fsS --max-time 10 http://localhost:8000 >/dev/null 2>&1; then
+  # We are running ON the speaker, so print the address people actually need
+  # rather than a <your-device-ip> placeholder they have to resolve themselves.
+  LAN_IP=$(ip -4 addr show scope global 2>/dev/null \
+    | awk '/inet /{sub(/\/.*/,"",$2); print $2; exit}')
+  [ -n "$LAN_IP" ] || LAN_IP="<your-device-ip>"
+
+  # If the init script installed a LAN entry-port redirect, that port -- not
+  # 8000 -- is the one reachable from other machines.
+  LAN_PORT=$(iptables -t nat -S PREROUTING 2>/dev/null \
+    | grep -- '-j REDIRECT' \
+    | sed -n 's/.*--dport \([0-9][0-9]*\).*--to-ports 8000.*/\1/p' \
+    | head -1)
+
+  echo ""
   echo "Installation complete. AfterTouch $VERSION is now running on your device."
-  echo "Connect to http://<your-device-ip>:8000 from another machine on the LAN."
-  echo "If the device doesn't expose :8000 directly, port-forward via SSH:"
-  echo "  ssh -L 8000:localhost:8000 root@<IP_ADDRESS_OF_SPEAKER>"
+  echo ""
+  if [ -n "$LAN_PORT" ]; then
+    echo "  Open  http://$LAN_IP:$LAN_PORT  from any machine on your network."
+    echo ""
+    echo "  (This speaker's Wi-Fi co-processor does not pass port 8000 through to"
+    echo "   AfterTouch, so port $LAN_PORT is redirected to it instead. Set"
+    echo "   AFTERTOUCH_LAN_PORT in $CONF_FILE to change or disable this.)"
+  else
+    echo "  Open  http://$LAN_IP:8000  from any machine on your network."
+  fi
+  echo ""
+  echo "If that doesn't load, reach it through an SSH tunnel instead:"
+  echo "  ssh -oHostKeyAlgorithms=+ssh-rsa -L 8000:localhost:8000 root@$LAN_IP"
+  echo "then open http://localhost:8000"
 else
   echo "WARNING: the init script reports AfterTouch as running, but" >&2
   echo "  http://localhost:8000 isn't responding. The daemon may have" >&2

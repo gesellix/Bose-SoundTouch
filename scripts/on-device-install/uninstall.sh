@@ -5,6 +5,18 @@
 set -eu
 
 /etc/init.d/aftertouch stop || true
+
+# `stop` normally removes the LAN entry-port redirect. Repeat it directly in
+# case the init script was already gone or failed, so no rule is left behind
+# pointing at a service that no longer exists.
+iptables -t nat -S PREROUTING 2>/dev/null \
+  | grep -- '--to-ports 8000' \
+  | sed 's/^-A /-D /' \
+  | while read -r rule; do
+        # shellcheck disable=SC2086
+        iptables -t nat $rule 2>/dev/null || true
+    done
+
 rm -f /etc/init.d/aftertouch
 update-rc.d -f aftertouch remove
 

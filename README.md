@@ -113,6 +113,7 @@ See the [API Reference](https://gesellix.github.io/Bose-SoundTouch/docs/referenc
 - **[SoundTouch Plus](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus)** (Todd Lucas) — Home Assistant integration; extensive undocumented API documentation
 - **[ÜberBöse API](https://github.com/julius-d/ueberboese-api)** (Julius) — API research and advanced endpoint discovery
 - **[Bose SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook)** (Adrian Böckenkamp) — `LD_PRELOAD` hooking for reverse engineering device internals
+- **[STR, SoundTouch Reborn](https://github.com/JRpersonal/streborn)** ([st-reborn.de](https://st-reborn.de)) — on-device agent plus desktop app; its published `iptables` REDIRECT technique is what makes AfterTouch's on-device install reachable over the LAN on co-processor chassis (see [Model Support Matrix](https://gesellix.github.io/Bose-SoundTouch/docs/reference/model-support-matrix/))
 
 ---
 
