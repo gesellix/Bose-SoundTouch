@@ -25,10 +25,19 @@ LOG_TAG="aftertouch"
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 
 
-# Optional settings written by install.sh (AFTERTOUCH_LAN_PORT, SERVICE_PORT).
+# Optional settings written by install.sh (AFTERTOUCH_LAN_PORT, SERVICE_PORT),
+# or added by hand for anything the daemon reads from its environment
+# (SERVER_URL, MGMT_USERNAME, MGMT_PASSWORD, DEPLOYMENT_MODE, ...). `set -a`
+# auto-exports every assignment while the file is sourced, so any such
+# variable actually reaches the daemon -- it's forked from this same shell's
+# environment further down via `--startas "/bin/sh" -- -c "... \"$DAEMON\" ..."`.
 # Sourced before the defaults below so it can override either.
-# shellcheck source=/dev/null
-[ -r "$CONFFILE" ] && . "$CONFFILE"
+if [ -r "$CONFFILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$CONFFILE"
+  set +a
+fi
 
 # Port the daemon binds locally. Kept in one variable because it appears in
 # the daemon arguments, the readiness poll and `status` -- three places that
@@ -38,6 +47,13 @@ SERVICE_PORT="${SERVICE_PORT:-8000}"
 
 # LAN entry port: a port number, "auto" (default), or "none".
 LAN_PORT_MODE="${AFTERTOUCH_LAN_PORT:-auto}"
+
+# This script only ever runs on the speaker itself, so the deployment mode is
+# not a guess -- default it here (overridable via aftertouch.conf, though that
+# should never be needed). Exported so soundtouch-service picks it up via
+# DEPLOYMENT_MODE without needing a --deployment-mode flag threaded through
+# the daemon invocation below.
+export DEPLOYMENT_MODE="${DEPLOYMENT_MODE:-on-device}"
 
 
 # Sanity check executable

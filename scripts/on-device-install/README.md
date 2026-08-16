@@ -96,6 +96,24 @@ still reaches AfterTouch on `:8000` as before. Change or disable this with
 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | AFTERTOUCH_LAN_PORT=none sh
 ```
 
+**`aftertouch.conf` isn't limited to `AFTERTOUCH_LAN_PORT`.** The init
+script exports every assignment in this file into the daemon's own
+environment, so any env var `soundtouch-service` reads (see the
+[configuration table](../../docs/content/docs/guides/SOUNDTOUCH-SERVICE.md#configuration-options))
+can be set the same way — for example, to change the admin credentials:
+
+```
+MGMT_USERNAME=admin
+MGMT_PASSWORD=change-me
+```
+
+Edit `/opt/aftertouch/aftertouch.conf` over SSH, then
+`/etc/init.d/aftertouch restart` to apply. `DEPLOYMENT_MODE=on-device` is
+already set by the init script itself — it never needs to be added here.
+The auto-export behavior described here needs a build including the fix
+for issue #546; older installs (before `aftertouch.conf` even existed, or
+between then and that fix) need to reinstall/update first.
+
 Which models need this, and how to report one that isn't listed yet, is
 tracked in
 [MODEL-SUPPORT-MATRIX.md](../../docs/content/docs/reference/MODEL-SUPPORT-MATRIX.md).

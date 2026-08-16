@@ -135,7 +135,13 @@ fi
 CONF_FILE="$INSTALL_DIR/aftertouch.conf"
 if [ -n "${AFTERTOUCH_LAN_PORT:-}" ] || [ ! -f "$CONF_FILE" ]; then
   cat > "$CONF_FILE" <<CONFEOF
-# AfterTouch on-device settings. Sourced by /etc/init.d/aftertouch.
+# AfterTouch on-device settings. Sourced by /etc/init.d/aftertouch, which
+# exports every assignment here into the daemon's own environment -- so any
+# env var soundtouch-service reads (see docs: guides/SOUNDTOUCH-SERVICE.md,
+# "Configuration Options") can be set by adding a line below and running
+# \`/etc/init.d/aftertouch restart\`, e.g.:
+#   MGMT_USERNAME=admin
+#   MGMT_PASSWORD=change-me
 #
 # AFTERTOUCH_LAN_PORT: how AfterTouch is reached from other machines.
 #   auto   (default) redirect a spare Bose port to AfterTouch, but only on

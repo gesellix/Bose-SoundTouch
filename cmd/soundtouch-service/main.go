@@ -224,6 +224,258 @@ func logBufferCapacityFromEnv(defaultCap int) int {
 	return v
 }
 
+// serviceFlags is the full flag/env-var surface for soundtouch-service.
+// Extracted to a package-level var (rather than inlined in main()'s
+// cli.App literal) so tests can build a real *cli.Context against the
+// exact same flags loadConfig reads, instead of hand-duplicating them.
+var serviceFlags = []cli.Flag{
+	&cli.StringFlag{
+		Name:    "port",
+		Aliases: []string{"p"},
+		Usage:   "HTTP port to bind the service to",
+		Value:   "8000",
+		EnvVars: []string{"PORT"},
+	},
+	&cli.StringFlag{
+		Name:    "bind",
+		Usage:   "Network interface to bind to",
+		EnvVars: []string{"BIND_ADDR"},
+	},
+	&cli.StringFlag{
+		Name:    "data-dir",
+		Usage:   "Directory for persistent data",
+		Value:   "data",
+		EnvVars: []string{"DATA_DIR"},
+	},
+	&cli.StringFlag{
+		Name:    "server-url",
+		Aliases: []string{"s"},
+		Usage:   "External URL of this service",
+		EnvVars: []string{"SERVER_URL"},
+	},
+	&cli.StringFlag{
+		Name: "deployment-mode",
+		Usage: "Where this service runs: on-device, private-network, or public-network " +
+			"- informs the server-url fallback when --server-url isn't set",
+		EnvVars: []string{"DEPLOYMENT_MODE"},
+	},
+	&cli.StringFlag{
+		Name:    "https-port",
+		Usage:   "HTTPS port to bind the service to",
+		Value:   "8443",
+		EnvVars: []string{"HTTPS_PORT"},
+	},
+	&cli.StringFlag{
+		Name:    "https-server-url",
+		Aliases: []string{"S"},
+		Usage:   "External HTTPS URL",
+		EnvVars: []string{"HTTPS_SERVER_URL"},
+	},
+	&cli.BoolFlag{
+		Name:    "redact-logs",
+		Usage:   "Redact sensitive data in proxy logs",
+		Value:   true,
+		EnvVars: []string{"REDACT_PROXY_LOGS"},
+	},
+	&cli.BoolFlag{
+		Name:    "log-bodies",
+		Usage:   "Log full request/response bodies",
+		EnvVars: []string{"LOG_PROXY_BODY"},
+	},
+	&cli.BoolFlag{
+		Name:    "record-interactions",
+		Usage:   "Record HTTP interactions to disk",
+		Value:   true,
+		EnvVars: []string{"RECORD_INTERACTIONS"},
+	},
+	&cli.BoolFlag{
+		Name:    "discovery-enabled",
+		Usage:   "Enable periodic device discovery",
+		Value:   true,
+		EnvVars: []string{"DISCOVERY_ENABLED"},
+	},
+	&cli.StringFlag{
+		Name:    "discovery-interval",
+		Usage:   "Device discovery interval",
+		Value:   "5m",
+		EnvVars: []string{"DISCOVERY_INTERVAL"},
+	},
+	&cli.BoolFlag{
+		Name:    "update-check-enabled",
+		Usage:   "Periodically check GitHub for a newer release (opt-in; the only network call this makes beyond speaker/provider traffic)",
+		Value:   false,
+		EnvVars: []string{"UPDATE_CHECK_ENABLED"},
+	},
+	&cli.StringFlag{
+		Name:    "update-check-interval",
+		Usage:   "Update check interval",
+		Value:   "24h",
+		EnvVars: []string{"UPDATE_CHECK_INTERVAL"},
+	},
+	&cli.BoolFlag{
+		Name:    "dns-discovery",
+		Usage:   "Enable DNS discovery server",
+		EnvVars: []string{"ENABLE_DNS_DISCOVERY"},
+	},
+	&cli.StringFlag{
+		Name:    "dns-upstream",
+		Usage:   "Upstream DNS server(s) for non-Bose queries (comma-separated). If empty, /etc/resolv.conf is used.",
+		Value:   "",
+		EnvVars: []string{"DNS_UPSTREAM"},
+	},
+	&cli.StringFlag{
+		Name:    "dns-bind",
+		Usage:   "Bind address for the DNS discovery server",
+		Value:   ":53",
+		EnvVars: []string{"DNS_BIND_ADDR"},
+	},
+	&cli.StringFlag{
+		Name:    "spotify-client-id",
+		Usage:   "Spotify OAuth client ID",
+		EnvVars: []string{"SPOTIFY_CLIENT_ID"},
+	},
+	&cli.StringFlag{
+		Name:    "spotify-client-secret",
+		Usage:   "Spotify OAuth client secret",
+		EnvVars: []string{"SPOTIFY_CLIENT_SECRET"},
+	},
+	&cli.StringFlag{
+		Name:    "spotify-redirect-uri",
+		Usage:   "Spotify OAuth redirect URI (defaults to <server-url>/mgmt/spotify/callback)",
+		EnvVars: []string{"SPOTIFY_REDIRECT_URI"},
+	},
+	&cli.StringFlag{
+		Name:    "spotify-token-url",
+		Usage:   "Spotify OAuth token URL (for testing)",
+		EnvVars: []string{"SPOTIFY_TOKEN_URL"},
+	},
+	&cli.StringFlag{
+		Name:    "spotify-api-base",
+		Usage:   "Spotify API base URL (for testing)",
+		EnvVars: []string{"SPOTIFY_API_BASE"},
+	},
+	&cli.StringFlag{
+		Name:    "amazon-client-id",
+		Usage:   "Amazon LWA OAuth client ID",
+		EnvVars: []string{"AMAZON_CLIENT_ID"},
+	},
+	&cli.StringFlag{
+		Name:    "amazon-client-secret",
+		Usage:   "Amazon LWA OAuth client secret",
+		EnvVars: []string{"AMAZON_CLIENT_SECRET"},
+	},
+	&cli.StringFlag{
+		Name:    "amazon-redirect-uri",
+		Usage:   "Amazon LWA OAuth redirect URI (defaults to <server-url>/mgmt/amazon/callback)",
+		EnvVars: []string{"AMAZON_REDIRECT_URI"},
+	},
+	&cli.StringFlag{
+		Name:    "amazon-token-url",
+		Usage:   "Amazon LWA token URL (for testing)",
+		EnvVars: []string{"AMAZON_TOKEN_URL"},
+	},
+	&cli.StringFlag{
+		Name:    "amazon-profile-url",
+		Usage:   "Amazon LWA profile URL (for testing)",
+		EnvVars: []string{"AMAZON_PROFILE_URL"},
+	},
+	&cli.StringFlag{
+		Name:    "tunein-opml-url",
+		Usage:   "TuneIn OPML base URL, covering Tune.ashx/describe.ashx/navigate (for testing / local mock; defaults to opml.radiotime.com)",
+		EnvVars: []string{"TUNEIN_OPML_URL"},
+	},
+	&cli.StringFlag{
+		Name:    "tunein-api-url",
+		Usage:   "TuneIn API base URL, covering search and profile contents (for testing / local mock; defaults to api.radiotime.com)",
+		EnvVars: []string{"TUNEIN_API_URL"},
+	},
+	&cli.StringFlag{
+		Name:    "tts-provider",
+		Usage:   "Text-to-speech provider: 'translate' (Google Translate, no credentials, default) or 'google-cloud' (Google Cloud TTS, needs an API key). Empty falls back to translate; leave unset to let a value saved in the settings UI take effect",
+		EnvVars: []string{"TTS_PROVIDER"},
+	},
+	&cli.StringFlag{
+		Name:    "tts-google-api-key",
+		Usage:   "Google Cloud Text-to-Speech API key (required when --tts-provider=google-cloud)",
+		EnvVars: []string{"TTS_GOOGLE_API_KEY"},
+	},
+	&cli.StringFlag{
+		Name:    "tts-google-endpoint",
+		Usage:   "Google Cloud TTS synthesize endpoint override (for testing)",
+		EnvVars: []string{"TTS_GOOGLE_ENDPOINT"},
+	},
+	&cli.StringFlag{
+		Name:    "tts-language",
+		Usage:   "Default TTS language code. Provider-specific: 'EN'/'DE' for translate, BCP-47 like 'en-US' for google-cloud",
+		EnvVars: []string{"TTS_LANGUAGE"},
+	},
+	&cli.StringFlag{
+		Name:    "tts-voice",
+		Usage:   "Default Google Cloud TTS voice name (e.g. en-US-Neural2-C); ignored by the translate provider",
+		EnvVars: []string{"TTS_VOICE"},
+	},
+	&cli.StringFlag{
+		Name:    "tts-app-key",
+		Usage:   "Bose /speaker app_key used to play TTS notifications on speakers",
+		EnvVars: []string{"TTS_APP_KEY"},
+	},
+	&cli.IntFlag{
+		Name:    "tts-volume",
+		Usage:   "Default TTS playback volume (0-100, 0 = keep current volume)",
+		Value:   0,
+		EnvVars: []string{"TTS_VOLUME"},
+	},
+	&cli.StringFlag{
+		Name:    "mgmt-username",
+		Usage:   "Management API username for HTTP Basic Auth",
+		Value:   "admin",
+		EnvVars: []string{"MGMT_USERNAME"},
+	},
+	&cli.StringFlag{
+		Name:    "mgmt-password",
+		Usage:   "Management API password for HTTP Basic Auth",
+		Value:   "change_me!",
+		EnvVars: []string{"MGMT_PASSWORD"},
+	},
+	&cli.StringFlag{
+		Name:    "base-url",
+		Usage:   "External base URL for OAuth callbacks behind reverse proxy",
+		EnvVars: []string{"BASE_URL"},
+	},
+	&cli.StringSliceFlag{
+		Name:    "internal-paths",
+		Usage:   "Paths for internal requests (comma-separated or multiple flags)",
+		EnvVars: []string{"INTERNAL_PATHS"},
+	},
+	&cli.StringSliceFlag{
+		Name:    "tls-extra-host",
+		Usage:   "Additional DNS name or IP to include in the server TLS certificate SAN list (repeatable)",
+		EnvVars: []string{"TLS_EXTRA_HOST"},
+	},
+	&cli.BoolFlag{
+		Name:    "migration-enabled",
+		Usage:   "Enable device directory migration from serial to MAC-based structure",
+		Value:   true,
+		EnvVars: []string{"MIGRATION_ENABLED"},
+	},
+	&cli.BoolFlag{
+		Name:    "migration-dry-run",
+		Usage:   "Log what would be migrated without actually doing it",
+		EnvVars: []string{"MIGRATION_DRY_RUN"},
+	},
+	&cli.StringFlag{
+		Name:    "stockholm-dir",
+		Usage:   "Path to the extracted Stockholm frontend directory (enables Stockholm UI when set)",
+		EnvVars: []string{"STOCKHOLM_DIR"},
+	},
+	&cli.StringFlag{
+		Name:    "stockholm-base-path",
+		Usage:   "URL prefix under which the Stockholm UI is served (e.g. /stockholm). Empty serves at root.",
+		Value:   "/stockholm",
+		EnvVars: []string{"STOCKHOLM_BASE_PATH"},
+	},
+}
+
 func main() {
 	updateBuildInfo()
 
@@ -250,249 +502,13 @@ func main() {
 				Name: "Tobias Gesellchen, and the Bose-SoundTouch Contributors",
 			},
 		},
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "port",
-				Aliases: []string{"p"},
-				Usage:   "HTTP port to bind the service to",
-				Value:   "8000",
-				EnvVars: []string{"PORT"},
-			},
-			&cli.StringFlag{
-				Name:    "bind",
-				Usage:   "Network interface to bind to",
-				EnvVars: []string{"BIND_ADDR"},
-			},
-			&cli.StringFlag{
-				Name:    "data-dir",
-				Usage:   "Directory for persistent data",
-				Value:   "data",
-				EnvVars: []string{"DATA_DIR"},
-			},
-			&cli.StringFlag{
-				Name:    "server-url",
-				Aliases: []string{"s"},
-				Usage:   "External URL of this service",
-				EnvVars: []string{"SERVER_URL"},
-			},
-			&cli.StringFlag{
-				Name:    "https-port",
-				Usage:   "HTTPS port to bind the service to",
-				Value:   "8443",
-				EnvVars: []string{"HTTPS_PORT"},
-			},
-			&cli.StringFlag{
-				Name:    "https-server-url",
-				Aliases: []string{"S"},
-				Usage:   "External HTTPS URL",
-				EnvVars: []string{"HTTPS_SERVER_URL"},
-			},
-			&cli.BoolFlag{
-				Name:    "redact-logs",
-				Usage:   "Redact sensitive data in proxy logs",
-				Value:   true,
-				EnvVars: []string{"REDACT_PROXY_LOGS"},
-			},
-			&cli.BoolFlag{
-				Name:    "log-bodies",
-				Usage:   "Log full request/response bodies",
-				EnvVars: []string{"LOG_PROXY_BODY"},
-			},
-			&cli.BoolFlag{
-				Name:    "record-interactions",
-				Usage:   "Record HTTP interactions to disk",
-				Value:   true,
-				EnvVars: []string{"RECORD_INTERACTIONS"},
-			},
-			&cli.BoolFlag{
-				Name:    "discovery-enabled",
-				Usage:   "Enable periodic device discovery",
-				Value:   true,
-				EnvVars: []string{"DISCOVERY_ENABLED"},
-			},
-			&cli.StringFlag{
-				Name:    "discovery-interval",
-				Usage:   "Device discovery interval",
-				Value:   "5m",
-				EnvVars: []string{"DISCOVERY_INTERVAL"},
-			},
-			&cli.BoolFlag{
-				Name:    "update-check-enabled",
-				Usage:   "Periodically check GitHub for a newer release (opt-in; the only network call this makes beyond speaker/provider traffic)",
-				Value:   false,
-				EnvVars: []string{"UPDATE_CHECK_ENABLED"},
-			},
-			&cli.StringFlag{
-				Name:    "update-check-interval",
-				Usage:   "Update check interval",
-				Value:   "24h",
-				EnvVars: []string{"UPDATE_CHECK_INTERVAL"},
-			},
-			&cli.BoolFlag{
-				Name:    "dns-discovery",
-				Usage:   "Enable DNS discovery server",
-				EnvVars: []string{"ENABLE_DNS_DISCOVERY"},
-			},
-			&cli.StringFlag{
-				Name:    "dns-upstream",
-				Usage:   "Upstream DNS server(s) for non-Bose queries (comma-separated). If empty, /etc/resolv.conf is used.",
-				Value:   "",
-				EnvVars: []string{"DNS_UPSTREAM"},
-			},
-			&cli.StringFlag{
-				Name:    "dns-bind",
-				Usage:   "Bind address for the DNS discovery server",
-				Value:   ":53",
-				EnvVars: []string{"DNS_BIND_ADDR"},
-			},
-			&cli.StringFlag{
-				Name:    "spotify-client-id",
-				Usage:   "Spotify OAuth client ID",
-				EnvVars: []string{"SPOTIFY_CLIENT_ID"},
-			},
-			&cli.StringFlag{
-				Name:    "spotify-client-secret",
-				Usage:   "Spotify OAuth client secret",
-				EnvVars: []string{"SPOTIFY_CLIENT_SECRET"},
-			},
-			&cli.StringFlag{
-				Name:    "spotify-redirect-uri",
-				Usage:   "Spotify OAuth redirect URI (defaults to <server-url>/mgmt/spotify/callback)",
-				EnvVars: []string{"SPOTIFY_REDIRECT_URI"},
-			},
-			&cli.StringFlag{
-				Name:    "spotify-token-url",
-				Usage:   "Spotify OAuth token URL (for testing)",
-				EnvVars: []string{"SPOTIFY_TOKEN_URL"},
-			},
-			&cli.StringFlag{
-				Name:    "spotify-api-base",
-				Usage:   "Spotify API base URL (for testing)",
-				EnvVars: []string{"SPOTIFY_API_BASE"},
-			},
-			&cli.StringFlag{
-				Name:    "amazon-client-id",
-				Usage:   "Amazon LWA OAuth client ID",
-				EnvVars: []string{"AMAZON_CLIENT_ID"},
-			},
-			&cli.StringFlag{
-				Name:    "amazon-client-secret",
-				Usage:   "Amazon LWA OAuth client secret",
-				EnvVars: []string{"AMAZON_CLIENT_SECRET"},
-			},
-			&cli.StringFlag{
-				Name:    "amazon-redirect-uri",
-				Usage:   "Amazon LWA OAuth redirect URI (defaults to <server-url>/mgmt/amazon/callback)",
-				EnvVars: []string{"AMAZON_REDIRECT_URI"},
-			},
-			&cli.StringFlag{
-				Name:    "amazon-token-url",
-				Usage:   "Amazon LWA token URL (for testing)",
-				EnvVars: []string{"AMAZON_TOKEN_URL"},
-			},
-			&cli.StringFlag{
-				Name:    "amazon-profile-url",
-				Usage:   "Amazon LWA profile URL (for testing)",
-				EnvVars: []string{"AMAZON_PROFILE_URL"},
-			},
-			&cli.StringFlag{
-				Name:    "tunein-opml-url",
-				Usage:   "TuneIn OPML base URL, covering Tune.ashx/describe.ashx/navigate (for testing / local mock; defaults to opml.radiotime.com)",
-				EnvVars: []string{"TUNEIN_OPML_URL"},
-			},
-			&cli.StringFlag{
-				Name:    "tunein-api-url",
-				Usage:   "TuneIn API base URL, covering search and profile contents (for testing / local mock; defaults to api.radiotime.com)",
-				EnvVars: []string{"TUNEIN_API_URL"},
-			},
-			&cli.StringFlag{
-				Name:    "tts-provider",
-				Usage:   "Text-to-speech provider: 'translate' (Google Translate, no credentials, default) or 'google-cloud' (Google Cloud TTS, needs an API key). Empty falls back to translate; leave unset to let a value saved in the settings UI take effect",
-				EnvVars: []string{"TTS_PROVIDER"},
-			},
-			&cli.StringFlag{
-				Name:    "tts-google-api-key",
-				Usage:   "Google Cloud Text-to-Speech API key (required when --tts-provider=google-cloud)",
-				EnvVars: []string{"TTS_GOOGLE_API_KEY"},
-			},
-			&cli.StringFlag{
-				Name:    "tts-google-endpoint",
-				Usage:   "Google Cloud TTS synthesize endpoint override (for testing)",
-				EnvVars: []string{"TTS_GOOGLE_ENDPOINT"},
-			},
-			&cli.StringFlag{
-				Name:    "tts-language",
-				Usage:   "Default TTS language code. Provider-specific: 'EN'/'DE' for translate, BCP-47 like 'en-US' for google-cloud",
-				EnvVars: []string{"TTS_LANGUAGE"},
-			},
-			&cli.StringFlag{
-				Name:    "tts-voice",
-				Usage:   "Default Google Cloud TTS voice name (e.g. en-US-Neural2-C); ignored by the translate provider",
-				EnvVars: []string{"TTS_VOICE"},
-			},
-			&cli.StringFlag{
-				Name:    "tts-app-key",
-				Usage:   "Bose /speaker app_key used to play TTS notifications on speakers",
-				EnvVars: []string{"TTS_APP_KEY"},
-			},
-			&cli.IntFlag{
-				Name:    "tts-volume",
-				Usage:   "Default TTS playback volume (0-100, 0 = keep current volume)",
-				Value:   0,
-				EnvVars: []string{"TTS_VOLUME"},
-			},
-			&cli.StringFlag{
-				Name:    "mgmt-username",
-				Usage:   "Management API username for HTTP Basic Auth",
-				Value:   "admin",
-				EnvVars: []string{"MGMT_USERNAME"},
-			},
-			&cli.StringFlag{
-				Name:    "mgmt-password",
-				Usage:   "Management API password for HTTP Basic Auth",
-				Value:   "change_me!",
-				EnvVars: []string{"MGMT_PASSWORD"},
-			},
-			&cli.StringFlag{
-				Name:    "base-url",
-				Usage:   "External base URL for OAuth callbacks behind reverse proxy",
-				EnvVars: []string{"BASE_URL"},
-			},
-			&cli.StringSliceFlag{
-				Name:    "internal-paths",
-				Usage:   "Paths for internal requests (comma-separated or multiple flags)",
-				EnvVars: []string{"INTERNAL_PATHS"},
-			},
-			&cli.StringSliceFlag{
-				Name:    "tls-extra-host",
-				Usage:   "Additional DNS name or IP to include in the server TLS certificate SAN list (repeatable)",
-				EnvVars: []string{"TLS_EXTRA_HOST"},
-			},
-			&cli.BoolFlag{
-				Name:    "migration-enabled",
-				Usage:   "Enable device directory migration from serial to MAC-based structure",
-				Value:   true,
-				EnvVars: []string{"MIGRATION_ENABLED"},
-			},
-			&cli.BoolFlag{
-				Name:    "migration-dry-run",
-				Usage:   "Log what would be migrated without actually doing it",
-				EnvVars: []string{"MIGRATION_DRY_RUN"},
-			},
-			&cli.StringFlag{
-				Name:    "stockholm-dir",
-				Usage:   "Path to the extracted Stockholm frontend directory (enables Stockholm UI when set)",
-				EnvVars: []string{"STOCKHOLM_DIR"},
-			},
-			&cli.StringFlag{
-				Name:    "stockholm-base-path",
-				Usage:   "URL prefix under which the Stockholm UI is served (e.g. /stockholm). Empty serves at root.",
-				Value:   "/stockholm",
-				EnvVars: []string{"STOCKHOLM_BASE_PATH"},
-			},
-		},
+		Flags: serviceFlags,
 		Action: func(c *cli.Context) error {
-			config := loadConfig(c)
+			config, err := loadConfig(c)
+			if err != nil {
+				return err
+			}
+
 			ds := initDataStore(config.dataDir)
 
 			// Detect a genuinely fresh data dir by the ABSENCE of settings.json,
@@ -517,13 +533,11 @@ func main() {
 				persisted = createDefaultSettings(ds, config)
 			}
 
-			// Recalculate domains if settings changed
-			hostname, _ := os.Hostname()
-			if hostname == "" {
-				hostname = "localhost"
-			}
-
-			config.domains = getDomains(config.serverURL, config.httpsServerURL, hostname, config.tlsExtraHosts)
+			// Recalculate domains if settings changed. Reuses the same mode-aware
+			// fallback host loadConfig already resolved, rather than a raw
+			// os.Hostname() call, so an on-device install doesn't leak its
+			// unresolvable variant codename back in here (see issue #546).
+			config.domains = getDomains(config.serverURL, config.httpsServerURL, config.hostname, config.tlsExtraHosts)
 
 			cm := initCertificateManager(config.dataDir, config.hostname)
 			sm := setup.NewManager(config.serverURL, ds, cm)
@@ -752,7 +766,32 @@ type serviceConfig struct {
 	stockholmBasePath   string
 }
 
-func loadConfig(c *cli.Context) serviceConfig {
+// resolveFallbackHost picks the host used to guess a server URL when
+// --server-url/SERVER_URL isn't set, based on where this service runs.
+// On-device (running on the speaker's own Linux) is the one case where
+// os.Hostname() is guaranteed useless: it returns the speaker's internal
+// variant codename (e.g. "spotty", "mojo"), which nothing can resolve, not
+// even the speaker itself (see issue #546). warnOnUse reports whether
+// falling back to the returned host is risky enough to warrant a startup
+// warning.
+func resolveFallbackHost(deploymentMode string) (host string, warnOnUse bool) {
+	switch deploymentMode {
+	case "on-device":
+		return "localhost", false
+	case "public-network":
+		// Caller must refuse to guess a publicly reachable address.
+		return "", false
+	default: // "private-network", "", or any unrecognized value: today's behavior.
+		h, _ := os.Hostname()
+		if h == "" {
+			h = "localhost"
+		}
+
+		return strings.ToLower(h), true
+	}
+}
+
+func loadConfig(c *cli.Context) (serviceConfig, error) {
 	port := c.String("port")
 	bindAddr := c.String("bind")
 
@@ -763,16 +802,23 @@ func loadConfig(c *cli.Context) serviceConfig {
 
 	dataDir := c.String("data-dir")
 
-	hostname, _ := os.Hostname()
-	if hostname == "" {
-		hostname = "localhost"
-	}
-
-	hostname = strings.ToLower(hostname)
+	deploymentMode := c.String("deployment-mode")
+	fallbackHost, warnOnFallback := resolveFallbackHost(deploymentMode)
 
 	serverURL := c.String("server-url")
 	if serverURL == "" {
-		serverURL = "http://" + hostname + ":" + port
+		if deploymentMode == "public-network" {
+			return serviceConfig{}, fmt.Errorf(
+				"--server-url (or SERVER_URL) is required when --deployment-mode=public-network; refusing to guess a public address")
+		}
+
+		serverURL = "http://" + fallbackHost + ":" + port
+
+		if warnOnFallback {
+			log.Printf("Warning: --server-url not set; defaulting to %s using this host's own hostname. "+
+				"If your SoundTouch speakers can't reach this address, set --server-url/SERVER_URL explicitly, "+
+				"or pass --deployment-mode=on-device if this runs on the speaker itself.", sanitizeLog(serverURL))
+		}
 	}
 	// Strip a trailing slash so it cannot leak into the BMX registry base or the
 	// margeServerUrl/bmxRegistryUrl pushed to speakers during migration.
@@ -787,14 +833,14 @@ func loadConfig(c *cli.Context) serviceConfig {
 
 	// The HTTPS URL is an override (from the flag/env); when empty it is
 	// derived from serverURL + https port so one setting (Target Domain)
-	// drives both. httpsDefaultURL is the hostname-based fallback used
+	// drives both. httpsDefaultURL is the same mode-aware fallback used
 	// before a Target Domain is configured.
 	httpsOverride := c.String("https-server-url")
-	httpsDefaultURL := "https://" + hostname + ":" + httpsPort
+	httpsDefaultURL := "https://" + fallbackHost + ":" + httpsPort
 	httpsServerURL := handlers.DeriveHTTPSURL(serverURL, httpsOverride, httpsPort, httpsDefaultURL)
 
 	tlsExtraHosts := c.StringSlice("tls-extra-host")
-	domains := getDomains(serverURL, httpsServerURL, hostname, tlsExtraHosts)
+	domains := getDomains(serverURL, httpsServerURL, fallbackHost, tlsExtraHosts)
 
 	redact := c.Bool("redact-logs")
 	logBody := c.Bool("log-bodies")
@@ -856,7 +902,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		bindAddr:            bindAddr,
 		addr:                addr,
 		dataDir:             dataDir,
-		hostname:            hostname,
+		hostname:            fallbackHost,
 		serverURL:           serverURL,
 		httpsServerURL:      httpsServerURL,
 		httpsOverride:       httpsOverride,
@@ -901,7 +947,7 @@ func loadConfig(c *cli.Context) serviceConfig {
 		migrationDryRun:     migrationDryRun,
 		stockholmDir:        stockholmDir,
 		stockholmBasePath:   stockholmBasePath,
-	}
+	}, nil
 }
 
 func getDomains(serverURL, httpsServerURL, hostname string, extraHosts []string) []string {

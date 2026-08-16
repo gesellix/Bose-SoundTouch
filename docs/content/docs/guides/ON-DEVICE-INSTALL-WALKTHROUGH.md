@@ -180,6 +180,17 @@ apply — that warning is about the external-host/cloud scenarios, where
 `localhost` would resolve on the wrong machine (the service host, not the
 speaker). Here there is no wrong machine to resolve on.
 
+> **Note:** as of the fix for issue #546, the on-device init script already
+> sets `DEPLOYMENT_MODE=on-device`, so a fresh (or reinstalled/updated)
+> on-device install's own Target Domain already defaults to
+> `http://localhost:8000` automatically — no manual Settings-tab step
+> needed for that part. Older installs still default to the speaker's own
+> unresolvable Linux hostname (e.g. `http://spotty:8000`) until reinstalled
+> with a build that includes the fix, or until the Target Domain is
+> corrected by hand. Either way, you still need to run Migrate below — that
+> step tells the *speaker* to use this address, which is separate from what
+> the service defaults its own identity to.
+
 **Via the Admin UI:**
 
 1. Go to **Settings**, set **Target Domain** to `http://localhost:8000`.

@@ -1,12 +1,146 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/urfave/cli/v2"
 )
+
+// newTestServiceContext builds a real *cli.Context against serviceFlags (the
+// exact flags soundtouch-service registers), so loadConfig tests exercise the
+// same parsing/env-var wiring production code does, instead of a hand-rolled
+// stand-in that could silently drift from it.
+func newTestServiceContext(t *testing.T, args ...string) *cli.Context {
+	t.Helper()
+
+	app := &cli.App{Flags: serviceFlags}
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+
+	for _, f := range serviceFlags {
+		if err := f.Apply(set); err != nil {
+			t.Fatalf("apply flag %v: %v", f.Names(), err)
+		}
+	}
+
+	if err := set.Parse(args); err != nil {
+		t.Fatalf("parse args %v: %v", args, err)
+	}
+
+	return cli.NewContext(app, set, nil)
+}
+
+func TestResolveFallbackHost(t *testing.T) {
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "localhost"
+	}
+
+	hostname = strings.ToLower(hostname)
+
+	cases := []struct {
+		name           string
+		deploymentMode string
+		wantHost       string
+		wantWarn       bool
+	}{
+		{"on-device uses localhost, no warning", "on-device", "localhost", false},
+		{"public-network returns no fallback, no warning (caller must fail fast)", "public-network", "", false},
+		{"private-network uses this host's own hostname, with warning", "private-network", hostname, true},
+		{"unset/legacy behaves like private-network", "", hostname, true},
+		{"unrecognized mode behaves like private-network", "some-typo", hostname, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotHost, gotWarn := resolveFallbackHost(tc.deploymentMode)
+			if gotHost != tc.wantHost {
+				t.Errorf("host: got %q, want %q", gotHost, tc.wantHost)
+			}
+
+			if gotWarn != tc.wantWarn {
+				t.Errorf("warnOnUse: got %v, want %v", gotWarn, tc.wantWarn)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_DeploymentMode(t *testing.T) {
+	t.Run("on-device with no --server-url defaults to localhost", func(t *testing.T) {
+		config, err := loadConfig(newTestServiceContext(t, "--deployment-mode=on-device", "--port=8000"))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		if config.serverURL != "http://localhost:8000" {
+			t.Errorf("serverURL: got %q, want %q", config.serverURL, "http://localhost:8000")
+		}
+
+		if config.httpsDefaultURL != "https://localhost:8443" {
+			t.Errorf("httpsDefaultURL: got %q, want %q", config.httpsDefaultURL, "https://localhost:8443")
+		}
+	})
+
+	t.Run("public-network with no --server-url fails fast instead of guessing", func(t *testing.T) {
+		_, err := loadConfig(newTestServiceContext(t, "--deployment-mode=public-network"))
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "public-network") {
+			t.Errorf("expected error to mention public-network, got: %v", err)
+		}
+	})
+
+	t.Run("public-network with an explicit --server-url succeeds", func(t *testing.T) {
+		config, err := loadConfig(newTestServiceContext(t,
+			"--deployment-mode=public-network", "--server-url=https://soundtouch.example.com"))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		if config.serverURL != "https://soundtouch.example.com" {
+			t.Errorf("serverURL: got %q, want %q", config.serverURL, "https://soundtouch.example.com")
+		}
+	})
+
+	t.Run("unset deployment-mode with no --server-url keeps today's hostname fallback", func(t *testing.T) {
+		hostname, _ := os.Hostname()
+		if hostname == "" {
+			hostname = "localhost"
+		}
+
+		hostname = strings.ToLower(hostname)
+
+		config, err := loadConfig(newTestServiceContext(t, "--port=8000"))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		want := "http://" + hostname + ":8000"
+		if config.serverURL != want {
+			t.Errorf("serverURL: got %q, want %q (legacy installs must keep working without --deployment-mode)", config.serverURL, want)
+		}
+	})
+
+	t.Run("explicit --server-url always wins regardless of deployment-mode", func(t *testing.T) {
+		for _, mode := range []string{"", "on-device", "private-network", "public-network"} {
+			config, err := loadConfig(newTestServiceContext(t,
+				"--deployment-mode="+mode, "--server-url=http://198.51.100.7:8000"))
+			if err != nil {
+				t.Fatalf("mode %q: loadConfig: unexpected error: %v", mode, err)
+			}
+
+			if config.serverURL != "http://198.51.100.7:8000" {
+				t.Errorf("mode %q: serverURL: got %q, want explicit override unchanged", mode, config.serverURL)
+			}
+		}
+	})
+}
 
 func TestApplyPersistedSettings(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "main-test")
