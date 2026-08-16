@@ -160,7 +160,7 @@ browser.
 > so the Admin UI is reachable from the LAN without any tunnel. Check with
 > `/etc/init.d/aftertouch status` on the speaker, which reports the LAN port
 > when the redirect is active. Details and per-model status:
-> [Model Support Matrix](../../reference/MODEL-SUPPORT-MATRIX/).
+> [Model Support Matrix](../reference/MODEL-SUPPORT-MATRIX.md).
 >
 > Keep the tunnel in mind anyway for **linking music-service accounts**:
 > Spotify only accepts `https://` or *loopback* OAuth redirect URIs, so
