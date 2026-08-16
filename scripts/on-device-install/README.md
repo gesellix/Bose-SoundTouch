@@ -94,8 +94,10 @@ Run the installer again with the version you want to install. The script backs u
 **Install (or upgrade to) a specific version** — three equivalent ways:
 
 ```bash
-# 1. Environment variable (works when piping into sh)
-VERSION=0.123.0 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
+# 1. Environment variable — goes on `sh`, not `curl`: in a pipe, each
+#    command is a separate process, so `VERSION=X curl ... | sh` silently
+#    does NOT set it for `sh` (the one that actually reads $VERSION).
+rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | VERSION=0.123.0 sh
 
 # 2. Command-line flag (pass args after `sh -s --`)
 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.123.0

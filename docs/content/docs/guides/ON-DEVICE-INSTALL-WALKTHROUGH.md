@@ -104,8 +104,11 @@ By default this installs the **latest release** — the script resolves it from
 GitHub's `releases/latest` redirect. To target a specific version instead:
 
 ```bash
-# Via environment variable (works with pipe-to-sh)
-VERSION=0.123.0 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
+# Via environment variable — note it goes on `sh`, not `curl`: shell
+# variable-assignment prefixes only apply to the one command they're
+# attached to, and in a pipe each command is a separate process.
+# `VERSION=0.123.0 curl ... | sh` silently does NOT set it for `sh`.
+rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | VERSION=0.123.0 sh
 
 # Via command-line flag (pass args after sh -s --)
 curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.123.0
@@ -372,7 +375,7 @@ older artefacts to keep `/mnt/nv` free:
 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
 
 # Update to a specific version — three equivalent forms
-VERSION=0.123.0 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
+rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | VERSION=0.123.0 sh
 
 rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.123.0
 

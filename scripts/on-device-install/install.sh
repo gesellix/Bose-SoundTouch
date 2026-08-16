@@ -5,8 +5,10 @@ set -eo pipefail
 #   curl -sSL .../install.sh | sh
 # resolves and installs the latest release automatically (see below).
 #
-# Pin a specific version via environment variable or the --version/-v flag:
-#   VERSION=0.123.0 curl -sSL .../install.sh | sh
+# Pin a specific version via environment variable or the --version/-v flag.
+# The env var goes on `sh`, not `curl`: in a pipe, each command is its own
+# process, so `VERSION=X curl ... | sh` silently does NOT set it for `sh`.
+#   curl -sSL .../install.sh | VERSION=0.123.0 sh
 #   curl -sSL .../install.sh | sh -s -- --version 0.123.0
 VERSION=${VERSION:-}
 
