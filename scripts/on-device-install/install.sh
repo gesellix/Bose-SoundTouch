@@ -138,8 +138,18 @@ mv "$UPDATE_TMP_DIR/init-script" /etc/init.d/aftertouch
 chmod +x /etc/init.d/aftertouch
 update-rc.d aftertouch defaults
 
-echo "Installation complete. Running initial startup..."
-/etc/init.d/aftertouch start
+echo "Installation complete. (Re)starting the service..."
+# Use `restart`, not `start`: if AfterTouch is already running (the normal
+# case for an in-place upgrade or downgrade), `start` calls start-stop-daemon
+# with a pidfile that still points at a live PID. start-stop-daemon then
+# refuses to launch a second instance and exits non-zero -- but this script
+# has no `set -e` here and never checked that exit status, so the old
+# process kept running untouched while the new binary sat unused on disk.
+# The post-install curl check below couldn't catch it either, since the old
+# process kept answering on :8000 throughout. `restart` stops the old
+# process first (a no-op if nothing was running yet, e.g. on a fresh
+# install), guaranteeing the newly-installed binary is the one that starts.
+/etc/init.d/aftertouch restart
 
 /etc/init.d/aftertouch status
 

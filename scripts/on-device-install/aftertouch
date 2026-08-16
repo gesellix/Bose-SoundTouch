@@ -42,25 +42,67 @@ case "$1" in
 
     mkdir -p "$DATADIR"
 
-    # Pipe stdout + stderr through `logger -t $LOG_TAG` so the
+    # Route stdout + stderr through `logger -t $LOG_TAG` so the
     # daemon's output lands in busybox syslog (bounded ring buffer,
     # never grows on disk). Users diagnose with:
     #
     #   logread        | grep aftertouch | tail -20
     #   logread -f     | grep aftertouch     # live tail
     #
-    # `exec` on the daemon replaces /bin/sh so --make-pidfile records
-    # the daemon's own PID (not the shell wrapper). The `logger`
-    # process sits on the read end of the pipe and exits cleanly
-    # when the daemon dies and closes its end.
+    # This used to be a `--startas "/bin/sh" -- -c "exec $DAEMON | logger"`
+    # pipeline, on the theory that `exec` replaces /bin/sh so --make-pidfile
+    # records the daemon's own PID. That's wrong for a *piped* command:
+    # POSIX requires each side of a pipe to run in its own forked process,
+    # so the top-level /bin/sh forks two children (one execs into the
+    # daemon, one becomes logger) and stays alive itself, blocked in
+    # wait() -- --make-pidfile recorded *that* wrapper's PID, not the
+    # daemon's. `stop` then killed the wrapper, which doesn't forward
+    # SIGTERM to its children, orphaning the real daemon (reparented to
+    # init) to keep running -- and keep holding :8000 -- forever, silently
+    # surviving every later stop/start/restart.
+    #
+    # A first fix attempt dropped the wrapper shell entirely in favor of
+    # `--exec "$DAEMON"` directly, with a plain shell-level `>FIFO`
+    # redirection on the start-stop-daemon invocation. That broke logging
+    # instead: this busybox's `--background` resets the backgrounded
+    # child's own stdio, ignoring the outer redirection, so the daemon's
+    # output never reached the FIFO -- confirmed on hardware (`logger`
+    # exited immediately with nothing to read, `logread` showed nothing
+    # new).
+    #
+    # This version keeps a wrapper shell -- its *own* FIFO redirection,
+    # set up by its own script logic rather than inherited from outside,
+    # isn't affected by whatever --background did to its stdio -- but has
+    # the wrapper record the daemon's real PID itself instead of trusting
+    # --make-pidfile. $! after a single, non-piped backgrounded command is
+    # portably that command's own PID; --make-pidfile can only ever see
+    # whatever process start-stop-daemon directly forked (the wrapper),
+    # never a PID from inside it.
+    LOGFIFO="/tmp/$NAME.fifo"
+    rm -f "$LOGFIFO"
+    mkfifo "$LOGFIFO"
+
+    # --pidfile (without --make-pidfile, since the wrapper writes it itself
+    # once it knows the daemon's real PID) makes start-stop-daemon's own
+    # "already running?" check keyed on *our* pidfile, not on "/bin/sh"
+    # identity. Without this, --startas "/bin/sh" is itself the match
+    # criterion -- and since the wrapper stays alive for the daemon's whole
+    # lifetime (blocked in its own `wait`), and `stop` only confirms the
+    # *daemon* PID died (not that the wrapper has finished tearing down),
+    # a `restart` firing `start` right after `stop` can catch the previous
+    # wrapper still mid-teardown. start-stop-daemon then silently refuses
+    # ("/bin/sh is already running", swallowed by --quiet) while the
+    # script burns its full 120s timeout waiting for a daemon that was
+    # never launched. Confirmed on hardware: a bare
+    # `start-stop-daemon --startas "/bin/sh" -- -c "echo hi"` was refused
+    # with exactly that message while a prior wrapper was still alive.
     start-stop-daemon --start \
         --quiet \
         --pidfile "$PIDFILE" \
         --background \
-        --make-pidfile \
         --chuid "$USER" \
         --startas "/bin/sh" \
-        -- -c "exec \"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false --discovery-interval=60m 2>&1 | logger -t $LOG_TAG"
+        -- -c "logger -t $LOG_TAG <'$LOGFIFO' & \"$DAEMON\" --data-dir '$DATADIR' --record-interactions=false --discovery-interval=60m >'$LOGFIFO' 2>&1 & echo \$! >'$PIDFILE'; wait"
 
     tries=0
     max_tries=60
