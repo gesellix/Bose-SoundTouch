@@ -124,9 +124,17 @@ type MigrationSummary struct {
 }
 
 // SSHClient defines the interface for SSH operations.
+//
+// Connect/Close are optional: Run/UploadContent both work standalone
+// (dialing their own one-off connection each time, as they always have).
+// Call Connect first when making several calls in a row — e.g.
+// RevertMigration's ~17 commands — so they reuse one connection instead of
+// dialing fresh every time; defer Close to release it afterward.
 type SSHClient interface {
 	Run(command string) (string, error)
 	UploadContent(content []byte, remotePath string) error
+	Connect() error
+	Close() error
 }
 
 // TelnetClient defines the interface for the device's port-17000 diagnostic
@@ -1869,6 +1877,18 @@ func (m *Manager) patchUdhcpcScript(client SSHClient, targetScript, hookMarker s
 // RevertMigration reverts the speaker to its original Bose cloud configuration.
 func (m *Manager) RevertMigration(deviceIP string) (string, error) {
 	client := m.NewSSH(deviceIP)
+
+	// This function alone makes ~17 client.Run/UploadContent calls across
+	// its sub-steps below. Dialing a fresh SSH connection per call (the
+	// default when Connect isn't used) was confirmed on real hardware to
+	// overwhelm a resource-constrained speaker; Connect+defer Close keeps
+	// it to one connection for the whole revert instead.
+	if err := client.Connect(); err != nil {
+		return "", fmt.Errorf("failed to connect for revert: %w", err)
+	}
+
+	defer func() { _ = client.Close() }()
+
 	rwCmd := "(rw || mount -o remount,rw /)"
 
 	var logs string

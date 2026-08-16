@@ -965,3 +965,9 @@ func (m *mockSSH) UploadContent(content []byte, remotePath string) error {
 
 	return nil
 }
+
+// Connect/Close are no-ops here — the mock has no real connection to
+// reuse, and every test call already goes through Run/UploadContent above
+// regardless of whether Connect was called first.
+func (m *mockSSH) Connect() error { return nil }
+func (m *mockSSH) Close() error   { return nil }

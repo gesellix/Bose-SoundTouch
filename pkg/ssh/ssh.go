@@ -14,6 +14,15 @@ import (
 type Client struct {
 	Host string
 	User string
+
+	// conn is non-nil once Connect has been called, and is then reused by
+	// Run/UploadContent until Close. Left nil, each Run/UploadContent call
+	// dials its own one-off connection as before — Connect is opt-in for
+	// callers making several calls in a row (e.g. RevertMigration's ~17
+	// commands), where dialing fresh every time is both slow and, on a
+	// resource-constrained speaker, has been observed to overwhelm the
+	// device (#614 self-test, 2026-08-16).
+	conn *ssh.Client
 }
 
 // NewClient creates a new SSH client for the given host. The default user is "root".
@@ -66,21 +75,71 @@ func (c *Client) getConfig() *ssh.ClientConfig {
 	}
 }
 
+// Connect opens a persistent SSH connection reused by subsequent
+// Run/UploadContent calls, instead of each dialing its own. Call Close when
+// done with it. Idempotent — calling Connect again while already connected
+// is a no-op. Skip this for a single (or a rare few) command — dialing
+// once and reusing it is only worth the extra Close bookkeeping when
+// several calls follow in quick succession.
+func (c *Client) Connect() error {
+	if c.conn != nil {
+		return nil
+	}
+
+	conn, err := ssh.Dial("tcp", c.Host+":22", c.getConfig())
+	if err != nil {
+		return fmt.Errorf("failed to dial: %w", err)
+	}
+
+	c.conn = conn
+
+	return nil
+}
+
+// Close closes the persistent connection opened by Connect, if any. Safe
+// to call even when Connect was never called (e.g. every Run/UploadContent
+// call so far used its own one-off connection).
+func (c *Client) Close() error {
+	if c.conn == nil {
+		return nil
+	}
+
+	err := c.conn.Close()
+	c.conn = nil
+
+	return err
+}
+
+// dial returns the persistent connection from Connect if one is open,
+// otherwise dials a fresh one-off connection for the caller to close via
+// the returned closeFunc (a no-op when reusing the persistent connection —
+// that one is only closed by an explicit Close call).
+func (c *Client) dial() (conn *ssh.Client, closeFunc func(), err error) {
+	if c.conn != nil {
+		return c.conn, func() {}, nil
+	}
+
+	conn, err = ssh.Dial("tcp", c.Host+":22", c.getConfig())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to dial: %w", err)
+	}
+
+	return conn, func() { _ = conn.Close() }, nil
+}
+
 // Run executes a command on the remote host and returns the combined stdout and stderr.
 //
 // command MUST be a hardcoded shell literal or constructed entirely from
 // internal, service-controlled values — never from user-supplied HTTP input.
 func (c *Client) Run(command string) (string, error) {
-	config := c.getConfig()
-
-	client, err := ssh.Dial("tcp", c.Host+":22", config)
+	conn, closeConn, err := c.dial()
 	if err != nil {
-		return "", fmt.Errorf("failed to dial: %w", err)
+		return "", err
 	}
 
-	defer func() { _ = client.Close() }()
+	defer closeConn()
 
-	session, err := client.NewSession()
+	session, err := conn.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
@@ -133,16 +192,14 @@ func (c *Client) ReadDir(remotePath string) (map[string][]byte, error) {
 
 // UploadContent uploads the given content to a file on the remote host using stdin piping.
 func (c *Client) UploadContent(content []byte, remotePath string) error {
-	config := c.getConfig()
-
-	client, err := ssh.Dial("tcp", c.Host+":22", config)
+	conn, closeConn, err := c.dial()
 	if err != nil {
-		return fmt.Errorf("failed to dial: %w", err)
+		return err
 	}
 
-	defer func() { _ = client.Close() }()
+	defer closeConn()
 
-	session, err := client.NewSession()
+	session, err := conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
