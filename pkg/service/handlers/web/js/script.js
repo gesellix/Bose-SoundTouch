@@ -2096,7 +2096,7 @@ async function showSummary(deviceId) {
             if (accountIdEl && summary.account_id) accountIdEl.innerText = summary.account_id;
         }
 
-        renderMigrationState(summary);
+        renderMigrationState(summary, targetUrl);
         renderPlan(summary);
         renderPlanCurrentURLs(summary);
         renderPlanPairing(summary, deviceId);
@@ -2148,6 +2148,20 @@ async function showSummary(deviceId) {
         const connectionTestPane = document.getElementById("connection-test");
         if (connectionTestPane) {
             connectionTestPane.style.display = summary.ssh_success ? "block" : "none";
+        }
+
+        // Stays visible either way (the user may still want to check it),
+        // but the default Suggested Plan never needs HTTPS — only note it
+        // as required when the Target URL itself is https://.
+        const connectionTestNote = document.getElementById("connection-test-relevance-note");
+        if (connectionTestNote) {
+            if (isHttpsTarget(targetUrl)) {
+                connectionTestNote.innerText = "Required for your current plan (HTTPS)";
+                connectionTestNote.style.color = "#c62828";
+            } else {
+                connectionTestNote.innerText = "Optional for your current plan (HTTP)";
+                connectionTestNote.style.color = "#666";
+            }
         }
 
         const currentConfigElem = document.getElementById("current-config");
@@ -3826,7 +3840,11 @@ function looksTransient(msg) {
 // DNS interception, CA/TLS), and preconditions (remote_services,
 // pairing, backup). Reads only fields the backend already exposes —
 // is_migrated remains the OR of the per-axis booleans.
-function renderMigrationState(summary) {
+//
+// targetUrl is the current Target Domain value, used only to judge
+// whether CA/TLS is actually relevant to the current plan (see
+// isHttpsTarget) — the default Suggested Plan never needs it.
+function renderMigrationState(summary, targetUrl) {
     // --- Transports ---
     setStateChip("state-ssh", summary.ssh_success, "Reachable", "Unreachable");
     setStateChip("state-telnet", summary.telnet_reachable, "Reachable", "Unreachable");
@@ -3907,7 +3925,7 @@ function renderMigrationState(summary) {
     const caLine = document.getElementById("state-ca-line");
     if (caLine) {
         caLine.replaceChildren();
-        const v = caVerdict(summary);
+        const v = caVerdict(summary, isHttpsTarget(targetUrl));
         caLine.appendChild(stateLine(v.icon, v.text, v.note));
     }
 
@@ -4041,9 +4059,22 @@ function dnsInterceptionVerdict(summary) {
     return {icon: "⚠️", text: "/etc/hosts redirects", note: "(deprecated method)"};
 }
 
-function caVerdict(summary) {
+// isHttpsTarget reports whether a target/service URL uses the https
+// scheme. Used to distinguish "CA/TLS optional" (the default Suggested
+// Plan for both XML-over-SSH and Telnet migrates over plain HTTP, no CA
+// involved) from "CA/TLS required" (Target Domain is https://, or the
+// Customize form's DNS-interception method is chosen — that one always
+// targets https://*.bose.com).
+function isHttpsTarget(url) {
+    return /^https:/i.test((url || "").trim());
+}
+
+function caVerdict(summary, httpsRelevant) {
     if (summary.ca_cert_trusted) return {icon: "✅", text: "Local root CA installed", note: ""};
-    return {icon: "❌", text: "Not installed", note: "(HTTPS to local service will fail TLS validation until injected via SSH)"};
+    if (httpsRelevant) {
+        return {icon: "❌", text: "Not installed", note: "(required — your Target URL is HTTPS; install it before migrating, or click Trust CA Now)"};
+    }
+    return {icon: "⚪", text: "Not installed", note: "(not needed — your Target URL is HTTP; only required if you switch to HTTPS or use the DNS-interception method)"};
 }
 
 function remoteServicesVerdict(summary) {
