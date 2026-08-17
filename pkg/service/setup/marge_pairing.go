@@ -225,6 +225,82 @@ func (m *Manager) postSetMargeAccount(deviceIP, accountID string) error {
 	return nil
 }
 
+// ConfigurationStatus values reported by GET /soundTouchConfigurationStatus.
+// See issue #615: a speaker can be reachable, named, and already
+// account-paired yet still report SOUNDTOUCH_NOT_CONFIGURED, which leaves
+// the firmware nagging the owner to install the Bose app. Only a full pass
+// through the WebSocket setup state machine (ExecuteInitPlan) clears it.
+const (
+	ConfigurationStatusConfigured    = "SOUNDTOUCH_CONFIGURED"
+	ConfigurationStatusNotConfigured = "SOUNDTOUCH_NOT_CONFIGURED"
+)
+
+// ReadConfigurationStatus fetches /soundTouchConfigurationStatus and returns
+// its raw status attribute (e.g. "SOUNDTOUCH_CONFIGURED").
+func (m *Manager) ReadConfigurationStatus(deviceIP string) (string, error) {
+	url := buildDeviceURL(deviceIP, "/soundTouchConfigurationStatus")
+
+	client := &http.Client{Timeout: supportedURLsTimeout}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("GET %s: %w", url, err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET %s returned %d", url, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", url, err)
+	}
+
+	var doc struct {
+		Status string `xml:"status,attr"`
+	}
+
+	if err := xml.Unmarshal(body, &doc); err != nil {
+		return "", fmt.Errorf("parse %s: %w", url, err)
+	}
+
+	return doc.Status, nil
+}
+
+// PreflightInitPlan reports whether ExecuteInitPlan should be run against
+// deviceIP, gated on the two conditions from issue #615: /setMargeAccount
+// must be listed in /supportedURLs, and the device's current
+// /soundTouchConfigurationStatus must be exactly SOUNDTOUCH_NOT_CONFIGURED.
+// needed=false with a nil error means "already configured, nothing to do."
+// Any other outcome (unsupported route, unrecognised status value) is
+// treated as unknown and returned as an error rather than guessed at.
+func (m *Manager) PreflightInitPlan(deviceIP string) (needed bool, status string, err error) {
+	supported, probeErr := m.probeSetMargeAccount(deviceIP)
+	if probeErr != nil {
+		return false, "", fmt.Errorf("supportedURLs probe: %w", probeErr)
+	}
+
+	if !supported {
+		return false, "", errors.New("/setMargeAccount is not listed in /supportedURLs — device does not support this pairing path")
+	}
+
+	status, err = m.ReadConfigurationStatus(deviceIP)
+	if err != nil {
+		return false, "", fmt.Errorf("read /soundTouchConfigurationStatus: %w", err)
+	}
+
+	switch status {
+	case ConfigurationStatusConfigured:
+		return false, status, nil
+	case ConfigurationStatusNotConfigured:
+		return true, status, nil
+	default:
+		return false, status, fmt.Errorf("unexpected /soundTouchConfigurationStatus value %q", status)
+	}
+}
+
 // buildDeviceURL builds a URL for a SoundTouch device's HTTP API. If
 // deviceIP already includes a port (test scenarios using httptest) it is
 // reused as-is; otherwise the canonical port 8090 is appended.

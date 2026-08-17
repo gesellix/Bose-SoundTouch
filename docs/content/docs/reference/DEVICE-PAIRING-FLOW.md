@@ -100,6 +100,20 @@ All subsequent messages (except `selectLastWiFiSource`, see below) use this enve
 
 ## Phase 2 — Pairing a New Speaker
 
+> **Preflight (AfterTouch's `setup pair --mode=full`).** Before opening the
+> WebSocket, AfterTouch reads `GET /supportedURLs` (must list
+> `/setMargeAccount`) and `GET /soundTouchConfigurationStatus`, and only
+> runs the state machine below when the status is exactly
+> `SOUNDTOUCH_NOT_CONFIGURED`. This matters because a speaker can be
+> reachable, named, and already have a `margeAccountUUID` set, yet still
+> report `SOUNDTOUCH_NOT_CONFIGURED` — the firmware keeps prompting to
+> install the Bose app until a full acknowledged pass through this state
+> machine runs, not just `setMargeAccount` on its own. Already-configured
+> devices are a no-op; an unsupported route or an unrecognised status value
+> aborts without writing anything. See
+> [#615](https://github.com/gesellix/Bose-SoundTouch/issues/615) and
+> `Manager.PreflightInitPlan` (`pkg/service/setup/marge_pairing.go`).
+
 ### 2.1 Setup State Machine
 
 The pairing flow uses a setup state machine on the device. States must be sent in order.

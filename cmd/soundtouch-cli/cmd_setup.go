@@ -2081,6 +2081,17 @@ func runPairBare(c *cli.Context, deviceIP, accountID string) error {
 func runPairFull(c *cli.Context, deviceIP, accountID string) error {
 	m := setup.NewManager(c.String("service-url"), nil, nil)
 
+	needed, status, err := m.PreflightInitPlan(deviceIP)
+	if err != nil {
+		PrintError(fmt.Sprintf("preflight: %v", err))
+		return err
+	}
+
+	if !needed {
+		PrintSuccess(fmt.Sprintf("Device already configured (status=%s) — nothing to do.", status))
+		return nil
+	}
+
 	plan := setup.InitPlan{
 		DeviceIP:       deviceIP,
 		ServiceURL:     c.String("service-url"),
@@ -2094,7 +2105,7 @@ func runPairFull(c *cli.Context, deviceIP, accountID string) error {
 	ctx, cancel := context.WithTimeout(c.Context, 60*time.Second)
 	defer cancel()
 
-	_, err := m.ExecuteInitPlan(ctx, plan, func(e setup.StepEvent) {
+	_, err = m.ExecuteInitPlan(ctx, plan, func(e setup.StepEvent) {
 		switch e.Status {
 		case setup.StatusOK:
 			fmt.Printf("[%d] %s — ok\n", e.Kind, e.Name)

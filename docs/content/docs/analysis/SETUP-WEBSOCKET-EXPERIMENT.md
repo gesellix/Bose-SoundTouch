@@ -112,6 +112,14 @@ Factory-reset the same speaker again and run the full state machine — the same
 
 This drives `setup.Manager.ExecuteInitPlan` with `SkipURLRewrite=true`, which runs:
 
+> **Update (#615):** `--mode=full` now preflights via `Manager.PreflightInitPlan`
+> before opening the WebSocket — it checks `/supportedURLs` for
+> `/setMargeAccount` and requires `/soundTouchConfigurationStatus` to read
+> `SOUNDTOUCH_NOT_CONFIGURED`, and no-ops on an already-configured device.
+> A freshly factory-reset speaker (as in this experiment) reports
+> `SOUNDTOUCH_NOT_CONFIGURED`, so the preflight passes through unchanged;
+> see `docs/content/docs/reference/DEVICE-PAIRING-FLOW.md`.
+
 ```
 SETUP_START
 SETUP_IDENTIFY_DEVICE_ENTER

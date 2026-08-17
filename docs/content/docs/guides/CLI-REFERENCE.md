@@ -1427,6 +1427,15 @@ name during pairing (empty keeps current). `--language` defaults to `2`
 (English). `--token` defaults to a built-in placeholder matching the Bose
 app's token shape.
 
+`--mode=full` first reads `/supportedURLs` and `/soundTouchConfigurationStatus`
+and only runs the state machine when the device reports
+`SOUNDTOUCH_NOT_CONFIGURED` (see [#615](https://github.com/gesellix/Bose-SoundTouch/issues/615):
+a speaker can be reachable, named, and already account-paired yet still
+report `SOUNDTOUCH_NOT_CONFIGURED`, leaving the "install the Bose app"
+prompt on screen — only a full pass through the state machine clears it).
+An already-configured device is a no-op; an unsupported route or an
+unrecognised status value fails the command instead of guessing.
+
 #### `setup sync`
 
 Pulls presets, recents, and sources from the speaker into AfterTouch's

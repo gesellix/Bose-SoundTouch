@@ -16,13 +16,14 @@ import (
 // device's :8090 HTTP API. It records POSTs to /setMargeAccount so tests
 // can assert on the body.
 type fakeDevice struct {
-	srv              *httptest.Server
-	addr             string // "host:port" usable as deviceIP
-	supportsSetMarge bool
-	postStatus       int // status code returned for POST /setMargeAccount
-	postDelay        time.Duration
-	gotPostBody      string
-	margeAccountUUID string // served by /info; empty means "unpaired"
+	srv                 *httptest.Server
+	addr                string // "host:port" usable as deviceIP
+	supportsSetMarge    bool
+	postStatus          int // status code returned for POST /setMargeAccount
+	postDelay           time.Duration
+	gotPostBody         string
+	margeAccountUUID    string // served by /info; empty means "unpaired"
+	configurationStatus string // served by /soundTouchConfigurationStatus; empty = route not served (404)
 }
 
 func newFakeDevice(t *testing.T) *fakeDevice {
@@ -60,6 +61,16 @@ func newFakeDevice(t *testing.T) *fakeDevice {
 	mux.HandleFunc("/info", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		fmt.Fprintf(w, `<info deviceID="AABBCCDDEE0A"><margeAccountUUID>%s</margeAccountUUID></info>`, d.margeAccountUUID)
+	})
+
+	mux.HandleFunc("/soundTouchConfigurationStatus", func(w http.ResponseWriter, _ *http.Request) {
+		if d.configurationStatus == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<SoundTouchConfigurationStatus status="%s" />`, d.configurationStatus)
 	})
 
 	d.srv = httptest.NewServer(mux)
@@ -357,6 +368,110 @@ func TestEnsureMargeAccountPaired_PropagatesPairingFailure(t *testing.T) {
 	_, _, _, err := m.EnsureMargeAccountPaired(d.addr, "1234567", nil)
 	if err == nil {
 		t.Fatal("expected an error when HTTP pairing is unsupported and no telnet client is given")
+	}
+}
+
+func TestReadConfigurationStatus_ReturnsRawStatus(t *testing.T) {
+	d := newFakeDevice(t)
+	d.configurationStatus = ConfigurationStatusConfigured
+
+	m := &Manager{}
+
+	status, err := m.ReadConfigurationStatus(d.addr)
+	if err != nil {
+		t.Fatalf("ReadConfigurationStatus: %v", err)
+	}
+
+	if status != ConfigurationStatusConfigured {
+		t.Errorf("status = %q, want %q", status, ConfigurationStatusConfigured)
+	}
+}
+
+func TestReadConfigurationStatus_ErrorsWhenRouteUnsupported(t *testing.T) {
+	d := newFakeDevice(t)
+	d.configurationStatus = ""
+
+	m := &Manager{}
+
+	if _, err := m.ReadConfigurationStatus(d.addr); err == nil {
+		t.Fatal("expected an error when the route is unsupported (404)")
+	}
+}
+
+func TestPreflightInitPlan_NotConfiguredNeedsRepair(t *testing.T) {
+	d := newFakeDevice(t)
+	d.configurationStatus = ConfigurationStatusNotConfigured
+
+	m := &Manager{}
+
+	needed, status, err := m.PreflightInitPlan(d.addr)
+	if err != nil {
+		t.Fatalf("PreflightInitPlan: %v", err)
+	}
+
+	if !needed {
+		t.Error("needed should be true for SOUNDTOUCH_NOT_CONFIGURED")
+	}
+
+	if status != ConfigurationStatusNotConfigured {
+		t.Errorf("status = %q, want %q", status, ConfigurationStatusNotConfigured)
+	}
+}
+
+func TestPreflightInitPlan_AlreadyConfiguredIsNoOp(t *testing.T) {
+	d := newFakeDevice(t)
+	d.configurationStatus = ConfigurationStatusConfigured
+
+	m := &Manager{}
+
+	needed, status, err := m.PreflightInitPlan(d.addr)
+	if err != nil {
+		t.Fatalf("PreflightInitPlan: %v", err)
+	}
+
+	if needed {
+		t.Error("needed should be false for SOUNDTOUCH_CONFIGURED")
+	}
+
+	if status != ConfigurationStatusConfigured {
+		t.Errorf("status = %q, want %q", status, ConfigurationStatusConfigured)
+	}
+}
+
+func TestPreflightInitPlan_UnsupportedSetMargeAccountFailsClosed(t *testing.T) {
+	d := newFakeDevice(t)
+	d.supportsSetMarge = false
+	d.configurationStatus = ConfigurationStatusNotConfigured
+
+	m := &Manager{}
+
+	needed, _, err := m.PreflightInitPlan(d.addr)
+	if err == nil {
+		t.Fatal("expected an error when /setMargeAccount is not listed in /supportedURLs")
+	}
+
+	if needed {
+		t.Error("needed should be false when preflight fails")
+	}
+}
+
+func TestPreflightInitPlan_UnrecognisedStatusFailsClosed(t *testing.T) {
+	d := newFakeDevice(t)
+	d.configurationStatus = "SOMETHING_UNEXPECTED"
+
+	m := &Manager{}
+
+	needed, status, err := m.PreflightInitPlan(d.addr)
+	if err == nil {
+		t.Fatal("expected an error for an unrecognised status value")
+	}
+
+	if needed {
+		t.Error("needed should be false when the status is unrecognised")
+	}
+
+	if status != "SOMETHING_UNEXPECTED" {
+		t.Errorf("status = %q, want the raw unrecognised value returned alongside the error", status)
 	}
 }
 
