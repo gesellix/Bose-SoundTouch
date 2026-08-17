@@ -84,7 +84,7 @@ rm -f /mnt/nv/aftertouch/soundtouch-cli
 df -h /mnt/nv   # confirm space recovered
 ```
 
-> **From v0.89.0 onwards the installer prunes stale artefacts automatically**
+> **From v0.93.0 onwards the installer prunes stale artefacts automatically**
 > during every upgrade — manual cleanup should no longer be necessary on
 > fresh installs.
 

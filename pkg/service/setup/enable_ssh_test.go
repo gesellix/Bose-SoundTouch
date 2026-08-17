@@ -157,6 +157,59 @@ func TestSetBoseURLs_RejectsDoubleQuote(t *testing.T) {
 	}
 }
 
+// TestSetAllBoseURLsViaTelnet_WritesAllFourBeforeEnvswitch is the regression
+// test for the stale statsServerUrl/bmxRegistryUrl bug reported in #621: the
+// XML migration's telnet resync used to commit `envswitch boseurls set` with
+// only marge/swUpdate as arguments, silently freezing whatever stats/bmx
+// happened to still be in the runtime layer at that moment. This asserts all
+// four `sys configuration` writes land before the single `envswitch` commit,
+// matching telnetURLs.Commands()'s known-good sequence.
+func TestSetAllBoseURLsViaTelnet_WritesAllFourBeforeEnvswitch(t *testing.T) {
+	const targetURL = "http://localhost:8000"
+
+	urls := telnetURLs{
+		Marge:       targetURL,
+		Stats:       targetURL,
+		SwUpdate:    targetURL + "/updates/soundtouch",
+		BmxRegistry: targetURL + "/bmx/registry/v1/services",
+	}
+
+	want := urls.Commands()
+
+	resp := make(map[string]string, len(want))
+	for _, c := range want {
+		resp[c] = "OK\n"
+	}
+
+	f := &fakeTelnet{responses: resp}
+	m := newFakeTelnetManager(f)
+
+	if _, err := m.setAllBoseURLsViaTelnet("192.0.2.10", urls); err != nil {
+		t.Fatalf("setAllBoseURLsViaTelnet: %v", err)
+	}
+
+	if len(f.commands) != len(want) {
+		t.Fatalf("sent %d commands %q\n want %d %q", len(f.commands), f.commands, len(want), want)
+	}
+
+	for i, c := range want {
+		if f.commands[i] != c {
+			t.Errorf("command %d = %q\n want %q", i, f.commands[i], c)
+		}
+	}
+
+	envswitchIdx := len(want) - 1
+	for i, c := range f.commands[:envswitchIdx] {
+		if !strings.HasPrefix(c, "sys configuration ") {
+			t.Errorf("command %d = %q, want a `sys configuration ...` runtime write before the envswitch commit", i, c)
+		}
+	}
+
+	if !strings.HasPrefix(f.commands[envswitchIdx], "envswitch boseurls set ") {
+		t.Errorf("last command = %q, want the envswitch commit last", f.commands[envswitchIdx])
+	}
+}
+
 func TestClose17000_RunsFirewallSteps(t *testing.T) {
 	var ran []string
 

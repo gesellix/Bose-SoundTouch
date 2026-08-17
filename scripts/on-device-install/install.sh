@@ -87,6 +87,24 @@ if [ "$INSTALL_DIR" != "/opt/aftertouch" ]; then
   ln -sf "$INSTALL_DIR" /opt/aftertouch
 fi
 
+# Prune any *.backup/*.old/*.new artefacts left behind by an earlier install
+# attempt, before doing anything else that needs disk space. /mnt/nv is small
+# (tens of MB), and if a previous run died between creating its backup and
+# reaching the GC step below (e.g. "no space left on device" during the
+# download that follows), that backup would otherwise never get cleaned up --
+# and low free space is exactly what makes the next attempt likely to die the
+# same way. Pruning up front makes cleanup idempotent regardless of where a
+# prior run was interrupted.
+echo "Disk usage before pre-install GC:"; df -h "$INSTALL_DIR"
+for f in "$INSTALL_DIR/aftertouch-service".*.backup \
+          "$INSTALL_DIR/aftertouch-service".*.old \
+          "$INSTALL_DIR/aftertouch-service.new"; do
+  [ -f "$f" ] || continue
+  rm -f "$f"
+  echo "Removed stale artefact: $f"
+done
+echo "Disk usage after pre-install GC:"; df -h "$INSTALL_DIR"
+
 curl \
   -sSL \
   -o "$UPDATE_TMP_DIR/binary" \
@@ -112,10 +130,11 @@ mv "$UPDATE_TMP_DIR/binary" "$INSTALL_DIR/aftertouch-service"
 chmod +x "$INSTALL_DIR/aftertouch-service"
 
 # Keep only the backup we just created; prune all older *.backup, *.old, and
-# *.new artefacts left by earlier installs.  /mnt/nv is small (tens of MB),
-# so accumulation quickly causes "no space left on device" during downloads.
+# *.new artefacts left by earlier installs. This is a second, defensive pass:
+# it only matters if something wrote a stray artefact between the pre-install
+# GC above and here (e.g. a concurrent install run).
 if [ -n "$BACKUP_FILE" ]; then
-  echo "Disk usage before GC:"; df -h "$INSTALL_DIR"
+  echo "Disk usage before post-install GC:"; df -h "$INSTALL_DIR"
   for f in "$INSTALL_DIR/aftertouch-service".*.backup \
             "$INSTALL_DIR/aftertouch-service".*.old \
             "$INSTALL_DIR/aftertouch-service.new"; do
@@ -124,7 +143,7 @@ if [ -n "$BACKUP_FILE" ]; then
     rm -f "$f"
     echo "Removed stale artefact: $f"
   done
-  echo "Disk usage after GC:"; df -h "$INSTALL_DIR"
+  echo "Disk usage after post-install GC:"; df -h "$INSTALL_DIR"
 fi
 
 # Settings file sourced by the init script. Written before the service is

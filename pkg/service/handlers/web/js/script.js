@@ -2776,6 +2776,26 @@ function onPlanTargetURLChange() {
         saved.innerText = "✏️ unsaved change — click \"Save as default\" to persist";
         saved.style.color = "#bf6900";
     }
+
+    // Re-derive the four service URL fields from the new Target URL, same
+    // as the initial pre-fill on summary render. fillPlanURLInputs still
+    // only overwrites fields the user hasn't hand-edited (tracked via
+    // dataset.autofilled), so this doesn't clobber genuinely manual edits.
+    // Without this, changing Target Domain to e.g. localhost left the four
+    // fields pointed at a stale default with no warning until the user
+    // edited them by hand (#621 follow-up).
+    const soundcork = document.getElementById("plan-soundcork-mode") &&
+        document.getElementById("plan-soundcork-mode").checked;
+    fillPlanURLInputs(defaultServiceURLs(v, {soundcorkMode: soundcork}));
+}
+
+// onPlanURLFieldEdited marks a Plan-card URL input as manually edited so
+// fillPlanURLInputs stops treating it as an auto-fillable default, then
+// re-validates. Wired from each of the four fields' oninput instead of
+// calling validatePlanURLs() directly.
+function onPlanURLFieldEdited(el) {
+    el.dataset.autofilled = "";
+    validatePlanURLs();
 }
 
 // saveTargetURLAsDefault posts the current plan-target-url value to
@@ -2838,8 +2858,12 @@ function defaultServiceURLs(targetUrl, options = {}) {
 
 // fillPlanURLInputs writes the four URLs into the Plan card inputs.
 // force=true overwrites existing values (used by Reset and the
-// Soundcork toggle); force=false only fills empties (used on summary
-// render so manual edits survive a refresh).
+// Soundcork toggle); force=false only fills empties and fields still
+// flagged dataset.autofilled=true (used on summary render and on Target
+// URL changes, so manual edits survive but a still-default value tracks
+// Target URL). Every field this function writes to is (re-)flagged
+// autofilled; onPlanURLFieldEdited clears the flag the moment a user
+// types into a field directly.
 function fillPlanURLInputs(urls, {force = false} = {}) {
     const fields = [
         ["plan-marge-url", urls.marge],
@@ -2850,7 +2874,10 @@ function fillPlanURLInputs(urls, {force = false} = {}) {
     for (const [id, value] of fields) {
         const el = document.getElementById(id);
         if (!el) continue;
-        if (force || !el.value) el.value = value;
+        if (force || !el.value || el.dataset.autofilled === "true") {
+            el.value = value;
+            el.dataset.autofilled = "true";
+        }
     }
     validatePlanURLs();
 }

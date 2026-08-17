@@ -2102,25 +2102,41 @@ func TestMigrateViaXML_ReappliesBoseURLsOverTelnet(t *testing.T) {
 		return &mockSSH{runFunc: func(string) (string, error) { return "", nil }}
 	}
 
-	ft := &fakeTelnet{banner: "->", responses: map[string]string{}}
+	wantCmds := telnetURLs{
+		Marge:       target,
+		Stats:       target,
+		SwUpdate:    target + "/updates/soundtouch",
+		BmxRegistry: target + "/bmx/registry/v1/services",
+	}.Commands()
+
+	resp := make(map[string]string, len(wantCmds))
+	for _, c := range wantCmds {
+		resp[c] = "OK\n"
+	}
+
+	ft := &fakeTelnet{banner: "->", responses: resp}
 	m.NewTelnet = func(string) TelnetClient { return ft }
 
 	if _, err := m.MigrateSpeaker("192.0.2.10", target, "", nil, MigrationMethodXML); err != nil {
 		t.Fatalf("MigrateSpeaker: %v", err)
 	}
 
-	want := `envswitch boseurls set "` + target + `" "` + target + `/updates/soundtouch"`
-
-	var found bool
-	for _, c := range ft.commands {
-		if c == want {
-			found = true
-			break
+	// All four `sys configuration` writes must land before the envswitch
+	// commit — see enable_ssh.go's setAllBoseURLsViaTelnet — otherwise the
+	// commit freezes whatever stale value was still in the runtime layer for
+	// any field not passed to it (the #621 statsServerUrl/bmxRegistryUrl bug).
+	for _, want := range wantCmds {
+		var found bool
+		for _, c := range ft.commands {
+			if c == want {
+				found = true
+				break
+			}
 		}
-	}
 
-	if !found {
-		t.Errorf("expected boseurls re-apply %q after XML migration; sent: %v", want, ft.commands)
+		if !found {
+			t.Errorf("expected boseurls re-apply command %q after XML migration; sent: %v", want, ft.commands)
+		}
 	}
 }
 

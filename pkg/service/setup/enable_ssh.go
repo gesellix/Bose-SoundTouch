@@ -183,6 +183,47 @@ func (m *Manager) setBoseURLsViaTelnet(deviceIP, marge, swUpdate string) (string
 	return logs.String(), nil
 }
 
+// setAllBoseURLsViaTelnet writes all four boseurls (bmx, stats, marge,
+// swUpdate) to the runtime layer via `sys configuration ...`, then commits
+// them with `envswitch boseurls set`, over the port-17000 shell. Unlike
+// setBoseURLsViaTelnet (which only issues the envswitch commit, used by the
+// #471 SSH-bootstrap/reset flows that need that specific two-argument
+// injection), this mirrors telnetURLs.Commands()'s full sequence so the
+// envswitch commit captures fresh values for all four fields, not just two.
+func (m *Manager) setAllBoseURLsViaTelnet(deviceIP string, urls telnetURLs) (string, error) {
+	if m.NewTelnet == nil {
+		return "", errors.New("telnet not configured: Manager.NewTelnet is nil")
+	}
+
+	var logs strings.Builder
+
+	t := m.NewTelnet(deviceIP)
+	if err := t.Dial(); err != nil {
+		return logs.String(), fmt.Errorf("telnet dial %s:17000: %w", deviceIP, err)
+	}
+
+	defer func() { _ = t.Close() }()
+
+	if banner, _ := t.Probe(); banner != "" {
+		fmt.Fprintf(&logs, "Telnet banner: %q\n", strings.TrimSpace(banner))
+	}
+
+	for _, cmd := range urls.Commands() {
+		resp, err := t.SendCommand(cmd)
+		if err != nil {
+			return logs.String(), fmt.Errorf("telnet command %q failed: %w", cmd, err)
+		}
+
+		fmt.Fprintf(&logs, "→ %s\n%s\n", cmd, strings.TrimRight(resp, "\r\n"))
+
+		if isCommandNotFound(resp) {
+			return logs.String(), fmt.Errorf("device rejected %q (firmware does not expose this command)", cmd)
+		}
+	}
+
+	return logs.String(), nil
+}
+
 // fwScript is the speaker's persistent iptables script; appending here makes a
 // rule survive reboot (it is re-applied on boot).
 const fwScript = "/etc/init.d/Firewalls/update_iptables"

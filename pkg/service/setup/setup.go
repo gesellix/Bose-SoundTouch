@@ -1089,32 +1089,46 @@ func (m *Manager) migrateViaXML(deviceIP, targetURL, proxyURL string, options ma
 		}
 	}
 
-	logs += m.resyncBoseURLsAfterXML(deviceIP, cfg.MargeServerUrl, cfg.SwUpdateUrl)
+	logs += m.resyncBoseURLsAfterXML(deviceIP, telnetURLs{
+		Marge:       cfg.MargeServerUrl,
+		Stats:       cfg.StatsServerUrl,
+		SwUpdate:    cfg.SwUpdateUrl,
+		BmxRegistry: cfg.BmxRegistryUrl,
+	})
 
 	return logs, nil
 }
 
-// resyncBoseURLsAfterXML re-applies the boseurls over telnet so the runtime
-// URL layer matches the XML just written by migrateViaXML.
+// resyncBoseURLsAfterXML re-applies all four boseurls over telnet so the
+// runtime URL layer matches the XML just written by migrateViaXML.
 //
 // The XML migration only updates the persisted SoundTouchSdkPrivateCfg.xml; it
 // does not touch the runtime/persistence layer that `getpdo
 // CurrentSystemConfiguration` reports. When SSH was bootstrapped via #471
 // (`enable-ssh`), that layer still points at the placeholder boseurls
 // (https://aftertouch.invalid), so the preflight cross-check keeps warning that
-// margeServerUrl/swUpdateUrl differ between transports until a reboot.
-// Re-applying the real boseurls over telnet :17000 reconciles it immediately.
+// the URLs differ between transports until a reboot.
+//
+// All four fields are re-applied, not just marge/swUpdate: the closing
+// `envswitch boseurls set` commit persists whatever is currently in the
+// runtime layer at the moment it runs, not only its own two arguments (see
+// docs/content/docs/analysis/TELNET-COMMAND-REFERENCE.md). Committing while
+// stats/bmx are still stale in the runtime layer freezes those stale values
+// into the persistence layer permanently — a later reboot loads that frozen
+// persistence layer, not the XML file, so nothing short of a factory reset
+// clears it again. Re-applying the real boseurls over telnet :17000
+// reconciles all four immediately.
 //
 // Best-effort: telnet may be unavailable (no port 17000, or it was closed via
 // --close-17000), in which case a reboot still reconciles the layers, so this
 // only returns a note and never fails the migration. Returns the log lines to
 // append.
-func (m *Manager) resyncBoseURLsAfterXML(deviceIP, marge, swUpdate string) string {
+func (m *Manager) resyncBoseURLsAfterXML(deviceIP string, urls telnetURLs) string {
 	if m.NewTelnet == nil {
 		return ""
 	}
 
-	rlogs, rerr := m.setBoseURLsViaTelnet(deviceIP, marge, swUpdate)
+	rlogs, rerr := m.setAllBoseURLsViaTelnet(deviceIP, urls)
 	if rerr != nil {
 		return fmt.Sprintf("Note: could not re-sync boseurls over telnet (%v); a device reboot will reconcile the runtime layer.\n", rerr)
 	}
