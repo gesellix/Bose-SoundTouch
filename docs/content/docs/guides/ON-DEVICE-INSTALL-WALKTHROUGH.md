@@ -404,6 +404,13 @@ curl -sSLo install.sh https://raw.githubusercontent.com/gesellix/Bose-SoundTouch
 sh install.sh --version 0.123.0
 ```
 
+The script's own final output already confirms the new version came up and
+is answering on `:8000`. If you separately check the version yourself
+(`wget -qO- http://localhost:8000/health`, or the Admin UI), **reboot the
+speaker first**: an Admin UI tab left open from before the update, or a
+browser cache of the previous page load, can otherwise still show the old
+version even though the new binary is already running.
+
 **Rollback:** the installer keeps a `.backup` file alongside the binary:
 
 ```bash

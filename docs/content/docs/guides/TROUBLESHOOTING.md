@@ -653,7 +653,8 @@ Notes:
 
 If the telnet method isn't available for your model, factory reset the speaker, then re-migrate it:
 
-1. Factory reset (on most models: hold `1` + `−` for ~10 seconds).
+1. Factory reset (on most models: hold `1` + `−` for ~10 seconds — confirmed
+   identical on the SoundTouch 30 Series III, not just the original ST30).
 2. Reconnect the speaker to your network.
 3. Re-migrate it in AfterTouch.
 
