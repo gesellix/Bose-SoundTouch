@@ -2558,17 +2558,14 @@ async function migrate(deviceId, ip, method) {
                 }),
             );
 
-            // Make reboot button available and prominent
+            // Make reboot button available and prominent. It lives in the
+            // always-visible "Speaker controls" row (see #621 — it used to
+            // be reachable only after expanding "Customize this migration"),
+            // so no need to force any collapsed container open here.
             const rebootBtn = document.getElementById("reboot-speaker-btn");
             rebootBtn.style.display = "inline-block";
             rebootBtn.disabled = false;
             rebootBtn.style.border = "2px solid #000";
-
-            // The Reboot button now lives inside the "Customize this
-            // migration" <details>; expand it so the post-migration
-            // reboot affordance is reachable from the Plan flow too.
-            const customize = rebootBtn.closest("details");
-            if (customize) customize.open = true;
 
             // Re-show summary but with prominence on reboot
             summaryDiv.style.display = "block";
@@ -3915,11 +3912,14 @@ function renderMigrationState(summary) {
     }
 
     // --- Preconditions ---
-    const remoteCell = document.getElementById("state-remote-services-cell");
-    if (remoteCell) {
-        remoteCell.replaceChildren();
+    // Like CA/TLS above, the cell also hosts the Enable/Disable SSH
+    // buttons as siblings of this line — only rewrite the verdict span so
+    // they stay put across re-renders.
+    const remoteLine = document.getElementById("state-remote-services-line");
+    if (remoteLine) {
+        remoteLine.replaceChildren();
         const v = remoteServicesVerdict(summary);
-        remoteCell.appendChild(stateLine(v.icon, v.text, v.note));
+        remoteLine.appendChild(stateLine(v.icon, v.text, v.note));
     }
 
     const pairedCell = document.getElementById("state-paired");

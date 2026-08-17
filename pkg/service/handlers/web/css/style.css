@@ -129,6 +129,20 @@ pre { background-color: #eee; padding: 10px; overflow-x: auto; font-size: 12px; 
     background-color: #d32f2f;
 }
 
+/* .btn-primary marks the one "do the thing" confirm action of a panel
+   (Save Settings, Apply Suggested/Custom Plan, Enable SSH, …). Everything
+   else stays the plain default button so color consistently signals the
+   same two meanings everywhere: primary = confirm, danger = destructive. */
+.btn-primary {
+    background-color: #2196f3;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+}
+.btn-primary:hover {
+    background-color: #1769aa;
+}
+
 .badge {
     padding: 2px 6px;
     border-radius: 4px;

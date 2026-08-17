@@ -533,7 +533,7 @@
         </div>
 
         <div style="margin-bottom: 20px">
-            <button onclick="updateSettings()">Save Settings</button>
+            <button class="btn-primary" onclick="updateSettings()">Save Settings</button>
             <span
                 id="settings-status"
                 style="margin-left: 10px; font-size: 0.9em"
@@ -691,9 +691,27 @@
             class="summary-box"
             style="display: none"
         >
-            <h3>
-                Migration Summary for
-                <span id="summary-device-display"></span>
+            <h3 style="display: flex; align-items: baseline; justify-content: space-between">
+                <span>
+                    Migration Summary for
+                    <span id="summary-device-display"></span>
+                </span>
+                <span style="display: flex; gap: 6px">
+                    <button
+                        type="button"
+                        onclick="refreshSummary()"
+                        title="Reload summary for this device"
+                        aria-label="Reload summary"
+                        style="padding: 2px 8px; font-size: 0.85em; line-height: 1; cursor: pointer; font-weight: normal"
+                    >&#x21bb; Reload</button>
+                    <button
+                        type="button"
+                        onclick="document.getElementById('migration-summary').style.display = 'none'"
+                        title="Hide this summary — doesn't change anything on the speaker"
+                        aria-label="Hide summary"
+                        style="padding: 2px 8px; font-size: 0.85em; line-height: 1; cursor: pointer; font-weight: normal"
+                    >&#x2715; Hide</button>
+                </span>
             </h3>
             <input type="hidden" id="summary-device-id"/>
             <p>Migration Status: <span id="migration-status"></span></p>
@@ -739,7 +757,8 @@
                                         <button
                                             id="trust-ca-btn"
                                             type="button"
-                                            style="display: none; background-color: #607d8b; color: white; border: none; padding: 2px 8px; font-size: 0.85em"
+                                            class="btn-primary"
+                                            style="display: none; padding: 2px 8px; font-size: 0.85em"
                                         >Trust CA Now</button>
                                         <a
                                             href="/setup/ca.crt"
@@ -760,7 +779,24 @@
                         <tbody>
                             <tr style="border-top: 1px solid #eee">
                                 <td style="padding: 4px 8px; width: 170px; color: #555" title="The remote_services file controls whether SSH is available after reboot">SSH (remote_services)</td>
-                                <td id="state-remote-services-cell" style="padding: 4px 8px"></td>
+                                <td id="state-remote-services-cell" style="padding: 4px 8px">
+                                    <span id="state-remote-services-line"></span>
+                                    <span style="margin-left: 12px; white-space: nowrap">
+                                        <button
+                                            id="ensure-remote-btn"
+                                            type="button"
+                                            class="btn-primary"
+                                            style="padding: 2px 8px; font-size: 0.85em"
+                                        >Enable SSH (Persist remote_services)</button>
+                                        <button
+                                            id="remove-remote-btn"
+                                            type="button"
+                                            class="btn-danger"
+                                            title="Removes the remote_services file — SSH will be disabled after the next reboot"
+                                            style="margin-left: 6px; padding: 2px 8px; font-size: 0.85em"
+                                        >Disable SSH (Remove remote_services)</button>
+                                    </span>
+                                </td>
                             </tr>
                             <tr style="border-top: 1px solid #eee">
                                 <td style="padding: 4px 8px; color: #555">Account paired</td>
@@ -772,6 +808,30 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Speaker controls: real device actions that don't depend on
+                 the Customize form below, kept always visible rather than
+                 behind its collapse (see #621 — Reboot was previously
+                 reachable only after expanding "Customize this migration"
+                 and scrolling past it). -->
+            <div style="margin: 0 0 16px 0">
+                <h4 style="margin: 0 0 6px 0; font-size: 0.95em">Speaker controls</h4>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                    <button
+                        id="revert-migrate-btn"
+                        class="btn-danger"
+                        style="padding: 10px 20px; display: none"
+                    >
+                        Revert to Defaults
+                    </button>
+                    <button
+                        id="reboot-speaker-btn"
+                        style="padding: 10px 20px"
+                    >
+                        Reboot Speaker
+                    </button>
                 </div>
             </div>
 
@@ -819,25 +879,13 @@
                 <div style="margin-top: 10px">
                     <button
                         id="test-connection-explicit-btn"
-                        style="
-                                    background-color: #607d8b;
-                                    color: white;
-                                    border: none;
-                                    padding: 5px 10px;
-                                    font-size: 0.9em;
-                                "
+                        style="font-size: 0.9em"
                     >
                         Test with Explicit CA.crt
                     </button>
                     <button
                         id="test-connection-trusted-btn"
-                        style="
-                                    background-color: #607d8b;
-                                    color: white;
-                                    border: none;
-                                    padding: 5px 10px;
-                                    font-size: 0.9em;
-                                "
+                        style="font-size: 0.9em"
                     >
                         Test with Shared Trust Store
                     </button>
@@ -879,13 +927,7 @@
                 <div style="margin-top: 10px">
                     <button
                         id="test-dns-btn"
-                        style="
-                                    background-color: #28a745;
-                                    color: white;
-                                    border: none;
-                                    padding: 5px 10px;
-                                    font-size: 0.9em;
-                                "
+                        style="font-size: 0.9em"
                     >
                         Test DNS Redirection
                     </button>
@@ -1067,6 +1109,7 @@
                         <button
                             type="button"
                             id="plan-apply-btn"
+                            class="btn-primary"
                             onclick="applySuggestedPlan()"
                             style="font-size: 0.95em"
                         >Apply Suggested Plan</button>
@@ -1150,8 +1193,9 @@
                     <button
                         type="button"
                         id="customize-apply-btn"
+                        class="btn-primary"
                         onclick="applyCustomPlan()"
-                        style="background-color: #4caf50; color: white; border: none; padding: 8px 14px; font-size: 0.95em"
+                        style="padding: 8px 14px; font-size: 0.95em"
                     >Apply Custom Plan</button>
                     <span id="customize-apply-status" style="margin-left: 10px; font-size: 0.9em"></span>
                 </div>
@@ -1235,64 +1279,6 @@
                         Root CA.
                     </div>
                 </div>
-            </div>
-            <div style="margin-top: 15px">
-                <button
-                    id="revert-migrate-btn"
-                    style="
-                                background-color: #ff9800;
-                                color: white;
-                                border: none;
-                                padding: 10px 20px;
-                                display: none;
-                            "
-                >
-                    Revert to Defaults
-                </button>
-                <button
-                    id="reboot-speaker-btn"
-                    style="
-                                background-color: #607d8b;
-                                color: white;
-                                border: none;
-                                padding: 10px 20px;
-                            "
-                >
-                    Reboot Speaker
-                </button>
-                <button
-                    id="ensure-remote-btn"
-                    style="
-                                background-color: #2196f3;
-                                color: white;
-                                border: none;
-                                padding: 10px 20px;
-                            "
-                >
-                    Enable SSH (Persist remote_services)
-                </button>
-                <button
-                    id="remove-remote-btn"
-                    title="Removes the remote_services file — SSH will be disabled after the next reboot"
-                    style="
-                                background-color: #f44336;
-                                color: white;
-                                border: none;
-                                padding: 10px 20px;
-                            "
-                >
-                    Disable SSH (Remove remote_services)
-                </button>
-                <button
-                    onclick="
-                                document.getElementById(
-                                    'migration-summary',
-                                ).style.display = 'none'
-                            "
-                    style="padding: 10px 20px"
-                >
-                    Cancel
-                </button>
             </div>
             </details>
         </div>
