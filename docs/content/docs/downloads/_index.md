@@ -17,12 +17,17 @@ then **which build** matches your computer.
 AfterTouch is a small set of separate programs. Most people run one or
 two of them.
 
-| Tool                 | What it does                                                                                   | You want this if…                                        |
-|----------------------|-----------------------------------------------------------------------------------------------|----------------------------------------------------------|
-| `soundtouch-service` | The local cloud replacement ("AfterTouch"). Runs always-on and takes over from the Bose cloud. | You are migrating speakers off the Bose cloud.           |
-| `soundtouch-player`  | A browser control panel (radio browsing, device control).                                      | You want a web UI to browse radio and control speakers.  |
-| `soundtouch-cli`     | Command-line control and setup (status, play, presets, groups, **migration**, …).              | You want to script things, or run a migration by hand.   |
-| `soundtouch-backup`  | Backs up your Bose cloud account and each speaker's local state.                                | You are preparing before a shutdown / factory reset.     |
+| Tool                 | What it does                                                                                   | You want this if…                                       |
+|----------------------|------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| `soundtouch-service` | The local cloud replacement ("AfterTouch"). Runs always-on and takes over from the Bose cloud. | You are migrating speakers off the Bose cloud.          |
+| `soundtouch-cli`     | Command-line control and setup (status, play, presets, groups, **migration**, …).              | You want to script things, or run a migration by hand.  |
+| `soundtouch-player`  | A browser control panel (radio browsing, device control).                                      | You want a web UI to browse radio and control speakers. |
+| `soundtouch-backup`  | Backs up your Bose cloud account and each speaker's local state.                               | You are preparing before a shutdown / factory reset.    |
+
+Most people only need **`soundtouch-service`** and **`soundtouch-cli`** — the
+release notes on each [GitHub release](https://github.com/gesellix/Bose-SoundTouch/releases/latest)
+link those two directly, one row per platform, so you don't have to hunt
+through the flat Assets list below.
 
 > Running a migration from the command line (for example the telnet
 > re-migration in the

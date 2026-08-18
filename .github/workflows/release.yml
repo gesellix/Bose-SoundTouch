@@ -346,6 +346,14 @@ jobs:
           TAG_NAME="${{ needs.validate.outputs.tag }}"
           VERSION="${TAG_NAME#v}"
 
+          # Real per-platform links for the two most-used tools, generated
+          # from the deterministic `<binary>-<tag>-<os>-<arch>[.exe]` asset
+          # naming convention (see scripts/release/quick-downloads.sh),
+          # instead of requiring a scroll through the flat, alphabetical
+          # Assets list. Inline checksum link per row (à la Helm's release
+          # notes) instead of sending people to the combined checksums file.
+          QUICK_DOWNLOADS="$(scripts/release/quick-downloads.sh "$TAG_NAME" "${{ github.repository }}")"
+
           # Short, accurate header. GitHub's auto-generated "What's Changed"
           # + "Full Changelog" are appended after this (generate_release_notes).
           cat > release_notes.md << EOF
@@ -353,13 +361,15 @@ jobs:
 
           **Bose SoundTouch Toolkit.** Keep your Bose SoundTouch speakers alive after the Bose cloud shutdown. No Bose infrastructure required.
 
+          $QUICK_DOWNLOADS
+
           ## What's included
 
           Pre-built binaries for Linux (amd64, arm64, armv7), macOS (Intel & Apple Silicon), Windows (amd64), and FreeBSD (amd64):
 
-          - **soundtouch-service**: local server that replaces the Bose cloud. Point your speaker at it and you keep full control; the built-in web UI on port 8000 handles setup.
+          - **soundtouch-service** (see above)
+          - **soundtouch-cli** (see above)
           - **soundtouch-player**: standalone LAN web UI for device control: play/pause, volume, presets, live status. (Formerly \`soundtouch-web\`.)
-          - **soundtouch-cli**: command-line control of any device: playback, presets, sources, multiroom zones, discovery, and migration. Good for scripting and home automation.
           - **soundtouch-backup**: back up your Bose cloud account and each speaker's local state. \`soundtouch-backup all\` captures everything in one step.
 
           Not sure which file to grab? The [Downloads page](https://gesellix.github.io/Bose-SoundTouch/docs/downloads/) explains which tool you need and which \`<os>-<arch>\` build matches your computer.
@@ -414,11 +424,61 @@ jobs:
     if: github.event_name == 'release' && github.event.action == 'published'
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
       - name: Download release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-assets
           path: ./release-assets
+
+      - name: Upgrade the Downloads footer with direct per-platform links
+        # This is the path real releases take: a maintainer hand-writes
+        # "Noteworthy" notes and publishes via the GitHub web UI, which
+        # fires this job, not create_release (workflow_dispatch only).
+        # _/releases/_TEMPLATE.md's convention is a trailing footer line:
+        #   ---
+        #   📦 **Downloads / installation:** <downloads page URL>
+        # Drop that line (if present) and append the quick-downloads
+        # block in its place. Always goes through the same append path
+        # (strip block + strip footer + append), whether or not a
+        # footer line is still there, so re-runs stay byte-for-byte
+        # idempotent instead of drifting on the 2nd run.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ needs.validate.outputs.tag }}"
+
+          scripts/release/quick-downloads.sh "$TAG_NAME" "${{ github.repository }}" > quick_downloads.md
+          gh release view "$TAG_NAME" --json body -q .body > existing_body.md
+
+          python3 - << 'PYEOF'
+          import re
+
+          with open("existing_body.md") as f:
+              body = f.read()
+          with open("quick_downloads.md") as f:
+              block = f.read().rstrip("\n")
+
+          # Drop a block this automation inserted on a previous run.
+          body = re.sub(r"\n*<!-- quick-downloads:start -->.*?<!-- quick-downloads:end -->\n*", "\n", body, flags=re.DOTALL)
+
+          # Drop the hand-authored footer line (first run only) so both
+          # cases converge on the same append below and re-runs stay
+          # byte-for-byte idempotent.
+          footer = re.compile(r"^📦 \*\*Downloads / installation:\*\*.*\n?", re.MULTILINE)
+          body = footer.sub("", body, count=1)
+
+          body = body.rstrip("\n") + "\n\n" + block + "\n"
+
+          with open("combined_notes.md", "w") as f:
+              f.write(body)
+          PYEOF
+
+          gh release edit "$TAG_NAME" --notes-file combined_notes.md
 
       - name: Upload additional assets to existing release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
