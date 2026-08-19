@@ -956,6 +956,8 @@ func (ds *DataStore) readPresetsLocked(account, device string) ([]models.Service
 	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Printf("[Datastore] readPresetsLocked: no Presets.xml at %s — reporting no presets", sanitizeLog(path))
+
 			return []models.ServicePreset{}, false, nil
 		}
 
@@ -1299,6 +1301,8 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Printf("[Datastore] GetRecents: no Recents.xml at %s — reporting no recents", sanitizeLog(path))
+
 			return []models.ServiceRecent{}, nil
 		}
 

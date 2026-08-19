@@ -752,6 +752,13 @@ func CreateAccountDevice(ds *datastore.DataStore, account, deviceID string) (mod
 	device.Presets = mapPresetsToFullResponse(presets, sources)
 	device.Recents = mapRecentsToFullResponse(recents, sources)
 
+	if len(device.Presets) != len(presets) {
+		log.Printf("[Marge] /full: device %s — read %d preset(s) from disk, embedding %d after source mapping",
+			sanitizeLog(deviceID), len(presets), len(device.Presets))
+	} else {
+		log.Printf("[Marge] /full: device %s — embedding %d preset(s)", sanitizeLog(deviceID), len(device.Presets))
+	}
+
 	return device, nil
 }
 
