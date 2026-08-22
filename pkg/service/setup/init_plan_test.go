@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
 // fakeSession is a StateMachine that records the order of
@@ -195,11 +197,13 @@ func TestExecuteInitPlan_ReusesExistingAccountUUID(t *testing.T) {
 }
 
 func TestExecuteInitPlan_GeneratesAccountWhenDeviceUUIDInvalid(t *testing.T) {
-	// Devices that report a non-7-digit UUID (e.g. a stale local value) must
-	// not be reused — we treat them as factory-reset for ID purposes.
+	// Devices that report an unsafe/malformed UUID (e.g. containing a path
+	// separator) must not be reused — we treat them as factory-reset for ID
+	// purposes. A merely non-numeric UUID (e.g. "stick@local", #634) IS
+	// reused now; see resolveAccountID/datastore.IsSafeIdentifier.
 	info := &fakeInfoResponder{
 		deviceID:       "AABBCCDDEEFF",
-		paired:         "not-7-digits",
+		paired:         "not/valid",
 		postInitPaired: "", // we'll learn the generated ID from the result
 	}
 	sess := &fakeSession{}
@@ -220,11 +224,11 @@ func TestExecuteInitPlan_GeneratesAccountWhenDeviceUUIDInvalid(t *testing.T) {
 		t.Fatalf("ExecuteInitPlan: %v", err)
 	}
 
-	if !IsValidAccountID(got.AccountID) {
-		t.Errorf("got.AccountID = %q, want a valid 7-digit ID", got.AccountID)
+	if !datastore.IsSafeIdentifier(got.AccountID) {
+		t.Errorf("got.AccountID = %q, want a valid generated ID", got.AccountID)
 	}
 
-	if got.AccountID == "not-7-digits" {
+	if got.AccountID == "not/valid" {
 		t.Error("orchestrator should not reuse an invalid UUID")
 	}
 }
@@ -236,7 +240,7 @@ func TestExecuteInitPlan_RejectsInvalidSuppliedAccountID(t *testing.T) {
 
 	plan := InitPlan{
 		DeviceIP:       "192.0.2.10",
-		AccountID:      "abc",
+		AccountID:      "abc/def",
 		SkipURLRewrite: true,
 	}
 

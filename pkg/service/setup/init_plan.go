@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
 // InitPlan describes everything required to take a factory-reset (or
@@ -250,8 +252,8 @@ func (m *Manager) runURLRewrite(plan InitPlan, emit func(StepKind, string, StepS
 // ID, or validating a user-supplied value.
 func (m *Manager) resolveAccountID(plan InitPlan, info *DeviceInfoXML, emit func(StepKind, string, StepStatus, error)) (InitPlan, error) {
 	if plan.AccountID != "" {
-		if !IsValidAccountID(plan.AccountID) {
-			invalidErr := fmt.Errorf("invalid AccountID %q: must be exactly 7 digits", plan.AccountID)
+		if !datastore.IsSafeIdentifier(plan.AccountID) {
+			invalidErr := fmt.Errorf("invalid AccountID %q: must be a non-empty, path-safe identifier", plan.AccountID)
 			emit(StepGenerateAccountID, "validate account ID", StatusFailed, invalidErr)
 
 			return plan, invalidErr
@@ -260,7 +262,7 @@ func (m *Manager) resolveAccountID(plan InitPlan, info *DeviceInfoXML, emit func
 		return plan, nil
 	}
 
-	if info.MargeAccountUUID != "" && IsValidAccountID(info.MargeAccountUUID) {
+	if info.MargeAccountUUID != "" && datastore.IsSafeIdentifier(info.MargeAccountUUID) {
 		plan.AccountID = info.MargeAccountUUID
 		emit(StepGenerateAccountID, "reuse existing margeAccountUUID="+plan.AccountID, StatusOK, nil)
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 )
@@ -62,6 +63,11 @@ func (s *Server) HandleMargeCreateAccount(w http.ResponseWriter, r *http.Request
 				break
 			}
 		}
+	}
+
+	if !datastore.IsSafeIdentifier(id) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
 	}
 
 	info := &models.ServiceAccountInfo{

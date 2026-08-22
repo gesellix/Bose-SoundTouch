@@ -215,7 +215,7 @@ func detectOrphanDefaultEntries(ds *datastore.DataStore, paired []models.Service
 
 			if speakerAccount != info.account {
 				log.Printf("[Health] consistency: speaker %s reports margeAccountUUID=%s but ListAllDevices picked %s — preferring the speaker's answer for orphan-deletion suggestions",
-					deviceID, speakerAccount, info.account)
+					sanitizeLog(deviceID), sanitizeLog(speakerAccount), sanitizeLog(info.account))
 			}
 		}
 
@@ -289,21 +289,21 @@ func deleteOrphanAccountEntry(ds *datastore.DataStore, target Target) (string, e
 		if speakerAccount := fetchSpeakerMargeAccount(ctx, speakerIP); speakerAccount != "" {
 			if speakerAccount == target.Account {
 				return "", fmt.Errorf("speaker %s reports margeAccountUUID=%s — refusing to delete <data-dir>/accounts/%s/devices/%s because it's the speaker's currently-active binding (re-paired since the consistency check ran?)",
-					target.Device, speakerAccount, target.Account, target.Device)
+					sanitizeLog(target.Device), sanitizeLog(speakerAccount), sanitizeLog(target.Account), sanitizeLog(target.Device))
 			}
 
 			log.Printf("[Health] deleteOrphanAccountEntry: speaker %s confirmed margeAccountUUID=%s; target account %s is stale, proceeding with delete",
-				target.Device, speakerAccount, target.Account)
+				sanitizeLog(target.Device), sanitizeLog(speakerAccount), sanitizeLog(target.Account))
 		} else {
 			log.Printf("[Health] deleteOrphanAccountEntry: speaker %s at %s not reachable for re-confirmation; relying on operator's Confirm click",
-				target.Device, speakerIP)
+				sanitizeLog(target.Device), sanitizeLog(speakerIP))
 		}
 	} else {
-		log.Printf("[Health] deleteOrphanAccountEntry: no IP recorded for device %s — skipping speaker re-probe", target.Device)
+		log.Printf("[Health] deleteOrphanAccountEntry: no IP recorded for device %s — skipping speaker re-probe", sanitizeLog(target.Device))
 	}
 
 	if target.Account == accountIDDefaultPlaceholder {
-		log.Printf("[Health] deleteOrphanAccountEntry: deleting the \"default\" placeholder entry for device %s; this is normal after pairing completed", target.Device)
+		log.Printf("[Health] deleteOrphanAccountEntry: deleting the \"default\" placeholder entry for device %s; this is normal after pairing completed", sanitizeLog(target.Device))
 	}
 
 	path := ds.AccountDeviceDir(target.Account, target.Device)
@@ -316,7 +316,7 @@ func deleteOrphanAccountEntry(ds *datastore.DataStore, target Target) (string, e
 	}
 
 	log.Printf("[Health] Removed orphan account entry %s (account=%s device=%s) at operator request",
-		path, target.Account, target.Device)
+		path, sanitizeLog(target.Account), sanitizeLog(target.Device))
 
 	return fmt.Sprintf("Removed stale account entry %s for device %s.", target.Account, target.Device), nil
 }
@@ -479,7 +479,7 @@ func reclassifyCanonicalSourceIDs(ds *datastore.DataStore, target Target) (strin
 	for i := range sources {
 		if newID, ok := rename[sources[i].ID]; ok {
 			log.Printf("[Health] Re-classify %s: id %s → %s (account=%s device=%s)",
-				sources[i].SourceKeyType, sources[i].ID, newID, target.Account, target.Device)
+				sanitizeLog(sources[i].SourceKeyType), sanitizeLog(sources[i].ID), sanitizeLog(newID), sanitizeLog(target.Account), sanitizeLog(target.Device))
 
 			sources[i].ID = newID
 

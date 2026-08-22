@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
 // fakeDevice spins up an httptest.Server that pretends to be the SoundTouch
@@ -313,7 +315,7 @@ func TestEnsureMargeAccountPaired_UnpairedGeneratesAndPairs(t *testing.T) {
 		t.Error("alreadyPaired should be false for an unpaired device")
 	}
 
-	if !IsValidAccountID(accountID) {
+	if !datastore.IsSafeIdentifier(accountID) {
 		t.Errorf("accountID %q is not a valid generated ID", accountID)
 	}
 
@@ -352,7 +354,7 @@ func TestEnsureMargeAccountPaired_RejectsInvalidWantAccountID(t *testing.T) {
 
 	m := NewManager("", nil, nil)
 
-	_, _, _, err := m.EnsureMargeAccountPaired(d.addr, "not-7-digits", nil)
+	_, _, _, err := m.EnsureMargeAccountPaired(d.addr, "not/valid", nil)
 	if err == nil {
 		t.Fatal("expected an error for an invalid --account value")
 	}
@@ -475,28 +477,9 @@ func TestPreflightInitPlan_UnrecognisedStatusFailsClosed(t *testing.T) {
 	}
 }
 
-func TestIsValidAccountID(t *testing.T) {
-	cases := []struct {
-		in   string
-		want bool
-	}{
-		{"1234567", true},
-		{"0000000", true},
-		{"9999999", true},
-		{"", false},
-		{"123456", false},
-		{"12345678", false},
-		{"123456a", false},
-		{"-123456", false},
-		{" 123456", false},
-	}
-
-	for _, tc := range cases {
-		if got := IsValidAccountID(tc.in); got != tc.want {
-			t.Errorf("IsValidAccountID(%q) = %v, want %v", tc.in, got, tc.want)
-		}
-	}
-}
+// Account-ID format validation is now solely datastore.IsSafeIdentifier's
+// responsibility (see datastore.TestIsSafeIdentifier); setup no longer has
+// its own account-ID validator to test.
 
 func TestGenerateAccountID_AvoidsCollisions(t *testing.T) {
 	id, err := GenerateAccountID(nil)
@@ -504,7 +487,7 @@ func TestGenerateAccountID_AvoidsCollisions(t *testing.T) {
 		t.Fatalf("GenerateAccountID(nil): %v", err)
 	}
 
-	if !IsValidAccountID(id) {
+	if !datastore.IsSafeIdentifier(id) {
 		t.Errorf("generated ID %q is not valid", id)
 	}
 

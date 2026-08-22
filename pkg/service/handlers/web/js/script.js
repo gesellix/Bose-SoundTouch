@@ -598,7 +598,19 @@ async function fetchDevices() {
         if (devices.length === 0) {
             container.innerHTML = "No devices known yet.";
         } else {
-            let html = "<table><tr><th>Name & Model</th><th>IP Address</th><th>Device & Account ID</th><th>Firmware & Serial</th><th>Method</th><th>Action</th></tr>";
+            // Built via DOM APIs rather than innerHTML/template strings: device
+            // fields (name, IDs, serials, ...) come from speakers and third-party
+            // pairing tools (see #634) and are not restricted to HTML/JS-safe
+            // characters, so they must never be parsed as markup or concatenated
+            // into inline event-handler attributes.
+            const table = document.createElement("table");
+            const headerRow = document.createElement("tr");
+            for (const label of ["Name & Model", "IP Address", "Device & Account ID", "Firmware & Serial", "Method", "Action"]) {
+                const th = document.createElement("th");
+                th.textContent = label;
+                headerRow.appendChild(th);
+            }
+            table.appendChild(headerRow);
 
             // Clear and repopulate selectors
             const currentSyncVal = syncSelector.value;
@@ -612,25 +624,83 @@ async function fetchDevices() {
 
             devices.forEach((d) => {
                 const methodLabel = d.discovery_method === "manual" ? "👤 Manual" : "🔍 Auto";
-                html += `
-                    <tr id="device-row-${d.device_id}">
-                        <td class="col-name-model"><div class="col-name">${d.name}</div><div class="col-model" style="font-size: 0.8em; color: #666;">${d.product_code}</div></td>
-                        <td class="col-ip">${d.ip_address}</td>
-                        <td class="col-ids"><div class="col-deviceid">${d.device_id}</div><div class="col-accountid" style="font-size: 0.8em; color: #666;">${d.account_id || "default"}</div></td>
-                        <td class="col-fw-serial"><div class="col-firmware">${d.firmware_version || "0.0.0"}</div><div class="col-serial" style="font-size: 0.8em; color: #666;">${d.device_serial_number}</div></td>
-                        <td class="col-method">${methodLabel}</td>
-                        <td>
-                            <button onclick="toggleDeviceSummary('${d.device_id}')">Inspect</button>
-                            <button onclick="prepareSync('${d.device_id}')">Sync Data</button>
-                            <button onclick="prepareMigration('${d.device_id}')">Migrate</button>
-                            <button id="prime-spotify-${d.device_id}" class="btn-spotify" style="display: none;" onclick="primeSpotify('${d.device_id}')">Prime Spotify</button>
-                            <button class="btn-danger" onclick="removeDevice('${d.device_id}', '${d.name}')">Remove</button>
-                        </td>
-                    </tr>
-                    <tr id="device-summary-${d.device_id}" style="display: none;">
-                        <td colspan="6" id="device-summary-cell-${d.device_id}" style="background: #fafafa; padding: 12px;"></td>
-                    </tr>
-                `;
+
+                const nameModelCell = document.createElement("td");
+                nameModelCell.className = "col-name-model";
+                const nameDiv = document.createElement("div");
+                nameDiv.className = "col-name";
+                nameDiv.textContent = d.name;
+                const modelDiv = document.createElement("div");
+                modelDiv.className = "col-model";
+                modelDiv.style.cssText = "font-size: 0.8em; color: #666;";
+                modelDiv.textContent = d.product_code;
+                nameModelCell.append(nameDiv, modelDiv);
+
+                const ipCell = document.createElement("td");
+                ipCell.className = "col-ip";
+                ipCell.textContent = d.ip_address;
+
+                const idsCell = document.createElement("td");
+                idsCell.className = "col-ids";
+                const deviceIdDiv = document.createElement("div");
+                deviceIdDiv.className = "col-deviceid";
+                deviceIdDiv.textContent = d.device_id;
+                const accountIdDiv = document.createElement("div");
+                accountIdDiv.className = "col-accountid";
+                accountIdDiv.style.cssText = "font-size: 0.8em; color: #666;";
+                accountIdDiv.textContent = d.account_id || "default";
+                idsCell.append(deviceIdDiv, accountIdDiv);
+
+                const fwCell = document.createElement("td");
+                fwCell.className = "col-fw-serial";
+                const fwDiv = document.createElement("div");
+                fwDiv.className = "col-firmware";
+                fwDiv.textContent = d.firmware_version || "0.0.0";
+                const serialDiv = document.createElement("div");
+                serialDiv.className = "col-serial";
+                serialDiv.style.cssText = "font-size: 0.8em; color: #666;";
+                serialDiv.textContent = d.device_serial_number;
+                fwCell.append(fwDiv, serialDiv);
+
+                const methodCell = document.createElement("td");
+                methodCell.className = "col-method";
+                methodCell.textContent = methodLabel;
+
+                const makeActionButton = (label, onClick, extra) => {
+                    const btn = document.createElement("button");
+                    btn.textContent = label;
+                    btn.addEventListener("click", onClick);
+                    if (extra) Object.assign(btn, extra);
+                    return btn;
+                };
+
+                const actionCell = document.createElement("td");
+                actionCell.append(
+                    makeActionButton("Inspect", () => toggleDeviceSummary(d.device_id)),
+                    makeActionButton("Sync Data", () => prepareSync(d.device_id)),
+                    makeActionButton("Migrate", () => prepareMigration(d.device_id)),
+                    makeActionButton("Prime Spotify", () => primeSpotify(d.device_id), {
+                        id: `prime-spotify-${d.device_id}`,
+                        className: "btn-spotify",
+                    }),
+                    makeActionButton("Remove", () => removeDevice(d.device_id, d.name), {className: "btn-danger"}),
+                );
+                actionCell.querySelector(".btn-spotify").style.display = "none";
+
+                const row = document.createElement("tr");
+                row.id = `device-row-${d.device_id}`;
+                row.append(nameModelCell, ipCell, idsCell, fwCell, methodCell, actionCell);
+
+                const summaryRow = document.createElement("tr");
+                summaryRow.id = `device-summary-${d.device_id}`;
+                summaryRow.style.display = "none";
+                const summaryCell = document.createElement("td");
+                summaryCell.colSpan = 6;
+                summaryCell.id = `device-summary-cell-${d.device_id}`;
+                summaryCell.style.cssText = "background: #fafafa; padding: 12px;";
+                summaryRow.appendChild(summaryCell);
+
+                table.append(row, summaryRow);
 
                 const optSync = document.createElement("option");
                 optSync.value = d.device_id;
@@ -649,8 +719,7 @@ async function fetchDevices() {
                     eventSelector.appendChild(optEvent);
                 }
             });
-            html += "</table>";
-            container.innerHTML = html;
+            container.replaceChildren(table);
 
             if (currentSyncVal) syncSelector.value = currentSyncVal;
             if (currentMigrationVal) migrationSelector.value = currentMigrationVal;
@@ -924,7 +993,14 @@ async function fetchAccountList() {
         const data = await response.json();
         const selector = document.getElementById("account-selector");
         if (selector) {
-            selector.innerHTML = data.accounts.map(acc => `<option value="${acc}">${acc}</option>`).join("");
+            // Account IDs can contain non-alphanumeric characters (e.g.
+            // "stick@local", #634) — built via DOM APIs, not innerHTML.
+            selector.replaceChildren(...data.accounts.map(acc => {
+                const opt = document.createElement("option");
+                opt.value = acc;
+                opt.textContent = acc;
+                return opt;
+            }));
             if (data.accounts.length > 0) {
                 fetchAccountDetails(selector.value);
             }
@@ -949,7 +1025,7 @@ async function fetchAccountDetails(accountId) {
     try {
         const response = await fetch(`/api/mgmt/accounts/${encodeURIComponent(accountId)}`);
         if (!response.ok) {
-            if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Failed to load account details: ${response.statusText}</span>`;
+            if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Failed to load account details: ${escapeHtml(response.statusText)}</span>`;
             return;
         }
         const data = await response.json();
@@ -964,7 +1040,7 @@ async function fetchAccountDetails(accountId) {
             metadataEl.innerHTML = `
                 ${warningNotice}
                 <table style="width: 100%; font-size: 0.9em;">
-                    <tr><td style="padding: 4px"><strong>Account ID:</strong></td><td style="padding: 4px">${data.account.account_id}</td></tr>
+                    <tr><td style="padding: 4px"><strong>Account ID:</strong></td><td style="padding: 4px">${escapeHtml(data.account.account_id)}</td></tr>
                     <tr><td style="padding: 4px"><strong>Language:</strong></td><td style="padding: 4px">
                         <select id="account-language-select" style="font-size: 0.9em; padding: 2px;">
                             <option value="en" ${data.account.preferred_language === "en" || !data.account.preferred_language ? "selected" : ""}>en</option>
@@ -983,7 +1059,7 @@ async function fetchAccountDetails(accountId) {
                                 }, {});
                                 return Object.entries(grouped).map(([pName, settings]) => `
                                     <div style="margin-bottom: 8px;">
-                                        <strong>${pName}</strong>
+                                        <strong>${escapeHtml(pName)}</strong>
                                         <ul style="margin: 2px 0 0 0; padding-left: 20px; list-style-type: disc;">
                                             ${settings.map(s => {
                                                 if ((s.provider_name === "SPOTIFY" || s.provider_id === "15") && s.key_name === "STREAMING_QUALITY") {
@@ -991,9 +1067,9 @@ async function fetchAccountDetails(accountId) {
                                                         <li style="margin-bottom: 4px;">
                                                             Music Streaming Quality:
                                                             <select class="provider-setting-select"
-                                                                    data-account-id="${data.account.account_id}"
-                                                                    data-provider-id="${s.provider_id}"
-                                                                    data-key="${s.key_name}"
+                                                                    data-account-id="${escapeHtml(data.account.account_id)}"
+                                                                    data-provider-id="${escapeHtml(s.provider_id)}"
+                                                                    data-key="${escapeHtml(s.key_name)}"
                                                                     style="font-size: 0.9em; padding: 2px; margin-left: 4px;">
                                                                 <option value="1" ${s.value === "1" ? "selected" : ""}>Fastest Streaming - up to 128 kbit/s</option>
                                                                 <option value="2" ${s.value === "2" ? "selected" : ""}>Balanced Quality and Speed - up to 192 kbit/s</option>
@@ -1003,7 +1079,7 @@ async function fetchAccountDetails(accountId) {
                                                         </li>
                                                     `;
                                                 }
-                                                return `<li>${s.key_name}: ${s.value}</li>`;
+                                                return `<li>${escapeHtml(s.key_name)}: ${escapeHtml(s.value)}</li>`;
                                             }).join("")}
                                         </ul>
                                     </div>
@@ -1024,7 +1100,7 @@ async function fetchAccountDetails(accountId) {
                         statusEl.style.color = "#666";
                     }
                     try {
-                        const response = await fetch(`/api/mgmt/accounts/${data.account.account_id}/language`, {
+                        const response = await fetch(`/api/mgmt/accounts/${encodeURIComponent(data.account.account_id)}/language`, {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
@@ -1068,7 +1144,7 @@ async function fetchAccountDetails(accountId) {
                     }
 
                     try {
-                        const response = await fetch(`/api/mgmt/accounts/${accID}/provider-settings`, {
+                        const response = await fetch(`/api/mgmt/accounts/${encodeURIComponent(accID)}/provider-settings`, {
                             method: "POST",
                             headers: {
                                 "Content-Type": "application/json",
@@ -1110,27 +1186,27 @@ async function fetchAccountDetails(accountId) {
 
             devicesEl.innerHTML = data.devices.map(device => `
                 <div class="summary-box" style="margin-bottom: 15px; border-left: 5px solid #007bff; padding: 15px;">
-                    <div style="display: flex; justify-content: space-between; cursor: pointer; align-items: center;" onclick="toggleInfo('device-details-${device.device_id}')">
-                        <h4 style="margin: 0">${device.name || "Unnamed Device"} (${device.product_code})</h4>
+                    <div class="device-summary-header" data-toggle-target="device-details-${escapeHtml(device.device_id)}" style="display: flex; justify-content: space-between; cursor: pointer; align-items: center;">
+                        <h4 style="margin: 0">${escapeHtml(device.name || "Unnamed Device")} (${escapeHtml(device.product_code)})</h4>
                         <div style="font-size: 0.8em; color: #666">
-                            ${device.ip_address} | ${device.device_id} <span style="font-size: 1.2em; vertical-align: middle;">&#9662;</span>
+                            ${escapeHtml(device.ip_address)} | ${escapeHtml(device.device_id)} <span style="font-size: 1.2em; vertical-align: middle;">&#9662;</span>
                         </div>
                     </div>
 
-                    <div id="device-details-${device.device_id}" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee">
+                    <div id="device-details-${escapeHtml(device.device_id)}" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
                             <div>
                                 <h5 style="margin: 10px 0 5px 0">Device Metadata</h5>
                                 <div style="font-size: 0.85em; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #e9ecef">
-                                    <strong>Serial:</strong> ${device.device_serial_number || device.serial_number || "N/A"}<br>
-                                    <strong>MAC:</strong> ${device.mac_address || "N/A"}<br>
-                                    <strong>Version:</strong> ${device.firmware_version || "N/A"}<br>
-                                    <strong>Discovery:</strong> ${device.discovery_method || "N/A"}
+                                    <strong>Serial:</strong> ${escapeHtml(device.device_serial_number || device.serial_number || "N/A")}<br>
+                                    <strong>MAC:</strong> ${escapeHtml(device.mac_address || "N/A")}<br>
+                                    <strong>Version:</strong> ${escapeHtml(device.firmware_version || "N/A")}<br>
+                                    <strong>Discovery:</strong> ${escapeHtml(device.discovery_method || "N/A")}
                                 </div>
 
                                 <h5 style="margin: 15px 0 5px 0">Hardware Components</h5>
                                 <ul style="font-size: 0.8em; padding-left: 20px; margin: 0">
-                                    ${device.components ? device.components.map(c => `<li><strong>${c.category || c.type || 'Component'}</strong>: ${c.firmware_version || 'N/A'} <br><small style="color:#777">S/N: ${c.serial_number || 'N/A'}</small></li>`).join("") : "<li>No components found</li>"}
+                                    ${device.components ? device.components.map(c => `<li><strong>${escapeHtml(c.category || c.type || 'Component')}</strong>: ${escapeHtml(c.firmware_version || 'N/A')} <br><small style="color:#777">S/N: ${escapeHtml(c.serial_number || 'N/A')}</small></li>`).join("") : "<li>No components found</li>"}
                                 </ul>
                             </div>
 
@@ -1150,14 +1226,14 @@ async function fetchAccountDetails(accountId) {
                                                 const account = (s.account && s.account !== s.username && s.account !== name) ? ` [${s.account}]` : "";
                                                 const finalName = name || s.type || "Unknown Source";
                                                 if (finalName) {
-                                                    sourceLabel = `<br><small style="color: #666; font-size: 0.85em;">via ${finalName}${account}</small>`;
+                                                    sourceLabel = `<br><small style="color: #666; font-size: 0.85em;">via ${escapeHtml(finalName)}${escapeHtml(account)}</small>`;
                                                 }
                                             }
                                         }
 
                                         return `
                                             <div style="border: 1px solid #ddd; padding: 5px; font-size: 0.8em; background: ${p ? "#e6ffed" : "#f8f9fa"}; border-radius: 3px;">
-                                                <strong>#${i + 1}</strong>: ${itemName}${sourceLabel}
+                                                <strong>#${i + 1}</strong>: ${escapeHtml(itemName)}${sourceLabel}
                                             </div>
                                         `;
                                     }).join("")}
@@ -1175,13 +1251,13 @@ async function fetchAccountDetails(accountId) {
                                                 const account = (s.account && s.account !== s.username && s.account !== sName) ? ` [${s.account}]` : "";
                                                 const finalSName = sName || s.type || "Unknown Source";
                                                 if (finalSName) {
-                                                    sourceLabel = `<br><small style="color: #666; font-size: 0.9em;">via ${finalSName}${account}</small>`;
+                                                    sourceLabel = `<br><small style="color: #666; font-size: 0.9em;">via ${escapeHtml(finalSName)}${escapeHtml(account)}</small>`;
                                                 }
                                             }
                                             const dateRaw = r.last_played_at || r.created_on;
                                             const dateObj = dateRaw ? (isNaN(Number(dateRaw)) ? new Date(dateRaw) : new Date(Number(dateRaw) * 1000)) : null;
                                             const dateStr = dateObj ? dateObj.toLocaleString('sv-SE') : 'N/A'; // sv-SE produces YYYY-MM-DD HH:MM:SS with 24h time
-                                            return `<li>${name}${sourceLabel} <br><small style="color:#888">${dateStr}</small></li>`;
+                                            return `<li>${escapeHtml(name)}${sourceLabel} <br><small style="color:#888">${escapeHtml(dateStr)}</small></li>`;
                                         }).join("") : "<li>No recents</li>"}
                                     </ul>
                                 </div>
@@ -1196,8 +1272,8 @@ async function fetchAccountDetails(accountId) {
                                     const usernameSuffix = (s.username && s.username !== "Local") ? ` (${s.username})` : "";
                                     const accountSuffix = (s.account && s.account !== s.username && s.account !== sourceName) ? ` [${s.account}]` : "";
                                     return `
-                                        <span style="background: #eefbff; color: #0056b3; border: 1px solid #b8daff; padding: 2px 8px; border-radius: 12px; font-size: 0.75em" title="Source Type: ${s.type}">
-                                            ${sourceName}${usernameSuffix}${accountSuffix}
+                                        <span style="background: #eefbff; color: #0056b3; border: 1px solid #b8daff; padding: 2px 8px; border-radius: 12px; font-size: 0.75em" title="Source Type: ${escapeHtml(s.type)}">
+                                            ${escapeHtml(sourceName)}${escapeHtml(usernameSuffix)}${escapeHtml(accountSuffix)}
                                         </span>
                                     `;
                                 }).join("") : "<small style='color:#999'>None</small>"}
@@ -1206,10 +1282,17 @@ async function fetchAccountDetails(accountId) {
                     </div>
                 </div>
             `).join("");
+
+            // data-toggle-target (not an inline onclick) avoids re-embedding
+            // speaker-controlled device_id inside a JS-string-in-HTML-attribute
+            // context, which HTML-escaping alone cannot make safe.
+            devicesEl.querySelectorAll(".device-summary-header").forEach(el => {
+                el.addEventListener("click", () => toggleInfo(el.dataset.toggleTarget));
+            });
         }
 
     } catch (error) {
-        if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Error: ${error.message}</span>`;
+        if (metadataEl) metadataEl.innerHTML = `<span style="color:red">Error: ${escapeHtml(error.message)}</span>`;
         console.error("Failed to fetch account details", error);
     }
 }
@@ -1767,7 +1850,7 @@ async function fetchDeviceEvents(deviceId) {
     list.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">Loading events...</td></tr>';
 
     try {
-        const response = await fetch(`/api/setup/devices/${deviceId}/events`);
+        const response = await fetch(`/api/setup/devices/${encodeURIComponent(deviceId)}/events`);
         const data = await response.json();
         const events = data.events;
 
@@ -1907,7 +1990,7 @@ async function removeDevice(deviceId, name) {
     }
 
     try {
-        const response = await fetch(`/api/setup/devices/${deviceId}`, {
+        const response = await fetch(`/api/setup/devices/${encodeURIComponent(deviceId)}`, {
             method: "DELETE",
         });
 
@@ -4804,14 +4887,14 @@ async function toggleDeviceSummary(deviceId) {
         const resp = await fetch(`/api/setup/device-summary/${encodeURIComponent(deviceId)}`);
         if (!resp.ok) {
             const txt = await resp.text();
-            cell.innerHTML = `<span style="color:#c62828;">Summary failed: ${resp.status} ${escapeHTML(txt)}</span>`;
+            cell.innerHTML = `<span style="color:#c62828;">Summary failed: ${resp.status} ${escapeHtml(txt)}</span>`;
             return;
         }
         const data = await resp.json();
         cell.innerHTML = "";
         cell.appendChild(renderDeviceSummary(data));
     } catch (e) {
-        cell.innerHTML = `<span style="color:#c62828;">Summary failed: ${escapeHTML(e.message || String(e))}</span>`;
+        cell.innerHTML = `<span style="color:#c62828;">Summary failed: ${escapeHtml(e.message || String(e))}</span>`;
     }
 }
 
@@ -5015,13 +5098,4 @@ function unreachableBlock(probe) {
     }
 
     return wrap;
-}
-
-function escapeHTML(s) {
-    return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
 }

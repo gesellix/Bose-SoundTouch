@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/xml"
 	"errors"
@@ -11,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
 // PairAccountTimeouts bounds every step of the pairing call so a wedged
@@ -44,8 +47,8 @@ func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairA
 		logs   strings.Builder
 	)
 
-	if !IsValidAccountID(accountID) {
-		return result, "", fmt.Errorf("invalid account ID %q: must be exactly 7 digits", accountID)
+	if !datastore.IsSafeIdentifier(accountID) {
+		return result, "", fmt.Errorf("invalid account ID %q: must be a non-empty, path-safe identifier", accountID)
 	}
 
 	supported, supportedErr := m.probeSetMargeAccount(deviceIP)
@@ -84,6 +87,9 @@ func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairA
 
 	result.TelnetAttempted = true
 
+	// Safe to concatenate: datastore.IsSafeIdentifier (checked above) rejects
+	// any whitespace or control characters, so accountID can't smuggle extra
+	// tokens into this single-line telnet command.
 	cmd := "envswitch accountid set " + accountID
 
 	resp, err := t.SendCommand(cmd)
@@ -135,8 +141,8 @@ func (m *Manager) EnsureMargeAccountPaired(deviceIP, wantAccountID string, t Tel
 		}
 
 		target = generated
-	} else if !IsValidAccountID(target) {
-		return "", false, "", fmt.Errorf("invalid account id %q: must be exactly 7 digits", target)
+	} else if !datastore.IsSafeIdentifier(target) {
+		return "", false, "", fmt.Errorf("invalid account id %q: must be a non-empty, path-safe identifier", target)
 	}
 
 	_, pairLogs, pairErr := m.PairAccount(deviceIP, target, t)
@@ -196,9 +202,18 @@ func (m *Manager) probeSetMargeAccount(deviceIP string) (bool, error) {
 func (m *Manager) postSetMargeAccount(deviceIP, accountID string) error {
 	url := buildDeviceURL(deviceIP, "/setMargeAccount")
 
+	// accountID is XML-escaped rather than interpolated raw:
+	// datastore.IsSafeIdentifier already excludes '<', '>', '&', '\'', '"'
+	// (see #634), but escaping here too means this stays well-formed even
+	// if that gate is ever bypassed.
+	var escapedAccountID bytes.Buffer
+	if err := xml.EscapeText(&escapedAccountID, []byte(accountID)); err != nil {
+		return fmt.Errorf("escape account ID: %w", err)
+	}
+
 	body := fmt.Sprintf(
 		`<PairDeviceWithAccount><accountId>%s</accountId><userAuthToken>aftertouch</userAuthToken></PairDeviceWithAccount>`,
-		accountID,
+		escapedAccountID.String(),
 	)
 
 	client := &http.Client{
@@ -310,23 +325,6 @@ func buildDeviceURL(deviceIP, path string) string {
 	}
 
 	return "http://" + deviceIP + ":8090" + path
-}
-
-// IsValidAccountID reports whether s is a syntactically valid SoundTouch
-// account ID — exactly 7 numeric digits, the format used by every
-// Bose-cloud-issued ID we have observed in captures.
-func IsValidAccountID(s string) bool {
-	if len(s) != 7 {
-		return false
-	}
-
-	for _, ch := range s {
-		if ch < '0' || ch > '9' {
-			return false
-		}
-	}
-
-	return true
 }
 
 // GenerateAccountID returns a fresh 7-digit account ID that does not collide

@@ -33,11 +33,30 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// isSafeIdentifier returns true if the given identifier is safe to use
-// as a single path component (for account IDs, device IDs, etc.).
-// It rejects empty strings, path separators, and parent directory references.
-func isSafeIdentifier(id string) bool {
-	if id == "" {
+// maxSafeIdentifierLength bounds account/device IDs accepted from a
+// speaker or third-party pairing tool. Well under typical filesystem
+// path-component limits (255 bytes); generous for any realistic
+// margeAccountUUID or MAC-derived device ID.
+const maxSafeIdentifierLength = 128
+
+// IsSafeIdentifier returns true if the given identifier is safe to use
+// as a single path component (for account IDs, device IDs, etc.), and
+// safe to embed in the other places these values end up: XML sent to a
+// speaker, log lines, and datastore-key comparisons. It rejects empty
+// or overlong strings, path separators, and parent directory
+// references.
+//
+// The allowed character set intentionally excludes XML/HTML-special
+// characters (`< > & " '`), whitespace, and shell/URL metacharacters
+// (see #634's `postSetMargeAccount`, which interpolates an account ID
+// into an XML body, and `PairAccount`, which interpolates one into a
+// literal `envswitch accountid set <id>` telnet command line) even
+// though it accepts more than Bose's own 7-digit account format —
+// devices paired via third-party or manual tooling (e.g. the
+// USB-stick SSH-enable method) can report arbitrary margeAccountUUID
+// values such as "stick@local".
+func IsSafeIdentifier(id string) bool {
+	if id == "" || len(id) > maxSafeIdentifierLength {
 		return false
 	}
 
@@ -46,14 +65,17 @@ func isSafeIdentifier(id string) bool {
 		return false
 	}
 
-	// Allow a conservative set of characters commonly found in IDs:
-	// letters, digits, underscore, dash, dot, and colon (for MAC-like IDs).
+	// Letters, digits, and a conservative set of punctuation seen in
+	// real-world IDs: underscore, dash, dot, colon (MAC-like IDs), and
+	// '@' (e.g. "stick@local"). Everything else — including all XML,
+	// HTML, shell, and URL metacharacters, whitespace, and control
+	// characters — is rejected.
 	for i := 0; i < len(id); i++ {
 		c := id[i]
 		if (c >= 'a' && c <= 'z') ||
 			(c >= 'A' && c <= 'Z') ||
 			(c >= '0' && c <= '9') ||
-			c == '_' || c == '-' || c == '.' || c == ':' {
+			c == '_' || c == '-' || c == '.' || c == ':' || c == '@' {
 			continue
 		}
 
@@ -1509,7 +1531,7 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 		return fmt.Errorf("device ID/name cannot be empty")
 	}
 
-	if !isSafeIdentifier(device) {
+	if !IsSafeIdentifier(device) {
 		return fmt.Errorf("invalid device ID")
 	}
 
@@ -1517,7 +1539,7 @@ func (ds *DataStore) SaveDeviceInfo(account, device string, info *models.Service
 		return fmt.Errorf("account ID cannot be empty")
 	}
 
-	if !isSafeIdentifier(account) {
+	if !IsSafeIdentifier(account) {
 		return fmt.Errorf("invalid account ID")
 	}
 
@@ -1703,6 +1725,10 @@ func (ds *DataStore) buildComponentsXML(info *models.ServiceDeviceInfo) []compon
 func (ds *DataStore) SaveAccountInfo(accountID string, info *models.ServiceAccountInfo) error {
 	if ds == nil || ds.DataDir == "" || accountID == "" {
 		return nil
+	}
+
+	if !IsSafeIdentifier(accountID) {
+		return fmt.Errorf("invalid account ID")
 	}
 
 	dir := ds.AccountDir(accountID)

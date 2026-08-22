@@ -30,9 +30,12 @@ func suggestAccountForPairing(ds *datastore.DataStore, deviceID string) string {
 	return ""
 }
 
-// isSevenDigitAccountID mirrors setup.IsValidAccountID without
-// importing the setup package (which would pull in SSH/telnet/certmgr
-// transitively — see the boundary comment near speakerInfoXML).
+// isSevenDigitAccountID is intentionally narrower than
+// datastore.IsSafeIdentifier: it filters suggestAccountForPairing's
+// candidates down to directories that look like a real Bose-issued
+// account, not merely safe-to-use ones (a device-reported value like
+// "stick@local", #634, is a safe identifier but not something to
+// suggest as a pre-existing "real" account to reuse).
 func isSevenDigitAccountID(s string) bool {
 	if len(s) != 7 {
 		return false

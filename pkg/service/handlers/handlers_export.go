@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -255,7 +256,12 @@ func (s *Server) addServiceHTTP(tw *tar.Writer, client *http.Client, devices []m
 		if !seenAccounts[dev.AccountID] {
 			seenAccounts[dev.AccountID] = true
 			pfx := "http/service/account-" + dev.AccountID
-			acct := base + "/streaming/account/" + dev.AccountID
+			// url.PathEscape, not raw concatenation: account/device IDs can
+			// contain characters like '@' (#634) that are safe as datastore
+			// keys but would otherwise need escaping to survive as URL path
+			// segments intact (e.g. a literal '?' or '#' would truncate the
+			// path here, though IsSafeIdentifier already excludes those).
+			acct := base + "/streaming/account/" + url.PathEscape(dev.AccountID)
 			tryAdd(pfx+"/full.xml", acct+"/full")
 			tryAdd(pfx+"/sources.xml", acct+"/sources")
 			tryAdd(pfx+"/presets.xml", acct+"/presets")
@@ -266,7 +272,7 @@ func (s *Server) addServiceHTTP(tw *tar.Writer, client *http.Client, devices []m
 		}
 
 		dpfx := "http/service/account-" + dev.AccountID + "/device-" + dev.DeviceID
-		dpath := base + "/streaming/account/" + dev.AccountID + "/device/" + dev.DeviceID
+		dpath := base + "/streaming/account/" + url.PathEscape(dev.AccountID) + "/device/" + url.PathEscape(dev.DeviceID)
 		tryAdd(dpfx+"/presets.xml", dpath+"/presets")
 		tryAdd(dpfx+"/recents.xml", dpath+"/recents")
 	}

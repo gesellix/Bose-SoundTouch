@@ -15,6 +15,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
@@ -674,9 +675,9 @@ func setupEnableSSHCmd() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name: "account",
-				Usage: "Only used when the device is unpaired and --no-auto-pair is not set: 7-digit account ID to pair " +
-					"with (empty = generate one). Use this if you already know which account this device should end up " +
-					"on (e.g. to match one already in the datastore) rather than getting a random one now",
+				Usage: "Only used when the device is unpaired and --no-auto-pair is not set: account ID to pair with " +
+					"(empty = generate a fresh 7-digit one). Use this if you already know which account this device " +
+					"should end up on (e.g. to match one already in the datastore) rather than getting a random one now",
 			},
 			&cli.BoolFlag{
 				Name:  "no-reset-urls",
@@ -1974,7 +1975,7 @@ func setupPairCmd() *cli.Command {
 		Usage:  "Pair the speaker with an account via WebSocket SETUP state machine",
 		Before: RequireHost,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "account", Usage: "7-digit account ID (empty = generate)"},
+			&cli.StringFlag{Name: "account", Usage: "Account ID to pair with (empty = generate a fresh 7-digit one)"},
 			&cli.StringFlag{Name: "mode", Value: "full", Usage: "full (state machine) or bare (setMargeAccount only — experimental)"},
 			&cli.StringFlag{Name: "service-url", Value: "http://aftertouch.local:8000", Usage: "AfterTouch base URL (also populates <boseServer>/<updateServer> in setMargeAccount)"},
 			&cli.StringFlag{Name: "name", Usage: "Speaker name to set during pairing (empty = keep current)"},
@@ -1998,8 +1999,8 @@ func setupPairCmd() *cli.Command {
 				fmt.Printf("Generated account id: %s\n", accountID)
 			}
 
-			if !setup.IsValidAccountID(accountID) {
-				return fmt.Errorf("invalid account id %q: must be 7 digits", accountID)
+			if !datastore.IsSafeIdentifier(accountID) {
+				return fmt.Errorf("invalid account id %q: must be a non-empty, path-safe identifier", accountID)
 			}
 
 			switch mode {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/gesellix/bose-soundtouch/pkg/service/health"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
@@ -61,12 +62,12 @@ type pairAccountResponse struct {
 	Error  string                  `json:"error,omitempty"`
 }
 
-// HandlePairAccount associates the device with the supplied 7-digit account ID,
+// HandlePairAccount associates the device with the supplied account ID,
 // trying HTTP /setMargeAccount first and falling back to telnet
 // `envswitch accountid set`.
 //
 // Query params:
-//   - account_id (required) — must pass setup.IsValidAccountID
+//   - account_id (required) — must pass datastore.IsSafeIdentifier
 func (s *Server) HandlePairAccount(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceId")
 	if deviceID == "" {
@@ -75,8 +76,8 @@ func (s *Server) HandlePairAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accountID := r.URL.Query().Get("account_id")
-	if !setup.IsValidAccountID(accountID) {
-		writeJSONError(w, http.StatusBadRequest, "account_id must be exactly 7 digits")
+	if !datastore.IsSafeIdentifier(accountID) {
+		writeJSONError(w, http.StatusBadRequest, "account_id must be a non-empty, path-safe identifier")
 		return
 	}
 
@@ -145,7 +146,7 @@ func (s *Server) completeSpeakerPairingFix(target health.Target) (string, error)
 	}
 
 	accountID := target.Account
-	if !setup.IsValidAccountID(accountID) {
+	if !datastore.IsSafeIdentifier(accountID) {
 		known, _ := s.ds.ListAccounts()
 
 		generated, genErr := setup.GenerateAccountID(known)
