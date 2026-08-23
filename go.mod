@@ -5,7 +5,7 @@ go 1.26.6
 require (
 	filippo.io/age v1.3.1
 	github.com/chromedp/chromedp v0.16.0
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/mdns v1.0.7
