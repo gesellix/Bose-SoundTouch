@@ -196,6 +196,24 @@ script.
 > /etc/init.d/aftertouch restart
 > ```
 
+## Environment Variables
+
+All of these go on `sh`, not `curl` — in a pipe, each command is a separate
+process, so `VAR=X curl ... | sh` silently does NOT set it for `sh` (the one
+that actually reads it). Use `curl -sSL .../install.sh | VAR=X sh` instead.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VERSION` | resolved automatically to the latest GitHub release | Install a specific version instead of latest. See [Updating AfterTouch](#updating-aftertouch) for the three equivalent ways to set this. |
+| `INSTALL_DIR` | `/mnt/nv/aftertouch` | Where AfterTouch is installed. `/opt/aftertouch` is symlinked here so the init script's hardcoded path keeps working. |
+| `AFTERTOUCH_FORCE_NO_BACKUP` | unset | Skip the interactive "not enough space for a backup, continue anyway?" prompt and proceed without a rollback backup. For unattended/scripted installs only — interactively, the installer always asks (or aborts if no terminal is available) rather than silently skipping the backup. |
+| `AFTERTOUCH_LAN_PORT` | `auto` | Written into `aftertouch.conf` (not consumed by the installer itself beyond that). Controls whether/which LAN entry-port gets redirected to AfterTouch. See [Model Support Matrix](../../docs/content/docs/reference/MODEL-SUPPORT-MATRIX.md). |
+| `UPDATE_TMP_DIR` | `/media/aftertouch` | Scratch directory for the downloaded binary before it replaces the installed one. Should stay on a different filesystem than `INSTALL_DIR` (tmpfs by default) so the download itself doesn't compete with `INSTALL_DIR` for space. |
+| `GH_REPO` | `gesellix/Bose-SoundTouch` | Install from a fork instead, e.g. for testing an unmerged branch's release. |
+| `BINARY_URL` | derived from `GH_REPO`/`VERSION` | Override the service binary's download URL entirely, bypassing `GH_REPO`/`VERSION` for this one file. |
+| `INIT_SCRIPT_URL` | derived from `GH_REPO`/`VERSION` | Override the init script's download URL entirely, bypassing `GH_REPO`/`VERSION` for this one file. |
+| `FALLBACK_VERSION` | `0.123.0` | Used only if the latest-release lookup fails (offline, rate-limited, or a `curl` build without `-w` support). |
+
 ## Uninstallation
 
 Before uninstall, you might want to revert the migration, especially the changes to the server URLs (even though having configured an unresponsive local server probably is about as bad as having configured unresponsive Bose servers). To uninstall AfterTouch, run the following command on the speaker.
