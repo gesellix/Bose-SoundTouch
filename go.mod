@@ -9,7 +9,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/mdns v1.0.7
-	github.com/miekg/dns v1.1.72
+	github.com/miekg/dns v1.1.73
 	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/sergi/go-diff v1.4.0
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
@@ -33,8 +33,6 @@ require (
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20250705151800-55b8f293f342 // indirect
 	golang.org/x/image v0.45.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
 )
