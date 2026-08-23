@@ -106,6 +106,86 @@ for f in "$INSTALL_DIR/aftertouch-service".*.backup \
 done
 echo "Disk usage after pre-install GC:"; df -h "$INSTALL_DIR"
 
+# --- Preflight disk-space check ------------------------------------------
+# /mnt/nv is small (tens of MB) and binaries keep growing (Go 1.27 alone
+# added ~640KB to this binary via its own new stdlib defaults, unrelated to
+# this project's code). A prior attempt on real hardware ran out of space
+# mid-replace and left a truncated, non-executable binary in place: UBIFS is
+# a log-structured flash filesystem, so space freed by overwriting the old
+# binary isn't necessarily reusable by the time the new one needs to land.
+# Check upfront, with a safety margin, instead of discovering this mid-write.
+#
+# The new binary's size comes from a HEAD request rather than a hardcoded
+# threshold, so this doesn't go stale as binaries grow across releases.
+NEW_BINARY_BYTES=$(curl -sSLI --fail "$BINARY_URL" 2>/dev/null \
+  | tr -d '\r' \
+  | awk 'tolower($1) == "content-length:" {v=$2} END {print v}') || true
+
+AVAILABLE_KB=$(df -Pk "$INSTALL_DIR" | awk 'NR==2 {print $4}')
+
+CURRENT_BINARY_KB=0
+if [ -f "$INSTALL_DIR/aftertouch-service" ]; then
+  CURRENT_BINARY_KB=$(du -k "$INSTALL_DIR/aftertouch-service" | awk '{print $1}')
+fi
+
+# Flat margin, not a percentage: covers UBIFS's own reserved/GC headroom on
+# this log-structured flash filesystem plus general slack.
+SAFETY_MARGIN_KB=5120 # 5 MB
+
+SKIP_BACKUP=no
+
+if [ -n "$NEW_BINARY_BYTES" ]; then
+  NEW_BINARY_KB=$((NEW_BINARY_BYTES / 1024))
+  # Backups compress to roughly 70% of the original size in practice
+  # (observed: a ~14.8MB binary gzipped to ~10.1MB); used as a conservative
+  # estimate since the real ratio isn't known until compression actually runs.
+  BACKUP_ESTIMATE_KB=$((CURRENT_BINARY_KB * 7 / 10))
+
+  NEEDED_WITH_BACKUP_KB=$((NEW_BINARY_KB + BACKUP_ESTIMATE_KB + SAFETY_MARGIN_KB))
+  NEEDED_NO_BACKUP_KB=$((NEW_BINARY_KB + SAFETY_MARGIN_KB))
+
+  if [ "$AVAILABLE_KB" -ge "$NEEDED_WITH_BACKUP_KB" ]; then
+    : # plenty of room; proceed normally, with a backup
+  elif [ "$AVAILABLE_KB" -ge "$NEEDED_NO_BACKUP_KB" ]; then
+    echo "WARNING: not enough free space on $INSTALL_DIR to keep a rollback" >&2
+    echo "backup this time (${AVAILABLE_KB}KB available; ~${NEEDED_WITH_BACKUP_KB}KB" >&2
+    echo "wanted with a backup, ~${NEEDED_NO_BACKUP_KB}KB without one)." >&2
+    echo "Continuing will replace the current binary with NO way to" >&2
+    echo "automatically undo it if something goes wrong." >&2
+    if [ -n "${AFTERTOUCH_FORCE_NO_BACKUP:-}" ]; then
+      echo "Proceeding without a backup (AFTERTOUCH_FORCE_NO_BACKUP is set)." >&2
+      SKIP_BACKUP=yes
+    elif [ -r /dev/tty ] && [ -w /dev/tty ]; then
+      printf 'Continue without a backup? [y/N] ' > /dev/tty
+      REPLY=""
+      read -r REPLY < /dev/tty || true
+      case "$REPLY" in
+        [Yy]*) SKIP_BACKUP=yes ;;
+        *)
+          echo "Aborting: refusing to proceed without a backup. Free up space" >&2
+          echo "on $INSTALL_DIR and try again, or set AFTERTOUCH_FORCE_NO_BACKUP=yes" >&2
+          echo "to proceed without one non-interactively." >&2
+          exit 1
+          ;;
+      esac
+    else
+      echo "No interactive terminal available to confirm; aborting." >&2
+      echo "Set AFTERTOUCH_FORCE_NO_BACKUP=yes to proceed without a backup" >&2
+      echo "non-interactively." >&2
+      exit 1
+    fi
+  else
+    echo "ERROR: not enough free space on $INSTALL_DIR to install AfterTouch" >&2
+    echo "$VERSION safely (${AVAILABLE_KB}KB available, ~${NEEDED_NO_BACKUP_KB}KB" >&2
+    echo "needed). Free up space and try again." >&2
+    exit 1
+  fi
+else
+  echo "WARNING: could not determine the new binary's size ahead of time" >&2
+  echo "(HEAD request to $BINARY_URL failed); skipping the preflight" >&2
+  echo "disk-space check." >&2
+fi
+
 curl \
   -sSL \
   -o "$UPDATE_TMP_DIR/binary" \
@@ -115,8 +195,11 @@ curl \
 # Back up the current binary before overwriting so a one-step rollback
 # is always available.  The version string comes from the binary itself;
 # if it is absent (very old build or corrupted) we fall back to a timestamp.
+# Skipped entirely when the preflight check above decided (with the
+# operator's explicit confirmation, or AFTERTOUCH_FORCE_NO_BACKUP) that
+# there isn't room for one.
 BACKUP_FILE=""
-if [ -f "$INSTALL_DIR/aftertouch-service" ]; then
+if [ -f "$INSTALL_DIR/aftertouch-service" ] && [ "$SKIP_BACKUP" != "yes" ]; then
   current_version=$("$INSTALL_DIR/aftertouch-service" --version 2>/dev/null \
     | awk '{print $NF}') || true
   if [ -z "$current_version" ] || [ "$current_version" = "dev" ]; then
