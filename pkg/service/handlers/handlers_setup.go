@@ -1274,7 +1274,16 @@ func (s *Server) HandleTestDNSRedirection(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// HandleInitialSync fetches presets, recents and sources from the device and saves them to the datastore.
+// HandleInitialSync fetches presets, recents and sources from the device
+// and saves them to the datastore.
+//
+// If applying the fetched presets/recents would shrink what's already
+// stored, the sync is not applied — the response comes back 409 with the
+// diff describing what would be removed — unless the caller passes
+// ?confirmed=true, in which case it's applied unconditionally. Every call
+// re-fetches live from the speaker at that moment (see
+// setup.SyncDeviceData), so a confirmed retry re-checks current reality
+// rather than replaying a possibly-stale earlier response.
 func (s *Server) HandleInitialSync(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceId")
 	if deviceID == "" {
@@ -1288,13 +1297,25 @@ func (s *Server) HandleInitialSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.sm.SyncDeviceData(deviceIP); err != nil {
+	confirmed := r.URL.Query().Get("confirmed") == "true"
+
+	result, err := s.sm.SyncDeviceData(deviceIP, confirmed)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"ok": true}`))
+	w.Header().Set("Content-Type", "application/json")
+
+	if !result.Applied {
+		w.WriteHeader(http.StatusConflict)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	if encodeErr := json.NewEncoder(w).Encode(result); encodeErr != nil {
+		log.Printf("HandleInitialSync: failed to encode result for device %s: %s", sanitizeLog(deviceID), sanitizeErr(encodeErr))
+	}
 }
 
 // HandleRebootDevice reboots a device.

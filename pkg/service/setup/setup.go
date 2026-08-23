@@ -2635,12 +2635,46 @@ func (m *Manager) resolveIP(host string, client SSHClient) (string, error) {
 		ErrResolvedFromServiceOnly, host, resolved)
 }
 
-// SyncDeviceData fetches presets, recents and sources from the device and saves them to the datastore.
-func (m *Manager) SyncDeviceData(deviceIP string) error {
+// SyncResourceDiff describes what a Data Sync would change for one
+// datastore resource (presets or recents): what's currently stored versus
+// what the speaker's own live :8090 API returned just now.
+type SyncResourceDiff struct {
+	Resource      string   `json:"resource"`
+	CurrentCount  int      `json:"currentCount"`
+	IncomingCount int      `json:"incomingCount"`
+	Removed       []string `json:"removed,omitempty"`
+	Destructive   bool     `json:"destructive"`
+}
+
+// SyncResult is the outcome of a SyncDeviceData call: whether it actually
+// wrote anything, and the per-resource diff that led to that decision.
+type SyncResult struct {
+	Applied     bool               `json:"applied"`
+	Destructive bool               `json:"destructive"`
+	Diffs       []SyncResourceDiff `json:"diffs"`
+}
+
+// SyncDeviceData fetches presets, recents and sources from the device and
+// saves them to the datastore.
+//
+// Presets and recents are fetched live from the speaker's own :8090 API and
+// would previously overwrite the datastore unconditionally — including with
+// an empty or shrunk list if the speaker's own local cache happened to be
+// stale or incomplete at that exact moment (e.g. right after a burst of
+// preset writes, or shortly after a reboot before the speaker has resynced
+// with Marge). That's a real, confirmed mechanism for #614's "Sync wipes my
+// presets" reports. Now: if applying would shrink either list relative to
+// what's already stored, SyncDeviceData does NOT write — it reports the
+// diff instead — unless confirmed is true. There is no cached "preview"
+// state: every call (confirmed or not) re-fetches live from the speaker at
+// that moment, so confirming re-checks reality rather than replaying a
+// possibly-stale earlier snapshot. Sources are left unconditional, as
+// before — a source-list change is comparatively low-risk and self-healing.
+func (m *Manager) SyncDeviceData(deviceIP string, confirmed bool) (SyncResult, error) {
 	// 1. Fetch info to get Serial Number (account identifier)
 	info, err := m.GetLiveDeviceInfo(deviceIP)
 	if err != nil {
-		return fmt.Errorf("failed to get device info: %w", err)
+		return SyncResult{}, fmt.Errorf("failed to get device info: %w", err)
 	}
 
 	log.Printf("Starting sync for device at %s: Name='%s', DeviceID='%s', SerialNumber='%s'",
@@ -2652,7 +2686,7 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 	deviceID := info.DeviceID
 	if deviceID == "" {
 		log.Printf("No deviceID found in /info response for device '%s' at %s", sanitizeLog(info.Name), sanitizeLog(deviceIP))
-		return fmt.Errorf("no deviceID found in /info response for device at %s - cannot sync without canonical device identifier", deviceIP)
+		return SyncResult{}, fmt.Errorf("no deviceID found in /info response for device at %s - cannot sync without canonical device identifier", deviceIP)
 	}
 
 	log.Printf("Using deviceID '%s' for sync operations (MAC address from /info)", sanitizeLog(deviceID))
@@ -2676,11 +2710,39 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 		accountID = "default"
 	}
 
-	// 2. Fetch Presets from :8090
-	m.syncPresets(deviceIP, accountID, deviceID)
+	// 2. Diff presets and recents against a fresh live fetch, before writing
+	// anything.
+	presetDiff, incomingPresets, presetErr := m.presetSyncDiff(deviceIP, accountID, deviceID)
+	if presetErr != nil {
+		log.Printf("[SYNC_ERR] Failed to fetch presets for %s: %v", sanitizeLog(deviceIP), presetErr)
+	}
 
-	// 3. Fetch Recents from :8090
-	m.syncRecents(deviceIP, accountID, deviceID)
+	recentDiff, incomingRecents, recentErr := m.recentSyncDiff(deviceIP, accountID, deviceID)
+	if recentErr != nil {
+		log.Printf("[SYNC_ERR] Failed to fetch recents for %s: %v", sanitizeLog(deviceIP), recentErr)
+	}
+
+	result := SyncResult{
+		Diffs:       []SyncResourceDiff{presetDiff, recentDiff},
+		Destructive: presetDiff.Destructive || recentDiff.Destructive,
+	}
+
+	if result.Destructive && !confirmed {
+		log.Printf("[SYNC] Sync for %s would shrink stored data (presets %d->%d, recents %d->%d) — awaiting confirmation, not writing anything",
+			sanitizeLog(deviceIP), presetDiff.CurrentCount, presetDiff.IncomingCount, recentDiff.CurrentCount, recentDiff.IncomingCount)
+
+		return result, nil
+	}
+
+	// 3. Apply presets/recents (skip whichever one failed to fetch, leaving
+	// the existing stored data untouched rather than wiping it).
+	if presetErr == nil {
+		_ = m.DataStore.SavePresets(accountID, deviceID, incomingPresets)
+	}
+
+	if recentErr == nil {
+		_ = m.DataStore.SaveRecents(accountID, deviceID, incomingRecents)
+	}
 
 	// 4. Fetch Sources
 	m.syncSources(deviceIP, accountID, deviceID)
@@ -2697,28 +2759,113 @@ func (m *Manager) SyncDeviceData(deviceIP string) error {
 	// 6. Create off-device backup of system configuration
 	_ = m.BackupConfigOffDevice(deviceIP)
 
-	return nil
+	result.Applied = true
+
+	return result, nil
 }
 
-func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
+// presetSyncDiff fetches the live preset list from the speaker and compares
+// it against what's currently stored, without writing anything.
+func (m *Manager) presetSyncDiff(deviceIP, accountID, deviceID string) (SyncResourceDiff, []models.ServicePreset, error) {
+	current, _ := m.DataStore.GetPresets(accountID, deviceID)
+
+	incoming, err := m.fetchLivePresets(deviceIP)
+	if err != nil {
+		return SyncResourceDiff{Resource: "presets", CurrentCount: len(current), IncomingCount: len(current)}, nil, err
+	}
+
+	return diffPresets(current, incoming), incoming, nil
+}
+
+// recentSyncDiff fetches the live recents list from the speaker and
+// compares it against what's currently stored, without writing anything.
+func (m *Manager) recentSyncDiff(deviceIP, accountID, deviceID string) (SyncResourceDiff, []models.ServiceRecent, error) {
+	current, _ := m.DataStore.GetRecents(accountID, deviceID)
+
+	incoming, err := m.fetchLiveRecents(deviceIP)
+	if err != nil {
+		return SyncResourceDiff{Resource: "recents", CurrentCount: len(current), IncomingCount: len(current)}, nil, err
+	}
+
+	return diffRecents(current, incoming), incoming, nil
+}
+
+// diffPresets compares a stored preset list against a freshly-fetched one.
+// Removed lists the names of presets present in current but absent (by
+// button/slot ID) from incoming — this is what tells an operator "Sync
+// would remove preset 6: Ici Roussillon" instead of just a bare count.
+func diffPresets(current, incoming []models.ServicePreset) SyncResourceDiff {
+	incomingIDs := make(map[string]bool, len(incoming))
+	for i := range incoming {
+		if incoming[i].ID != "" {
+			incomingIDs[incoming[i].ID] = true
+		}
+	}
+
+	var removed []string
+
+	for i := range current {
+		if current[i].ID != "" && current[i].Name != "" && !incomingIDs[current[i].ID] {
+			removed = append(removed, current[i].Name)
+		}
+	}
+
+	return SyncResourceDiff{
+		Resource:      "presets",
+		CurrentCount:  len(current),
+		IncomingCount: len(incoming),
+		Removed:       removed,
+		Destructive:   len(incoming) < len(current),
+	}
+}
+
+// diffRecents compares a stored recents list against a freshly-fetched one.
+// Recents have no stable per-entry ID the way presets do (they're an
+// ordered, time-sorted, size-capped list), so entries are matched by
+// content Location instead.
+func diffRecents(current, incoming []models.ServiceRecent) SyncResourceDiff {
+	incomingLocations := make(map[string]bool, len(incoming))
+	for i := range incoming {
+		if incoming[i].Location != "" {
+			incomingLocations[incoming[i].Location] = true
+		}
+	}
+
+	var removed []string
+
+	for i := range current {
+		if current[i].Location != "" && current[i].Name != "" && !incomingLocations[current[i].Location] {
+			removed = append(removed, current[i].Name)
+		}
+	}
+
+	return SyncResourceDiff{
+		Resource:      "recents",
+		CurrentCount:  len(current),
+		IncomingCount: len(incoming),
+		Removed:       removed,
+		Destructive:   len(incoming) < len(current),
+	}
+}
+
+// fetchLivePresets fetches the current preset list straight from the
+// speaker's own local :8090 API. It does not touch the datastore.
+func (m *Manager) fetchLivePresets(deviceIP string) ([]models.ServicePreset, error) {
 	presetsURL := fmt.Sprintf("http://%s:8090/presets", deviceIP)
 	if _, _, splitErr := net.SplitHostPort(deviceIP); splitErr == nil {
 		presetsURL = fmt.Sprintf("http://%s/presets", deviceIP)
 	}
 
-	log.Printf("[SYNC] Syncing presets for %s", sanitizeLog(deviceIP))
-
 	resp, err := m.HTTPGet(presetsURL)
 	if err != nil {
-		log.Printf("[SYNC_ERR] Failed to fetch presets for %s: %v", sanitizeLog(deviceIP), err)
-		return
+		return nil, err
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
 	var ps models.Presets
 	if decodeErr := xml.NewDecoder(resp.Body).Decode(&ps); decodeErr != nil {
-		return
+		return nil, decodeErr
 	}
 
 	var servicePresets []models.ServicePreset
@@ -2762,10 +2909,28 @@ func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
 		})
 	}
 
-	_ = m.DataStore.SavePresets(accountID, deviceID, servicePresets)
+	return servicePresets, nil
 }
 
-func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
+// syncPresets fetches the live preset list and unconditionally persists it.
+// Used directly by tests exercising the raw fetch+save behaviour; the
+// button-driven path goes through SyncDeviceData's diff/confirm guard
+// instead.
+func (m *Manager) syncPresets(deviceIP, accountID, deviceID string) {
+	log.Printf("[SYNC] Syncing presets for %s", sanitizeLog(deviceIP))
+
+	presets, err := m.fetchLivePresets(deviceIP)
+	if err != nil {
+		log.Printf("[SYNC_ERR] Failed to fetch presets for %s: %v", sanitizeLog(deviceIP), err)
+		return
+	}
+
+	_ = m.DataStore.SavePresets(accountID, deviceID, presets)
+}
+
+// fetchLiveRecents fetches the current recents list straight from the
+// speaker's own local :8090 API. It does not touch the datastore.
+func (m *Manager) fetchLiveRecents(deviceIP string) ([]models.ServiceRecent, error) {
 	recentsURL := fmt.Sprintf("http://%s:8090/recents", deviceIP)
 	if _, _, splitErr := net.SplitHostPort(deviceIP); splitErr == nil {
 		recentsURL = fmt.Sprintf("http://%s/recents", deviceIP)
@@ -2773,14 +2938,14 @@ func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
 
 	resp, err := m.HTTPGet(recentsURL)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
 	var rr models.RecentsResponse
 	if decodeErr := xml.NewDecoder(resp.Body).Decode(&rr); decodeErr != nil {
-		return
+		return nil, decodeErr
 	}
 
 	var serviceRecents []models.ServiceRecent
@@ -2807,7 +2972,20 @@ func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
 		})
 	}
 
-	_ = m.DataStore.SaveRecents(accountID, deviceID, serviceRecents)
+	return serviceRecents, nil
+}
+
+// syncRecents fetches the live recents list and unconditionally persists
+// it. Used directly by tests exercising the raw fetch+save behaviour; the
+// button-driven path goes through SyncDeviceData's diff/confirm guard
+// instead.
+func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
+	recents, err := m.fetchLiveRecents(deviceIP)
+	if err != nil {
+		return
+	}
+
+	_ = m.DataStore.SaveRecents(accountID, deviceID, recents)
 }
 
 func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {

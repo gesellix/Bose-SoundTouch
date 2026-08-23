@@ -123,7 +123,7 @@ func TestIssue234_FactoryResetSpeakerSyncsReducedSources(t *testing.T) {
 	// SyncDeviceData derives accountID/deviceID from /info; with
 	// an empty margeAccountUUID the account falls through to
 	// "default".
-	if err := m.SyncDeviceData(deviceIP); err != nil {
+	if _, err := m.SyncDeviceData(deviceIP, false); err != nil {
 		t.Fatalf("SyncDeviceData: %v", err)
 	}
 

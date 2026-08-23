@@ -64,7 +64,7 @@ func TestSyncDeviceData_UsesDeviceID(t *testing.T) {
 	manager := NewManager("http://localhost:8000", ds, cm)
 
 	// Test SyncDeviceData
-	err := manager.SyncDeviceData(serverHost)
+	_, err := manager.SyncDeviceData(serverHost, false)
 	if err != nil {
 		t.Fatalf("SyncDeviceData failed: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestSyncDeviceData_NoDeviceID_ShouldFail(t *testing.T) {
 	manager := NewManager("http://localhost:8000", ds, cm)
 
 	// Test SyncDeviceData - should fail
-	err := manager.SyncDeviceData(serverHost)
+	_, err := manager.SyncDeviceData(serverHost, false)
 	if err == nil {
 		t.Fatal("SyncDeviceData should have failed when deviceID is empty")
 	}
@@ -221,7 +221,7 @@ func TestSyncDeviceData_FallbackToExistingDeviceMapping(t *testing.T) {
 	manager := NewManager("http://localhost:8000", ds, cm)
 
 	// Sync should work and use MAC address
-	err := manager.SyncDeviceData(serverHost)
+	_, err := manager.SyncDeviceData(serverHost, false)
 	if err != nil {
 		t.Fatalf("SyncDeviceData failed: %v", err)
 	}

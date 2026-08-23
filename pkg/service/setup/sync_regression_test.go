@@ -279,7 +279,7 @@ func TestSyncSources_Format(t *testing.T) {
 	deviceIP := mockDevice.Listener.Addr().String()
 	accountID := "1234567"
 	deviceID := "001122334455"
-	err = m.SyncDeviceData(deviceIP)
+	_, err = m.SyncDeviceData(deviceIP, false)
 	if err != nil {
 		t.Fatalf("SyncDeviceData failed: %v", err)
 	}
