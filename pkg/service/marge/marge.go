@@ -1508,19 +1508,18 @@ func AccountFullToXML(ds *datastore.DataStore, account string) ([]byte, error) {
 
 // RemovePreset clears a preset for the specified account and device.
 func RemovePreset(ds *datastore.DataStore, account, device string, presetNumber int) error {
-	presets, err := ds.GetPresets(account, device)
-	if err != nil {
-		return err
-	}
+	_, err := ds.MutatePresets(account, device, func(presets []models.ServicePreset) ([]models.ServicePreset, error) {
+		if presetNumber < 1 || presetNumber > len(presets) {
+			// Preset doesn't exist or index out of range, nothing to do
+			return presets, nil
+		}
 
-	if presetNumber < 1 || presetNumber > len(presets) {
-		// Preset doesn't exist or index out of range, nothing to do
-		return nil
-	}
+		presets[presetNumber-1] = models.ServicePreset{}
 
-	presets[presetNumber-1] = models.ServicePreset{}
+		return presets, nil
+	})
 
-	return ds.SavePresets(account, device, presets)
+	return err
 }
 
 // resolvePresetSource resolves the source a preset PUT is referencing,
@@ -1606,11 +1605,6 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 		return nil, err
 	}
 
-	presets, err := ds.GetPresets(account, device)
-	if err != nil {
-		presets = []models.ServicePreset{}
-	}
-
 	var newPresetElem struct {
 		Name            string `xml:"name"`
 		Username        string `xml:"username"`
@@ -1676,14 +1670,19 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 		Username:     newPresetElem.Name,
 	}
 
-	// Ensure presets list is large enough
-	for len(presets) < presetNumber {
-		presets = append(presets, models.ServicePreset{})
-	}
+	// Read-mutate-write atomically: a concurrent PUT for a different preset
+	// number racing this one must not be able to clobber it. See
+	// MutatePresets — this is the exact interleave that dropped a preset
+	// during #614's rapid-fire repro.
+	if _, err = ds.MutatePresets(account, device, func(presets []models.ServicePreset) ([]models.ServicePreset, error) {
+		for len(presets) < presetNumber {
+			presets = append(presets, models.ServicePreset{})
+		}
 
-	presets[presetNumber-1] = presetObj
+		presets[presetNumber-1] = presetObj
 
-	if err = ds.SavePresets(account, device, presets); err != nil {
+		return presets, nil
+	}); err != nil {
 		return nil, err
 	}
 
@@ -1812,11 +1811,6 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 		return nil, err
 	}
 
-	recents, err := ds.GetRecents(account, device)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-
 	var input recentInput
 	if err := xml.Unmarshal(sourceXML, &input); err != nil {
 		return nil, err
@@ -1861,9 +1855,19 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 	syncMatchingSource(matchingSrc, input)
 
 	utcTime := parseLastPlayedAt(input.LastPlayedAt)
-	recentObj, recents := updateOrCreateRecent(recents, input.Name, matchingSrc, input.ContentItemType, input.Location, device, utcTime)
 
-	if err := ds.SaveRecents(account, device, recents); err != nil {
+	// Read-mutate-write atomically: a concurrent AddRecent/preset call for
+	// the same device racing this one must not be able to clobber it. See
+	// MutatePresets/MutateRecents for why a plain GetRecents+SaveRecents
+	// isn't safe here.
+	var recentObj *models.ServiceRecent
+
+	if _, err := ds.MutateRecents(account, device, func(recents []models.ServiceRecent) ([]models.ServiceRecent, error) {
+		var updated []models.ServiceRecent
+		recentObj, updated = updateOrCreateRecent(recents, input.Name, matchingSrc, input.ContentItemType, input.Location, device, utcTime)
+
+		return updated, nil
+	}); err != nil {
 		return nil, err
 	}
 
@@ -1891,7 +1895,7 @@ func learnSource(ds *datastore.DataStore, account, device string, sources []mode
 			matchingSrc.SecretType = constants.CredentialTypeToken
 		}
 
-		persistLearnedSource(ds, account, device, sources, matchingSrc)
+		persistLearnedSource(ds, account, device, matchingSrc)
 	}
 
 	return matchingSrc, sourceLearned
@@ -2041,26 +2045,24 @@ func updateSourceFields(src *models.ConfiguredSource, credentialValue, sourceNam
 	return learned
 }
 
-func persistLearnedSource(ds *datastore.DataStore, account, device string, sources []models.ConfiguredSource, matchingSrc *models.ConfiguredSource) {
-	updatedSources := make([]models.ConfiguredSource, len(sources))
-	copy(updatedSources, sources)
+func persistLearnedSource(ds *datastore.DataStore, account, device string, matchingSrc *models.ConfiguredSource) {
+	// Read-mutate-write atomically against the persisted list, not a
+	// snapshot the caller read earlier — AddRecent and UpdatePreset can
+	// both be learning/auto-adding sources for the same device
+	// concurrently, and a plain Get+Save here would silently lose
+	// whichever write landed second.
+	_, err := ds.MutateConfiguredSources(account, device, func(sources []models.ConfiguredSource) ([]models.ConfiguredSource, error) {
+		for i := range sources {
+			if sources[i].ID == matchingSrc.ID {
+				sources[i] = *matchingSrc
 
-	found := false
-
-	for i := range updatedSources {
-		if updatedSources[i].ID == matchingSrc.ID {
-			updatedSources[i] = *matchingSrc
-			found = true
-
-			break
+				return sources, nil
+			}
 		}
-	}
 
-	if !found {
-		updatedSources = append(updatedSources, *matchingSrc)
-	}
-
-	if err := ds.SaveConfiguredSources(account, device, updatedSources); err != nil {
+		return append(sources, *matchingSrc), nil
+	})
+	if err != nil {
 		log.Printf("[MARGE_ERR] Failed to persist learned source for %s: %s", sanitizeLog(device), sanitizeErr(err))
 	}
 }
@@ -2446,7 +2448,6 @@ func AddSource(ds *datastore.DataStore, account, username, providerID, secret, s
 		}
 
 		devID := entry.Name()
-		sources, _ := ds.GetConfiguredSources(account, devID)
 
 		newSrc := models.ConfiguredSource{
 			ID:               sourceID,
@@ -2476,37 +2477,39 @@ func AddSource(ds *datastore.DataStore, account, username, providerID, secret, s
 
 		PrepareConfiguredSource(&newSrc)
 
-		// Update or append. Most providers are singletons (one account each), so
-		// the same provider replaces the existing entry. STORED_MUSIC is the
-		// exception: each DLNA media server is a separate account (username =
-		// "<UDN>/0"), so it must only replace when the account also matches.
-		// Otherwise registering a second media server overwrites the first, which
-		// then vanishes from /full + /sources and the speaker drops it (only one
-		// media server could ever stay registered).
-		replaced := false
+		// Read-mutate-write atomically against the persisted list, not a
+		// snapshot read before the loop body — see MutateConfiguredSources.
+		_, err := ds.MutateConfiguredSources(account, devID, func(sources []models.ConfiguredSource) ([]models.ConfiguredSource, error) {
+			// Update or append. Most providers are singletons (one account
+			// each), so the same provider replaces the existing entry.
+			// STORED_MUSIC is the exception: each DLNA media server is a
+			// separate account (username = "<UDN>/0"), so it must only
+			// replace when the account also matches. Otherwise registering
+			// a second media server overwrites the first, which then
+			// vanishes from /full + /sources and the speaker drops it
+			// (only one media server could ever stay registered).
+			for i := range sources {
+				sameProvider := sources[i].SourceProviderID == providerID
+				if providerID == strconv.Itoa(constants.StoredMusicProviderID) {
+					// Match on the persisted account identity
+					// (SourceKey.Account), not Username, which does not
+					// round-trip through the datastore.
+					sameProvider = sameProvider && sources[i].SourceKey.Account == username
+				}
 
-		for i := range sources {
-			sameProvider := sources[i].SourceProviderID == providerID
-			if providerID == strconv.Itoa(constants.StoredMusicProviderID) {
-				// Match on the persisted account identity (SourceKey.Account),
-				// not Username, which does not round-trip through the datastore.
-				sameProvider = sameProvider && sources[i].SourceKey.Account == username
+				if sameProvider ||
+					(providerID == strconv.Itoa(constants.SpotifyProviderID) && sources[i].SourceKey.Type == constants.ProviderSpotify) {
+					sources[i] = newSrc
+
+					return sources, nil
+				}
 			}
 
-			if sameProvider ||
-				(providerID == strconv.Itoa(constants.SpotifyProviderID) && sources[i].SourceKey.Type == constants.ProviderSpotify) {
-				sources[i] = newSrc
-				replaced = true
-
-				break
-			}
+			return append(sources, newSrc), nil
+		})
+		if err != nil {
+			log.Printf("[Marge] AddSource: failed to save source %s for device %s: %s", sanitizeLog(newSrc.SourceKey.Type), sanitizeLog(devID), sanitizeErr(err))
 		}
-
-		if !replaced {
-			sources = append(sources, newSrc)
-		}
-
-		_ = ds.SaveConfiguredSources(account, devID, sources)
 	}
 
 	return sourceID, nil
