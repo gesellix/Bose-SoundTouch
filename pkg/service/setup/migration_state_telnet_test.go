@@ -29,6 +29,58 @@ func TestIsTelnetMigrated_DifferentHostname(t *testing.T) {
 	}
 }
 
+func TestCheckIsMigratedFromProbe_FormerBackendOffersTelnetRevert(t *testing.T) {
+	m := &Manager{ServerURL: "http://current.example:8000"}
+	summary := &MigrationSummary{
+		TelnetReachable: true,
+		TelnetVerifiedConfig: flatGetpdoResponse(telnetURLs{
+			Marge:       "http://former.example:8000/marge",
+			Stats:       "http://former.example:8000",
+			SwUpdate:    "http://former.example:8000/updates/soundtouch",
+			BmxRegistry: "http://former.example:8000/bmx/registry/v1/services",
+		}),
+	}
+
+	m.checkIsMigratedFromProbe(summary, &speakerProbe{})
+
+	if summary.TelnetMigrated {
+		t.Error("TelnetMigrated = true, want false for a former backend")
+	}
+
+	if !summary.TelnetRevertAvailable {
+		t.Error("TelnetRevertAvailable = false, want rollback for a former backend")
+	}
+}
+
+func TestCheckIsMigratedFromProbe_CanonicalBoseURLsDoNotOfferTelnetRevert(t *testing.T) {
+	m := &Manager{ServerURL: "http://current.example:8000"}
+	summary := &MigrationSummary{
+		TelnetReachable:      true,
+		TelnetVerifiedConfig: flatGetpdoResponse(canonicalBoseTelnetURLs()),
+	}
+
+	m.checkIsMigratedFromProbe(summary, &speakerProbe{})
+
+	if summary.TelnetRevertAvailable {
+		t.Error("TelnetRevertAvailable = true, want false for canonical Bose URLs")
+	}
+}
+
+func TestCheckIsMigratedFromProbe_PartialNonCanonicalConfigOffersTelnetRevert(t *testing.T) {
+	m := &Manager{ServerURL: "http://current.example:8000"}
+	summary := &MigrationSummary{
+		TelnetReachable: true,
+		TelnetVerifiedConfig: "margeServerUrl=https://streaming.bose.com\n" +
+			"statsServerUrl=http://legacy.example:8000\n",
+	}
+
+	m.checkIsMigratedFromProbe(summary, &speakerProbe{})
+
+	if !summary.TelnetRevertAvailable {
+		t.Error("TelnetRevertAvailable = false, want rollback for partial non-canonical config")
+	}
+}
+
 func TestIsTelnetMigrated_EmptyVerifiedConfig(t *testing.T) {
 	m := &Manager{ServerURL: "http://example:8000"}
 

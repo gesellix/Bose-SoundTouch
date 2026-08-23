@@ -159,6 +159,7 @@ func probeDeviceTagFor(summary *MigrationSummary) string {
 // or marker comment is always present, so this is acceptable.
 func (m *Manager) checkIsMigratedFromProbe(summary *MigrationSummary, probe *speakerProbe) {
 	summary.TelnetMigrated = m.isTelnetMigrated(summary)
+	summary.TelnetRevertAvailable = telnetRevertAvailable(summary.TelnetVerifiedConfig)
 
 	if probe.SSHOK {
 		summary.XMLMigrated = m.isXMLMigrated(summary)

@@ -284,6 +284,28 @@ func TestSendCommand_CommandNotFound(t *testing.T) {
 	}
 }
 
+func TestSendCommand_RejectsLineBreaksWithoutWriting(t *testing.T) {
+	s := newScriptedServer(t, "", map[string]string{
+		"getpdo CurrentSystemConfiguration": "OK\n",
+	})
+	defer s.close()
+
+	c := newClientFor(t, s)
+	if err := c.Dial(); err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	if _, err := c.SendCommand("getpdo CurrentSystemConfiguration\r\nsys reboot"); err == nil ||
+		!strings.Contains(err.Error(), "line breaks") {
+		t.Fatalf("SendCommand error = %v, want line-break rejection", err)
+	}
+
+	if _, err := c.SendCommand("getpdo CurrentSystemConfiguration"); err != nil {
+		t.Fatalf("safe command after rejection: %v", err)
+	}
+}
+
 func TestSendCommand_DeadlineFiresWhenDeviceHangs(t *testing.T) {
 	s := newScriptedServer(t, "", map[string]string{
 		"first":  "OK\n",

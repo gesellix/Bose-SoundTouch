@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -123,6 +124,10 @@ func (c *Client) Probe() (string, error) {
 // device's textual conventions vary by firmware: some commands return "OK",
 // others echo state, others return nothing).
 func (c *Client) SendCommand(cmd string) (string, error) {
+	if strings.ContainsAny(cmd, "\r\n") {
+		return "", errors.New("telnet: command must not contain line breaks")
+	}
+
 	if c.conn == nil {
 		return "", errors.New("telnet: not connected")
 	}

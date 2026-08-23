@@ -1399,16 +1399,36 @@ soundtouch-cli --host <device> setup migrate --method telnet \
 
 #### `setup revert`
 
-Undoes a migration — the CLI equivalent of the web UI's "Revert to
-Defaults" button. Restores `SoundTouchSdkPrivateCfg.xml`, `/etc/hosts`, and
-`/etc/resolv.conf` from their `.original` backups, removes the AfterTouch
-DNS-hook artifacts, and strips just the AfterTouch-labeled certificate out
-of the trust bundle. No `--service-url` needed — everything it touches
-already lives on the speaker.
+Undoes a migration. The default `--method ssh` is the CLI equivalent of the
+web UI's **Revert to Defaults** button: it restores
+`SoundTouchSdkPrivateCfg.xml`, `/etc/hosts`, and `/etc/resolv.conf` from their
+`.original` backups, removes the AfterTouch DNS-hook artifacts, and strips
+just the AfterTouch-labeled certificate out of the trust bundle.
 
 ```bash
 soundtouch-cli --host <device> setup revert
 ```
+
+For a telnet-only migration, `--method telnet` restores the four canonical
+Bose service URLs without requiring SSH or an XML backup:
+
+```bash
+soundtouch-cli --host <device> setup revert --method telnet
+```
+
+This only changes `margeServerUrl`, `statsServerUrl`, `swUpdateUrl`, and
+`bmxRegistryUrl`. It does not restore filesystem, DNS, CA, SSH, or account
+state. Reboot the speaker afterwards and verify all four persisted values.
+The `--marge-url`, `--stats-url`, `--sw-update-url`, and `--bmx-url` flags can
+override the canonical defaults for firmware- or region-specific values.
+These flags require `--method telnet`; using them with the default SSH method
+is an error. Each value must be an absolute HTTP or HTTPS service URL without
+userinfo, query parameters, fragments, whitespace, control characters, or
+shell metacharacters.
+Telnet writes are sequential rather than transactional. If the command reports
+an error, read back and reconcile all four fields before retrying or rebooting;
+the error distinguishes a partial runtime update from an uncertain persistence
+outcome after `envswitch`.
 
 **Out of scope for this command** (matches the web UI button): SSH /
 `remote_services` persistence (use `setup remote-services --remove`) and

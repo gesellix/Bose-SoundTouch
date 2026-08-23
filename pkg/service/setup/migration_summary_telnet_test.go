@@ -77,6 +77,10 @@ func TestGetMigrationSummary_TelnetSucceedsSSHFails(t *testing.T) {
 	if !strings.Contains(summary.TelnetVerifiedConfig, target) {
 		t.Errorf("TelnetVerifiedConfig = %q, want it to contain %q", summary.TelnetVerifiedConfig, target)
 	}
+
+	if !summary.TelnetRevertAvailable {
+		t.Error("TelnetRevertAvailable = false, want rollback for live non-canonical URLs")
+	}
 }
 
 func TestGetMigrationSummary_TelnetFailsSSHFails(t *testing.T) {

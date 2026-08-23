@@ -1510,12 +1510,23 @@ func renderMigrationSummary(deviceIP, serviceURL string, s *setup.MigrationSumma
 	}
 }
 
-// setupRevertCmd wraps setup.Manager.RevertMigration — the same operation
-// as the web UI's "Revert to Defaults" button (Migrate tab). Restores
-// SoundTouchSdkPrivateCfg.xml, /etc/hosts, and /etc/resolv.conf from their
-// .original backups, removes the AfterTouch DNS-hook artifacts, and strips
-// just the AfterTouch-labeled cert out of the trust bundle. No --service-url
-// needed: everything it touches already lives on the speaker.
+var telnetRevertOverrideFlags = []string{"marge-url", "stats-url", "sw-update-url", "bmx-url"}
+
+func validateRevertMethodOptions(method string, overrideFlags []string) error {
+	if method != "ssh" && method != string(setup.MigrationMethodTelnet) {
+		return fmt.Errorf("unsupported revert method %q; expected ssh or telnet", method)
+	}
+
+	if method != string(setup.MigrationMethodTelnet) && len(overrideFlags) > 0 {
+		return fmt.Errorf("--%s requires --method telnet", strings.Join(overrideFlags, ", --"))
+	}
+
+	return nil
+}
+
+// setupRevertCmd restores either the SSH/filesystem migration state or only
+// the four URL fields written by a telnet migration. The default remains the
+// existing SSH path for backwards compatibility.
 //
 // Deliberately out of scope (matches the web UI button): SSH/remote_services
 // persistence (use `setup remote-services --remove`) and account pairing
@@ -1523,15 +1534,53 @@ func renderMigrationSummary(deviceIP, serviceURL string, s *setup.MigrationSumma
 func setupRevertCmd() *cli.Command {
 	return &cli.Command{
 		Name:   "revert",
-		Usage:  "Undo a migration: restore SoundTouchSdkPrivateCfg.xml/hosts/resolv.conf from backups and remove the AfterTouch CA cert",
+		Usage:  "Undo a migration via SSH backups or restore canonical Bose service URLs over telnet",
 		Before: RequireHost,
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "method", Value: "ssh", Usage: "ssh | telnet"},
+			&cli.StringFlag{Name: "marge-url", Usage: "Override the canonical Bose margeServerUrl (telnet only)"},
+			&cli.StringFlag{Name: "stats-url", Usage: "Override the canonical Bose statsServerUrl (telnet only)"},
+			&cli.StringFlag{Name: "sw-update-url", Usage: "Override the canonical Bose swUpdateUrl (telnet only)"},
+			&cli.StringFlag{Name: "bmx-url", Usage: "Override the canonical Bose bmxRegistryUrl (telnet only)"},
+		},
 		Action: func(c *cli.Context) error {
 			cfg := GetClientConfig(c)
+			method := c.String("method")
+
+			var overrideFlags []string
+
+			for _, flag := range telnetRevertOverrideFlags {
+				if c.IsSet(flag) {
+					overrideFlags = append(overrideFlags, flag)
+				}
+			}
+
+			if err := validateRevertMethodOptions(method, overrideFlags); err != nil {
+				return err
+			}
+
 			m := setup.NewManager("", nil, nil)
 
-			fmt.Printf("Reverting migration on %s...\n", cfg.Host)
+			fmt.Printf("Reverting migration on %s using method=%s...\n", cfg.Host, method)
 
-			logs, err := m.RevertMigration(cfg.Host)
+			var (
+				logs string
+				err  error
+			)
+
+			switch method {
+			case "ssh":
+				logs, err = m.RevertMigration(cfg.Host)
+			case string(setup.MigrationMethodTelnet):
+				options := map[string]string{
+					"marge_url":     c.String("marge-url"),
+					"stats_url":     c.String("stats-url"),
+					"sw_update_url": c.String("sw-update-url"),
+					"bmx_url":       c.String("bmx-url"),
+				}
+				logs, err = m.RevertTelnetURLs(cfg.Host, options)
+			}
+
 			if logs != "" {
 				fmt.Print(logs)
 			}
@@ -1541,8 +1590,12 @@ func setupRevertCmd() *cli.Command {
 				return err
 			}
 
-			PrintSuccess("Migration reverted. SSH access and account pairing are untouched by this — " +
-				"see `setup remote-services --remove` and `account unpair` if you want those cleared too.")
+			if method == string(setup.MigrationMethodTelnet) {
+				PrintSuccess("Canonical Bose URL configuration restored. Reboot the speaker to verify the persisted layer; filesystem, DNS, CA, SSH, and account state were not changed.")
+			} else {
+				PrintSuccess("Migration reverted. SSH access and account pairing are untouched by this — " +
+					"see `setup remote-services --remove` and `account unpair` if you want those cleared too.")
+			}
 
 			return nil
 		},

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -704,6 +705,10 @@ func TestMigrationAndCA(t *testing.T) {
 	sm.NewSSH = func(host string) setup.SSHClient {
 		return &mockSSH{host: host}
 	}
+	telnetMock := &mockSetupTelnet{}
+	sm.NewTelnet = func(string) setup.TelnetClient {
+		return telnetMock
+	}
 
 	// Mock HTTPGet to avoid real network timeouts
 	sm.HTTPGet = func(url string) (*http.Response, error) {
@@ -776,6 +781,22 @@ func TestMigrationAndCA(t *testing.T) {
 		t.Errorf("Migrate: Expected output field in response")
 	}
 
+	// Unsafe telnet migration input is a client error and never reaches the speaker.
+	unsafeMigrateCommandCount := len(telnetMock.commands)
+	unsafeTarget := url.QueryEscape("http://192.0.2.100:8000\r\nsys reboot")
+	res, err = http.Post(ts.URL+"/setup/migrate/192.0.2.10?method=telnet&target_url="+unsafeTarget, "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("Unsafe telnet migration: expected status 400, got %v", res.Status)
+	}
+	if len(telnetMock.commands) != unsafeMigrateCommandCount {
+		t.Errorf("Unsafe telnet migration sent commands: before=%d after=%d", unsafeMigrateCommandCount, len(telnetMock.commands))
+	}
+
 	// 3. Test POST /setup/trust-ca/{deviceIP}
 	res, err = http.Post(ts.URL+"/setup/trust-ca/192.0.2.10", "application/json", nil)
 	if err != nil {
@@ -837,6 +858,81 @@ func TestMigrationAndCA(t *testing.T) {
 	}
 	if _, ok := result["output"]; !ok {
 		t.Errorf("RemoveRemote: Expected output field in response")
+	}
+
+	// 6. Telnet-only revert uses the dedicated URL restore path.
+	res, err = http.Post(ts.URL+"/setup/revert/192.0.2.10?method=telnet", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Telnet revert: expected status OK, got %v", res.Status)
+	}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		t.Fatalf("Telnet revert: failed to decode response: %v", err)
+	}
+	if result["ok"] != true {
+		t.Errorf("Telnet revert: expected ok=true, got %v", result["ok"])
+	}
+
+	commands := strings.Join(telnetMock.commands, "\n")
+	for _, want := range []string{
+		"sys configuration margeServerUrl https://streaming.bose.com",
+		"sys configuration statsServerUrl https://events.api.bosecm.com",
+		"sys configuration swUpdateUrl https://worldwide.bose.com/updates/soundtouch",
+		"sys configuration bmxRegistryUrl https://content.api.bose.io/bmx/registry/v1/services",
+		"envswitch boseurls set https://streaming.bose.com https://worldwide.bose.com/updates/soundtouch",
+		"getpdo CurrentSystemConfiguration",
+	} {
+		if !strings.Contains(commands, want) {
+			t.Errorf("Telnet revert commands missing %q:\n%s", want, commands)
+		}
+	}
+
+	// 7. SSH revert rejects telnet-only URL overrides instead of ignoring them.
+	commandCount := len(telnetMock.commands)
+	res, err = http.Post(ts.URL+"/setup/revert/192.0.2.10?method=ssh&marge_url=https%3A%2F%2Foverride.example%2Fmarge", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("SSH revert with telnet overrides: expected status 400, got %v", res.Status)
+	}
+	if len(telnetMock.commands) != commandCount {
+		t.Errorf("SSH revert with telnet overrides sent telnet commands: before=%d after=%d", commandCount, len(telnetMock.commands))
+	}
+
+	// 8. Unsafe telnet URL input fails before any command is sent.
+	unsafeURL := url.QueryEscape("https://override.example/marge\r\nsys reboot")
+	res, err = http.Post(ts.URL+"/setup/revert/192.0.2.10?method=telnet&marge_url="+unsafeURL, "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("Unsafe telnet URL: expected status 400, got %v", res.Status)
+	}
+	if len(telnetMock.commands) != commandCount {
+		t.Errorf("Unsafe telnet URL sent commands: before=%d after=%d", commandCount, len(telnetMock.commands))
+	}
+
+	// 9. Unknown revert methods fail before touching either transport.
+	res, err = http.Post(ts.URL+"/setup/revert/192.0.2.10?method=invalid", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("Invalid revert method: expected status 400, got %v", res.Status)
+	}
+	if len(telnetMock.commands) != commandCount {
+		t.Errorf("Invalid revert method sent telnet commands: before=%d after=%d", commandCount, len(telnetMock.commands))
 	}
 }
 
@@ -938,6 +1034,40 @@ type mockSSH struct {
 	// TrustCACertFromBytes) returns what we just wrote there.
 	uploaded map[string][]byte
 }
+
+type mockSetupTelnet struct {
+	commands []string
+}
+
+func (m *mockSetupTelnet) Dial() error { return nil }
+
+func (m *mockSetupTelnet) Probe() (string, error) { return "->", nil }
+
+func (m *mockSetupTelnet) SendCommand(command string) (string, error) {
+	m.commands = append(m.commands, command)
+	if command == "getpdo CurrentSystemConfiguration" {
+		return `margeServerUrl {
+  text: "https://streaming.bose.com"
+}
+statsServerUrl {
+  text: "https://events.api.bosecm.com"
+}
+swUpdateUrl {
+  text: "https://worldwide.bose.com/updates/soundtouch"
+}
+bmxRegistryUrl {
+  text: "https://content.api.bose.io/bmx/registry/v1/services"
+}`, nil
+	}
+	if fields := strings.Fields(command); len(fields) == 5 &&
+		fields[0] == "envswitch" && fields[1] == "boseurls" && fields[2] == "set" {
+		return "Setting Bose Server URLs to " + fields[3] + " and " + fields[4] + "\n->OK\n->", nil
+	}
+
+	return "OK", nil
+}
+
+func (m *mockSetupTelnet) Close() error { return nil }
 
 func (m *mockSSH) Run(command string) (string, error) {
 	if strings.Contains(command, "cat /etc/hosts") {

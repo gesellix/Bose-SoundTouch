@@ -207,6 +207,38 @@ func TestRecommendMigrationMethod_EmptyWhenNoTransport(t *testing.T) {
 	}
 }
 
+func TestValidateRevertMethodOptions(t *testing.T) {
+	tests := []struct {
+		name      string
+		method    string
+		overrides []string
+		wantError string
+	}{
+		{name: "ssh defaults", method: "ssh"},
+		{name: "telnet defaults", method: "telnet"},
+		{name: "telnet overrides", method: "telnet", overrides: []string{"marge-url"}},
+		{name: "ssh rejects overrides", method: "ssh", overrides: []string{"marge-url"}, wantError: "requires --method telnet"},
+		{name: "unknown method", method: "serial", wantError: "unsupported revert method"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRevertMethodOptions(tt.method, tt.overrides)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("validateRevertMethodOptions: %v", err)
+				}
+
+				return
+			}
+
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("error = %v, want text %q", err, tt.wantError)
+			}
+		})
+	}
+}
+
 func TestBuildPlanSteps_NoOpWhenAlreadyMigratedAndPaired(t *testing.T) {
 	summary := &setup.MigrationSummary{IsMigrated: true, IsPaired: true, TelnetMigrated: true}
 	inspect := &setup.InspectReport{Info: &setup.DeviceInfoXML{DeviceID: "AABBCCDDEEFF"}}

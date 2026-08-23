@@ -2,6 +2,13 @@ package handlers
 
 import "net/url"
 
+var telnetMigrationURLKeys = []string{
+	"marge_url",
+	"stats_url",
+	"sw_update_url",
+	"bmx_url",
+}
+
 // migrationOptionKeys is the allow-list of query parameters carried into
 // the migration manager's options map. Two families coexist:
 //
@@ -42,4 +49,16 @@ func parseMigrationOptions(query url.Values) map[string]string {
 	}
 
 	return out
+}
+
+func presentTelnetURLOverrides(query url.Values) []string {
+	var present []string
+
+	for _, key := range telnetMigrationURLKeys {
+		if _, ok := query[key]; ok {
+			present = append(present, key)
+		}
+	}
+
+	return present
 }

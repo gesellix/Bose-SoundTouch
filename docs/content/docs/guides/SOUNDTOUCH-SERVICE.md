@@ -477,6 +477,24 @@ curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?method=telnet&targ
 curl -X POST "http://localhost:8000/setup/migrate/192.0.2.100?method=resolv&target_url=https://my-server.com:8443"
 ```
 
+#### `POST /setup/revert/{deviceID}`
+Reverts either an SSH-backed migration or the URL fields written by a telnet migration.
+
+- No `method` query parameter, or `method=ssh`, preserves the existing behavior:
+  restore the on-speaker `.original` files and related SSH-managed state.
+- `method=telnet` restores the four canonical Bose service URLs without SSH.
+  The optional `marge_url`, `stats_url`, `sw_update_url`, and `bmx_url` query
+  parameters override individual canonical values.
+- Supplying those URL parameters with the default SSH method returns `400`
+  instead of silently ignoring them. Invalid or command-unsafe telnet URLs also
+  return `400` before a speaker connection is attempted.
+
+The telnet path changes URL configuration only and does not reboot the speaker.
+Its commands are sequential, so an error can mean partial runtime state or an
+uncertain persistence outcome. Read back and reconcile all four fields before
+retrying or rebooting. A successful response confirms the runtime readback;
+verify persistence after the subsequent reboot.
+
 #### `POST /setup/telnet-probe/{deviceIP}`
 SSH-less reachability check. Temporarily flips the speaker's `swUpdateUrl` via the port-17000 diagnostic shell, triggers `:8090/swUpdateCheck` on the device, and observes whether the resulting outbound lands on this service's `/probe/{token}` handler within 6 s. Always attempts to restore the original `swUpdateUrl` even on failure.
 

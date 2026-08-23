@@ -450,11 +450,14 @@ that `setup.PairAccount` already implements.
 | ST Portable / FW 27.0.6        | jmosen   | #236                        | After migration: `POST /marge/streaming/support/power_on` → 502; `<margeAccountUUID/>` empty. Time-bounded HTTP path fails; envswitch fallback succeeds. |
 | BST20 Portable (factory reset) | ubittner | scheilch/opencloudtouch#167 | `<margeAccountUUID/>` empty; `/setMargeAccount` not in `/supportedURLs`. HTTP path skipped entirely; only the telnet fallback works.                     |
 
-### 8.3 Likely to fail (but the failure is clean)
+### 8.3 Likely to reject the telnet sequence
 
 Our preflight + abort-on-first-rejection design (`TestMigrateViaTelnet_CommandNotFoundAborts`)
-means none of these scenarios leave a device half-configured. The user is
-told what failed and pointed to the XML or DNS method.
+stops at the first rejected command and reports whether earlier runtime writes
+or the persistence command may already have applied. A rejection of command #1
+leaves the URL state untouched; after any later failure, read back all four URL
+fields before retrying or rebooting. The user is also pointed to the XML or DNS
+method.
 
 | Device                                     | Source          | Likely cause                                                                                                                                                                                                                             |
 |--------------------------------------------|-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -482,8 +485,10 @@ negative claim: the author writes "I've made some educated guesses and come
 up with the following valid commands" and never says they tested
 `envswitch`. We do not down-weight `envswitch` availability on the strength
 of S5 alone — but if a real-device run ever shows `envswitch` rejected on
-an ST 10, our preflight catches it, the migration aborts on the first
-non-OK response, and the user gets a clear error rather than partial state.
+an ST 10, the migration aborts on the first unconfirmed response and reports
+whether runtime writes were confirmed or persistence is uncertain. Because the
+commands are sequential, the user must read back all four fields before retrying
+or rebooting.
 
 ### 8.6 Failure-mode matrix
 
@@ -492,10 +497,12 @@ What `migrateViaTelnet` does in each failure mode (verified by
 
 | Failure                                        | Outcome                                                                                           | Test                                                                                                               |
 |------------------------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
-| Port 17000 closed / TCP unreachable            | `Dial` errors before any command is sent; UI shows the error; nothing persisted                   | `TestMigrateViaTelnet_DialFailureReturnsError`                                                                     |
-| `sys configuration` rejected (cmd #1)          | Sequence aborts; verification not sent; rest of commands not attempted                            | `TestMigrateViaTelnet_CommandNotFoundAborts` (envswitch variant — generalises)                                     |
-| `envswitch boseurls set` rejected              | Sequence aborts; runtime-only `sys configuration` state reverts on reboot — no permanent damage   | `TestMigrateViaTelnet_CommandNotFoundAborts`                                                                       |
-| Verification mismatch (URLs not echoed back)   | Loud "verification failed" error; live state may persist until reboot but UI never claims success | `TestMigrateViaTelnet_VerifyMismatchFails`                                                                         |
+| Port 17000 closed / TCP unreachable            | `Dial` errors before any command is sent; UI shows the error; nothing persisted                                        | `TestMigrateViaTelnet_DialFailureReturnsError`                                                                     |
+| `sys configuration` rejected                   | Sequence aborts; earlier or attempted runtime writes may have applied; read back all four fields                       | `TestMigrateViaTelnet_GenericRuntimeRejectionReportsPartialState`                                                  |
+| `envswitch boseurls set` rejected              | Sequence aborts after four confirmed runtime writes; persistence outcome is uncertain; inspect before rebooting        | `TestMigrateViaTelnet_EnvswitchRejectionReportsUncertainPersistence`                                               |
+| Verification mismatch (URLs not echoed back)   | Loud error after accepted `envswitch`; runtime differs and persistence may already have changed; UI never claims success | `TestMigrateViaTelnet_VerifyMismatchFails`                                                                         |
+| Invalid or command-unsafe URL input             | Rejected before a telnet client is created or any device connection is attempted                                       | `TestMigrateViaTelnet_RejectsUnsafeURLsBeforeCreatingClient`                                                       |
+| Concurrent URL mutations for one speaker       | Process-local per-speaker lock keeps command sequences contiguous; different processes remain out of scope             | `TestTelnetURLMutationsSameSpeakerAreSerialized`                                                                  |
 | `/setMargeAccount` 502 / hang                  | 5s connect + 12s total budget enforced; falls through to telnet `envswitch accountid set`         | `TestPairAccount_FallsBackWhenHTTPReturnsServerError`                                                              |
 | `/setMargeAccount` missing in `/supportedURLs` | HTTP path skipped; goes straight to telnet `envswitch accountid set`                              | `TestPairAccount_FallsBackWhenSetMargeAccountMissing`                                                              |
 | Both pairing paths unavailable                 | Structured error: "use the official Bose app before EOS, or open SSH and use the XML method"      | `TestPairAccount_NoTelnetAndHTTPMissingReturnsClearError`, `TestPairAccount_TelnetCommandNotFoundReportsBothPaths` |
@@ -504,7 +511,7 @@ What `migrateViaTelnet` does in each failure mode (verified by
 
 - **Green light** — ST 10, ST 20, ST 300, Wave III, Wave IV on FW 27.0.6 (multi-reporter agreement).
 - **Yellow** — ST Portable and BST20 Portable: migration works, pairing needs our fallback (already implemented).
-- **Red, but fails cleanly** — SA-5 on FW 9.x, possibly newer ST Portable builds.
+- **Red, aborts with explicit state diagnostics** — SA-5 on FW 9.x, possibly newer ST Portable builds.
 - **Unverified but expected to work** — ST 30, ST 520, Wave Music System I/II.
 
 The most useful next verification step is touching a real ST 30 and ST 520

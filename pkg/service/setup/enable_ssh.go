@@ -104,6 +104,9 @@ func (m *Manager) runTelnetInjection(deviceIP string, forbidQuote, cmds []string
 		}
 	}
 
+	unlock := m.lockTelnetURLMutation(deviceIP)
+	defer unlock()
+
 	var logs strings.Builder
 
 	t := m.NewTelnet(deviceIP)
@@ -154,6 +157,9 @@ func (m *Manager) setBoseURLsViaTelnet(deviceIP, marge, swUpdate string) (string
 		return "", errors.New("boseurls values must not contain a double quote")
 	}
 
+	unlock := m.lockTelnetURLMutation(deviceIP)
+	defer unlock()
+
 	var logs strings.Builder
 
 	t := m.NewTelnet(deviceIP)
@@ -191,9 +197,16 @@ func (m *Manager) setBoseURLsViaTelnet(deviceIP, marge, swUpdate string) (string
 // injection), this mirrors telnetURLs.Commands()'s full sequence so the
 // envswitch commit captures fresh values for all four fields, not just two.
 func (m *Manager) setAllBoseURLsViaTelnet(deviceIP string, urls telnetURLs) (string, error) {
+	if err := urls.validate(); err != nil {
+		return "", err
+	}
+
 	if m.NewTelnet == nil {
 		return "", errors.New("telnet not configured: Manager.NewTelnet is nil")
 	}
+
+	unlock := m.lockTelnetURLMutation(deviceIP)
+	defer unlock()
 
 	var logs strings.Builder
 

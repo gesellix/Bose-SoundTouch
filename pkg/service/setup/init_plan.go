@@ -242,7 +242,7 @@ func (m *Manager) runURLRewrite(plan InitPlan, emit func(StepKind, string, StepS
 	emit(StepURLRewrite, "telnet URL rewrite", StatusRunning, nil)
 
 	urls := defaultTelnetURLs(plan.ServiceURL)
-	if _, rwErr := m.migrateViaTelnet(plan.DeviceIP, plan.ServiceURL, urls); rwErr != nil {
+	if _, rwErr := m.migrateViaTelnet(plan.DeviceIP, urls); rwErr != nil {
 		emit(StepURLRewrite, "telnet URL rewrite", StatusFailed, rwErr)
 		return fmt.Errorf("URL rewrite: %w", rwErr)
 	}

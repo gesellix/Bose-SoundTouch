@@ -69,6 +69,57 @@ func TestTelnetURLsFromOptions_PerFieldOverrides(t *testing.T) {
 	}
 }
 
+func TestRevertTelnetURLs_DefaultsAndCommandOrder(t *testing.T) {
+	urls := telnetURLs{
+		Marge:       "https://streaming.bose.com",
+		Stats:       "https://events.api.bosecm.com",
+		SwUpdate:    "https://worldwide.bose.com/updates/soundtouch",
+		BmxRegistry: "https://content.api.bose.io/bmx/registry/v1/services",
+	}
+	f := &fakeTelnet{responses: telnetResponses(urls, flatGetpdoResponse(urls))}
+	m := newFakeTelnetManager(f)
+
+	logs, err := m.RevertTelnetURLs("192.0.2.1", nil)
+	if err != nil {
+		t.Fatalf("RevertTelnetURLs: %v", err)
+	}
+
+	wantCommands := append(urls.Commands(), "getpdo CurrentSystemConfiguration")
+	if !reflect.DeepEqual(f.commands, wantCommands) {
+		t.Errorf("commands =\n%v\nwant\n%v", f.commands, wantCommands)
+	}
+
+	if !strings.Contains(logs, "URL configuration only") {
+		t.Errorf("logs do not limit the operation to URL configuration:\n%s", logs)
+	}
+}
+
+func TestRevertTelnetURLs_OverridesTakePrecedence(t *testing.T) {
+	options := map[string]string{
+		"marge_url":     "https://override.example/marge",
+		"stats_url":     "https://override.example/stats",
+		"sw_update_url": "https://override.example/update",
+		"bmx_url":       "https://override.example/bmx",
+	}
+	want := telnetURLs{
+		Marge:       options["marge_url"],
+		Stats:       options["stats_url"],
+		SwUpdate:    options["sw_update_url"],
+		BmxRegistry: options["bmx_url"],
+	}
+	f := &fakeTelnet{responses: telnetResponses(want, flatGetpdoResponse(want))}
+	m := newFakeTelnetManager(f)
+
+	if _, err := m.RevertTelnetURLs("192.0.2.1", options); err != nil {
+		t.Fatalf("RevertTelnetURLs: %v", err)
+	}
+
+	wantCommands := append(want.Commands(), "getpdo CurrentSystemConfiguration")
+	if !reflect.DeepEqual(f.commands, wantCommands) {
+		t.Errorf("commands =\n%v\nwant overrides\n%v", f.commands, wantCommands)
+	}
+}
+
 // TestTelnetURLs_Commands_EnvswitchTracksMargeAndSwUpdate is the load-bearing
 // test for the soundcork case: if the user added /marge to Marge, the
 // envswitch arg1 must follow the same suffix verbatim, otherwise the
@@ -105,7 +156,6 @@ func TestTelnetURLs_Commands_EnvswitchTracksMargeAndSwUpdate(t *testing.T) {
 }
 
 func TestMigrateViaTelnet_SoundcorkMargeSuffixPropagatesToEnvswitch(t *testing.T) {
-	target := "http://example:8000"
 	urls := telnetURLs{
 		Marge:       "http://example:8000/marge",
 		Stats:       "http://example:8000",
@@ -113,20 +163,10 @@ func TestMigrateViaTelnet_SoundcorkMargeSuffixPropagatesToEnvswitch(t *testing.T
 		BmxRegistry: "http://example:8000/bmx/registry/v1/services",
 	}
 
-	// Build a happy-path responder that matches the *new* command set.
-	resp := map[string]string{
-		"sys configuration bmxRegistryUrl " + urls.BmxRegistry:       "OK\n",
-		"sys configuration statsServerUrl " + urls.Stats:             "OK\n",
-		"sys configuration margeServerUrl " + urls.Marge:             "OK\n",
-		"sys configuration swUpdateUrl " + urls.SwUpdate:             "OK\n",
-		"envswitch boseurls set " + urls.Marge + " " + urls.SwUpdate: "OK\n",
-		"getpdo CurrentSystemConfiguration":                          "margeServerUrl=" + urls.Marge + "\n",
-	}
-
-	f := &fakeTelnet{responses: resp}
+	f := &fakeTelnet{responses: telnetResponses(urls, flatGetpdoResponse(urls))}
 	m := newFakeTelnetManager(f)
 
-	if _, err := m.migrateViaTelnet("192.0.2.1", target, urls); err != nil {
+	if _, err := m.migrateViaTelnet("192.0.2.1", urls); err != nil {
 		t.Fatalf("migrateViaTelnet: %v", err)
 	}
 

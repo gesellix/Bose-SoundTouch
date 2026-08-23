@@ -722,8 +722,12 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusInternalServerError
 
 		var notReady *setup.MigrationDataNotReadyError
-		if errors.As(err, &notReady) {
+
+		switch {
+		case errors.As(err, &notReady):
 			status = http.StatusConflict
+		case errors.Is(err, setup.ErrInvalidTelnetURL):
+			status = http.StatusBadRequest
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -745,7 +749,9 @@ func (s *Server) HandleMigrateDevice(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleRevertMigration reverts the migration for a device.
+// HandleRevertMigration reverts the migration for a device. The existing
+// no-query path restores SSH/filesystem backups; method=telnet restores only
+// the four canonical Bose service URLs and accepts the migration URL overrides.
 func (s *Server) HandleRevertMigration(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "deviceId")
 	if deviceID == "" {
@@ -773,10 +779,50 @@ func (s *Server) HandleRevertMigration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := s.sm.RevertMigration(deviceIP)
-	if err != nil {
+	method := r.URL.Query().Get("method")
+	if (method == "" || method == "ssh") && len(presentTelnetURLOverrides(r.URL.Query())) > 0 {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":      false,
+			"message": "Telnet URL overrides require method=telnet",
+		}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	var output string
+
+	switch method {
+	case "", "ssh":
+		output, err = s.sm.RevertMigration(deviceIP)
+	case string(setup.MigrationMethodTelnet):
+		output, err = s.sm.RevertTelnetURLs(deviceIP, parseMigrationOptions(r.URL.Query()))
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":      false,
+			"message": fmt.Sprintf("Unsupported revert method %q; expected ssh or telnet", method),
+		}); encodeErr != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, setup.ErrInvalidTelnetURL) {
+			status = http.StatusBadRequest
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
 
 		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "message": err.Error(), "output": output}); encodeErr != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)

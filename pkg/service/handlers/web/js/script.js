@@ -2364,6 +2364,11 @@ async function showSummary(deviceId) {
         revertBtn.disabled = !summary.ssh_success;
         revertBtn.style.display = summary.original_config ? "inline-block" : "none";
 
+        const revertTelnetBtn = document.getElementById("revert-telnet-btn");
+        revertTelnetBtn.onclick = () => revertTelnetURLs(deviceId);
+        revertTelnetBtn.disabled = !summary.telnet_reachable;
+        revertTelnetBtn.style.display = summary.telnet_revert_available ? "inline-block" : "none";
+
         const rebootBtn = document.getElementById("reboot-speaker-btn");
         rebootBtn.onclick = () => reboot(deviceId, ip);
         rebootBtn.disabled = !anyTransport;
@@ -2440,6 +2445,53 @@ async function revert(deviceId, ip) {
     } catch (error) {
         statusDiv.style.backgroundColor = "#ffcccc";
         statusDiv.textContent = "Error reverting " + display + ": " + error;
+    }
+}
+
+async function revertTelnetURLs(deviceId) {
+    if (!deviceId) {
+        alert("Please select a device.");
+        return;
+    }
+
+    const display = getDeviceDisplayName(deviceId);
+    if (!confirm(
+        "Restore the canonical Bose service URLs on " + display + " via Telnet? " +
+        "This changes only the four URL fields; it does not restore filesystem, DNS, CA, SSH, or account state. " +
+        "The writes are sequential, so inspect all four fields if an error occurs.",
+    )) {
+        return;
+    }
+
+    const revertTelnetBtn = document.getElementById("revert-telnet-btn");
+    revertTelnetBtn.disabled = true;
+
+    const statusDiv = document.getElementById("status");
+    statusDiv.style.display = "block";
+    statusDiv.style.backgroundColor = "#ffffcc";
+    statusDiv.textContent = "Restoring canonical Bose URLs on " + display + " via Telnet...";
+
+    try {
+        const response = await fetch(
+            "/api/setup/revert/" + encodeURIComponent(deviceId) + "?method=telnet",
+            {method: "POST"},
+        );
+        const result = await response.json();
+        showCommandOutput(result);
+        if (result.ok) {
+            statusDiv.style.backgroundColor = "#ccffcc";
+            statusDiv.textContent = "Restored canonical Bose URLs on " + display +
+                ". Reboot the speaker, then verify all four persisted URL fields.";
+        } else {
+            revertTelnetBtn.disabled = false;
+            statusDiv.style.backgroundColor = "#ffcccc";
+            statusDiv.textContent = "Telnet URL restore failed for " + display + ": " +
+                (result.message || "Unknown error");
+        }
+    } catch (error) {
+        revertTelnetBtn.disabled = false;
+        statusDiv.style.backgroundColor = "#ffcccc";
+        statusDiv.textContent = "Error restoring Bose URLs on " + display + ": " + error;
     }
 }
 
