@@ -892,6 +892,26 @@ function buildSyncConfirmMessage(result) {
     return lines.join("\n");
 }
 
+// renderSyncResultList builds a <ul> summarising a successful SyncResult —
+// one <li> per resource, e.g. "presets: 6 → 6", plus a sources count. Built
+// via DOM APIs (not innerHTML string concatenation) since preset/recent
+// names ultimately come from user-editable station names on the speaker.
+function renderSyncResultList(result) {
+    const ul = document.createElement("ul");
+
+    for (const diff of result.diffs || []) {
+        const li = document.createElement("li");
+        li.textContent = diff.resource + ": " + diff.currentCount + " → " + diff.incomingCount;
+        ul.appendChild(li);
+    }
+
+    const sourcesLi = document.createElement("li");
+    sourcesLi.textContent = "sources: " + (result.sourcesCount >= 0 ? result.sourcesCount : "sync failed");
+    ul.appendChild(sourcesLi);
+
+    return ul;
+}
+
 async function requestSync(deviceId, confirmed) {
     let url = "/api/setup/sync/" + encodeURIComponent(deviceId);
     if (confirmed) {
@@ -942,11 +962,12 @@ async function startSync() {
             status.style.backgroundColor = "#dfd";
             status.textContent = "✅ Sync completed successfully for " + display + "!";
             results.style.display = "block";
-            const lines = (result.diffs || []).map(
-                (diff) => diff.resource + ": " + diff.currentCount + " → " + diff.incomingCount,
-            );
-            lines.push("sources: synced");
-            log.textContent = "Data fetched and saved to local datastore for " + display + ".\n" + lines.join("\n");
+
+            log.innerHTML = "";
+            const intro = document.createElement("p");
+            intro.textContent = "Data fetched and saved to local datastore for " + display + ".";
+            log.appendChild(intro);
+            log.appendChild(renderSyncResultList(result));
         } else {
             const err = result ? JSON.stringify(result) : await response.text();
             throw new Error(err);

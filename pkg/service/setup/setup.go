@@ -2652,6 +2652,11 @@ type SyncResult struct {
 	Applied     bool               `json:"applied"`
 	Destructive bool               `json:"destructive"`
 	Diffs       []SyncResourceDiff `json:"diffs"`
+	// SourcesCount is the number of configured sources saved for this
+	// device, or -1 if the sources fetch failed. Sources are synced
+	// unconditionally (see syncSources) — there's no diff/confirm gate for
+	// them — so this is a plain count rather than a SyncResourceDiff.
+	SourcesCount int `json:"sourcesCount"`
 }
 
 // SyncDeviceData fetches presets, recents and sources from the device and
@@ -2745,7 +2750,7 @@ func (m *Manager) SyncDeviceData(deviceIP string, confirmed bool) (SyncResult, e
 	}
 
 	// 4. Fetch Sources
-	m.syncSources(deviceIP, accountID, deviceID)
+	result.SourcesCount = m.syncSources(deviceIP, accountID, deviceID)
 
 	// 5. Nudge the device to re-render its source list. After a factory
 	// reset (issue #234) the speaker's /sources only lists the always-on
@@ -2988,7 +2993,12 @@ func (m *Manager) syncRecents(deviceIP, accountID, deviceID string) {
 	_ = m.DataStore.SaveRecents(accountID, deviceID, recents)
 }
 
-func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
+// syncSources fetches the device's configured sources (via SSH first, then
+// falling back to :8090/sources) and persists them. It returns the number
+// of sources actually saved, or -1 if neither path produced anything to
+// save (so the caller/UI can distinguish "synced zero sources" from "sync
+// didn't run").
+func (m *Manager) syncSources(deviceIP, accountID, deviceID string) int {
 	client := m.NewSSH(deviceIP)
 
 	sourcesXML, err := client.Run("cat /mnt/nv/BoseApp-Persistence/1/Sources.xml")
@@ -3013,7 +3023,7 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 
 			_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, srs.Sources)
 
-			return
+			return len(srs.Sources)
 		}
 	}
 
@@ -3025,46 +3035,50 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) {
 
 	resp, err := m.HTTPGet(sourcesURL)
 	if err != nil {
-		return
+		return -1
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
 	var srs models.Sources
-	if decodeErr := xml.NewDecoder(resp.Body).Decode(&srs); decodeErr == nil {
-		var configuredSources []models.ConfiguredSource
+	if decodeErr := xml.NewDecoder(resp.Body).Decode(&srs); decodeErr != nil {
+		return -1
+	}
 
-		for _, s := range srs.SourceItem {
-			cs := models.ConfiguredSource{
-				DisplayName: s.DisplayName,
-				Secret:      "",
-				SecretType:  "",
-			}
-			if s.Status == "READY" {
-				cs.SecretType = "token"
-			}
+	var configuredSources []models.ConfiguredSource
 
-			if s.Source == constants.ProviderSpotify {
-				cs.SecretType = "token_version_3"
-			}
-
-			cs.SourceKey.Type = s.Source
-			cs.SourceKey.Account = s.SourceAccount
-			// Also set legacy fields for now
-			cs.SourceKeyType = s.Source
-			cs.SourceKeyAccount = s.SourceAccount
-
-			configuredSources = append(configuredSources, cs)
+	for _, s := range srs.SourceItem {
+		cs := models.ConfiguredSource{
+			DisplayName: s.DisplayName,
+			Secret:      "",
+			SecretType:  "",
+		}
+		if s.Status == "READY" {
+			cs.SecretType = "token"
 		}
 
-		// Drop device-local/transient sources without a resolvable
-		// sourceproviderid (e.g. STORED_MUSIC_MEDIA_RENDERER, UPNP).
-		// Persisting them causes /full to emit an empty <sourceproviderid>
-		// which the speaker rejects as INVALID_SOURCE (#334).
-		configuredSources = filterServableSources(configuredSources, deviceID)
+		if s.Source == constants.ProviderSpotify {
+			cs.SecretType = "token_version_3"
+		}
 
-		_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, configuredSources)
+		cs.SourceKey.Type = s.Source
+		cs.SourceKey.Account = s.SourceAccount
+		// Also set legacy fields for now
+		cs.SourceKeyType = s.Source
+		cs.SourceKeyAccount = s.SourceAccount
+
+		configuredSources = append(configuredSources, cs)
 	}
+
+	// Drop device-local/transient sources without a resolvable
+	// sourceproviderid (e.g. STORED_MUSIC_MEDIA_RENDERER, UPNP).
+	// Persisting them causes /full to emit an empty <sourceproviderid>
+	// which the speaker rejects as INVALID_SOURCE (#334).
+	configuredSources = filterServableSources(configuredSources, deviceID)
+
+	_ = m.DataStore.SaveConfiguredSources(accountID, deviceID, configuredSources)
+
+	return len(configuredSources)
 }
 
 // filterServableSources returns a copy of srcs containing only sources that
