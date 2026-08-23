@@ -950,7 +950,10 @@ func (ds *DataStore) parseDeviceInfoFile(path string) (*models.ServiceDeviceInfo
 
 // GetPresets retrieves all presets for the specified account and device.
 func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset, error) {
-	presets, needsRewrite, err := ds.readPresetsLocked(account, device)
+	ds.fileMutex.RLock()
+	presets, needsRewrite, err := ds.readPresetsNoLock(account, device)
+	ds.fileMutex.RUnlock()
+
 	if err != nil {
 		return nil, err
 	}
@@ -966,19 +969,47 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 	return presets, nil
 }
 
-// readPresetsLocked is the locked read half of GetPresets. It returns the
-// parsed presets and a flag indicating whether the on-disk file used the
-// legacy <ContentItem> (capital C) format that needs rewriting.
-func (ds *DataStore) readPresetsLocked(account, device string) ([]models.ServicePreset, bool, error) {
-	ds.fileMutex.RLock()
-	defer ds.fileMutex.RUnlock()
+// MutatePresets atomically reads the current preset list, transforms it via
+// mutate, and persists the result — holding a single write lock for the
+// entire read-mutate-write cycle. Calling GetPresets followed by a separate
+// SavePresets leaves a lost-update window open: two concurrent callers can
+// each read the same starting list, mutate different entries, and the
+// second writer's SavePresets silently clobbers the first writer's update.
+// That's the exact interleave that dropped a preset during #614's rapid-fire
+// repro (overlapping PUT .../preset/N requests). Callers that read-then-write
+// a single device's presets should use this instead of GetPresets+SavePresets.
+func (ds *DataStore) MutatePresets(account, device string, mutate func(current []models.ServicePreset) ([]models.ServicePreset, error)) ([]models.ServicePreset, error) {
+	ds.fileMutex.Lock()
+	defer ds.fileMutex.Unlock()
 
+	current, _, err := ds.readPresetsNoLock(account, device)
+	if err != nil {
+		return nil, err
+	}
+
+	next, err := mutate(current)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ds.savePresetsNoLock(account, device, next); err != nil {
+		return nil, err
+	}
+
+	return next, nil
+}
+
+// readPresetsNoLock is the lock-free read half of GetPresets/MutatePresets.
+// Callers must already hold ds.fileMutex (for reading or writing). It
+// returns the parsed presets and a flag indicating whether the on-disk file
+// used the legacy <ContentItem> (capital C) format that needs rewriting.
+func (ds *DataStore) readPresetsNoLock(account, device string) ([]models.ServicePreset, bool, error) {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 
 	data, err := ds.rootReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("[Datastore] readPresetsLocked: no Presets.xml at %s — reporting no presets", sanitizeLog(path))
+			log.Printf("[Datastore] readPresetsNoLock: no Presets.xml at %s — reporting no presets", sanitizeLog(path))
 
 			return []models.ServicePreset{}, false, nil
 		}
@@ -991,7 +1022,7 @@ func (ds *DataStore) readPresetsLocked(account, device string) ([]models.Service
 	// error, so the device-level /presets endpoint returns an empty list
 	// instead of HTTP 500. See #458.
 	if len(bytes.TrimSpace(data)) == 0 {
-		log.Printf("[Datastore] readPresetsLocked: empty/0-byte Presets.xml at %s — treating as no presets (#458)", sanitizeLog(path))
+		log.Printf("[Datastore] readPresetsNoLock: empty/0-byte Presets.xml at %s — treating as no presets (#458)", sanitizeLog(path))
 
 		return []models.ServicePreset{}, false, nil
 	}
@@ -1023,7 +1054,7 @@ func (ds *DataStore) readPresetsLocked(account, device string) ([]models.Service
 	needsRewrite := !bytes.Equal(normalized, data)
 
 	if err := xml.Unmarshal(normalized, &presetsWrap); err != nil {
-		log.Printf("[Datastore] readPresetsLocked: malformed Presets.xml at %s (%s) — treating as no presets (#458)", sanitizeLog(path), sanitizeErr(err))
+		log.Printf("[Datastore] readPresetsNoLock: malformed Presets.xml at %s (%s) — treating as no presets (#458)", sanitizeLog(path), sanitizeErr(err))
 
 		return []models.ServicePreset{}, false, nil
 	}
@@ -1077,7 +1108,7 @@ func repairLeakedSource(account, device, label, persistedSource, sourceID string
 		return persistedSource
 	}
 
-	sources, err := ds.getConfiguredSourcesLocked(account, device)
+	sources, err := ds.getConfiguredSourcesNoLock(account, device)
 	if err != nil {
 		return persistedSource
 	}
@@ -1103,11 +1134,11 @@ func isLeakedSourceValue(s string) bool {
 	return s == "" || s == "Audio"
 }
 
-// getConfiguredSourcesLocked is GetConfiguredSources without the
+// getConfiguredSourcesNoLock is GetConfiguredSources without the
 // fileMutex.RLock() — callers must already hold it. Used by
 // repairLeakedSource from within GetPresets/GetRecents which already
 // hold the lock.
-func (ds *DataStore) getConfiguredSourcesLocked(account, device string) ([]models.ConfiguredSource, error) {
+func (ds *DataStore) getConfiguredSourcesNoLock(account, device string) ([]models.ConfiguredSource, error) {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 
 	data, err := ds.rootReadFile(path)
@@ -1155,6 +1186,12 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 	ds.fileMutex.Lock()
 	defer ds.fileMutex.Unlock()
 
+	return ds.savePresetsNoLock(account, device, presets)
+}
+
+// savePresetsNoLock is the lock-free write half of
+// SavePresets/MutatePresets. Callers must already hold ds.fileMutex.Lock().
+func (ds *DataStore) savePresetsNoLock(account, device string, presets []models.ServicePreset) error {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 	if err := ds.rootMkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -1318,6 +1355,38 @@ func (ds *DataStore) GetRecents(account, device string) ([]models.ServiceRecent,
 	ds.fileMutex.RLock()
 	defer ds.fileMutex.RUnlock()
 
+	return ds.readRecentsNoLock(account, device)
+}
+
+// MutateRecents atomically reads the current recents list, transforms it
+// via mutate, and persists the result — holding a single write lock for the
+// entire read-mutate-write cycle. See MutatePresets for why this matters: a
+// separate GetRecents followed by SaveRecents leaves a lost-update window
+// open between concurrent callers.
+func (ds *DataStore) MutateRecents(account, device string, mutate func(current []models.ServiceRecent) ([]models.ServiceRecent, error)) ([]models.ServiceRecent, error) {
+	ds.fileMutex.Lock()
+	defer ds.fileMutex.Unlock()
+
+	current, err := ds.readRecentsNoLock(account, device)
+	if err != nil {
+		return nil, err
+	}
+
+	next, err := mutate(current)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ds.saveRecentsNoLock(account, device, next); err != nil {
+		return nil, err
+	}
+
+	return next, nil
+}
+
+// readRecentsNoLock is the lock-free read half of GetRecents/MutateRecents.
+// Callers must already hold ds.fileMutex (for reading or writing).
+func (ds *DataStore) readRecentsNoLock(account, device string) ([]models.ServiceRecent, error) {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.RecentsFile)
 
 	data, err := ds.rootReadFile(path)
@@ -1430,6 +1499,12 @@ func (ds *DataStore) SaveRecents(account, device string, recents []models.Servic
 	ds.fileMutex.Lock()
 	defer ds.fileMutex.Unlock()
 
+	return ds.saveRecentsNoLock(account, device, recents)
+}
+
+// saveRecentsNoLock is the lock-free write half of
+// SaveRecents/MutateRecents. Callers must already hold ds.fileMutex.Lock().
+func (ds *DataStore) saveRecentsNoLock(account, device string, recents []models.ServiceRecent) error {
 	dir := ds.AccountDeviceDir(account, device)
 	if err := ds.rootMkdirAll(dir, 0755); err != nil {
 		return err
@@ -1935,6 +2010,40 @@ func (ds *DataStore) GetConfiguredSources(account, device string) ([]models.Conf
 	ds.fileMutex.RLock()
 	defer ds.fileMutex.RUnlock()
 
+	return ds.readConfiguredSourcesNoLock(account, device)
+}
+
+// MutateConfiguredSources atomically reads the current configured-source
+// list, transforms it via mutate, and persists the result — holding a
+// single write lock for the entire read-mutate-write cycle. See
+// MutatePresets for why this matters: a separate GetConfiguredSources
+// followed by SaveConfiguredSources leaves a lost-update window open
+// between concurrent callers.
+func (ds *DataStore) MutateConfiguredSources(account, device string, mutate func(current []models.ConfiguredSource) ([]models.ConfiguredSource, error)) ([]models.ConfiguredSource, error) {
+	ds.fileMutex.Lock()
+	defer ds.fileMutex.Unlock()
+
+	current, err := ds.readConfiguredSourcesNoLock(account, device)
+	if err != nil {
+		return nil, err
+	}
+
+	next, err := mutate(current)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ds.saveConfiguredSourcesNoLock(account, device, next); err != nil {
+		return nil, err
+	}
+
+	return next, nil
+}
+
+// readConfiguredSourcesNoLock is the lock-free read half of
+// GetConfiguredSources/MutateConfiguredSources. Callers must already hold
+// ds.fileMutex (for reading or writing).
+func (ds *DataStore) readConfiguredSourcesNoLock(account, device string) ([]models.ConfiguredSource, error) {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 
 	// defaultSources is the fallback used whenever there is no usable
@@ -2106,6 +2215,13 @@ func (ds *DataStore) SaveConfiguredSources(account, device string, sources []mod
 	ds.fileMutex.Lock()
 	defer ds.fileMutex.Unlock()
 
+	return ds.saveConfiguredSourcesNoLock(account, device, sources)
+}
+
+// saveConfiguredSourcesNoLock is the lock-free write half of
+// SaveConfiguredSources/MutateConfiguredSources. Callers must already hold
+// ds.fileMutex.Lock().
+func (ds *DataStore) saveConfiguredSourcesNoLock(account, device string, sources []models.ConfiguredSource) error {
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.SourcesFile)
 	if err := ds.rootMkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err

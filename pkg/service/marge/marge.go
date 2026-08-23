@@ -1529,42 +1529,74 @@ func RemovePreset(ds *datastore.DataStore, account, device string, presetNumber 
 // returns the matched source plus the possibly-extended sources slice
 // (since auto-add appends). Returns (nil, sources) when no match could be
 // resolved — UpdatePreset turns that into a 500 with a diagnostic log line.
-func resolvePresetSource(ds *datastore.DataStore, account, device string, sources []models.ConfiguredSource, sourceID string, presetNumber int) (*models.ConfiguredSource, []models.ConfiguredSource) {
+// findConfiguredSource looks up sourceID in sources, first by exact ID and
+// then — since the speaker sometimes sends the symbolic provider name (e.g.
+// <sourceid>TUNEIN</sourceid>) instead of a numeric ID — by SourceKeyType
+// for the handful of providers known to do that.
+func findConfiguredSource(sources []models.ConfiguredSource, sourceID string) *models.ConfiguredSource {
 	for i := range sources {
 		if sources[i].ID == sourceID {
-			return &sources[i], sources
+			return &sources[i]
 		}
 	}
 
-	// Fallback: SourceID is the symbolic provider name (the speaker
-	// sometimes sends e.g. <sourceid>TUNEIN</sourceid> instead of a
-	// numeric ID); match by SourceKeyType.
 	if sourceID == constants.ProviderInternetRadio || sourceID == constants.ProviderTunein || sourceID == constants.ProviderSpotify || sourceID == constants.ProviderAmazon {
 		for i := range sources {
 			if sources[i].SourceKeyType == sourceID {
-				return &sources[i], sources
+				return &sources[i]
 			}
 		}
+	}
+
+	return nil
+}
+
+func resolvePresetSource(ds *datastore.DataStore, account, device string, sources []models.ConfiguredSource, sourceID string, presetNumber int) (*models.ConfiguredSource, []models.ConfiguredSource) {
+	if src := findConfiguredSource(sources, sourceID); src != nil {
+		return src, sources
 	}
 
 	// Auto-add a canonical built-in source the speaker referenced but
 	// AfterTouch hasn't been told about (post-factory-reset state). For
 	// account-bound sources (Spotify, Amazon) we can't synthesise
 	// credentials, so the caller will reject the PUT instead.
-	if canonical, ok := ds.CanonicalSourceByID(sourceID); ok {
-		log.Printf("[Marge] UpdatePreset(preset=%d): auto-adding canonical source id=%s type=%s providerid=%s — speaker referenced a built-in source not yet in AfterTouch's configured-sources list; saving so the preset can land",
-			presetNumber, sanitizeLog(canonical.ID), sanitizeLog(canonical.SourceKeyType), sanitizeLog(canonical.SourceProviderID))
+	canonical, ok := ds.CanonicalSourceByID(sourceID)
+	if !ok {
+		return nil, sources
+	}
+
+	log.Printf("[Marge] UpdatePreset(preset=%d): auto-adding canonical source id=%s type=%s providerid=%s — speaker referenced a built-in source not yet in AfterTouch's configured-sources list; saving so the preset can land",
+		presetNumber, sanitizeLog(canonical.ID), sanitizeLog(canonical.SourceKeyType), sanitizeLog(canonical.SourceProviderID))
+
+	// Read-mutate-write atomically against the persisted list, not the
+	// possibly-stale `sources` snapshot the caller already read — a
+	// concurrent PUT for a different preset could be auto-adding (or have
+	// just added) a source at the same time, and a plain Get+Save here
+	// would silently lose whichever write landed second.
+	updated, saveErr := ds.MutateConfiguredSources(account, device, func(current []models.ConfiguredSource) ([]models.ConfiguredSource, error) {
+		if src := findConfiguredSource(current, sourceID); src != nil {
+			// Another concurrent caller already added it; nothing to do.
+			return current, nil
+		}
+
+		return append(current, canonical), nil
+	})
+	if saveErr != nil {
+		log.Printf("[Marge] UpdatePreset(preset=%d): SaveConfiguredSources after auto-add failed: %s — the preset will land but the source may not survive a service restart",
+			presetNumber, sanitizeErr(saveErr))
 
 		sources = append(sources, canonical)
-		if saveErr := ds.SaveConfiguredSources(account, device, sources); saveErr != nil {
-			log.Printf("[Marge] UpdatePreset(preset=%d): SaveConfiguredSources after auto-add failed: %s — the preset will land but the source may not survive a service restart",
-				presetNumber, sanitizeErr(saveErr))
-		}
 
 		return &sources[len(sources)-1], sources
 	}
 
-	return nil, sources
+	if src := findConfiguredSource(updated, sourceID); src != nil {
+		return src, updated
+	}
+
+	updated = append(updated, canonical)
+
+	return &updated[len(updated)-1], updated
 }
 
 // UpdatePreset updates or creates a preset for the specified account and device.
