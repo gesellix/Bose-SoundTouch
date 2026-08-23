@@ -1864,6 +1864,7 @@ func AddRecent(ds *datastore.DataStore, account, device string, sourceXML []byte
 
 	if _, err := ds.MutateRecents(account, device, func(recents []models.ServiceRecent) ([]models.ServiceRecent, error) {
 		var updated []models.ServiceRecent
+
 		recentObj, updated = updateOrCreateRecent(recents, input.Name, matchingSrc, input.ContentItemType, input.Location, device, utcTime)
 
 		return updated, nil
