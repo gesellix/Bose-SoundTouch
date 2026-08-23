@@ -1,5 +1,5 @@
 # golangci-lint configuration for Bose SoundTouch Go Library
-# Compatible with golangci-lint v2.8.0
+# Compatible with golangci-lint v2.13.1
 # See: https://golangci-lint.run/usage/configuration/
 
 version: "2"
