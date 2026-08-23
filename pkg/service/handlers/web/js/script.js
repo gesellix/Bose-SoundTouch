@@ -876,6 +876,37 @@ function getDeviceDisplayName(deviceId) {
     return deviceId;
 }
 
+// buildSyncConfirmMessage renders a human-readable summary of a destructive
+// SyncResult (see setup.SyncResult/SyncResourceDiff) for window.confirm() —
+// e.g. "Sync would remove 1 preset: Ici Roussillon. Continue?".
+function buildSyncConfirmMessage(result) {
+    const lines = ["This Data Sync would remove data that's currently stored:"];
+    for (const diff of result.diffs || []) {
+        if (!diff.destructive) {
+            continue;
+        }
+        const removedNote = diff.removed && diff.removed.length ? ": " + diff.removed.join(", ") : "";
+        lines.push("- " + diff.resource + ": " + diff.currentCount + " → " + diff.incomingCount + removedNote);
+    }
+    lines.push("This usually means the speaker's own live data was incomplete at this moment. Continue anyway?");
+    return lines.join("\n");
+}
+
+async function requestSync(deviceId, confirmed) {
+    let url = "/api/setup/sync/" + encodeURIComponent(deviceId);
+    if (confirmed) {
+        url += "?confirmed=true";
+    }
+    const response = await fetch(url, {method: "POST"});
+    let result = null;
+    try {
+        result = await response.clone().json();
+    } catch (e) {
+        // Non-JSON error body (e.g. a plain-text 500) — handled below via response.text().
+    }
+    return {response, result};
+}
+
 async function startSync() {
     const deviceId = document.getElementById("sync-device-list").value;
     if (!deviceId) {
@@ -895,14 +926,29 @@ async function startSync() {
     log.innerHTML = "";
 
     try {
-        const response = await fetch("/api/setup/sync/" + encodeURIComponent(deviceId), {method: "POST"},);
-        if (response.ok) {
+        let {response, result} = await requestSync(deviceId, false);
+
+        if (response.status === 409 && result) {
+            if (!confirm(buildSyncConfirmMessage(result))) {
+                status.style.backgroundColor = "#eef";
+                status.textContent = "Sync cancelled for " + display + " — nothing was changed.";
+                return;
+            }
+
+            ({response, result} = await requestSync(deviceId, true));
+        }
+
+        if (response.ok && result) {
             status.style.backgroundColor = "#dfd";
             status.textContent = "✅ Sync completed successfully for " + display + "!";
             results.style.display = "block";
-            log.textContent = "Data fetched and saved to local datastore for " + display + ".\nPresets: OK\nRecents: OK\nSources: OK";
+            const lines = (result.diffs || []).map(
+                (diff) => diff.resource + ": " + diff.currentCount + " → " + diff.incomingCount,
+            );
+            lines.push("sources: synced");
+            log.textContent = "Data fetched and saved to local datastore for " + display + ".\n" + lines.join("\n");
         } else {
-            const err = await response.text();
+            const err = result ? JSON.stringify(result) : await response.text();
             throw new Error(err);
         }
     } catch (error) {
