@@ -21,7 +21,11 @@ If your device doesn't expose the port, you can still use the on-device installe
 
 The storage space on the SoundTouch devices is very limited — stock rootfs typically has only a few MB free (e.g. ~4 MB on the ST20, see issue #268), well below the AfterTouch binary's ~12 MB. To work around this, the installer puts everything on `/mnt/nv/aftertouch` by default (the persistent partition, typically ~30 MB free) and points `/opt/aftertouch` at it via a symlink so the init script and runtime paths stay unchanged. Override the install target with `INSTALL_DIR=/some/path` if you've got room elsewhere.
 
-The space limitation also means we are currently unsure on how to update the system, because two binaries are already too large. We are currently working on this - both by checking how we can make the binaries smaller, but also on how we can extend the storage space (e.g. by running AfterTouch from a USB drive).
+Updating is genuinely tight on this partition, since the old binary, the new one, and a rollback backup can't all comfortably fit at once, and binaries only keep growing (the Go toolchain's own defaults alone add hundreds of KB per major version, independent of anything in this project). The installer handles this in a few ways:
+- The rollback backup is gzip-compressed (`.backup.gz`) rather than a plain copy, cutting its footprint by roughly a third.
+- Before downloading anything, it checks whether there's actually enough free space for the update, using the new binary's real size (a HEAD request), not a guess.
+- If there's enough room for the update itself but not enough extra for a backup, it asks for confirmation before proceeding without one — reading from `/dev/tty` since the installer is normally run as `curl | sh`. The default (empty input, or no `/dev/tty` available at all) is always to abort rather than silently skip the backup; set `AFTERTOUCH_FORCE_NO_BACKUP=yes` to skip that prompt for unattended/scripted installs.
+- If there isn't even enough room for the update itself, it aborts before downloading anything, rather than leaving a partially-overwritten, non-executable binary in place.
 
 ### Logs
 
