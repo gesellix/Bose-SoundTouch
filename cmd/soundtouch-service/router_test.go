@@ -39,11 +39,8 @@ func TestPrintRoutes(t *testing.T) {
 		// Now we might have "soundtouch-service.setupRouter.func1"
 		// or "command-line-arguments.setupRouter.func1"
 		// or "main.setupRouter.func1"
-		// Let's remove the first part if it's a known varying package name
-		if idx := strings.Index(handlerName, "setupRouter"); idx != -1 {
-			handlerName = handlerName[idx:]
-		}
-		// In case it's not setupRouter but still has a package prefix
+		// Remove the leading package/binary-name segment(s), whatever form
+		// they take.
 		for {
 			dotIdx := strings.Index(handlerName, ".")
 			if dotIdx == -1 {
