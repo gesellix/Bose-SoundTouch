@@ -177,9 +177,16 @@ redirect to discover the newest tag. If that lookup fails (offline, or a `curl`
 build without `-w` support), it falls back to a pinned version baked into the
 script.
 
-> **Tip — rollback:** if the new binary misbehaves, the installer left a `.backup` file alongside it:
+> **Tip — rollback:** if the new binary misbehaves, the installer left a backup file
+> alongside it, gzip-compressed as `.backup.gz` (plain `.backup`, uncompressed, if
+> `gzip` wasn't available on your device):
 > ```bash
-> ls /mnt/nv/aftertouch/aftertouch-service*.backup
+> ls /mnt/nv/aftertouch/aftertouch-service*.backup*
+> # .backup.gz (compressed):
+> gunzip -c /mnt/nv/aftertouch/aftertouch-service.<old-version>.backup.gz \
+>    > /mnt/nv/aftertouch/aftertouch-service
+> chmod +x /mnt/nv/aftertouch/aftertouch-service
+> # or, for an uncompressed .backup:
 > cp /mnt/nv/aftertouch/aftertouch-service.<old-version>.backup \
 >    /mnt/nv/aftertouch/aftertouch-service
 > /etc/init.d/aftertouch restart

@@ -97,6 +97,7 @@ fi
 # prior run was interrupted.
 echo "Disk usage before pre-install GC:"; df -h "$INSTALL_DIR"
 for f in "$INSTALL_DIR/aftertouch-service".*.backup \
+          "$INSTALL_DIR/aftertouch-service".*.backup.gz \
           "$INSTALL_DIR/aftertouch-service".*.old \
           "$INSTALL_DIR/aftertouch-service.new"; do
   [ -f "$f" ] || continue
@@ -121,8 +122,24 @@ if [ -f "$INSTALL_DIR/aftertouch-service" ]; then
   if [ -z "$current_version" ] || [ "$current_version" = "dev" ]; then
     current_version=$(date +%Y%m%d-%H%M%S)
   fi
+  # Binaries are tens of MB and only growing (see #614 investigation into
+  # Go 1.27's default binary-size increase), while /mnt/nv is small (tens of
+  # MB total). Stream straight into the compressed file rather than cp-then-
+  # gzip: at this point in the script the old binary is still live AND the
+  # newly-downloaded one is already sitting in $UPDATE_TMP_DIR, so an
+  # intermediate uncompressed backup copy would briefly need all three full
+  # copies on disk at once -- exactly the kind of moment that has already
+  # caused "no space left on device" failures here. Best effort: if gzip is
+  # missing, or the stream fails partway (e.g. disk fills mid-compress),
+  # fall back to a plain uncompressed copy exactly as before.
   BACKUP_FILE="$INSTALL_DIR/aftertouch-service.${current_version}.backup"
-  cp -p "$INSTALL_DIR/aftertouch-service" "$BACKUP_FILE"
+  if command -v gzip >/dev/null 2>&1 \
+      && gzip -c < "$INSTALL_DIR/aftertouch-service" > "$BACKUP_FILE.gz"; then
+    BACKUP_FILE="$BACKUP_FILE.gz"
+  else
+    rm -f "$BACKUP_FILE.gz"
+    cp -p "$INSTALL_DIR/aftertouch-service" "$BACKUP_FILE"
+  fi
   echo "Backed up current binary ($current_version) → $BACKUP_FILE"
 fi
 
@@ -136,6 +153,7 @@ chmod +x "$INSTALL_DIR/aftertouch-service"
 if [ -n "$BACKUP_FILE" ]; then
   echo "Disk usage before post-install GC:"; df -h "$INSTALL_DIR"
   for f in "$INSTALL_DIR/aftertouch-service".*.backup \
+            "$INSTALL_DIR/aftertouch-service".*.backup.gz \
             "$INSTALL_DIR/aftertouch-service".*.old \
             "$INSTALL_DIR/aftertouch-service.new"; do
     [ -f "$f" ] || continue
