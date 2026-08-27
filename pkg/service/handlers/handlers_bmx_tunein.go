@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
+	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -118,30 +119,37 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// HandleTuneInToken returns a TuneIn access token.
-func (s *Server) HandleTuneInToken(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		GrantType    string `json:"grant_type"`
-		RefreshToken string `json:"refresh_token"`
-	}
+// HandleTuneInToken returns an anonymous TuneIn access token.
+//
+// The registry advertises TUNEIN with authenticationModel.anonymousAccount
+// (autoCreate: true) — see bmx_services.json — so the speaker's very first
+// call here is a bootstrap request with no prior refresh_token to present.
+// This handler used to echo back whatever refresh_token the speaker sent
+// (mirroring an authenticated-refresh recording), which meant that very
+// first bootstrap call round-tripped an empty token. The speaker never
+// obtained a usable TuneIn account and subsequently rejected every TUNEIN
+// ContentItem selection with INVALID_SOURCE, even though /sources reported
+// TUNEIN as READY (READY only reflects registry presence, not a live
+// account). Match HandleOrionToken's unconditional-generation shape
+// instead: always mint a fresh token, regardless of what the speaker sent.
+func (s *Server) HandleTuneInToken(w http.ResponseWriter, _ *http.Request) {
+	token := datastore.GenerateSerialSecret("tunein")
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
-
-	// For now, we return the provided refresh_token as access_token and refresh_token,
-	// mirroring the behavior seen in the recordings.
-	resp := map[string]string{
-		"access_token":  req.RefreshToken,
-		"refresh_token": req.RefreshToken,
+	resp := map[string]interface{}{
+		"_embedded": map[string]interface{}{
+			"bmx_account": map[string]string{
+				"displayName": "",
+				"username":    "",
+			},
+		},
+		"access_token":  token,
+		"refresh_token": token,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
 	}
 }
 
