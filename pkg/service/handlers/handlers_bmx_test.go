@@ -203,6 +203,9 @@ func TestHandleTuneInToken(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
+	// Even when the speaker presents a refresh_token from a prior session,
+	// the handler always mints a fresh token rather than echoing the input
+	// back verbatim.
 	payload := `{"grant_type":"refresh_token","refresh_token":"test-refresh-token"}`
 	res, err := http.Post(ts.URL+"/bmx/tunein/v1/token", "application/json", strings.NewReader(payload))
 	if err != nil {
@@ -214,16 +217,75 @@ func TestHandleTuneInToken(t *testing.T) {
 		t.Errorf("Expected status 200, got %v", res.Status)
 	}
 
-	var resp map[string]string
+	var resp map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}
 
-	if resp["access_token"] != "test-refresh-token" {
-		t.Errorf("Expected access_token 'test-refresh-token', got %v", resp["access_token"])
+	accessToken, _ := resp["access_token"].(string)
+	refreshToken, _ := resp["refresh_token"].(string)
+
+	if accessToken == "" {
+		t.Error("Expected a non-empty access_token")
 	}
-	if resp["refresh_token"] != "test-refresh-token" {
-		t.Errorf("Expected refresh_token 'test-refresh-token', got %v", resp["refresh_token"])
+	if refreshToken == "" {
+		t.Error("Expected a non-empty refresh_token")
+	}
+	if accessToken != refreshToken {
+		t.Errorf("Expected access_token and refresh_token to match, got %q and %q", accessToken, refreshToken)
+	}
+	if accessToken == "test-refresh-token" {
+		t.Error("Expected a freshly generated token, not an echo of the request's refresh_token")
+	}
+
+	embedded, ok := resp["_embedded"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected _embedded object in response, got %v", resp["_embedded"])
+	}
+	if _, ok := embedded["bmx_account"]; !ok {
+		t.Error("Expected _embedded.bmx_account in response")
+	}
+}
+
+// TestHandleTuneInToken_Bootstrap covers the real-world trigger of the
+// original bug: a speaker's very first TUNEIN token request, made under
+// authenticationModel.anonymousAccount (autoCreate: true), has no prior
+// refresh_token to present at all. The old handler echoed back whatever
+// (possibly empty/absent) refresh_token it received, so this exact request
+// used to round-trip an empty token and the speaker would reject every
+// subsequent TUNEIN ContentItem selection with INVALID_SOURCE — even though
+// browse and search worked fine and the same stream URL played successfully
+// via Play URL/LOCAL_INTERNET_RADIO.
+func TestHandleTuneInToken_Bootstrap(t *testing.T) {
+	r, _ := setupRouter("http://localhost:8001", nil)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	payload := `{"grant_type":"refresh_token"}`
+	res, err := http.Post(ts.URL+"/bmx/tunein/v1/token", "application/json", strings.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %v", res.Status)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	accessToken, _ := resp["access_token"].(string)
+	refreshToken, _ := resp["refresh_token"].(string)
+
+	if accessToken == "" {
+		t.Error("Bootstrap request (no refresh_token) must still receive a non-empty access_token")
+	}
+	if refreshToken == "" {
+		t.Error("Bootstrap request (no refresh_token) must still receive a non-empty refresh_token")
 	}
 }
 
