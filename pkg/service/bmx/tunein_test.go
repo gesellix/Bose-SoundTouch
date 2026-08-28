@@ -2,9 +2,77 @@ package bmx
 
 import (
 	"encoding/base64"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
+
+// TestTuneInSectionsAshx_UntypedContainerSurfacesStations is a regression
+// test for a real-world bug: TuneIn's Browse.ashx?render=json responses
+// often wrap the actual stations for a category in a container object that
+// has "children" but no "type" field at all (unlike navigable sub-categories,
+// which are always type:"link"). The original parser's switch only ever
+// extracted "children" when itemType == "link", so these untyped containers
+// -- and every station nested inside them -- were silently dropped: browse
+// showed only category links, never any actual stations. Reproduces the
+// shape of a real captured Jazz-genre browse response.
+func TestTuneInSectionsAshx_UntypedContainerSurfacesStations(t *testing.T) {
+	const wantStationName = "SmoothJazz.com.pl (Poland)"
+
+	payload := `{
+		"head": {"status": "200", "title": "Jazz"},
+		"body": [
+			{
+				"text": "Stations",
+				"key": "stations",
+				"children": [
+					{
+						"type": "audio",
+						"text": "` + wantStationName + `",
+						"URL": "http://opml.radiotime.com/Tune.ashx?id=s106565",
+						"guide_id": "s106565",
+						"subtext": "Smooth Jazz"
+					}
+				]
+			}
+		]
+	}`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(payload))
+	}))
+	defer ts.Close()
+
+	parsed, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatalf("could not parse test server URL: %v", err)
+	}
+
+	allowedTuneInHosts[parsed.Hostname()] = true
+	defer delete(allowedTuneInHosts, parsed.Hostname())
+
+	sections, err := tuneInSectionsAshx(ts.URL, nil)
+	if err != nil {
+		t.Fatalf("tuneInSectionsAshx returned error: %v", err)
+	}
+
+	for _, section := range sections {
+		for _, item := range section.Items {
+			if item.Name == wantStationName {
+				if item.Links == nil || item.Links.BmxPlayback == nil {
+					t.Errorf("station %q was surfaced but has no BmxPlayback link: %+v", wantStationName, item)
+				}
+
+				return
+			}
+		}
+	}
+
+	t.Fatalf("expected station %q to be surfaced from the untyped container, got sections: %+v", wantStationName, sections)
+}
 
 func TestTuneInRenderJSONURI(t *testing.T) {
 	tests := []struct {
