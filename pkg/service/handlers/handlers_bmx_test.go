@@ -204,7 +204,7 @@ func TestHandleTuneInToken(t *testing.T) {
 	defer ts.Close()
 
 	// Even when the speaker presents a refresh_token from a prior session,
-	// the handler always mints a fresh token rather than echoing the input
+	// the handler always mints its own token rather than echoing the input
 	// back verbatim.
 	payload := `{"grant_type":"refresh_token","refresh_token":"test-refresh-token"}`
 	res, err := http.Post(ts.URL+"/bmx/tunein/v1/token", "application/json", strings.NewReader(payload))
@@ -235,7 +235,7 @@ func TestHandleTuneInToken(t *testing.T) {
 		t.Errorf("Expected access_token and refresh_token to match, got %q and %q", accessToken, refreshToken)
 	}
 	if accessToken == "test-refresh-token" {
-		t.Error("Expected a freshly generated token, not an echo of the request's refresh_token")
+		t.Error("Expected a minted token, not an echo of the request's refresh_token")
 	}
 
 	embedded, ok := resp["_embedded"].(map[string]interface{})
@@ -286,6 +286,29 @@ func TestHandleTuneInToken_Bootstrap(t *testing.T) {
 	}
 	if refreshToken == "" {
 		t.Error("Bootstrap request (no refresh_token) must still receive a non-empty refresh_token")
+	}
+}
+
+// TestHandleTuneInToken_MalformedBodyRejected covers the request-validation
+// path that stayed in place alongside the unconditional-mint fix: a body
+// that isn't even valid JSON is not a normal bootstrap call (which is still
+// well-formed JSON, just with an empty/absent refresh_token — see
+// TestHandleTuneInToken_Bootstrap), so it should be rejected rather than
+// silently minting a token anyway.
+func TestHandleTuneInToken_MalformedBodyRejected(t *testing.T) {
+	r, _ := setupRouter("http://localhost:8001", nil)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	res, err := http.Post(ts.URL+"/bmx/tunein/v1/token", "application/json", strings.NewReader("not json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for a malformed body, got %v", res.Status)
 	}
 }
 

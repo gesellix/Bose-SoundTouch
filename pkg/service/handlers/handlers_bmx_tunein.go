@@ -131,8 +131,30 @@ func (s *Server) HandleTuneInPlaybackPodcast(w http.ResponseWriter, r *http.Requ
 // ContentItem selection with INVALID_SOURCE, even though /sources reported
 // TUNEIN as READY (READY only reflects registry presence, not a live
 // account). Match HandleOrionToken's unconditional-generation shape
-// instead: always mint a fresh token, regardless of what the speaker sent.
-func (s *Server) HandleTuneInToken(w http.ResponseWriter, _ *http.Request) {
+// instead: always mint a token, regardless of what the speaker sent.
+//
+// The token itself is a stable, constant value (datastore.GenerateSerialSecret
+// is a pure function of the hardcoded "tunein" literal), not a fresh or
+// per-device secret — it's the same value for every device and every call.
+// That's fine today only because the Authorization gate is disabled for all
+// TuneIn handlers (see HandleTuneInReport below) and nothing validates the
+// token's uniqueness; if either of those ever changes, this would need a
+// real per-device/per-session token instead.
+func (s *Server) HandleTuneInToken(w http.ResponseWriter, r *http.Request) {
+	// The unconditional mint above means we never use the decoded values,
+	// but we still decode the body so a genuinely malformed request (not a
+	// normal bootstrap call, which is valid JSON with an empty/absent
+	// refresh_token) gets a 400 instead of silently succeeding.
+	var req struct {
+		GrantType    string `json:"grant_type"`
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
 	token := datastore.GenerateSerialSecret("tunein")
 
 	resp := map[string]interface{}{
