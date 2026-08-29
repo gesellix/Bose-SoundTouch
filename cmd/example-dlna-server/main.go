@@ -654,8 +654,8 @@ func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 
 			browseAttrs = []any{
-				"objectID", between(string(body), "<ObjectID>", "</ObjectID>"),
-				"browseFlag", between(string(body), "<BrowseFlag>", "</BrowseFlag>"),
+				"objectID", sanitizeLog(between(string(body), "<ObjectID>", "</ObjectID>")),
+				"browseFlag", sanitizeLog(between(string(body), "<BrowseFlag>", "</BrowseFlag>")),
 			}
 		}
 
@@ -664,7 +664,7 @@ func withAccessLog(logger *slog.Logger, next http.Handler) http.Handler {
 
 		attrs := []any{
 			"method", r.Method,
-			"path", r.URL.Path,
+			"path", sanitizeLog(r.URL.Path),
 			"status", rec.status,
 			"bytes", rec.bytes,
 			"from", r.RemoteAddr,
