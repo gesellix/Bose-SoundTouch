@@ -102,7 +102,6 @@ function App() {
             if (msg.type === 'devices') {
                 setDevices(msg.data || {});
             } else if (msg.type === 'discovery_status') {
-                console.log('[DEBUG_LOG] discovery_status:', msg.data);
                 if (msg.data?.isDiscovering !== undefined) {
                     setIsDiscovering(msg.data.isDiscovering);
                 } else if (msg.data?.status === 'starting') {
