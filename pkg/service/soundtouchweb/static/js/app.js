@@ -115,7 +115,11 @@ function App() {
                 }
             } else if (msg.type === 'status_update' && msg.deviceId) {
                 setDevices(prev => {
-                    if (!prev[msg.deviceId]) return prev;
+                    // Object.prototype.hasOwnProperty, not a plain prev[msg.deviceId]
+                    // truthy check: a deviceId of "__proto__" or "constructor" would
+                    // otherwise resolve through the prototype chain to a truthy value
+                    // and pass the check despite not being a real, known device.
+                    if (!Object.prototype.hasOwnProperty.call(prev, msg.deviceId)) return prev;
                     return {
                         ...prev,
                         [msg.deviceId]: { ...prev[msg.deviceId], status: msg.data },
