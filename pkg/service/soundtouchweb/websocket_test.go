@@ -77,7 +77,10 @@ func TestUpdateDeviceStatusRefreshesGroup(t *testing.T) {
 	</group>`)
 	defer server.Close()
 
-	conn := webtypes.NewDeviceConnection(client.NewClientFromHost(server.URL), &models.DeviceInfo{Type: "SoundTouch 10"})
+	conn := webtypes.NewDeviceConnection(client.NewClientFromHost(server.URL), &models.DeviceInfo{
+		DeviceID: "master-1",
+		Type:     "SoundTouch 10",
+	})
 	NewWebApp().UpdateDeviceStatus("device-1", conn)
 
 	status := conn.Status()
@@ -95,6 +98,9 @@ func TestUpdateDeviceStatusRefreshesGroup(t *testing.T) {
 
 	if !status.IsConnected {
 		t.Error("successful status refresh should mark the device connected")
+	}
+	if status.Zone == nil || status.Zone.Master != "master-1" || len(status.Zone.Members) != 1 {
+		t.Fatalf("Zone = %+v, want refreshed multiroom topology", status.Zone)
 	}
 }
 
@@ -159,6 +165,7 @@ func TestUpdateDeviceStatusDoesNotOverwriteNewerNameEvent(t *testing.T) {
 		"/sources":     `<sources/>`,
 		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
 		"/getGroup":    `<group/>`,
+		"/getZone":     `<zone master="device-1"/>`,
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -230,6 +237,7 @@ func TestUpdateDeviceStatusSkipsGroupForNonStereoModel(t *testing.T) {
 			"/presets":     `<presets/>`,
 			"/sources":     `<sources/>`,
 			"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+			"/getZone":     `<zone master="device-1"/>`,
 		}
 		body, ok := responses[r.URL.Path]
 		if !ok {
@@ -324,6 +332,73 @@ func TestApplyGroupUpdatedEventReplacesGroup(t *testing.T) {
 
 	if conn.Status().Group != nil {
 		t.Errorf("teardown event did not clear the group: %+v", conn.Status().Group)
+	}
+}
+
+func TestRefreshZonesAfterEventClearsCachedMasterClaim(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/getZone" {
+			http.NotFound(w, r)
+			return
+		}
+
+		_, _ = w.Write([]byte(`<zone master="master-id"/>`))
+	}))
+	defer server.Close()
+
+	app := NewWebApp()
+	master := webtypes.NewDeviceConnection(client.NewClientFromHost(server.URL), &models.DeviceInfo{
+		DeviceID: "master-id",
+		Name:     "Kitchen",
+	})
+	master.SetStatus(&webtypes.DeviceStatus{Zone: &models.ZoneInfo{
+		Master:  "master-id",
+		Members: []models.Member{{DeviceID: "member-id", IP: "192.0.2.20"}},
+	}})
+	app.AddDevice("192.0.2.10", master)
+	member := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{
+		DeviceID: "member-id",
+		Name:     "Dining",
+	})
+	app.AddDevice("192.0.2.20", member)
+
+	// Some firmware events omit deviceID. The callback must fall back to the
+	// connection's hardware ID, not its IP-keyed registry entry.
+	app.refreshZonesAfterEvent(zoneEventDeviceID("", member), "")
+
+	if master.Status().Zone != nil {
+		t.Fatalf("dissolved zone remained cached: %+v", master.Status().Zone)
+	}
+}
+
+func TestReserveZoneRefreshesAfterEventFencesOlderPollBeforeIO(t *testing.T) {
+	app := NewWebApp()
+	master := webtypes.NewDeviceConnection(client.NewClientFromHost("http://127.0.0.1"), &models.DeviceInfo{
+		DeviceID: "master-id",
+		Name:     "Kitchen",
+	})
+	initialZone := &models.ZoneInfo{
+		Master:  "master-id",
+		Members: []models.Member{{DeviceID: "member-id", IP: "192.0.2.20"}},
+	}
+	master.SetStatus(&webtypes.DeviceStatus{Zone: initialZone})
+	app.AddDevice("192.0.2.10", master)
+
+	staleGeneration := master.BeginZoneRefresh()
+	refreshes := app.reserveZoneRefreshesAfterEvent("member-id", "")
+	if len(refreshes) != 1 || refreshes[0].connection != master {
+		t.Fatalf("reserved refreshes = %+v, want the cached master", refreshes)
+	}
+
+	staleZone := &models.ZoneInfo{
+		Master:  "master-id",
+		Members: []models.Member{{DeviceID: "old-member", IP: "192.0.2.30"}},
+	}
+	if master.ApplyPolledZone(staleGeneration, "master-id", staleZone) {
+		t.Fatal("pre-event /getZone response crossed the event reservation barrier")
+	}
+	if master.Status().Zone != initialZone {
+		t.Fatalf("stale poll changed the cached topology: %+v", master.Status().Zone)
 	}
 }
 
@@ -428,6 +503,7 @@ func newStatusTestServer(t *testing.T, groupStatus int, groupBody string) *httpt
 		"/presets":     `<presets/>`,
 		"/sources":     `<sources/>`,
 		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+		"/getZone":     `<zone master="master-1"><member ipaddress="192.0.2.20">member-2</member></zone>`,
 	}
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
