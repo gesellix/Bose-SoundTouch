@@ -1661,7 +1661,6 @@ async function fetchInteractions() {
             const path = i.path || i.Path || "";
             const status = i.status || i.Status || "";
             const category = i.category || i.Category || "";
-            const session = i.session || i.Session || "";
             const file = i.file || i.File || "";
             const scmudcData = i.scmudc_data || i.SCMUDCData || null;
 
