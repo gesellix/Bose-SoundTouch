@@ -5,6 +5,20 @@ async function req(url, opts = {}) {
     return r.json();
 }
 
+async function checkedReq(url, opts = {}) {
+    const r = await fetch(url, opts);
+    let response;
+    try {
+        response = await r.json();
+    } catch (_) {
+        throw new Error(`Request failed (${r.status})`);
+    }
+    if (!r.ok || response?.success === false) {
+        throw new Error(response?.error || `Request failed (${r.status})`);
+    }
+    return response;
+}
+
 export const api = {
     devices: () => req('/api/control/devices'),
     device: (id) => req(`/api/control/devices/${id}`),
@@ -51,7 +65,11 @@ export const api = {
     tuneInSearchNext: (cursor) => req(`/api/control/providers/tunein/search/next?cursor=${encodeURIComponent(cursor)}`),
     control: (id, action, presetId) => req(`/api/control/devices/${id}/action/${action}?id=${presetId}`),
     storePreset: (id, slotId) => req(`/api/control/devices/${id}/action/storepreset?id=${slotId}`),
-    selectSource: (id, source, account) => req(`/api/control/devices/${id}/action/source?name=${encodeURIComponent(source)}&account=${encodeURIComponent(account || '')}`),
+    selectSource: (id, source, account) => checkedReq(`/api/control/devices/${id}/action/source`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ source, account: account ?? '' }),
+    }),
     tuneInPlay: (deviceId, item) => req(`/api/control/devices/${deviceId}/providers/tunein/play`, {
         method: 'POST',
         headers: JSON_HEADERS,

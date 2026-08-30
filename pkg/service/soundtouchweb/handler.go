@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -697,19 +698,50 @@ func (app *WebApp) handleBassControl(w http.ResponseWriter, r *http.Request, dev
 	app.sendControlResponse(w, err, fmt.Sprintf("Bass set to %d", bassReq.Level))
 }
 
-// handleSourceControl processes source control requests
+// handleSourceControl processes source control requests. POST with an exact
+// {source, account} JSON body is canonical. GET query parameters remain as a
+// temporary compatibility surface and are explicitly marked deprecated.
 func (app *WebApp) handleSourceControl(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection) {
-	sourceParam := r.URL.Query().Get("name")
+	var sourceParam, accountParam string
+
+	switch r.Method {
+	case http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+
+		var sourceReq webtypes.SourceRequest
+		if err := decoder.Decode(&sourceReq); err != nil {
+			app.sendError(w, "Invalid source data", http.StatusBadRequest)
+			return
+		}
+
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			app.sendError(w, "Invalid source data", http.StatusBadRequest)
+			return
+		}
+
+		sourceParam = sourceReq.Source
+		accountParam = sourceReq.Account
+	case http.MethodGet:
+		w.Header().Set("Deprecation", "true")
+		w.Header().Set("Warning", `299 - "GET source control is deprecated; use POST with a JSON body"`)
+
+		sourceParam = r.URL.Query().Get("name")
+		accountParam = r.URL.Query().Get("account")
+	default:
+		app.sendError(w, "POST required for source control", http.StatusMethodNotAllowed)
+		return
+	}
+
 	if sourceParam == "" {
 		app.sendError(w, "Source name required", http.StatusBadRequest)
 		return
 	}
 
-	// Forward the optional account parameter as sourceAccount. Devices with
-	// multiple jacks that share source="AUX" (e.g. ST-5 CD/Aux inputs)
-	// disambiguate them via distinct sourceAccount values (AUX, AUX1, …).
-	accountParam := r.URL.Query().Get("account")
-
+	// Forward account verbatim as sourceAccount. Devices with multiple jacks
+	// that share source="AUX" (e.g. ST-5 CD/Aux inputs) disambiguate them via
+	// distinct sourceAccount values (AUX, AUX1, …).
 	if device.Client == nil {
 		app.sendError(w, "Device client not available", http.StatusInternalServerError)
 		return

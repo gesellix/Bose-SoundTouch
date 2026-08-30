@@ -752,6 +752,7 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 	volume, volumeErr := conn.Client.GetVolume()
 	presets, presetsErr := conn.Client.GetPresets()
 	sources, sourcesErr := conn.Client.GetSources()
+	sourcesReadAt := time.Now()
 	bass, bassErr := conn.Client.GetBass()
 
 	var (
@@ -797,12 +798,13 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 
 	if sourcesErr == nil {
 		anyFetchSucceeded = true
-
-		conn.CompleteFieldPoll(webtypes.FieldSources, sourcesGen, func(s *webtypes.DeviceStatus) {
-			s.Sources = sources
-			s.LastActivity = time.Now()
-		})
 	}
+
+	// Unlike the other fields, a FAILED /sources read is merged too: the last
+	// known inventory stays visible but is marked stale so it cannot be acted
+	// on. Running through CompleteFieldPoll is what makes a newer failure
+	// fence an older, still-in-flight success.
+	updateSourcesCache(conn, sourcesGen, sources, sourcesErr, sourcesReadAt)
 
 	if bassErr == nil {
 		anyFetchSucceeded = true
@@ -847,6 +849,30 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 			conn.ApplyPolledGroup(groupGeneration, group)
 		}
 	}
+}
+
+// updateSourcesCache records a source refresh, successful or not. A failure
+// keeps the previous inventory and its read time, but marks it stale so the
+// player stops offering it until a read succeeds again.
+func updateSourcesCache(
+	conn *webtypes.DeviceConnection,
+	generation uint64,
+	sources *models.Sources,
+	err error,
+	readAt time.Time,
+) bool {
+	return conn.CompleteFieldPoll(webtypes.FieldSources, generation, func(s *webtypes.DeviceStatus) {
+		if err != nil {
+			s.SourcesStale = true
+
+			return
+		}
+
+		s.Sources = sources
+		s.SourcesReadAt = readAt
+		s.SourcesStale = false
+		s.LastActivity = time.Now()
+	})
 }
 
 func (app *WebApp) applyGroupUpdatedEvent(

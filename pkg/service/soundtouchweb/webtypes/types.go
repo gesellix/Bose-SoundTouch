@@ -111,6 +111,8 @@ type DeviceStatus struct {
 	Volume                 *models.Volume          `json:"volume,omitempty"`
 	Presets                *models.Presets         `json:"presets,omitempty"`
 	Sources                *models.Sources         `json:"sources,omitempty"`
+	SourcesStale           bool                    `json:"sourcesStale,omitempty"`
+	SourcesReadAt          time.Time               `json:"-"`
 	Bass                   *models.Bass            `json:"bass,omitempty"`
 	Group                  *models.Group           `json:"group,omitempty"`
 	Connectivity           Connectivity            `json:"connectivity"`
@@ -119,6 +121,18 @@ type DeviceStatus struct {
 	SpeakerConnectionState *SpeakerConnectionState `json:"speakerConnectionState,omitempty"`
 	IsConnected            bool                    `json:"isConnected"`
 	LastActivity           time.Time               `json:"lastActivity"`
+
+	// Revision is a per-connection monotonic counter advanced by every
+	// successful UpdateStatus. It lets the browser order a full `devices`
+	// snapshot against a `status_update` delta -- without it the two frames
+	// carry no sequence at all and a slow snapshot can clobber a newer delta.
+	Revision uint64 `json:"revision"`
+	// NowPlayingRevision is the FieldNowPlaying generation that last wrote
+	// NowPlaying. Revision alone cannot answer "did now-playing actually
+	// change?", because an unrelated field's merge advances it too; a source
+	// selection waiting for authoritative confirmation needs exactly that
+	// distinction.
+	NowPlayingRevision uint64 `json:"nowPlayingRevision"`
 }
 
 // Connectivity is the player's aggregate view of HTTP and event-stream
@@ -137,6 +151,10 @@ const (
 	offlineFailureThreshold = 2
 	offlineGracePeriod      = 60 * time.Second
 )
+
+// sourceCacheTTL bounds how long a successfully-read source inventory stays
+// actionable without a fresh confirmation from the speaker.
+const sourceCacheTTL = 30 * time.Second
 
 // SpeakerConnectionState is the network state reported by the speaker.
 type SpeakerConnectionState struct {
@@ -247,7 +265,20 @@ func (c *DeviceConnection) Info() *models.DeviceInfo {
 // mutated. Use UpdateStatus or SetStatus to apply changes. Never returns
 // nil for connections built via NewDeviceConnection.
 func (c *DeviceConnection) Status() *DeviceStatus {
-	return c.status.Load()
+	return sourceCacheStatusAt(c.status.Load(), time.Now(), sourceCacheTTL)
+}
+
+func sourceCacheStatusAt(status *DeviceStatus, now time.Time, ttl time.Duration) *DeviceStatus {
+	stale := status.SourcesStale || status.Sources != nil && !status.SourcesReadAt.IsZero() &&
+		!now.Before(status.SourcesReadAt.Add(ttl))
+	if stale == status.SourcesStale {
+		return status
+	}
+
+	next := *status
+	next.SourcesStale = stale
+
+	return &next
 }
 
 // Done returns a channel that is closed when the connection is removed
@@ -334,8 +365,40 @@ func (c *DeviceConnection) FinishWebSocketLoop() {
 // SetStatus atomically replaces the entire status. Use sparingly —
 // UpdateStatus is the preferred entry point because it preserves
 // concurrent changes from other goroutines.
+//
+// Revision is derived from the currently stored status rather than trusted
+// from the caller: a replacement that reset it to the caller's zero value
+// would make every browser holding a higher revision reject this device's
+// subsequent updates outright. Replacing the whole status also supersedes
+// every field, so each StatusField generation is advanced past any poll
+// still in flight.
 func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
-	c.status.Store(s)
+	nowPlayingGeneration := c.supersedeAllFields()
+
+	for {
+		old := c.status.Load()
+		next := *s
+		next.Revision = old.Revision + 1
+		next.NowPlayingRevision = nowPlayingGeneration
+
+		if c.status.CompareAndSwap(old, &next) {
+			return
+		}
+	}
+}
+
+// supersedeAllFields advances every StatusField generation past whatever is
+// currently in flight and returns FieldNowPlaying's new generation.
+func (c *DeviceConnection) supersedeAllFields() uint64 {
+	c.fieldGenMu.Lock()
+	defer c.fieldGenMu.Unlock()
+
+	for field := range c.fieldGen {
+		c.fieldGen[field].issued++
+		c.fieldGen[field].applied = c.fieldGen[field].issued
+	}
+
+	return c.fieldGen[FieldNowPlaying].applied
 }
 
 // BeginFieldPoll reserves a generation for an asynchronous fetch of field,
@@ -367,7 +430,10 @@ func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint6
 	c.fieldGen[field].applied = generation
 	c.fieldGenMu.Unlock()
 
-	c.UpdateStatus(mut)
+	c.UpdateStatus(func(status *DeviceStatus) {
+		mut(status)
+		recordFieldRevision(status, field, generation)
+	})
 
 	return true
 }
@@ -378,10 +444,26 @@ func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint6
 func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceStatus)) {
 	c.fieldGenMu.Lock()
 	c.fieldGen[field].issued++
-	c.fieldGen[field].applied = c.fieldGen[field].issued
+	generation := c.fieldGen[field].issued
+	c.fieldGen[field].applied = generation
 	c.fieldGenMu.Unlock()
 
-	c.UpdateStatus(mut)
+	c.UpdateStatus(func(status *DeviceStatus) {
+		mut(status)
+		recordFieldRevision(status, field, generation)
+	})
+}
+
+// recordFieldRevision publishes the generation that just wrote field, for the
+// fields whose ordering a client needs to observe. Only FieldNowPlaying is
+// published today: a source selection confirms itself by waiting for a
+// now-playing write strictly newer than the one it started from, and the
+// aggregate Revision cannot express that, because any other field's merge
+// advances it too.
+func recordFieldRevision(status *DeviceStatus, field StatusField, generation uint64) {
+	if field == FieldNowPlaying {
+		status.NowPlayingRevision = generation
+	}
 }
 
 // UpdateStatus atomically applies mut to a copy of the current status
@@ -397,11 +479,14 @@ func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceSt
 // reader still holding the previous snapshot). Production callers
 // receive these values fresh from the device API, so this is the
 // natural shape.
+//
+// Every successful store advances Revision exactly once.
 func (c *DeviceConnection) UpdateStatus(mut func(*DeviceStatus)) {
 	for {
 		old := c.status.Load()
 		next := *old
 		mut(&next)
+		next.Revision = old.Revision + 1
 
 		if c.status.CompareAndSwap(old, &next) {
 			return
@@ -733,6 +818,12 @@ type VolumeRequest struct {
 // BassRequest represents a bass control request
 type BassRequest struct {
 	Level int `json:"level"`
+}
+
+// SourceRequest represents an exact source selection request.
+type SourceRequest struct {
+	Source  string `json:"source"`
+	Account string `json:"account"`
 }
 
 // WebSocketMessage represents messages sent over WebSocket

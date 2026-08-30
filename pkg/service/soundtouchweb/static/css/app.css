@@ -700,11 +700,23 @@ img { display: block; max-width: 100%; }
     font-size: .8rem;
     transition: background .1s, border-color .1s;
 }
-.source-btn:hover { background: var(--bg); }
+.source-btn:hover:not(:disabled) { background: var(--bg); }
+.source-btn:disabled { cursor: not-allowed; opacity: .55; }
 .source-btn.active { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+.source-btn.pending { cursor: wait; }
+.source-btn.provisional-confirmed { border-style: dashed; cursor: progress; }
+.source-btn.unverified { border-color: #a76b00; }
+.source-btn.failed { border-color: var(--offline); }
 .source-btn.local { border-style: dashed; }
 .source-icon { font-size: .9rem; line-height: 1; }
 .source-name { font-weight: 500; }
+.source-command-status {
+    min-height: 1.2em;
+    margin-top: .35rem;
+    color: var(--text-dim);
+    font-size: .75rem;
+}
+.source-command-status.availability { color: #8a5a00; }
 
 .stereo-pair-note {
     display: flex;

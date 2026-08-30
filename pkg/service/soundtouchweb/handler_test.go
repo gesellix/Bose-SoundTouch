@@ -850,12 +850,10 @@ func TestHandleDevicePlay_SourceAccountFiltering(t *testing.T) {
 	}
 }
 
-// TestHandleSourceControl_ForwardsAccount verifies that the account query
-// parameter is forwarded as sourceAccount in the /select XML. Devices like
-// the ST-5 expose multiple AUX jacks that share source="AUX" and are only
-// disambiguated by distinct sourceAccount values (AUX, AUX1, …). Regression
-// test for issue #444, where the handler dropped the account parameter.
-func TestHandleSourceControl_ForwardsAccount(t *testing.T) {
+// TestHandleSourceControl_LegacyGETForwardsAccount verifies that the temporary
+// GET compatibility route still forwards sourceAccount while clearly marking
+// the response deprecated.
+func TestHandleSourceControl_LegacyGETForwardsAccount(t *testing.T) {
 	tests := []struct {
 		name              string
 		query             string
@@ -903,6 +901,12 @@ func TestHandleSourceControl_ForwardsAccount(t *testing.T) {
 
 			if w.Code != http.StatusOK {
 				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+			if got := w.Header().Get("Deprecation"); got != "true" {
+				t.Errorf("Deprecation header = %q, want true", got)
+			}
+			if got := w.Header().Get("Warning"); !strings.Contains(got, "use POST") {
+				t.Errorf("Warning header = %q, want POST migration guidance", got)
 			}
 
 			if want := `source="AUX"`; !strings.Contains(capturedBody, want) {
@@ -1057,6 +1061,63 @@ func TestHandleZoneAddRejectsStandbyMaster(t *testing.T) {
 	}
 	if want := []string{"GET /now_playing", "GET /sources"}; !reflect.DeepEqual(paths, want) {
 		t.Fatalf("requests = %v, want %v", paths, want)
+	}
+}
+
+func TestHandleSourceControl_CanonicalPOSTForwardsExactBody(t *testing.T) {
+	var capturedBody string
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/select" {
+			b, _ := io.ReadAll(r.Body)
+			capturedBody = string(b)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer speaker.Close()
+
+	app := NewWebApp()
+	conn := webtypes.NewDeviceConnection(
+		client.NewClient(&client.Config{Host: speaker.URL}),
+		&models.DeviceInfo{Name: "Test Speaker"},
+	)
+	conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
+	app.AddDevice("source-device", conn)
+
+	body := strings.NewReader(`{"source":"AUX","account":"AUX1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/control/devices/source-device/action/source", body)
+	req.Header.Set("Content-Type", "application/json")
+	req = withChiParams(req, map[string]string{"id": "source-device", "action": "source"})
+	w := httptest.NewRecorder()
+
+	app.HandleAPIControl(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("Deprecation"); got != "" {
+		t.Errorf("canonical POST unexpectedly marked deprecated: %q", got)
+	}
+	for _, want := range []string{`source="AUX"`, `sourceAccount="AUX1"`} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("XML should contain %q, got: %s", want, capturedBody)
+		}
+	}
+}
+
+func TestHandleSourceControl_CanonicalPOSTRejectsUnknownFields(t *testing.T) {
+	app := NewWebApp()
+	conn := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{Name: "Test Speaker"})
+	app.AddDevice("source-device", conn)
+
+	body := strings.NewReader(`{"source":"AUX","account":"AUX1","name":"legacy"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/control/devices/source-device/action/source", body)
+	req = withChiParams(req, map[string]string{"id": "source-device", "action": "source"})
+	w := httptest.NewRecorder()
+
+	app.HandleAPIControl(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
