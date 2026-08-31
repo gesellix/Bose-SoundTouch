@@ -70,13 +70,17 @@ function matchesContentExpectation(nowPlaying, expected) {
     return Boolean(expected.source);
 }
 
-function matchesCommand(status, command) {
+export function matchesCommand(status, command) {
     if (command?.expectationReady === false) return false;
     const action = commandAction(command);
     const nowPlaying = status?.nowPlaying;
     if (action === 'power-off') return nowPlaying?.Source === 'STANDBY';
     if (action === 'power-on') return Boolean(nowPlaying?.Source) && nowPlaying.Source !== 'STANDBY';
-    if (action === 'pause') return nowPlaying?.PlayStatus === 'PAUSE_STATE';
+    if (action === 'pause') {
+        return nowPlaying?.PlayStatus === 'PAUSE_STATE' ||
+            (nowPlaying?.PlayStatus === 'STOP_STATE' &&
+                Boolean(nowPlaying.Source) && nowPlaying.Source !== 'STANDBY');
+    }
     if (action === 'play') return nowPlaying?.PlayStatus === 'PLAY_STATE';
     if (action === 'mute-on') return status?.volume?.MuteEnabled === true;
     if (action === 'mute-off') return status?.volume?.MuteEnabled === false;
