@@ -40,7 +40,7 @@ function inferredPhysicalCount(members) {
         total + Math.max(1, member?.physicalMembers?.length || 0), 0);
 }
 
-export function Zone({ deviceId, devices }) {
+export function Zone({ deviceId, devices, onSelectMember }) {
     const [zone, setZone] = useState(null);
     const [candidates, setCandidates] = useState({});
     const [loading, setLoading] = useState(true);
@@ -149,7 +149,9 @@ export function Zone({ deviceId, devices }) {
 
         return html`
             <div class="zone-logical-member" key=${resolved.controlId}>
-                <div class="zone-logical-header">
+                <button class="zone-logical-header zone-member-open" type="button"
+                        aria-label=${`Open details for ${metadata.name}`}
+                        onClick=${() => onSelectMember?.(resolved.controlId)}>
                     <span class="device-indicator ${metadata.connectivity}" role="status"
                           title=${metadata.connectivityLabel}
                           aria-label=${metadata.statusAriaLabel}></span>
@@ -164,7 +166,12 @@ export function Zone({ deviceId, devices }) {
                             <span>${metadata.kind}</span>
                         </div>
                     </div>
-                </div>
+                    <svg class="zone-member-open-icon" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true">
+                        <path d="m9 18 6-6-6-6" />
+                    </svg>
+                </button>
 
                 ${isStereoPair ? html`
                     <div class="zone-physical-members">

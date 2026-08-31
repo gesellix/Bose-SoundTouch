@@ -115,12 +115,16 @@ func (app *WebApp) deviceViewSnapshot() map[string]deviceView {
 	return projectDeviceEntries(app.DeviceSnapshot())
 }
 
-// deviceViewForID projects the registry into a single logical control
-// target and reports whether id is currently visible in the player-facing
-// inventory. A hidden stereo-pair member is not visible under its own id --
-// only its pair's master key exposes it, via StereoPair.Members.
+// deviceViewForID projects the registry into one logical control target.
+// Multiroom-zone members remain addressable by the detail API even though the
+// inventory folds them into the zone master's card. A hidden physical stereo
+// peer remains inaccessible under its own id; only the pair master is a
+// logical control target.
 func (app *WebApp) deviceViewForID(id string) (deviceView, bool) {
-	view, ok := app.deviceViewSnapshot()[id]
+	devices, _, _ := projectLogicalDeviceEntries(
+		captureDeviceProjectionEntries(app.DeviceSnapshot()),
+	)
+	view, ok := devices[id]
 
 	return view, ok
 }
