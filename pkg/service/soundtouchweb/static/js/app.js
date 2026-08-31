@@ -15,9 +15,16 @@ import { Library } from './components/Library.js';
 import { PlayURL } from './components/PlayURL.js';
 import { TTS } from './components/TTS.js';
 import { Announcements } from './components/Announcements.js';
+import { ContentPlaybackCommand } from './components/ContentPlaybackCommand.js';
 import { api } from './api.js';
 import { isSoundTouch10StereoPair } from './stereoPresentation.mjs';
 import { removeDeviceAndRefresh } from './deviceRemoval.js';
+import {
+    DISCRETE_COMMAND_READBACK_DELAYS_MS,
+    contentExpectation,
+    playbackIdentity,
+    useDiscreteCommand,
+} from './discreteCommand.js';
 
 const html = htm.bind(h);
 
@@ -83,217 +90,6 @@ function replaceDevice(previous, deviceId, device) {
     ]);
 }
 
-const DISCRETE_COMMAND_READBACK_DELAYS_MS = [2000, 5000, 10000];
-
-function nowPlayingRevision(status) {
-    const revision = status?.nowPlayingRevision;
-    return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
-}
-
-function commandAction(command) {
-    return typeof command === 'string' ? command : command?.action;
-}
-
-function discreteCommandRevision(status, command) {
-    return commandAction(command)?.startsWith('mute-')
-        ? statusRevision(status)
-        : nowPlayingRevision(status);
-}
-
-function playbackIdentity(nowPlaying) {
-    if (!nowPlaying) return '';
-    const item = nowPlaying.ContentItem || {};
-    return [
-        nowPlaying.Source,
-        nowPlaying.SourceAccount,
-        item.Source,
-        item.SourceAccount,
-        item.Location,
-        nowPlaying.TrackID,
-        nowPlaying.Track,
-        nowPlaying.StationName,
-    ].map(value => value || '').join('\u0000');
-}
-
-function contentExpectation(item) {
-    const source = item?.Source || '';
-    const sourceAccount = item?.SourceAccount && item.SourceAccount !== source
-        ? item.SourceAccount
-        : '';
-    return {
-        source,
-        sourceAccount,
-        location: item?.Location || '',
-        itemName: item?.ItemName || '',
-    };
-}
-
-function matchesContentExpectation(nowPlaying, expected) {
-    if (!nowPlaying || !expected) return false;
-    const item = nowPlaying.ContentItem || {};
-    const source = item.Source || nowPlaying.Source || '';
-    const account = item.SourceAccount || nowPlaying.SourceAccount || '';
-    if (expected.source && source !== expected.source) return false;
-    if (expected.sourceAccount && account !== expected.sourceAccount) return false;
-    if (expected.location) {
-        return item.Location === expected.location ||
-            nowPlaying.StationLocation === expected.location;
-    }
-    if (expected.itemName) return [
-        item.ItemName,
-        nowPlaying.Track,
-        nowPlaying.StationName,
-    ].includes(expected.itemName);
-    return Boolean(expected.source);
-}
-
-function matchesDiscreteCommand(status, command) {
-    const action = commandAction(command);
-    const nowPlaying = status?.nowPlaying;
-    if (action === 'power-off') return nowPlaying?.Source === 'STANDBY';
-    if (action === 'power-on') return Boolean(nowPlaying?.Source) && nowPlaying.Source !== 'STANDBY';
-    if (action === 'pause') return nowPlaying?.PlayStatus === 'PAUSE_STATE';
-    if (action === 'play') return nowPlaying?.PlayStatus === 'PLAY_STATE';
-    if (action === 'mute-on') return status?.volume?.MuteEnabled === true;
-    if (action === 'mute-off') return status?.volume?.MuteEnabled === false;
-    if (action === 'shuffle-on') return nowPlaying?.ShuffleSetting === 'SHUFFLE_ON';
-    if (action === 'shuffle-off') return nowPlaying?.ShuffleSetting === 'SHUFFLE_OFF';
-    if (action === 'repeat-all') return nowPlaying?.RepeatSetting === 'REPEAT_ALL';
-    if (action === 'repeat-one') return nowPlaying?.RepeatSetting === 'REPEAT_ONE';
-    if (action === 'repeat-off') return nowPlaying?.RepeatSetting === 'REPEAT_OFF';
-    if (action === 'next-track' || action === 'previous-track') {
-        const identity = playbackIdentity(nowPlaying);
-        return Boolean(identity) && identity !== command?.expected?.previousIdentity;
-    }
-    if (action === 'preset' || action === 'recent') {
-        return matchesContentExpectation(nowPlaying, command?.expected);
-    }
-    return false;
-}
-
-function discreteCommandFailed(status, command) {
-    const action = commandAction(command);
-    if (!['play', 'pause', 'next-track', 'previous-track', 'preset', 'recent'].includes(action)) {
-        return false;
-    }
-    const nowPlaying = status?.nowPlaying;
-    return nowPlaying?.Source === 'INVALID_SOURCE' ||
-        nowPlaying?.Source?.endsWith('_ERROR') ||
-        nowPlaying?.PlayStatus === 'INVALID_PLAY_STATE';
-}
-
-function discreteCommandText(command) {
-    if (!command) return '';
-    const labels = {
-        'power-off': {
-            pending: 'Turning device off',
-            'provisional-confirmed': 'Device powered off, confirming',
-            'final-confirmed': 'Device powered off',
-            unverified: 'Power command unverified',
-            failed: 'Power command failed',
-        },
-        'power-on': {
-            pending: 'Waking device',
-            'provisional-confirmed': 'Device awake, confirming',
-            'final-confirmed': 'Device awake',
-            unverified: 'Power command unverified',
-            failed: 'Power command failed',
-        },
-        pause: {
-            pending: 'Pausing playback',
-            'provisional-confirmed': 'Playback paused, confirming',
-            'final-confirmed': 'Playback paused',
-            unverified: 'Pause command unverified',
-            failed: 'Pause command failed',
-        },
-        play: {
-            pending: 'Starting playback',
-            'provisional-confirmed': 'Playback started, confirming',
-            'final-confirmed': 'Playback started',
-            unverified: 'Play command unverified',
-            failed: 'Play command failed',
-        },
-        'mute-on': {
-            pending: 'Muting audio',
-            'provisional-confirmed': 'Audio muted, confirming',
-            'final-confirmed': 'Audio muted',
-            unverified: 'Mute command unverified',
-            failed: 'Mute command failed',
-        },
-        'mute-off': {
-            pending: 'Unmuting audio',
-            'provisional-confirmed': 'Audio unmuted, confirming',
-            'final-confirmed': 'Audio unmuted',
-            unverified: 'Unmute command unverified',
-            failed: 'Unmute command failed',
-        },
-        'shuffle-on': {
-            pending: 'Enabling shuffle',
-            'provisional-confirmed': 'Shuffle enabled, confirming',
-            'final-confirmed': 'Shuffle enabled',
-            unverified: 'Shuffle command unverified',
-            failed: 'Shuffle command failed',
-        },
-        'shuffle-off': {
-            pending: 'Disabling shuffle',
-            'provisional-confirmed': 'Shuffle disabled, confirming',
-            'final-confirmed': 'Shuffle disabled',
-            unverified: 'Shuffle command unverified',
-            failed: 'Shuffle command failed',
-        },
-        'repeat-all': {
-            pending: 'Enabling repeat all',
-            'provisional-confirmed': 'Repeat all enabled, confirming',
-            'final-confirmed': 'Repeat all enabled',
-            unverified: 'Repeat command unverified',
-            failed: 'Repeat command failed',
-        },
-        'repeat-one': {
-            pending: 'Enabling repeat one',
-            'provisional-confirmed': 'Repeat one enabled, confirming',
-            'final-confirmed': 'Repeat one enabled',
-            unverified: 'Repeat command unverified',
-            failed: 'Repeat command failed',
-        },
-        'repeat-off': {
-            pending: 'Disabling repeat',
-            'provisional-confirmed': 'Repeat disabled, confirming',
-            'final-confirmed': 'Repeat disabled',
-            unverified: 'Repeat command unverified',
-            failed: 'Repeat command failed',
-        },
-        'next-track': {
-            pending: 'Skipping to next track',
-            'provisional-confirmed': 'Next track started, confirming',
-            'final-confirmed': 'Next track started',
-            unverified: 'Next-track command unverified',
-            failed: 'Next-track command failed',
-        },
-        'previous-track': {
-            pending: 'Returning to previous track',
-            'provisional-confirmed': 'Previous track started, confirming',
-            'final-confirmed': 'Previous track started',
-            unverified: 'Previous-track command unverified',
-            failed: 'Previous-track command failed',
-        },
-        preset: {
-            pending: 'Starting preset',
-            'provisional-confirmed': 'Preset started, confirming',
-            'final-confirmed': 'Preset started',
-            unverified: 'Preset playback unverified',
-            failed: 'Preset playback failed',
-        },
-        recent: {
-            pending: 'Starting recent item',
-            'provisional-confirmed': 'Recent item started, confirming',
-            'final-confirmed': 'Recent item started',
-            unverified: 'Recent-item playback unverified',
-            failed: 'Recent-item playback failed',
-        },
-    };
-    return labels[command.action]?.[command.outcome] || '';
-}
-
 export function mergeStatusUpdate(previous, deviceId, status) {
     // Object.prototype.hasOwnProperty, not a plain previous[deviceId] truthy
     // check: a deviceId of "__proto__" or "constructor" would otherwise
@@ -322,146 +118,17 @@ export function DeviceDetail({
 }) {
     const device = devices[deviceId];
     const status = device?.status;
-    const [command, setCommand] = useState(null);
-    const commandRef = useRef({ generation: 0, active: null, timers: [] });
-
-    function clearCommandReadbacks() {
-        commandRef.current.timers.forEach(clearTimeout);
-        commandRef.current.timers = [];
-    }
-
-    useEffect(() => {
-        commandRef.current.generation += 1;
-        commandRef.current.active = null;
-        clearCommandReadbacks();
-        setCommand(null);
-
-        return () => {
-            commandRef.current.generation += 1;
-            commandRef.current.active = null;
-            clearCommandReadbacks();
-        };
-    }, [deviceId]);
-
-    useEffect(() => {
-        const revision = discreteCommandRevision(status, command);
-        if (!command || revision === null || command.startRevision === null ||
-            revision <= command.startRevision || command.outcome === 'failed' ||
-            command.outcome === 'unverified') return;
-
-        const matches = matchesDiscreteCommand(status, command);
-        if (command.outcome === 'final-confirmed') {
-            if (revision > command.confirmedRevision && !matches) {
-                setCommand(previous => previous?.generation === command.generation
-                    ? null : previous);
-            }
-            return;
-        }
-        if (discreteCommandFailed(status, command)) {
-            clearCommandReadbacks();
-            commandRef.current.active = null;
-            setCommand(previous => previous?.generation === command.generation
-                ? { ...previous, outcome: 'failed' }
-                : previous);
-        } else if (matches && command.outcome === 'pending') {
-            setCommand(previous => previous?.generation === command.generation
-                ? { ...previous, outcome: 'provisional-confirmed' }
-                : previous);
-        }
-    }, [command, status]);
-
-    function runDiscreteCommand(action, invoke, expected = null) {
-        if (commandRef.current.active) return;
-
-        clearCommandReadbacks();
-        const generation = commandRef.current.generation + 1;
-        const request = { action, expected };
-        const startRevision = discreteCommandRevision(status, request);
-        const active = { generation, latestReadback: -1, writeError: null };
-        commandRef.current.generation = generation;
-        commandRef.current.active = active;
-        setCommand({ ...request, generation, outcome: 'pending', startRevision });
-        const startedAt = Date.now();
-
-        commandReadbackDelays.forEach((delay, index) => {
-            const timer = setTimeout(async () => {
-                if (commandRef.current.active !== active) return;
-                active.latestReadback = index;
-
-                try {
-                    const response = await api.deviceNowPlaying(deviceId);
-                    if (commandRef.current.active !== active || active.latestReadback !== index) return;
-                    if (response?.success === false || !response?.data?.status) {
-                        throw new Error(response?.error || 'Device status unavailable');
-                    }
-
-                    const readbackStatus = response.data.status;
-                    const readbackRevision = discreteCommandRevision(readbackStatus, request);
-                    const revisionIsNewer = startRevision !== null && readbackRevision !== null &&
-                        readbackRevision > startRevision;
-                    onStatusReadback?.(deviceId, readbackStatus);
-
-                    if (revisionIsNewer && discreteCommandFailed(readbackStatus, request)) {
-                        clearCommandReadbacks();
-                        commandRef.current.active = null;
-                        setCommand({ ...request, generation, outcome: 'failed', startRevision });
-                    } else if (revisionIsNewer && matchesDiscreteCommand(readbackStatus, request)) {
-                        const isFinalReadback = index === commandReadbackDelays.length - 1;
-                        setCommand({
-                            ...request,
-                            generation,
-                            outcome: isFinalReadback ? 'final-confirmed' : 'provisional-confirmed',
-                            startRevision,
-                            confirmedRevision: readbackRevision,
-                        });
-                        if (isFinalReadback) {
-                            clearCommandReadbacks();
-                            commandRef.current.active = null;
-                        }
-                    } else if (index === commandReadbackDelays.length - 1) {
-                        commandRef.current.active = null;
-                        setCommand({
-                            ...request,
-                            generation,
-                            outcome: 'unverified',
-                            startRevision,
-                            error: active.writeError?.message,
-                        });
-                    }
-                } catch (_) {
-                    if (commandRef.current.active === active && active.latestReadback === index &&
-                        index === commandReadbackDelays.length - 1) {
-                        commandRef.current.active = null;
-                        setCommand({
-                            ...request,
-                            generation,
-                            outcome: 'unverified',
-                            startRevision,
-                            error: active.writeError?.message,
-                        });
-                    }
-                }
-            }, Math.max(0, delay - (Date.now() - startedAt)));
-            commandRef.current.timers.push(timer);
-        });
-
-        let write;
-        try {
-            write = invoke();
-        } catch (error) {
-            active.writeError = error;
-            return;
-        }
-        Promise.resolve(write).then(response => {
-            if (response?.success === false) throw new Error(response.error || 'Command rejected');
-        }).catch(error => {
-            if (commandRef.current.active === active) active.writeError = error;
-        });
-    }
-
-    const commandBusy = command?.outcome === 'pending' ||
-        command?.outcome === 'provisional-confirmed';
-    const commandStatus = discreteCommandText(command);
+    const {
+        command,
+        busy: commandBusy,
+        statusText: commandStatus,
+        run: runDiscreteCommand,
+    } = useDiscreteCommand({
+        deviceId,
+        status,
+        onStatusReadback,
+        readbackDelays: commandReadbackDelays,
+    });
     const source = status?.nowPlaying?.Source;
     const playStatus = status?.nowPlaying?.PlayStatus;
 
@@ -645,6 +312,9 @@ function App() {
     // 'connecting' until the first frame arrives, so a page opened while the
     // service is down does not claim the connection was lost.
     const [connection, setConnection] = useState('connecting');
+    const [contentPlaybackRequest, setContentPlaybackRequest] = useState(null);
+    const [contentPlaybackBusy, setContentPlaybackBusy] = useState(false);
+    const contentPlaybackRef = useRef({ generation: 0, busy: false });
 
     const getPageTitle = () => {
         if (page === 'devices') return 'Devices';
@@ -780,8 +450,43 @@ function App() {
         setDevices(previous => mergeDevicesSnapshot(previous, resp.data));
     }
 
-    function mergeDeviceReadback(deviceId, status) {
-        setDevices(previous => mergeStatusUpdate(previous, deviceId, status));
+    function mergeDeviceReadback(deviceId, status, readbackInfo = null) {
+        setDevices(previous => {
+            if (readbackInfo?.device_id &&
+                previous[deviceId]?.info?.device_id !== readbackInfo.device_id) {
+                return previous;
+            }
+            return mergeStatusUpdate(previous, deviceId, status);
+        });
+    }
+
+    function startContentPlayback(request) {
+        if (contentPlaybackRef.current.busy) return false;
+        const targetIdentity = devices[request.deviceId]?.info?.device_id;
+        if (!targetIdentity) {
+            showToast('Playback target is no longer available');
+            return false;
+        }
+
+        contentPlaybackRef.current.busy = true;
+        contentPlaybackRef.current.generation += 1;
+        setContentPlaybackBusy(true);
+        setContentPlaybackRequest({
+            ...request,
+            key: `content-playback-${contentPlaybackRef.current.generation}`,
+            targetIdentity,
+        });
+        return true;
+    }
+
+    function updateContentPlaybackState(state) {
+        contentPlaybackRef.current.busy = state.busy;
+        setContentPlaybackBusy(state.busy);
+    }
+
+    function clearContentPlayback() {
+        if (contentPlaybackRef.current.busy) return;
+        setContentPlaybackRequest(null);
     }
 
     async function removeDevice(id) {
@@ -866,6 +571,16 @@ function App() {
             <${Announcements} />
 
             <main class="main-content">
+                ${contentPlaybackRequest ? html`
+                    <${ContentPlaybackCommand}
+                        key=${contentPlaybackRequest.key}
+                        request=${contentPlaybackRequest}
+                        devices=${devices}
+                        onStatusReadback=${mergeDeviceReadback}
+                        onStateChange=${updateContentPlaybackState}
+                        onClear=${clearContentPlayback}
+                    />
+                ` : null}
                 ${page === 'devices' ? html`
                     <${DeviceList}
                         key="device-list"
@@ -887,15 +602,36 @@ function App() {
                         onNavigate=${navigate}
                     />
                 ` : page === 'tunein' ? html`
-                    <${TuneInBrowser} key="tunein-browser" devices=${devices} />
+                    <${TuneInBrowser}
+                        key="tunein-browser"
+                        devices=${devices}
+                        onPlaybackRequest=${startContentPlayback}
+                        playbackBusy=${contentPlaybackBusy}
+                    />
                 ` : page === 'radiobrowser' ? html`
-                    <${RadioBrowser} key="radiobrowser-browser" devices=${devices} />
+                    <${RadioBrowser}
+                        key="radiobrowser-browser"
+                        devices=${devices}
+                        onPlaybackRequest=${startContentPlayback}
+                        playbackBusy=${contentPlaybackBusy}
+                    />
                 ` : page === 'playurl' ? html`
-                    <${PlayURL} key="play-url" devices=${devices} serverServiceUrl=${version?.service_url || ''} />
+                    <${PlayURL}
+                        key="play-url"
+                        devices=${devices}
+                        serverServiceUrl=${version?.service_url || ''}
+                        onPlaybackRequest=${startContentPlayback}
+                        playbackBusy=${contentPlaybackBusy}
+                    />
                 ` : page === 'tts' ? html`
                     <${TTS} key="tts" devices=${devices} serverServiceUrl=${version?.service_url || ''} />
                 ` : page === 'library' ? html`
-                    <${Library} key="library" devices=${devices} />
+                    <${Library}
+                        key="library"
+                        devices=${devices}
+                        onPlaybackRequest=${startContentPlayback}
+                        playbackBusy=${contentPlaybackBusy}
+                    />
                 ` : null}
             </main>
 

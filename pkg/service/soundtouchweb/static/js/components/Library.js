@@ -5,7 +5,12 @@ import { api } from '../api.js';
 
 const html = htm.bind(h);
 
-export function Library({ devices }) {
+export function Library({
+    devices,
+    onPlaybackRequest,
+    playbackBusy = false,
+    commandReadbackDelays,
+}) {
     const deviceEntries = Object.entries(devices);
     const firstDeviceId = deviceEntries.length > 0 ? deviceEntries[0][0] : null;
 
@@ -17,7 +22,6 @@ export function Library({ devices }) {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(false);
     const [finding, setFinding] = useState(false);
-    const [playingName, setPlayingName] = useState(null);
 
     // Sync deviceId when devices prop first arrives or changes enough to
     // invalidate the current selection.
@@ -112,18 +116,30 @@ export function Library({ devices }) {
         await browseLevel(server.account, frame.location, frame.type);
     }
 
-    async function playEntry(entry) {
+    function playEntry(entry) {
         // Pass the entry's own type so a folder selects as a container ("dir")
         // rather than a single track — that lets the speaker queue the folder so
         // next/previous and auto-advance work, instead of stopping after one item.
-        await api.libraryPlay(deviceId, {
-            account: server.account,
-            location: entry.location,
-            type: entry.type || 'track',
-            name: entry.name,
+        const selectedDeviceId = deviceId;
+        const selectedServer = server;
+        if (!selectedDeviceId || !selectedServer) return;
+        onPlaybackRequest?.({
+            deviceId: selectedDeviceId,
+            action: 'library',
+            readbackDelays: commandReadbackDelays,
+            invoke: () => api.libraryPlay(selectedDeviceId, {
+                account: selectedServer.account,
+                location: entry.location,
+                type: entry.type || 'track',
+                name: entry.name,
+            }),
+            expected: {
+                source: 'STORED_MUSIC',
+                sourceAccount: selectedServer.account,
+                location: entry.location,
+                itemName: entry.name,
+            },
         });
-        setPlayingName(entry.name);
-        setTimeout(() => setPlayingName(null), 3000);
     }
 
     function toggleFinding() {
@@ -249,12 +265,6 @@ export function Library({ devices }) {
                         </nav>
                     ` : null}
 
-                    ${playingName ? html`
-                        <div style="font-size:.875rem;color:var(--text-dim);margin-bottom:.5rem">
-                            Playing: <strong>${playingName}</strong>
-                        </div>
-                    ` : null}
-
                     ${entries.length === 0 && !loading ? html`
                         <p style="font-size:.875rem;color:var(--text-dim);padding:.5rem 0">No items found.</p>
                     ` : null}
@@ -275,6 +285,7 @@ export function Library({ devices }) {
                                     <button
                                         class="tunein-play-btn"
                                         title="${entry.isDir ? 'Play folder' : 'Play'} on ${devices[deviceId]?.info?.name || deviceId}"
+                                        disabled=${playbackBusy}
                                         onClick=${(e) => { e.stopPropagation(); playEntry(entry); }}
                                     >▶</button>
                                 ` : null}

@@ -539,6 +539,8 @@ render(h(Fixture), document.getElementById('fixture'));
 	mode := ""
 	reads := map[string]int{}
 	powerWrites := 0
+	fullReads := 0
+	nowPlayingReads := 0
 	var keys []string
 	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
 		r.Post("/api/control/devices/speaker/power", func(w http.ResponseWriter, _ *http.Request) {
@@ -561,77 +563,86 @@ render(h(Fixture), document.getElementById('fixture'));
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
-			mu.Lock()
-			currentMode := mode
-			reads[currentMode]++
-			read := reads[currentMode]
-			mu.Unlock()
+		readback := func(kind string) http.HandlerFunc {
+			return func(w http.ResponseWriter, _ *http.Request) {
+				mu.Lock()
+				currentMode := mode
+				reads[currentMode]++
+				if kind == "full" {
+					fullReads++
+				} else {
+					nowPlayingReads++
+				}
+				read := reads[currentMode]
+				mu.Unlock()
 
-			revisionBase := map[string]int{
-				"power": 1, "pause": 100, "mute": 200, "shuffle": 300, "repeat": 400,
-				"next": 500, "previous": 600,
-			}[currentMode]
-			revision := read + revisionBase
-			nowPlayingRevision := revision
-			source := "PRODUCT"
-			playStatus := "PLAY_STATE"
-			shuffle := "SHUFFLE_OFF"
-			repeat := "REPEAT_OFF"
-			muted := false
-			track := "First track"
-			if currentMode == "power" && read >= 2 {
-				source = "STANDBY"
-				playStatus = "STOP_STATE"
-			} else if currentMode == "pause" {
-				if read >= 2 {
+				revisionBase := map[string]int{
+					"power": 1, "pause": 100, "mute": 200, "shuffle": 300, "repeat": 400,
+					"next": 500, "previous": 600,
+				}[currentMode]
+				revision := read + revisionBase
+				nowPlayingRevision := revision
+				source := "PRODUCT"
+				playStatus := "PLAY_STATE"
+				shuffle := "SHUFFLE_OFF"
+				repeat := "REPEAT_OFF"
+				muted := false
+				track := "First track"
+				if currentMode == "power" && read >= 2 {
+					source = "STANDBY"
+					playStatus = "STOP_STATE"
+				} else if currentMode == "pause" {
+					if read >= 2 {
+						playStatus = "PAUSE_STATE"
+					}
+				} else if currentMode == "mute" {
+					nowPlayingRevision = 200
 					playStatus = "PAUSE_STATE"
-				}
-			} else if currentMode == "mute" {
-				nowPlayingRevision = 200
-				playStatus = "PAUSE_STATE"
-				if read >= 2 {
-					muted = true
-				}
-			} else if currentMode == "shuffle" {
-				playStatus = "PAUSE_STATE"
-				if read >= 2 {
+					if read >= 2 {
+						muted = true
+					}
+				} else if currentMode == "shuffle" {
+					playStatus = "PAUSE_STATE"
+					if read >= 2 {
+						shuffle = "SHUFFLE_ON"
+					}
+				} else if currentMode == "repeat" {
+					playStatus = "PAUSE_STATE"
 					shuffle = "SHUFFLE_ON"
-				}
-			} else if currentMode == "repeat" {
-				playStatus = "PAUSE_STATE"
-				shuffle = "SHUFFLE_ON"
-				if read >= 2 {
+					if read >= 2 {
+						repeat = "REPEAT_ALL"
+					}
+				} else if currentMode == "next" {
+					playStatus = "PAUSE_STATE"
+					shuffle = "SHUFFLE_ON"
 					repeat = "REPEAT_ALL"
-				}
-			} else if currentMode == "next" {
-				playStatus = "PAUSE_STATE"
-				shuffle = "SHUFFLE_ON"
-				repeat = "REPEAT_ALL"
-				if read >= 2 {
+					if read >= 2 {
+						track = "Second track"
+					}
+				} else if currentMode == "previous" {
+					playStatus = "PAUSE_STATE"
+					shuffle = "SHUFFLE_ON"
+					repeat = "REPEAT_ALL"
 					track = "Second track"
+					if read >= 2 {
+						track = "First track"
+					}
 				}
-			} else if currentMode == "previous" {
-				playStatus = "PAUSE_STATE"
-				shuffle = "SHUFFLE_ON"
-				repeat = "REPEAT_ALL"
-				track = "Second track"
-				if read >= 2 {
-					track = "First track"
-				}
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
-				"status": map[string]any{
-					"revision": revision, "nowPlayingRevision": nowPlayingRevision,
-					"nowPlaying": map[string]string{
-						"Source": source, "PlayStatus": playStatus,
-						"ShuffleSetting": shuffle, "RepeatSetting": repeat, "Track": track,
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+					"status": map[string]any{
+						"revision": revision, "nowPlayingRevision": nowPlayingRevision,
+						"nowPlaying": map[string]string{
+							"Source": source, "PlayStatus": playStatus,
+							"ShuffleSetting": shuffle, "RepeatSetting": repeat, "Track": track,
+						},
+						"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": muted},
 					},
-					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": muted},
-				},
-			}})
-		})
+				}})
+			}
+		}
+		r.Get("/api/control/devices/speaker", readback("full"))
+		r.Get("/api/control/devices/speaker/now-playing", readback("now-playing"))
 		r.Get("/api/control/devices/speaker/zone", func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
@@ -700,6 +711,9 @@ render(h(Fixture), document.getElementById('fixture'));
 		if reads[command] != 3 {
 			t.Errorf("%s readbacks = %d, want 3", command, reads[command])
 		}
+	}
+	if fullReads != 3 || nowPlayingReads != 18 {
+		t.Errorf("readback endpoints: full=%d now-playing=%d, want 3 and 18", fullReads, nowPlayingReads)
 	}
 }
 
@@ -819,6 +833,390 @@ render(h(Fixture), document.getElementById('fixture'));
 	}
 	if reads["preset"] != 3 || reads["recent"] != 3 {
 		t.Errorf("readbacks: preset=%d recent=%d, want 3 each", reads["preset"], reads["recent"])
+	}
+}
+
+func TestProviderAndLibraryPlaybackUseOneWriteAndBoundedReadbacks(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState, useRef } from 'preact/hooks';
+import { mergeStatusUpdate } from '/app/static/js/app.js';
+import { ContentPlaybackCommand } from '/app/static/js/components/ContentPlaybackCommand.js';
+import { TuneInBrowser } from '/app/static/js/components/TuneInBrowser.js';
+import { RadioBrowser } from '/app/static/js/components/RadioBrowser.js';
+import { PlayURL } from '/app/static/js/components/PlayURL.js';
+import { Library } from '/app/static/js/components/Library.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { device_id: 'DEVICE1', name: 'Speaker', ip_address: '192.0.2.1' }, status: initialStatus } });
+  const [request, setRequest] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [showTuneIn, setShowTuneIn] = useState(true);
+  const owner = useRef({ generation: 0, busy: false });
+  const onStatusReadback = (deviceId, status, info) => setDevices(previous => {
+    if (info?.device_id && previous[deviceId]?.info?.device_id !== info.device_id) return previous;
+    return mergeStatusUpdate(previous, deviceId, status);
+  });
+  const onPlaybackRequest = next => {
+    if (owner.current.busy) return false;
+    owner.current.busy = true;
+    owner.current.generation += 1;
+    setBusy(true);
+    setRequest({ ...next, key: 'command-' + owner.current.generation, targetIdentity: devices[next.deviceId]?.info?.device_id });
+    return true;
+  };
+  const onStateChange = state => {
+    owner.current.busy = state.busy;
+    setBusy(state.busy);
+  };
+  const onClear = () => {
+    if (!owner.current.busy) setRequest(null);
+  };
+  window.hideTuneIn = () => setShowTuneIn(false);
+  const props = { devices, onPlaybackRequest, playbackBusy: busy, commandReadbackDelays: [100, 250, 500] };
+  return h('div', {}, [
+    request ? h(ContentPlaybackCommand, { key: request.key, request, devices, onStatusReadback, onStateChange, onClear }) : null,
+    showTuneIn ? h('section', { id: 'tunein' }, h(TuneInBrowser, props)) : null,
+    h('section', { id: 'radio' }, h(RadioBrowser, props)),
+    h('section', { id: 'url' }, h(PlayURL, { ...props, serverServiceUrl: 'http://aftertouch.test' })),
+    h('section', { id: 'library' }, h(Library, props)),
+  ]);
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	mode := ""
+	reads := map[string]int{}
+	writes := map[string]int{}
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/providers/tunein/navigate", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"bmx_sections": []any{
+					map[string]any{
+						"name": "Stations",
+						"items": []any{
+							map[string]any{
+								"name": "TuneIn station",
+								"_links": map[string]any{"bmx_playback": map[string]string{
+									"href": "/tunein/station", "type": "stationurl",
+								}},
+							},
+						},
+					},
+				},
+			}})
+		})
+		r.Get("/api/control/providers/radiobrowser/search", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"bmx_sections": []any{
+					map[string]any{
+						"name": "Stations",
+						"items": []any{
+							map[string]any{
+								"name": "RadioBrowser station",
+								"_links": map[string]any{"bmx_playback": map[string]string{
+									"href": "/radiobrowser/station", "type": "stationurl",
+								}},
+							},
+						},
+					},
+				},
+			}})
+		})
+		r.Get("/api/control/devices/speaker/library/servers", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: []any{
+				map[string]any{"udn": "uuid:library", "name": "Media server", "ready": true},
+			}})
+		})
+		r.Get("/api/control/devices/speaker/library/browse", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"entries": []any{map[string]any{
+					"name": "Library track", "location": "/library/track", "type": "track", "playable": true,
+				}},
+			}})
+		})
+
+		registerWrite := func(command string) http.HandlerFunc {
+			return func(w http.ResponseWriter, _ *http.Request) {
+				mu.Lock()
+				mode = command
+				writes[command]++
+				mu.Unlock()
+				_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+			}
+		}
+		r.Post("/api/control/devices/speaker/providers/tunein/play", registerWrite("tunein"))
+		r.Post("/api/control/devices/speaker/providers/radiobrowser/play", registerWrite("radiobrowser"))
+		r.Post("/api/control/devices/speaker/providers/url/play", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			mode = "url"
+			writes["url"]++
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]string{
+				"source": "LOCAL_INTERNET_RADIO", "location": "/orion/fixture", "itemName": "Fixture stream",
+			}})
+		})
+		r.Post("/api/control/devices/speaker/library/play", registerWrite("library"))
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			currentMode := mode
+			reads[currentMode]++
+			read := reads[currentMode]
+			mu.Unlock()
+
+			type expectedContent struct {
+				source   string
+				account  string
+				location string
+				name     string
+			}
+			expected := map[string]expectedContent{
+				"tunein":       {source: "TUNEIN", location: "/tunein/station", name: "TuneIn station"},
+				"radiobrowser": {source: "RADIO_BROWSER", location: "/radiobrowser/station", name: "RadioBrowser station"},
+				"url":          {source: "LOCAL_INTERNET_RADIO", location: "/orion/fixture", name: "Fixture stream"},
+				"library":      {source: "STORED_MUSIC", account: "uuid:library/0", location: "/library/track", name: "Library track"},
+			}[currentMode]
+			base := map[string]int{"tunein": 10, "radiobrowser": 20, "url": 30, "library": 40}[currentMode]
+			revision := base + read
+			source, account, location, name := "PRODUCT", "", "", "Original"
+			if read >= 2 {
+				source, account, location, name = expected.source, expected.account, expected.location, expected.name
+			}
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"info": map[string]string{"device_id": "DEVICE1"},
+				"status": map[string]any{
+					"revision": revision, "nowPlayingRevision": revision,
+					"nowPlaying": map[string]any{
+						"Source": source, "SourceAccount": account, "PlayStatus": "PLAY_STATE",
+						"ContentItem": map[string]string{
+							"Source": source, "SourceAccount": account, "Location": location, "ItemName": name,
+						},
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var radioDisabledWhilePending bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#tunein .tunein-play-btn`, chromedp.ByQuery),
+		chromedp.SetValue(`#radio .tunein-search-input`, "station", chromedp.ByQuery),
+		chromedp.Click(`#radio .btn-primary`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#radio .tunein-play-btn`, chromedp.ByQuery),
+		chromedp.Click(`#tunein .tunein-play-btn`, chromedp.ByQuery),
+		chromedp.Click(`#tunein .picker-device-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('#radio .tunein-play-btn')?.disabled === true`, nil),
+		chromedp.Evaluate(`document.querySelector('#radio .tunein-play-btn').disabled`, &radioDisabledWhilePending),
+		chromedp.Evaluate(`window.hideTuneIn()`, nil),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+
+		chromedp.Click(`#radio .tunein-play-btn`, chromedp.ByQuery),
+		chromedp.Click(`#radio .picker-device-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+
+		chromedp.SetValue(`#url input[type="url"]`, "http://stream.test/audio", chromedp.ByQuery),
+		chromedp.SetValue(`#url input[type="text"]`, "Fixture stream", chromedp.ByQuery),
+		chromedp.Click(`#url .tunein-toolbar .btn-primary`, chromedp.ByQuery),
+		chromedp.Click(`#url .picker-device-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+
+		chromedp.WaitVisible(`#library .tunein-item`, chromedp.ByQuery),
+		chromedp.Click(`#library .tunein-item`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#library .tunein-play-btn`, chromedp.ByQuery),
+		chromedp.Click(`#library .tunein-play-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+	); err != nil {
+		t.Fatalf("exercise provider and library playback command state: %v", err)
+	}
+	if !radioDisabledWhilePending {
+		t.Error("a second provider command remained enabled while the first command was pending")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, command := range []string{"tunein", "radiobrowser", "url", "library"} {
+		if writes[command] != 1 {
+			t.Errorf("%s writes = %d, want 1", command, writes[command])
+		}
+		if reads[command] != 3 {
+			t.Errorf("%s readbacks = %d, want 3", command, reads[command])
+		}
+	}
+}
+
+func TestContentPlaybackCommandFencesTargetsAndClassifiesOutcomes(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { api } from '/app/static/js/api.js';
+import { mergeStatusUpdate } from '/app/static/js/app.js';
+import { ContentPlaybackCommand } from '/app/static/js/components/ContentPlaybackCommand.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { device_id: 'DEVICE1', name: 'Speaker' }, status: initialStatus } });
+  const [request, setRequest] = useState(null);
+  const commandRequest = (scenario, targetIdentity = devices.speaker.info.device_id) => ({
+    key: scenario + '-' + Date.now(),
+    deviceId: 'speaker',
+    targetIdentity,
+    action: 'tunein',
+    readbackDelays: [100, 250, 500],
+    invoke: () => api.tuneInPlay('speaker', { location: '/' + scenario, type: 'stationurl', name: scenario }),
+    expected: { source: 'TUNEIN', location: '/' + scenario, itemName: scenario },
+  });
+  const start = scenario => setRequest(commandRequest(scenario));
+  const startWithReplacement = () => {
+    const targetIdentity = devices.speaker.info.device_id;
+    setRequest(commandRequest('pretarget', targetIdentity));
+    setDevices(previous => ({
+      ...previous,
+      speaker: { ...previous.speaker, info: { ...previous.speaker.info, device_id: 'DEVICE2' } },
+    }));
+  };
+  const onStatusReadback = (deviceId, status, info) => setDevices(previous => {
+    if (info?.device_id && previous[deviceId]?.info?.device_id !== info.device_id) return previous;
+    return mergeStatusUpdate(previous, deviceId, status);
+  });
+  window.replaceTarget = () => setDevices(previous => ({
+    ...previous,
+    speaker: { ...previous.speaker, info: { ...previous.speaker.info, device_id: 'DEVICE2' } },
+  }));
+  window.restoreTarget = () => setDevices(previous => ({
+    ...previous,
+    speaker: { ...previous.speaker, info: { ...previous.speaker.info, device_id: 'DEVICE1' }, status: initialStatus },
+  }));
+  window.publishNewer = () => setDevices(previous => mergeStatusUpdate(previous, 'speaker', {
+    revision: 100,
+    nowPlayingRevision: 100,
+    nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE', Track: 'Newer external state' },
+    volume: { ActualVolume: 20, MuteEnabled: false },
+  }));
+  return h('div', {}, [
+    h('button', { id: 'reject', onClick: () => start('reject') }, 'Reject'),
+    h('button', { id: 'target', onClick: () => start('target') }, 'Target'),
+    h('button', { id: 'pretarget', onClick: startWithReplacement }, 'Pre-write target'),
+    h('button', { id: 'stale', onClick: () => start('stale') }, 'Stale'),
+    request ? h(ContentPlaybackCommand, {
+      key: request.key,
+      request,
+      devices,
+      onStatusReadback,
+      onClear: () => setRequest(null),
+    }) : null,
+  ]);
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	mode := ""
+	reads := map[string]int{}
+	writes := map[string]int{}
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/providers/tunein/play", func(w http.ResponseWriter, req *http.Request) {
+			var body struct {
+				Location string `json:"location"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			currentMode := strings.TrimPrefix(body.Location, "/")
+			mu.Lock()
+			mode = currentMode
+			writes[currentMode]++
+			mu.Unlock()
+			if currentMode == "reject" {
+				_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: false, Error: "catalog rejected"})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			currentMode := mode
+			reads[currentMode]++
+			read := reads[currentMode]
+			mu.Unlock()
+			revision := read + 1
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"info": map[string]string{"device_id": "DEVICE1"},
+				"status": map[string]any{
+					"revision": revision, "nowPlayingRevision": revision,
+					"nowPlaying": map[string]any{
+						"Source": "TUNEIN", "PlayStatus": "PLAY_STATE",
+						"ContentItem": map[string]string{
+							"Source": "TUNEIN", "Location": "/" + currentMode, "ItemName": currentMode,
+						},
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.Click(`#reject`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('failed')`, nil),
+		chromedp.Poll(`document.querySelector('.content-command-error')?.textContent === 'catalog rejected'`, nil),
+		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
+
+		chromedp.Click(`#target`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.content-command-status.pending`, chromedp.ByQuery),
+		chromedp.Evaluate(`window.replaceTarget()`, nil),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('failed')`, nil),
+		chromedp.Poll(`document.querySelector('.content-command-error')?.textContent === 'Playback target changed'`, nil),
+		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
+		chromedp.Evaluate(`window.restoreTarget()`, nil),
+
+		chromedp.Click(`#pretarget`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('failed')`, nil),
+		chromedp.Poll(`document.querySelector('.content-command-error')?.textContent === 'Playback target changed'`, nil),
+		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
+		chromedp.Evaluate(`window.restoreTarget()`, nil),
+
+		chromedp.Click(`#stale`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.content-command-status.pending`, chromedp.ByQuery),
+		chromedp.Evaluate(`window.publishNewer()`, nil),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('unverified')`, nil),
+	); err != nil {
+		t.Fatalf("exercise negative content playback outcomes: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, command := range []string{"reject", "target", "stale"} {
+		if writes[command] != 1 {
+			t.Errorf("%s writes = %d, want 1", command, writes[command])
+		}
+	}
+	if reads["reject"] != 0 {
+		t.Errorf("rejected command readbacks = %d, want 0 after definite rejection", reads["reject"])
+	}
+	if reads["stale"] != 3 {
+		t.Errorf("stale command readbacks = %d, want 3", reads["stale"])
+	}
+	if writes["pretarget"] != 0 {
+		t.Errorf("pre-write target replacement writes = %d, want 0", writes["pretarget"])
 	}
 }
 

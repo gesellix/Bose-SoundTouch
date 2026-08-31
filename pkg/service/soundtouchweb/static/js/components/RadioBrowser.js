@@ -12,7 +12,12 @@ function flattenSections(data) {
     );
 }
 
-export function RadioBrowser({ devices }) {
+export function RadioBrowser({
+    devices,
+    onPlaybackRequest,
+    playbackBusy = false,
+    commandReadbackDelays,
+}) {
     const [items, setItems] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
@@ -28,16 +33,28 @@ export function RadioBrowser({ devices }) {
         }
     }
 
-    async function playOn(deviceId) {
-        await api.radioBrowserPlay(deviceId, {
-            location: pendingPlay.location,
-            type: pendingPlay.type,
-            name: pendingPlay.name,
-            // The speaker keeps this on the ContentItem, so presets and
-            // recents saved from here show the station logo.
-            containerArt: pendingPlay.image,
+    function playOn(deviceId) {
+        const item = pendingPlay;
+        if (!item) return;
+        const accepted = onPlaybackRequest?.({
+            deviceId,
+            action: 'radiobrowser',
+            readbackDelays: commandReadbackDelays,
+            invoke: () => api.radioBrowserPlay(deviceId, {
+                location: item.location,
+                type: item.type,
+                name: item.name,
+                // The speaker keeps this on the ContentItem, so presets and
+                // recents saved from here show the station logo.
+                containerArt: pendingPlay.image,
+            }),
+            expected: {
+                source: 'RADIO_BROWSER',
+                location: item.location,
+                itemName: item.name,
+            },
         });
-        setPendingPlay(null);
+        if (accepted !== false) setPendingPlay(null);
     }
 
     const deviceEntries = Object.entries(devices);
@@ -73,6 +90,7 @@ export function RadioBrowser({ devices }) {
                                 <button
                                     class="tunein-play-btn"
                                     title="Play"
+                                    disabled=${playbackBusy}
                                     onClick=${() => {
                                         setPendingPlay({ location: play.href, type: play.type, name: item.name, image: item.imageUrl });
                                     }}
@@ -91,7 +109,12 @@ export function RadioBrowser({ devices }) {
                         <div class="picker-devices">
                             ${deviceEntries.length === 0 ? html`<p class="picker-no-devices">No devices found. Try discovering first.</p>` : null}
                             ${deviceEntries.map(([id, d]) => html`
-                                <button class="picker-device-btn" key=${id} onClick=${() => playOn(id)}>
+                                <button
+                                    class="picker-device-btn"
+                                    key=${id}
+                                    disabled=${playbackBusy}
+                                    onClick=${() => playOn(id)}
+                                >
                                     <div class="picker-device-info">
                                         <span class="picker-device-name">${d.info?.name || id}</span>
                                         <span class="picker-device-ip">${d.info?.ip_address || ''}</span>

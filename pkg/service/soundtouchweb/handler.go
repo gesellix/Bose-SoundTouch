@@ -1753,7 +1753,12 @@ func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
 
 	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
 		Success: true,
-		Data:    map[string]string{"message": "Playing " + req.Name},
+		Data: map[string]string{
+			"message":  "Playing " + req.Name,
+			"source":   contentItem.Source,
+			"location": contentItem.Location,
+			"itemName": contentItem.ItemName,
+		},
 	}); encErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}

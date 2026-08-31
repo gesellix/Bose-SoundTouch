@@ -1010,6 +1010,23 @@ img.recent-source-icon { width: 20px; height: 20px; object-fit: contain; filter:
 .tunein-section-name { font-size: .85rem; font-weight: 600; color: var(--text-dim); padding: 8px 0 2px; margin: 0; }
 .tunein-load-more { margin: 4px 0 12px; }
 
+.content-command-status {
+    min-height: 1.5rem;
+    margin-bottom: .75rem;
+    color: var(--text-dim);
+    font-size: .8rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+}
+.content-command-status.provisional-confirmed { font-style: italic; }
+.content-command-status.unverified { color: #8a5a00; }
+.content-command-status.failed { color: var(--offline); }
+.content-command-status span { min-width: 0; overflow-wrap: anywhere; }
+.content-command-error { display: block; margin-top: .15rem; }
+.content-command-status .btn-secondary { flex-shrink: 0; }
+
 /* ── Device picker overlay ───────────────────────────────────────────────── */
 .overlay {
     position: fixed; inset: 0;
