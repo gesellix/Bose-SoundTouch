@@ -1,5 +1,5 @@
 import { h, render } from 'preact';
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { DeviceList } from './components/DeviceList.js';
 import { NowPlaying } from './components/NowPlaying.js';
@@ -83,6 +83,65 @@ function replaceDevice(previous, deviceId, device) {
     ]);
 }
 
+const DISCRETE_COMMAND_READBACK_DELAYS_MS = [2000, 5000, 10000];
+
+function nowPlayingRevision(status) {
+    const revision = status?.nowPlayingRevision;
+    return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
+}
+
+function matchesDiscreteCommand(status, action) {
+    const nowPlaying = status?.nowPlaying;
+    if (action === 'power-off') return nowPlaying?.Source === 'STANDBY';
+    if (action === 'power-on') return Boolean(nowPlaying?.Source) && nowPlaying.Source !== 'STANDBY';
+    if (action === 'pause') return nowPlaying?.PlayStatus === 'PAUSE_STATE';
+    if (action === 'play') return nowPlaying?.PlayStatus === 'PLAY_STATE';
+    return false;
+}
+
+function discreteCommandFailed(status, action) {
+    if (action !== 'play' && action !== 'pause') return false;
+    const nowPlaying = status?.nowPlaying;
+    return nowPlaying?.Source === 'INVALID_SOURCE' ||
+        nowPlaying?.Source?.endsWith('_ERROR') ||
+        nowPlaying?.PlayStatus === 'INVALID_PLAY_STATE';
+}
+
+function discreteCommandText(command) {
+    if (!command) return '';
+    const labels = {
+        'power-off': {
+            pending: 'Turning device off',
+            'provisional-confirmed': 'Device powered off, confirming',
+            'final-confirmed': 'Device powered off',
+            unverified: 'Power command unverified',
+            failed: 'Power command failed',
+        },
+        'power-on': {
+            pending: 'Waking device',
+            'provisional-confirmed': 'Device awake, confirming',
+            'final-confirmed': 'Device awake',
+            unverified: 'Power command unverified',
+            failed: 'Power command failed',
+        },
+        pause: {
+            pending: 'Pausing playback',
+            'provisional-confirmed': 'Playback paused, confirming',
+            'final-confirmed': 'Playback paused',
+            unverified: 'Pause command unverified',
+            failed: 'Pause command failed',
+        },
+        play: {
+            pending: 'Starting playback',
+            'provisional-confirmed': 'Playback started, confirming',
+            'final-confirmed': 'Playback started',
+            unverified: 'Play command unverified',
+            failed: 'Play command failed',
+        },
+    };
+    return labels[command.action]?.[command.outcome] || '';
+}
+
 export function mergeStatusUpdate(previous, deviceId, status) {
     // Object.prototype.hasOwnProperty, not a plain previous[deviceId] truthy
     // check: a deviceId of "__proto__" or "constructor" would otherwise
@@ -98,8 +157,173 @@ export function mergeStatusUpdate(previous, deviceId, status) {
     });
 }
 
-function DeviceDetail({ deviceId, devices, onBack, onDevicesChanged, notify, onRemove, onStatusReadback, onNavigate }) {
+export function DeviceDetail({
+    deviceId,
+    devices,
+    onBack,
+    onDevicesChanged,
+    notify,
+    onRemove,
+    onStatusReadback,
+    onNavigate,
+    commandReadbackDelays = DISCRETE_COMMAND_READBACK_DELAYS_MS,
+}) {
     const device = devices[deviceId];
+    const status = device?.status;
+    const [command, setCommand] = useState(null);
+    const commandRef = useRef({ generation: 0, active: null, timers: [] });
+
+    function clearCommandReadbacks() {
+        commandRef.current.timers.forEach(clearTimeout);
+        commandRef.current.timers = [];
+    }
+
+    useEffect(() => {
+        commandRef.current.generation += 1;
+        commandRef.current.active = null;
+        clearCommandReadbacks();
+        setCommand(null);
+
+        return () => {
+            commandRef.current.generation += 1;
+            commandRef.current.active = null;
+            clearCommandReadbacks();
+        };
+    }, [deviceId]);
+
+    useEffect(() => {
+        const revision = nowPlayingRevision(status);
+        if (!command || revision === null || command.startRevision === null ||
+            revision <= command.startRevision || command.outcome === 'failed' ||
+            command.outcome === 'unverified') return;
+
+        const matches = matchesDiscreteCommand(status, command.action);
+        if (command.outcome === 'final-confirmed') {
+            if (revision > command.confirmedRevision && !matches) {
+                setCommand(previous => previous?.generation === command.generation
+                    ? null : previous);
+            }
+            return;
+        }
+        if (discreteCommandFailed(status, command.action)) {
+            clearCommandReadbacks();
+            commandRef.current.active = null;
+            setCommand(previous => previous?.generation === command.generation
+                ? { ...previous, outcome: 'failed' }
+                : previous);
+        } else if (matches && command.outcome === 'pending') {
+            setCommand(previous => previous?.generation === command.generation
+                ? { ...previous, outcome: 'provisional-confirmed' }
+                : previous);
+        }
+    }, [command, status]);
+
+    function runDiscreteCommand(action, invoke) {
+        if (commandRef.current.active) return;
+
+        clearCommandReadbacks();
+        const generation = commandRef.current.generation + 1;
+        const startRevision = nowPlayingRevision(status);
+        const active = { generation, latestReadback: -1, writeError: null };
+        commandRef.current.generation = generation;
+        commandRef.current.active = active;
+        setCommand({ action, generation, outcome: 'pending', startRevision });
+        const startedAt = Date.now();
+
+        commandReadbackDelays.forEach((delay, index) => {
+            const timer = setTimeout(async () => {
+                if (commandRef.current.active !== active) return;
+                active.latestReadback = index;
+
+                try {
+                    const response = await api.deviceNowPlaying(deviceId);
+                    if (commandRef.current.active !== active || active.latestReadback !== index) return;
+                    if (response?.success === false || !response?.data?.status) {
+                        throw new Error(response?.error || 'Device status unavailable');
+                    }
+
+                    const readbackStatus = response.data.status;
+                    const readbackRevision = nowPlayingRevision(readbackStatus);
+                    const revisionIsNewer = startRevision !== null && readbackRevision !== null &&
+                        readbackRevision > startRevision;
+                    onStatusReadback?.(deviceId, readbackStatus);
+
+                    if (revisionIsNewer && discreteCommandFailed(readbackStatus, action)) {
+                        clearCommandReadbacks();
+                        commandRef.current.active = null;
+                        setCommand({ action, generation, outcome: 'failed', startRevision });
+                    } else if (revisionIsNewer && matchesDiscreteCommand(readbackStatus, action)) {
+                        const isFinalReadback = index === commandReadbackDelays.length - 1;
+                        setCommand({
+                            action,
+                            generation,
+                            outcome: isFinalReadback ? 'final-confirmed' : 'provisional-confirmed',
+                            startRevision,
+                            confirmedRevision: readbackRevision,
+                        });
+                        if (isFinalReadback) {
+                            clearCommandReadbacks();
+                            commandRef.current.active = null;
+                        }
+                    } else if (index === commandReadbackDelays.length - 1) {
+                        commandRef.current.active = null;
+                        setCommand({
+                            action,
+                            generation,
+                            outcome: 'unverified',
+                            startRevision,
+                            error: active.writeError?.message,
+                        });
+                    }
+                } catch (_) {
+                    if (commandRef.current.active === active && active.latestReadback === index &&
+                        index === commandReadbackDelays.length - 1) {
+                        commandRef.current.active = null;
+                        setCommand({
+                            action,
+                            generation,
+                            outcome: 'unverified',
+                            startRevision,
+                            error: active.writeError?.message,
+                        });
+                    }
+                }
+            }, Math.max(0, delay - (Date.now() - startedAt)));
+            commandRef.current.timers.push(timer);
+        });
+
+        let write;
+        try {
+            write = invoke();
+        } catch (error) {
+            active.writeError = error;
+            return;
+        }
+        Promise.resolve(write).then(response => {
+            if (response?.success === false) throw new Error(response.error || 'Command rejected');
+        }).catch(error => {
+            if (commandRef.current.active === active) active.writeError = error;
+        });
+    }
+
+    const commandBusy = command?.outcome === 'pending' ||
+        command?.outcome === 'provisional-confirmed';
+    const commandStatus = discreteCommandText(command);
+    const source = status?.nowPlaying?.Source;
+    const playStatus = status?.nowPlaying?.PlayStatus;
+
+    function togglePower() {
+        if (!source) return;
+        runDiscreteCommand(source === 'STANDBY' ? 'power-on' : 'power-off',
+            () => api.power(deviceId));
+    }
+
+    function togglePlayback() {
+        if (!playStatus) return;
+        const isPlaying = playStatus === 'PLAY_STATE';
+        runDiscreteCommand(isPlaying ? 'pause' : 'play',
+            () => api.key(deviceId, isPlaying ? 'PAUSE' : 'PLAY'));
+    }
 
     if (!device) {
         return html`
@@ -114,7 +338,13 @@ function DeviceDetail({ deviceId, devices, onBack, onDevicesChanged, notify, onR
         <div class="device-detail">
             <div class="page-header">
                 <button class="back-btn" onClick=${onBack}>← Back</button>
-                <button class="btn-icon" onClick=${() => api.power(deviceId)} title="Power">
+                <button
+                    class="btn-icon command-btn ${command?.action?.startsWith('power-') ? command.outcome : ''}"
+                    onClick=${togglePower}
+                    title="Power"
+                    disabled=${commandBusy || !source}
+                    aria-busy=${command?.action?.startsWith('power-') && commandBusy ? 'true' : null}
+                >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                         <path d="M12 2v8" />
                         <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
@@ -122,7 +352,14 @@ function DeviceDetail({ deviceId, devices, onBack, onDevicesChanged, notify, onR
                 </button>
             </div>
             <${NowPlaying} nowPlaying=${device.status?.nowPlaying} deviceId=${deviceId} presets=${device.status?.presets} />
-            <${Controls} deviceId=${deviceId} status=${device.status} />
+            <${Controls}
+                deviceId=${deviceId}
+                status=${device.status}
+                command=${command}
+                commandBusy=${commandBusy}
+                commandStatus=${commandStatus}
+                onTogglePlayback=${togglePlayback}
+            />
             <${Presets} deviceId=${deviceId} status=${device.status} />
             <${Sources}
                 deviceId=${deviceId}
