@@ -85,6 +85,9 @@ export function Controls({
     commandBusy = false,
     commandStatus = '',
     onTogglePlayback,
+    onToggleMute,
+    onToggleShuffle,
+    onCycleRepeat,
 }) {
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
@@ -115,6 +118,9 @@ export function Controls({
     const send = (key) => api.key(deviceId, key);
     const transportCommand = command?.action === 'play' || command?.action === 'pause'
         ? command : null;
+    const muteCommand = command?.action?.startsWith('mute-') ? command : null;
+    const shuffleCommand = command?.action?.startsWith('shuffle-') ? command : null;
+    const repeatCommand = command?.action?.startsWith('repeat-') ? command : null;
 
     // One throttle per slider per mount. The local state still updates on every
     // input, so the handle keeps up with the pointer; only the network write is
@@ -144,16 +150,6 @@ export function Controls({
         writeBalance(deviceId, val);
     }
 
-    function toggleShuffle() {
-        send(shuffle === 'SHUFFLE_ON' ? 'SHUFFLE_OFF' : 'SHUFFLE_ON');
-    }
-
-    function cycleRepeat() {
-        if (repeat === 'REPEAT_OFF') send('REPEAT_ALL');
-        else if (repeat === 'REPEAT_ALL') send('REPEAT_ONE');
-        else send('REPEAT_OFF');
-    }
-
     return html`
         <div class="controls">
             <div class="transport">
@@ -165,7 +161,7 @@ export function Controls({
                     onClick=${onTogglePlayback || (() => send(isPlaying ? 'PAUSE' : 'PLAY'))}
                     disabled=${commandBusy || !np?.PlayStatus}
                     aria-busy=${transportCommand && commandBusy ? 'true' : null}
-                    title=${transportCommand ? commandStatus : (isPlaying ? 'Pause' : 'Play')}
+                    title=${transportCommand && commandBusy ? commandStatus : (isPlaying ? 'Pause' : 'Play')}
                     aria-label=${isPlaying ? 'Pause' : 'Play'}
                 >
                     ${isPlaying ? IconPause() : IconPlay()}
@@ -173,13 +169,41 @@ export function Controls({
                 <button class="ctrl-btn" onClick=${() => send('NEXT_TRACK')} title="Next" aria-label="Next">
                     ${IconNext()}
                 </button>
-                <button class="ctrl-btn ${isMuted ? 'active' : ''}" onClick=${() => send('MUTE')} title="Mute" aria-label="Mute" aria-pressed=${isMuted}>
+                <button
+                    class="ctrl-btn command-btn mute-btn ${isMuted ? 'active' : ''} ${muteCommand?.outcome || ''}"
+                    onClick=${onToggleMute || (() => send('MUTE'))}
+                    disabled=${commandBusy || typeof status?.volume?.MuteEnabled !== 'boolean'}
+                    aria-busy=${muteCommand && commandBusy ? 'true' : null}
+                    title=${muteCommand && commandBusy ? commandStatus : (isMuted ? 'Unmute' : 'Mute')}
+                    aria-label=${isMuted ? 'Unmute' : 'Mute'}
+                    aria-pressed=${isMuted}
+                >
                     ${IconVolume({ muted: isMuted })}
                 </button>
-                <button class="ctrl-btn ${shuffle === 'SHUFFLE_ON' ? 'active' : ''}" onClick=${toggleShuffle} title="Shuffle" aria-label="Shuffle" aria-pressed=${shuffle === 'SHUFFLE_ON'}>
+                <button
+                    class="ctrl-btn command-btn shuffle-btn ${shuffle === 'SHUFFLE_ON' ? 'active' : ''} ${shuffleCommand?.outcome || ''}"
+                    onClick=${onToggleShuffle || (() => send(shuffle === 'SHUFFLE_ON' ? 'SHUFFLE_OFF' : 'SHUFFLE_ON'))}
+                    disabled=${commandBusy || !np?.ShuffleSetting}
+                    aria-busy=${shuffleCommand && commandBusy ? 'true' : null}
+                    title=${shuffleCommand && commandBusy ? commandStatus : 'Shuffle'}
+                    aria-label="Shuffle"
+                    aria-pressed=${shuffle === 'SHUFFLE_ON'}
+                >
                     ${IconShuffle()}
                 </button>
-                <button class="ctrl-btn ${repeat !== 'REPEAT_OFF' ? 'active' : ''}" onClick=${cycleRepeat} title=${repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat'} aria-label=${repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat'} aria-pressed=${repeat !== 'REPEAT_OFF'}>
+                <button
+                    class="ctrl-btn command-btn repeat-btn ${repeat !== 'REPEAT_OFF' ? 'active' : ''} ${repeatCommand?.outcome || ''}"
+                    onClick=${onCycleRepeat || (() => {
+                        if (repeat === 'REPEAT_OFF') send('REPEAT_ALL');
+                        else if (repeat === 'REPEAT_ALL') send('REPEAT_ONE');
+                        else send('REPEAT_OFF');
+                    })}
+                    disabled=${commandBusy || !np?.RepeatSetting}
+                    aria-busy=${repeatCommand && commandBusy ? 'true' : null}
+                    title=${repeatCommand && commandBusy ? commandStatus : (repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat')}
+                    aria-label=${repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat'}
+                    aria-pressed=${repeat !== 'REPEAT_OFF'}
+                >
                     ${IconRepeat({ one: repeat === 'REPEAT_ONE' })}
                 </button>
             </div>

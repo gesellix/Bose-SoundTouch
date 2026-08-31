@@ -90,12 +90,23 @@ function nowPlayingRevision(status) {
     return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
 }
 
+function discreteCommandRevision(status, action) {
+    return action?.startsWith('mute-') ? statusRevision(status) : nowPlayingRevision(status);
+}
+
 function matchesDiscreteCommand(status, action) {
     const nowPlaying = status?.nowPlaying;
     if (action === 'power-off') return nowPlaying?.Source === 'STANDBY';
     if (action === 'power-on') return Boolean(nowPlaying?.Source) && nowPlaying.Source !== 'STANDBY';
     if (action === 'pause') return nowPlaying?.PlayStatus === 'PAUSE_STATE';
     if (action === 'play') return nowPlaying?.PlayStatus === 'PLAY_STATE';
+    if (action === 'mute-on') return status?.volume?.MuteEnabled === true;
+    if (action === 'mute-off') return status?.volume?.MuteEnabled === false;
+    if (action === 'shuffle-on') return nowPlaying?.ShuffleSetting === 'SHUFFLE_ON';
+    if (action === 'shuffle-off') return nowPlaying?.ShuffleSetting === 'SHUFFLE_OFF';
+    if (action === 'repeat-all') return nowPlaying?.RepeatSetting === 'REPEAT_ALL';
+    if (action === 'repeat-one') return nowPlaying?.RepeatSetting === 'REPEAT_ONE';
+    if (action === 'repeat-off') return nowPlaying?.RepeatSetting === 'REPEAT_OFF';
     return false;
 }
 
@@ -137,6 +148,55 @@ function discreteCommandText(command) {
             'final-confirmed': 'Playback started',
             unverified: 'Play command unverified',
             failed: 'Play command failed',
+        },
+        'mute-on': {
+            pending: 'Muting audio',
+            'provisional-confirmed': 'Audio muted, confirming',
+            'final-confirmed': 'Audio muted',
+            unverified: 'Mute command unverified',
+            failed: 'Mute command failed',
+        },
+        'mute-off': {
+            pending: 'Unmuting audio',
+            'provisional-confirmed': 'Audio unmuted, confirming',
+            'final-confirmed': 'Audio unmuted',
+            unverified: 'Unmute command unverified',
+            failed: 'Unmute command failed',
+        },
+        'shuffle-on': {
+            pending: 'Enabling shuffle',
+            'provisional-confirmed': 'Shuffle enabled, confirming',
+            'final-confirmed': 'Shuffle enabled',
+            unverified: 'Shuffle command unverified',
+            failed: 'Shuffle command failed',
+        },
+        'shuffle-off': {
+            pending: 'Disabling shuffle',
+            'provisional-confirmed': 'Shuffle disabled, confirming',
+            'final-confirmed': 'Shuffle disabled',
+            unverified: 'Shuffle command unverified',
+            failed: 'Shuffle command failed',
+        },
+        'repeat-all': {
+            pending: 'Enabling repeat all',
+            'provisional-confirmed': 'Repeat all enabled, confirming',
+            'final-confirmed': 'Repeat all enabled',
+            unverified: 'Repeat command unverified',
+            failed: 'Repeat command failed',
+        },
+        'repeat-one': {
+            pending: 'Enabling repeat one',
+            'provisional-confirmed': 'Repeat one enabled, confirming',
+            'final-confirmed': 'Repeat one enabled',
+            unverified: 'Repeat command unverified',
+            failed: 'Repeat command failed',
+        },
+        'repeat-off': {
+            pending: 'Disabling repeat',
+            'provisional-confirmed': 'Repeat disabled, confirming',
+            'final-confirmed': 'Repeat disabled',
+            unverified: 'Repeat command unverified',
+            failed: 'Repeat command failed',
         },
     };
     return labels[command.action]?.[command.outcome] || '';
@@ -192,7 +252,7 @@ export function DeviceDetail({
     }, [deviceId]);
 
     useEffect(() => {
-        const revision = nowPlayingRevision(status);
+        const revision = discreteCommandRevision(status, command?.action);
         if (!command || revision === null || command.startRevision === null ||
             revision <= command.startRevision || command.outcome === 'failed' ||
             command.outcome === 'unverified') return;
@@ -223,7 +283,7 @@ export function DeviceDetail({
 
         clearCommandReadbacks();
         const generation = commandRef.current.generation + 1;
-        const startRevision = nowPlayingRevision(status);
+        const startRevision = discreteCommandRevision(status, action);
         const active = { generation, latestReadback: -1, writeError: null };
         commandRef.current.generation = generation;
         commandRef.current.active = active;
@@ -243,7 +303,7 @@ export function DeviceDetail({
                     }
 
                     const readbackStatus = response.data.status;
-                    const readbackRevision = nowPlayingRevision(readbackStatus);
+                    const readbackRevision = discreteCommandRevision(readbackStatus, action);
                     const revisionIsNewer = startRevision !== null && readbackRevision !== null &&
                         readbackRevision > startRevision;
                     onStatusReadback?.(deviceId, readbackStatus);
@@ -325,6 +385,30 @@ export function DeviceDetail({
             () => api.key(deviceId, isPlaying ? 'PAUSE' : 'PLAY'));
     }
 
+    function toggleMute() {
+        const muted = status?.volume?.MuteEnabled;
+        if (typeof muted !== 'boolean') return;
+        runDiscreteCommand(muted ? 'mute-off' : 'mute-on',
+            () => api.key(deviceId, 'MUTE'));
+    }
+
+    function toggleShuffle() {
+        const shuffle = status?.nowPlaying?.ShuffleSetting;
+        if (!shuffle) return;
+        const target = shuffle === 'SHUFFLE_ON' ? 'SHUFFLE_OFF' : 'SHUFFLE_ON';
+        runDiscreteCommand(target === 'SHUFFLE_ON' ? 'shuffle-on' : 'shuffle-off',
+            () => api.key(deviceId, target));
+    }
+
+    function cycleRepeat() {
+        const repeat = status?.nowPlaying?.RepeatSetting;
+        if (!repeat) return;
+        const target = repeat === 'REPEAT_OFF' ? 'REPEAT_ALL'
+            : repeat === 'REPEAT_ALL' ? 'REPEAT_ONE' : 'REPEAT_OFF';
+        runDiscreteCommand(`repeat-${target.substring('REPEAT_'.length).toLowerCase()}`,
+            () => api.key(deviceId, target));
+    }
+
     if (!device) {
         return html`
             <div class="page-header">
@@ -359,6 +443,9 @@ export function DeviceDetail({
                 commandBusy=${commandBusy}
                 commandStatus=${commandStatus}
                 onTogglePlayback=${togglePlayback}
+                onToggleMute=${toggleMute}
+                onToggleShuffle=${toggleShuffle}
+                onCycleRepeat=${cycleRepeat}
             />
             <${Presets} deviceId=${deviceId} status=${device.status} />
             <${Sources}

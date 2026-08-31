@@ -506,7 +506,7 @@ window.revisionChecks = {
 	}
 }
 
-func TestPowerAndPauseCommandsUseOneWriteAndBoundedReadbacks(t *testing.T) {
+func TestDiscreteCommandsUseOneWriteAndBoundedReadbacks(t *testing.T) {
 	const fixture = `
 import { h, render } from 'preact';
 import { useState } from 'preact/hooks';
@@ -514,7 +514,7 @@ import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
 const initialStatus = {
   revision: 1,
   nowPlayingRevision: 1,
-  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF' },
   volume: { ActualVolume: 20, MuteEnabled: false },
   presets: { Preset: [] },
   sources: { SourceItem: [] },
@@ -550,9 +550,12 @@ render(h(Fixture), document.getElementById('fixture'));
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
 		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, req *http.Request) {
+			key := chi.URLParam(req, "key")
 			mu.Lock()
-			mode = "pause"
-			keys = append(keys, chi.URLParam(req, "key"))
+			mode = map[string]string{
+				"PAUSE": "pause", "MUTE": "mute", "SHUFFLE_ON": "shuffle", "REPEAT_ALL": "repeat",
+			}[key]
+			keys = append(keys, key)
 			mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
@@ -564,23 +567,48 @@ render(h(Fixture), document.getElementById('fixture'));
 			read := reads[currentMode]
 			mu.Unlock()
 
-			revision := read + 1
+			revisionBase := map[string]int{"power": 1, "pause": 100, "mute": 200, "shuffle": 300, "repeat": 400}[currentMode]
+			revision := read + revisionBase
+			nowPlayingRevision := revision
 			source := "PRODUCT"
 			playStatus := "PLAY_STATE"
+			shuffle := "SHUFFLE_OFF"
+			repeat := "REPEAT_OFF"
+			muted := false
 			if currentMode == "power" && read >= 2 {
 				source = "STANDBY"
 				playStatus = "STOP_STATE"
 			} else if currentMode == "pause" {
-				revision = read + 100
 				if read >= 2 {
 					playStatus = "PAUSE_STATE"
+				}
+			} else if currentMode == "mute" {
+				nowPlayingRevision = 200
+				playStatus = "PAUSE_STATE"
+				if read >= 2 {
+					muted = true
+				}
+			} else if currentMode == "shuffle" {
+				playStatus = "PAUSE_STATE"
+				if read >= 2 {
+					shuffle = "SHUFFLE_ON"
+				}
+			} else if currentMode == "repeat" {
+				playStatus = "PAUSE_STATE"
+				shuffle = "SHUFFLE_ON"
+				if read >= 2 {
+					repeat = "REPEAT_ALL"
 				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
 				"status": map[string]any{
-					"revision": revision, "nowPlayingRevision": revision,
-					"nowPlaying": map[string]string{"Source": source, "PlayStatus": playStatus},
+					"revision": revision, "nowPlayingRevision": nowPlayingRevision,
+					"nowPlaying": map[string]string{
+						"Source": source, "PlayStatus": playStatus,
+						"ShuffleSetting": shuffle, "RepeatSetting": repeat,
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": muted},
 				},
 			}})
 		})
@@ -596,23 +624,36 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	var powerPending, pausePending bool
+	var powerPending, pausePending, mutePending, shufflePending, repeatPending bool
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 		chromedp.WaitVisible(`.page-header .command-btn`, chromedp.ByQuery),
 		chromedp.Click(`.page-header .command-btn`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelector('.page-header .command-btn').getAttribute('aria-busy') === 'true'`, &powerPending),
 		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Device powered off'`, nil),
-		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE'}})`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: false}})`, nil),
 		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === ''`, nil),
 		chromedp.Click(`.play-btn`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelector('.play-btn').getAttribute('aria-busy') === 'true'`, &pausePending),
 		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 200, nowPlayingRevision: 200, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: false}})`, nil),
+		chromedp.Click(`.mute-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.mute-btn').getAttribute('aria-busy') === 'true'`, &mutePending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Audio muted'`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 300, nowPlayingRevision: 300, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
+		chromedp.Click(`.shuffle-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.shuffle-btn').getAttribute('aria-busy') === 'true'`, &shufflePending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Shuffle enabled'`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 400, nowPlayingRevision: 400, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
+		chromedp.Click(`.repeat-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.repeat-btn').getAttribute('aria-busy') === 'true'`, &repeatPending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Repeat all enabled'`, nil),
 	); err != nil {
 		t.Fatalf("exercise bounded discrete commands: %v", err)
 	}
-	if !powerPending || !pausePending {
-		t.Errorf("pending state: power=%v pause=%v, want both true", powerPending, pausePending)
+	if !powerPending || !pausePending || !mutePending || !shufflePending || !repeatPending {
+		t.Errorf("pending state: power=%v pause=%v mute=%v shuffle=%v repeat=%v, want all true",
+			powerPending, pausePending, mutePending, shufflePending, repeatPending)
 	}
 
 	mu.Lock()
@@ -620,11 +661,13 @@ render(h(Fixture), document.getElementById('fixture'));
 	if powerWrites != 1 {
 		t.Errorf("power writes = %d, want 1", powerWrites)
 	}
-	if len(keys) != 1 || keys[0] != "PAUSE" {
-		t.Errorf("key writes = %v, want [PAUSE]", keys)
+	if got, want := fmt.Sprint(keys), "[PAUSE MUTE SHUFFLE_ON REPEAT_ALL]"; got != want {
+		t.Errorf("key writes = %s, want %s", got, want)
 	}
-	if reads["power"] != 3 || reads["pause"] != 3 {
-		t.Errorf("readbacks = power:%d pause:%d, want 3 each", reads["power"], reads["pause"])
+	for _, command := range []string{"power", "pause", "mute", "shuffle", "repeat"} {
+		if reads[command] != 3 {
+			t.Errorf("%s readbacks = %d, want 3", command, reads[command])
+		}
 	}
 }
 
