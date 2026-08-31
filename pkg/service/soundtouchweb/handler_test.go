@@ -4,6 +4,7 @@ package soundtouchweb
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 )
@@ -847,6 +849,61 @@ func TestHandleDevicePlay_SourceAccountFiltering(t *testing.T) {
 				t.Errorf("XML should contain %q, got: %s", want, capturedBody)
 			}
 		})
+	}
+}
+
+func TestHandlePlayURLReturnsSelectedContentIdentity(t *testing.T) {
+	var selected models.ContentItem
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/select" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := xml.NewDecoder(r.Body).Decode(&selected); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer speaker.Close()
+
+	app := NewWebApp()
+	app.ServiceURL = "http://aftertouch.test"
+	conn := webtypes.NewDeviceConnection(
+		client.NewClient(&client.Config{Host: speaker.URL}),
+		&models.DeviceInfo{DeviceID: "DEVICE1", Name: "Speaker"},
+	)
+	app.AddDevice("speaker", conn)
+
+	body := strings.NewReader(`{"url":"http://stream.test/audio","name":"Fixture stream","imageUrl":"http://stream.test/art.png"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/control/devices/speaker/providers/url/play", body)
+	req = withChiParams(req, map[string]string{"id": "speaker"})
+	w := httptest.NewRecorder()
+	app.HandlePlayURL(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("play URL status = %d: %s", w.Code, w.Body.String())
+	}
+	expectedLocation := bmxpkg.BuildOrionLocation(
+		app.ServiceURL,
+		"Fixture stream",
+		"http://stream.test/art.png",
+		"http://stream.test/audio",
+	)
+	var response struct {
+		Success bool              `json:"success"`
+		Data    map[string]string `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("decode play URL response: %v", err)
+	}
+	if !response.Success || response.Data["source"] != "LOCAL_INTERNET_RADIO" ||
+		response.Data["location"] != expectedLocation || response.Data["itemName"] != "Fixture stream" {
+		t.Fatalf("play URL identity = %+v, want exact selected content", response)
+	}
+	if selected.Source != response.Data["source"] || selected.Location != response.Data["location"] ||
+		selected.ItemName != response.Data["itemName"] {
+		t.Fatalf("speaker selection = %+v, response = %+v", selected, response.Data)
 	}
 }
 
