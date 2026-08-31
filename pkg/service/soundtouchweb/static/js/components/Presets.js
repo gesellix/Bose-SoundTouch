@@ -26,7 +26,7 @@ function sourceLabel(source) {
 // unreachable on touch devices and easy to miss everywhere else.  It shares
 // the star glyph and the gold --fav colour with the now-playing preset
 // picker (see NowPlaying.js) so both save paths read as the same gesture.
-function PresetSlot({ preset, deviceId, active, canSave }) {
+function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, onSelect }) {
     const [saveState, setSaveState] = useState(null); // null | 'saved' | 'error'
 
     const item = preset?.ContentItem;
@@ -58,7 +58,7 @@ function PresetSlot({ preset, deviceId, active, canSave }) {
 
     function select() {
         if (savableEmpty) store();
-        else if (!isEmpty) api.control(deviceId, 'preset', preset.ID);
+        else if (!isEmpty) (onSelect || (() => api.control(deviceId, 'preset', preset.ID)))(preset);
     }
 
     function save(e) {
@@ -82,7 +82,9 @@ function PresetSlot({ preset, deviceId, active, canSave }) {
                 class="preset-slot ${isEmpty ? 'empty' : ''} ${active ? 'active' : ''} ${savableEmpty ? 'savable' : ''}"
                 data-source=${item?.Source ?? ''}
                 onClick=${select}
-                disabled=${isEmpty && !savableEmpty}
+                disabled=${(isEmpty && !savableEmpty) || commandBusy}
+                aria-busy=${command?.action === 'preset' && commandBusy &&
+                    command?.expected?.targetId === String(preset.ID) ? 'true' : null}
                 title=${slotTitle}
             >
                 <span class="preset-thumb">
@@ -117,7 +119,7 @@ function PresetSlot({ preset, deviceId, active, canSave }) {
     `;
 }
 
-export function Presets({ deviceId, status }) {
+export function Presets({ deviceId, status, command, commandBusy = false, onSelect }) {
     const presets = status?.presets?.Preset ?? [];
     const currentSource = status?.nowPlaying?.Source;
     const currentLocation = status?.nowPlaying?.ContentItem?.Location;
@@ -147,6 +149,9 @@ export function Presets({ deviceId, status }) {
                         deviceId=${deviceId}
                         active=${isActive(preset)}
                         canSave=${canSave}
+                        command=${command}
+                        commandBusy=${commandBusy}
+                        onSelect=${onSelect}
                     />
                 `)}
             </div>
