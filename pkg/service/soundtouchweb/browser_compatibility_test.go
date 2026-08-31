@@ -514,7 +514,7 @@ import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
 const initialStatus = {
   revision: 1,
   nowPlayingRevision: 1,
-  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF' },
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF', Track: 'First track' },
   volume: { ActualVolume: 20, MuteEnabled: false },
   presets: { Preset: [] },
   sources: { SourceItem: [] },
@@ -554,6 +554,7 @@ render(h(Fixture), document.getElementById('fixture'));
 			mu.Lock()
 			mode = map[string]string{
 				"PAUSE": "pause", "MUTE": "mute", "SHUFFLE_ON": "shuffle", "REPEAT_ALL": "repeat",
+				"NEXT_TRACK": "next", "PREV_TRACK": "previous",
 			}[key]
 			keys = append(keys, key)
 			mu.Unlock()
@@ -567,7 +568,10 @@ render(h(Fixture), document.getElementById('fixture'));
 			read := reads[currentMode]
 			mu.Unlock()
 
-			revisionBase := map[string]int{"power": 1, "pause": 100, "mute": 200, "shuffle": 300, "repeat": 400}[currentMode]
+			revisionBase := map[string]int{
+				"power": 1, "pause": 100, "mute": 200, "shuffle": 300, "repeat": 400,
+				"next": 500, "previous": 600,
+			}[currentMode]
 			revision := read + revisionBase
 			nowPlayingRevision := revision
 			source := "PRODUCT"
@@ -575,6 +579,7 @@ render(h(Fixture), document.getElementById('fixture'));
 			shuffle := "SHUFFLE_OFF"
 			repeat := "REPEAT_OFF"
 			muted := false
+			track := "First track"
 			if currentMode == "power" && read >= 2 {
 				source = "STANDBY"
 				playStatus = "STOP_STATE"
@@ -599,6 +604,21 @@ render(h(Fixture), document.getElementById('fixture'));
 				if read >= 2 {
 					repeat = "REPEAT_ALL"
 				}
+			} else if currentMode == "next" {
+				playStatus = "PAUSE_STATE"
+				shuffle = "SHUFFLE_ON"
+				repeat = "REPEAT_ALL"
+				if read >= 2 {
+					track = "Second track"
+				}
+			} else if currentMode == "previous" {
+				playStatus = "PAUSE_STATE"
+				shuffle = "SHUFFLE_ON"
+				repeat = "REPEAT_ALL"
+				track = "Second track"
+				if read >= 2 {
+					track = "First track"
+				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
@@ -606,7 +626,7 @@ render(h(Fixture), document.getElementById('fixture'));
 					"revision": revision, "nowPlayingRevision": nowPlayingRevision,
 					"nowPlaying": map[string]string{
 						"Source": source, "PlayStatus": playStatus,
-						"ShuffleSetting": shuffle, "RepeatSetting": repeat,
+						"ShuffleSetting": shuffle, "RepeatSetting": repeat, "Track": track,
 					},
 					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": muted},
 				},
@@ -625,6 +645,7 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var powerPending, pausePending, mutePending, shufflePending, repeatPending bool
+	var nextPending, previousPending bool
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 		chromedp.WaitVisible(`.page-header .command-btn`, chromedp.ByQuery),
@@ -648,12 +669,23 @@ render(h(Fixture), document.getElementById('fixture'));
 		chromedp.Click(`.repeat-btn`, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelector('.repeat-btn').getAttribute('aria-busy') === 'true'`, &repeatPending),
 		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Repeat all enabled'`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 500, nowPlayingRevision: 500, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'First track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
+		chromedp.Poll(`document.querySelector('.track-title').textContent === 'First track'`, nil),
+		chromedp.Click(`.next-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.next-btn').getAttribute('aria-busy') === 'true'`, &nextPending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 600, nowPlayingRevision: 600, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'Second track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
+		chromedp.Poll(`document.querySelector('.track-title').textContent === 'Second track'`, nil),
+		chromedp.Click(`.previous-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.previous-btn').getAttribute('aria-busy') === 'true'`, &previousPending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`, nil),
 	); err != nil {
 		t.Fatalf("exercise bounded discrete commands: %v", err)
 	}
-	if !powerPending || !pausePending || !mutePending || !shufflePending || !repeatPending {
-		t.Errorf("pending state: power=%v pause=%v mute=%v shuffle=%v repeat=%v, want all true",
-			powerPending, pausePending, mutePending, shufflePending, repeatPending)
+	if !powerPending || !pausePending || !mutePending || !shufflePending || !repeatPending ||
+		!nextPending || !previousPending {
+		t.Errorf("pending state: power=%v pause=%v mute=%v shuffle=%v repeat=%v next=%v previous=%v, want all true",
+			powerPending, pausePending, mutePending, shufflePending, repeatPending, nextPending, previousPending)
 	}
 
 	mu.Lock()
@@ -661,13 +693,132 @@ render(h(Fixture), document.getElementById('fixture'));
 	if powerWrites != 1 {
 		t.Errorf("power writes = %d, want 1", powerWrites)
 	}
-	if got, want := fmt.Sprint(keys), "[PAUSE MUTE SHUFFLE_ON REPEAT_ALL]"; got != want {
+	if got, want := fmt.Sprint(keys), "[PAUSE MUTE SHUFFLE_ON REPEAT_ALL NEXT_TRACK PREV_TRACK]"; got != want {
 		t.Errorf("key writes = %s, want %s", got, want)
 	}
-	for _, command := range []string{"power", "pause", "mute", "shuffle", "repeat"} {
+	for _, command := range []string{"power", "pause", "mute", "shuffle", "repeat", "next", "previous"} {
 		if reads[command] != 3 {
 			t.Errorf("%s readbacks = %d, want 3", command, reads[command])
 		}
+	}
+}
+
+func TestPresetAndRecentCommandsUseOneWriteAndBoundedReadbacks(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [{ ID: 1, ContentItem: { Source: 'TUNEIN', Location: '/station/preset', ItemName: 'Preset station' } }] },
+  sources: { SourceItem: [] },
+};
+let publishStatus;
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  publishStatus = status => setDevices(previous => mergeStatusUpdate(previous, 'speaker', status));
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+window.publishStatus = status => publishStatus(status);
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	mode := ""
+	reads := map[string]int{}
+	presetWrites := 0
+	recentWrites := 0
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/action/preset", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			mode = "preset"
+			presetWrites++
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Post("/api/control/devices/speaker/play", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			mode = "recent"
+			recentWrites++
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			currentMode := mode
+			reads[currentMode]++
+			read := reads[currentMode]
+			mu.Unlock()
+
+			revisionBase := map[string]int{"preset": 1, "recent": 100}[currentMode]
+			source := "PRODUCT"
+			location := ""
+			name := "Original"
+			if currentMode == "preset" && read >= 2 {
+				source, location, name = "TUNEIN", "/station/preset", "Preset station"
+			} else if currentMode == "recent" && read >= 2 {
+				source, location, name = "LOCAL_INTERNET_RADIO", "/station/recent", "Recent station"
+			}
+			revision := revisionBase + read
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"status": map[string]any{
+					"revision": revision, "nowPlayingRevision": revision,
+					"nowPlaying": map[string]any{
+						"Source": source, "PlayStatus": "PLAY_STATE",
+						"ContentItem": map[string]string{"Source": source, "Location": location, "ItemName": name},
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+		r.Get("/api/control/devices/speaker/zone", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/zone/candidates", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{}})
+		})
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{"Items": []any{
+				map[string]any{"ID": "recent-1", "ContentItem": map[string]any{
+					"Source": "LOCAL_INTERNET_RADIO", "Location": "/station/recent", "ItemName": "Recent station",
+				}},
+			}}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var presetPending, recentPending bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.preset-slot:not(.empty)`, chromedp.ByQuery),
+		chromedp.Click(`.preset-slot:not(.empty)`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.preset-slot:not(.empty)').getAttribute('aria-busy') === 'true'`, &presetPending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Preset started'`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE'}, volume: {ActualVolume: 20, MuteEnabled: false}, presets: {Preset: [{ID: 1, ContentItem: {Source: 'TUNEIN', Location: '/station/preset', ItemName: 'Preset station'}}]}})`, nil),
+		chromedp.WaitVisible(`.recent-item`, chromedp.ByQuery),
+		chromedp.Click(`.recent-item`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.recent-item').getAttribute('aria-busy') === 'true'`, &recentPending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Recent item started'`, nil),
+	); err != nil {
+		t.Fatalf("exercise preset and recent command state: %v", err)
+	}
+	if !presetPending || !recentPending {
+		t.Errorf("pending state: preset=%v recent=%v, want both true", presetPending, recentPending)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if presetWrites != 1 || recentWrites != 1 {
+		t.Errorf("writes: preset=%d recent=%d, want 1 each", presetWrites, recentWrites)
+	}
+	if reads["preset"] != 3 || reads["recent"] != 3 {
+		t.Errorf("readbacks: preset=%d recent=%d, want 3 each", reads["preset"], reads["recent"])
 	}
 }
 

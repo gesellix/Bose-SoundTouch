@@ -6,7 +6,7 @@ import { SourceIcon } from '../sourceIcons.js';
 
 const html = htm.bind(h);
 
-export function Recents({ deviceId }) {
+export function Recents({ deviceId, command, commandBusy = false, onPlay }) {
     const [items, setItems] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -29,6 +29,10 @@ export function Recents({ deviceId }) {
     if (!items || items.length === 0) return null;
 
     function play(item) {
+        if (onPlay) {
+            onPlay(item);
+            return;
+        }
         const ci = item.ContentItem;
         if (!ci?.Location) return;
         api.play(deviceId, {
@@ -50,7 +54,15 @@ export function Recents({ deviceId }) {
                     const ci = item.ContentItem;
                     if (!ci) return null;
                     return html`
-                        <button class="recent-item" key=${item.ID || item.UTCTime} onClick=${() => play(item)}>
+                        <button
+                            class="recent-item"
+                            key=${item.ID || item.UTCTime}
+                            onClick=${() => play(item)}
+                            disabled=${commandBusy}
+                            aria-busy=${command?.action === 'recent' && commandBusy &&
+                                command?.expected?.targetId === String(item.ID || item.UTCTime || ci.Location)
+                                ? 'true' : null}
+                        >
                             ${ci.ContainerArt
                                 ? html`<img class="recent-art" src=${ci.ContainerArt} alt="" />`
                                 : html`<div class="recent-art recent-art-empty"><${SourceIcon} source=${ci.Source} className="recent-source-icon" /></div>`

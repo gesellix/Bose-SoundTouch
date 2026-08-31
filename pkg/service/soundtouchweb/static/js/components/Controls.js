@@ -88,6 +88,8 @@ export function Controls({
     onToggleMute,
     onToggleShuffle,
     onCycleRepeat,
+    onPreviousTrack,
+    onNextTrack,
 }) {
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
@@ -121,6 +123,8 @@ export function Controls({
     const muteCommand = command?.action?.startsWith('mute-') ? command : null;
     const shuffleCommand = command?.action?.startsWith('shuffle-') ? command : null;
     const repeatCommand = command?.action?.startsWith('repeat-') ? command : null;
+    const previousCommand = command?.action === 'previous-track' ? command : null;
+    const nextCommand = command?.action === 'next-track' ? command : null;
 
     // One throttle per slider per mount. The local state still updates on every
     // input, so the handle keeps up with the pointer; only the network write is
@@ -153,7 +157,14 @@ export function Controls({
     return html`
         <div class="controls">
             <div class="transport">
-                <button class="ctrl-btn" onClick=${() => send('PREV_TRACK')} title="Previous" aria-label="Previous">
+                <button
+                    class="ctrl-btn command-btn previous-btn ${previousCommand?.outcome || ''}"
+                    onClick=${onPreviousTrack || (() => send('PREV_TRACK'))}
+                    disabled=${commandBusy || !np}
+                    aria-busy=${previousCommand && commandBusy ? 'true' : null}
+                    title=${previousCommand && commandBusy ? commandStatus : 'Previous'}
+                    aria-label="Previous"
+                >
                     ${IconPrev()}
                 </button>
                 <button
@@ -166,7 +177,14 @@ export function Controls({
                 >
                     ${isPlaying ? IconPause() : IconPlay()}
                 </button>
-                <button class="ctrl-btn" onClick=${() => send('NEXT_TRACK')} title="Next" aria-label="Next">
+                <button
+                    class="ctrl-btn command-btn next-btn ${nextCommand?.outcome || ''}"
+                    onClick=${onNextTrack || (() => send('NEXT_TRACK'))}
+                    disabled=${commandBusy || !np}
+                    aria-busy=${nextCommand && commandBusy ? 'true' : null}
+                    title=${nextCommand && commandBusy ? commandStatus : 'Next'}
+                    aria-label="Next"
+                >
                     ${IconNext()}
                 </button>
                 <button

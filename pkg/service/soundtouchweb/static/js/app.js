@@ -90,11 +90,65 @@ function nowPlayingRevision(status) {
     return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
 }
 
-function discreteCommandRevision(status, action) {
-    return action?.startsWith('mute-') ? statusRevision(status) : nowPlayingRevision(status);
+function commandAction(command) {
+    return typeof command === 'string' ? command : command?.action;
 }
 
-function matchesDiscreteCommand(status, action) {
+function discreteCommandRevision(status, command) {
+    return commandAction(command)?.startsWith('mute-')
+        ? statusRevision(status)
+        : nowPlayingRevision(status);
+}
+
+function playbackIdentity(nowPlaying) {
+    if (!nowPlaying) return '';
+    const item = nowPlaying.ContentItem || {};
+    return [
+        nowPlaying.Source,
+        nowPlaying.SourceAccount,
+        item.Source,
+        item.SourceAccount,
+        item.Location,
+        nowPlaying.TrackID,
+        nowPlaying.Track,
+        nowPlaying.StationName,
+    ].map(value => value || '').join('\u0000');
+}
+
+function contentExpectation(item) {
+    const source = item?.Source || '';
+    const sourceAccount = item?.SourceAccount && item.SourceAccount !== source
+        ? item.SourceAccount
+        : '';
+    return {
+        source,
+        sourceAccount,
+        location: item?.Location || '',
+        itemName: item?.ItemName || '',
+    };
+}
+
+function matchesContentExpectation(nowPlaying, expected) {
+    if (!nowPlaying || !expected) return false;
+    const item = nowPlaying.ContentItem || {};
+    const source = item.Source || nowPlaying.Source || '';
+    const account = item.SourceAccount || nowPlaying.SourceAccount || '';
+    if (expected.source && source !== expected.source) return false;
+    if (expected.sourceAccount && account !== expected.sourceAccount) return false;
+    if (expected.location) {
+        return item.Location === expected.location ||
+            nowPlaying.StationLocation === expected.location;
+    }
+    if (expected.itemName) return [
+        item.ItemName,
+        nowPlaying.Track,
+        nowPlaying.StationName,
+    ].includes(expected.itemName);
+    return Boolean(expected.source);
+}
+
+function matchesDiscreteCommand(status, command) {
+    const action = commandAction(command);
     const nowPlaying = status?.nowPlaying;
     if (action === 'power-off') return nowPlaying?.Source === 'STANDBY';
     if (action === 'power-on') return Boolean(nowPlaying?.Source) && nowPlaying.Source !== 'STANDBY';
@@ -107,11 +161,21 @@ function matchesDiscreteCommand(status, action) {
     if (action === 'repeat-all') return nowPlaying?.RepeatSetting === 'REPEAT_ALL';
     if (action === 'repeat-one') return nowPlaying?.RepeatSetting === 'REPEAT_ONE';
     if (action === 'repeat-off') return nowPlaying?.RepeatSetting === 'REPEAT_OFF';
+    if (action === 'next-track' || action === 'previous-track') {
+        const identity = playbackIdentity(nowPlaying);
+        return Boolean(identity) && identity !== command?.expected?.previousIdentity;
+    }
+    if (action === 'preset' || action === 'recent') {
+        return matchesContentExpectation(nowPlaying, command?.expected);
+    }
     return false;
 }
 
-function discreteCommandFailed(status, action) {
-    if (action !== 'play' && action !== 'pause') return false;
+function discreteCommandFailed(status, command) {
+    const action = commandAction(command);
+    if (!['play', 'pause', 'next-track', 'previous-track', 'preset', 'recent'].includes(action)) {
+        return false;
+    }
     const nowPlaying = status?.nowPlaying;
     return nowPlaying?.Source === 'INVALID_SOURCE' ||
         nowPlaying?.Source?.endsWith('_ERROR') ||
@@ -198,6 +262,34 @@ function discreteCommandText(command) {
             unverified: 'Repeat command unverified',
             failed: 'Repeat command failed',
         },
+        'next-track': {
+            pending: 'Skipping to next track',
+            'provisional-confirmed': 'Next track started, confirming',
+            'final-confirmed': 'Next track started',
+            unverified: 'Next-track command unverified',
+            failed: 'Next-track command failed',
+        },
+        'previous-track': {
+            pending: 'Returning to previous track',
+            'provisional-confirmed': 'Previous track started, confirming',
+            'final-confirmed': 'Previous track started',
+            unverified: 'Previous-track command unverified',
+            failed: 'Previous-track command failed',
+        },
+        preset: {
+            pending: 'Starting preset',
+            'provisional-confirmed': 'Preset started, confirming',
+            'final-confirmed': 'Preset started',
+            unverified: 'Preset playback unverified',
+            failed: 'Preset playback failed',
+        },
+        recent: {
+            pending: 'Starting recent item',
+            'provisional-confirmed': 'Recent item started, confirming',
+            'final-confirmed': 'Recent item started',
+            unverified: 'Recent-item playback unverified',
+            failed: 'Recent-item playback failed',
+        },
     };
     return labels[command.action]?.[command.outcome] || '';
 }
@@ -252,12 +344,12 @@ export function DeviceDetail({
     }, [deviceId]);
 
     useEffect(() => {
-        const revision = discreteCommandRevision(status, command?.action);
+        const revision = discreteCommandRevision(status, command);
         if (!command || revision === null || command.startRevision === null ||
             revision <= command.startRevision || command.outcome === 'failed' ||
             command.outcome === 'unverified') return;
 
-        const matches = matchesDiscreteCommand(status, command.action);
+        const matches = matchesDiscreteCommand(status, command);
         if (command.outcome === 'final-confirmed') {
             if (revision > command.confirmedRevision && !matches) {
                 setCommand(previous => previous?.generation === command.generation
@@ -265,7 +357,7 @@ export function DeviceDetail({
             }
             return;
         }
-        if (discreteCommandFailed(status, command.action)) {
+        if (discreteCommandFailed(status, command)) {
             clearCommandReadbacks();
             commandRef.current.active = null;
             setCommand(previous => previous?.generation === command.generation
@@ -278,16 +370,17 @@ export function DeviceDetail({
         }
     }, [command, status]);
 
-    function runDiscreteCommand(action, invoke) {
+    function runDiscreteCommand(action, invoke, expected = null) {
         if (commandRef.current.active) return;
 
         clearCommandReadbacks();
         const generation = commandRef.current.generation + 1;
-        const startRevision = discreteCommandRevision(status, action);
+        const request = { action, expected };
+        const startRevision = discreteCommandRevision(status, request);
         const active = { generation, latestReadback: -1, writeError: null };
         commandRef.current.generation = generation;
         commandRef.current.active = active;
-        setCommand({ action, generation, outcome: 'pending', startRevision });
+        setCommand({ ...request, generation, outcome: 'pending', startRevision });
         const startedAt = Date.now();
 
         commandReadbackDelays.forEach((delay, index) => {
@@ -303,19 +396,19 @@ export function DeviceDetail({
                     }
 
                     const readbackStatus = response.data.status;
-                    const readbackRevision = discreteCommandRevision(readbackStatus, action);
+                    const readbackRevision = discreteCommandRevision(readbackStatus, request);
                     const revisionIsNewer = startRevision !== null && readbackRevision !== null &&
                         readbackRevision > startRevision;
                     onStatusReadback?.(deviceId, readbackStatus);
 
-                    if (revisionIsNewer && discreteCommandFailed(readbackStatus, action)) {
+                    if (revisionIsNewer && discreteCommandFailed(readbackStatus, request)) {
                         clearCommandReadbacks();
                         commandRef.current.active = null;
-                        setCommand({ action, generation, outcome: 'failed', startRevision });
-                    } else if (revisionIsNewer && matchesDiscreteCommand(readbackStatus, action)) {
+                        setCommand({ ...request, generation, outcome: 'failed', startRevision });
+                    } else if (revisionIsNewer && matchesDiscreteCommand(readbackStatus, request)) {
                         const isFinalReadback = index === commandReadbackDelays.length - 1;
                         setCommand({
-                            action,
+                            ...request,
                             generation,
                             outcome: isFinalReadback ? 'final-confirmed' : 'provisional-confirmed',
                             startRevision,
@@ -328,7 +421,7 @@ export function DeviceDetail({
                     } else if (index === commandReadbackDelays.length - 1) {
                         commandRef.current.active = null;
                         setCommand({
-                            action,
+                            ...request,
                             generation,
                             outcome: 'unverified',
                             startRevision,
@@ -340,7 +433,7 @@ export function DeviceDetail({
                         index === commandReadbackDelays.length - 1) {
                         commandRef.current.active = null;
                         setCommand({
-                            action,
+                            ...request,
                             generation,
                             outcome: 'unverified',
                             startRevision,
@@ -409,6 +502,42 @@ export function DeviceDetail({
             () => api.key(deviceId, target));
     }
 
+    function previousTrack() {
+        runDiscreteCommand('previous-track',
+            () => api.key(deviceId, 'PREV_TRACK'),
+            { previousIdentity: playbackIdentity(status?.nowPlaying) });
+    }
+
+    function nextTrack() {
+        runDiscreteCommand('next-track',
+            () => api.key(deviceId, 'NEXT_TRACK'),
+            { previousIdentity: playbackIdentity(status?.nowPlaying) });
+    }
+
+    function selectPreset(preset) {
+        if (!preset?.ContentItem) return;
+        runDiscreteCommand('preset',
+            () => api.control(deviceId, 'preset', preset.ID),
+            { ...contentExpectation(preset.ContentItem), targetId: String(preset.ID) });
+    }
+
+    function playRecent(item) {
+        const content = item?.ContentItem;
+        if (!content?.Location) return;
+        runDiscreteCommand('recent', () => api.play(deviceId, {
+            source: content.Source,
+            type: content.Type,
+            location: content.Location,
+            sourceAccount: content.SourceAccount,
+            itemName: content.ItemName,
+            containerArt: content.ContainerArt,
+            isPresetable: content.IsPresetable,
+        }), {
+            ...contentExpectation(content),
+            targetId: String(item.ID || item.UTCTime || content.Location),
+        });
+    }
+
     if (!device) {
         return html`
             <div class="page-header">
@@ -446,8 +575,16 @@ export function DeviceDetail({
                 onToggleMute=${toggleMute}
                 onToggleShuffle=${toggleShuffle}
                 onCycleRepeat=${cycleRepeat}
+                onPreviousTrack=${previousTrack}
+                onNextTrack=${nextTrack}
             />
-            <${Presets} deviceId=${deviceId} status=${device.status} />
+            <${Presets}
+                deviceId=${deviceId}
+                status=${device.status}
+                command=${command}
+                commandBusy=${commandBusy}
+                onSelect=${selectPreset}
+            />
             <${Sources}
                 deviceId=${deviceId}
                 status=${device.status}
@@ -468,7 +605,12 @@ export function DeviceDetail({
                 </aside>
             ` : null}
             <${Zone} deviceId=${deviceId} devices=${devices} />
-            <${Recents} deviceId=${deviceId} />
+            <${Recents}
+                deviceId=${deviceId}
+                command=${command}
+                commandBusy=${commandBusy}
+                onPlay=${playRecent}
+            />
             ${!device.stereoPair ? html`
                 <div class="device-management-section">
                     <div class="section-title">Device management</div>
