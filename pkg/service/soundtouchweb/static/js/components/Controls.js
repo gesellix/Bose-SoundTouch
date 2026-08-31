@@ -78,7 +78,14 @@ function balanceLabel(level) {
     return level < 0 ? `L${-level}` : `R${level}`;
 }
 
-export function Controls({ deviceId, status }) {
+export function Controls({
+    deviceId,
+    status,
+    command,
+    commandBusy = false,
+    commandStatus = '',
+    onTogglePlayback,
+}) {
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
     const actualVolume = status?.volume?.ActualVolume ?? 0;
@@ -106,6 +113,8 @@ export function Controls({ deviceId, status }) {
     useEffect(() => { setLocalBalance(actualBalance); }, [actualBalance]);
 
     const send = (key) => api.key(deviceId, key);
+    const transportCommand = command?.action === 'play' || command?.action === 'pause'
+        ? command : null;
 
     // One throttle per slider per mount. The local state still updates on every
     // input, so the handle keeps up with the pointer; only the network write is
@@ -152,9 +161,11 @@ export function Controls({ deviceId, status }) {
                     ${IconPrev()}
                 </button>
                 <button
-                    class="ctrl-btn play-btn"
-                    onClick=${() => send(isPlaying ? 'PAUSE' : 'PLAY')}
-                    title=${isPlaying ? 'Pause' : 'Play'}
+                    class="ctrl-btn play-btn command-btn ${transportCommand?.outcome || ''}"
+                    onClick=${onTogglePlayback || (() => send(isPlaying ? 'PAUSE' : 'PLAY'))}
+                    disabled=${commandBusy || !np?.PlayStatus}
+                    aria-busy=${transportCommand && commandBusy ? 'true' : null}
+                    title=${transportCommand ? commandStatus : (isPlaying ? 'Pause' : 'Play')}
                     aria-label=${isPlaying ? 'Pause' : 'Play'}
                 >
                     ${isPlaying ? IconPause() : IconPlay()}
@@ -171,6 +182,9 @@ export function Controls({ deviceId, status }) {
                 <button class="ctrl-btn ${repeat !== 'REPEAT_OFF' ? 'active' : ''}" onClick=${cycleRepeat} title=${repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat'} aria-label=${repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat'} aria-pressed=${repeat !== 'REPEAT_OFF'}>
                     ${IconRepeat({ one: repeat === 'REPEAT_ONE' })}
                 </button>
+            </div>
+            <div class="discrete-command-status" role="status" aria-live="polite">
+                ${commandStatus}
             </div>
             <div class="volume-row">
                 <span class="volume-icon">${IconVolume({ size: 16 })}</span>

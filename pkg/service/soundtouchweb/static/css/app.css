@@ -596,6 +596,18 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
 /* The primary action is deliberately larger; everything else is uniform. */
 .ctrl-btn.play-btn { width: 3rem; height: 3rem; }
 .ctrl-btn.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.command-btn:disabled { cursor: not-allowed; opacity: .55; }
+.command-btn.pending { cursor: wait; }
+.command-btn.provisional-confirmed { border-style: dashed; cursor: progress; }
+.command-btn.unverified { border-color: #a76b00; }
+.command-btn.failed { border-color: var(--offline); }
+
+.discrete-command-status {
+    min-height: 1.2em;
+    margin: -.35rem 0 .4rem;
+    color: var(--text-dim);
+    font-size: .75rem;
+}
 
 .volume-row { display: flex; align-items: center; gap: .75rem; }
 .volume-icon { display: flex; align-items: center; }

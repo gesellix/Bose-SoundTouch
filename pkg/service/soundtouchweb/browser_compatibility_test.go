@@ -506,6 +506,128 @@ window.revisionChecks = {
 	}
 }
 
+func TestPowerAndPauseCommandsUseOneWriteAndBoundedReadbacks(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [] },
+  sources: { SourceItem: [] },
+};
+let publishStatus;
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  publishStatus = status => setDevices(previous => mergeStatusUpdate(previous, 'speaker', status));
+  return h(DeviceDetail, {
+    deviceId: 'speaker',
+    devices,
+    onBack: () => {},
+    commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+window.publishStatus = status => publishStatus(status);
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	mode := ""
+	reads := map[string]int{}
+	powerWrites := 0
+	var keys []string
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/power", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			mode = "power"
+			powerWrites++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			mode = "pause"
+			keys = append(keys, chi.URLParam(req, "key"))
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			currentMode := mode
+			reads[currentMode]++
+			read := reads[currentMode]
+			mu.Unlock()
+
+			revision := read + 1
+			source := "PRODUCT"
+			playStatus := "PLAY_STATE"
+			if currentMode == "power" && read >= 2 {
+				source = "STANDBY"
+				playStatus = "STOP_STATE"
+			} else if currentMode == "pause" {
+				revision = read + 100
+				if read >= 2 {
+					playStatus = "PAUSE_STATE"
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"status": map[string]any{
+					"revision": revision, "nowPlayingRevision": revision,
+					"nowPlaying": map[string]string{"Source": source, "PlayStatus": playStatus},
+				},
+			}})
+		})
+		r.Get("/api/control/devices/speaker/zone", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/zone/candidates", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{}})
+		})
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{"Items": []any{}}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var powerPending, pausePending bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.page-header .command-btn`, chromedp.ByQuery),
+		chromedp.Click(`.page-header .command-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.page-header .command-btn').getAttribute('aria-busy') === 'true'`, &powerPending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Device powered off'`, nil),
+		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE'}})`, nil),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === ''`, nil),
+		chromedp.Click(`.play-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.play-btn').getAttribute('aria-busy') === 'true'`, &pausePending),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`, nil),
+	); err != nil {
+		t.Fatalf("exercise bounded discrete commands: %v", err)
+	}
+	if !powerPending || !pausePending {
+		t.Errorf("pending state: power=%v pause=%v, want both true", powerPending, pausePending)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if powerWrites != 1 {
+		t.Errorf("power writes = %d, want 1", powerWrites)
+	}
+	if len(keys) != 1 || keys[0] != "PAUSE" {
+		t.Errorf("key writes = %v, want [PAUSE]", keys)
+	}
+	if reads["power"] != 3 || reads["pause"] != 3 {
+		t.Errorf("readbacks = power:%d pause:%d, want 3 each", reads["power"], reads["pause"])
+	}
+}
+
 // TestSourceExpiryDisablesCommandsOnNewerRevision: a stale marker pushed over
 // the socket must reach the buttons and make them unclickable, without the
 // projection ever showing the source as selected.
