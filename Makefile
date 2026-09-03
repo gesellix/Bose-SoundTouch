@@ -174,9 +174,16 @@ test-http-client-rotate:
 
 test-http-client:
 	@echo "Starting services with docker compose (waiting for healthchecks)..."
-	@docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wait
-	@echo "Running .http tests..."
-	@docker run --rm --network soundtouch-test-net \
+	@docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wait; \
+	UP_EXIT_CODE=$$?; \
+	if [ $$UP_EXIT_CODE -ne 0 ]; then \
+		echo "docker compose up failed (exit $$UP_EXIT_CODE); dumping container logs:"; \
+		docker compose -f docker-compose.yml -f docker-compose.ci.yml logs; \
+		docker compose -f docker-compose.yml -f docker-compose.ci.yml down; \
+		exit $$UP_EXIT_CODE; \
+	fi; \
+	echo "Running .http tests..."; \
+	docker run --rm --network soundtouch-test-net \
 		-v "$(PWD)/tests/integration/http-client:/workdir" \
 		jetbrains/intellij-http-client:2026.1 \
 		--env-file /workdir/http-client.env.json \
@@ -236,9 +243,7 @@ test-http-client:
 		/workdir/unregister_device.http \
 		--report; \
 	EXIT_CODE=$$?; \
-	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs soundtouch-service; \
-	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs spotify-mock; \
-	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs amazon-mock; \
+	docker compose -f docker-compose.yml -f docker-compose.ci.yml logs; \
 	docker compose -f docker-compose.yml -f docker-compose.ci.yml down; \
 	exit $$EXIT_CODE
 
