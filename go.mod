@@ -3,7 +3,7 @@ module github.com/gesellix/bose-soundtouch
 go 1.27.0
 
 require (
-	filippo.io/age v1.3.1
+	filippo.io/age v1.3.2
 	github.com/chromedp/chromedp v0.16.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/gopacket v1.1.19
