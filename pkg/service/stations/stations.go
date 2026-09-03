@@ -91,12 +91,18 @@ func navigateTuneIn(wildcard string) (*models.BmxNavResponse, error) {
 
 		return bmx.TuneInNavigate(rest[secondSlash+1:], &n)
 	case "profiles":
-		parts := strings.SplitN(rest, "/", 3)
-		if len(parts) < 3 {
-			return bmx.TuneInNavigate(wildcard, nil)
-		}
+		// Hrefs are generated as a single path segment:
+		// /v1/navigate/profiles/{encodedURI} (see tuneInSearchProfile in
+		// pkg/service/bmx/tunein.go). Requiring a profiles/{type}/{id}/{encodedURI}
+		// shape here caused every profile link to fall through to
+		// bmx.TuneInNavigate with the literal "profiles/..." prefix still
+		// attached, which is not valid base64 and produced a 500 ("illegal
+		// base64 data..."). Take the last path segment as the encoded URI
+		// so both the current single-segment hrefs and any legacy
+		// multi-segment ones decode correctly.
+		parts := strings.Split(rest, "/")
 
-		return bmx.TuneInNavigateProfile(parts[2])
+		return bmx.TuneInNavigateProfile(parts[len(parts)-1])
 	default:
 		return bmx.TuneInNavigate(wildcard, nil)
 	}

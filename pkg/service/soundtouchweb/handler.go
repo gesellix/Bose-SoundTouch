@@ -991,7 +991,7 @@ func (app *WebApp) HandleTuneInSearchNext(w http.ResponseWriter, r *http.Request
 //   - (empty)                             → top-level browse
 //   - /{encodedURI}                       → browse the given TuneIn URI
 //   - /sub/{n}/{encodedURI}               → single subsection
-//   - /profiles/{type}/{id}/{encodedURI}  → artist/program profile
+//   - /profiles/{encodedURI}              → artist/program profile
 func (app *WebApp) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
 	wildcard := chi.URLParam(r, "*")
 
