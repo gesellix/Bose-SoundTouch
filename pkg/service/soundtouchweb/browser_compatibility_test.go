@@ -33,6 +33,12 @@ func newHeadlessChromeContext(t *testing.T) context.Context {
 			// permissions Chrome's sandbox needs; harmless to also set
 			// locally.
 			chromedp.Flag("no-sandbox", true),
+			// chromedp's default is 20s; a loaded shared CI runner can be
+			// slower than that to fork/exec Chrome and print its DevTools
+			// websocket URL, which otherwise surfaces as a flaky "websocket
+			// url timeout reached" test failure unrelated to the page under
+			// test.
+			chromedp.WSURLReadTimeout(45*time.Second),
 		)...,
 	)
 	t.Cleanup(cancelAlloc)
@@ -40,7 +46,7 @@ func newHeadlessChromeContext(t *testing.T) context.Context {
 	ctx, cancelCtx := chromedp.NewContext(allocCtx)
 	t.Cleanup(cancelCtx)
 
-	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancelTimeout := context.WithTimeout(ctx, 60*time.Second)
 	t.Cleanup(cancelTimeout)
 
 	return ctx
