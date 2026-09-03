@@ -1,6 +1,6 @@
 module preset-management-example
 
-go 1.27.0
+go 1.27.1
 
 require github.com/gesellix/bose-soundtouch v0.128.0
 
