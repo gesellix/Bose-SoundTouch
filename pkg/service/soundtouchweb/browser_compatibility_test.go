@@ -427,7 +427,7 @@ func TestSourceSelectionUsesOneWriteAndAbsoluteReadbacks(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			run := &runs[len(runs)-1]
 			run.readTimes = append(run.readTimes, time.Since(run.startedAt))
@@ -504,6 +504,88 @@ func TestSourceSelectionUsesOneWriteAndAbsoluteReadbacks(t *testing.T) {
 	}
 }
 
+// TestSourceSelectionStopsReadbacksOnceTheEventStreamConfirms: when the
+// speaker's event stream is live it will report a late rejection on its own,
+// so a confirmed selection must not keep polling. This is the difference
+// between one readback per source tap and three.
+func TestSourceSelectionStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
+	var mu sync.Mutex
+	reads := 0
+	server := newPlayerFixtureServer(t, sourceFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			reads++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"revision":9,"nowPlayingRevision":9,` +
+				`"webSocketConnected":true,"nowPlaying":{"Source":"AUX","SourceAccount":"AUX1"}}}}`))
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+		// Outlast the remaining readback deadlines (250ms and 500ms here).
+		chromedp.Sleep(900*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exercise event-stream-confirmed selection: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads != 1 {
+		t.Errorf("readbacks with a live event stream = %d, want 1", reads)
+	}
+}
+
+// TestSourceSelectionKeepsReadbacksWithoutAnEventStream is the other half:
+// with no event stream to watch for a late rejection, the readbacks are the
+// only watcher and must run to the end of their window.
+func TestSourceSelectionKeepsReadbacksWithoutAnEventStream(t *testing.T) {
+	var mu sync.Mutex
+	reads := 0
+	server := newPlayerFixtureServer(t, sourceFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			reads++
+			readCount := reads
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"success":true,"data":{"status":{"revision":%d,"nowPlayingRevision":%d,`+
+				`"webSocketConnected":false,"nowPlaying":{"Source":"AUX","SourceAccount":"AUX1"}}}}`,
+				readCount+8, readCount+8)
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exercise selection without an event stream: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads != len([]int{100, 250, 500}) {
+		t.Errorf("readbacks without an event stream = %d, want 3", reads)
+	}
+}
+
 func TestSourceSelectionTreatsSelfAccountAsOmitted(t *testing.T) {
 	const fixture = `
 import { h, render } from 'preact';
@@ -533,7 +615,7 @@ render(h(Sources, {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"revision":2,"nowPlayingRevision":2,"nowPlaying":{"Source":"AUX","SourceAccount":""}}}}`))
 		})
@@ -574,7 +656,7 @@ func TestSourceSelectionReadbacksDoNotWaitForSlowWriteResponse(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			readTimes = append(readTimes, time.Since(startedAt))
 			readCount := len(readTimes)
@@ -619,7 +701,7 @@ func TestSourceSelectionDefinitiveRefusalFailsImmediately(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"success":false,"error":"Device not found"}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			reads++
 			mu.Unlock()
@@ -663,7 +745,7 @@ func TestSourceSelectionLaterFirmwareErrorOverridesProvisionalConfirmation(t *te
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			reads++
 			read := reads
@@ -714,7 +796,7 @@ func TestSourceSelectionKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
 		// Every readback fails, so only the pushed status can confirm anything.
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 		})
 	})
@@ -748,7 +830,7 @@ func TestSourceSelectionRejectsReadbackWithOnlyNewerAggregateRevision(t *testing
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			reads++
 			mu.Unlock()
@@ -782,7 +864,7 @@ func TestSourceSelectionTreatsFirmwareErrorSourceAsFailed(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			reads++
 			read := reads
@@ -829,7 +911,7 @@ func TestSourceSelectionLaterAuthoritativeSourceClearsFinalProjection(t *testing
 					w.Header().Set("Content-Type", "application/json")
 					_, _ = w.Write([]byte(`{"success":true}`))
 				})
-				r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+				r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 					mu.Lock()
 					reads++
 					revision := reads + 1
@@ -899,7 +981,7 @@ render(h(Fixture), document.getElementById('fixture'));
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			reads++
 			revision := reads + 1
@@ -948,7 +1030,7 @@ func TestSourceSelectionResetsWhenDeviceChanges(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		})
@@ -990,7 +1072,7 @@ func TestSourceSelectionFencesOlderReadbackAndStatus(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
-		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			mu.Lock()
 			source := currentSource
 			readRevision++

@@ -152,7 +152,7 @@ export function Sources({
                 active.latestReadback = index;
 
                 try {
-                    const response = await api.device(deviceId);
+                    const response = await api.deviceNowPlaying(deviceId);
                     if (commandRef.current.active !== active || active.latestReadback !== index) return;
 
                     const readbackStatus = response?.data?.status;
@@ -174,15 +174,29 @@ export function Sources({
                         });
                     } else if (revisionIsNewer && nowPlaying?.Source === target.source &&
                         sourceAccountsMatch(target.source, nowPlaying?.SourceAccount, target.account)) {
+                        // A match is not the end of the story: /select answers
+                        // 200 even for a source the speaker goes on to reject a
+                        // few seconds later, which surfaces as a transition to
+                        // an error source. Something has to keep watching.
+                        //
+                        // The event stream is the better watcher when it is
+                        // live: nowPlayingUpdated reports that transition as it
+                        // happens, and the effect above already turns it into a
+                        // failure. Polling on top of that only re-asks a
+                        // question we are already subscribed to the answer of.
+                        // So keep the remaining readbacks only as a fallback
+                        // for a device whose events we are not receiving.
                         const isFinalReadback = index === readbackDelays.length - 1;
+                        const eventStreamWatching = readbackStatus?.webSocketConnected === true;
+                        const settled = isFinalReadback || eventStreamWatching;
                         setCommand({
                             ...target,
                             generation,
-                            outcome: isFinalReadback ? 'final-confirmed' : 'provisional-confirmed',
+                            outcome: settled ? 'final-confirmed' : 'provisional-confirmed',
                             startNowPlayingRevision: nowPlayingRevision,
                             confirmedRevision: readbackRevision,
                         });
-                        if (isFinalReadback) {
+                        if (settled) {
                             clearReadbacks();
                             commandRef.current.active = null;
                         }

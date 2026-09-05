@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
@@ -167,5 +169,75 @@ func TestHandleAPIDevicePublishesCanonicalReadback(t *testing.T) {
 		response.Data.Status.NowPlayingRevision != canonical.NowPlayingRevision ||
 		canonical.NowPlayingRevision <= baselineRevision {
 		t.Fatalf("response did not publish canonical status: response=%+v status=%+v", response.Data.Status, canonical)
+	}
+}
+
+// TestHandleDeviceNowPlayingPollsOnlyNowPlaying is the point of the endpoint:
+// the source-selection readback needs one question answered, and going
+// through the full device fetch would poll every field to answer it.
+func TestHandleDeviceNowPlayingPollsOnlyNowPlaying(t *testing.T) {
+	var mu sync.Mutex
+	var paths []string
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+
+		if r.URL.Path != "/now_playing" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<nowPlaying source="AUX" sourceAccount="AUX1"><playStatus>PLAY_STATE</playStatus></nowPlaying>`))
+	}))
+	defer speaker.Close()
+
+	app := NewWebApp()
+	conn := webtypes.NewDeviceConnection(
+		client.NewClient(&client.Config{Host: speaker.URL}),
+		&models.DeviceInfo{Name: "Speaker"},
+	)
+	conn.SetStatus(&webtypes.DeviceStatus{NowPlaying: &models.NowPlaying{Source: "STANDBY"}})
+	baseline := conn.Status().NowPlayingRevision
+	app.AddDevice("speaker", conn)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/control/devices/speaker/now-playing", nil)
+	req = withChiParams(req, map[string]string{"id": "speaker"})
+	w := httptest.NewRecorder()
+	app.HandleDeviceNowPlaying(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("now-playing readback = %d: %s", w.Code, w.Body.String())
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"/now_playing"}; !reflect.DeepEqual(paths, want) {
+		t.Fatalf("speaker requests = %v, want only %v", paths, want)
+	}
+
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Status webtypes.DeviceStatus `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("decode now-playing readback: %v", err)
+	}
+
+	canonical := conn.Status()
+	if !response.Success || canonical.NowPlaying.Source != "AUX" {
+		t.Fatalf("now-playing was not merged: response=%+v status=%+v", response, canonical)
+	}
+	// The readback confirms a source by comparing this revision, so it has to
+	// carry the same values the connection now holds.
+	if response.Data.Status.NowPlayingRevision != canonical.NowPlayingRevision ||
+		response.Data.Status.Revision != canonical.Revision ||
+		canonical.NowPlayingRevision <= baseline {
+		t.Fatalf("response did not publish canonical revisions: response=%+v status=%+v",
+			response.Data.Status, canonical)
 	}
 }

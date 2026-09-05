@@ -39,6 +39,9 @@ async function checkedReq(url, opts = {}) {
 export const api = {
     devices: () => req('/api/control/devices'),
     device: (id) => req(`/api/control/devices/${id}`),
+    // Refreshes only /now_playing. Used by the source-selection readback,
+    // which would otherwise poll every field to answer one question.
+    deviceNowPlaying: (id) => req(`/api/control/devices/${id}/now-playing`),
     removeDevice: (id) => req(`/api/control/devices/${id}`, { method: 'DELETE' }),
     discover: () => req('/api/control/discover', { method: 'POST' }),
     key: (id, key) => req(`/api/control/devices/${id}/key/${key}`, { method: 'POST' }),

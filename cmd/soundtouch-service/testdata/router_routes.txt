@@ -43,6 +43,7 @@ GET      /api/control/devices/{id}/                                   soundtouch
 GET      /api/control/devices/{id}/action/{action}                    soundtouchweb.(*WebApp).HandleAPIControl-fm
 GET      /api/control/devices/{id}/library/browse                     soundtouchweb.(*WebApp).HandleLibraryBrowse-fm
 GET      /api/control/devices/{id}/library/servers                    soundtouchweb.(*WebApp).HandleDeviceLibraryServers-fm
+GET      /api/control/devices/{id}/now-playing                        soundtouchweb.(*WebApp).HandleDeviceNowPlaying-fm
 GET      /api/control/devices/{id}/power-status                       soundtouchweb.(*WebApp).HandleDevicePowerStatus-fm
 GET      /api/control/devices/{id}/recents                            soundtouchweb.(*WebApp).HandleDeviceRecents-fm
 GET      /api/control/devices/{id}/stereo-pair/                       soundtouchweb.(*WebApp).HandleGetStereoPair-fm
