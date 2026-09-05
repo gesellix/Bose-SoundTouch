@@ -21,6 +21,10 @@ import { removeDeviceAndRefresh } from './deviceRemoval.js';
 
 const html = htm.bind(h);
 
+// Reconnect backoff for the status socket, doubling from base to max.
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 15000;
+
 function statusRevision(status) {
     const revision = status?.revision;
     return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
@@ -172,6 +176,9 @@ function App() {
     const [toast, setToast] = useState(null);
     const [version, setVersion] = useState(null);
     const [isDiscovering, setIsDiscovering] = useState(false);
+    // 'connecting' until the first frame arrives, so a page opened while the
+    // service is down does not claim the connection was lost.
+    const [connection, setConnection] = useState('connecting');
 
     const getPageTitle = () => {
         if (page === 'devices') return 'Devices';
@@ -208,10 +215,12 @@ function App() {
             .catch(err => console.error('Failed to fetch version:', err));
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${location.host}/api/control/ws`);
+        let socket = null;
         let reconnectTimer;
+        let backoff = RECONNECT_BASE_MS;
+        let closed = false;
 
-        ws.onmessage = (event) => {
+        const handleMessage = (event) => {
             const msg = JSON.parse(event.data);
             if (msg.type === 'devices') {
                 setDevices(previous => mergeDevicesSnapshot(previous, msg.data));
@@ -232,13 +241,45 @@ function App() {
             }
         };
 
-        ws.onclose = () => {
-            reconnectTimer = setTimeout(() => location.reload(), 5000);
-        };
+        // Reconnect in place rather than reloading. Reloading a page whose
+        // own document is served by the service cannot work while the service
+        // is down: it replaces a working UI with the browser's error page and
+        // loses everything the page held. Reconnecting keeps the page usable
+        // and recovers on its own when the service returns.
+        //
+        // This is safe because each status carries the epoch of the
+        // connection that produced it. A restarted service publishes
+        // revisions from 0 again, which the browser would otherwise reject
+        // forever; a newer epoch is accepted regardless of its revision, so a
+        // reconnected socket resynchronises without a reload.
+        function connect() {
+            if (closed) return;
+
+            const ws = new WebSocket(`${protocol}//${location.host}/api/control/ws`);
+            socket = ws;
+
+            ws.onopen = () => {
+                backoff = RECONNECT_BASE_MS;
+                setConnection('online');
+            };
+
+            ws.onmessage = handleMessage;
+
+            ws.onclose = () => {
+                if (closed || socket !== ws) return;
+
+                setConnection('offline');
+                reconnectTimer = setTimeout(connect, backoff);
+                backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
+            };
+        }
+
+        connect();
 
         return () => {
+            closed = true;
             clearTimeout(reconnectTimer);
-            ws.close();
+            socket?.close();
         };
     }, []);
 
@@ -403,6 +444,14 @@ function App() {
                         </span>
                     </footer>
                 ` : null}
+
+            ${connection !== 'online' ? html`
+                <div class="connection-banner ${connection}" role="status" aria-live="polite" key="connection">
+                    ${connection === 'connecting'
+                        ? 'Connecting to AfterTouch…'
+                        : 'Lost contact with AfterTouch. Reconnecting…'}
+                </div>
+            ` : null}
 
             ${toast ? html`<div class="toast" role="status" aria-live="polite"
                                 aria-atomic="true" key="toast">${toast}</div>` : null}

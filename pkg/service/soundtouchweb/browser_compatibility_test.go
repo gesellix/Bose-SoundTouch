@@ -13,9 +13,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -167,6 +170,164 @@ func TestPlayerRendersNatively(t *testing.T) {
 // script types), which routes every browser -- including this ordinary
 // headless Chrome -- through the library's own polyfill resolution instead
 // of native import map support.
+// outageProxy is a TCP proxy in front of the test server that can be taken
+// down and brought back at the same address.
+//
+// Simulating an outage needs both halves: refusing new connections AND
+// severing the established ones. A server that merely stops accepting leaves
+// an open WebSocket running, and Chrome's offline emulation does not close it
+// either, so neither reproduces a service that went away.
+type outageProxy struct {
+	listener net.Listener
+	backend  string
+
+	mu    sync.Mutex
+	up    bool
+	conns []net.Conn
+}
+
+func newOutageProxy(t *testing.T, backend string) *outageProxy {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	p := &outageProxy{listener: listener, backend: backend, up: true}
+	t.Cleanup(func() {
+		_ = listener.Close()
+		p.setUp(false)
+	})
+
+	go p.serve()
+
+	return p
+}
+
+func (p *outageProxy) url() string { return "http://" + p.listener.Addr().String() }
+
+func (p *outageProxy) serve() {
+	for {
+		client, err := p.listener.Accept()
+		if err != nil {
+			return
+		}
+
+		p.mu.Lock()
+		serving := p.up
+		p.mu.Unlock()
+
+		if !serving {
+			_ = client.Close()
+
+			continue
+		}
+
+		upstream, err := net.Dial("tcp", p.backend)
+		if err != nil {
+			_ = client.Close()
+
+			continue
+		}
+
+		p.mu.Lock()
+		p.conns = append(p.conns, client, upstream)
+		p.mu.Unlock()
+
+		go func() { _, _ = io.Copy(upstream, client) }()
+		go func() { _, _ = io.Copy(client, upstream) }()
+	}
+}
+
+// setUp brings the proxy down or back. Going down also drops every connection
+// already established, which is what makes an open WebSocket notice.
+func (p *outageProxy) setUp(up bool) {
+	p.mu.Lock()
+	p.up = up
+
+	conns := p.conns
+	p.conns = nil
+	p.mu.Unlock()
+
+	if up {
+		return
+	}
+
+	for _, c := range conns {
+		_ = c.Close()
+	}
+}
+
+// TestPlayerSurvivesAServiceOutage: the player used to reload itself five
+// seconds after the socket closed, which cannot work while the service is
+// down, since the document is served by that same service. The tab landed on
+// the browser's error page and everything the page held was lost.
+//
+// It must now stay up, say so, and recover on its own. The epoch on each
+// status is what makes that safe: a restarted service publishes revisions
+// from 0 again, and without the epoch the browser would reject them forever.
+func TestPlayerSurvivesAServiceOutage(t *testing.T) {
+	app := NewWebApp()
+	r := chi.NewRouter()
+	app.Mount(r, nil)
+
+	server := httptest.NewServer(r)
+	t.Cleanup(server.Close)
+
+	backendURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+
+	proxy := newOutageProxy(t, backendURL.Host)
+	ctx := newHeadlessChromeContext(t)
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(proxy.url()+"/app"),
+		chromedp.WaitVisible(`#app`, chromedp.ByQuery),
+		// The socket must be up before taking it away.
+		chromedp.Poll(`document.querySelector('.connection-banner') === null`, nil),
+	); err != nil {
+		t.Fatalf("connect before the outage: %v", err)
+	}
+
+	proxy.setUp(false)
+
+	var bannerAfterOutage, stillLoaded string
+	if err := chromedp.Run(ctx,
+		chromedp.Poll(`document.querySelector('.connection-banner') !== null`, nil),
+		chromedp.Text(`.connection-banner`, &bannerAfterOutage, chromedp.ByQuery),
+		// The page is still the player, not the browser's error page.
+		chromedp.Evaluate(`document.querySelector('#app') !== null ? 'loaded' : 'gone'`, &stillLoaded),
+	); err != nil {
+		t.Fatalf("detect the outage: %v", err)
+	}
+
+	if !strings.Contains(bannerAfterOutage, "Reconnecting") {
+		t.Errorf("banner during outage = %q, want it to say it is reconnecting", bannerAfterOutage)
+	}
+	if stillLoaded != "loaded" {
+		t.Error("player did not survive the outage")
+	}
+
+	proxy.setUp(true)
+
+	var navigations int
+	if err := chromedp.Run(ctx,
+		// Recovers on its own, with no interaction.
+		chromedp.Poll(`document.querySelector('.connection-banner') === null`, nil),
+		chromedp.Evaluate(`performance.getEntriesByType('navigation').length`, &navigations),
+	); err != nil {
+		t.Fatalf("recover after the outage: %v", err)
+	}
+
+	// Still the document that weathered the outage, not a reloaded one.
+	if navigations != 1 {
+		t.Errorf("navigation entries = %d, want 1: the player reloaded instead of reconnecting", navigations)
+	}
+}
+
 func TestPlayerRendersUnderForcedShimMode(t *testing.T) {
 	app := NewWebApp()
 	r := chi.NewRouter()
