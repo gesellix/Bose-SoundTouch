@@ -94,7 +94,7 @@ export function mergeStatusUpdate(previous, deviceId, status) {
     });
 }
 
-function DeviceDetail({ deviceId, devices, onBack, onDevicesChanged, notify, onRemove, onStatusReadback }) {
+function DeviceDetail({ deviceId, devices, onBack, onDevicesChanged, notify, onRemove, onStatusReadback, onNavigate }) {
     const device = devices[deviceId];
 
     if (!device) {
@@ -124,6 +124,7 @@ function DeviceDetail({ deviceId, devices, onBack, onDevicesChanged, notify, onR
                 deviceId=${deviceId}
                 status=${device.status}
                 onStatusReadback=${status => onStatusReadback(deviceId, status)}
+                onNavigate=${onNavigate}
             />
             <${StereoPair}
                 deviceId=${deviceId}
@@ -376,6 +377,7 @@ function App() {
                         notify=${showToast}
                         onRemove=${removeDevice}
                         onStatusReadback=${mergeDeviceReadback}
+                        onNavigate=${navigate}
                     />
                 ` : page === 'tunein' ? html`
                     <${TuneInBrowser} key="tunein-browser" devices=${devices} />

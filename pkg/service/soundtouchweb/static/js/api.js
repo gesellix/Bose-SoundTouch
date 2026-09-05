@@ -80,6 +80,15 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
+    // Same request as play, but surfaces failures. Used by the source-selection
+    // command path, which reports an outcome and so must be able to tell a
+    // rejected write from an accepted one. play() keeps its response-level
+    // behaviour for the callers that already rely on it.
+    playChecked: (id, item) => checkedReq(`/api/control/devices/${id}/play`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(item),
+    }),
     tuneInBrowse: (path) => req(path ? `/api/control/providers/tunein/navigate/${path}` : '/api/control/providers/tunein/navigate'),
     tuneInSearch: (q) => req(`/api/control/providers/tunein/search?q=${encodeURIComponent(q)}`),
     tuneInSearchNext: (cursor) => req(`/api/control/providers/tunein/search/next?cursor=${encodeURIComponent(cursor)}`),

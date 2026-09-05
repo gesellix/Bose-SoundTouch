@@ -54,6 +54,27 @@ func newPlayerFixtureServer(t *testing.T, moduleScript string, configure func(ch
 	return server
 }
 
+// providerFixtureScript renders a RADIO_BROWSER source, which the speaker
+// advertises READY but cannot act on without a station ContentItem.
+const providerFixtureScript = `
+import { h, render } from 'preact';
+import { Sources } from '/app/static/js/components/Sources.js';
+window.navigated = [];
+render(h(Sources, {
+  deviceId: 'speaker',
+  status: {
+    revision: 1,
+    nowPlayingRevision: 1,
+    sources: { SourceItem: [
+      { Source: 'RADIO_BROWSER', SourceAccount: '', DisplayName: 'RadioBrowser', Status: 'READY' },
+    ] },
+    nowPlaying: { Source: 'SPOTIFY', SourceAccount: 'someone' },
+  },
+  onNavigate: page => window.navigated.push(page),
+  readbackDelays: [100, 250, 500],
+}), document.getElementById('fixture'));
+`
+
 const sourceFixtureScript = `
 import { h, render } from 'preact';
 import { Sources } from '/app/static/js/components/Sources.js';
@@ -508,6 +529,163 @@ func TestSourceSelectionUsesOneWriteAndAbsoluteReadbacks(t *testing.T) {
 // speaker's event stream is live it will report a late rejection on its own,
 // so a confirmed selection must not keep polling. This is the difference
 // between one readback per source tap and three.
+// TestProviderSourceResumesMostRecentStation: RADIO_BROWSER is advertised
+// READY but is not a selectable input. A bare /select strands the speaker on a
+// stub now-playing (empty type and location, no playStatus) while the previous
+// audio keeps playing, and the speaker then reports that stub indefinitely.
+// Playing the most recent station for the source sends a real ContentItem.
+func TestProviderSourceResumesMostRecentStation(t *testing.T) {
+	var mu sync.Mutex
+	var played map[string]any
+	selects := 0
+	server := newPlayerFixtureServer(t, providerFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"Items":[
+				{"ID":1,"ContentItem":{"Source":"SPOTIFY","Location":"spotify:track:x"}},
+				{"ID":2,"ContentItem":{"Source":"RADIO_BROWSER","Type":"stationurl",
+					"Location":"/station/abc","ItemName":"Some Station","IsPresetable":true}}
+			]}}`))
+		})
+		r.Post("/api/control/devices/speaker/play", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			_ = json.NewDecoder(req.Body).Decode(&played)
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			selects++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"revision":9,"nowPlayingRevision":9,` +
+				`"webSocketConnected":true,"nowPlaying":{"Source":"RADIO_BROWSER","SourceAccount":""}}}}`))
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var navigated []string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+		chromedp.Evaluate(`window.navigated`, &navigated),
+	); err != nil {
+		t.Fatalf("exercise provider source with a recent station: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if selects != 0 {
+		t.Errorf("provider source issued %d bare selects, want 0", selects)
+	}
+	if len(navigated) != 0 {
+		t.Errorf("navigated to %v, want to stay and play the recent station", navigated)
+	}
+	// A Location is the whole point: without it the speaker gets the same stub.
+	if played["location"] != "/station/abc" || played["source"] != "RADIO_BROWSER" ||
+		played["type"] != "stationurl" || played["itemName"] != "Some Station" {
+		t.Errorf("played ContentItem = %+v, want the recent RADIO_BROWSER station", played)
+	}
+}
+
+// TestProviderSourceWithoutRecentsNavigatesInstead: with nothing to resume, the
+// only options are stranding the speaker or sending the user somewhere useful.
+func TestProviderSourceWithoutRecentsNavigatesInstead(t *testing.T) {
+	var mu sync.Mutex
+	writes := 0
+	server := newPlayerFixtureServer(t, providerFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"Items":[
+				{"ID":1,"ContentItem":{"Source":"SPOTIFY","Location":"spotify:track:x"}}
+			]}}`))
+		})
+		r.Post("/api/control/devices/speaker/play", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var navigated []string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn`, chromedp.ByQuery),
+		chromedp.Poll(`window.navigated.length === 1`, nil),
+		chromedp.Evaluate(`window.navigated`, &navigated),
+	); err != nil {
+		t.Fatalf("exercise provider source without recents: %v", err)
+	}
+
+	if len(navigated) != 1 || navigated[0] != "radiobrowser" {
+		t.Errorf("navigated = %v, want [radiobrowser]", navigated)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if writes != 0 {
+		t.Errorf("issued %d writes for a provider with nothing to resume, want 0", writes)
+	}
+}
+
+// TestProviderSourceNavigatesWhenRecentsFail: a recents lookup that errors must
+// not fall through to the bare select this whole path exists to avoid.
+func TestProviderSourceNavigatesWhenRecentsFail(t *testing.T) {
+	var mu sync.Mutex
+	writes := 0
+	server := newPlayerFixtureServer(t, providerFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		})
+		r.Post("/api/control/devices/speaker/play", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var navigated []string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn`, chromedp.ByQuery),
+		chromedp.Poll(`window.navigated.length === 1`, nil),
+		chromedp.Evaluate(`window.navigated`, &navigated),
+	); err != nil {
+		t.Fatalf("exercise provider source with failing recents: %v", err)
+	}
+
+	if len(navigated) != 1 || navigated[0] != "radiobrowser" {
+		t.Errorf("navigated = %v, want [radiobrowser]", navigated)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if writes != 0 {
+		t.Errorf("issued %d writes after a failed recents lookup, want 0", writes)
+	}
+}
+
 func TestSourceSelectionStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	var mu sync.Mutex
 	reads := 0

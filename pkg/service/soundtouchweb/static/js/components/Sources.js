@@ -14,6 +14,26 @@ const SOURCE_ICONS = {
 
 const SOURCE_READBACK_DELAYS_MS = [2000, 5000, 10000];
 
+// Sources the speaker advertises as READY but which are NOT selectable inputs.
+// They are providers: playing one needs a station ContentItem carrying a
+// Location (see stations.ResolveContentItem, which sets type="stationurl").
+//
+// A bare /select with just source and account parks the speaker on a stub
+// now-playing -- source="RADIO_BROWSER", empty type and location, itemName
+// echoing the source name, no playStatus -- while the previous audio keeps
+// playing. The speaker then reports that stub indefinitely, so the player
+// shows a source the speaker is not actually playing.
+//
+// Verified against real hardware for RADIO_BROWSER. TUNEIN is listed here
+// because ResolveContentItem treats it identically (both need a Location).
+// LOCAL_INTERNET_RADIO and ALEXA are also advertised READY but are NOT listed:
+// whether a bare select resumes something for them is unverified, and leaving
+// them alone preserves today's behaviour.
+const PROVIDER_SOURCES = {
+    RADIO_BROWSER: { page: 'radiobrowser', label: 'RadioBrowser' },
+    TUNEIN: { page: 'tunein', label: 'TuneIn' },
+};
+
 function isErrorSource(source) {
     return source === 'INVALID_SOURCE' || source?.endsWith('_ERROR');
 }
@@ -30,6 +50,7 @@ export function Sources({
     deviceId,
     status,
     onStatusReadback,
+    onNavigate,
     readbackDelays = SOURCE_READBACK_DELAYS_MS,
 }) {
     const [command, setCommand] = useState(null);
@@ -109,7 +130,58 @@ export function Sources({
         : '';
     const availabilityId = sourcesStale ? 'source-stale-status' : null;
 
+    // Finds the most recent playable item for a source: the newest Recents
+    // entry for it that carries a Location. Recents entries hold the real
+    // ContentItem the speaker was given, which is exactly what a provider
+    // source needs and what a bare select cannot supply.
+    async function mostRecentPlayableFor(src) {
+        const response = await api.recents(deviceId);
+        const account = src.SourceAccount ?? '';
+        const match = (response?.data?.Items ?? []).find(item => {
+            const ci = item?.ContentItem;
+            return ci?.Source === src.Source && ci?.Location &&
+                sourceAccountsMatch(src.Source, ci.SourceAccount ?? '', account);
+        });
+
+        return match?.ContentItem ?? null;
+    }
+
     async function select(src) {
+        const provider = PROVIDER_SOURCES[src.Source];
+        if (!provider) {
+            await runSourceCommand(src,
+                () => api.selectSource(deviceId, src.Source, src.SourceAccount ?? ''));
+
+            return;
+        }
+
+        let item = null;
+        try {
+            item = await mostRecentPlayableFor(src);
+        } catch (_) {
+            item = null;
+        }
+
+        // Nothing to resume, and a bare select would strand the speaker on a
+        // stub: send the user to the browser to pick a station instead.
+        if (!item) {
+            onNavigate?.(provider.page);
+
+            return;
+        }
+
+        await runSourceCommand(src, () => api.playChecked(deviceId, {
+            source: item.Source,
+            type: item.Type,
+            location: item.Location,
+            sourceAccount: item.SourceAccount,
+            itemName: item.ItemName,
+            containerArt: item.ContainerArt,
+            isPresetable: item.IsPresetable,
+        }));
+    }
+
+    async function runSourceCommand(src, write) {
         clearReadbacks();
         const generation = commandRef.current.generation + 1;
         const target = { source: src.Source, account: src.SourceAccount ?? '' };
@@ -216,7 +288,7 @@ export function Sources({
         });
 
         try {
-            await api.selectSource(deviceId, target.source, target.account);
+            await write();
         } catch (error) {
             if (commandRef.current.active !== active) return;
             // A definitive refusal (4xx) means the speaker never saw the
