@@ -24,11 +24,15 @@ const SOURCE_READBACK_DELAYS_MS = [2000, 5000, 10000];
 // playing. The speaker then reports that stub indefinitely, so the player
 // shows a source the speaker is not actually playing.
 //
-// Verified against real hardware for RADIO_BROWSER and LOCAL_INTERNET_RADIO:
-// both produce the byte-identical stub. TUNEIN is listed because
-// ResolveContentItem treats it identically to RADIO_BROWSER (both need a
-// Location). ALEXA is also advertised READY but is NOT listed: whether a bare
-// select resumes anything for it is unverified, so it keeps today's behaviour.
+// Verified against real hardware: RADIO_BROWSER and LOCAL_INTERNET_RADIO both
+// produce the byte-identical stub, and resuming TUNEIN from its Recents plays
+// the station as intended.
+//
+// ALEXA is advertised READY as well but is deliberately NOT listed. It cannot
+// be tested on the hardware available, so listing it would mean guessing at
+// its behaviour, and guessing wrong would break a source that works today.
+// The stub check in isStubNowPlaying covers it instead: if a bare select does
+// strand it, that is reported as a failure rather than confirmed.
 //
 // `page` is the browser to open for the source: the page in this app that
 // produces content for it. `resume` says whether clicking may first replay

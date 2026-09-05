@@ -24,6 +24,10 @@ need a station **ContentItem carrying a `Location`** (see
 `stations.ResolveContentItem`, which sets `type="stationurl"`). There is
 nothing for the speaker to resume from the source name alone.
 
+All three are confirmed on hardware: `RADIO_BROWSER` and
+`LOCAL_INTERNET_RADIO` by the stub described below, `TUNEIN` by its resume
+path playing the station as intended.
+
 `STORED_MUSIC` is a third case: one entry per media server, its
 `sourceAccount` being a server UDN. Selecting it identifies no track or
 container.
@@ -74,8 +78,9 @@ URL's `bmx.BuildOrionLocation`, but it also carries CLI URL playback, and any
 future audio-injecting feature would have to remember to stay clear of it.
 Opening Play URL does not depend on classifying what is in Recents.
 
-`ALEXA` is advertised `READY` too and is left alone, because whether a bare
-select resumes anything for it has not been verified.
+`ALEXA` is advertised `READY` too and is deliberately left alone: it cannot be
+tested on the hardware available, and guessing at its behaviour risks breaking
+a source that works today. The backstop below covers it instead.
 
 ### The backstop
 
