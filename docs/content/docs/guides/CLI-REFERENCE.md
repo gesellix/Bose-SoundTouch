@@ -861,9 +861,9 @@ Create and manage a persistent LEFT/RIGHT pair of two SoundTouch 10 speakers.
 This is distinct from a temporary multi-room zone. Both speakers must be
 online, stereo-capable, standalone, and outside any zone before a lifecycle
 operation. Pair creation also requires both speakers to use the same Marge
-account and backend. Run lifecycle commands from the site containing both
-speakers; site-relative Marge names such as `unifi` do not identify a remote
-site when resolved by the CLI host.
+backend, though they need not share a Marge account. Run lifecycle commands
+from the site containing both speakers; site-relative Marge names such as
+`unifi` do not identify a remote site when resolved by the CLI host.
 
 ```bash
 # Inspect a standalone speaker or either member of a pair
