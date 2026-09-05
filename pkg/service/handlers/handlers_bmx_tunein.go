@@ -9,11 +9,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/stations"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -236,7 +236,7 @@ func (s *Server) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
 
 	wildcard := chi.URLParam(r, "*")
 
-	resp, err := parseTuneInNavigatePath(wildcard)
+	resp, err := stations.Navigate(stations.ProviderTuneIn, wildcard)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -246,57 +246,6 @@ func (s *Server) HandleTuneInNavigate(w http.ResponseWriter, r *http.Request) {
 
 	if encErr := json.NewEncoder(w).Encode(resp); encErr != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
-}
-
-func parseTuneInNavigatePath(wildcard string) (interface{}, error) {
-	if wildcard == "" {
-		return bmx.TuneInNavigate("", nil)
-	}
-
-	firstSlash := strings.Index(wildcard, "/")
-	if firstSlash == -1 {
-		return bmx.TuneInNavigate(wildcard, nil)
-	}
-
-	prefix := wildcard[:firstSlash]
-	rest := wildcard[firstSlash+1:]
-
-	switch prefix {
-	case "sub":
-		secondSlash := strings.Index(rest, "/")
-		if secondSlash == -1 {
-			return bmx.TuneInNavigate(rest, nil)
-		}
-
-		n, err := strconv.Atoi(rest[:secondSlash])
-		if err != nil {
-			return bmx.TuneInNavigate(wildcard, nil)
-		}
-
-		return bmx.TuneInNavigate(rest[secondSlash+1:], &n)
-
-	case "profiles":
-		// Hrefs are generated as a single path segment:
-		// /v1/navigate/profiles/{encodedURI} (see tuneInSearchProfile in
-		// pkg/service/bmx/tunein.go). Requiring a profiles/{type}/{id}/{encodedURI}
-		// shape here caused every profile link to fall through to
-		// bmx.TuneInNavigate with the literal "profiles/..." prefix still
-		// attached, which is not valid base64 and produced a 500 ("illegal
-		// base64 data..."). Take the last path segment as the encoded URI so
-		// both the current single-segment hrefs and any legacy
-		// multi-segment ones decode correctly.
-		parts := strings.Split(rest, "/")
-
-		encodedURI := parts[len(parts)-1]
-		if encodedURI == "" {
-			return bmx.TuneInNavigate(wildcard, nil)
-		}
-
-		return bmx.TuneInNavigateProfile(encodedURI)
-
-	default:
-		return bmx.TuneInNavigate(wildcard, nil)
 	}
 }
 

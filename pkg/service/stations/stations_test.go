@@ -1,6 +1,8 @@
 package stations
 
 import (
+	"encoding/base64"
+	"strings"
 	"testing"
 )
 
@@ -174,5 +176,52 @@ func TestNavigate_UnknownProvider(t *testing.T) {
 	_, err := Navigate("bogus", "")
 	if err == nil {
 		t.Error("expected error for unknown provider")
+	}
+}
+
+// TestNavigateTuneIn_ProfilesPathDispatch covers navigateTuneIn's "profiles"
+// case, the only TuneIn dispatch this package previously had zero coverage
+// for (this is also the sole implementation now: handlers_bmx_tunein.go's
+// HandleTuneInNavigate delegates here instead of carrying its own,
+// previously byte-for-byte identical, copy of this parsing logic).
+//
+// Each case encodes the same fake, deliberately-unreachable host so a
+// "URL host not in allowed list: <the encoded URL, verbatim>" error proves
+// the encoded URI was extracted and decoded correctly, independent of any
+// real network access.
+func TestNavigateTuneIn_ProfilesPathDispatch(t *testing.T) {
+	const fakeURL = "https://not-a-real-tunein-host.invalid/profiles/p123"
+
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(fakeURL))
+
+	cases := []struct {
+		name       string
+		wildcard   string
+		wantErrHas string
+	}{
+		{
+			name:       "single-segment href (current shape)",
+			wildcard:   "profiles/" + encoded,
+			wantErrHas: fakeURL,
+		},
+		{
+			name:       "legacy multi-segment href extracts the last segment",
+			wildcard:   "profiles/type/id/" + encoded,
+			wantErrHas: fakeURL,
+		},
+		{
+			name:       "empty encoded URI falls back instead of erroring on empty input",
+			wildcard:   "profiles/",
+			wantErrHas: "illegal base64 data",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := navigateTuneIn(tc.wildcard)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErrHas) {
+				t.Fatalf("navigateTuneIn(%q) error = %v, want containing %q", tc.wildcard, err, tc.wantErrHas)
+			}
+		})
 	}
 }
