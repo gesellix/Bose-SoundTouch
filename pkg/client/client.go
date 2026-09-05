@@ -796,7 +796,14 @@ func (c *Client) DecreaseBalance(amount int) (*models.Balance, error) {
 	return c.GetBalance()
 }
 
-// SelectSource selects an audio source using the /select endpoint
+// SelectSource selects an audio source using the /select endpoint.
+//
+// Only sources that are inputs in their own right can be selected this way:
+// AUX, BLUETOOTH, or a streaming service with a real sourceAccount. Provider
+// sources (TUNEIN, RADIO_BROWSER, LOCAL_INTERNET_RADIO) and STORED_MUSIC need
+// SelectContentItem with a Location instead; a bare select leaves such a
+// speaker reporting a source it is not playing. See
+// docs/content/docs/reference/PLAYER-SOURCE-BEHAVIOUR.md.
 func (c *Client) SelectSource(source, sourceAccount string) error {
 	// Validate source parameter
 	if source == "" {
@@ -861,7 +868,15 @@ func (c *Client) SelectAux() error {
 	return c.SelectSource("AUX", "")
 }
 
-// SelectTuneIn is a convenience method to select TuneIn source
+// SelectTuneIn is a convenience method to select TuneIn source.
+//
+// This sends a bare select, with no station. A speaker does not report an
+// error for that: it answers 200, parks on a stub now-playing (no playStatus,
+// empty type and location, itemName echoing the source name) and carries on
+// playing whatever it was playing, then reports that stub indefinitely. To
+// actually play something use SelectContentItem with a ContentItem carrying a
+// Location, as stations.ResolveContentItem builds. See
+// docs/content/docs/reference/PLAYER-SOURCE-BEHAVIOUR.md.
 func (c *Client) SelectTuneIn(sourceAccount string) error {
 	return c.SelectSource("TUNEIN", sourceAccount)
 }

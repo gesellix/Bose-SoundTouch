@@ -54,13 +54,13 @@ after the fact. The only remedy is not to issue such a select.
 
 ## What the player does instead
 
-| Source | Click behaviour | Resumes from Recents |
-| --- | --- | --- |
-| `RADIO_BROWSER` | resume newest station, else open RadioBrowser | yes |
-| `TUNEIN` | resume newest station, else open TuneIn | yes |
-| `LOCAL_INTERNET_RADIO` | open Play URL | no |
-| `STORED_MUSIC` | open Library | no |
-| anything else | `POST /select` as before | n/a |
+| Source                 | Click behaviour                               | Resumes from Recents |
+|------------------------|-----------------------------------------------|----------------------|
+| `RADIO_BROWSER`        | resume newest station, else open RadioBrowser | yes                  |
+| `TUNEIN`               | resume newest station, else open TuneIn       | yes                  |
+| `LOCAL_INTERNET_RADIO` | open Play URL                                 | no                   |
+| `STORED_MUSIC`         | open Library                                  | no                   |
+| anything else          | `POST /select` as before                      | n/a                  |
 
 Resuming replays the newest Recents entry for that source, using that entry's
 own ContentItem: the real item the speaker was given, `Location` included.

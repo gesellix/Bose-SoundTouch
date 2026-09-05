@@ -348,6 +348,14 @@ Based on WebSocket interaction analysis, potential future features:
 - Advanced preset programming
 - Progressive Web App (PWA) features
 
+## Behaviour reference
+
+[Player: Sources and Selection State](../../docs/content/docs/reference/PLAYER-SOURCE-BEHAVIOUR.md)
+covers the parts that are not obvious from the code: which advertised sources
+can actually be selected and which need a station ContentItem, how a selection
+is confirmed against a speaker that answers 200 either way, and the revision
+and epoch fields the browser uses to order status updates.
+
 ## License
 
 Same as the parent project - see main repository LICENSE file.

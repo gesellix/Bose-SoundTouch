@@ -29,17 +29,34 @@ The Bose SoundTouch Go client provides comprehensive source selection functional
 
 **Response**: HTTP 200 OK (no body) on success
 
-**Supported Sources:**
-- `SPOTIFY` - Spotify streaming service
+**Sources selectable this way:**
+- `SPOTIFY` - Spotify streaming service (with a real `sourceAccount`)
 - `BLUETOOTH` - Bluetooth audio input
 - `AUX` - Auxiliary input (3.5mm jack)
-- `TUNEIN` - TuneIn internet radio
-- `PANDORA` - Pandora streaming service
-- `AMAZON` - Amazon Music
-- `IHEARTRADIO` - iHeartRadio streaming
-- `STORED_MUSIC` - Local/network stored music
 - `AIRPLAY` - Apple AirPlay (device dependent)
+- `PANDORA`, `AMAZON`, `IHEARTRADIO` - streaming services (with an account)
+
+### Sources that need a ContentItem instead
+
+A bare `/select` carrying only a source and account is **not** enough for
+every source a speaker advertises. These need a full ContentItem with a
+`Location`, built by `stations.ResolveContentItem` with `type="stationurl"`:
+
+- `TUNEIN` - TuneIn internet radio
 - `RADIO_BROWSER` - [RadioBrowser](radio-browser.md) internet radio directory
+- `LOCAL_INTERNET_RADIO` - stream URLs, including Play URL and TTS output
+- `STORED_MUSIC` - one entry per media server; selecting it names no track
+
+Given a bare select for one of these the speaker does **not** report an
+error. It answers `200`, parks on a stub now-playing with no `playStatus`,
+empty `type` and `location`, and an `itemName` echoing the source name, and
+carries on playing whatever it was playing. It then reports that stub
+indefinitely, so callers that check `/now_playing` see the source they asked
+for while the audio is something else.
+
+Use `SelectContentItem` with a real `Location` for these, and see
+[Player: Sources and Selection State](PLAYER-SOURCE-BEHAVIOUR.md) for the
+stub's full signature and how the web player avoids it.
 
 ## Client Library Usage
 
@@ -158,20 +175,20 @@ soundtouch-cli -host 192.0.2.100 -aux
 
 ### CLI Flags
 
-| Flag | Description | Example |
-|------|-------------|---------|
-| `-select-source <source>` | Select audio source | `-select-source SPOTIFY` |
-| `-source-account <account>` | Account for streaming services | `-source-account "user123"` |
-| `-spotify` | Select Spotify source | `-spotify -source-account "user"` |
-| `-bluetooth` | Select Bluetooth source | `-bluetooth` |
-| `-aux` | Select AUX input | `-aux` |
+| Flag                        | Description                    | Example                           |
+|-----------------------------|--------------------------------|-----------------------------------|
+| `-select-source <source>`   | Select audio source            | `-select-source SPOTIFY`          |
+| `-source-account <account>` | Account for streaming services | `-source-account "user123"`       |
+| `-spotify`                  | Select Spotify source          | `-spotify -source-account "user"` |
+| `-bluetooth`                | Select Bluetooth source        | `-bluetooth`                      |
+| `-aux`                      | Select AUX input               | `-aux`                            |
 
 ## Source Account Information
 
 ### When Source Accounts are Required
 
 - **Spotify**: Required for multi-account setups
-- **Pandora**: Required for account-based access  
+- **Pandora**: Required for account-based access
 - **TuneIn**: Optional, may improve personalization
 - **Amazon Music**: Required for account access
 - **Bluetooth/AUX**: Not required (leave empty)
@@ -259,11 +276,11 @@ func selectWithConfig(client *client.Client, config SourceConfig) error {
 
 ### Common Error Codes
 
-| Code | Name | Description | Solution |
-|------|------|-------------|----------|
-| 1005 | UNKNOWN_SOURCE_ERROR | Invalid or unavailable source | Check available sources first |
-| 1006 | SOURCE_UNAVAILABLE | Source temporarily unavailable | Try again later |
-| 1007 | ACCOUNT_ERROR | Invalid account for source | Check account name format |
+| Code | Name                 | Description                    | Solution                      |
+|------|----------------------|--------------------------------|-------------------------------|
+| 1005 | UNKNOWN_SOURCE_ERROR | Invalid or unavailable source  | Check available sources first |
+| 1006 | SOURCE_UNAVAILABLE   | Source temporarily unavailable | Try again later               |
+| 1007 | ACCOUNT_ERROR        | Invalid account for source     | Check account name format     |
 
 ### Troubleshooting Tips
 
@@ -347,13 +364,16 @@ The implementation follows the official SoundTouch API:
 
 ## Related Documentation
 
+- [Player: Sources and Selection State](PLAYER-SOURCE-BEHAVIOUR.md) - which
+  sources accept a bare select, and how a selection is confirmed
+
 - **[API Endpoints Overview](API-ENDPOINTS.md)** - Complete API reference
-- **[Sources](https://github.com/gesellix/Bose-SoundTouch/blob/main/pkg/models/sources.go)** - Source model implementation  
+- **[Sources](https://github.com/gesellix/Bose-SoundTouch/blob/main/pkg/models/sources.go)** - Source model implementation
 - **[Now Playing](https://github.com/gesellix/Bose-SoundTouch/blob/main/pkg/models/nowplaying.go)** - ContentItem model
 - **[Client Usage Examples](https://github.com/gesellix/Bose-SoundTouch/blob/main/cmd/soundtouch-cli/main.go)** - CLI implementation reference
 
 ---
 
-**Implementation Date**: 2026-01-09  
-**Status**: ✅ Complete and tested  
+**Implementation Date**: 2026-01-09
+**Status**: ✅ Complete and tested
 **Real Device Validation**: SoundTouch 10, SoundTouch 20
