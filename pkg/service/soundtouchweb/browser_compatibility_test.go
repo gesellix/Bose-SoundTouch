@@ -200,10 +200,17 @@ func TestFrontendDeviceStateRejectsNonNewerStatusRevisions(t *testing.T) {
 	const revisionFixture = `
 import { mergeDevicesSnapshot, mergeStatusUpdate } from '/app/static/js/app.js';
 const current = {
-  speaker: { info: { name: 'Current' }, status: { revision: 5, sourcesStale: false, nowPlaying: { Track: 'new' } } },
+  speaker: {
+    info: { name: 'Current' },
+    status: { revision: 5, sourcesStale: false, nowPlaying: { Track: 'new' } },
+  },
 };
 const snapshot = mergeDevicesSnapshot(current, {
-  speaker: { info: { name: 'Renamed' }, status: { revision: 4, nowPlaying: { Track: 'old' } } },
+  speaker: {
+    info: { name: 'Renamed' },
+    stereoPair: { id: 'stale-pair' },
+    status: { revision: 4, nowPlaying: { Track: 'old' } },
+  },
   added: { info: { name: 'Added' }, status: { revision: 1 } },
 });
 const equal = mergeStatusUpdate(snapshot, 'speaker', { revision: 5, nowPlaying: { Track: 'equal' } });
@@ -228,7 +235,11 @@ const constructorUpdated = mergeStatusUpdate(protoUpdated, 'constructor', {
 });
 window.revisionChecks = {
   snapshotKeptStatus: snapshot.speaker.status.revision === 5 && snapshot.speaker.status.nowPlaying.Track === 'new',
-  snapshotUpdatedInfo: snapshot.speaker.info.name === 'Renamed' && snapshot.added.status.revision === 1,
+  // A losing snapshot entry is rejected whole: its stereoPair is derived from
+  // the same older status, so mixing the two would describe a pair the newer
+  // status already dissolved.
+  snapshotKeptEntryWhole: snapshot.speaker.info.name === 'Current',
+  snapshotAcceptsUnseenDevices: snapshot.added.status.revision === 1,
   equalRejected: equal === snapshot,
   olderRejected: older === equal,
   newerAccepted: newer !== older && newer.speaker.status.revision === 6 && newer.speaker.status.nowPlaying.Track === 'newest',
@@ -245,6 +256,7 @@ window.revisionChecks = {
     revision: 6,
     sourcesStale: false,
   }) === stale,
+  snapshotDroppedStaleProjection: snapshot.speaker.stereoPair === undefined,
   unknownRejected: mergeStatusUpdate(newer, 'unknown', { revision: 99 }) === newer,
   // A fresh DeviceConnection for the same id restarts revisions at 0. Without
   // the epoch check this frame loses the revision comparison and the tab stays

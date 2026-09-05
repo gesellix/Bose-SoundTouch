@@ -60,10 +60,15 @@ export function mergeDevicesSnapshot(previous, snapshot) {
         if (!current || acceptsNewerStatus(current.status, incoming?.status)) {
             return [deviceId, incoming];
         }
-        // Keep the newer status we already hold, but take the rest of the
-        // incoming entry: info/stereoPair travel with the snapshot, not with
-        // the status revision.
-        return [deviceId, { ...incoming, status: current.status }];
+        // Keep the whole entry we already hold, not just its status. The
+        // server derives stereoPair from the very status.Group this snapshot
+        // lost the comparison on, so taking the incoming projection alongside
+        // the newer status would describe a pair the newer status already
+        // dissolved. The next snapshot carries a status we accept together
+        // with a matching projection, and one is due within 5s (sooner in
+        // practice: whatever produced the newer status also queued a
+        // device-list broadcast).
+        return [deviceId, current];
     }));
 }
 
