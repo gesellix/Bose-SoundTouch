@@ -44,6 +44,26 @@ function isErrorSource(source) {
     return source === 'INVALID_SOURCE' || source?.endsWith('_ERROR');
 }
 
+// A speaker given a select it cannot act on parks on a stub now-playing
+// rather than refusing: the source name echoed back as the item name, no
+// location, and no play status, while whatever was already playing carries
+// on. Confirmed on real hardware for RADIO_BROWSER and LOCAL_INTERNET_RADIO.
+//
+// PROVIDER_SOURCES prevents the selects we know produce this. This check is
+// the backstop for the ones we do not know about, ALEXA among them: reporting
+// such a readback as success is worse than reporting nothing, because the
+// source list then shows a source the speaker is demonstrably not playing.
+//
+// All three conditions are required. A genuinely playing source reports a
+// play status even when it has no location to report, a physical input for
+// instance, so no single condition would be safe on its own.
+function isStubNowPlaying(nowPlaying) {
+    const item = nowPlaying?.ContentItem;
+    if (!item) return false;
+
+    return !item.Location && !nowPlaying.PlayStatus && item.ItemName === nowPlaying.Source;
+}
+
 function sourceAccountIdentity(source, account) {
     return account && account !== source ? account : '';
 }
@@ -101,6 +121,7 @@ export function Sources({
 
         const matches = currentSource === command.source &&
             sourceAccountsMatch(command.source, currentAccount, command.account);
+        const stub = currentSource === command.source && isStubNowPlaying(status?.nowPlaying);
         if (command.outcome === 'final-confirmed') {
             if (nowPlayingRevision > command.confirmedRevision && !matches) {
                 setCommand(previous => previous?.generation === command.generation
@@ -108,11 +129,15 @@ export function Sources({
             }
             return;
         }
-        if (isErrorSource(currentSource)) {
+        if (isErrorSource(currentSource) || stub) {
             clearReadbacks();
             commandRef.current.active = null;
             setCommand(previous => previous?.generation === command.generation
-                ? { ...previous, outcome: 'failed', error: currentSource }
+                ? {
+                    ...previous,
+                    outcome: 'failed',
+                    error: stub ? 'speaker reported nothing playing' : currentSource,
+                }
                 : previous);
         } else if (matches && command.outcome === 'pending') {
             setCommand(previous => previous?.generation === command.generation
@@ -248,6 +273,17 @@ export function Sources({
                             generation,
                             outcome: 'failed',
                             error: nowPlaying.Source,
+                            startNowPlayingRevision: nowPlayingRevision,
+                        });
+                    } else if (revisionIsNewer && nowPlaying?.Source === target.source &&
+                        isStubNowPlaying(nowPlaying)) {
+                        clearReadbacks();
+                        commandRef.current.active = null;
+                        setCommand({
+                            ...target,
+                            generation,
+                            outcome: 'failed',
+                            error: 'speaker reported nothing playing',
                             startNowPlayingRevision: nowPlayingRevision,
                         });
                     } else if (revisionIsNewer && nowPlaying?.Source === target.source &&

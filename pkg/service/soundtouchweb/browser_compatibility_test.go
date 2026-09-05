@@ -702,6 +702,71 @@ func TestProviderSourceNavigatesWhenRecentsFail(t *testing.T) {
 	}
 }
 
+// TestStubNowPlayingIsNotReportedAsSuccess: PROVIDER_SOURCES only covers the
+// sources known to produce the stub. For any other, the readback must not
+// confirm a now-playing that names the source but reports nothing playing:
+// no location, no play status, item name echoing the source.
+func TestStubNowPlayingIsNotReportedAsSuccess(t *testing.T) {
+	server := newPlayerFixtureServer(t, sourceFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"revision":9,"nowPlayingRevision":9,` +
+				`"webSocketConnected":true,"nowPlaying":{"Source":"AUX","SourceAccount":"AUX1",` +
+				`"PlayStatus":"","ContentItem":{"Source":"AUX","Type":"","Location":"",` +
+				`"ItemName":"AUX","IsPresetable":false}}}}}`))
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var statusText string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.source-btn:nth-child(1)').classList.contains('failed')`, nil),
+		chromedp.Text(`.source-command-status`, &statusText, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("exercise stub now-playing readback: %v", err)
+	}
+
+	if !strings.Contains(statusText, "nothing playing") {
+		t.Errorf("status = %q, want it to report that nothing is playing", statusText)
+	}
+}
+
+// TestPlayingSourceWithoutLocationStillConfirms guards the backstop's own
+// blast radius: a physical input reports no location, and must still confirm
+// as long as the speaker says it is playing.
+func TestPlayingSourceWithoutLocationStillConfirms(t *testing.T) {
+	server := newPlayerFixtureServer(t, sourceFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"revision":9,"nowPlayingRevision":9,` +
+				`"webSocketConnected":true,"nowPlaying":{"Source":"AUX","SourceAccount":"AUX1",` +
+				`"PlayStatus":"PLAY_STATE","ContentItem":{"Source":"AUX","Type":"","Location":"",` +
+				`"ItemName":"AUX","IsPresetable":false}}}}}`))
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+	); err != nil {
+		t.Fatalf("exercise playing source with no location: %v", err)
+	}
+}
+
 func TestSourceSelectionStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	var mu sync.Mutex
 	reads := 0
