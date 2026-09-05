@@ -288,7 +288,12 @@ func parseTuneInNavigatePath(wildcard string) (interface{}, error) {
 		// multi-segment ones decode correctly.
 		parts := strings.Split(rest, "/")
 
-		return bmx.TuneInNavigateProfile(parts[len(parts)-1])
+		encodedURI := parts[len(parts)-1]
+		if encodedURI == "" {
+			return bmx.TuneInNavigate(wildcard, nil)
+		}
+
+		return bmx.TuneInNavigateProfile(encodedURI)
 
 	default:
 		return bmx.TuneInNavigate(wildcard, nil)

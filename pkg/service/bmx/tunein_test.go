@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
 // TestTuneInSectionsAshx_UntypedContainerSurfacesStations is a regression
@@ -518,5 +520,138 @@ func TestParseTuneInProgramContents(t *testing.T) {
 				t.Errorf("got episode id %q, want %q", got, tc.wantID)
 			}
 		})
+	}
+}
+
+// TestTuneInNavigateProfileHandlesContainerShapes is a regression test for
+// four bugs found reviewing PR #677's profile-navigate fix:
+//   - an empty Container (no children, identified by "ContainerType") was
+//     misread as a leaf item and turned into a bogus playback link keyed by
+//     the container's own non-playable GuideId (it checked "Type", which
+//     only leaf items carry, instead of "ContainerType");
+//   - the legacy lowercase "children" key (as opposed to "Children") was no
+//     longer read at all, silently hiding any container using it;
+//   - the Pivots.More.Url "load more" pagination cursor was dropped
+//     entirely, so a container's BmxNext link was never built; and
+//   - the response's own self link used "/v1/navigate/profile/" (singular),
+//     which none of the route dispatchers that recognize "profiles"
+//     (plural) actually match, breaking re-navigation via that link.
+func TestTuneInNavigateProfileHandlesContainerShapes(t *testing.T) {
+	var contentsURL string
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/profile":
+			_, _ = w.Write([]byte(`{
+				"Item": {
+					"Pivots": {
+						"Contents": {"DisplayName": "Broadcasts", "Url": "` + contentsURL + `"}
+					}
+				}
+			}`))
+		case "/contents":
+			_, _ = w.Write([]byte(`{
+				"Items": [
+					{
+						"Title": "Episodes",
+						"GuideId": "v5",
+						"ContainerType": "Topics",
+						"Children": [
+							{"Type": "Topic", "Title": "Ep 1", "GuideId": "t100"}
+						],
+						"Pivots": {"More": {"Url": "` + contentsURL + `?itemToken=abc"}}
+					},
+					{
+						"Title": "Empty Container",
+						"GuideId": "v6",
+						"ContainerType": "Topics",
+						"Children": []
+					},
+					{
+						"Title": "Legacy Children",
+						"GuideId": "v7",
+						"ContainerType": "Topics",
+						"children": [
+							{"Type": "Topic", "Title": "Ep 2", "GuideId": "t200"}
+						]
+					},
+					{
+						"Type": "Station",
+						"Title": "Flat Leaf",
+						"GuideId": "s999"
+					}
+				]
+			}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	contentsURL = ts.URL + "/contents"
+
+	parsed, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatalf("could not parse test server URL: %v", err)
+	}
+
+	allowedTuneInHosts[parsed.Hostname()] = true
+	defer delete(allowedTuneInHosts, parsed.Hostname())
+
+	encodedURI := base64.RawURLEncoding.EncodeToString([]byte(ts.URL + "/profile"))
+
+	navResp, err := TuneInNavigateProfile(encodedURI)
+	if err != nil {
+		t.Fatalf("TuneInNavigateProfile returned error: %v", err)
+	}
+
+	if navResp.Links == nil || navResp.Links.Self == nil {
+		t.Fatalf("response has no self link: %+v", navResp)
+	}
+
+	if want := "/v1/navigate/profiles/" + encodedURI; navResp.Links.Self.Href != want {
+		t.Errorf("self link = %q, want %q (must match the \"profiles\" prefix the dispatchers recognize)", navResp.Links.Self.Href, want)
+	}
+
+	byName := make(map[string]models.BmxNavSection, len(navResp.BmxSections))
+	for _, section := range navResp.BmxSections {
+		byName[section.Name] = section
+	}
+
+	if _, found := byName["Empty Container"]; found {
+		t.Errorf("empty container was surfaced as a section, want it skipped: %+v", navResp.BmxSections)
+	}
+
+	episodes, ok := byName["Episodes"]
+	if !ok {
+		t.Fatalf("no \"Episodes\" section found: %+v", navResp.BmxSections)
+	}
+
+	if len(episodes.Items) != 1 || episodes.Items[0].Name != "Ep 1" {
+		t.Errorf("Episodes items = %+v, want exactly [Ep 1]", episodes.Items)
+	}
+
+	if episodes.Links == nil || episodes.Links.BmxNext == nil || !strings.Contains(episodes.Links.BmxNext.Href, "/v1/search/next?cursor=") {
+		t.Errorf("Episodes section missing BmxNext pagination link: %+v", episodes.Links)
+	}
+
+	legacy, ok := byName["Legacy Children"]
+	if !ok {
+		t.Fatalf("no \"Legacy Children\" section found (lowercase \"children\" fallback not applied): %+v", navResp.BmxSections)
+	}
+
+	if len(legacy.Items) != 1 || legacy.Items[0].Name != "Ep 2" {
+		t.Errorf("Legacy Children items = %+v, want exactly [Ep 2]", legacy.Items)
+	}
+
+	broadcasts, ok := byName["Broadcasts"]
+	if !ok {
+		t.Fatalf("no \"Broadcasts\" (flat leaf, pivot display name) section found: %+v", navResp.BmxSections)
+	}
+
+	if len(broadcasts.Items) != 1 || broadcasts.Items[0].Name != "Flat Leaf" {
+		t.Errorf("Broadcasts items = %+v, want exactly [Flat Leaf]", broadcasts.Items)
 	}
 }
