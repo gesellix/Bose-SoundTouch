@@ -67,6 +67,7 @@ render(h(Sources, {
     nowPlayingRevision: 1,
     sources: { SourceItem: [
       { Source: 'RADIO_BROWSER', SourceAccount: '', DisplayName: 'RadioBrowser', Status: 'READY' },
+      { Source: 'LOCAL_INTERNET_RADIO', SourceAccount: '', DisplayName: 'Local Radio', Status: 'READY' },
     ] },
     nowPlaying: { Source: 'SPOTIFY', SourceAccount: 'someone' },
   },
@@ -573,7 +574,7 @@ func TestProviderSourceResumesMostRecentStation(t *testing.T) {
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
 		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
 		chromedp.Evaluate(`window.navigated`, &navigated),
 	); err != nil {
@@ -624,7 +625,7 @@ func TestProviderSourceWithoutRecentsNavigatesInstead(t *testing.T) {
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
 		chromedp.Poll(`window.navigated.length === 1`, nil),
 		chromedp.Evaluate(`window.navigated`, &navigated),
 	); err != nil {
@@ -633,6 +634,21 @@ func TestProviderSourceWithoutRecentsNavigatesInstead(t *testing.T) {
 
 	if len(navigated) != 1 || navigated[0] != "radiobrowser" {
 		t.Errorf("navigated = %v, want [radiobrowser]", navigated)
+	}
+
+	// LOCAL_INTERNET_RADIO has its own browser: Play URL is what emits that
+	// source, so that is where a click with nothing to resume belongs.
+	var localRadioNav []string
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`window.navigated = []`, nil),
+		chromedp.Click(`.source-btn:nth-child(2)`, chromedp.ByQuery),
+		chromedp.Poll(`window.navigated.length === 1`, nil),
+		chromedp.Evaluate(`window.navigated`, &localRadioNav),
+	); err != nil {
+		t.Fatalf("exercise LOCAL_INTERNET_RADIO without recents: %v", err)
+	}
+	if len(localRadioNav) != 1 || localRadioNav[0] != "playurl" {
+		t.Errorf("navigated = %v, want [playurl]", localRadioNav)
 	}
 
 	mu.Lock()
@@ -668,7 +684,7 @@ func TestProviderSourceNavigatesWhenRecentsFail(t *testing.T) {
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
 		chromedp.Poll(`window.navigated.length === 1`, nil),
 		chromedp.Evaluate(`window.navigated`, &navigated),
 	); err != nil {

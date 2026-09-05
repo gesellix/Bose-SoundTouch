@@ -24,14 +24,20 @@ const SOURCE_READBACK_DELAYS_MS = [2000, 5000, 10000];
 // playing. The speaker then reports that stub indefinitely, so the player
 // shows a source the speaker is not actually playing.
 //
-// Verified against real hardware for RADIO_BROWSER. TUNEIN is listed here
-// because ResolveContentItem treats it identically (both need a Location).
-// LOCAL_INTERNET_RADIO and ALEXA are also advertised READY but are NOT listed:
-// whether a bare select resumes something for them is unverified, and leaving
-// them alone preserves today's behaviour.
+// Verified against real hardware for RADIO_BROWSER and LOCAL_INTERNET_RADIO:
+// both produce the byte-identical stub. TUNEIN is listed because
+// ResolveContentItem treats it identically to RADIO_BROWSER (both need a
+// Location). ALEXA is also advertised READY but is NOT listed: whether a bare
+// select resumes anything for it is unverified, so it keeps today's behaviour.
+//
+// `page` is the browser to fall back to when there is nothing to resume: the
+// page in this app that produces content for that source. LOCAL_INTERNET_RADIO
+// maps to Play URL because that is what HandlePlayURL emits, a ContentItem
+// with Source "LOCAL_INTERNET_RADIO".
 const PROVIDER_SOURCES = {
-    RADIO_BROWSER: { page: 'radiobrowser', label: 'RadioBrowser' },
-    TUNEIN: { page: 'tunein', label: 'TuneIn' },
+    RADIO_BROWSER: { page: 'radiobrowser' },
+    TUNEIN: { page: 'tunein' },
+    LOCAL_INTERNET_RADIO: { page: 'playurl' },
 };
 
 function isErrorSource(source) {
@@ -163,7 +169,7 @@ export function Sources({
         }
 
         // Nothing to resume, and a bare select would strand the speaker on a
-        // stub: send the user to the browser to pick a station instead.
+        // stub: send the user to the browser to pick something instead.
         if (!item) {
             onNavigate?.(provider.page);
 
