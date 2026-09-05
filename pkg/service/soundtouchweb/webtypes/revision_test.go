@@ -95,6 +95,46 @@ func TestNowPlayingRevisionAdvancesForPollAndEvent(t *testing.T) {
 	}
 }
 
+// TestStatusEpochDistinguishesConnections: Revision restarts at 0 for every
+// new DeviceConnection, so a browser holding a high revision for a device id
+// would reject the replacement connection's frames forever. Epoch is what
+// makes the two sequences distinguishable, and it must strictly increase.
+func TestStatusEpochDistinguishesConnections(t *testing.T) {
+	first := NewDeviceConnection(nil, nil)
+	second := NewDeviceConnection(nil, nil)
+
+	firstEpoch := first.Status().Epoch
+	secondEpoch := second.Status().Epoch
+
+	if firstEpoch <= 0 || secondEpoch <= firstEpoch {
+		t.Fatalf("epochs = %d then %d, want strictly increasing and non-zero", firstEpoch, secondEpoch)
+	}
+
+	// Both entry points must stamp it: a status that lost its epoch would be
+	// indistinguishable from one produced before epochs existed.
+	first.UpdateStatus(func(status *DeviceStatus) {
+		status.NowPlaying = &models.NowPlaying{Source: "AUX"}
+	})
+	if got := first.Status().Epoch; got != firstEpoch {
+		t.Errorf("epoch after UpdateStatus = %d, want %d", got, firstEpoch)
+	}
+
+	first.SetStatus(&DeviceStatus{})
+	if got := first.Status().Epoch; got != firstEpoch {
+		t.Errorf("epoch after SetStatus = %d, want %d", got, firstEpoch)
+	}
+}
+
+// TestStatusEpochStaysWithinJavaScriptSafeIntegers: the browser compares this
+// value as a JSON number, so it must not exceed Number.MAX_SAFE_INTEGER.
+func TestStatusEpochStaysWithinJavaScriptSafeIntegers(t *testing.T) {
+	const maxSafeInteger = int64(1)<<53 - 1
+
+	if got := NewDeviceConnection(nil, nil).Status().Epoch; got > maxSafeInteger {
+		t.Fatalf("epoch = %d, exceeds Number.MAX_SAFE_INTEGER (%d)", got, maxSafeInteger)
+	}
+}
+
 func TestDeviceStatusRevisionIsMonotonicWithConcurrentProjections(t *testing.T) {
 	conn := NewDeviceConnection(nil, nil)
 	const projections = 64

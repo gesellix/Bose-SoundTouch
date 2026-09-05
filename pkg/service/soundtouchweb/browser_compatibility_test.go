@@ -246,6 +246,42 @@ window.revisionChecks = {
     sourcesStale: false,
   }) === stale,
   unknownRejected: mergeStatusUpdate(newer, 'unknown', { revision: 99 }) === newer,
+  // A fresh DeviceConnection for the same id restarts revisions at 0. Without
+  // the epoch check this frame loses the revision comparison and the tab stays
+  // pinned to the old status forever.
+  newerEpochAcceptedDespiteLowerRevision: (() => {
+    const epoched = mergeStatusUpdate(newer, 'speaker', {
+      epoch: 100,
+      revision: 40,
+      nowPlaying: { Track: 'epoch one' },
+    });
+    const reconnected = mergeStatusUpdate(epoched, 'speaker', {
+      epoch: 101,
+      revision: 0,
+      nowPlaying: { Track: 'epoch two' },
+    });
+    return reconnected !== epoched &&
+      reconnected.speaker.status.nowPlaying.Track === 'epoch two';
+  })(),
+  olderEpochRejected: (() => {
+    const epochOne = mergeStatusUpdate(newer, 'speaker', {
+      epoch: 100,
+      revision: 40,
+      nowPlaying: { Track: 'epoch one' },
+    });
+    const epochTwo = mergeStatusUpdate(epochOne, 'speaker', {
+      epoch: 101,
+      revision: 0,
+      nowPlaying: { Track: 'epoch two' },
+    });
+    // A frame still in flight from the replaced connection, carrying a high
+    // revision from its own sequence, must not win.
+    return mergeStatusUpdate(epochTwo, 'speaker', {
+      epoch: 100,
+      revision: 99,
+      nowPlaying: { Track: 'late frame from the old connection' },
+    }) === epochTwo;
+  })(),
   adversarialIDsAreOwnDataProperties:
     Object.prototype.hasOwnProperty.call(constructorUpdated, '__proto__') &&
     Object.prototype.hasOwnProperty.call(constructorUpdated, 'constructor'),

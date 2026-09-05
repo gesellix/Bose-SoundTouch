@@ -54,6 +54,9 @@ type DeviceConnection struct {
 	deviceName atomic.Pointer[string]
 	status     atomic.Pointer[DeviceStatus]
 
+	// epoch stamps every status this connection publishes. See nextStatusEpoch.
+	epoch int64
+
 	webSocketMu          sync.RWMutex
 	webSocketLoopRunning atomic.Bool
 
@@ -121,6 +124,10 @@ type DeviceStatus struct {
 	IsConnected            bool                    `json:"isConnected"`
 	LastActivity           time.Time               `json:"lastActivity"`
 
+	// Epoch identifies the DeviceConnection that produced this status.
+	// Revision restarts at 0 for every new connection, so revisions from
+	// different epochs are not comparable; a client must compare Epoch first.
+	Epoch int64 `json:"epoch"`
 	// Revision is a per-connection monotonic counter advanced by every
 	// successful UpdateStatus. It lets the browser order a full `devices`
 	// snapshot against a `status_update` delta -- without it the two frames
@@ -157,6 +164,33 @@ type SpeakerConnectionState struct {
 	Signal string `json:"signal,omitempty"`
 }
 
+// statusEpochClock hands out strictly increasing epochs, seeded from the wall
+// clock so they keep increasing across a service restart too. A plain counter
+// would restart at 0 on restart and a plain timestamp could collide for two
+// connections created in the same millisecond; both would leave a browser
+// unable to tell a newer connection's revision sequence from an older one.
+var statusEpochClock atomic.Int64
+
+func nextStatusEpoch() int64 {
+	// Milliseconds, not nanoseconds: this value is compared in the browser,
+	// where a nanosecond timestamp exceeds Number.MAX_SAFE_INTEGER and would
+	// lose precision as a JSON number.
+	now := time.Now().UnixMilli()
+
+	for {
+		previous := statusEpochClock.Load()
+
+		next := now
+		if next <= previous {
+			next = previous + 1
+		}
+
+		if statusEpochClock.CompareAndSwap(previous, next) {
+			return next
+		}
+	}
+}
+
 // StatusField identifies one independently-racing field of DeviceStatus for
 // BeginFieldPoll/CompleteFieldPoll/ApplyFieldEvent's generation ordering.
 // FieldConnectivity covers IsConnected, which is derived by a poll (from
@@ -187,11 +221,13 @@ func NewDeviceConnection(c *client.Client, info *models.DeviceInfo) *DeviceConne
 		DeviceInfo: info,
 		LastSeen:   time.Now(),
 		done:       make(chan struct{}),
+		epoch:      nextStatusEpoch(),
 	}
 	conn.status.Store(&DeviceStatus{
 		Connectivity: ConnectivityOffline,
 		IsConnected:  false,
 		LastActivity: time.Now(),
+		Epoch:        conn.epoch,
 	})
 
 	if info != nil {
@@ -360,6 +396,7 @@ func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
 	for {
 		old := c.status.Load()
 		next := *s
+		next.Epoch = c.epoch
 		next.Revision = old.Revision + 1
 		next.NowPlayingRevision = nowPlayingGeneration
 
@@ -468,6 +505,7 @@ func (c *DeviceConnection) UpdateStatus(mut func(*DeviceStatus)) {
 		old := c.status.Load()
 		next := *old
 		mut(&next)
+		next.Epoch = c.epoch
 		next.Revision = old.Revision + 1
 
 		if c.status.CompareAndSwap(old, &next) {

@@ -26,11 +26,27 @@ function statusRevision(status) {
     return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
 }
 
+function statusEpoch(status) {
+    const epoch = status?.epoch;
+    return Number.isSafeInteger(epoch) ? epoch : null;
+}
+
 // The server advances DeviceStatus.revision on every projection, so a frame
 // carrying a revision no newer than what we already hold is stale -- a slow
 // `devices` snapshot overtaken by a `status_update` delta, or a REST refresh
 // overtaken by either. A device we have never seen is always accepted.
+//
+// Revisions are only comparable within one epoch. A device id backed by a new
+// DeviceConnection, or a restarted service, restarts its revisions at 0, and
+// without the epoch check the browser would reject every later frame for that
+// id and display a status frozen at whatever it last held.
 function acceptsNewerStatus(current, incoming) {
+    const currentEpoch = statusEpoch(current);
+    const incomingEpoch = statusEpoch(incoming);
+    if (currentEpoch !== null && incomingEpoch !== null && incomingEpoch !== currentEpoch) {
+        return incomingEpoch > currentEpoch;
+    }
+
     const currentRevision = statusRevision(current);
     const incomingRevision = statusRevision(incoming);
     if (currentRevision === null) return true;
