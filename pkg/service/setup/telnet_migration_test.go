@@ -270,13 +270,7 @@ func TestMigrateViaTelnet_CommandNotFoundAborts(t *testing.T) {
 		t.Errorf("err = %v, want to mention the rejected command", err)
 	}
 
-	// The verification command must NOT have been sent — the run aborts on
-	// the first rejection.
-	for _, c := range f.commands {
-		if c == "getpdo CurrentSystemConfiguration" {
-			t.Errorf("verification was sent after a rejected command: %v", f.commands)
-		}
-	}
+	assertNoTelnetWritesAfterRejection(t, f.commands, "envswitch")
 }
 
 func TestMigrateViaTelnet_GenericRuntimeRejectionReportsPartialState(t *testing.T) {
@@ -322,9 +316,30 @@ func TestMigrateViaTelnet_EnvswitchRejectionReportsUncertainPersistence(t *testi
 		t.Errorf("err = %v, want uncertain-persistence classification", err)
 	}
 
-	for _, command := range f.commands {
-		if command == "getpdo CurrentSystemConfiguration" {
-			t.Errorf("verification was sent after unconfirmed envswitch response: %v", f.commands)
+	assertNoTelnetWritesAfterRejection(t, f.commands, "envswitch")
+}
+
+// assertNoTelnetWritesAfterRejection checks the property that matters once a
+// command is rejected: no further command may CHANGE the device. The
+// read-only getpdo read-back is expected, since the failure report says what
+// the device actually holds rather than telling the user to go and find out.
+func assertNoTelnetWritesAfterRejection(t *testing.T, commands []string, rejected string) {
+	t.Helper()
+
+	seenRejected := false
+	for _, command := range commands {
+		if strings.Contains(command, rejected) {
+			seenRejected = true
+
+			continue
+		}
+
+		if !seenRejected {
+			continue
+		}
+
+		if strings.HasPrefix(command, "sys configuration") || strings.HasPrefix(command, "envswitch") {
+			t.Errorf("a write was sent after the rejected command: %v", commands)
 		}
 	}
 }
@@ -497,5 +512,34 @@ func TestTelnetRevertNotOfferedOnUnmigratedSpeakers(t *testing.T) {
 				t.Errorf("telnetRevertAvailable() = %v, want %v", got, test.want)
 			}
 		})
+	}
+}
+
+// TestMigrateViaTelnet_FailureReportsWhatTheDeviceHolds: the failure advice is
+// "read back and reconcile all four URL fields", which the service can do
+// itself. An unrecognised reply is not proof the write failed, so the readback
+// is better evidence than the reply shape.
+func TestMigrateViaTelnet_FailureReportsWhatTheDeviceHolds(t *testing.T) {
+	target := "http://example:8000"
+	urls := defaultTelnetURLs(target)
+	resp := happyResponses(target)
+	resp["envswitch boseurls set "+urls.Marge+" "+urls.SwUpdate] = "something unfamiliar\n"
+
+	f := &fakeTelnet{responses: resp}
+	m := newFakeTelnetManager(f)
+
+	logs, err := m.migrateViaTelnet("192.0.2.1", urls)
+	if err == nil {
+		t.Fatal("expected an error for an unrecognised envswitch response")
+	}
+
+	if !strings.Contains(err.Error(), "the device currently reports") {
+		t.Errorf("err = %v, want it to carry the live URL state", err)
+	}
+	if !strings.Contains(err.Error(), "margeServerUrl="+target) {
+		t.Errorf("err = %v, want the actual margeServerUrl value", err)
+	}
+	if !strings.Contains(logs, "read-back after the failure") {
+		t.Errorf("logs did not record the read-back:\n%s", logs)
 	}
 }

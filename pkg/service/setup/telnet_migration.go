@@ -312,8 +312,20 @@ func (m *Manager) migrateViaTelnet(deviceIP string, urls telnetURLs) (string, er
 		fmt.Fprintf(&logs, "→ %s\n%s\n", cmd, strings.TrimRight(resp, "\r\n"))
 
 		if err := validateTelnetMutationResponse(cmd, resp, persistenceCommand, urls); err != nil {
-			return logs.String(), fmt.Errorf("%w; %s", err,
-				telnetWriteFailureContext(runtimeWrites, persistenceCommand))
+			// Aborting here is deliberate: no further writes are sent, so a
+			// rejected sequence cannot spread. But the advice this produces is
+			// "read back and reconcile all four URL fields", which the service
+			// can simply do, and must, because an unrecognised reply is not
+			// proof the write failed. A telnet console is a shared stream and
+			// firmware echoes vary, so the readback is better evidence than
+			// the reply shape. It is read-only and changes nothing.
+			// Read back before snapshotting logs: the return values are
+			// evaluated left to right, so logs.String() inline would capture
+			// the builder before the read-back appends to it.
+			readBack := telnetReadBackSummary(t, &logs)
+
+			return logs.String(), fmt.Errorf("%w; %s%s", err,
+				telnetWriteFailureContext(runtimeWrites, persistenceCommand), readBack)
 		}
 
 		if !persistenceCommand {
@@ -399,6 +411,40 @@ func hasTelnetPersistenceConfirmation(response, expected string) bool {
 
 	return len(meaningful) == 1 && meaningful[0] == expected+" ->" ||
 		len(meaningful) == 2 && meaningful[0] == expected && meaningful[1] == "OK"
+}
+
+// telnetReadBackSummary reads the live URL configuration so a failure report
+// says what the device actually holds now, instead of asking the user to go
+// and find out. Returns an empty string when the readback itself fails, since
+// there is then nothing trustworthy to add.
+func telnetReadBackSummary(t TelnetClient, logs *strings.Builder) string {
+	verify, err := t.SendCommand("getpdo CurrentSystemConfiguration")
+	if err != nil {
+		fmt.Fprintf(logs, "Read-back after the failure also failed: %v\n", err)
+
+		return ""
+	}
+
+	fmt.Fprintf(logs, "→ getpdo CurrentSystemConfiguration (read-back after the failure)\n%s\n",
+		strings.TrimRight(verify, "\r\n"))
+
+	current := parseGetpdoConfig(verify)
+	if len(current) == 0 {
+		return ""
+	}
+
+	fields := make([]string, 0, len(current))
+	for _, field := range canonicalBoseTelnetURLs().fields() {
+		if value, ok := current[field.configName]; ok && value != "" {
+			fields = append(fields, field.configName+"="+value)
+		}
+	}
+
+	if len(fields) == 0 {
+		return ""
+	}
+
+	return "; the device currently reports " + strings.Join(fields, ", ")
 }
 
 func telnetWriteFailureContext(runtimeWrites int, persistenceAttempted bool) string {
