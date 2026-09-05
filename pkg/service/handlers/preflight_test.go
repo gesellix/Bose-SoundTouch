@@ -226,23 +226,28 @@ type errResolve string
 func (e errResolve) Error() string { return string(e) }
 
 func TestCheck443Reachability_LANProbeMatchesListenerOutcome(t *testing.T) {
-	// Spin up a listener on a random port and use that port via resolver
-	// trickery: we point the LAN host at 127.0.0.1 and rely on the fact that
-	// nothing answers on :443 in test environments. The point of this test
-	// is to lock in the result-shape: when localhost:443 is closed (the
-	// default in CI), the function still returns a well-formed result and
-	// reports the resolved LAN host. Uses HTTPS so the NotApplicable
-	// short-circuit doesn't fire.
-	res := Check443Reachability(8443, "https://1.2.3.4:8443", func(string) (string, error) {
-		return "1.2.3.4", nil
+	// Point the LAN host at 127.0.0.1 and rely on the fact that nothing
+	// answers on :443 in test environments. The point of this test is to
+	// lock in the result-shape: when localhost:443 is closed (the default
+	// in CI), the function still returns a well-formed result and reports
+	// the resolved LAN host. Uses HTTPS so the NotApplicable short-circuit
+	// doesn't fire.
+	//
+	// Deliberately NOT a real routable address like 1.2.3.4: probing an
+	// arbitrary internet destination's reachability depends on the tester's
+	// own network path (transparent proxies, DPI middleboxes, or sinkholed
+	// "known test IP" blocklists can all make it appear reachable), which
+	// is exactly what made this test fail outside CI (#683).
+	res := Check443Reachability(8443, "https://127.0.0.1:8443", func(string) (string, error) {
+		return "127.0.0.1", nil
 	}, 200*time.Millisecond)
 
 	if res.Skipped {
 		t.Fatalf("expected Skipped=false, got true")
 	}
 
-	if res.LANHost != "1.2.3.4" {
-		t.Errorf("expected LANHost=1.2.3.4, got %q", res.LANHost)
+	if res.LANHost != "127.0.0.1" {
+		t.Errorf("expected LANHost=127.0.0.1, got %q", res.LANHost)
 	}
 
 	// In any sane CI environment nothing is listening on :443, so both
