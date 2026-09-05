@@ -246,7 +246,9 @@ function App() {
     async function refreshDevices() {
         const resp = await api.devices();
         if (!resp?.success) throw new Error(resp?.error || 'Failed to refresh devices');
-        setDevices(resp.data || {});
+        // Ordered like the WebSocket frames: a slow REST snapshot must not
+        // clobber a newer status that arrived over the socket meanwhile.
+        setDevices(previous => mergeDevicesSnapshot(previous, resp.data));
     }
 
     function mergeDeviceReadback(deviceId, status) {
