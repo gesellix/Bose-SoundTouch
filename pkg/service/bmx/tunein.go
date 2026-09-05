@@ -99,6 +99,18 @@ func isTuneInOpmlURI(rawURL string) bool {
 	return strings.EqualFold(u.Hostname(), "opml.radiotime.com")
 }
 
+// tuneInRawItems extracts a response's item list, trying "Items" (the
+// v1.3 search/profiles API shape) first, then falling back to "body"
+// (the legacy/OPML shape).
+func tuneInRawItems(data map[string]interface{}) []interface{} {
+	items, ok := data["Items"].([]interface{})
+	if !ok {
+		items, _ = data["body"].([]interface{})
+	}
+
+	return items
+}
+
 // tuneInRenderJSONURI returns the URL with render=json set as a query parameter,
 // replacing any existing render value instead of appending a duplicate.
 func tuneInRenderJSONURI(rawURL string) string {
@@ -350,11 +362,7 @@ func TuneInSearch(query string) (*models.BmxNavResponse, error) {
 		Layout: "classic",
 	}
 
-	// Try "Items" (v1.3) first, then "body" (legacy)
-	items, ok := data["Items"].([]interface{})
-	if !ok {
-		items, _ = data["body"].([]interface{})
-	}
+	items := tuneInRawItems(data)
 
 	for idx, item := range items {
 		m, ok := item.(map[string]interface{})
@@ -479,10 +487,7 @@ func TuneInSearchNext(encodedCursor string) (*models.BmxNavResponse, error) {
 		return nil, err
 	}
 
-	rawItems, ok := data["Items"].([]interface{})
-	if !ok {
-		rawItems, _ = data["body"].([]interface{})
-	}
+	rawItems := tuneInRawItems(data)
 
 	navItems := make([]models.BmxNavItem, 0, len(rawItems))
 	for _, raw := range rawItems {
@@ -662,11 +667,7 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 			return nil, err
 		}
 
-		// "Items" (v1.3 profiles/search API) first, then "body" (legacy/OPML).
-		rawItems, ok := contents["Items"].([]interface{})
-		if !ok {
-			rawItems, _ = contents["body"].([]interface{})
-		}
+		rawItems := tuneInRawItems(contents)
 
 		// The Contents pivot doesn't return playable items directly: each
 		// top-level entry is a "Container" (identified by a "ContainerType"
