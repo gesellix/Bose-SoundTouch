@@ -89,7 +89,11 @@ export function Sources({
                 : previous);
         } else if (matches && command.outcome === 'pending') {
             setCommand(previous => previous?.generation === command.generation
-                ? { ...previous, outcome: 'provisional-confirmed' }
+                ? {
+                    ...previous,
+                    outcome: 'provisional-confirmed',
+                    confirmedRevision: nowPlayingRevision,
+                }
                 : previous);
         }
     }, [command, currentSource, currentAccount, nowPlayingRevision]);
@@ -119,6 +123,28 @@ export function Sources({
             startNowPlayingRevision: nowPlayingRevision,
         });
         const startedAt = Date.now();
+
+        // Called when the readback window closes without this round matching.
+        // "Unverified" is only honest for a command nothing ever confirmed: a
+        // nowPlayingUpdated event may already have confirmed it at t=1s, and a
+        // failed readback at t=10s must not retract that. Such a command is
+        // settled as confirmed instead, since no further readback will run.
+        function settleUnverified(previous) {
+            if (previous?.generation !== generation) return previous;
+            if (previous.outcome === 'provisional-confirmed' ||
+                previous.outcome === 'final-confirmed') {
+                return { ...previous, outcome: 'final-confirmed' };
+            }
+            if (previous.outcome === 'failed') return previous;
+
+            return {
+                ...target,
+                generation,
+                outcome: 'unverified',
+                error: active.writeError?.message,
+                startNowPlayingRevision: nowPlayingRevision,
+            };
+        }
 
         readbackDelays.forEach((delay, index) => {
             const timer = setTimeout(async () => {
@@ -162,25 +188,13 @@ export function Sources({
                         }
                     } else if (index === readbackDelays.length - 1) {
                         commandRef.current.active = null;
-                        setCommand({
-                            ...target,
-                            generation,
-                            outcome: 'unverified',
-                            error: active.writeError?.message,
-                            startNowPlayingRevision: nowPlayingRevision,
-                        });
+                        setCommand(settleUnverified);
                     }
                 } catch (_) {
                     if (commandRef.current.active === active && active.latestReadback === index &&
                         index === readbackDelays.length - 1) {
                         commandRef.current.active = null;
-                        setCommand({
-                            ...target,
-                            generation,
-                            outcome: 'unverified',
-                            error: active.writeError?.message,
-                            startNowPlayingRevision: nowPlayingRevision,
-                        });
+                        setCommand(settleUnverified);
                     }
                 }
             }, Math.max(0, delay - (Date.now() - startedAt)));

@@ -655,6 +655,43 @@ func TestSourceSelectionLaterFirmwareErrorOverridesProvisionalConfirmation(t *te
 	}
 }
 
+// TestSourceSelectionKeepsPushConfirmationWhenReadbacksFail: a
+// nowPlayingUpdated event is authoritative evidence the speaker switched.
+// Once it has confirmed the selection, the readback window closing without a
+// matching read must not retract that and report "unverified".
+func TestSourceSelectionKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
+	server := newPlayerFixtureServer(t, sourceFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		// Every readback fails, so only the pushed status can confirm anything.
+		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var statusText string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		// The speaker reports the switch before the first readback deadline.
+		chromedp.Evaluate(`window.renderStatus('AUX', 'AUX1')`, nil),
+		chromedp.Poll(`document.querySelector('.source-btn').classList.contains('provisional-confirmed')`, nil),
+		// Outlast the last readback deadline (500ms in this fixture).
+		chromedp.Sleep(900*time.Millisecond),
+		chromedp.Text(`.source-command-status`, &statusText, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("exercise push-confirmed selection with failing readbacks: %v", err)
+	}
+
+	if statusText != "Source selected" {
+		t.Errorf("status = %q, want the push confirmation to stand as %q", statusText, "Source selected")
+	}
+}
+
 func TestSourceSelectionRejectsReadbackWithOnlyNewerAggregateRevision(t *testing.T) {
 	var mu sync.Mutex
 	reads := 0
