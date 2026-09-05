@@ -30,14 +30,23 @@ const SOURCE_READBACK_DELAYS_MS = [2000, 5000, 10000];
 // Location). ALEXA is also advertised READY but is NOT listed: whether a bare
 // select resumes anything for it is unverified, so it keeps today's behaviour.
 //
-// `page` is the browser to fall back to when there is nothing to resume: the
-// page in this app that produces content for that source. LOCAL_INTERNET_RADIO
-// maps to Play URL because that is what HandlePlayURL emits, a ContentItem
-// with Source "LOCAL_INTERNET_RADIO".
+// `page` is the browser to open for the source: the page in this app that
+// produces content for it. `resume` says whether clicking may first replay
+// that source's newest Recents entry.
+//
+// LOCAL_INTERNET_RADIO does not resume. AfterTouch plays its own one-shot
+// audio through that source -- TTS and the notification ding go out over
+// /custom/v1/playback/ -- so its Recents mix notifications with stations, and
+// the newest entry is as likely to be a ding as anything worth replaying.
+// Observed on real hardware: the only LOCAL_INTERNET_RADIO recent was
+// "AfterTouch ding", so resuming it played the notification. Opening Play URL,
+// which is what HandlePlayURL emits content for, is predictable instead of
+// guessing. RADIO_BROWSER and TUNEIN have no such problem: nothing writes
+// one-shot audio to them, and their Recents hold real stations.
 const PROVIDER_SOURCES = {
-    RADIO_BROWSER: { page: 'radiobrowser' },
-    TUNEIN: { page: 'tunein' },
-    LOCAL_INTERNET_RADIO: { page: 'playurl' },
+    RADIO_BROWSER: { page: 'radiobrowser', resume: true },
+    TUNEIN: { page: 'tunein', resume: true },
+    LOCAL_INTERNET_RADIO: { page: 'playurl', resume: false },
 };
 
 function isErrorSource(source) {
@@ -187,10 +196,12 @@ export function Sources({
         }
 
         let item = null;
-        try {
-            item = await mostRecentPlayableFor(src);
-        } catch (_) {
-            item = null;
+        if (provider.resume) {
+            try {
+                item = await mostRecentPlayableFor(src);
+            } catch (_) {
+                item = null;
+            }
         }
 
         // Nothing to resume, and a bare select would strand the speaker on a

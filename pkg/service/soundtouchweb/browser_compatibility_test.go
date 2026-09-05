@@ -636,8 +636,7 @@ func TestProviderSourceWithoutRecentsNavigatesInstead(t *testing.T) {
 		t.Errorf("navigated = %v, want [radiobrowser]", navigated)
 	}
 
-	// LOCAL_INTERNET_RADIO has its own browser: Play URL is what emits that
-	// source, so that is where a click with nothing to resume belongs.
+	// LOCAL_INTERNET_RADIO never resumes, so it goes straight to Play URL.
 	var localRadioNav []string
 	if err := chromedp.Run(ctx,
 		chromedp.Evaluate(`window.navigated = []`, nil),
@@ -764,6 +763,67 @@ func TestPlayingSourceWithoutLocationStillConfirms(t *testing.T) {
 		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
 	); err != nil {
 		t.Fatalf("exercise playing source with no location: %v", err)
+	}
+}
+
+// TestLocalInternetRadioNeverResumes: AfterTouch plays its own TTS and the
+// notification ding through LOCAL_INTERNET_RADIO, so that source's Recents mix
+// one-shot audio with stations. Observed on real hardware: resuming its newest
+// entry played the "AfterTouch ding". It must open Play URL instead, even when
+// a perfectly resumable entry exists.
+func TestLocalInternetRadioNeverResumes(t *testing.T) {
+	var mu sync.Mutex
+	recentsFetches := 0
+	writes := 0
+	server := newPlayerFixtureServer(t, providerFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			recentsFetches++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"Items":[
+				{"ID":1,"ContentItem":{"Source":"LOCAL_INTERNET_RADIO","Type":"stationurl",
+					"Location":"https://host/custom/v1/playback/abc?name=AfterTouch+ding",
+					"ItemName":"AfterTouch ding","IsPresetable":true}}
+			]}}`))
+		})
+		r.Post("/api/control/devices/speaker/play", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var navigated []string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(2)`, chromedp.ByQuery),
+		chromedp.Poll(`window.navigated.length === 1`, nil),
+		chromedp.Evaluate(`window.navigated`, &navigated),
+	); err != nil {
+		t.Fatalf("exercise LOCAL_INTERNET_RADIO with a resumable recent: %v", err)
+	}
+
+	if len(navigated) != 1 || navigated[0] != "playurl" {
+		t.Errorf("navigated = %v, want [playurl]", navigated)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if writes != 0 {
+		t.Errorf("issued %d writes, want 0: this source never plays anything on click", writes)
+	}
+	// Not merely ignored: the lookup is skipped, so a slow /recents cannot
+	// delay opening the page.
+	if recentsFetches != 0 {
+		t.Errorf("fetched recents %d times, want 0", recentsFetches)
 	}
 }
 
