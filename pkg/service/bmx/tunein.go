@@ -415,20 +415,7 @@ func tuneInSearchSection(item map[string]interface{}, idx int, query, layout str
 			continue
 		}
 
-		typeStr, _ := cm["Type"].(string)
-		if typeStr == "" {
-			typeStr, _ = cm["className"].(string)
-		}
-
-		switch typeStr {
-		case "Station", "PlayItem", "Topic":
-			// Topics are single podcast episodes (t<N>) — Tune.ashx
-			// accepts them just like station IDs, so the same play-link
-			// shape works.
-			section.Items = append(section.Items, tuneInSearchPlayItem(cm))
-		case "Program", "Profile":
-			section.Items = append(section.Items, tuneInSearchProfile(cm, name))
-		}
+		section.Items = append(section.Items, tuneInClassifyItem(cm))
 	}
 
 	return section
@@ -496,13 +483,7 @@ func TuneInSearchNext(encodedCursor string) (*models.BmxNavResponse, error) {
 			continue
 		}
 
-		typeStr, _ := m["Type"].(string)
-		switch typeStr {
-		case "Station", "PlayItem", "Topic":
-			navItems = append(navItems, tuneInSearchPlayItem(m))
-		case "Program", "Profile":
-			navItems = append(navItems, tuneInSearchProfile(m, ""))
-		}
+		navItems = append(navItems, tuneInClassifyItem(m))
 	}
 
 	return &models.BmxNavResponse{
@@ -701,7 +682,7 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 				navResp.BmxSections = append(navResp.BmxSections, models.BmxNavSection{
 					Name:   displayName,
 					Layout: "list",
-					Items:  []models.BmxNavItem{tuneInProfileNavItem(m)},
+					Items:  []models.BmxNavItem{tuneInClassifyItem(m)},
 				})
 
 				continue
@@ -720,7 +701,7 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 					continue
 				}
 
-				navItems = append(navItems, tuneInProfileNavItem(cm))
+				navItems = append(navItems, tuneInClassifyItem(cm))
 			}
 
 			section := models.BmxNavSection{
@@ -740,33 +721,55 @@ func TuneInNavigateProfile(encodedURI string) (*models.BmxNavResponse, error) {
 	return navResp, nil
 }
 
-// tuneInProfileNavItem maps a single item found under a profile's Contents
-// pivot (or one of a Container's Children) to a BmxNavItem, based on its
-// TuneIn "Type".
-func tuneInProfileNavItem(m map[string]interface{}) models.BmxNavItem {
+// tuneInClassifyItem maps a single TuneIn item (a search/search-next
+// result, a section child, or a profile Contents/Container child) to a
+// BmxNavItem based on its "Type". Program/Profile items navigate to
+// another profile page; Station/PlayItem/Topic are played directly by
+// their own GuideId via Tune.ashx (Topics are single on-demand episodes/
+// broadcasts (t<N>) — Tune.ashx accepts them just like station IDs, so the
+// same play-link shape works).
+//
+// This intentionally does NOT use /v1/playback/episodes/{GuideId}
+// (tracklisturl) for any of these: that route is backed by
+// TuneInPodcastInfo, which is a stub that always returns an empty track
+// list (see its doc comment) - a speaker given that location has nothing
+// to play. /v1/playback/station/{GuideId} (bmx.TuneInPlayback) is the one
+// path in this codebase proven to resolve a raw TuneIn GuideId - including
+// a "t"-prefixed topic id - to an actual stream, via Tune.ashx;
+// resolveTuneInProgramLatestEpisode+TuneInPlayback uses the exact same
+// call for a program's latest topic.
+//
+// A type this code doesn't otherwise recognize is *also* given a playback
+// link rather than silently dropped: TuneIn's type list isn't guaranteed
+// stable, and dropping the item entirely (as this code used to for search
+// and search-next results) hides real content with no trace it existed.
+// Its Subtitle is marked instead, so a playback attempt that doesn't pan
+// out reads as "this content type isn't fully supported yet" rather than
+// a mystery broken link.
+func tuneInClassifyItem(m map[string]interface{}) models.BmxNavItem {
 	typeStr, _ := m["Type"].(string)
+	if typeStr == "" {
+		typeStr, _ = m["className"].(string)
+	}
 
 	switch typeStr {
 	case "Program", "Profile":
 		name, _ := m["Title"].(string)
 
 		return tuneInSearchProfile(m, name)
-	default:
-		// "Topic" (individual on-demand episodes/broadcasts), "Station",
-		// "PlayItem", and anything else are all directly playable by their
-		// own GuideId via Tune.ashx, so they share tuneInSearchPlayItem's
-		// /v1/playback/station/{GuideId} link.
-		//
-		// This intentionally does NOT use /v1/playback/episodes/{GuideId}
-		// (tracklisturl): that route is backed by TuneInPodcastInfo, which
-		// is a stub that always returns an empty track list (see its
-		// doc comment) - a speaker given that location has nothing to
-		// play. /v1/playback/station/{GuideId} (bmx.TuneInPlayback) is the
-		// one path in this codebase proven to resolve a raw TuneIn GuideId
-		// - including a "t"-prefixed topic id - to an actual stream, via
-		// Tune.ashx; resolveTuneInProgramLatestEpisode+TuneInPlayback uses
-		// the exact same call for a program's latest topic.
+	case "Station", "PlayItem", "Topic":
 		return tuneInSearchPlayItem(m)
+	default:
+		item := tuneInSearchPlayItem(m)
+
+		const uncertainNote = "Unrecognized type, may not play"
+		if item.Subtitle == "" {
+			item.Subtitle = uncertainNote
+		} else {
+			item.Subtitle = item.Subtitle + " (" + uncertainNote + ")"
+		}
+
+		return item
 	}
 }
 

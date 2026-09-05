@@ -655,3 +655,69 @@ func TestTuneInNavigateProfileHandlesContainerShapes(t *testing.T) {
 		t.Errorf("Broadcasts items = %+v, want exactly [Flat Leaf]", broadcasts.Items)
 	}
 }
+
+// TestTuneInClassifyItemMarksUnrecognizedTypesInsteadOfDroppingThem covers
+// the shared classifier used by tuneInSearchSection, TuneInSearchNext, and
+// TuneInNavigateProfile's container children. Previously, tuneInSearchSection
+// and TuneInSearchNext each had their own switch with no default case, so an
+// item whose "Type" wasn't one of the 5 known values was silently omitted --
+// TuneIn's type list isn't guaranteed stable, and this hid real content with
+// no trace it existed. An unrecognized type now still gets a playback link,
+// with its Subtitle marked so a playback attempt that doesn't pan out reads
+// as "this content type isn't fully supported yet" rather than a mystery
+// broken link.
+func TestTuneInClassifyItemMarksUnrecognizedTypesInsteadOfDroppingThem(t *testing.T) {
+	t.Run("known playable type is unmarked", func(t *testing.T) {
+		item := tuneInClassifyItem(map[string]interface{}{
+			"Type": "Station", "Title": "Jazz FM", "GuideId": "s123", "Subtitle": "Smooth Jazz",
+		})
+
+		if item.Subtitle != "Smooth Jazz" {
+			t.Errorf("Subtitle = %q, want unmodified %q", item.Subtitle, "Smooth Jazz")
+		}
+	})
+
+	t.Run("Program/Profile type navigates instead of playing", func(t *testing.T) {
+		item := tuneInClassifyItem(map[string]interface{}{
+			"Type": "Program", "Title": "Some Show", "GuideId": "p123",
+		})
+
+		if item.Links == nil || item.Links.BmxNavigate == nil {
+			t.Errorf("Program item has no BmxNavigate link: %+v", item)
+		}
+	})
+
+	t.Run("unrecognized type without existing subtitle", func(t *testing.T) {
+		item := tuneInClassifyItem(map[string]interface{}{
+			"Type": "SomeFutureType", "Title": "Mystery Item", "GuideId": "x123",
+		})
+
+		if item.Links == nil || item.Links.BmxPlayback == nil {
+			t.Fatalf("unrecognized-type item has no playback link, want it still playable: %+v", item)
+		}
+
+		if item.Subtitle != "Unrecognized type, may not play" {
+			t.Errorf("Subtitle = %q, want the unrecognized-type marker", item.Subtitle)
+		}
+	})
+
+	t.Run("unrecognized type with existing subtitle appends the marker", func(t *testing.T) {
+		item := tuneInClassifyItem(map[string]interface{}{
+			"Type": "SomeFutureType", "Title": "Mystery Item", "GuideId": "x123", "Subtitle": "From Mystery Network",
+		})
+
+		if !strings.Contains(item.Subtitle, "From Mystery Network") || !strings.Contains(item.Subtitle, "Unrecognized type") {
+			t.Errorf("Subtitle = %q, want both the original subtitle and the unrecognized-type marker", item.Subtitle)
+		}
+	})
+
+	t.Run("empty type falls back to className, still unrecognized if className is also unknown", func(t *testing.T) {
+		item := tuneInClassifyItem(map[string]interface{}{
+			"className": "weirdLegacyThing", "Title": "Legacy Item", "GuideId": "y123",
+		})
+
+		if !strings.Contains(item.Subtitle, "Unrecognized type") {
+			t.Errorf("Subtitle = %q, want the unrecognized-type marker", item.Subtitle)
+		}
+	})
+}
