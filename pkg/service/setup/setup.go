@@ -1178,6 +1178,14 @@ func (m *Manager) resyncBoseURLsAfterXML(deviceIP string, urls telnetURLs) strin
 
 	rlogs, rerr := m.setAllBoseURLsViaTelnet(deviceIP, urls)
 	if rerr != nil {
+		// A rejected URL is not the device being unreachable, and saying so
+		// would send the user looking at telnet. The XML write has already
+		// happened with this value, so the URL itself is what needs attention.
+		if errors.Is(rerr, ErrInvalidTelnetURL) {
+			return fmt.Sprintf("Note: skipped the telnet boseurls re-sync because a URL was rejected (%v); "+
+				"the XML configuration was still written, and a device reboot will reconcile the runtime layer.\n", rerr)
+		}
+
 		return fmt.Sprintf("Note: could not re-sync boseurls over telnet (%v); a device reboot will reconcile the runtime layer.\n", rerr)
 	}
 

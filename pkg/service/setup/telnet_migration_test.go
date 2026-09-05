@@ -543,3 +543,25 @@ func TestMigrateViaTelnet_FailureReportsWhatTheDeviceHolds(t *testing.T) {
 		t.Errorf("logs did not record the read-back:\n%s", logs)
 	}
 }
+
+// TestResyncBoseURLsAfterXML_DistinguishesRejectedURL: applyURLOverrides lets
+// the XML path accept URLs the telnet validator refuses, so the XML write
+// succeeds while the re-sync is skipped. Reporting that as "could not re-sync
+// over telnet" points the user at the wrong thing.
+func TestResyncBoseURLsAfterXML_DistinguishesRejectedURL(t *testing.T) {
+	m := newFakeTelnetManager(&fakeTelnet{responses: map[string]string{}})
+
+	rejected := m.resyncBoseURLsAfterXML("192.0.2.1", telnetURLs{
+		Marge:       "http://example:8000?probe=1",
+		Stats:       "http://example:8000",
+		SwUpdate:    "http://example:8000/updates/soundtouch",
+		BmxRegistry: "http://example:8000/bmx/registry/v1/services",
+	})
+
+	if !strings.Contains(rejected, "a URL was rejected") {
+		t.Errorf("note = %q, want it to name the rejected URL as the cause", rejected)
+	}
+	if strings.Contains(rejected, "could not re-sync boseurls over telnet") {
+		t.Errorf("note = %q, want it not to blame telnet availability", rejected)
+	}
+}
