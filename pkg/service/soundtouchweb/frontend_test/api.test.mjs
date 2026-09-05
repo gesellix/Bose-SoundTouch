@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { api } from './api.js';
+import { api } from '../static/js/api.js';
 
 test('selectSource posts the exact source and account body', async () => {
     const requests = [];
