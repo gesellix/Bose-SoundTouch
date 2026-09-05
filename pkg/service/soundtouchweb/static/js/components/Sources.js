@@ -190,7 +190,23 @@ export function Sources({
         try {
             await api.selectSource(deviceId, target.source, target.account);
         } catch (error) {
-            if (commandRef.current.active === active) active.writeError = error;
+            if (commandRef.current.active !== active) return;
+            // A definitive refusal (4xx) means the speaker never saw the
+            // command, so there is nothing for the readbacks to confirm and
+            // reporting it now beats waiting out the readback window. Anything
+            // else stays pending: a 5xx or a transport error does not tell us
+            // whether the speaker acted, so we keep verifying and carry the
+            // reason into whatever outcome the readbacks reach.
+            if (!error?.definitive) {
+                active.writeError = error;
+
+                return;
+            }
+            clearReadbacks();
+            commandRef.current.active = null;
+            setCommand(previous => previous?.generation === generation
+                ? { ...previous, outcome: 'failed', error: error?.message }
+                : previous);
         }
     }
 
@@ -209,6 +225,12 @@ export function Sources({
         failed: 'Source selection failed',
     };
 
+    function commandMessage(cmd) {
+        if (!cmd) return '';
+        const text = outcomeText[cmd.outcome];
+        return cmd.error ? `${text}: ${cmd.error}` : text;
+    }
+
     return html`
         <div class="sources-section">
             <h3 class="section-title">Sources</h3>
@@ -225,7 +247,7 @@ export function Sources({
                             class="source-btn ${isActive ? 'active' : ''} ${src.IsLocal ? 'local' : ''} ${outcome}"
                             onClick=${() => select(src)}
                             disabled=${sourcesStale}
-                            title=${availabilityMessage || (outcome ? outcomeText[outcome] : src.Source)}
+                            title=${availabilityMessage || (outcome ? commandMessage(command) : src.Source)}
                             aria-describedby=${availabilityId}
                             aria-busy=${outcome === 'pending' || outcome === 'provisional-confirmed' ? 'true' : null}
                         >
@@ -241,7 +263,7 @@ export function Sources({
                 role="status"
                 aria-live="polite"
             >
-                ${availabilityMessage || (command ? outcomeText[command.outcome] : '')}
+                ${availabilityMessage || commandMessage(command)}
             </div>
         </div>
     `;

@@ -370,6 +370,10 @@ func TestSourceSelectionUsesOneWriteAndAbsoluteReadbacks(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			if body.Source == "SPOTIFY" {
+				// 500 is how a failed Client.SelectSource surfaces. It does not
+				// prove the speaker ignored the command, so the readbacks below
+				// must still run.
+				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: false, Error: "source rejected"})
 				return
 			}
@@ -406,6 +410,7 @@ func TestSourceSelectionUsesOneWriteAndAbsoluteReadbacks(t *testing.T) {
 		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`, nil),
 		chromedp.Click(`.source-btn:nth-child(3)`, chromedp.ByQuery),
 		chromedp.Poll(`document.querySelector('.source-btn:nth-child(3)').classList.contains('unverified')`, nil),
+		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection unverified: source rejected'`, nil),
 	); err != nil {
 		t.Fatalf("exercise source commands: %v", err)
 	}
@@ -553,6 +558,55 @@ func TestSourceSelectionReadbacksDoNotWaitForSlowWriteResponse(t *testing.T) {
 	}
 }
 
+// TestSourceSelectionDefinitiveRefusalFailsImmediately: a 4xx is produced
+// before AfterTouch ever calls the speaker, so the command provably never went
+// out. There is nothing for the readbacks to confirm; report it at once, with
+// the server's reason, instead of polling for the full readback window.
+func TestSourceSelectionDefinitiveRefusalFailsImmediately(t *testing.T) {
+	var mu sync.Mutex
+	reads := 0
+	server := newPlayerFixtureServer(t, sourceFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"success":false,"error":"Device not found"}`))
+		})
+		r.Get("/api/control/devices/speaker", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			reads++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"revision":2,"nowPlayingRevision":2,"nowPlaying":{"Source":"STANDBY","SourceAccount":""}}}}`))
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var statusText string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.source-btn').classList.contains('failed')`, nil),
+		chromedp.Text(`.source-command-status`, &statusText, chromedp.ByQuery),
+		// Well past every readback deadline in this fixture (100/250/500ms), so
+		// a zero read count means the failure came from the write itself.
+		chromedp.Sleep(700*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exercise definitively refused source write: %v", err)
+	}
+
+	if !strings.Contains(statusText, "Source selection failed") ||
+		!strings.Contains(statusText, "Device not found") {
+		t.Errorf("status = %q, want the failure and the server's reason", statusText)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads != 0 {
+		t.Errorf("readbacks after a definitive refusal = %d, want 0", reads)
+	}
+}
+
 func TestSourceSelectionLaterFirmwareErrorOverridesProvisionalConfirmation(t *testing.T) {
 	var mu sync.Mutex
 	reads := 0
@@ -586,7 +640,7 @@ func TestSourceSelectionLaterFirmwareErrorOverridesProvisionalConfirmation(t *te
 		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
 		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected, confirming'`, nil),
 		chromedp.Evaluate(`document.querySelector('.source-btn:nth-child(1)').classList.contains('provisional-confirmed')`, &provisional),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection failed'`, nil),
+		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection failed: INVALID_SOURCE'`, nil),
 	); err != nil {
 		t.Fatalf("exercise provisional source rejection: %v", err)
 	}
@@ -658,7 +712,7 @@ func TestSourceSelectionTreatsFirmwareErrorSourceAsFailed(t *testing.T) {
 		chromedp.Navigate(server.URL+"/fixture"),
 		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
 		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection failed'`, nil),
+		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection failed: INVALID_SOURCE'`, nil),
 	); err != nil {
 		t.Fatalf("exercise firmware source rejection: %v", err)
 	}

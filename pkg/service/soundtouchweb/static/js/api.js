@@ -5,16 +5,33 @@ async function req(url, opts = {}) {
     return r.json();
 }
 
+// checkedReq turns a failed request into a thrown Error, tagging whether the
+// failure is DEFINITIVE, meaning proof the command never reached the speaker.
+//
+// Only 4xx qualifies. Every 4xx on the control endpoints is produced before
+// any speaker call (missing/unknown device, unparseable body, empty source,
+// unknown action), so nothing was sent onward. A 5xx is NOT proof of anything:
+// handleSourceControl reports a failed Client.SelectSource through
+// sendControlResponse, which maps any speaker-call error to 500, and a request
+// that timed out after the speaker already switched looks exactly like one it
+// never received. Transport errors are ambiguous for the same reason.
+//
+// Callers that verify by readback must keep verifying unless the failure is
+// definitive.
 async function checkedReq(url, opts = {}) {
     const r = await fetch(url, opts);
+    const definitive = r.status >= 400 && r.status < 500;
     let response;
     try {
         response = await r.json();
     } catch (_) {
-        throw new Error(`Request failed (${r.status})`);
+        throw Object.assign(new Error(`Request failed (${r.status})`), { definitive });
     }
     if (!r.ok || response?.success === false) {
-        throw new Error(response?.error || `Request failed (${r.status})`);
+        throw Object.assign(
+            new Error(response?.error || `Request failed (${r.status})`),
+            { definitive },
+        );
     }
     return response;
 }
