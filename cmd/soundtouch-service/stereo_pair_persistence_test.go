@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/xml"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,9 +17,18 @@ import (
 // TestEmbeddedStereoPairPersistenceTreatsDNSHijackedBoseHostAsLocal).
 func neverDNSHijacked(string) bool { return false }
 
-type rejectingRoundTripper struct{}
+// rejectingRoundTripper errors on every request and counts how many it saw.
+// A preflight failure is now logged and swallowed rather than propagated
+// (see TestEmbeddedStereoPairPersistenceSkipsExternalWritesButAttemptsRead),
+// so tests that need to prove an external dispatch actually happened check
+// calls rather than the returned error.
+type rejectingRoundTripper struct {
+	calls int
+}
 
-func (rejectingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+func (r *rejectingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	r.calls++
+
 	return nil, errors.New("unexpected HTTP persistence request")
 }
 
@@ -50,7 +57,7 @@ func TestEmbeddedStereoPairPersistenceUsesLocalDatastoreAcrossAccounts(t *testin
 		ds,
 		func() []string { return []string{localURL} },
 		neverDNSHijacked,
-		&http.Client{Transport: rejectingRoundTripper{}},
+		&http.Client{Transport: &rejectingRoundTripper{}},
 	)
 
 	err = preflight([]stereopair.GenerationRef{{
@@ -93,7 +100,7 @@ func TestEmbeddedStereoPairCleanupMapsAmbiguousGenerationToConflict(t *testing.T
 		ds,
 		func() []string { return []string{localURL} },
 		neverDNSHijacked,
-		&http.Client{Transport: rejectingRoundTripper{}},
+		&http.Client{Transport: &rejectingRoundTripper{}},
 	)
 	wrongTopology := persistenceTestGroup(groupID)
 	wrongTopology.Roles.Roles[1].DeviceID = "SUBSTITUTE-RIGHT-ID"
@@ -107,64 +114,54 @@ func TestEmbeddedStereoPairCleanupMapsAmbiguousGenerationToConflict(t *testing.T
 	}
 }
 
-func TestEmbeddedStereoPairPersistenceUsesExternalMargeBackend(t *testing.T) {
-	active := true
-	deleteCalls := 0
-	postCalls := 0
-	expected := persistenceTestGroup("7654321")
+// TestEmbeddedStereoPairPersistenceSkipsExternalWritesButAttemptsRead covers
+// an external (non-local) MargeURL: cleanup and rename must never push to a
+// backend we don't own -- the speaker itself self-reports its own group
+// teardown/rename to whatever Marge backend it's configured with, which is
+// the entire reason HandleMargeDeleteGroup/HandleMargeModifyGroup exist
+// (they're only ever called by speakers). Preflight still attempts its
+// read-only dangling-generation check, but a failure there (network error,
+// wrong credentials, real Bose cloud rejecting us, ...) must not block
+// Create, since it's a best-effort check on top of the coordinator's own
+// physical preflight, not the primary guard.
+func TestEmbeddedStereoPairPersistenceSkipsExternalWritesButAttemptsRead(t *testing.T) {
+	getCalls := 0
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/device/LEFT-ID/group"):
-			if !active {
-				_, _ = w.Write([]byte(`<group/>`))
-				return
-			}
-			_, _ = fmt.Fprintf(w, `<group id="%s"><name>%s</name><masterDeviceId>%s</masterDeviceId><roles><groupRole><deviceId>LEFT-ID</deviceId><role>LEFT</role><ipAddress>192.0.2.10</ipAddress></groupRole><groupRole><deviceId>RIGHT-ID</deviceId><role>RIGHT</role><ipAddress>192.0.2.11</ipAddress></groupRole></roles></group>`, expected.ID, expected.Name, expected.MasterDeviceID)
-		case r.Method == http.MethodDelete && strings.HasSuffix(r.URL.Path, "/group/"+expected.ID):
-			deleteCalls++
-			active = false
-			w.WriteHeader(http.StatusOK)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/group/"+expected.ID):
-			postCalls++
-			var update models.Group
-			if err := xml.NewDecoder(r.Body).Decode(&update); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			expected = &update
-			w.WriteHeader(http.StatusOK)
-		default:
-			http.NotFound(w, r)
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/device/LEFT-ID/group") {
+			getCalls++
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+
+			return
 		}
+
+		t.Fatalf("unexpected external %s %s: cleanup/rename must not write to a backend we don't own", r.Method, r.URL.Path)
 	}))
 	defer server.Close()
 
-	cleanup, _, rename := embeddedStereoPairGenerationPersistence(
+	cleanup, preflight, rename := embeddedStereoPairGenerationPersistence(
 		datastore.NewDataStore(t.TempDir()),
 		func() []string { return []string{"http://aftertouch.invalid:18000"} },
 		neverDNSHijacked,
 		server.Client(),
 	)
-	if err := rename(stereopair.GenerationRef{
+
+	ref := stereopair.GenerationRef{
 		DeviceID: "LEFT-ID", AccountID: "ACCOUNT1", MargeURL: server.URL + "/marge",
-		GroupID: expected.ID, ExpectedGroup: persistenceTestGroup(expected.ID),
-	}, "Renamed living room"); err != nil {
-		t.Fatalf("rename: %v", err)
-	}
-	if postCalls != 1 || expected.Name != "Renamed living room" {
-		t.Fatalf("external POST calls = %d, name = %q; want 1, Renamed living room", postCalls, expected.Name)
+		GroupID: "7654321", ExpectedGroup: persistenceTestGroup("7654321"),
 	}
 
-	if err := cleanup(stereopair.GenerationRef{
-		DeviceID: "LEFT-ID", AccountID: "ACCOUNT1", MargeURL: server.URL + "/marge",
-		GroupID: expected.ID, ExpectedGroup: expected,
-	}); err != nil {
-		t.Fatalf("cleanup: %v", err)
+	if err := rename(ref, "Renamed living room"); err != nil {
+		t.Fatalf("rename = %v, want nil (speaker self-reports its own rename)", err)
 	}
-
-	if deleteCalls != 1 || active {
-		t.Fatalf("external DELETE calls = %d, active = %v; want 1, false", deleteCalls, active)
+	if err := cleanup(ref); err != nil {
+		t.Fatalf("cleanup = %v, want nil (speaker self-reports its own teardown)", err)
+	}
+	if err := preflight([]stereopair.GenerationRef{ref}); err != nil {
+		t.Fatalf("preflight = %v, want nil: an unauthenticated external check must not block Create", err)
+	}
+	if getCalls != 1 {
+		t.Fatalf("external GET calls = %d, want exactly 1 (preflight must still attempt the read)", getCalls)
 	}
 }
 
@@ -178,6 +175,7 @@ func TestEmbeddedStereoPairPersistenceReadsOneCurrentURLSnapshot(t *testing.T) {
 
 	currentURL := "http://old.invalid:18000"
 	providerCalls := 0
+	transport := &rejectingRoundTripper{}
 	_, preflight, _ := embeddedStereoPairGenerationPersistence(
 		ds,
 		func() []string {
@@ -185,7 +183,7 @@ func TestEmbeddedStereoPairPersistenceReadsOneCurrentURLSnapshot(t *testing.T) {
 			return []string{currentURL}
 		},
 		neverDNSHijacked,
-		&http.Client{Transport: rejectingRoundTripper{}},
+		&http.Client{Transport: transport},
 	)
 
 	currentURL = "http://new.invalid:18000"
@@ -200,11 +198,18 @@ func TestEmbeddedStereoPairPersistenceReadsOneCurrentURLSnapshot(t *testing.T) {
 		t.Fatalf("URL provider calls = %d, want one coherent snapshot", providerCalls)
 	}
 
+	// The old URL no longer matches localMargeURLs()'s current snapshot, so
+	// this ref is external. Preflight still attempts the read (proven by the
+	// transport call count) but no longer propagates its failure -- an
+	// external check failing must not block Create.
 	err = preflight([]stereopair.GenerationRef{{
 		DeviceID: "LEFT-ID", AccountID: "OLD-ACCOUNT", MargeURL: "http://old.invalid:18000",
 	}})
-	if err == nil || !strings.Contains(err.Error(), "unexpected HTTP persistence request") {
-		t.Fatalf("old URL preflight error = %v, want external HTTP dispatch", err)
+	if err != nil {
+		t.Fatalf("old URL preflight error = %v, want nil (external check failure must not block)", err)
+	}
+	if transport.calls != 1 {
+		t.Fatalf("external HTTP dispatch calls = %d, want exactly 1", transport.calls)
 	}
 }
 
@@ -228,7 +233,7 @@ func TestEmbeddedStereoPairPersistenceTreatsDNSHijackedBoseHostAsLocal(t *testin
 		ds,
 		func() []string { return []string{"https://aftertouch.invalid:18443"} },
 		func(margeURL string) bool { return strings.Contains(margeURL, "streaming.bose.com") },
-		&http.Client{Transport: rejectingRoundTripper{}},
+		&http.Client{Transport: &rejectingRoundTripper{}},
 	)
 
 	err = preflight([]stereopair.GenerationRef{{

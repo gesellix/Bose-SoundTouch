@@ -1598,7 +1598,12 @@ func embeddedStereoPairGenerationPersistence(
 			return err
 		}
 
-		return stereopair.DeleteMargeGroupGeneration(httpClient, ref)
+		// The speaker itself self-reports its own group teardown to
+		// whatever Marge backend it's configured with -- that's the entire
+		// reason HandleMargeDeleteGroup/HandleMargeDeleteAccountGroups
+		// exist, they're only ever called by speakers, never by us.
+		// Nothing for us to push to a backend we don't own.
+		return nil
 	}
 
 	preflight := func(refs []stereopair.GenerationRef) error {
@@ -1621,7 +1626,14 @@ func embeddedStereoPairGenerationPersistence(
 		}
 
 		if len(externalRefs) > 0 {
-			return stereopair.EnsureMargeNoGroupGenerations(httpClient, externalRefs)
+			// Best-effort dangling-generation check against a backend we
+			// don't own (real Bose cloud, another AfterTouch/SoundCork
+			// instance, ...): attempt it, but never let it being
+			// unreachable or unauthenticated block a Create the
+			// coordinator's own physical preflight already verified safe.
+			if err := stereopair.EnsureMargeNoGroupGenerations(httpClient, externalRefs); err != nil {
+				log.Printf("Stereo-pair external generation preflight inconclusive, proceeding: %v", err)
+			}
 		}
 
 		return nil
@@ -1637,7 +1649,9 @@ func embeddedStereoPairGenerationPersistence(
 			return err
 		}
 
-		return stereopair.RenameMargeGroupGeneration(httpClient, ref, name)
+		// See cleanup's comment above: the speaker self-reports its own
+		// rename to whatever Marge backend it's configured with.
+		return nil
 	}
 
 	return cleanup, preflight, rename
