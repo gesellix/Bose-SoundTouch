@@ -799,24 +799,11 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 		anyFetchSucceeded = true
 	}
 
-	// Unlike the other fields, a FAILED /sources read is merged too. The
+	// Unlike the other fields, a FAILED /sources read is recorded too: the
 	// inventory drives which source buttons the player offers, and acting on
-	// an inventory the speaker no longer confirms is worse than offering
-	// nothing: the last known list stays visible, but SourcesStale disables
-	// it until a read succeeds again. Running through CompleteFieldPoll (not
-	// a bare UpdateStatus) is what makes a newer failure fence an older,
-	// still-in-flight success rather than being silently overwritten by it.
-	conn.CompleteFieldPoll(webtypes.FieldSources, sourcesGen, func(s *webtypes.DeviceStatus) {
-		if sourcesErr != nil {
-			s.SourcesStale = true
-
-			return
-		}
-
-		s.Sources = sources
-		s.SourcesStale = false
-		s.LastActivity = time.Now()
-	})
+	// a list the speaker no longer confirms is worse than offering none. See
+	// ApplySourcesRead for why a failure is counted rather than fenced.
+	conn.ApplySourcesRead(sourcesGen, sources, sourcesErr)
 
 	if bassErr == nil {
 		anyFetchSucceeded = true

@@ -42,11 +42,12 @@ func TestUpdateDeviceStatusDoesNotRefreshNowPlayingRevisionOnFailure(t *testing.
 	}
 }
 
-// TestUpdateDeviceStatusMarksSourcesStaleOnFailedRead: unlike every other
-// field, a FAILED /sources read is still merged -- the last known inventory
-// stays visible but is marked unusable, because offering source buttons the
-// speaker no longer confirms is worse than offering none.
-func TestUpdateDeviceStatusMarksSourcesStaleOnFailedRead(t *testing.T) {
+// TestUpdateDeviceStatusMarksSourcesStaleOnRepeatedFailedReads: unlike every
+// other field, a failed /sources read is still recorded. The last known
+// inventory stays visible but goes unusable once reads keep failing, because
+// offering source buttons the speaker no longer confirms is worse than
+// offering none.
+func TestUpdateDeviceStatusMarksSourcesStaleOnRepeatedFailedReads(t *testing.T) {
 	sourcesOK := true
 	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/sources" {
@@ -77,12 +78,20 @@ func TestUpdateDeviceStatusMarksSourcesStaleOnFailedRead(t *testing.T) {
 		t.Fatalf("successful source read was not merged as actionable: %+v", fresh)
 	}
 
+	// One failure is not enough: a single transient hiccup must not disable
+	// the whole source list.
 	sourcesOK = false
+	app.UpdateDeviceStatus("speaker", conn)
+
+	if single := conn.Status(); single.SourcesStale {
+		t.Fatalf("one failed source read marked the inventory stale: %+v", single)
+	}
+
 	app.UpdateDeviceStatus("speaker", conn)
 
 	stale := conn.Status()
 	if !stale.SourcesStale {
-		t.Fatalf("failed source read did not mark the inventory stale: %+v", stale)
+		t.Fatalf("consecutive failed source reads did not mark the inventory stale: %+v", stale)
 	}
 	if stale.Sources != fresh.Sources {
 		t.Fatalf("failed source read discarded the last known inventory: %+v", stale)

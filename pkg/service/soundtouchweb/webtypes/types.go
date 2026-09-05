@@ -79,6 +79,11 @@ type DeviceConnection struct {
 	speakerConnectionConnected bool
 	speakerConnectionObserved  time.Time
 
+	// sourcesFailuresMu guards consecutiveSourcesFailures, the count of
+	// /sources reads that have failed in a row. See ApplySourcesRead.
+	sourcesFailuresMu          sync.Mutex
+	consecutiveSourcesFailures int
+
 	// fieldGenMu guards fieldGen, the per-field generation ordering used by
 	// BeginFieldPoll/CompleteFieldPoll/ApplyFieldEvent. Each StatusField gets
 	// its own (issued, applied) pair so an event or a poll completion for
@@ -157,6 +162,13 @@ const (
 	offlineFailureThreshold = 2
 	offlineGracePeriod      = 60 * time.Second
 )
+
+// staleSourcesFailureThreshold is how many /sources reads must fail in a row
+// before the player stops offering the inventory. One failed read is not
+// evidence the list is wrong, and marking it stale immediately would disable
+// every source button on a single transient hiccup. Mirrors
+// offlineFailureThreshold's reasoning for connectivity.
+const staleSourcesFailureThreshold = 2
 
 // SpeakerConnectionState is the network state reported by the speaker.
 type SpeakerConnectionState struct {
@@ -483,6 +495,45 @@ func recordFieldRevision(status *DeviceStatus, field StatusField, generation uin
 	if field == FieldNowPlaying {
 		status.NowPlayingRevision = generation
 	}
+}
+
+// ApplySourcesRead records the outcome of one /sources read.
+//
+// A successful read is merged under the field's generation ordering, so an
+// older in-flight read cannot overwrite a newer one, and it always clears the
+// stale marker: having just received an inventory from the speaker is the
+// strongest evidence available that the list can be acted on.
+//
+// A failure is deliberately NOT fenced by generation. It carries no inventory
+// to order, and gating it on the generation would let a single failed read
+// discard a concurrent successful one, disabling every source button until the
+// next fully successful poll. Instead failures are counted, and only
+// staleSourcesFailureThreshold of them in a row marks the inventory unusable.
+func (c *DeviceConnection) ApplySourcesRead(generation uint64, sources *models.Sources, err error) bool {
+	c.sourcesFailuresMu.Lock()
+
+	if err == nil {
+		c.consecutiveSourcesFailures = 0
+	} else {
+		c.consecutiveSourcesFailures++
+	}
+
+	stale := c.consecutiveSourcesFailures >= staleSourcesFailureThreshold
+	c.sourcesFailuresMu.Unlock()
+
+	if err != nil {
+		c.UpdateStatus(func(status *DeviceStatus) {
+			status.SourcesStale = stale
+		})
+
+		return false
+	}
+
+	return c.CompleteFieldPoll(FieldSources, generation, func(status *DeviceStatus) {
+		status.Sources = sources
+		status.SourcesStale = stale
+		status.LastActivity = time.Now()
+	})
 }
 
 // UpdateStatus atomically applies mut to a copy of the current status

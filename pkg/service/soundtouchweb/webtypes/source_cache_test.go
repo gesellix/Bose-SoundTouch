@@ -2,108 +2,135 @@ package webtypes
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
-// TestSourcesFailureFencesOlderOverlappingSuccess is the ordering property
-// that makes the stale marker trustworthy: a /sources read that FAILED must
-// not be undone by an older, still-in-flight read that happens to succeed
-// after it. Both go through CompleteFieldPoll(FieldSources, ...), so the
-// failure's newer generation wins.
-func TestSourcesFailureFencesOlderOverlappingSuccess(t *testing.T) {
+// TestSourcesSurviveASingleFailedRead: one failed /sources read is not
+// evidence the inventory is wrong. Marking it stale immediately would disable
+// every source button in the player on a transient hiccup.
+func TestSourcesSurviveASingleFailedRead(t *testing.T) {
 	conn := NewDeviceConnection(nil, nil)
-	retained := &models.Sources{SourceItem: []models.SourceItem{{Source: "PRODUCT"}}}
+	inventory := &models.Sources{SourceItem: []models.SourceItem{{Source: "AUX"}}}
 
-	firstGeneration := conn.BeginFieldPoll(FieldSources)
-	secondGeneration := conn.BeginFieldPoll(FieldSources)
+	conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), inventory, nil)
+	conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), nil, errors.New("temporary read failure"))
 
-	conn.CompleteFieldPoll(FieldSources, secondGeneration, func(status *DeviceStatus) {
-		status.Sources = retained
-		status.SourcesStale = true
-	})
+	status := conn.Status()
+	if status.SourcesStale {
+		t.Fatalf("one failed read marked the inventory stale: %+v", status)
+	}
+	if status.Sources != inventory {
+		t.Fatalf("failed read discarded the inventory: %+v", status)
+	}
+}
 
-	older := &models.Sources{SourceItem: []models.SourceItem{{Source: "AUX"}}}
-	if conn.CompleteFieldPoll(FieldSources, firstGeneration, func(status *DeviceStatus) {
-		status.Sources = older
-		status.SourcesStale = false
-	}) {
-		t.Fatal("older successful source poll was accepted after the newer failure")
+func TestSourcesGoStaleAfterConsecutiveFailedReads(t *testing.T) {
+	conn := NewDeviceConnection(nil, nil)
+	inventory := &models.Sources{SourceItem: []models.SourceItem{{Source: "AUX"}}}
+	conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), inventory, nil)
+
+	for range staleSourcesFailureThreshold {
+		conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), nil, errors.New("read failure"))
 	}
 
 	status := conn.Status()
-	if status.Sources != retained || !status.SourcesStale {
-		t.Fatalf("older success cleared the newer source failure: %+v", status)
+	if !status.SourcesStale {
+		t.Fatalf("inventory not marked stale after %d failed reads: %+v", staleSourcesFailureThreshold, status)
+	}
+	// Kept visible, just not actionable: the player still shows the list.
+	if status.Sources != inventory {
+		t.Fatalf("stale marking discarded the last known inventory: %+v", status)
 	}
 }
 
-// TestSourcesStaleSurvivesAnUnrelatedFieldMerge guards the reason staleness is
-// stored rather than derived per read: an unrelated field's merge copies the
-// status, and must carry the marker along.
-func TestSourcesStaleSurvivesAnUnrelatedFieldMerge(t *testing.T) {
+// TestSourcesSuccessClearsStaleAndResetsTheCount: a success is the strongest
+// evidence available that the list can be acted on again.
+func TestSourcesSuccessClearsStaleAndResetsTheCount(t *testing.T) {
 	conn := NewDeviceConnection(nil, nil)
-	conn.CompleteFieldPoll(FieldSources, conn.BeginFieldPoll(FieldSources), func(status *DeviceStatus) {
-		status.SourcesStale = true
-	})
-
-	conn.CompleteFieldPoll(FieldVolume, conn.BeginFieldPoll(FieldVolume), func(status *DeviceStatus) {
-		status.Volume = &models.Volume{ActualVolume: 35}
-	})
-
+	for range staleSourcesFailureThreshold {
+		conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), nil, errors.New("read failure"))
+	}
 	if !conn.Status().SourcesStale {
-		t.Fatal("an unrelated field merge cleared the source stale marker")
+		t.Fatal("precondition: inventory should be stale")
+	}
+
+	fresh := &models.Sources{SourceItem: []models.SourceItem{{Source: "BLUETOOTH"}}}
+	conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), fresh, nil)
+
+	if status := conn.Status(); status.SourcesStale || status.Sources != fresh {
+		t.Fatalf("successful read did not restore actionability: %+v", status)
+	}
+
+	// The count reset too, so the next single failure must not re-mark stale.
+	conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), nil, errors.New("read failure"))
+
+	if status := conn.Status(); status.SourcesStale {
+		t.Fatalf("failure count was not reset by the successful read: %+v", status)
 	}
 }
 
-// TestSourcesFailureWithoutInventoryIsExplicit covers the first-poll case: the
-// player has no inventory at all AND cannot trust one, and the browser has to
-// see that in the JSON.
-func TestSourcesFailureWithoutInventoryIsExplicit(t *testing.T) {
+// TestSourcesFailureDoesNotDiscardConcurrentSuccess is the finding this
+// design answers: a failed read carries no inventory to order, so it must not
+// consume the field generation and throw away a slower, successful read.
+func TestSourcesFailureDoesNotDiscardConcurrentSuccess(t *testing.T) {
 	conn := NewDeviceConnection(nil, nil)
-	conn.CompleteFieldPoll(FieldSources, conn.BeginFieldPoll(FieldSources), func(status *DeviceStatus) {
-		status.SourcesStale = true
-	})
+
+	slowSuccess := conn.BeginFieldPoll(FieldSources)
+	fastFailure := conn.BeginFieldPoll(FieldSources)
+
+	conn.ApplySourcesRead(fastFailure, nil, errors.New("read failure"))
+
+	inventory := &models.Sources{SourceItem: []models.SourceItem{{Source: "AUX"}}}
+	if !conn.ApplySourcesRead(slowSuccess, inventory, nil) {
+		t.Fatal("successful read was discarded by a concurrent failure")
+	}
+
+	if status := conn.Status(); status.SourcesStale || status.Sources != inventory {
+		t.Fatalf("concurrent failure suppressed a successful read: %+v", status)
+	}
+}
+
+// TestSourcesOlderSuccessCannotOverwriteNewer keeps the ordering that does
+// still matter: two successful reads are ordered by generation.
+func TestSourcesOlderSuccessCannotOverwriteNewer(t *testing.T) {
+	conn := NewDeviceConnection(nil, nil)
+
+	older := conn.BeginFieldPoll(FieldSources)
+	newer := conn.BeginFieldPoll(FieldSources)
+
+	current := &models.Sources{SourceItem: []models.SourceItem{{Source: "BLUETOOTH"}}}
+	conn.ApplySourcesRead(newer, current, nil)
+
+	stale := &models.Sources{SourceItem: []models.SourceItem{{Source: "AUX"}}}
+	if conn.ApplySourcesRead(older, stale, nil) {
+		t.Fatal("older successful read was accepted after a newer one")
+	}
+
+	if status := conn.Status(); status.Sources != current {
+		t.Fatalf("older read overwrote a newer inventory: %+v", status)
+	}
+}
+
+func TestStaleSourcesWithoutInventoryIsExplicitInJSON(t *testing.T) {
+	conn := NewDeviceConnection(nil, nil)
+	for range staleSourcesFailureThreshold {
+		conn.ApplySourcesRead(conn.BeginFieldPoll(FieldSources), nil, errors.New("read failure"))
+	}
 
 	status := conn.Status()
 	if status.Sources != nil || !status.SourcesStale {
-		t.Fatalf("initial source failure was not represented without inventory: %+v", status)
+		t.Fatalf("initial source failures not represented without inventory: %+v", status)
 	}
 
 	encoded, err := json.Marshal(status)
 	if err != nil {
-		t.Fatalf("marshal initial source failure: %v", err)
+		t.Fatalf("marshal stale sources: %v", err)
 	}
 	if got := string(encoded); !strings.Contains(got, `"sourcesStale":true`) {
-		t.Fatalf("initial source failure omitted stale state: %s", got)
-	}
-}
-
-// TestSourcesSuccessClearsStale is the recovery half: once a read succeeds the
-// inventory is actionable again, with no TTL to wait out.
-func TestSourcesSuccessClearsStale(t *testing.T) {
-	conn := NewDeviceConnection(nil, nil)
-	conn.CompleteFieldPoll(FieldSources, conn.BeginFieldPoll(FieldSources), func(status *DeviceStatus) {
-		status.SourcesStale = true
-	})
-
-	fresh := &models.Sources{SourceItem: []models.SourceItem{{Source: "BLUETOOTH"}}}
-	conn.CompleteFieldPoll(FieldSources, conn.BeginFieldPoll(FieldSources), func(status *DeviceStatus) {
-		status.Sources = fresh
-		status.SourcesStale = false
-	})
-
-	status := conn.Status()
-	if status.SourcesStale || status.Sources != fresh {
-		t.Fatalf("successful source readback did not restore actionability: %+v", status)
-	}
-
-	encoded, err := json.Marshal(status)
-	if err != nil {
-		t.Fatalf("marshal refreshed sources: %v", err)
-	}
-	if got := string(encoded); strings.Contains(got, "sourcesStale") {
-		t.Fatalf("cleared stale marker should be omitted from JSON: %s", got)
+		t.Fatalf("stale state missing from JSON: %s", got)
 	}
 }
