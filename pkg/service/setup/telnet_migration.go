@@ -152,11 +152,78 @@ func validateTelnetURL(field, value string) error {
 	return nil
 }
 
+// knownOriginalTelnetURLs lists, per field, the values actually observed on
+// speakers that were never migrated. Firmware variants differ: the stats and
+// BMX registry endpoints have each been seen with two different hosts, so a
+// single canonical set is not enough to recognise an untouched device.
+//
+// Only values actually observed in these four fields belong here. Other Bose
+// hostnames appear elsewhere in this repo (updates.bose.com and bmx.bose.com
+// in the DNS interception and /etc/hosts lists) and in DNS recordings, but
+// those record hosts a speaker RESOLVES at runtime, including ones reached
+// through redirects and unrelated APIs. That is a different thing from the
+// configured value of margeServerUrl and friends.
+//
+// The asymmetry matters: a wrong entry here makes a changed device look
+// original, so the revert quietly disappears for someone who needs it. Being
+// incomplete only offers a revert that turns out to be unnecessary.
+//
+// Compared against the full URL rather than just the host. Any Bose-looking
+// host would also accept a speaker pointed at some other Bose endpoint, which
+// is not the same thing as being unmigrated.
+func knownOriginalTelnetURLs() map[string][]string {
+	return map[string][]string{
+		"margeServerUrl": {"https://streaming.bose.com"},
+		"statsServerUrl": {
+			"https://stats.bose.com",
+			"https://events.api.bosecm.com",
+		},
+		"swUpdateUrl": {"https://worldwide.bose.com/updates/soundtouch"},
+		"bmxRegistryUrl": {
+			"https://content.api.bose.io/bmx/registry/v1/services",
+			"https://bmxservice.bose.com/bmx/registry/v1/services",
+		},
+	}
+}
+
+// normalizeTelnetURLForComparison makes URL equality tolerant of the
+// differences firmware introduces when echoing a value back, without
+// loosening which endpoints count as original.
+func normalizeTelnetURLForComparison(value string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(value)), "/")
+}
+
+// telnetRevertAvailable reports whether the device carries a URL set worth
+// offering to restore.
+//
+// It answers "has this been changed away from a factory configuration", not
+// "does it differ from our canonical set". Those are not the same question:
+// the canonical set is one of several original variants, so comparing against
+// it alone offers a destructive, persisted rewrite on speakers that were never
+// migrated, destroying the record of what their URLs actually were. Telnet
+// migration takes no backup, so that record is not recoverable.
 func telnetRevertAvailable(response string) bool {
 	current := parseGetpdoConfig(response)
+	known := knownOriginalTelnetURLs()
 
 	for _, field := range canonicalBoseTelnetURLs().fields() {
-		if value, ok := current[field.configName]; ok && value != "" && value != field.value {
+		value, ok := current[field.configName]
+		if !ok || value == "" {
+			continue
+		}
+
+		if !matchesKnownOriginalTelnetURL(known[field.configName], value) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func matchesKnownOriginalTelnetURL(originals []string, value string) bool {
+	normalized := normalizeTelnetURLForComparison(value)
+	for _, original := range originals {
+		if normalizeTelnetURLForComparison(original) == normalized {
 			return true
 		}
 	}

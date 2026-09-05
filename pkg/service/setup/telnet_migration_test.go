@@ -437,3 +437,65 @@ func TestMigrateViaTelnet_MissingNewTelnetIsClearError(t *testing.T) {
 		t.Errorf("err = %v, want a configuration error mentioning NewTelnet", err)
 	}
 }
+
+// TestTelnetRevertNotOfferedOnUnmigratedSpeakers: offering the revert here
+// would rewrite a pristine speaker's genuine factory URLs and commit them
+// through envswitch. Telnet migration takes no backup, so the record of what
+// those URLs were is then gone.
+func TestTelnetRevertNotOfferedOnUnmigratedSpeakers(t *testing.T) {
+	getpdo := func(marge, stats, swUpdate, bmx string) string {
+		return "margeServerUrl {\n  text: \"" + marge + "\"\n}\n" +
+			"statsServerUrl {\n  text: \"" + stats + "\"\n}\n" +
+			"swUpdateUrl {\n  text: \"" + swUpdate + "\"\n}\n" +
+			"bmxRegistryUrl {\n  text: \"" + bmx + "\"\n}\n->OK\n"
+	}
+
+	for _, test := range []struct {
+		name     string
+		response string
+		want     bool
+	}{
+		{
+			// Observed on real hardware, and what canonicalBoseTelnetURLs holds.
+			name: "canonical original variant",
+			response: getpdo("https://streaming.bose.com", "https://events.api.bosecm.com",
+				"https://worldwide.bose.com/updates/soundtouch",
+				"https://content.api.bose.io/bmx/registry/v1/services"),
+		},
+		{
+			// The variant pkg/service/testing/fakespeaker models. Comparing
+			// against the canonical set alone offered a revert here.
+			name: "older original variant",
+			response: getpdo("https://streaming.bose.com", "https://stats.bose.com",
+				"https://worldwide.bose.com/updates/soundtouch",
+				"https://bmxservice.bose.com/bmx/registry/v1/services"),
+		},
+		{
+			name: "original with firmware-normalised casing and trailing slash",
+			response: getpdo("https://STREAMING.BOSE.COM/", "https://events.api.bosecm.com",
+				"https://worldwide.bose.com/updates/soundtouch",
+				"https://content.api.bose.io/bmx/registry/v1/services"),
+		},
+		{
+			name: "migrated to AfterTouch",
+			response: getpdo("http://aftertouch.example:8000", "http://aftertouch.example:8000",
+				"http://aftertouch.example:8000/updates/soundtouch",
+				"http://aftertouch.example:8000/bmx/registry/v1/services"),
+			want: true,
+		},
+		{
+			// A single changed field is still a changed device.
+			name: "partially migrated",
+			response: getpdo("http://aftertouch.example:8000", "https://events.api.bosecm.com",
+				"https://worldwide.bose.com/updates/soundtouch",
+				"https://content.api.bose.io/bmx/registry/v1/services"),
+			want: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := telnetRevertAvailable(test.response); got != test.want {
+				t.Errorf("telnetRevertAvailable() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
