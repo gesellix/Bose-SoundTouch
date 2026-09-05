@@ -37,20 +37,6 @@ function acceptsNewerStatus(current, incoming) {
     return incomingRevision !== null && incomingRevision > currentRevision;
 }
 
-// The server derives sourcesStale at read time, so two reads at the same
-// revision can disagree about it. Carry that one derived bit forward without
-// letting an otherwise-stale frame replace the canonical state.
-function mergeDerivedStatus(current, incoming) {
-    const currentRevision = statusRevision(current);
-    const incomingRevision = statusRevision(incoming);
-    if (currentRevision === null || incomingRevision !== currentRevision ||
-        current?.sourcesStale === true || incoming?.sourcesStale !== true) {
-        return current;
-    }
-
-    return { ...current, sourcesStale: true };
-}
-
 export function mergeDevicesSnapshot(previous, snapshot) {
     return Object.fromEntries(Object.entries(snapshot || {}).map(([deviceId, incoming]) => {
         const current = Object.prototype.hasOwnProperty.call(previous, deviceId)
@@ -58,10 +44,10 @@ export function mergeDevicesSnapshot(previous, snapshot) {
         if (!current || acceptsNewerStatus(current.status, incoming?.status)) {
             return [deviceId, incoming];
         }
-        return [deviceId, {
-            ...incoming,
-            status: mergeDerivedStatus(current.status, incoming?.status),
-        }];
+        // Keep the newer status we already hold, but take the rest of the
+        // incoming entry: info/stereoPair travel with the snapshot, not with
+        // the status revision.
+        return [deviceId, { ...incoming, status: current.status }];
     }));
 }
 
@@ -79,13 +65,7 @@ export function mergeStatusUpdate(previous, deviceId, status) {
     // check despite not being a real, known device.
     if (!Object.prototype.hasOwnProperty.call(previous, deviceId) ||
         !acceptsNewerStatus(previous[deviceId]?.status, status)) {
-        const current = previous[deviceId]?.status;
-        const merged = mergeDerivedStatus(current, status);
-        if (merged === current) return previous;
-        return replaceDevice(previous, deviceId, {
-            ...previous[deviceId],
-            status: merged,
-        });
+        return previous;
     }
     return replaceDevice(previous, deviceId, {
         ...previous[deviceId],

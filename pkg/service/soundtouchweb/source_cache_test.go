@@ -2,11 +2,9 @@ package soundtouchweb
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -44,38 +42,57 @@ func TestUpdateDeviceStatusDoesNotRefreshNowPlayingRevisionOnFailure(t *testing.
 	}
 }
 
-// TestUpdateSourcesCacheRetainsFailureAndRefreshesSuccess: a failed refresh
-// keeps the previous inventory and its read time but marks it stale; the next
-// success replaces both and restores actionability.
-func TestUpdateSourcesCacheRetainsFailureAndRefreshesSuccess(t *testing.T) {
-	conn := webtypes.NewDeviceConnection(nil, nil)
-	// Read times must sit inside sourceCacheTTL of now: Status() derives
-	// staleness against the wall clock, so fixed calendar dates would read
-	// back as expired no matter what this test does.
-	firstRead := time.Now()
-	oldSources := &models.Sources{SourceItem: []models.SourceItem{{Source: "AUX"}}}
+// TestUpdateDeviceStatusMarksSourcesStaleOnFailedRead: unlike every other
+// field, a FAILED /sources read is still merged -- the last known inventory
+// stays visible but is marked unusable, because offering source buttons the
+// speaker no longer confirms is worse than offering none.
+func TestUpdateDeviceStatusMarksSourcesStaleOnFailedRead(t *testing.T) {
+	sourcesOK := true
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sources" {
+			if !sourcesOK {
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
 
-	updateSourcesCache(conn, conn.BeginFieldPoll(webtypes.FieldSources), oldSources, nil, firstRead)
+				return
+			}
 
-	if !updateSourcesCache(conn, conn.BeginFieldPoll(webtypes.FieldSources), nil,
-		errors.New("temporary read failure"), firstRead.Add(time.Second)) {
-		t.Fatal("failed source readback was not recorded")
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(`<sources><sourceItem source="AUX" sourceAccount="AUX1" status="READY" isLocal="true">Aux 1</sourceItem></sources>`))
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<volume><targetvolume>35</targetvolume><actualvolume>35</actualvolume><muteenabled>false</muteenabled></volume>`))
+	}))
+	defer speaker.Close()
+
+	app := NewWebApp()
+	conn := webtypes.NewDeviceConnection(client.NewClient(&client.Config{Host: speaker.URL}), nil)
+
+	app.UpdateDeviceStatus("speaker", conn)
+
+	fresh := conn.Status()
+	if fresh.SourcesStale || fresh.Sources == nil || len(fresh.Sources.SourceItem) != 1 {
+		t.Fatalf("successful source read was not merged as actionable: %+v", fresh)
 	}
 
-	status := conn.Status()
-	if status.Sources != oldSources || !status.SourcesReadAt.Equal(firstRead) || !status.SourcesStale {
-		t.Fatalf("failed source readback changed the cache: %+v", status)
+	sourcesOK = false
+	app.UpdateDeviceStatus("speaker", conn)
+
+	stale := conn.Status()
+	if !stale.SourcesStale {
+		t.Fatalf("failed source read did not mark the inventory stale: %+v", stale)
+	}
+	if stale.Sources != fresh.Sources {
+		t.Fatalf("failed source read discarded the last known inventory: %+v", stale)
 	}
 
-	secondRead := time.Now()
-	newSources := &models.Sources{SourceItem: []models.SourceItem{{Source: "PRODUCT"}}}
-	if !updateSourcesCache(conn, conn.BeginFieldPoll(webtypes.FieldSources), newSources, nil, secondRead) {
-		t.Fatal("successful source readback was not reported as an update")
-	}
+	sourcesOK = true
+	app.UpdateDeviceStatus("speaker", conn)
 
-	status = conn.Status()
-	if status.Sources != newSources || !status.SourcesReadAt.Equal(secondRead) || status.SourcesStale {
-		t.Fatalf("successful source readback did not refresh the cache: %+v", status)
+	if recovered := conn.Status(); recovered.SourcesStale {
+		t.Fatalf("successful source read did not clear staleness: %+v", recovered)
 	}
 }
 

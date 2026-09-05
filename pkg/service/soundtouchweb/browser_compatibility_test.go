@@ -232,8 +232,15 @@ window.revisionChecks = {
   equalRejected: equal === snapshot,
   olderRejected: older === equal,
   newerAccepted: newer !== older && newer.speaker.status.revision === 6 && newer.speaker.status.nowPlaying.Track === 'newest',
-  derivedStaleAccepted: stale !== newer && stale.speaker.status.sourcesStale === true &&
-    stale.speaker.status.nowPlaying.Track === 'newest',
+  staleAtEqualRevisionRejected: stale === newer,
+  staleAtNewerRevisionAccepted: (() => {
+    const applied = mergeStatusUpdate(newer, 'speaker', {
+      revision: 7,
+      sourcesStale: true,
+      nowPlaying: { Track: 'newest' },
+    });
+    return applied !== newer && applied.speaker.status.sourcesStale === true;
+  })(),
   staleCannotClearAtEqualRevision: mergeStatusUpdate(stale, 'speaker', {
     revision: 6,
     sourcesStale: false,
@@ -267,7 +274,10 @@ window.revisionChecks = {
 	}
 }
 
-func TestDerivedSourceExpiryDisablesCommandsAtEqualRevision(t *testing.T) {
+// TestSourceExpiryDisablesCommandsOnNewerRevision: a stale marker pushed over
+// the socket must reach the buttons and make them unclickable, without the
+// projection ever showing the source as selected.
+func TestSourceExpiryDisablesCommandsOnNewerRevision(t *testing.T) {
 	const sourceExpiryFixture = `
 import { h, render } from 'preact';
 import { mergeStatusUpdate } from '/app/static/js/app.js';
@@ -293,11 +303,11 @@ function redraw() {
 }
 window.expireSources = () => {
   devices = mergeStatusUpdate(devices, 'speaker', {
-    revision: 5,
+    revision: 6,
     nowPlayingRevision: 5,
     sourcesStale: true,
     sources: { SourceItem: ready },
-    nowPlaying: { Source: 'AUX', SourceAccount: 'AUX1' },
+    nowPlaying: { Source: 'STANDBY', SourceAccount: '' },
   });
   redraw();
 };
@@ -333,7 +343,7 @@ redraw();
 	mu.Lock()
 	defer mu.Unlock()
 	if writes != 0 || trackSource != "STANDBY" {
-		t.Fatalf("derived expiry writes=%d projected source=%q, want 0 and STANDBY", writes, trackSource)
+		t.Fatalf("stale source expiry writes=%d projected source=%q, want 0 and STANDBY", writes, trackSource)
 	}
 }
 

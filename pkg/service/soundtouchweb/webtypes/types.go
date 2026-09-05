@@ -112,7 +112,6 @@ type DeviceStatus struct {
 	Presets                *models.Presets         `json:"presets,omitempty"`
 	Sources                *models.Sources         `json:"sources,omitempty"`
 	SourcesStale           bool                    `json:"sourcesStale,omitempty"`
-	SourcesReadAt          time.Time               `json:"-"`
 	Bass                   *models.Bass            `json:"bass,omitempty"`
 	Group                  *models.Group           `json:"group,omitempty"`
 	Connectivity           Connectivity            `json:"connectivity"`
@@ -151,10 +150,6 @@ const (
 	offlineFailureThreshold = 2
 	offlineGracePeriod      = 60 * time.Second
 )
-
-// sourceCacheTTL bounds how long a successfully-read source inventory stays
-// actionable without a fresh confirmation from the speaker.
-const sourceCacheTTL = 30 * time.Second
 
 // SpeakerConnectionState is the network state reported by the speaker.
 type SpeakerConnectionState struct {
@@ -265,20 +260,7 @@ func (c *DeviceConnection) Info() *models.DeviceInfo {
 // mutated. Use UpdateStatus or SetStatus to apply changes. Never returns
 // nil for connections built via NewDeviceConnection.
 func (c *DeviceConnection) Status() *DeviceStatus {
-	return sourceCacheStatusAt(c.status.Load(), time.Now(), sourceCacheTTL)
-}
-
-func sourceCacheStatusAt(status *DeviceStatus, now time.Time, ttl time.Duration) *DeviceStatus {
-	stale := status.SourcesStale || status.Sources != nil && !status.SourcesReadAt.IsZero() &&
-		!now.Before(status.SourcesReadAt.Add(ttl))
-	if stale == status.SourcesStale {
-		return status
-	}
-
-	next := *status
-	next.SourcesStale = stale
-
-	return &next
+	return c.status.Load()
 }
 
 // Done returns a channel that is closed when the connection is removed
