@@ -18,6 +18,10 @@ import { Announcements } from './components/Announcements.js';
 import { api } from './api.js';
 import { isSoundTouch10StereoPair } from './stereoPresentation.mjs';
 import { removeDeviceAndRefresh } from './deviceRemoval.js';
+// TEMPORARY INSTRUMENTATION -- do not merge. See trace_temp.js.
+import { installTrace } from './trace_temp.js';
+
+installTrace();
 
 const html = htm.bind(h);
 

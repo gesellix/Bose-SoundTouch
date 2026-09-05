@@ -218,9 +218,9 @@ func NewClient(config *Config) *Client {
 
 		return &Client{
 			baseURL: fmt.Sprintf("http://%s:%d", config.Host, port),
-			httpClient: &http.Client{
+			httpClient: installSpeakerTrace(&http.Client{
 				Timeout: config.Timeout,
-			},
+			}),
 			timeout:   config.Timeout,
 			userAgent: config.UserAgent,
 		}
@@ -248,9 +248,9 @@ func NewClient(config *Config) *Client {
 
 	return &Client{
 		baseURL: u.String(),
-		httpClient: &http.Client{
+		httpClient: installSpeakerTrace(&http.Client{
 			Timeout: config.Timeout,
-		},
+		}),
 		timeout:   config.Timeout,
 		userAgent: config.UserAgent,
 	}
