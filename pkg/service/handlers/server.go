@@ -1352,6 +1352,19 @@ func (s *Server) GetSettings() (string, string) {
 	return s.serverURL, s.httpsServerURL
 }
 
+// DNSHijackEnabled reports whether this server's DNS-hijack redirection
+// (SetDNSSettings) is currently active. DNS-level migration never changes a
+// speaker's own reported MargeURL -- only how a Bose cloud hostname resolves
+// on the network -- so callers use this alongside
+// discovery.InterceptedBoseHosts to recognize such a speaker as effectively
+// local despite its MargeURL literally being a Bose hostname.
+func (s *Server) DNSHijackEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.dnsEnabled
+}
+
 // IsSpotifyConfigured returns whether Spotify integration is configured.
 func (s *Server) IsSpotifyConfigured() bool {
 	s.mu.RLock()

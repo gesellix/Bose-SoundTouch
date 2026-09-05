@@ -1515,6 +1515,25 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 			localServerURL, localHTTPSServerURL := server.GetSettings()
 			return []string{localServerURL, localHTTPSServerURL}
 		},
+		func(margeURL string) bool {
+			if !server.DNSHijackEnabled() {
+				return false
+			}
+
+			parsed, err := url.Parse(strings.TrimSpace(margeURL))
+			if err != nil || parsed.Hostname() == "" {
+				return false
+			}
+
+			host := parsed.Hostname()
+			for _, hijacked := range discovery.InterceptedBoseHosts {
+				if strings.Contains(host, hijacked) {
+					return true
+				}
+			}
+
+			return false
+		},
 		&http.Client{Timeout: stereopair.RequestTimeout},
 	)
 	webApp.SetStereoPairGenerationPersistence(cleanup, preflight, rename)
@@ -1549,6 +1568,7 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 func embeddedStereoPairGenerationPersistence(
 	ds *datastore.DataStore,
 	localMargeURLs func() []string,
+	dnsHijackedMargeHost func(margeURL string) bool,
 	httpClient *http.Client,
 ) (stereopair.GenerationCleanup, stereopair.GenerationPreflight, stereopair.GenerationRename) {
 	isLocal := func(margeURL string, localURLs []string) bool {
@@ -1558,7 +1578,14 @@ func embeddedStereoPairGenerationPersistence(
 			}
 		}
 
-		return false
+		// DNS-level migration never changes a speaker's own reported
+		// MargeURL -- only how that Bose hostname resolves on the network --
+		// so a speaker reporting e.g. https://streaming.bose.com can still be
+		// pointed at this very service. Treating it as "external" instead
+		// sends the generation-conflict check out over the real internet,
+		// where Bose's still-live Apigee gateway rejects it (HTTP 401),
+		// hard-blocking Create for a normal DNS-migrated setup.
+		return dnsHijackedMargeHost(margeURL)
 	}
 
 	cleanup := func(ref stereopair.GenerationRef) error {

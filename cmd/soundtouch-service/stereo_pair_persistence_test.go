@@ -14,6 +14,11 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/stereopair"
 )
 
+// neverDNSHijacked is the default DNS-hijack predicate for tests that don't
+// exercise the DNS-migrated-speaker path (see
+// TestEmbeddedStereoPairPersistenceTreatsDNSHijackedBoseHostAsLocal).
+func neverDNSHijacked(string) bool { return false }
+
 type rejectingRoundTripper struct{}
 
 func (rejectingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
@@ -44,6 +49,7 @@ func TestEmbeddedStereoPairPersistenceUsesLocalDatastoreAcrossAccounts(t *testin
 	cleanup, preflight, rename := embeddedStereoPairGenerationPersistence(
 		ds,
 		func() []string { return []string{localURL} },
+		neverDNSHijacked,
 		&http.Client{Transport: rejectingRoundTripper{}},
 	)
 
@@ -86,6 +92,7 @@ func TestEmbeddedStereoPairCleanupMapsAmbiguousGenerationToConflict(t *testing.T
 	cleanup, _, _ := embeddedStereoPairGenerationPersistence(
 		ds,
 		func() []string { return []string{localURL} },
+		neverDNSHijacked,
 		&http.Client{Transport: rejectingRoundTripper{}},
 	)
 	wrongTopology := persistenceTestGroup(groupID)
@@ -136,6 +143,7 @@ func TestEmbeddedStereoPairPersistenceUsesExternalMargeBackend(t *testing.T) {
 	cleanup, _, rename := embeddedStereoPairGenerationPersistence(
 		datastore.NewDataStore(t.TempDir()),
 		func() []string { return []string{"http://aftertouch.invalid:18000"} },
+		neverDNSHijacked,
 		server.Client(),
 	)
 	if err := rename(stereopair.GenerationRef{
@@ -176,6 +184,7 @@ func TestEmbeddedStereoPairPersistenceReadsOneCurrentURLSnapshot(t *testing.T) {
 			providerCalls++
 			return []string{currentURL}
 		},
+		neverDNSHijacked,
 		&http.Client{Transport: rejectingRoundTripper{}},
 	)
 
@@ -196,5 +205,36 @@ func TestEmbeddedStereoPairPersistenceReadsOneCurrentURLSnapshot(t *testing.T) {
 	}})
 	if err == nil || !strings.Contains(err.Error(), "unexpected HTTP persistence request") {
 		t.Fatalf("old URL preflight error = %v, want external HTTP dispatch", err)
+	}
+}
+
+// TestEmbeddedStereoPairPersistenceTreatsDNSHijackedBoseHostAsLocal covers a
+// speaker migrated at the DNS level: its own reported MargeURL is still the
+// literal Bose cloud hostname (DNS migration never changes it), but this
+// service's DNS hijack redirects that hostname to itself on the network.
+// Routing it through the external HTTP path instead would reach the real,
+// still-live Bose cloud and 401 there, hard-blocking Create for a normal
+// DNS-migrated setup. Uses rejectingRoundTripper to prove no HTTP call is
+// attempted at all.
+func TestEmbeddedStereoPairPersistenceTreatsDNSHijackedBoseHostAsLocal(t *testing.T) {
+	ds := datastore.NewDataStore(t.TempDir())
+	group := persistenceTestGroup("")
+	groupID, err := ds.AddGroup("OLD-ACCOUNT", group)
+	if err != nil {
+		t.Fatalf("AddGroup: %v", err)
+	}
+
+	_, preflight, _ := embeddedStereoPairGenerationPersistence(
+		ds,
+		func() []string { return []string{"https://aftertouch.invalid:18443"} },
+		func(margeURL string) bool { return strings.Contains(margeURL, "streaming.bose.com") },
+		&http.Client{Transport: rejectingRoundTripper{}},
+	)
+
+	err = preflight([]stereopair.GenerationRef{{
+		DeviceID: "LEFT-ID", AccountID: "NEW-ACCOUNT", MargeURL: "https://streaming.bose.com",
+	}})
+	if err == nil || !strings.Contains(err.Error(), groupID) {
+		t.Fatalf("preflight error = %v, want local generation %s found via datastore, not an external HTTP call", err, groupID)
 	}
 }
