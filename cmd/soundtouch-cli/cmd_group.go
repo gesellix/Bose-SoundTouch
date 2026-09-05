@@ -182,19 +182,49 @@ func newGroupCoordinator(config *ClientConfig) *stereopair.Coordinator {
 	}
 
 	cleanupClient := &http.Client{Timeout: lifecycleConfig.Timeout}
+	cleanup, preflight, rename := cliStereoPairGenerationPersistence(cleanupClient)
 
 	return stereopair.NewWithGenerationLifecyclePersistence(
 		groupClientFactory(&lifecycleConfig),
-		func(ref stereopair.GenerationRef) error {
-			return stereopair.DeleteMargeGroupGeneration(cleanupClient, ref)
-		},
-		func(refs []stereopair.GenerationRef) error {
-			return stereopair.EnsureMargeNoGroupGenerations(cleanupClient, refs)
-		},
-		func(ref stereopair.GenerationRef, name string) error {
-			return stereopair.RenameMargeGroupGeneration(cleanupClient, ref, name)
-		},
+		cleanup, preflight, rename,
 	)
+}
+
+// cliStereoPairGenerationPersistence wires generation-lifecycle hooks for
+// the CLI: cleanup and rename are no-ops, and preflight's read-only
+// dangling-generation check is advisory (mirrors -service's and -player's
+// own equivalents).
+//
+// A speaker self-reports its own group create/rename/teardown to whatever
+// Marge backend it's configured with -- that's the entire reason
+// HandleMargeAddGroup/HandleMargeModifyGroup/HandleMargeDeleteGroup exist,
+// they're only ever called by speakers, never by us. Proactively pushing the
+// same update ourselves would duplicate that against a backend we generally
+// can't authenticate to anyway (real Bose cloud, another AfterTouch/SoundCork
+// instance, ...). The one part with a distinct purpose -- checking for a
+// dangling stale generation before a new Create -- is still attempted, but
+// its failure must not block Create: it's a best-effort safety net on top of
+// the coordinator's own physical preflight, not the primary guard.
+func cliStereoPairGenerationPersistence(
+	cleanupClient *http.Client,
+) (stereopair.GenerationCleanup, stereopair.GenerationPreflight, stereopair.GenerationRename) {
+	cleanup := func(stereopair.GenerationRef) error {
+		return nil
+	}
+
+	preflight := func(refs []stereopair.GenerationRef) error {
+		if err := stereopair.EnsureMargeNoGroupGenerations(cleanupClient, refs); err != nil {
+			PrintWarning(fmt.Sprintf("stereo-pair external generation preflight inconclusive, proceeding: %v", err))
+		}
+
+		return nil
+	}
+
+	rename := func(stereopair.GenerationRef, string) error {
+		return nil
+	}
+
+	return cleanup, preflight, rename
 }
 
 // groupClientFactory addresses every member directly while retaining the
