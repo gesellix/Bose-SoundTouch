@@ -43,10 +43,18 @@ const SOURCE_READBACK_DELAYS_MS = [2000, 5000, 10000];
 // which is what HandlePlayURL emits content for, is predictable instead of
 // guessing. RADIO_BROWSER and TUNEIN have no such problem: nothing writes
 // one-shot audio to them, and their Recents hold real stations.
+//
+// STORED_MUSIC does not resume either, for a different reason: it is not one
+// source but one entry per media server (its sourceAccount is a server UDN),
+// and selecting it identifies no track or container to play. Browsing is the
+// only meaningful action, so a click opens the Library. The clicked server is
+// not carried over -- the Library lists the servers itself, the same way the
+// other browser pages let you pick a device.
 const PROVIDER_SOURCES = {
     RADIO_BROWSER: { page: 'radiobrowser', resume: true },
     TUNEIN: { page: 'tunein', resume: true },
     LOCAL_INTERNET_RADIO: { page: 'playurl', resume: false },
+    STORED_MUSIC: { page: 'library', resume: false },
 };
 
 function isErrorSource(source) {

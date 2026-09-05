@@ -68,6 +68,7 @@ render(h(Sources, {
     sources: { SourceItem: [
       { Source: 'RADIO_BROWSER', SourceAccount: '', DisplayName: 'RadioBrowser', Status: 'READY' },
       { Source: 'LOCAL_INTERNET_RADIO', SourceAccount: '', DisplayName: 'Local Radio', Status: 'READY' },
+      { Source: 'STORED_MUSIC', SourceAccount: 'fa095ecc-e13e-40e7-8e6c-e0286d5bc000/0', DisplayName: 'fritz', Status: 'READY' },
     ] },
     nowPlaying: { Source: 'SPOTIFY', SourceAccount: 'someone' },
   },
@@ -824,6 +825,57 @@ func TestLocalInternetRadioNeverResumes(t *testing.T) {
 	// delay opening the page.
 	if recentsFetches != 0 {
 		t.Errorf("fetched recents %d times, want 0", recentsFetches)
+	}
+}
+
+// TestStoredMusicOpensTheLibrary: a STORED_MUSIC entry names a media server,
+// not something to play, so selecting it identifies no track or container.
+// Browsing is the only meaningful action.
+func TestStoredMusicOpensTheLibrary(t *testing.T) {
+	var mu sync.Mutex
+	writes := 0
+	server := newPlayerFixtureServer(t, providerFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"Items":[
+				{"ID":1,"ContentItem":{"Source":"STORED_MUSIC","Type":"dir",
+					"SourceAccount":"fa095ecc-e13e-40e7-8e6c-e0286d5bc000/0",
+					"Location":"/music/album/1","ItemName":"Some Album","IsPresetable":true}}
+			]}}`))
+		})
+		r.Post("/api/control/devices/speaker/play", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+		r.Post("/api/control/devices/speaker/action/source", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			writes++
+			mu.Unlock()
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var navigated []string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
+		chromedp.Click(`.source-btn:nth-child(3)`, chromedp.ByQuery),
+		chromedp.Poll(`window.navigated.length === 1`, nil),
+		chromedp.Evaluate(`window.navigated`, &navigated),
+	); err != nil {
+		t.Fatalf("exercise STORED_MUSIC source: %v", err)
+	}
+
+	if len(navigated) != 1 || navigated[0] != "library" {
+		t.Errorf("navigated = %v, want [library]", navigated)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	// Even with a resumable album in Recents, this source only ever browses.
+	if writes != 0 {
+		t.Errorf("issued %d writes, want 0", writes)
 	}
 }
 
