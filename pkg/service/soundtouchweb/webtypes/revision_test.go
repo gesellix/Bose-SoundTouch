@@ -72,6 +72,29 @@ func TestUnrelatedProjectionDoesNotAdvanceNowPlayingRevision(t *testing.T) {
 	}
 }
 
+func TestNowPlayingRevisionAdvancesForPollAndEvent(t *testing.T) {
+	conn := NewDeviceConnection(nil, nil)
+	baseline := conn.Status().NowPlayingRevision
+
+	generation := conn.BeginFieldPoll(FieldNowPlaying)
+	conn.CompleteFieldPoll(FieldNowPlaying, generation, func(status *DeviceStatus) {
+		status.NowPlaying = &models.NowPlaying{Source: "AUX"}
+	})
+
+	polled := conn.Status().NowPlayingRevision
+	if polled <= baseline {
+		t.Fatalf("now-playing revision after poll = %d, want newer than %d", polled, baseline)
+	}
+
+	conn.ApplyFieldEvent(FieldNowPlaying, func(status *DeviceStatus) {
+		status.NowPlaying = &models.NowPlaying{Source: "SPOTIFY"}
+	})
+
+	if got := conn.Status().NowPlayingRevision; got <= polled {
+		t.Fatalf("now-playing revision after event = %d, want newer than %d", got, polled)
+	}
+}
+
 func TestDeviceStatusRevisionIsMonotonicWithConcurrentProjections(t *testing.T) {
 	conn := NewDeviceConnection(nil, nil)
 	const projections = 64
