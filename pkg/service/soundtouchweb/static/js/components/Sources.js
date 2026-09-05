@@ -95,12 +95,15 @@ export function Sources({
     }, [command, currentSource, currentAccount, nowPlayingRevision]);
 
     const ready = items.filter(s => s.Status === 'READY');
+    // Nothing to show and nothing to say: a device that has not been polled
+    // yet has no inventory to call out of date. Only render once there is
+    // either a list to offer or a list we are refusing to act on.
+    if (ready.length === 0 && !sourcesStale) return null;
+
     const availabilityMessage = sourcesStale
         ? 'Source list out of date'
-        : (ready.length === 0 ? 'Source list unavailable' : '');
-    const availabilityId = sourcesStale
-        ? 'source-stale-status'
-        : (ready.length === 0 ? 'source-inventory-status' : null);
+        : '';
+    const availabilityId = sourcesStale ? 'source-stale-status' : null;
 
     async function select(src) {
         clearReadbacks();

@@ -965,16 +965,20 @@ func TestStaleSourcesRemainVisibleButCannotBeSelected(t *testing.T) {
 		t.Errorf("fresh sources: enabled=%d want=%d staleIndicatorMissing=%v", enabledCount, sourceCount, staleIndicatorMissing)
 	}
 
-	var noInventoryText, noInventoryRole string
+	var emptyInventoryHidden, staleEmptyAnnounced bool
 	if err := chromedp.Run(ctx,
 		chromedp.Evaluate(`window.renderStatus('STANDBY', '', false, 'speaker', null, [])`, nil),
-		chromedp.WaitVisible(`#source-inventory-status`, chromedp.ByQuery),
-		chromedp.Text(`#source-inventory-status`, &noInventoryText, chromedp.ByQuery),
-		chromedp.AttributeValue(`#source-inventory-status`, "role", &noInventoryRole, nil, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.sources-section') === null`, nil),
+		chromedp.Evaluate(`document.querySelector('.sources-section') === null`, &emptyInventoryHidden),
+		// A stale empty inventory still has something to say: we know the list
+		// is untrustworthy, as opposed to simply not having read one yet.
+		chromedp.Evaluate(`window.renderStatus('STANDBY', '', true, 'speaker', null, [])`, nil),
+		chromedp.WaitVisible(`#source-stale-status`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('#source-stale-status').textContent.trim() === 'Source list out of date'`, &staleEmptyAnnounced),
 	); err != nil {
 		t.Fatalf("render missing source inventory: %v", err)
 	}
-	if noInventoryText != "Source list unavailable" || noInventoryRole != "status" {
-		t.Errorf("missing source inventory: text=%q role=%q", noInventoryText, noInventoryRole)
+	if !emptyInventoryHidden || !staleEmptyAnnounced {
+		t.Errorf("empty inventory: hidden=%v staleAnnounced=%v", emptyInventoryHidden, staleEmptyAnnounced)
 	}
 }
