@@ -682,6 +682,8 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
     gap: .5rem;
     padding: .45rem 1.7rem .45rem .45rem; /* right gutter: slot number + star */
     border: 1px solid var(--border);
+    /* The source colour lives here, clear of the artwork. */
+    border-bottom: 3px solid var(--slot-color, var(--border));
     border-radius: var(--radius);
     background: var(--surface);
     cursor: pointer;
@@ -691,7 +693,12 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
 }
 .preset-slot:hover:not(:disabled) { background: var(--bg); box-shadow: var(--shadow); }
 .preset-slot:disabled { opacity: .4; cursor: default; }
-.preset-slot.active { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+.preset-slot.active {
+    border-color: var(--accent);
+    border-bottom-color: var(--slot-color, var(--accent));
+    background: var(--accent);
+    color: var(--accent-fg);
+}
 .preset-slot.active .preset-name,
 .preset-slot.active .preset-source-label,
 .preset-slot.active .preset-num { color: var(--accent-fg); }
@@ -705,19 +712,25 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
 /* Artwork box, or a placeholder holding the source icon.
    The background stays the page ground in both themes, which is the inverse of
    whatever --content-icon-filter paints the icon, so the icon keeps full
-   contrast. The source colour rides on the border instead: tinting the fill
-   put a mid-tone behind a mid-tone icon and both disappeared. */
+   contrast. Tinting the fill was worse still: a mid-tone behind a mid-tone
+   icon and both disappeared.
+
+   Nothing coloured touches this box: the source colour is a bottom border on
+   the tile instead (see .preset-slot), because ringing the thumb framed real
+   album art in Spotify green or TuneIn blue and fought with the artwork. */
 .preset-thumb {
     position: relative;
     flex: 0 0 40px;
     width: 40px; height: 40px;
-    border: 1px solid var(--slot-color, var(--border));
+    border: 1px solid var(--border);
     border-radius: 4px;
     background: var(--bg);
     overflow: hidden;
     display: flex; align-items: center; justify-content: center;
 }
-.preset-slot.savable .preset-thumb { border-style: dashed; border-color: var(--fav); }
+/* An empty slot has no source to colour, so the whole box carries the
+   save invitation instead. */
+.preset-slot.savable .preset-thumb { border: 1px dashed var(--fav); }
 .preset-thumb-glyph { font-size: 1.05rem; line-height: 1; color: var(--fav); opacity: .85; }
 .preset-art { position: relative; width: 100%; height: 100%; object-fit: cover; }
 .preset-source-icon {
