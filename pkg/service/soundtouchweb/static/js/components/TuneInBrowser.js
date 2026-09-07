@@ -96,7 +96,14 @@ export function TuneInBrowser({ devices }) {
     }
 
     async function playOn(deviceId) {
-        await api.tuneInPlay(deviceId, { location: pendingPlay.location, type: pendingPlay.type, name: pendingPlay.name });
+        await api.tuneInPlay(deviceId, {
+            location: pendingPlay.location,
+            type: pendingPlay.type,
+            name: pendingPlay.name,
+            // The speaker keeps this on the ContentItem, so presets and
+            // recents saved from here show the station logo.
+            containerArt: pendingPlay.image,
+        });
         setPendingPlay(null);
     }
 

@@ -142,7 +142,6 @@ func ResolveContentItem(item PlayItem) *models.ContentItem {
 		ci.IsPresetable = true
 		ci.ItemName = item.Name
 		ci.Location = item.Location
-		ci.ContainerArt = item.ContainerArt
 	case ProviderRadioBrowser:
 		// Native RADIO_BROWSER source: the speaker prepends the BMX-registry
 		// base URL (https://all.api.radio-browser.info/soundtouch) to the
@@ -168,6 +167,11 @@ func ResolveContentItem(item PlayItem) *models.ContentItem {
 		ci.ItemName = item.Name
 		ci.Location = item.Location
 	}
+
+	// The speaker stores the artwork it is handed at select time, and presets,
+	// recents and now-playing all read it back from there. Every provider needs
+	// it, so it is set here rather than per branch.
+	ci.ContainerArt = item.ContainerArt
 
 	// Apply the SourceAccount placeholder guard: if SourceAccount is non-empty
 	// and is not just the source name echoed back by the speaker, pass it through.

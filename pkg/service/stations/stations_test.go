@@ -225,3 +225,22 @@ func TestNavigateTuneIn_ProfilesPathDispatch(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveContentItem_RadioBrowser_ContainerArt guards the counterpart to
+// TestResolveContentItem_TuneIn_ContainerArt: the artwork used to be copied
+// only in the TuneIn branch, so RadioBrowser stations reached the speaker with
+// no art and their presets and recents showed a placeholder.
+func TestResolveContentItem_RadioBrowser_ContainerArt(t *testing.T) {
+	item := PlayItem{
+		Provider:     ProviderRadioBrowser,
+		Location:     "/stations/byuuid/abc-123",
+		Name:         "Radio Paradise",
+		ContainerArt: "http://example.com/art.png",
+	}
+
+	ci := ResolveContentItem(item)
+
+	if ci.ContainerArt != "http://example.com/art.png" {
+		t.Errorf("expected ContainerArt set, got %q", ci.ContainerArt)
+	}
+}
