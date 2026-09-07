@@ -1319,3 +1319,76 @@ func TestHandleGetZoneCandidates_UnknownDeviceNotFound(t *testing.T) {
 		t.Fatalf("expected 404 for an unknown device, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// TestPlayHandlers_ForwardStationArt covers the gap behind the empty preset
+// and recents thumbnails: the speaker stores whatever ContainerArt it is given
+// at /select time, and presets, recents and now-playing all read the artwork
+// back from there. Two of the three station play paths used to drop it.
+// RadioBrowser never accepted the field, and the custom-URL path embedded the
+// image in the Orion location but left it off the ContentItem, so a station
+// saved as a preset came back with <containerArt></containerArt>.
+func TestPlayHandlers_ForwardStationArt(t *testing.T) {
+	const art = "http://example.com/station-logo.png"
+
+	cases := []struct {
+		name    string
+		handler func(*WebApp) http.HandlerFunc
+		body    string
+	}{
+		{
+			name:    "tunein",
+			handler: func(app *WebApp) http.HandlerFunc { return app.HandlePlayTuneIn },
+			body:    `{"location":"/v1/playback/station/s1","type":"stationurl","name":"Example","containerArt":"` + art + `"}`,
+		},
+		{
+			name:    "radiobrowser",
+			handler: func(app *WebApp) http.HandlerFunc { return app.HandlePlayRadioBrowser },
+			body:    `{"location":"/stations/byuuid/abc","name":"Example","containerArt":"` + art + `"}`,
+		},
+		{
+			// The custom-URL path names the field imageUrl, since it also goes
+			// into the Orion location blob the speaker fetches.
+			name:    "url",
+			handler: func(app *WebApp) http.HandlerFunc { return app.HandlePlayURL },
+			body:    `{"url":"http://example.com/stream.mp3","name":"Example","imageUrl":"` + art + `","serviceUrl":"http://aftertouch.example"}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var capturedBody string
+
+			speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/select" {
+					b, _ := io.ReadAll(r.Body)
+					capturedBody = string(b)
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer speaker.Close()
+
+			app := NewWebApp()
+			conn := webtypes.NewDeviceConnection(
+				client.NewClient(&client.Config{Host: speaker.URL}),
+				&models.DeviceInfo{Name: "Test Speaker"},
+			)
+			conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, LastActivity: time.Now()})
+			app.AddDevice("art-device", conn)
+
+			req := httptest.NewRequest(http.MethodPost, "/play", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = withChiParams(req, map[string]string{"id": "art-device"})
+			w := httptest.NewRecorder()
+
+			tc.handler(app)(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			if want := "<containerArt>" + art + "</containerArt>"; !strings.Contains(capturedBody, want) {
+				t.Errorf("XML should contain %q, got: %s", want, capturedBody)
+			}
+		})
+	}
+}

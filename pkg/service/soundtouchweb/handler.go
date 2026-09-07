@@ -1652,6 +1652,7 @@ func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
 		Type:         "stationurl",
 		Location:     location,
 		ItemName:     req.Name,
+		ContainerArt: req.ImageURL,
 		IsPresetable: true,
 	}
 
@@ -1737,6 +1738,10 @@ func (app *WebApp) HandlePlayRadioBrowser(w http.ResponseWriter, r *http.Request
 	var req struct {
 		Location string `json:"location"`
 		Name     string `json:"name"`
+		// The speaker stores whatever art it is given at select time, and
+		// presets/recents read it back from there. Dropping it here is why
+		// saved radio stations used to show a placeholder.
+		ContainerArt string `json:"containerArt"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1750,9 +1755,10 @@ func (app *WebApp) HandlePlayRadioBrowser(w http.ResponseWriter, r *http.Request
 	}
 
 	ci := stations.ResolveContentItem(stations.PlayItem{
-		Provider: stations.ProviderRadioBrowser,
-		Location: req.Location,
-		Name:     req.Name,
+		Provider:     stations.ProviderRadioBrowser,
+		Location:     req.Location,
+		Name:         req.Name,
+		ContainerArt: req.ContainerArt,
 	})
 
 	logPlaybackRequest("radiobrowser", deviceID, ci.Source, ci.SourceAccount, ci.Location, ci.ItemName)
