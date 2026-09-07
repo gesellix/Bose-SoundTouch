@@ -226,13 +226,33 @@ In the AfterTouch UI:
 4. Click the **QuickFix** button (labelled "Fix", "Pair account", or
    "Apply QuickFix" depending on the version) and confirm.
 
-Or via the CLI (same underlying pairing call, `--mode=bare` matches what
-the QuickFix does — see Step 9 to grab `soundtouch-cli` first):
+Or via the CLI, which pairs by a **different** mechanism and is worth
+trying when the QuickFix does not stick (see Step 9 to grab
+`soundtouch-cli` first, or run it from any other machine on your LAN with
+`--host <speaker-ip>`):
 
 ```bash
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 setup pair \
   --mode=bare --account=1111111 --service-url http://localhost:8000
 ```
+
+The two are not equivalent, so if one leaves the speaker unpaired the other
+is still worth a try:
+
+- The **Health QuickFix** posts to the speaker's `/setMargeAccount` HTTP
+  endpoint, falling back to the telnet `envswitch accountid set` command.
+- **`--mode=bare`** opens the speaker's own setup WebSocket on port 8080 and
+  pairs through that session. This is the path that has been observed to
+  move a speaker out of `source="SETUP"`, though it is still marked
+  experimental.
+- **`--mode=full`** runs the complete `SETUP_ENTER` / `SETUP_LEAVE` bracket
+  and is the next thing to try if `--mode=bare` does not help.
+
+Note that `--service-url` is not dialled by the CLI itself. It is handed to
+the speaker over the pairing session and stored as the speaker's own server
+URL, which it evaluates later. On an on-device install that value stays
+`http://localhost:8000` even when you run the command from a different
+machine, because it is the speaker that has to resolve it.
 
 Then reboot again to let the pairing take effect:
 
@@ -258,7 +278,10 @@ wget -qO- http://localhost:8090/sources
 ```
 
 If `margeAccountUUID` is still empty, re-run the Health QuickFix (Step 7)
-and reboot again.
+and reboot again. If it stays empty after a second attempt, or if the
+speaker reports `source="SETUP"` and refuses to play presets, try the
+`soundtouch-cli setup pair` route from Step 7 instead: it pairs over a
+different channel, so it can succeed where the QuickFix does not.
 
 ---
 
@@ -376,7 +399,7 @@ should start playing the corresponding stream.
 |------------------------------------------------------|-----------------------------------------------------|
 | SSH "no matching host key type"                      | Add `-oHostKeyAlgorithms=+ssh-rsa`                  |
 | Port 8000 not reachable from LAN                     | Use the SSH tunnel (Step 5)                         |
-| `margeAccountUUID` still empty after reboot          | Re-run Health QuickFix, reboot again                |
+| `margeAccountUUID` still empty after reboot          | Re-run Health QuickFix, reboot again; if it still won't stick, try `setup pair --mode=bare` (Step 7), which pairs over a different channel |
 | Radio source error 1005                              | `margeAccountUUID` is empty — complete Step 7 first |
 | `http://localhost:8000` not responding after install | `logread \| grep aftertouch \| tail -20`            |
 | No space left on device during install               | Run the cleanup in Step 2; check `df -h /mnt/nv`    |
