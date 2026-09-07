@@ -188,7 +188,7 @@ func main() {
 			r := chi.NewRouter()
 			webApp.Mount(r, discoveryService)
 
-			log.Printf("AfterTouch Web UI starting on http://%s", sanitizeLog(addr))
+			log.Printf("AfterTouch Web UI starting on %s", sanitizeLog(browsableURL(addr)))
 
 			return http.ListenAndServe(addr, r)
 		},
@@ -215,6 +215,27 @@ func defaultDiscoveryInterface(rawInterface, rawBind, resolvedBind string) strin
 	}
 
 	return ""
+}
+
+// browsableURL turns a listen address into a URL that can actually be opened.
+// A wildcard listen address is written ":8080" or "0.0.0.0:8080", which is what
+// net.Listen wants but is useless as a link, so its host becomes "localhost".
+// An IPv6 literal comes back bracketed, courtesy of net.JoinHostPort.
+func browsableURL(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// Not host:port after all; hand it back rather than mangle it.
+		return "http://" + addr
+	}
+
+	// SplitHostPort has already stripped any brackets, and JoinHostPort puts
+	// them back for an IPv6 literal, so neither needs handling here.
+	switch host {
+	case "", "0.0.0.0", "::":
+		host = "localhost"
+	}
+
+	return "http://" + net.JoinHostPort(host, port)
 }
 
 // resolveBindAddr returns the address to bind the HTTP listener to.
