@@ -2,15 +2,9 @@ import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
+import { SourceIcon } from '../sourceIcons.js';
 
 const html = htm.bind(h);
-
-const SOURCE_ICONS = {
-    TUNEIN: '📻', SPOTIFY: '🎵', AMAZON: '🛒', PANDORA: '🎶',
-    BLUETOOTH: '📶', AUX: '🔌', OPTICAL: '💡', HDMI: '📺',
-    IHEARTRADIO: '❤️', DEEZER: '🎼', LOCAL_INTERNET_RADIO: '📡',
-    AIRPLAY: '📡', PRODUCT: '🔊',
-};
 
 const SOURCE_READBACK_DELAYS_MS = [2000, 5000, 10000];
 
@@ -410,13 +404,14 @@ export function Sources({
                         <button
                             key=${src.Source + account}
                             class="source-btn ${isActive ? 'active' : ''} ${src.IsLocal ? 'local' : ''} ${outcome}"
+                            data-source=${src.Source}
                             onClick=${() => select(src)}
                             disabled=${sourcesStale}
                             title=${availabilityMessage || (outcome ? commandMessage(command) : src.Source)}
                             aria-describedby=${availabilityId}
                             aria-busy=${outcome === 'pending' || outcome === 'provisional-confirmed' ? 'true' : null}
                         >
-                            <span class="source-icon">${SOURCE_ICONS[src.Source] || '🔊'}</span>
+                            <${SourceIcon} source=${src.Source} className="source-icon" />
                             <span class="source-name">${src.DisplayName || src.Source}</span>
                         </button>
                     `;

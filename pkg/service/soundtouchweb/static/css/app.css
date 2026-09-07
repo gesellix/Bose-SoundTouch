@@ -13,9 +13,15 @@
     --stale:     #f59e0b;
     --offline:   #9ca3af;
     --danger:    #b42318;
+    --fav:       #c9a000; /* preset star: warm gold, not too bright */
+    --fav-bright:#e0b800;
     --radius:    8px;
     --shadow:    0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
     --nav-icon-filter: brightness(0) invert(1);
+    /* Mono SVGs are black on transparent. On normal content they stay as
+       they are; -alt is for inverted backgrounds like an active tile. */
+    --content-icon-filter: none;
+    --content-icon-filter-alt: brightness(0) invert(1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,7 +34,11 @@
         --accent:   #e0e0e0;
         --accent-fg:#111;
         --danger:   #ff8a80;
+        --fav:      #d4ae1a;
+        --fav-bright:#f0c800;
         --nav-icon-filter: none;
+        --content-icon-filter: brightness(0) invert(1);
+        --content-icon-filter-alt: none;
     }
 }
 
@@ -46,6 +56,21 @@ a { color: inherit; text-decoration: none; cursor: pointer; }
 button { cursor: pointer; font: inherit; border: none; background: none; }
 ul { list-style: none; }
 img { display: block; max-width: 100%; }
+
+/* Per-source accent colour, so one source looks the same everywhere it
+   appears. Read by the preset thumb border, the now-playing artwork
+   placeholder and the source pill border; those three are the only places
+   that set data-source. Physical inputs (aux, optical, HDMI, ...)
+   deliberately have none and fall back to --border. */
+[data-source="SPOTIFY"]              { --slot-color: #1DB954; }
+[data-source="TUNEIN"]               { --slot-color: #0082C8; }
+[data-source="LOCAL_INTERNET_RADIO"] { --slot-color: #FF6B35; }
+[data-source="RADIO_BROWSER"]        { --slot-color: #00A3A3; }
+[data-source="AMAZON"]               { --slot-color: #FF9900; }
+[data-source="PANDORA"]              { --slot-color: #4A90C2; }
+[data-source="DEEZER"]               { --slot-color: #A238FF; }
+[data-source="IHEARTRADIO"]          { --slot-color: #C6002B; }
+[data-source="BLUETOOTH"]            { --slot-color: #0082FC; }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .app { display: flex; flex-direction: column; min-height: 100vh; }
@@ -473,13 +498,13 @@ img { display: block; max-width: 100%; }
     color: var(--text);
 }
 .now-playing-fav-btn.mapped {
-    color: #c9a000; /* warm gold, not too bright */
+    color: var(--fav);
     opacity: .85;
 }
 .now-playing-fav-btn.mapped:hover,
 .now-playing-fav-btn.mapped.open {
     opacity: 1;
-    color: #e0b800;
+    color: var(--fav-bright);
 }
 
 .now-playing-fav-overlay {
@@ -499,6 +524,15 @@ img { display: block; max-width: 100%; }
 }
 
 .album-art { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+/* Placeholder when neither <art> nor the ContentItem carries a picture, built
+   like the preset thumb: neutral ground for icon contrast, source colour on
+   the border. */
+.album-art-empty {
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); border: 1px solid var(--slot-color, var(--border));
+    font-size: 1.6rem;
+}
+img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; filter: var(--content-icon-filter); opacity: .85; }
 
 .track-info { flex: 1; min-width: 0; overflow: hidden; }
 .track-title {
@@ -537,9 +571,17 @@ img { display: block; max-width: 100%; }
 
 .transport { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
 
+/* Fixed squares rather than padding around the glyph. These used to be sized
+   by their content, and the content was emoji whose advance width varies per
+   glyph and per platform font, so the buttons came out different widths and
+   the play button changed size every time it toggled between play and pause,
+   shifting the whole row. The icons are SVG now, but the fixed box is what
+   keeps the row stable. */
 .ctrl-btn {
-    font-size: 1.25rem;
-    padding: .4rem .7rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    padding: 0;
     border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -551,7 +593,8 @@ img { display: block; max-width: 100%; }
     transition: background .12s;
 }
 .ctrl-btn:hover { background: var(--bg); }
-.ctrl-btn.play-btn { font-size: 1.5rem; padding: .4rem .9rem; }
+/* The primary action is deliberately larger; everything else is uniform. */
+.ctrl-btn.play-btn { width: 3rem; height: 3rem; }
 .ctrl-btn.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 
 .volume-row { display: flex; align-items: center; gap: .75rem; }
@@ -617,6 +660,7 @@ img { display: block; max-width: 100%; }
 }
 .preset-picker-slot.saving { opacity: .5; cursor: wait; }
 .preset-picker-slot.saved  { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+.preset-picker-slot.error  { border-color: var(--danger); color: var(--danger); }
 
 /* ── Presets ─────────────────────────────────────────────────────────────── */
 .presets-section, .sources-section { margin-top: 1.25rem; }
@@ -624,67 +668,94 @@ img { display: block; max-width: 100%; }
 
 .preset-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: .4rem;
+    /* Six slots divide evenly into 6, 3, 2 and 1, so there is never a ragged
+       last row: wide window 6x1, device panel 3x2, phone 2x3. */
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: .5rem;
 }
 
 .preset-slot {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: .25rem;
-    padding: .4rem .2rem;
+    text-align: left;
+    gap: .5rem;
+    padding: .45rem 1.7rem .45rem .45rem; /* right gutter: slot number + star */
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
     cursor: pointer;
     position: relative;
     transition: background .1s, box-shadow .1s;
-    min-height: 72px;
+    min-height: 56px;
 }
 .preset-slot:hover:not(:disabled) { background: var(--bg); box-shadow: var(--shadow); }
 .preset-slot:disabled { opacity: .4; cursor: default; }
 .preset-slot.active { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
-.preset-slot.active .preset-name { color: var(--accent-fg); }
+.preset-slot.active .preset-name,
+.preset-slot.active .preset-source-label,
+.preset-slot.active .preset-num { color: var(--accent-fg); }
 
-.preset-slot-wrap { position: relative; }
-.preset-slot-wrap .preset-slot { width: 100%; }
+/* The grid item is the wrapper, not the tile, so the tile has to be told to
+   fill it.  Without this each tile collapses to its own content height and a
+   row of one- and two-line names ends up with ragged bottom edges. */
+.preset-slot-wrap { position: relative; display: flex; }
+.preset-slot-wrap .preset-slot { width: 100%; height: 100%; }
 
-/* Source-specific accent colour applied as a top border on text-only slots
-   (slots that have no artwork image).  Has no visible effect when art is
-   shown because the image fills the top of the slot. */
-.preset-slot[data-source="SPOTIFY"]              { --slot-color: #1DB954; }
-.preset-slot[data-source="TUNEIN"]               { --slot-color: #0082C8; }
-.preset-slot[data-source="LOCAL_INTERNET_RADIO"] { --slot-color: #FF6B35; }
-.preset-slot[data-source="RADIO_BROWSER"]        { --slot-color: #FF6B35; }
-.preset-slot[data-source="AMAZON"]               { --slot-color: #FF9900; }
-.preset-slot[data-source="PANDORA"]              { --slot-color: #005483; }
-.preset-slot:not(.active):not(.empty):not(:has(.preset-art)) {
-    border-top: 2px solid var(--slot-color, var(--border));
+/* Artwork box, or a placeholder holding the source icon.
+   The background stays the page ground in both themes, which is the inverse of
+   whatever --content-icon-filter paints the icon, so the icon keeps full
+   contrast. The source colour rides on the border instead: tinting the fill
+   put a mid-tone behind a mid-tone icon and both disappeared. */
+.preset-thumb {
+    position: relative;
+    flex: 0 0 40px;
+    width: 40px; height: 40px;
+    border: 1px solid var(--slot-color, var(--border));
+    border-radius: 4px;
+    background: var(--bg);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
 }
-
-/* Save-to-preset overlay button — fades in on hover, lives outside the play
-   button to avoid invalid nested <button> elements. */
-.preset-save-btn {
-    position: absolute; top: 2px; left: 3px; z-index: 1;
-    font-size: .65rem; line-height: 1; font-weight: 700;
-    background: none; border: none; cursor: pointer; padding: 2px 3px;
-    border-radius: 2px; color: var(--text-dim);
-    opacity: 0; transition: opacity .15s, color .15s;
+.preset-slot.savable .preset-thumb { border-style: dashed; border-color: var(--fav); }
+.preset-thumb-glyph { font-size: 1.05rem; line-height: 1; color: var(--fav); opacity: .85; }
+.preset-art { position: relative; width: 100%; height: 100%; object-fit: cover; }
+.preset-source-icon {
+    position: relative; width: 20px; height: 20px;
+    font-size: 1rem; line-height: 20px; text-align: center;
 }
-.preset-slot-wrap:hover .preset-save-btn,
-.preset-save-btn:focus { opacity: .65; }
-.preset-save-btn:hover { opacity: 1; color: var(--accent); }
-.preset-save-btn.saved { opacity: 1; color: var(--accent); }
-.preset-save-btn.error { opacity: 1; color: #e55; }
+img.preset-source-icon { object-fit: contain; filter: var(--content-icon-filter); opacity: .85; }
 
-.preset-art { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; }
-.preset-source-label { font-size: .6rem; font-weight: 600; text-transform: uppercase; opacity: .6; }
-.preset-name { font-size: .65rem; text-align: center; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; color: var(--text-dim); }
+.preset-text { display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1 1 auto; }
+.preset-source-label { font-size: .55rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; opacity: .6; color: var(--text-dim); }
+.preset-name { font-size: .75rem; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; color: var(--text-dim); }
 .preset-num {
-    position: absolute; top: 2px; right: 4px;
+    position: absolute; top: .3rem; right: .45rem;
     font-size: .6rem; font-weight: 700; color: var(--text-dim); opacity: .5;
 }
+
+/* Save-to-preset star.  Always visible - disabled, never hidden, when nothing
+   is playing - so it stays reachable on touch, which has no hover.  It lives
+   outside the play button to avoid invalid nested <button> elements.  Gold in
+   both states; only the fill carries meaning (☆ neutral, ★ currently playing),
+   matching the star on the now-playing card. */
+.preset-save-wrap { position: absolute; right: .2rem; bottom: .2rem; z-index: 1; display: flex; }
+.preset-save-btn {
+    font-size: .8rem; line-height: 1;
+    background: none; border: none; padding: 2px 3px;
+    border-radius: 3px; cursor: pointer;
+    color: var(--fav); opacity: .85;
+    transition: opacity .15s, color .15s;
+}
+.preset-save-btn:hover:not(:disabled),
+.preset-save-btn:focus-visible:not(:disabled) { opacity: 1; color: var(--fav-bright); }
+.preset-save-btn.mapped { opacity: 1; }
+.preset-save-btn:disabled { color: var(--text-dim); opacity: .3; cursor: default; }
+.preset-save-btn.saved { color: var(--fav-bright); opacity: 1; }
+.preset-save-btn.error { color: var(--danger); opacity: 1; }
+/* An active tile inverts its background, so the neutral disabled grey would
+   otherwise disappear into it. */
+.preset-slot-wrap.active .preset-save-btn:disabled { color: var(--accent-fg); }
 
 /* ── Sources ─────────────────────────────────────────────────────────────── */
 .source-list { display: flex; flex-wrap: wrap; gap: .4rem; }
@@ -694,21 +765,29 @@ img { display: block; max-width: 100%; }
     align-items: center;
     gap: .35rem;
     padding: .35rem .7rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--slot-color, var(--border));
     border-radius: 999px;
     background: var(--surface);
+    /* Buttons don't inherit colour from the page, and the UA default is black
+       whatever the theme, so this has to be spelled out. The active pill is
+       filled and overrides it below. */
+    color: var(--text);
     font-size: .8rem;
     transition: background .1s, border-color .1s;
 }
 .source-btn:hover:not(:disabled) { background: var(--bg); }
 .source-btn:disabled { cursor: not-allowed; opacity: .55; }
-.source-btn.active { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+.source-btn.active { border-color: var(--slot-color, var(--accent)); background: var(--accent); color: var(--accent-fg); }
 .source-btn.pending { cursor: wait; }
 .source-btn.provisional-confirmed { border-style: dashed; cursor: progress; }
 .source-btn.unverified { border-color: #a76b00; }
 .source-btn.failed { border-color: var(--offline); }
 .source-btn.local { border-style: dashed; }
+/* A source icon is either a mono SVG or an emoji (see sourceIcons.js). The
+   theme filter belongs on the SVG only; it would wash an emoji out. */
 .source-icon { font-size: .9rem; line-height: 1; }
+img.source-icon { width: 16px; height: 16px; object-fit: contain; filter: var(--content-icon-filter); opacity: .9; }
+.source-btn.active img.source-icon { filter: var(--content-icon-filter-alt); }
 .source-name { font-weight: 500; }
 .source-command-status {
     min-height: 1.2em;
@@ -830,7 +909,9 @@ img { display: block; max-width: 100%; }
 .recent-art-empty {
     display: flex; align-items: center; justify-content: center;
     background: var(--bg); font-size: 1.1rem;
+    border: 1px solid var(--border);
 }
+img.recent-source-icon { width: 20px; height: 20px; object-fit: contain; filter: var(--content-icon-filter); opacity: .85; }
 .recent-info { flex: 1; overflow: hidden; }
 .recent-name { display: block; font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .recent-source { display: block; font-size: .75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; margin-top: .1rem; }

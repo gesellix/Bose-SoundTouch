@@ -2,14 +2,9 @@ import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
+import { SourceIcon } from '../sourceIcons.js';
 
 const html = htm.bind(h);
-
-const SOURCE_ICONS = {
-    TUNEIN: '📻', SPOTIFY: '🎵', AMAZON: '🎶', PANDORA: '🎸',
-    DEEZER: '🎵', IHEART: '📻', BLUETOOTH: '📶', AUX: '🔌',
-    LOCAL_MUSIC: '💽', STORED_MUSIC: '💽',
-};
 
 export function Recents({ deviceId }) {
     const [items, setItems] = useState(null);
@@ -54,12 +49,11 @@ export function Recents({ deviceId }) {
                 ${items.map(item => {
                     const ci = item.ContentItem;
                     if (!ci) return null;
-                    const icon = SOURCE_ICONS[ci.Source] ?? '♪';
                     return html`
                         <button class="recent-item" key=${item.ID || item.UTCTime} onClick=${() => play(item)}>
                             ${ci.ContainerArt
                                 ? html`<img class="recent-art" src=${ci.ContainerArt} alt="" />`
-                                : html`<div class="recent-art recent-art-empty">${icon}</div>`
+                                : html`<div class="recent-art recent-art-empty"><${SourceIcon} source=${ci.Source} className="recent-source-icon" /></div>`
                             }
                             <div class="recent-info">
                                 <span class="recent-name">${ci.ItemName || ci.Source}</span>
