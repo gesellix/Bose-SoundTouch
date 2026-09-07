@@ -683,7 +683,7 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
     padding: .45rem 1.7rem .45rem .45rem; /* right gutter: slot number + star */
     border: 1px solid var(--border);
     /* The source colour lives here, clear of the artwork. */
-    border-bottom: 3px solid var(--slot-color, var(--border));
+    border-bottom: 2px solid var(--slot-color, var(--border));
     border-radius: var(--radius);
     background: var(--surface);
     cursor: pointer;
@@ -779,6 +779,8 @@ img.preset-source-icon { object-fit: contain; filter: var(--content-icon-filter)
     gap: .35rem;
     padding: .35rem .7rem;
     border: 1px solid var(--slot-color, var(--border));
+    /* Weighted along the bottom, matching the preset tiles. */
+    border-bottom-width: 2px;
     border-radius: 999px;
     background: var(--surface);
     /* Buttons don't inherit colour from the page, and the UA default is black
