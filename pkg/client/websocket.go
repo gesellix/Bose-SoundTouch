@@ -213,6 +213,16 @@ func (ws *WebSocketClient) OnRawMessage(handler models.RawMessageHandler) {
 	ws.handlers.OnRawMessage = handler
 }
 
+// OnDeviceError sets a handler for root-level <errorUpdate> frames — the
+// speaker's own error reports, carrying a numeric code, a symbolic name and a
+// severity. OnSpecialMessage still fires for the same frame.
+func (ws *WebSocketClient) OnDeviceError(handler models.TypedEventHandler[*models.ErrorUpdate]) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	ws.handlers.OnDeviceError = handler
+}
+
 // OnSpecialMessage sets a handler for special (non-updates) messages
 func (ws *WebSocketClient) OnSpecialMessage(handler models.SpecialMessageHandler) {
 	ws.mu.Lock()
@@ -636,10 +646,19 @@ func (ws *WebSocketClient) handleSpecialMessage(data []byte) {
 		return
 	}
 
-	// Call handler if set
+	// Call handlers if set. A device error goes to the dedicated typed
+	// handler first, then to the catch-all, so a caller may register
+	// either or both.
 	ws.mu.RLock()
 	handler := ws.handlers.OnSpecialMessage
+	deviceErrHandler := ws.handlers.OnDeviceError
 	ws.mu.RUnlock()
+
+	if deviceErrHandler != nil {
+		if errorUpdate := specialMessage.GetErrorUpdate(); errorUpdate != nil {
+			deviceErrHandler(errorUpdate)
+		}
+	}
 
 	if handler != nil {
 		handler(specialMessage)

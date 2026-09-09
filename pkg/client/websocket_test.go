@@ -674,3 +674,76 @@ func TestWebSocketClient_Integration(t *testing.T) {
 
 	close(messagesChan)
 }
+
+// TestWebSocketClient_HandleDeviceError verifies that a root-level
+// <errorUpdate> frame — the shape a real speaker uses for its own error
+// reports — reaches both the dedicated OnDeviceError handler and the
+// OnSpecialMessage catch-all. Before GH-701 it reached neither: it failed to
+// parse and was only visible in the raw debug log.
+func TestWebSocketClient_HandleDeviceError(t *testing.T) {
+	client := NewClientFromHost("192.0.2.10")
+	logger := &mockLogger{}
+	wsClient := client.NewWebSocketClient(nil)
+	wsClient.logger = logger
+
+	var (
+		deviceErr *models.ErrorUpdate
+		special   *models.SpecialMessage
+	)
+
+	wsClient.OnDeviceError(func(event *models.ErrorUpdate) { deviceErr = event })
+	wsClient.OnSpecialMessage(func(message *models.SpecialMessage) { special = message })
+
+	frame := []byte(`<errorUpdate deviceID="DEVICEID01">` +
+		`<error value="1654" name="STORED_MUSIC_AP_TIMEOUT" severity="Unrecoverable">APServer: Timeout</error>` +
+		`</errorUpdate>`)
+
+	wsClient.handleMessage(frame)
+
+	if deviceErr == nil {
+		t.Fatal("OnDeviceError was not called")
+	}
+
+	if deviceErr.DeviceID != "DEVICEID01" {
+		t.Errorf("DeviceID = %q, want DEVICEID01", deviceErr.DeviceID)
+	}
+
+	if deviceErr.Error.Value != "1654" || deviceErr.Error.Name != "STORED_MUSIC_AP_TIMEOUT" {
+		t.Errorf("got %s/%s, want 1654/STORED_MUSIC_AP_TIMEOUT", deviceErr.Error.Value, deviceErr.Error.Name)
+	}
+
+	if deviceErr.Error.Severity != "Unrecoverable" {
+		t.Errorf("Severity = %q, want Unrecoverable", deviceErr.Error.Severity)
+	}
+
+	if special == nil {
+		t.Fatal("OnSpecialMessage was not called; it stays the catch-all")
+	}
+
+	if special.Type != models.MessageTypeErrorUpdate {
+		t.Errorf("SpecialMessage.Type = %q, want %q", special.Type, models.MessageTypeErrorUpdate)
+	}
+
+	for _, message := range logger.getMessages() {
+		if strings.Contains(message, "Unknown special message type") {
+			t.Errorf("errorUpdate still logged as unknown: %s", message)
+		}
+	}
+}
+
+// TestWebSocketClient_DeviceErrorHandlerIgnoresOtherSpecialMessages pins that
+// OnDeviceError only fires for actual device errors.
+func TestWebSocketClient_DeviceErrorHandlerIgnoresOtherSpecialMessages(t *testing.T) {
+	client := NewClientFromHost("192.0.2.10")
+	wsClient := client.NewWebSocketClient(nil)
+	wsClient.logger = &mockLogger{}
+
+	called := false
+	wsClient.OnDeviceError(func(*models.ErrorUpdate) { called = true })
+
+	wsClient.handleMessage([]byte(`<userActivityUpdate deviceID="DEVICEID01" />`))
+
+	if called {
+		t.Error("OnDeviceError fired for a userActivityUpdate frame")
+	}
+}

@@ -32,6 +32,14 @@ func TestParseEventFilters(t *testing.T) {
 			expectExit:  false,
 		},
 		{
+			// "errors" selects root-level <errorUpdate> frames (GH-701);
+			// "userInactivity" was handled but rejected by this parser.
+			name:        "device-error and inactivity filters",
+			eventFilter: "errors,userInactivity",
+			want:        map[string]bool{"errors": true, "userInactivity": true},
+			expectExit:  false,
+		},
+		{
 			name:        "filters with spaces",
 			eventFilter: "nowPlaying, volume , bass",
 			want:        map[string]bool{"nowPlaying": true, "volume": true, "bass": true},
