@@ -2,7 +2,6 @@
 package soundtouchweb
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -322,32 +321,26 @@ var balanceWatchSchedule = []time.Duration{
 	30 * time.Second,
 }
 
-// watchBalance establishes the balance reading for a freshly connected
-// speaker, retrying briefly until it succeeds.
+// watchBalance establishes the balance reading for a device, retrying briefly
+// until the speaker answers.
 //
-// One read on connect is not enough, for two reasons found on hardware:
+// It reads over HTTP, deliberately. Reads do not need the WebSocket — only
+// writes do — and that socket is created lazily, on the first control request
+// that needs one. Hanging the read off it meant a paired speaker showed no
+// slider until something was pressed: the pair was on screen, the speaker
+// answered balanceAvailable=true to anyone who asked, and nobody asked.
 //
-//   - A pair that already existed before startup is discovered by the
-//     /getGroup poll, which runs concurrently. groupUpdated only fires when
-//     the pairing CHANGES, so it does not help here.
-//   - A speaker that is asleep answers balanceAvailable=false even when it is
-//     genuinely paired. The reading only becomes truthful once it wakes.
+// Retrying rather than reading once covers the other case: a pair that already
+// existed at startup is discovered by the /getGroup poll running concurrently,
+// and groupUpdated only fires when the pairing CHANGES.
 //
-// Both showed the same symptom: a paired speaker with no slider in the Player
-// until something unrelated happened to trigger a read. The loop stops as soon
-// as a balance is known, so a speaker that really has none costs a handful of
-// cheap requests and then nothing.
-func (app *WebApp) watchBalance(
-	deviceID string,
-	conn *webtypes.DeviceConnection,
-	wsClient *client.WebSocketClient,
-) {
+// The loop stops as soon as a balance is known or the device goes away, so a
+// speaker that genuinely has none costs a handful of cheap requests and then
+// nothing. GetBalance carries its own short timeout, so a sleeping speaker
+// cannot stall this either.
+func (app *WebApp) watchBalance(deviceID string, conn *webtypes.DeviceConnection) {
 	for attempt, wait := range balanceWatchSchedule {
-		if conn.CurrentWebSocket() != wsClient {
-			return // this generation's socket is gone
-		}
-
-		app.refreshBalanceForConnection(deviceID, conn, wsClient)
+		app.refreshBalance(deviceID, conn)
 
 		if conn.Status().Balance != nil {
 			if attempt > 0 {
@@ -358,12 +351,6 @@ func (app *WebApp) watchBalance(
 			return
 		}
 
-		// Say what the speaker actually answered. A control that silently
-		// never appears is the hardest kind of bug to report, and guessing
-		// at the cause from the outside has already been wrong twice.
-		log.Printf("Speaker %s: balance still unavailable after attempt %d, retrying in %s",
-			sanitizeLog(deviceID), attempt+1, wait)
-
 		select {
 		case <-time.After(wait):
 		case <-conn.Done():
@@ -373,35 +360,10 @@ func (app *WebApp) watchBalance(
 
 	// One last attempt after the final wait, so the longest interval is not
 	// spent only to give up without using it.
-	if conn.CurrentWebSocket() == wsClient {
-		app.refreshBalanceForConnection(deviceID, conn, wsClient)
-	}
+	app.refreshBalance(deviceID, conn)
 }
 
-// refreshBalanceForConnection runs refreshBalance under a context bounded both
-// by balanceControlTimeout and by the connection's own lifetime, so a read
-// stops when the device is removed rather than holding the socket open.
-func (app *WebApp) refreshBalanceForConnection(
-	deviceID string,
-	conn *webtypes.DeviceConnection,
-	wsClient *client.WebSocketClient,
-) {
-	ctx, cancel := context.WithTimeout(context.Background(), balanceControlTimeout)
-	defer cancel()
-
-	go func() {
-		select {
-		case <-conn.Done():
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-
-	app.refreshBalance(ctx, deviceID, conn, wsClient)
-}
-
-// refreshBalance reads the balance over the WebSocket and stores it on the
-// device status.
+// refreshBalance reads the balance and stores it on the device status.
 //
 // The only gate is the model: balance exists on SoundTouch 10s, and asking
 // anything else is pointless. Whether it currently APPLIES is the speaker's
@@ -409,23 +371,15 @@ func (app *WebApp) refreshBalanceForConnection(
 // an unavailable answer clears the reading so the UI drops the control.
 //
 // It deliberately does NOT pre-check status.Group. That looks like a free
-// optimisation and is actually a race: on a fresh connection this runs
-// alongside the first /getGroup poll, so the group is usually still nil, and
-// gating on it meant the reading was skipped exactly when it was first needed
-// — with nothing to retry it, since groupUpdated only fires when the pairing
-// itself changes. Found on hardware: a genuinely paired speaker showed no
-// slider until an unrelated write populated the field.
-func (app *WebApp) refreshBalance(
-	ctx context.Context,
-	deviceID string,
-	conn *webtypes.DeviceConnection,
-	wsClient *client.WebSocketClient,
-) {
-	if wsClient == nil || !stereoPairCapable(conn.DeviceInfo) {
+// optimisation and is actually a race: on startup this runs alongside the
+// first /getGroup poll, so the group is usually still nil, and gating on it
+// meant the reading was skipped exactly when it was first needed.
+func (app *WebApp) refreshBalance(deviceID string, conn *webtypes.DeviceConnection) {
+	if conn.Client == nil || !stereoPairCapable(conn.DeviceInfo) {
 		return
 	}
 
-	balance, err := wsClient.GetBalance(ctx)
+	balance, err := conn.Client.GetBalance()
 	if err != nil {
 		log.Printf("Speaker %s: balance read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
 
@@ -433,10 +387,8 @@ func (app *WebApp) refreshBalance(
 	}
 
 	if !balance.Available {
-		// Log the whole answer, not just the fact of it. A speaker that is
-		// genuinely paired still answers this way under conditions we have
-		// not pinned down, and the range/target it reports alongside are the
-		// evidence needed to work out which.
+		// Log the whole answer, not just the fact of it: the range and target
+		// reported alongside are the evidence for why it is unavailable.
 		log.Printf("Speaker %s: balance reported unavailable (range %d..%d, default %d, target %d, actual %d)",
 			sanitizeLog(deviceID), balance.Min, balance.Max, balance.Default, balance.Target, balance.Actual)
 
@@ -718,7 +670,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			// stored as "no balance here". Re-read on the transition out of
 			// standby, once, rather than on every event.
 			if np.Source != prevSource && isStandbySource(prevSource) && !isStandbySource(np.Source) {
-				go app.refreshBalanceForConnection(deviceID, conn, wsClient)
+				go app.refreshBalance(deviceID, conn)
 			}
 
 			prevSource = np.Source
@@ -766,7 +718,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		// balanceUpdated carries no payload — it is a signal to re-read, not
 		// a value.
 		wsClient.OnBalanceUpdated(func(_ *models.BalanceUpdatedEvent) {
-			go app.refreshBalanceForConnection(deviceID, conn, wsClient)
+			go app.refreshBalance(deviceID, conn)
 		})
 
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
@@ -788,7 +740,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 			// Creating or tearing down a pair flips whether balance exists
 			// here at all, so the reading has to follow the group.
-			go app.refreshBalanceForConnection(deviceID, conn, wsClient)
+			go app.refreshBalance(deviceID, conn)
 		})
 
 		wsClient.OnNameUpdated(func(event *models.NameUpdatedEvent) {
@@ -846,12 +798,6 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		// new WebSocket connections, so anything that changed while we were
 		// disconnected would otherwise stay stale until the next WS event.
 		go app.UpdateDeviceStatus(deviceID, conn)
-
-		// Balance is read here rather than in the status poll, on purpose:
-		// /balance BLOCKS instead of refusing while a speaker is in deep
-		// standby, so one sleeping speaker on the polled path would stall
-		// every other field with it.
-		go app.watchBalance(deviceID, conn, wsClient)
 
 		<-conn.Done()
 

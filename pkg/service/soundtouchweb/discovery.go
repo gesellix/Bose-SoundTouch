@@ -108,6 +108,13 @@ func (app *WebApp) addDeviceByHost(
 
 	go app.UpdateDeviceStatus(host, conn)
 
+	// Establish the stereo-pair balance reading. It lives here, not on the
+	// status poll, because /balance blocks rather than refusing on a sleeping
+	// speaker and must never hold up the other fields; and not on the
+	// WebSocket, because that socket is created lazily and a paired speaker
+	// would then show no balance control until something was pressed.
+	go app.watchBalance(host, conn)
+
 	// Poll via HTTP every 30 s as a fallback for WebSocket events that the
 	// speaker does not emit (e.g. Spotify Connect track changes) and for the
 	// window between a WS disconnect and its reconnect.
