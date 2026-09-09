@@ -42,6 +42,13 @@ func TestParseEventFilters(t *testing.T) {
 			expectExit:  false,
 		},
 		{
+			// balanceUpdated used to land as an unmodelled <updates> child.
+			name:        "stereo-pair balance filter",
+			eventFilter: "balance",
+			want:        map[string]bool{"balance": true},
+			expectExit:  false,
+		},
+		{
 			name:        "filters with spaces",
 			eventFilter: "nowPlaying, volume , bass",
 			want:        map[string]bool{"nowPlaying": true, "volume": true, "bass": true},

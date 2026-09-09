@@ -210,7 +210,7 @@ func parseEventFilters(eventFilter string) map[string]bool {
 		"nowPlaying": true, "volume": true, "connection": true,
 		"preset": true, "zone": true, "group": true, "bass": true,
 		"sdkInfo": true, "userActivity": true, "userInactivity": true,
-		"errors": true,
+		"errors": true, "balance": true,
 	}
 
 	if eventFilter == "" {
@@ -306,6 +306,13 @@ func setupEventHandlers(wsClient *client.WebSocketClient, filters map[string]boo
 	if filters == nil || filters["bass"] {
 		wsClient.OnBassUpdated(func(event *models.BassUpdatedEvent) {
 			handleBassEvent(event)
+		})
+	}
+
+	// Stereo-pair balance events
+	if filters == nil || filters["balance"] {
+		wsClient.OnBalanceUpdated(func(event *models.BalanceUpdatedEvent) {
+			handleBalanceEvent(event, verbose)
 		})
 	}
 
@@ -569,6 +576,20 @@ func handleDeviceError(message *models.SpecialMessage, verbose bool) {
 
 	if verbose {
 		fmt.Printf("  ⏰ Timestamp: %s\n", message.Timestamp.Format("15:04:05"))
+	}
+}
+
+// handleBalanceEvent prints a stereo-pair balance notification.
+//
+// The frame is empty — <balanceUpdated></balanceUpdated>, no attributes, no
+// payload — so there is no value to show. It means "re-read /balance", and
+// saying that is more useful than printing nothing.
+func handleBalanceEvent(_ *models.BalanceUpdatedEvent, verbose bool) {
+	fmt.Println("\n🔊 Balance Updated (stereo pair)")
+	fmt.Println("  ↩️  Carries no value; re-read /balance for the new setting")
+
+	if verbose {
+		fmt.Printf("  ⏰ Timestamp: %s\n", time.Now().Format("15:04:05"))
 	}
 }
 

@@ -2299,7 +2299,7 @@ func main() {
 							&cli.StringFlag{
 								Name:    "filter",
 								Aliases: []string{"f"},
-								Usage:   "Filter events by type (comma-separated): nowPlaying,volume,connection,preset,zone,group,bass,sdkInfo,userActivity,userInactivity,errors",
+								Usage:   "Filter events by type (comma-separated): nowPlaying,volume,connection,preset,zone,group,bass,balance,sdkInfo,userActivity,userInactivity,errors",
 							},
 							&cli.DurationFlag{
 								Name:    "duration",

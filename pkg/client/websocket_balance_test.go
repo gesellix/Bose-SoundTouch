@@ -255,3 +255,30 @@ func TestBalanceUpdatedCarriesNoPayload(t *testing.T) {
 		t.Error("HasEventType(EventTypeBalanceUpdated) = false")
 	}
 }
+
+// TestBalanceUpdatedIsNotAnUnknownEvent pins the captured frame verbatim,
+// single quotes and all: before balanceUpdated was modelled it reached the CLI
+// as "Unknown Event / Unmodelled element: balanceUpdated".
+func TestBalanceUpdatedIsNotAnUnknownEvent(t *testing.T) {
+	c := NewClientFromHost("192.0.2.10")
+	wsClient := c.NewWebSocketClient(&WebSocketConfig{Logger: &mockLogger{}})
+
+	var (
+		typed   bool
+		unknown bool
+	)
+
+	wsClient.OnBalanceUpdated(func(*models.BalanceUpdatedEvent) { typed = true })
+	wsClient.OnUnknownEvent(func(*models.WebSocketEvent) { unknown = true })
+
+	// Exactly as the speaker sent it, including the single-quoted attribute.
+	wsClient.handleMessage([]byte(`<updates deviceID='DEVICEID01'><balanceUpdated></balanceUpdated></updates>`))
+
+	if !typed {
+		t.Error("OnBalanceUpdated did not fire")
+	}
+
+	if unknown {
+		t.Error("balanceUpdated is still reported as an unknown event")
+	}
+}
