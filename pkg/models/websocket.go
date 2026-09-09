@@ -34,6 +34,8 @@ const (
 	EventTypeClockDisplayUpdated WebSocketEventType = "clockDisplayUpdated"
 	// EventTypeNameUpdated indicates a device name change
 	EventTypeNameUpdated WebSocketEventType = "nameUpdated"
+	// EventTypeBalanceUpdated indicates a stereo-pair balance change
+	EventTypeBalanceUpdated WebSocketEventType = "balanceUpdated"
 	// EventTypeErrorUpdated indicates an error status change
 	EventTypeErrorUpdated WebSocketEventType = "errorUpdated"
 	// EventTypeRecentsUpdated indicates a recent items list change
@@ -65,6 +67,8 @@ func (e WebSocketEventType) String() string {
 		return "Stereo Pair Updated"
 	case EventTypeBassUpdated:
 		return "Bass Updated"
+	case EventTypeBalanceUpdated:
+		return "Balance Updated"
 	case EventTypeClockTimeUpdated:
 		return "Clock Time Updated"
 	case EventTypeClockDisplayUpdated:
@@ -97,6 +101,7 @@ type WebSocketEvent struct {
 	ZoneUpdated            *ZoneUpdatedEvent            `xml:"zoneUpdated,omitempty"`
 	GroupUpdated           *GroupUpdatedEvent           `xml:"groupUpdated,omitempty"`
 	BassUpdated            *BassUpdatedEvent            `xml:"bassUpdated,omitempty"`
+	BalanceUpdated         *BalanceUpdatedEvent         `xml:"balanceUpdated,omitempty"`
 	ClockTimeUpdated       *ClockTimeUpdatedEvent       `xml:"clockTimeUpdated,omitempty"`
 	ClockDisplayUpdated    *ClockDisplayUpdatedEvent    `xml:"clockDisplayUpdated,omitempty"`
 	NameUpdated            *NameUpdatedEvent            `xml:"nameUpdated,omitempty"`
@@ -157,6 +162,10 @@ func (e *WebSocketEvent) GetEvents() []interface{} {
 
 	if e.BassUpdated != nil {
 		events = append(events, e.BassUpdated)
+	}
+
+	if e.BalanceUpdated != nil {
+		events = append(events, e.BalanceUpdated)
 	}
 
 	if e.ClockTimeUpdated != nil {
@@ -297,6 +306,23 @@ type BassUpdatedEvent struct {
 	XMLName  xml.Name `xml:"bassUpdated"`
 	DeviceID string   `xml:"deviceID,attr"`
 	Bass     Bass     `xml:"bass"`
+}
+
+// BalanceUpdatedEvent signals that the stereo pair's balance changed.
+//
+// It carries NO payload and NO attributes — the captured frame is exactly
+//
+//	<updates deviceID="DEVICEID01"><balanceUpdated></balanceUpdated></updates>
+//
+// so it is a "re-read /balance" trigger, not a value. Confirmed on hardware
+// after both an HTTP and a WebSocket write (FW 27.0.6).
+//
+// There is deliberately no DeviceID field: the device ID lives on the parent
+// <updates> element (WebSocketEvent.DeviceID), and a deviceID attribute here
+// would be permanently empty — the same shape of bug as the unpopulated
+// ConnectionState this package used to carry (GH-701).
+type BalanceUpdatedEvent struct {
+	XMLName xml.Name `xml:"balanceUpdated"`
 }
 
 // ClockTimeUpdatedEvent represents a clock time update event
@@ -471,6 +497,7 @@ type WebSocketEventHandlers struct {
 	OnZoneUpdated         TypedEventHandler[*ZoneUpdatedEvent]
 	OnGroupUpdated        TypedEventHandler[*GroupUpdatedEvent]
 	OnBassUpdated         TypedEventHandler[*BassUpdatedEvent]
+	OnBalanceUpdated      TypedEventHandler[*BalanceUpdatedEvent]
 	OnClockTimeUpdated    TypedEventHandler[*ClockTimeUpdatedEvent]
 	OnClockDisplayUpdated TypedEventHandler[*ClockDisplayUpdatedEvent]
 	OnNameUpdated         TypedEventHandler[*NameUpdatedEvent]
@@ -528,6 +555,8 @@ func (e *WebSocketEvent) getFieldByEventType(eventType WebSocketEventType) inter
 		field = e.GroupUpdated
 	case EventTypeBassUpdated:
 		field = e.BassUpdated
+	case EventTypeBalanceUpdated:
+		field = e.BalanceUpdated
 	case EventTypeClockTimeUpdated:
 		field = e.ClockTimeUpdated
 	case EventTypeClockDisplayUpdated:
@@ -581,6 +610,8 @@ func isNil(i interface{}) bool {
 		return v == nil
 	case *BassUpdatedEvent:
 		return v == nil
+	case *BalanceUpdatedEvent:
+		return v == nil
 	case *ClockTimeUpdatedEvent:
 		return v == nil
 	case *ClockDisplayUpdatedEvent:
@@ -629,6 +660,8 @@ func (e *WebSocketEvent) HasEventType(eventType WebSocketEventType) bool {
 		return e.GroupUpdated != nil
 	case EventTypeBassUpdated:
 		return e.BassUpdated != nil
+	case EventTypeBalanceUpdated:
+		return e.BalanceUpdated != nil
 	case EventTypeClockTimeUpdated:
 		return e.ClockTimeUpdated != nil
 	case EventTypeClockDisplayUpdated:
@@ -676,6 +709,10 @@ func (e *WebSocketEvent) GetEventTypes() []WebSocketEventType {
 
 	if e.BassUpdated != nil {
 		types = append(types, EventTypeBassUpdated)
+	}
+
+	if e.BalanceUpdated != nil {
+		types = append(types, EventTypeBalanceUpdated)
 	}
 
 	if e.ClockTimeUpdated != nil {

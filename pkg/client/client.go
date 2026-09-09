@@ -728,72 +728,49 @@ func (c *Client) DecreaseBass(amount int) (*models.Bass, error) {
 	return c.GetBass()
 }
 
-// GetBalance retrieves the current balance level from the /balance endpoint
+// BalanceReadTimeout caps GET /balance.
+//
+// It gets its own, short budget because the endpoint BLOCKS rather than
+// refusing while the speaker is in deep standby — measured at 12 s and
+// counting. That is also why balance must not be folded into the periodic
+// status poll next to /volume and /bass: one sleeping speaker would stall the
+// whole poll.
+const BalanceReadTimeout = 3 * time.Second
+
+// GetBalance reads the stereo pair's balance over HTTP.
+//
+// Address it to the PAIR'S MASTER. An unpaired speaker, and the right-hand
+// member of a pair, answer with balanceAvailable=false rather than an error, so
+// check Balance.Available before using the values.
+//
+// Uses BalanceReadTimeout rather than the client's default: see that constant.
 func (c *Client) GetBalance() (*models.Balance, error) {
 	var balance models.Balance
 
-	err := c.get("/balance", &balance)
-	if err != nil {
+	shortBudget := &http.Client{Timeout: BalanceReadTimeout}
+
+	if err := c.getWithHTTPClient(shortBudget, "/balance", &balance); err != nil {
 		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
 
 	return &balance, nil
 }
 
-// SetBalance sets the balance level using the /balance endpoint
+// SetBalance is not available over HTTP.
+//
+// POST /balance does not work: field tests found every write hanging rather
+// than being refused, including the exact body the widely-referenced community
+// implementation sends. The app Bose ships on the speaker itself never writes
+// balance over HTTP either — it goes exclusively over the Gabbo WebSocket.
+//
+// Use WebSocketClient.SetBalance instead. This method is kept, and kept
+// failing, so the reason is discoverable at the call site rather than by
+// watching a request hang (GH-699).
 func (c *Client) SetBalance(level int) error {
-	if !models.ValidateBalanceLevel(level) {
-		return fmt.Errorf("invalid balance level: %d (must be between %d and %d)", level, models.BalanceLevelMin, models.BalanceLevelMax)
-	}
-
-	balanceReq, err := models.NewBalanceRequest(level)
-	if err != nil {
-		return fmt.Errorf("failed to create balance request: %w", err)
-	}
-
-	return c.post("/balance", balanceReq)
-}
-
-// SetBalanceSafe sets balance with validation and clamping
-func (c *Client) SetBalanceSafe(level int) error {
-	clampedLevel := models.ClampBalanceLevel(level)
-	return c.SetBalance(clampedLevel)
-}
-
-// IncreaseBalance increases balance by the specified amount (with safety limits)
-func (c *Client) IncreaseBalance(amount int) (*models.Balance, error) {
-	currentBalance, err := c.GetBalance()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current balance: %w", err)
-	}
-
-	newLevel := models.ClampBalanceLevel(currentBalance.GetLevel() + amount)
-
-	err = c.SetBalance(newLevel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set balance: %w", err)
-	}
-
-	// Return updated balance
-	return c.GetBalance()
-}
-
-// DecreaseBalance decreases balance by the specified amount (with safety limits)
-func (c *Client) DecreaseBalance(amount int) (*models.Balance, error) {
-	currentBalance, err := c.GetBalance()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current balance: %w", err)
-	}
-
-	newLevel := models.ClampBalanceLevel(currentBalance.GetLevel() - amount)
-
-	err = c.SetBalance(newLevel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set balance: %w", err)
-	}
-
-	// Return updated balance
-	return c.GetBalance()
+	return fmt.Errorf(
+		"set balance %d: POST /balance is not supported by the firmware (the write hangs); use WebSocketClient.SetBalance, which writes over the WebSocket",
+		level,
+	)
 }
 
 // SelectSource selects an audio source using the /select endpoint.

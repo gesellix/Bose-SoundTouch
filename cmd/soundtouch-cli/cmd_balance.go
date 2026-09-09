@@ -2,45 +2,69 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/client"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/urfave/cli/v2"
 )
+
+// balanceWriteTimeout caps a single balance write, including the read that
+// validates it against the device's range.
+const balanceWriteTimeout = 15 * time.Second
+
+// Balance belongs to a stereo PAIR — two SoundTouch 10s taking the LEFT and
+// RIGHT channel — and lives on the pair's master. It is not a multiroom-zone
+// property. Every command here must therefore be addressed to the master;
+// anything else reports balanceAvailable=false.
+//
+// Writes go over the WebSocket, never HTTP: POST /balance hangs rather than
+// refusing, and the app Bose ships on the speaker writes balance exclusively
+// over the socket (GH-699).
 
 // getBalance retrieves the current balance level from the device
 func getBalance(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
 	PrintDeviceHeader("Getting balance level", clientConfig.Host, clientConfig.Port)
 
-	client, err := CreateSoundTouchClient(clientConfig)
+	soundTouchClient, err := CreateSoundTouchClient(clientConfig)
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to create client: %v", err))
 		return err
 	}
 
-	balance, err := client.GetBalance()
+	balance, err := soundTouchClient.GetBalance()
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to get balance: %v", err))
 		return err
 	}
 
-	fmt.Printf("Current balance level: %d\n", balance.ActualBalance)
-
-	if balance.TargetBalance != balance.ActualBalance {
-		fmt.Printf("Target balance level: %d\n", balance.TargetBalance)
-	}
-
-	// Display balance direction
-	switch {
-	case balance.ActualBalance > 0:
-		fmt.Printf("Balance direction: Right (+%d)\n", balance.ActualBalance)
-	case balance.ActualBalance < 0:
-		fmt.Printf("Balance direction: Left (%d)\n", balance.ActualBalance)
-	default:
-		fmt.Println("Balance direction: Center (0)")
-	}
+	printBalance(balance)
 
 	return nil
+}
+
+// printBalance renders a reading, including the unavailable case, which is
+// what an unpaired speaker or the right-hand member of a pair reports.
+func printBalance(balance *models.Balance) {
+	if !balance.Available {
+		fmt.Println("Balance: not available on this speaker")
+		fmt.Println("  Balance exists only on the MASTER of a stereo pair (two SoundTouch 10s).")
+		fmt.Println("  An unpaired speaker and the right-hand member both report it unavailable.")
+
+		return
+	}
+
+	fmt.Printf("Current balance level: %d\n", balance.Actual)
+
+	if balance.Target != balance.Actual {
+		fmt.Printf("Target balance level: %d\n", balance.Target)
+	}
+
+	fmt.Printf("Range: %d to %d (default %d)\n", balance.Min, balance.Max, balance.Default)
+	fmt.Printf("Balance direction: %s\n", balance.LevelName(balance.Actual))
 }
 
 // setBalance sets the balance level on the device
@@ -49,21 +73,7 @@ func setBalance(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
 	PrintDeviceHeader(fmt.Sprintf("Setting balance level to %d", level), clientConfig.Host, clientConfig.Port)
 
-	client, err := CreateSoundTouchClient(clientConfig)
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to create client: %v", err))
-		return err
-	}
-
-	err = client.SetBalanceSafe(level)
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to set balance: %v", err))
-		return err
-	}
-
-	PrintSuccess(fmt.Sprintf("Balance level set to %d", level))
-
-	return nil
+	return writeBalance(clientConfig, func(_ *models.Balance) int { return level })
 }
 
 // balanceLeft shifts balance to the left
@@ -72,30 +82,9 @@ func balanceLeft(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
 	PrintDeviceHeader(fmt.Sprintf("Shifting balance left by %d", amount), clientConfig.Host, clientConfig.Port)
 
-	client, err := CreateSoundTouchClient(clientConfig)
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to create client: %v", err))
-		return err
-	}
-
-	// Get current balance level first
-	currentBalance, err := client.GetBalance()
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to get current balance: %v", err))
-		return err
-	}
-
-	newLevel := currentBalance.ActualBalance - amount
-
-	err = client.SetBalanceSafe(newLevel)
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to shift balance left: %v", err))
-		return err
-	}
-
-	PrintSuccess(fmt.Sprintf("Balance shifted from %d to %d (left)", currentBalance.ActualBalance, newLevel))
-
-	return nil
+	return writeBalance(clientConfig, func(current *models.Balance) int {
+		return current.Clamp(current.Actual - amount)
+	})
 }
 
 // balanceRight shifts balance to the right
@@ -104,50 +93,65 @@ func balanceRight(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
 	PrintDeviceHeader(fmt.Sprintf("Shifting balance right by %d", amount), clientConfig.Host, clientConfig.Port)
 
-	client, err := CreateSoundTouchClient(clientConfig)
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to create client: %v", err))
-		return err
-	}
-
-	// Get current balance level first
-	currentBalance, err := client.GetBalance()
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to get current balance: %v", err))
-		return err
-	}
-
-	newLevel := currentBalance.ActualBalance + amount
-
-	err = client.SetBalanceSafe(newLevel)
-	if err != nil {
-		PrintError(fmt.Sprintf("Failed to shift balance right: %v", err))
-		return err
-	}
-
-	PrintSuccess(fmt.Sprintf("Balance shifted from %d to %d (right)", currentBalance.ActualBalance, newLevel))
-
-	return nil
+	return writeBalance(clientConfig, func(current *models.Balance) int {
+		return current.Clamp(current.Actual + amount)
+	})
 }
 
-// balanceCenter centers the balance (sets to 0)
+// balanceCenter centers the balance, at whatever the device calls its default.
 func balanceCenter(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
 	PrintDeviceHeader("Centering balance", clientConfig.Host, clientConfig.Port)
 
-	client, err := CreateSoundTouchClient(clientConfig)
+	return writeBalance(clientConfig, func(current *models.Balance) int { return current.Default })
+}
+
+// writeBalance opens a WebSocket, reads the current balance so the target can
+// be computed and validated against the DEVICE-reported range, writes, and
+// prints the value the speaker echoes back.
+//
+// The echoed response is used rather than a read-back: HTTP GET /balance lags
+// briefly behind a write, so re-reading to confirm can report the old value.
+func writeBalance(clientConfig *ClientConfig, target func(current *models.Balance) int) error {
+	soundTouchClient, err := CreateSoundTouchClient(clientConfig)
 	if err != nil {
 		PrintError(fmt.Sprintf("Failed to create client: %v", err))
 		return err
 	}
 
-	err = client.SetBalanceSafe(0)
+	wsClient := soundTouchClient.NewWebSocketClient(&client.WebSocketConfig{
+		Logger: &SilentLogger{},
+	})
+
+	if connectErr := wsClient.Connect(); connectErr != nil {
+		PrintError(fmt.Sprintf("Failed to open the WebSocket: %v", connectErr))
+		return connectErr
+	}
+
+	defer func() { _ = wsClient.Disconnect() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), balanceWriteTimeout)
+	defer cancel()
+
+	current, err := wsClient.GetBalance(ctx)
 	if err != nil {
-		PrintError(fmt.Sprintf("Failed to center balance: %v", err))
+		PrintError(fmt.Sprintf("Failed to read the current balance: %v", err))
 		return err
 	}
 
-	PrintSuccess("Balance centered")
+	if !current.Available {
+		printBalance(current)
+
+		return fmt.Errorf("balance is not available on this speaker")
+	}
+
+	updated, err := wsClient.SetBalanceWithBounds(ctx, target(current), current)
+	if err != nil {
+		PrintError(fmt.Sprintf("Failed to set balance: %v", err))
+		return err
+	}
+
+	PrintSuccess(fmt.Sprintf("Balance set to %d (%s)", updated.Target, updated.LevelName(updated.Target)))
 
 	return nil
 }
