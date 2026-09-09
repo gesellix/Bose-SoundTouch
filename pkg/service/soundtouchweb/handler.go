@@ -792,10 +792,26 @@ func (app *WebApp) handleBalanceControl(w http.ResponseWriter, r *http.Request, 
 	ctx, cancel := context.WithTimeout(r.Context(), balanceControlTimeout)
 	defer cancel()
 
-	current, err := wsClient.GetBalance(ctx)
-	if err != nil {
-		app.sendControlResponse(w, err, "")
-		return
+	// Validate against the reading we already hold rather than fetching one
+	// per write. The bounds are what validation needs, they do not change
+	// while a pair exists, and the status copy is kept current by the
+	// connect-time watch, by balanceUpdated and by groupUpdated.
+	//
+	// Reading first made every balance write two round trips where volume and
+	// bass are one, and put the extra hit on /balance — the one endpoint that
+	// blocks rather than refusing when a speaker is asleep. A stale cache
+	// costs nothing here: the speaker rejects a write it cannot honour, and
+	// that error is surfaced.
+	current := device.Status().Balance
+
+	if current == nil || !current.Available {
+		fetched, err := wsClient.GetBalance(ctx)
+		if err != nil {
+			app.sendControlResponse(w, err, "")
+			return
+		}
+
+		current = fetched
 	}
 
 	if !current.Available {

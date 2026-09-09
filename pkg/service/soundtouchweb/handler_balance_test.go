@@ -188,3 +188,33 @@ func TestBalanceWatchStartsWithTheDevice(t *testing.T) {
 			"speaker will show no slider until something else triggers a read")
 	}
 }
+
+// TestBalanceWriteUsesCachedBounds pins that a write validates against the
+// reading already on the status instead of fetching a fresh one.
+//
+// Reading per write made balance two round trips where volume and bass are
+// one, and put the extra hit on /balance — the one endpoint that blocks rather
+// than refusing when a speaker is asleep.
+func TestBalanceWriteUsesCachedBounds(t *testing.T) {
+	source, err := readSourceFile("handler.go")
+	if err != nil {
+		t.Fatalf("read handler.go: %v", err)
+	}
+
+	body := sliceBetween(source, "func (app *WebApp) handleBalanceControl(", "\n}\n")
+	if body == "" {
+		t.Fatal("could not locate handleBalanceControl; update this guard")
+	}
+
+	if !strings.Contains(body, "device.Status().Balance") {
+		t.Error("handleBalanceControl no longer validates against the cached reading; " +
+			"every write would fetch bounds it already has")
+	}
+
+	// The fallback read must stay: a first write can arrive before the watch
+	// has produced a reading.
+	if !strings.Contains(body, "wsClient.GetBalance(ctx)") {
+		t.Error("the fallback read is gone; a write arriving before the first " +
+			"successful read would have no bounds to validate against")
+	}
+}
