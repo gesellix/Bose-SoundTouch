@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { throttleTrailing } from '../static/js/components/Controls.js';
+import { throttleTrailing } from '../static/js/throttle.mjs';
 
 test('a drag collapses into far fewer writes than input events', async () => {
     const sent = [];
