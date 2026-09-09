@@ -923,3 +923,70 @@ func TestPayloadFreeUpdateFramesCarryNoValue(t *testing.T) {
 		}
 	})
 }
+
+// TestDeviceIDPropagatesToChildEvents pins that a typed handler can tell which
+// speaker an event came from.
+//
+// The device ID appears only on <updates>: across the reference captures, 226
+// child elements carry no deviceID attribute and none carries one. Typed
+// handlers receive only the child, so without propagation every DeviceID is
+// empty — which is what printed the bare "[]" in the CLI's event output.
+func TestDeviceIDPropagatesToChildEvents(t *testing.T) {
+	tests := []struct {
+		name    string
+		xmlData string
+		got     func(*WebSocketEvent) string
+	}{
+		{
+			name: "volumeUpdated",
+			xmlData: `<updates deviceID="DEVICEID01"><volumeUpdated><volume>` +
+				`<targetvolume>16</targetvolume><actualvolume>16</actualvolume></volume></volumeUpdated></updates>`,
+			got: func(e *WebSocketEvent) string { return e.VolumeUpdated.DeviceID },
+		},
+		{
+			name:    "bassUpdated, even when payload-free",
+			xmlData: `<updates deviceID='DEVICEID01'><bassUpdated></bassUpdated></updates>`,
+			got:     func(e *WebSocketEvent) string { return e.BassUpdated.DeviceID },
+		},
+		{
+			name: "nowPlayingUpdated",
+			xmlData: `<updates deviceID="DEVICEID01"><nowPlayingUpdated>` +
+				`<nowPlaying source="SPOTIFY"></nowPlaying></nowPlayingUpdated></updates>`,
+			got: func(e *WebSocketEvent) string { return e.NowPlayingUpdated.DeviceID },
+		},
+		{
+			name: "connectionStateUpdated",
+			xmlData: `<updates deviceID="DEVICEID01">` +
+				`<connectionStateUpdated state="NETWORK_WIFI_CONNECTED" up="true" signal="GOOD_SIGNAL" /></updates>`,
+			got: func(e *WebSocketEvent) string { return e.ConnectionStateUpdated.DeviceID },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event, err := ParseWebSocketEvent([]byte(tt.xmlData))
+			if err != nil {
+				t.Fatalf("ParseWebSocketEvent: %v", err)
+			}
+
+			if got := tt.got(event); got != "DEVICEID01" {
+				t.Errorf("child DeviceID = %q, want DEVICEID01 (from the parent <updates>)", got)
+			}
+		})
+	}
+}
+
+// TestDeviceIDPropagationKeepsAnExplicitChildValue guards the direction of the
+// copy: the parent fills in a gap, it does not overwrite.
+func TestDeviceIDPropagationKeepsAnExplicitChildValue(t *testing.T) {
+	event, err := ParseWebSocketEvent([]byte(
+		`<updates deviceID="PARENT01"><nameUpdated deviceID="CHILD02">` +
+			`<name>Kitchen</name></nameUpdated></updates>`))
+	if err != nil {
+		t.Fatalf("ParseWebSocketEvent: %v", err)
+	}
+
+	if event.NameUpdated.DeviceID != "CHILD02" {
+		t.Errorf("DeviceID = %q, want the child's own value to win", event.NameUpdated.DeviceID)
+	}
+}

@@ -552,6 +552,100 @@ type WebSocketEventHandlers struct {
 // RawMessageHandler defines the signature for raw-frame handlers.
 type RawMessageHandler func(data []byte, parseErr error)
 
+// UnmarshalXML decodes an <updates> frame and copies its deviceID down to the
+// child events.
+//
+// The device ID appears ONLY on <updates>: across the reference captures, 226
+// child elements carry no deviceID attribute and none carries one. Each child
+// event type declares the field anyway, so without this every DeviceID handed
+// to a typed handler is the empty string — which is what printed the bare "[]"
+// in the CLI's event output.
+//
+// Typed handlers receive only the child, so the parent's value is the only
+// place the device identity can come from.
+func (e *WebSocketEvent) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	// A distinct type avoids recursing back into this method.
+	type rawEvent WebSocketEvent
+
+	var raw rawEvent
+	if err := d.DecodeElement(&raw, &start); err != nil {
+		return err
+	}
+
+	*e = WebSocketEvent(raw)
+	e.propagateDeviceID()
+
+	return nil
+}
+
+// propagateDeviceID fills in each present child's DeviceID from the parent,
+// leaving alone any that somehow arrived with one of its own.
+func (e *WebSocketEvent) propagateDeviceID() {
+	if e.DeviceID == "" {
+		return
+	}
+
+	targets := []*string{}
+
+	if e.NowPlayingUpdated != nil {
+		targets = append(targets, &e.NowPlayingUpdated.DeviceID)
+	}
+
+	if e.VolumeUpdated != nil {
+		targets = append(targets, &e.VolumeUpdated.DeviceID)
+	}
+
+	if e.ConnectionStateUpdated != nil {
+		targets = append(targets, &e.ConnectionStateUpdated.DeviceID)
+	}
+
+	if e.PresetUpdated != nil {
+		targets = append(targets, &e.PresetUpdated.DeviceID)
+	}
+
+	if e.ZoneUpdated != nil {
+		targets = append(targets, &e.ZoneUpdated.DeviceID)
+	}
+
+	if e.GroupUpdated != nil {
+		targets = append(targets, &e.GroupUpdated.DeviceID)
+	}
+
+	if e.BassUpdated != nil {
+		targets = append(targets, &e.BassUpdated.DeviceID)
+	}
+
+	if e.ClockTimeUpdated != nil {
+		targets = append(targets, &e.ClockTimeUpdated.DeviceID)
+	}
+
+	if e.ClockDisplayUpdated != nil {
+		targets = append(targets, &e.ClockDisplayUpdated.DeviceID)
+	}
+
+	if e.NameUpdated != nil {
+		targets = append(targets, &e.NameUpdated.DeviceID)
+	}
+
+	if e.ErrorUpdated != nil {
+		targets = append(targets, &e.ErrorUpdated.DeviceID)
+	}
+
+	if e.RecentsUpdated != nil {
+		targets = append(targets, &e.RecentsUpdated.DeviceID)
+	}
+
+	if e.LanguageUpdated != nil {
+		targets = append(targets, &e.LanguageUpdated.DeviceID)
+	}
+
+	for _, target := range targets {
+		if *target == "" {
+			*target = e.DeviceID
+		}
+	}
+}
+
 // ParseWebSocketEvent attempts to parse a WebSocket message into a specific event type
 func ParseWebSocketEvent(data []byte) (*WebSocketEvent, error) {
 	var event WebSocketEvent
