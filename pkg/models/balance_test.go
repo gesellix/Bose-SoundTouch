@@ -27,6 +27,9 @@ const capturedBalanceResponse = `<?xml version="1.0" encoding="UTF-8" ?>
 // capturedUnavailableBalance is what an UNPAIRED speaker reports, captured
 // from hardware after a pair was torn down (2026-09-09).
 //
+// Only unpaired: both members of a live pair report Available true, including
+// the right-hand one, contrary to third-party notes.
+//
 // Note what it is not: it is a successful response, not an error, and it still
 // carries the full range AND the target the speaker held while it was paired.
 // So Available is the only field that says whether the control applies — a
@@ -139,6 +142,34 @@ func TestBalanceOutOfRangeStillParses(t *testing.T) {
 	// It is out of range, and Validate is where that is reported.
 	if err := balance.Validate(balance.Target); err == nil {
 		t.Error("Validate accepted 99 against a -7..7 range")
+	}
+}
+
+// TestBothPairMembersReportBalance records what the hardware actually does,
+// against a claim we repeated from third-party notes and then disproved:
+// balance is a property of the PAIR, and both members answer for it.
+//
+// Measured on a live ST-10 pair (FW 27.0.6, 2026-09-09): the LEFT/master and
+// the RIGHT member both reported Available true, and writing 4 to the RIGHT
+// member left both reporting target=4 within a second.
+func TestBothPairMembersReportBalance(t *testing.T) {
+	// The right-hand member's own response — not an unavailable one.
+	rightMember := `<balance deviceID="DEVICEID02">` +
+		`<balanceAvailable>true</balanceAvailable>` +
+		`<balanceMin>-7</balanceMin><balanceMax>7</balanceMax><balanceDefault>0</balanceDefault>` +
+		`<targetBalance>0</targetBalance><actualBalance>0</actualBalance></balance>`
+
+	var balance Balance
+	if err := xml.Unmarshal([]byte(rightMember), &balance); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if !balance.Available {
+		t.Error("Available = false; both members of a pair report balance")
+	}
+
+	if err := balance.Validate(4); err != nil {
+		t.Errorf("Validate(4) on the right-hand member = %v, want nil", err)
 	}
 }
 

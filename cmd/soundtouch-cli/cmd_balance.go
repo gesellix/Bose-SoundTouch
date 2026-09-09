@@ -16,9 +16,10 @@ import (
 const balanceWriteTimeout = 15 * time.Second
 
 // Balance belongs to a stereo PAIR — two SoundTouch 10s taking the LEFT and
-// RIGHT channel — and lives on the pair's master. It is not a multiroom-zone
-// property. Every command here must therefore be addressed to the master;
-// anything else reports balanceAvailable=false.
+// RIGHT channel — not to a multiroom zone and not to one speaker. Measured on
+// hardware, either member answers with the same value and a write to either is
+// reflected by both, so these commands work against whichever member is
+// addressed. An unpaired speaker reports balanceAvailable=false.
 //
 // Writes go over the WebSocket, never HTTP: POST /balance hangs rather than
 // refusing, and the app Bose ships on the speaker writes balance exclusively
@@ -47,12 +48,12 @@ func getBalance(c *cli.Context) error {
 }
 
 // printBalance renders a reading, including the unavailable case, which is
-// what an unpaired speaker or the right-hand member of a pair reports.
+// what a speaker that is not in a stereo pair reports.
 func printBalance(balance *models.Balance) {
 	if !balance.Available {
 		fmt.Println("Balance: not available on this speaker")
-		fmt.Println("  Balance exists only on the MASTER of a stereo pair (two SoundTouch 10s).")
-		fmt.Println("  An unpaired speaker and the right-hand member both report it unavailable.")
+		fmt.Println("  Balance exists only while a speaker is in a stereo pair (two SoundTouch 10s).")
+		fmt.Println("  Pair them, then either member accepts the setting.")
 
 		return
 	}

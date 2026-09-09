@@ -20,7 +20,8 @@ const balanceMainNode = "balanceSet"
 // is correlated to the request, and it does not race the HTTP read's brief lag
 // behind a just-completed write.
 //
-// Address it to the pair's MASTER; anything else answers Available=false.
+// Either member of the pair answers, with the same value; an unpaired speaker
+// answers Available=false.
 func (ws *WebSocketClient) GetBalance(ctx context.Context) (*models.Balance, error) {
 	body, err := ws.Request(ctx, "balance", "GET", "", RequestOptions{})
 	if err != nil {
