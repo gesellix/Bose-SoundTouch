@@ -330,14 +330,21 @@ func (app *WebApp) refreshBalanceForConnection(
 	app.refreshBalance(ctx, deviceID, conn, wsClient)
 }
 
-// refreshBalance reads the stereo pair's balance over the WebSocket and stores
-// it on the device status.
+// refreshBalance reads the balance over the WebSocket and stores it on the
+// device status.
 //
-// It is gated twice, because asking the wrong speaker is not free: balance
-// exists only on SoundTouch 10s (stereoPairCapable) that are currently paired,
-// and only on the pair's master. An unpaired speaker answers
-// balanceAvailable=false rather than failing, which is stored as nil so the UI
-// simply has no control to show.
+// The only gate is the model: balance exists on SoundTouch 10s, and asking
+// anything else is pointless. Whether it currently APPLIES is the speaker's
+// call, reported as balanceAvailable, and that is the single authority here —
+// an unavailable answer clears the reading so the UI drops the control.
+//
+// It deliberately does NOT pre-check status.Group. That looks like a free
+// optimisation and is actually a race: on a fresh connection this runs
+// alongside the first /getGroup poll, so the group is usually still nil, and
+// gating on it meant the reading was skipped exactly when it was first needed
+// — with nothing to retry it, since groupUpdated only fires when the pairing
+// itself changes. Found on hardware: a genuinely paired speaker showed no
+// slider until an unrelated write populated the field.
 func (app *WebApp) refreshBalance(
 	ctx context.Context,
 	deviceID string,
@@ -345,12 +352,6 @@ func (app *WebApp) refreshBalance(
 	wsClient *client.WebSocketClient,
 ) {
 	if wsClient == nil || !stereoPairCapable(conn.DeviceInfo) {
-		return
-	}
-
-	if group := conn.Status().Group; group == nil || group.IsEmpty() {
-		app.clearBalance(conn)
-
 		return
 	}
 
@@ -371,8 +372,7 @@ func (app *WebApp) refreshBalance(
 }
 
 // clearBalance drops any stored reading, which is how the UI learns the
-// control no longer applies (the pair was torn down, or this is the
-// right-hand member).
+// control no longer applies — the pair was torn down.
 func (app *WebApp) clearBalance(conn *webtypes.DeviceConnection) {
 	if conn.Status().Balance == nil {
 		return

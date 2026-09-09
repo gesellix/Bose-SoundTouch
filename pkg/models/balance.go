@@ -9,9 +9,16 @@ import (
 // Balance represents the response from GET /balance.
 //
 // Balance is a property of a stereo PAIR (a /getGroup group of two SoundTouch
-// 10s taking the LEFT and RIGHT channel), not of a multiroom zone, and it lives
-// on the pair's master. An unpaired speaker, and the right-hand member of a
-// pair, report Available false.
+// 10s taking the LEFT and RIGHT channel), not of a multiroom zone.
+//
+// It belongs to the pair, not to one speaker: measured on hardware, BOTH
+// members report Available true and the same value, and a write to either is
+// reflected by both within a second. Addressing the master is still the
+// conventional choice (it is what the app Bose ships on the speaker does), but
+// it is not a requirement. Third-party notes claiming the right-hand member
+// reports Available false do not match FW 27.0.6.
+//
+// An unpaired speaker reports Available false.
 //
 // Shape confirmed on hardware (SoundTouch 10, variant=rhino, moduleType=sm2,
 // FW 27.0.6, paired as master, 2026-09-08):
@@ -75,7 +82,7 @@ func NewBalanceRequest(level int, bounds *Balance) (*BalanceRequest, error) {
 // Validate reports whether level is within the range this device announced.
 func (b *Balance) Validate(level int) error {
 	if !b.Available {
-		return fmt.Errorf("balance is not available on device %q (it reports balanceAvailable=false; balance exists only on the master of a stereo pair)", b.DeviceID)
+		return fmt.Errorf("balance is not available on device %q (it reports balanceAvailable=false; balance exists only while the speaker is in a stereo pair)", b.DeviceID)
 	}
 
 	if level < b.Min || level > b.Max {
@@ -163,7 +170,7 @@ func GetBalanceLevelCategory(level int) string {
 // String returns a human-readable string representation
 func (b *Balance) String() string {
 	if !b.Available {
-		return "Balance: unavailable (not the master of a stereo pair)"
+		return "Balance: unavailable (the speaker is not in a stereo pair)"
 	}
 
 	return fmt.Sprintf("Balance: %d (%s), range %d..%d", b.GetLevel(), b.LevelName(b.GetLevel()), b.Min, b.Max)

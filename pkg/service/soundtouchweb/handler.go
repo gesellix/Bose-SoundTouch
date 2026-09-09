@@ -771,8 +771,8 @@ const balanceControlTimeout = 12 * time.Second
 //     -7..7), so the bound check uses the reading that precedes the write
 //     instead of a constant.
 //
-// Address it to the pair's MASTER; anything else reports the balance
-// unavailable, and that is reported back as a 409 rather than a failure.
+// Either member of the pair accepts it. A speaker that is not paired reports
+// the balance unavailable, which comes back as a 409 rather than a failure.
 func (app *WebApp) handleBalanceControl(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection) {
 	if r.Method != http.MethodPost {
 		app.sendError(w, "POST required for balance control", http.StatusMethodNotAllowed)
@@ -801,7 +801,7 @@ func (app *WebApp) handleBalanceControl(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if !current.Available {
-		app.sendError(w, "This speaker does not have balance; it belongs to the master of a stereo pair", http.StatusConflict)
+		app.sendError(w, "This speaker has no balance; it is not part of a stereo pair", http.StatusConflict)
 		return
 	}
 

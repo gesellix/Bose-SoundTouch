@@ -144,9 +144,9 @@ func ExampleClient_SetBass() {
 
 // ExampleClient_GetBalance demonstrates reading a stereo pair's balance.
 //
-// Address it to the pair's MASTER. An unpaired speaker, and the right-hand
-// member of a pair, answer balanceAvailable=false rather than failing, and the
-// valid range comes from the device rather than being assumed.
+// Either member of the pair answers, with the same value. An unpaired speaker
+// answers balanceAvailable=false rather than failing, and the valid range comes
+// from the device rather than being assumed.
 //
 // Writing balance is not possible over HTTP — see WebSocketClient.SetBalance.
 func ExampleClient_GetBalance() {
@@ -159,7 +159,7 @@ func ExampleClient_GetBalance() {
 	}
 
 	if !balance.Available {
-		fmt.Println("Balance: not available (only the master of a stereo pair has it)")
+		fmt.Println("Balance: not available (the speaker is not in a stereo pair)")
 		return
 	}
 

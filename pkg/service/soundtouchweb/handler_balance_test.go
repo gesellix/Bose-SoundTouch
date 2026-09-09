@@ -106,3 +106,31 @@ func TestBalanceRequestJSONShape(t *testing.T) {
 		t.Errorf("Level = %d, want -7", decoded.Level)
 	}
 }
+
+// TestRefreshBalanceDoesNotPrecheckGroup is the regression for a race found on
+// hardware: refreshBalance used to skip the read when status.Group was nil.
+//
+// On a fresh connection that check runs alongside the first /getGroup poll, so
+// the group is usually still nil — the reading was skipped exactly when it was
+// first needed, and nothing retried it, because groupUpdated only fires when
+// the pairing itself changes. A genuinely paired speaker showed no slider in
+// the Player until an unrelated write happened to populate the field.
+//
+// balanceAvailable from the device is the authority; a local group snapshot is
+// not. If this guard fails, someone reintroduced the pre-check.
+func TestRefreshBalanceDoesNotPrecheckGroup(t *testing.T) {
+	source, err := readSourceFile("websocket.go")
+	if err != nil {
+		t.Fatalf("read websocket.go: %v", err)
+	}
+
+	body := sliceBetween(source, "func (app *WebApp) refreshBalance(", "\n}\n")
+	if body == "" {
+		t.Fatal("could not locate refreshBalance; update this guard")
+	}
+
+	if strings.Contains(body, "Status().Group") {
+		t.Error("refreshBalance pre-checks status.Group; on a fresh connection " +
+			"that races the first /getGroup poll and silently skips the read")
+	}
+}
