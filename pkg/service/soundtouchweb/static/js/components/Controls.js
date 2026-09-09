@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 
@@ -70,6 +70,48 @@ function IconRepeat({ one = false }) {
     </svg>`;
 }
 
+// throttleTrailing limits how often fn runs, and always runs it once more with
+// the final arguments after the last call.
+//
+// Range inputs fire on every pixel of a drag. Without this, one drag of the
+// volume slider is dozens of POSTs to the speaker, and a drag of the balance
+// slider is worse still: each write is a read-then-write round trip over the
+// WebSocket, because the level has to be validated against the range the
+// device reports. The trailing call is what makes throttling safe here — the
+// value the user let go on is always the value that gets sent.
+export function throttleTrailing(fn, ms) {
+    let last = 0;
+    let timer = null;
+    let pending = null;
+
+    return (...args) => {
+        pending = args;
+
+        const elapsed = Date.now() - last;
+        if (elapsed >= ms) {
+            last = Date.now();
+            fn(...pending);
+            pending = null;
+            return;
+        }
+
+        if (timer === null) {
+            timer = setTimeout(() => {
+                timer = null;
+                if (pending === null) return;
+                last = Date.now();
+                fn(...pending);
+                pending = null;
+            }, ms - elapsed);
+        }
+    };
+}
+
+// sliderWriteInterval is the shortest gap between two writes from one slider.
+// Long enough to collapse a drag into a handful of requests, short enough that
+// dragging still feels live.
+const sliderWriteInterval = 150;
+
 // balanceLabel renders a level as a side rather than a bare signed number:
 // "L3" reads better than "-3" on a control whose whole point is left/right.
 function balanceLabel(level) {
@@ -106,22 +148,32 @@ export function Controls({ deviceId, status }) {
 
     const send = (key) => api.key(deviceId, key);
 
+    // One throttle per slider per mount. The local state still updates on every
+    // input, so the handle keeps up with the pointer; only the network write is
+    // rate-limited.
+    const writeVolume = useMemo(() => throttleTrailing(
+        (id, val) => api.volume(id, val), sliderWriteInterval), []);
+    const writeBass = useMemo(() => throttleTrailing(
+        (id, val) => api.bass(id, val), sliderWriteInterval), []);
+    const writeBalance = useMemo(() => throttleTrailing(
+        (id, val) => api.balance(id, val), sliderWriteInterval), []);
+
     function onVolumeChange(e) {
         const val = parseInt(e.target.value, 10);
         setLocalVolume(val);
-        api.volume(deviceId, val);
+        writeVolume(deviceId, val);
     }
 
     function onBassChange(e) {
         const val = parseInt(e.target.value, 10);
         setLocalBass(val);
-        api.bass(deviceId, val);
+        writeBass(deviceId, val);
     }
 
     function onBalanceChange(e) {
         const val = parseInt(e.target.value, 10);
         setLocalBalance(val);
-        api.balance(deviceId, val);
+        writeBalance(deviceId, val);
     }
 
     function toggleShuffle() {
