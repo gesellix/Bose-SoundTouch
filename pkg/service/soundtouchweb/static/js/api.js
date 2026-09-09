@@ -51,6 +51,11 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify({ level }),
     }),
+    balance: (id, level) => req(`/api/control/devices/${id}/action/balance`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ level }),
+    }),
     power: (id) => req(`/api/control/devices/${id}/power`, { method: 'POST' }),
     recents: (id) => req(`/api/control/devices/${id}/recents`),
     zone: (id) => req(`/api/control/devices/${id}/zone`),

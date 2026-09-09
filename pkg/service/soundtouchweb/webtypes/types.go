@@ -121,6 +121,7 @@ type DeviceStatus struct {
 	Sources                *models.Sources         `json:"sources,omitempty"`
 	SourcesStale           bool                    `json:"sourcesStale,omitempty"`
 	Bass                   *models.Bass            `json:"bass,omitempty"`
+	Balance                *models.Balance         `json:"balance,omitempty"`
 	Group                  *models.Group           `json:"group,omitempty"`
 	Connectivity           Connectivity            `json:"connectivity"`
 	HTTPReachable          bool                    `json:"httpReachable"`
@@ -226,6 +227,7 @@ const (
 	FieldPresets
 	FieldSources
 	FieldBass
+	FieldBalance
 	FieldConnectivity
 	numStatusFields
 )
@@ -548,7 +550,8 @@ func (c *DeviceConnection) ApplySourcesRead(generation uint64, sources *models.S
 // writers cannot silently lose each other's changes.
 //
 // The copy mut receives is a shallow value copy of the previous status.
-// Nested pointer fields (NowPlaying, Volume, Presets, Sources, Bass, Group)
+// Nested pointer fields (NowPlaying, Volume, Presets, Sources, Bass, Balance,
+// Group)
 // share their backing struct with the previous version: callers MUST
 // REPLACE these pointers (s.Volume = &models.Volume{...}) rather than
 // mutate through them (s.Volume.ActualVolume++ would race with any
@@ -899,6 +902,15 @@ type APIResponse struct {
 
 // VolumeRequest represents a volume control request
 type VolumeRequest struct {
+	Level int `json:"level"`
+}
+
+// BalanceRequest is a stereo-pair balance control request.
+//
+// Level is validated against the range the DEVICE reports, not a constant:
+// a SoundTouch 10 pair reports -7..7, and the widely-copied ±50 assumption is
+// wrong (GH-699).
+type BalanceRequest struct {
 	Level int `json:"level"`
 }
 

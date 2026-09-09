@@ -2,6 +2,7 @@
 package soundtouchweb
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -307,6 +308,93 @@ func (app *WebApp) applyBassEvent(
 	})
 }
 
+// refreshBalanceForConnection runs refreshBalance under a context bounded both
+// by balanceControlTimeout and by the connection's own lifetime, so a read
+// stops when the device is removed rather than holding the socket open.
+func (app *WebApp) refreshBalanceForConnection(
+	deviceID string,
+	conn *webtypes.DeviceConnection,
+	wsClient *client.WebSocketClient,
+) {
+	ctx, cancel := context.WithTimeout(context.Background(), balanceControlTimeout)
+	defer cancel()
+
+	go func() {
+		select {
+		case <-conn.Done():
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	app.refreshBalance(ctx, deviceID, conn, wsClient)
+}
+
+// refreshBalance reads the stereo pair's balance over the WebSocket and stores
+// it on the device status.
+//
+// It is gated twice, because asking the wrong speaker is not free: balance
+// exists only on SoundTouch 10s (stereoPairCapable) that are currently paired,
+// and only on the pair's master. An unpaired speaker answers
+// balanceAvailable=false rather than failing, which is stored as nil so the UI
+// simply has no control to show.
+func (app *WebApp) refreshBalance(
+	ctx context.Context,
+	deviceID string,
+	conn *webtypes.DeviceConnection,
+	wsClient *client.WebSocketClient,
+) {
+	if wsClient == nil || !stereoPairCapable(conn.DeviceInfo) {
+		return
+	}
+
+	if group := conn.Status().Group; group == nil || group.IsEmpty() {
+		app.clearBalance(conn)
+
+		return
+	}
+
+	balance, err := wsClient.GetBalance(ctx)
+	if err != nil {
+		log.Printf("Speaker %s: balance read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
+
+		return
+	}
+
+	if !balance.Available {
+		app.clearBalance(conn)
+
+		return
+	}
+
+	app.applyBalanceEvent(conn, balance)
+}
+
+// clearBalance drops any stored reading, which is how the UI learns the
+// control no longer applies (the pair was torn down, or this is the
+// right-hand member).
+func (app *WebApp) clearBalance(conn *webtypes.DeviceConnection) {
+	if conn.Status().Balance == nil {
+		return
+	}
+
+	app.applyBalanceEvent(conn, nil)
+}
+
+// applyBalanceEvent stores a fresh balance reading on the device status.
+func (app *WebApp) applyBalanceEvent(
+	conn *webtypes.DeviceConnection,
+	balance *models.Balance,
+) {
+	app.applySpeakerStatusEvent(conn, webtypes.FieldBalance, func(status *webtypes.DeviceStatus) bool {
+		changed := !reflect.DeepEqual(status.Balance, balance)
+		status.Balance = balance
+		status.LastActivity = time.Now()
+
+		return changed
+	})
+}
+
 // registerDeviceWebSocketClient gives conn its own write-serialization lock,
 // mirroring registerGlobalWebSocket's role for the browser-wide pool. Unlike
 // registerGlobalWebSocket, there are no initial frames to send under it --
@@ -487,6 +575,10 @@ func (app *WebApp) HandleAPIDiscover(w http.ResponseWriter, r *http.Request) {
 // device. Initial connection failures are retried here; after the first
 // success WebSocketClient owns transport reconnects and this supervisor
 // observes their state until the device is removed.
+//
+// It deliberately takes no context: it outlives any request, and the
+// connection's own lifetime (conn.Done) is the scope that matters. Work it
+// starts derives its context from that rather than inheriting a caller's.
 func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.DeviceConnection) {
 	// Skip WebSocket connection if client is not available (e.g., in tests)
 	if conn.Client == nil {
@@ -575,6 +667,12 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			)
 		})
 
+		// balanceUpdated carries no payload — it is a signal to re-read, not
+		// a value.
+		wsClient.OnBalanceUpdated(func(_ *models.BalanceUpdatedEvent) {
+			go app.refreshBalanceForConnection(deviceID, conn, wsClient)
+		})
+
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
 			activity := time.Now()
 
@@ -591,6 +689,10 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 		wsClient.OnGroupUpdated(func(event *models.GroupUpdatedEvent) {
 			app.applyGroupUpdatedEvent(conn, event)
+
+			// Creating or tearing down a pair flips whether balance exists
+			// here at all, so the reading has to follow the group.
+			go app.refreshBalanceForConnection(deviceID, conn, wsClient)
 		})
 
 		wsClient.OnNameUpdated(func(event *models.NameUpdatedEvent) {
@@ -648,6 +750,12 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		// new WebSocket connections, so anything that changed while we were
 		// disconnected would otherwise stay stale until the next WS event.
 		go app.UpdateDeviceStatus(deviceID, conn)
+
+		// Balance is read here rather than in the status poll, on purpose:
+		// /balance BLOCKS instead of refusing while a speaker is in deep
+		// standby, so one sleeping speaker on the polled path would stall
+		// every other field with it.
+		go app.refreshBalanceForConnection(deviceID, conn, wsClient)
 
 		<-conn.Done()
 
