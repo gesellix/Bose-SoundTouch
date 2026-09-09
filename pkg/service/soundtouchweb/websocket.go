@@ -379,6 +379,26 @@ func (app *WebApp) refreshBalance(deviceID string, conn *webtypes.DeviceConnecti
 		return
 	}
 
+	// Coalesce. Dragging the slider emits a burst of balanceUpdated frames —
+	// four inside one second, measured — and reading once per frame would
+	// pile concurrent requests onto an endpoint that blocks on a sleeping
+	// speaker. Whoever is already reading will read once more on our behalf,
+	// so the final value still lands.
+	if !conn.BeginBalanceRefresh() {
+		return
+	}
+
+	for {
+		app.readBalanceOnce(deviceID, conn)
+
+		if !conn.EndBalanceRefresh() {
+			return
+		}
+	}
+}
+
+// readBalanceOnce performs a single balance read and stores the result.
+func (app *WebApp) readBalanceOnce(deviceID string, conn *webtypes.DeviceConnection) {
 	balance, err := conn.Client.GetBalance()
 	if err != nil {
 		log.Printf("Speaker %s: balance read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
