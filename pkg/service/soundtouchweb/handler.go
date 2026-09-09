@@ -483,7 +483,6 @@ func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
-		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -578,7 +577,6 @@ func (app *WebApp) HandleAPIControl(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
-		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -923,7 +921,6 @@ func (app *WebApp) HandleDeviceKey(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
-		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -956,7 +953,6 @@ func (app *WebApp) HandleDirectVolumeControl(w http.ResponseWriter, r *http.Requ
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
-		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -983,7 +979,6 @@ func (app *WebApp) HandleDevicePower(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
-		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 

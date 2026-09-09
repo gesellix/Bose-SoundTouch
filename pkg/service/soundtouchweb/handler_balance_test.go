@@ -108,8 +108,8 @@ func TestBalanceIsRetriedAfterConnect(t *testing.T) {
 
 	watch := sliceBetween(source, "func (app *WebApp) watchBalance(", "\n}\n")
 	if watch == "" {
-		t.Fatal("watchBalance is gone; a single read on connect misses an " +
-			"already-paired speaker and a sleeping one")
+		t.Fatal("watchBalance is gone; a single read misses a pair that already " +
+			"existed at startup, discovered by the concurrent /getGroup poll")
 	}
 
 	if !strings.Contains(watch, "Status().Balance != nil") {
@@ -160,7 +160,31 @@ func TestRefreshBalanceDoesNotPrecheckGroup(t *testing.T) {
 	}
 
 	if strings.Contains(body, "Status().Group") {
-		t.Error("refreshBalance pre-checks status.Group; on a fresh connection " +
-			"that races the first /getGroup poll and silently skips the read")
+		t.Error("refreshBalance pre-checks status.Group; at startup that races " +
+			"the first /getGroup poll and silently skips the read")
+	}
+
+	// Reads must not depend on the WebSocket. It is created lazily, on the
+	// first control request that needs one, so a paired speaker showed no
+	// slider until something was pressed — the speaker was answering
+	// balanceAvailable=true the whole time, and nobody was asking.
+	if strings.Contains(body, "wsClient") || strings.Contains(body, "CurrentWebSocket") {
+		t.Error("refreshBalance depends on the WebSocket; reads go over HTTP, " +
+			"only writes need the socket")
+	}
+}
+
+// TestBalanceWatchStartsWithTheDevice pins where the watch is anchored. Tying
+// it to the WebSocket meant it never ran for a speaker nobody had interacted
+// with, which is precisely the speaker whose slider was missing.
+func TestBalanceWatchStartsWithTheDevice(t *testing.T) {
+	source, err := readSourceFile("discovery.go")
+	if err != nil {
+		t.Fatalf("read discovery.go: %v", err)
+	}
+
+	if !strings.Contains(source, "go app.watchBalance(") {
+		t.Error("device registration no longer starts the balance watch; a paired " +
+			"speaker will show no slider until something else triggers a read")
 	}
 }
