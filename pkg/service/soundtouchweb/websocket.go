@@ -342,7 +342,7 @@ func (app *WebApp) watchBalance(
 	conn *webtypes.DeviceConnection,
 	wsClient *client.WebSocketClient,
 ) {
-	for _, wait := range balanceWatchSchedule {
+	for attempt, wait := range balanceWatchSchedule {
 		if conn.CurrentWebSocket() != wsClient {
 			return // this generation's socket is gone
 		}
@@ -350,8 +350,19 @@ func (app *WebApp) watchBalance(
 		app.refreshBalanceForConnection(deviceID, conn, wsClient)
 
 		if conn.Status().Balance != nil {
+			if attempt > 0 {
+				log.Printf("Speaker %s: balance became readable on attempt %d",
+					sanitizeLog(deviceID), attempt+1)
+			}
+
 			return
 		}
+
+		// Say what the speaker actually answered. A control that silently
+		// never appears is the hardest kind of bug to report, and guessing
+		// at the cause from the outside has already been wrong twice.
+		log.Printf("Speaker %s: balance still unavailable after attempt %d, retrying in %s",
+			sanitizeLog(deviceID), attempt+1, wait)
 
 		select {
 		case <-time.After(wait):
@@ -422,13 +433,12 @@ func (app *WebApp) refreshBalance(
 	}
 
 	if !balance.Available {
-		// Worth a line. A speaker that is genuinely paired can still answer
-		// this way — it did, while asleep — and without the log the only
-		// symptom is a control that quietly never appears, which is exactly
-		// how this cost an evening to track down.
-		if conn.Status().Balance != nil {
-			log.Printf("Speaker %s: balance no longer available", sanitizeLog(deviceID))
-		}
+		// Log the whole answer, not just the fact of it. A speaker that is
+		// genuinely paired still answers this way under conditions we have
+		// not pinned down, and the range/target it reports alongside are the
+		// evidence needed to work out which.
+		log.Printf("Speaker %s: balance reported unavailable (range %d..%d, default %d, target %d, actual %d)",
+			sanitizeLog(deviceID), balance.Min, balance.Max, balance.Default, balance.Target, balance.Actual)
 
 		app.clearBalance(conn)
 
