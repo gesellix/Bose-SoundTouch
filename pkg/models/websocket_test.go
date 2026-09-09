@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -38,37 +39,87 @@ func TestWebSocketEventType_String(t *testing.T) {
 	}
 }
 
-func TestConnectionState_IsConnected(t *testing.T) {
+// TestConnectionStateUpdatedEvent_Parse pins the shape captured from a
+// SoundTouch 10 (variant=rhino, moduleType=sm2, FW 27.0.6): state, up and
+// signal are attributes on <connectionStateUpdated> itself. The type used to
+// model a nested <connectionState> child that never appears, which left State
+// and Signal permanently empty (GH-701).
+func TestConnectionStateUpdatedEvent_Parse(t *testing.T) {
 	tests := []struct {
-		name     string
-		state    string
-		expected bool
+		name       string
+		xmlData    string
+		wantState  string
+		wantUp     bool
+		wantSignal string
 	}{
-		{"Connected", "CONNECTED", true},
-		{"Disconnected", "DISCONNECTED", false},
-		{"Connecting", "CONNECTING", false},
-		{"Unknown", "UNKNOWN", false},
+		{
+			name: "captured wifi-connected frame",
+			xmlData: `<updates deviceID="DEVICEID01">` +
+				`<connectionStateUpdated state="NETWORK_WIFI_CONNECTED" up="true" signal="EXCELLENT_SIGNAL" />` +
+				`</updates>`,
+			wantState:  "NETWORK_WIFI_CONNECTED",
+			wantUp:     true,
+			wantSignal: "EXCELLENT_SIGNAL",
+		},
+		{
+			name: "link down",
+			xmlData: `<updates deviceID="DEVICEID01">` +
+				`<connectionStateUpdated state="NETWORK_WIFI_DISCONNECTED" up="false" signal="NO_SIGNAL" />` +
+				`</updates>`,
+			wantState:  "NETWORK_WIFI_DISCONNECTED",
+			wantUp:     false,
+			wantSignal: "NO_SIGNAL",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := &ConnectionState{State: tt.state}
+			event, err := ParseWebSocketEvent([]byte(tt.xmlData))
+			if err != nil {
+				t.Fatalf("ParseWebSocketEvent() error = %v", err)
+			}
 
-			result := cs.IsConnected()
-			if result != tt.expected {
-				t.Errorf("ConnectionState.IsConnected() = %v, want %v", result, tt.expected)
+			cs := event.ConnectionStateUpdated
+			if cs == nil {
+				t.Fatal("ConnectionStateUpdated is nil")
+			}
+
+			if cs.State != tt.wantState {
+				t.Errorf("State = %q, want %q", cs.State, tt.wantState)
+			}
+
+			if cs.Up != tt.wantUp {
+				t.Errorf("Up = %v, want %v", cs.Up, tt.wantUp)
+			}
+
+			if cs.Signal != tt.wantSignal {
+				t.Errorf("Signal = %q, want %q", cs.Signal, tt.wantSignal)
+			}
+
+			if got := cs.IsConnected(); got != tt.wantUp {
+				t.Errorf("IsConnected() = %v, want %v", got, tt.wantUp)
+			}
+
+			if got := cs.GetSignalStrength(); got != tt.wantSignal {
+				t.Errorf("GetSignalStrength() = %q, want %q", got, tt.wantSignal)
 			}
 		})
 	}
 }
 
-func TestConnectionState_GetSignalStrength(t *testing.T) {
-	cs := &ConnectionState{Signal: "EXCELLENT"}
-	result := cs.GetSignalStrength()
+// TestConnectionStateUpdatedEvent_IsConnectedReadsUp documents why
+// IsConnected does not compare State against ConnectionStateConnected: the
+// device never sends that bare value, so a string match would report every
+// healthy speaker as disconnected.
+func TestConnectionStateUpdatedEvent_IsConnectedReadsUp(t *testing.T) {
+	event := &ConnectionStateUpdatedEvent{State: "NETWORK_WIFI_CONNECTED", Up: true}
+	if !event.IsConnected() {
+		t.Error("IsConnected() = false for up=\"true\"; must read the up attribute")
+	}
 
-	expected := "EXCELLENT"
-	if result != expected {
-		t.Errorf("ConnectionState.GetSignalStrength() = %v, want %v", result, expected)
+	stale := &ConnectionStateUpdatedEvent{State: string(ConnectionStateConnected), Up: false}
+	if stale.IsConnected() {
+		t.Error("IsConnected() = true for up=\"false\"; State must not override up")
 	}
 }
 
@@ -576,5 +627,216 @@ func TestParseWebSocketEvent_KnownEventNoUnknowns(t *testing.T) {
 
 	if names := event.UnknownEventNames(); len(names) != 0 {
 		t.Errorf("expected no unknown elements for a modeled event, got %v", names)
+	}
+}
+
+// TestParseSpecialMessage covers the non-<updates> frames the speaker sends.
+//
+// The errorUpdate cases are verbatim captures from a SoundTouch 10
+// (variant=rhino, moduleType=sm2, FW 27.0.6), with the device ID replaced.
+// Before GH-701 they fell through to "unknown special message type", so every
+// device-side error was lost — which is exactly the diagnostic information
+// playback bug reports keep lacking.
+func TestParseSpecialMessage(t *testing.T) {
+	t.Run("errorUpdate — STORED_MUSIC_AP_TIMEOUT", func(t *testing.T) {
+		data := []byte(`<errorUpdate deviceID="DEVICEID01">` +
+			`<error value="1654" name="STORED_MUSIC_AP_TIMEOUT" severity="Unrecoverable">APServer: Timeout</error>` +
+			`</errorUpdate>`)
+
+		msg, err := ParseSpecialMessage(data)
+		if err != nil {
+			t.Fatalf("ParseSpecialMessage() error = %v", err)
+		}
+
+		if msg.Type != MessageTypeErrorUpdate {
+			t.Errorf("Type = %q, want %q", msg.Type, MessageTypeErrorUpdate)
+		}
+
+		if msg.DeviceID != "DEVICEID01" {
+			t.Errorf("DeviceID = %q, want DEVICEID01", msg.DeviceID)
+		}
+
+		update := msg.GetErrorUpdate()
+		if update == nil {
+			t.Fatal("GetErrorUpdate() = nil")
+		}
+
+		if update.Error.Value != "1654" {
+			t.Errorf("Error.Value = %q, want 1654", update.Error.Value)
+		}
+
+		if update.Error.Name != "STORED_MUSIC_AP_TIMEOUT" {
+			t.Errorf("Error.Name = %q, want STORED_MUSIC_AP_TIMEOUT", update.Error.Name)
+		}
+
+		if update.Error.Severity != "Unrecoverable" {
+			t.Errorf("Error.Severity = %q, want Unrecoverable", update.Error.Severity)
+		}
+
+		if update.Error.Text != "APServer: Timeout" {
+			t.Errorf("Error.Text = %q, want %q", update.Error.Text, "APServer: Timeout")
+		}
+	})
+
+	t.Run("errorUpdate — AUDIO_ERROR_TIMEOUT", func(t *testing.T) {
+		data := []byte(`<errorUpdate deviceID="DEVICEID01">` +
+			`<error value="3103" name="AUDIO_ERROR_TIMEOUT" severity="Unknown">AudioPath error4, reason 1</error>` +
+			`</errorUpdate>`)
+
+		msg, err := ParseSpecialMessage(data)
+		if err != nil {
+			t.Fatalf("ParseSpecialMessage() error = %v", err)
+		}
+
+		update := msg.GetErrorUpdate()
+		if update == nil {
+			t.Fatal("GetErrorUpdate() = nil")
+		}
+
+		if update.Error.Value != "3103" || update.Error.Name != "AUDIO_ERROR_TIMEOUT" {
+			t.Errorf("got %s/%s, want 3103/AUDIO_ERROR_TIMEOUT", update.Error.Value, update.Error.Name)
+		}
+
+		if !strings.Contains(msg.String(), "AUDIO_ERROR_TIMEOUT") {
+			t.Errorf("String() = %q, want it to name the error", msg.String())
+		}
+	})
+
+	t.Run("SoundTouchSdkInfo", func(t *testing.T) {
+		msg, err := ParseSpecialMessage([]byte(`<SoundTouchSdkInfo serverVersion="4" serverBuild="trunk r46330" />`))
+		if err != nil {
+			t.Fatalf("ParseSpecialMessage() error = %v", err)
+		}
+
+		if msg.Type != MessageTypeSdkInfo {
+			t.Errorf("Type = %q, want %q", msg.Type, MessageTypeSdkInfo)
+		}
+
+		if msg.GetErrorUpdate() != nil {
+			t.Error("GetErrorUpdate() must be nil for a non-error message")
+		}
+	})
+
+	t.Run("userActivityUpdate", func(t *testing.T) {
+		msg, err := ParseSpecialMessage([]byte(`<userActivityUpdate deviceID="DEVICEID01" />`))
+		if err != nil {
+			t.Fatalf("ParseSpecialMessage() error = %v", err)
+		}
+
+		if msg.Type != MessageTypeUserActivity {
+			t.Errorf("Type = %q, want %q", msg.Type, MessageTypeUserActivity)
+		}
+	})
+
+	t.Run("userInactivityUpdate", func(t *testing.T) {
+		msg, err := ParseSpecialMessage([]byte(`<userInactivityUpdate deviceID="DEVICEID01" />`))
+		if err != nil {
+			t.Fatalf("ParseSpecialMessage() error = %v", err)
+		}
+
+		if msg.Type != MessageTypeUserInactivity {
+			t.Errorf("Type = %q, want %q", msg.Type, MessageTypeUserInactivity)
+		}
+	})
+
+	t.Run("unknown type still reports an error", func(t *testing.T) {
+		if _, err := ParseSpecialMessage([]byte(`<somethingElse deviceID="DEVICEID01" />`)); err == nil {
+			t.Fatal("expected an error for an unmodelled special message")
+		}
+	})
+}
+
+// TestParseSpecialMessage_ErrorUpdatedIsNotErrorUpdate guards the shared
+// prefix: "<errorUpdate" is also a prefix of "<errorUpdated", the (never
+// observed) <updates> child. A bare-prefix match in ParseSpecialMessage would
+// swallow the past-tense element.
+func TestParseSpecialMessage_ErrorUpdatedIsNotErrorUpdate(t *testing.T) {
+	data := []byte(`<updates deviceID="DEVICEID01">` +
+		`<errorUpdated deviceID="DEVICEID01"><error value="7" name="SOMETHING">boom</error></errorUpdated>` +
+		`</updates>`)
+
+	event, err := ParseWebSocketEvent(data)
+	if err != nil {
+		t.Fatalf("ParseWebSocketEvent() error = %v", err)
+	}
+
+	if event.ErrorUpdated == nil {
+		t.Fatal("ErrorUpdated is nil; <errorUpdated> must still parse as an <updates> child")
+	}
+
+	if event.ErrorUpdated.Error.Name != "SOMETHING" {
+		t.Errorf("Error.Name = %q, want SOMETHING", event.ErrorUpdated.Error.Name)
+	}
+
+	// The root-level branch must not claim a bare <errorUpdated> frame.
+	if _, err := ParseSpecialMessage([]byte(`<errorUpdated deviceID="DEVICEID01"/>`)); err == nil {
+		t.Error("ParseSpecialMessage accepted <errorUpdated>; only <errorUpdate> is a special message")
+	}
+}
+
+// TestParseSpecialMessage_ErrorUpdateShapeVariants guards the root-element
+// dispatch against shapes a substring needle would miss: attributes wrapped
+// onto the next line, and a self-closing element.
+func TestParseSpecialMessage_ErrorUpdateShapeVariants(t *testing.T) {
+	tests := []struct {
+		name    string
+		xmlData string
+	}{
+		{
+			name:    "attributes on the next line",
+			xmlData: "<errorUpdate\n  deviceID=\"DEVICEID01\">\n  <error value=\"1654\" name=\"STORED_MUSIC_AP_TIMEOUT\"/>\n</errorUpdate>",
+		},
+		{
+			name:    "self-closing",
+			xmlData: `<errorUpdate deviceID="DEVICEID01"/>`,
+		},
+		{
+			name:    "with an XML prolog",
+			xmlData: `<?xml version="1.0" encoding="UTF-8" ?><errorUpdate deviceID="DEVICEID01"><error value="7"/></errorUpdate>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, err := ParseSpecialMessage([]byte(tt.xmlData))
+			if err != nil {
+				t.Fatalf("ParseSpecialMessage() error = %v", err)
+			}
+
+			if msg.Type != MessageTypeErrorUpdate {
+				t.Errorf("Type = %q, want %q", msg.Type, MessageTypeErrorUpdate)
+			}
+
+			if msg.DeviceID != "DEVICEID01" {
+				t.Errorf("DeviceID = %q, want DEVICEID01", msg.DeviceID)
+			}
+		})
+	}
+}
+
+func TestRootElementName(t *testing.T) {
+	tests := []struct {
+		name    string
+		xmlData string
+		want    string
+		wantErr bool
+	}{
+		{"plain", `<updates deviceID="X"/>`, "updates", false},
+		{"prolog skipped", `<?xml version="1.0" ?><status>/setup</status>`, "status", false},
+		{"leading whitespace", "\n  <errorUpdate/>", "errorUpdate", false},
+		{"not xml", `not xml at all`, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := RootElementName([]byte(tt.xmlData))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("RootElementName() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if got != tt.want {
+				t.Errorf("RootElementName() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

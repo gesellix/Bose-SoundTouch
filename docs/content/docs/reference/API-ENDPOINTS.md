@@ -451,6 +451,48 @@ Establishes a persistent connection for live updates.
 - `connectionStateUpdated`
 - `presetUpdated`
 
+#### `connectionStateUpdated`
+
+Everything is an attribute on the element itself; there is no nested
+`<connectionState>` child. The `state` and `signal` vocabularies match
+`/networkInfo`'s interface attributes.
+
+```xml
+<updates deviceID="DEVICEID01">
+  <connectionStateUpdated state="NETWORK_WIFI_CONNECTED" up="true" signal="EXCELLENT_SIGNAL" />
+</updates>
+```
+
+Captured on a SoundTouch 10 (`variant=rhino`, `moduleType=sm2`, FW 27.0.6).
+The `up` attribute is the authoritative boolean; `state` is transport-qualified
+and never equals a bare `CONNECTED`.
+
+#### `errorUpdate` (root level, not inside `<updates>`)
+
+Device-side errors arrive unwrapped, at the top level, in the present tense.
+They name the failure precisely, which makes them the most useful diagnostic
+the speaker offers for playback problems.
+
+```xml
+<errorUpdate deviceID="DEVICEID01">
+  <error value="1654" name="STORED_MUSIC_AP_TIMEOUT" severity="Unrecoverable">APServer: Timeout</error>
+</errorUpdate>
+
+<errorUpdate deviceID="DEVICEID01">
+  <error value="3103" name="AUDIO_ERROR_TIMEOUT" severity="Unknown">AudioPath error4, reason 1</error>
+</errorUpdate>
+```
+
+Observed severities: `Unrecoverable`, `Unknown`. Note this is *not* the
+`errorUpdated` (past tense) child of `<updates>` that third-party API notes
+describe; no capture has ever contained that element.
+
+Neither shape appears in Bose's published Web API document — its notification
+chapter is demonstrably incomplete for FW 27.0.6, so both are recorded here
+from captures. Both are pinned by tests in `pkg/models/websocket_test.go`.
+
+`soundtouch-cli events subscribe --filter connection,errors` prints both.
+
 ## Network and System
 
 ### GET /networkInfo ✅ **Implemented**

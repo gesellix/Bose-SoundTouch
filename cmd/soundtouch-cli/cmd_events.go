@@ -209,7 +209,8 @@ func parseEventFilters(eventFilter string) map[string]bool {
 	validFilters := map[string]bool{
 		"nowPlaying": true, "volume": true, "connection": true,
 		"preset": true, "zone": true, "group": true, "bass": true,
-		"sdkInfo": true, "userActivity": true,
+		"sdkInfo": true, "userActivity": true, "userInactivity": true,
+		"errors": true,
 	}
 
 	if eventFilter == "" {
@@ -385,17 +386,16 @@ func handleVolumeEvent(event *models.VolumeUpdatedEvent, verbose bool) {
 }
 
 func handleConnectionEvent(event *models.ConnectionStateUpdatedEvent) {
-	cs := &event.ConnectionState
 	fmt.Printf("\n🌐 Connection Update [%s]:\n", event.DeviceID)
 
-	if cs.IsConnected() {
-		fmt.Println("  ✅ Connected")
+	if event.IsConnected() {
+		fmt.Printf("  ✅ Connected (%s)\n", event.State)
 	} else {
-		fmt.Printf("  ❌ State: %s\n", cs.State)
+		fmt.Printf("  ❌ State: %s\n", event.State)
 	}
 
-	if cs.Signal != "" {
-		fmt.Printf("  📶 Signal: %s\n", cs.GetSignalStrength())
+	if event.Signal != "" {
+		fmt.Printf("  📶 Signal: %s\n", event.GetSignalStrength())
 	}
 }
 
@@ -507,6 +507,10 @@ func handleSpecialMessage(message *models.SpecialMessage, filters map[string]boo
 			if !filters["userInactivity"] {
 				return
 			}
+		case models.MessageTypeErrorUpdate:
+			if !filters["errors"] {
+				return
+			}
 		}
 	}
 
@@ -529,12 +533,42 @@ func handleSpecialMessage(message *models.SpecialMessage, filters map[string]boo
 		if verbose {
 			fmt.Printf("  ⏰ Timestamp: %s\n", message.Timestamp.Format("15:04:05"))
 		}
+	case models.MessageTypeErrorUpdate:
+		handleDeviceError(message, verbose)
 	default:
 		fmt.Printf("\n❓ Unknown Special Message: %s\n", message.String())
 
 		if verbose {
 			fmt.Printf("  📱 Raw data: %s\n", string(message.RawData))
 		}
+	}
+}
+
+// handleDeviceError prints a root-level <errorUpdate> frame. These name the
+// failure precisely — numeric code, symbolic name, severity — and are the
+// most useful thing the speaker says when playback goes wrong.
+func handleDeviceError(message *models.SpecialMessage, verbose bool) {
+	errorUpdate := message.GetErrorUpdate()
+	if errorUpdate == nil {
+		return
+	}
+
+	devErr := &errorUpdate.Error
+
+	fmt.Printf("\n🚨 Device Error [%s]:\n", message.DeviceID)
+	fmt.Printf("  🔢 Code: %s\n", devErr.Value)
+	fmt.Printf("  🏷️  Name: %s\n", devErr.Name)
+
+	if devErr.Severity != "" {
+		fmt.Printf("  ⚠️  Severity: %s\n", devErr.Severity)
+	}
+
+	if text := strings.TrimSpace(devErr.Text); text != "" {
+		fmt.Printf("  💬 Detail: %s\n", text)
+	}
+
+	if verbose {
+		fmt.Printf("  ⏰ Timestamp: %s\n", message.Timestamp.Format("15:04:05"))
 	}
 }
 

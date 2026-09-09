@@ -554,11 +554,25 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 				return
 			}
 
-			app.applyConnectionStateEvent(conn, event.ConnectionState.IsConnected())
+			app.applyConnectionStateEvent(conn, event.IsConnected())
 			conn.ApplySpeakerConnectionEvent(webtypes.SpeakerConnectionState{
-				State:  event.ConnectionState.State,
-				Signal: event.ConnectionState.Signal,
+				State:  event.State,
+				Up:     event.Up,
+				Signal: event.Signal,
 			}, time.Now())
+		})
+
+		// Device errors are the speaker's own diagnosis of a failure —
+		// code, symbolic name, severity. Logging them costs nothing and is
+		// exactly the evidence issue reports keep lacking (GH-701).
+		wsClient.OnDeviceError(func(event *models.ErrorUpdate) {
+			log.Printf("Speaker %s reported error %s (%s) severity=%s: %s",
+				sanitizeLog(deviceID),
+				sanitizeLog(event.Error.Name),
+				sanitizeLog(event.Error.Value),
+				sanitizeLog(event.Error.Severity),
+				sanitizeLog(strings.TrimSpace(event.Error.Text)),
+			)
 		})
 
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {

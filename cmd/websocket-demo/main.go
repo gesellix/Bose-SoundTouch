@@ -47,7 +47,7 @@ func parseFilters(eventFilter string) map[string]bool {
 	validFilters := map[string]bool{
 		"nowPlaying": true, "volume": true, "connection": true,
 		"preset": true, "zone": true, "bass": true,
-		"sdkInfo": true, "userActivity": true,
+		"sdkInfo": true, "userActivity": true, "errors": true,
 	}
 
 	if eventFilter == "" {
@@ -60,7 +60,7 @@ func parseFilters(eventFilter string) map[string]bool {
 	for _, f := range filterList {
 		f = strings.TrimSpace(f)
 		if !validFilters[f] {
-			fmt.Printf("Invalid filter '%s'. Valid filters: nowPlaying, volume, connection, preset, zone, bass, sdkInfo, userActivity\n", f)
+			fmt.Printf("Invalid filter '%s'. Valid filters: nowPlaying, volume, connection, preset, zone, bass, sdkInfo, userActivity, errors\n", f)
 			os.Exit(1)
 		}
 
@@ -327,17 +327,16 @@ func handleVolume(event *models.VolumeUpdatedEvent, verbose bool) {
 }
 
 func handleConnection(event *models.ConnectionStateUpdatedEvent) {
-	cs := &event.ConnectionState
 	fmt.Printf("\n🌐 Connection Update [%s]:\n", event.DeviceID)
 
-	if cs.IsConnected() {
-		fmt.Println("  ✅ Connected")
+	if event.IsConnected() {
+		fmt.Printf("  ✅ Connected (%s)\n", event.State)
 	} else {
-		fmt.Printf("  ❌ State: %s\n", cs.State)
+		fmt.Printf("  ❌ State: %s\n", event.State)
 	}
 
-	if cs.Signal != "" {
-		fmt.Printf("  📶 Signal: %s\n", cs.GetSignalStrength())
+	if event.Signal != "" {
+		fmt.Printf("  📶 Signal: %s\n", event.GetSignalStrength())
 	}
 }
 
@@ -417,6 +416,10 @@ func handleSpecialMessage(message *models.SpecialMessage, filters map[string]boo
 			if !filters["userActivity"] {
 				return
 			}
+		case models.MessageTypeErrorUpdate:
+			if !filters["errors"] {
+				return
+			}
 		}
 	}
 
@@ -432,6 +435,16 @@ func handleSpecialMessage(message *models.SpecialMessage, filters map[string]boo
 
 		if verbose {
 			fmt.Printf("  ⏰ Timestamp: %s\n", message.Timestamp.Format("15:04:05"))
+		}
+	case models.MessageTypeErrorUpdate:
+		if errorUpdate := message.GetErrorUpdate(); errorUpdate != nil {
+			fmt.Printf("\n🚨 Device Error [%s]: %s (%s) severity=%s: %s\n",
+				message.DeviceID,
+				errorUpdate.Error.Name,
+				errorUpdate.Error.Value,
+				errorUpdate.Error.Severity,
+				strings.TrimSpace(errorUpdate.Error.Text),
+			)
 		}
 	default:
 		fmt.Printf("\n❓ Unknown Special Message: %s\n", message.String())

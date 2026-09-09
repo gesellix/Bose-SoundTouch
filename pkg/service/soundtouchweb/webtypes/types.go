@@ -171,8 +171,14 @@ const (
 const staleSourcesFailureThreshold = 2
 
 // SpeakerConnectionState is the network state reported by the speaker.
+//
+// Up is the speaker's own boolean for "the link is up". State is the
+// transport-qualified name it ships alongside ("NETWORK_WIFI_CONNECTED"), kept
+// for display only — it is not a value worth matching on, see
+// ApplySpeakerConnectionEvent.
 type SpeakerConnectionState struct {
 	State  string `json:"state"`
+	Up     bool   `json:"up"`
 	Signal string `json:"signal,omitempty"`
 }
 
@@ -606,11 +612,21 @@ func (c *DeviceConnection) ApplySpeakerConnectionEvent(state SpeakerConnectionSt
 	c.markEventStreamActivityLocked(at)
 	c.speakerConnectionObserved = at
 
-	switch strings.ToUpper(strings.TrimSpace(state.State)) {
-	case string(models.ConnectionStateConnected):
+	// Up is the only positive evidence accepted, matching
+	// models.ConnectionStateUpdatedEvent.IsConnected — the two must agree,
+	// because websocket.go feeds the same event to both.
+	//
+	// Matching on State used to be the only test here, and it fell to the
+	// default branch for every real frame: speakers report
+	// "NETWORK_WIFI_CONNECTED", never a bare "CONNECTED" (GH-701). State is
+	// now consulted only to tell a confirmed disconnect apart from "we
+	// cannot tell" — deliberately with no symmetric CONNECTED case, since
+	// reaching it would mean the state string claims a link that up denies.
+	switch upper := strings.ToUpper(strings.TrimSpace(state.State)); {
+	case state.Up:
 		c.speakerConnectionKnown = true
 		c.speakerConnectionConnected = true
-	case string(models.ConnectionStateDisconnected):
+	case strings.HasSuffix(upper, string(models.ConnectionStateDisconnected)):
 		c.speakerConnectionKnown = true
 		c.speakerConnectionConnected = false
 	default:
