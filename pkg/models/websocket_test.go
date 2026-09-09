@@ -840,3 +840,86 @@ func TestRootElementName(t *testing.T) {
 		})
 	}
 }
+
+// TestPayloadFreeUpdateFramesCarryNoValue pins a shape that cost a real bug:
+// the speaker sends some <xUpdated> elements EMPTY, as a "re-read" signal
+// rather than a value.
+//
+// Frequencies across the reference captures (an ST-20 and both members of an
+// ST-10 pair, FW 27.0.6): bassUpdated 4 of 4 empty, presetsUpdated 3 of 9
+// empty, balanceUpdated always empty. Decoding a value out of one yields the
+// zero value, and storing that overwrites the real setting — the Player's bass
+// slider snapping to 0 on every change was exactly this.
+func TestPayloadFreeUpdateFramesCarryNoValue(t *testing.T) {
+	t.Run("empty bassUpdated carries no bass", func(t *testing.T) {
+		// Captured verbatim, single-quoted attribute included.
+		event, err := ParseWebSocketEvent(
+			[]byte(`<updates deviceID='DEVICEID01'><bassUpdated></bassUpdated></updates>`))
+		if err != nil {
+			t.Fatalf("ParseWebSocketEvent: %v", err)
+		}
+
+		if event.BassUpdated == nil {
+			t.Fatal("BassUpdated is nil; the element was present")
+		}
+
+		if event.BassUpdated.HasPayload() {
+			t.Error("HasPayload() = true for an empty frame; level 0 would be fabricated")
+		}
+
+		if event.BassUpdated.Bass != nil {
+			t.Errorf("Bass = %+v, want nil for a signal-only frame", event.BassUpdated.Bass)
+		}
+	})
+
+	t.Run("bassUpdated with a value still decodes", func(t *testing.T) {
+		event, err := ParseWebSocketEvent([]byte(
+			`<updates deviceID="DEVICEID01"><bassUpdated><bass deviceID="DEVICEID01">` +
+				`<targetbass>-5</targetbass><actualbass>-5</actualbass></bass></bassUpdated></updates>`))
+		if err != nil {
+			t.Fatalf("ParseWebSocketEvent: %v", err)
+		}
+
+		if !event.BassUpdated.HasPayload() {
+			t.Fatal("HasPayload() = false for a frame that carries a value")
+		}
+
+		if event.BassUpdated.Bass.ActualBass != -5 {
+			t.Errorf("ActualBass = %d, want -5", event.BassUpdated.Bass.ActualBass)
+		}
+	})
+
+	t.Run("self-closing presetsUpdated carries no list", func(t *testing.T) {
+		event, err := ParseWebSocketEvent(
+			[]byte(`<updates deviceID="DEVICEID01"><presetsUpdated/></updates>`))
+		if err != nil {
+			t.Fatalf("ParseWebSocketEvent: %v", err)
+		}
+
+		if event.PresetUpdated == nil {
+			t.Fatal("PresetUpdated is nil; the element was present")
+		}
+
+		if event.PresetUpdated.HasPayload() {
+			t.Error("HasPayload() = true for a bare signal; an empty list would blank the UI")
+		}
+	})
+
+	t.Run("presetsUpdated with a list still decodes", func(t *testing.T) {
+		event, err := ParseWebSocketEvent([]byte(
+			`<updates deviceID="DEVICEID01"><presetsUpdated><presets>` +
+				`<preset id="1"><ContentItem source="TUNEIN"><itemName>X</itemName></ContentItem></preset>` +
+				`</presets></presetsUpdated></updates>`))
+		if err != nil {
+			t.Fatalf("ParseWebSocketEvent: %v", err)
+		}
+
+		if !event.PresetUpdated.HasPayload() {
+			t.Fatal("HasPayload() = false for a frame that carries a list")
+		}
+
+		if len(event.PresetUpdated.Presets.Preset) != 1 {
+			t.Errorf("got %d presets, want 1", len(event.PresetUpdated.Presets.Preset))
+		}
+	})
+}

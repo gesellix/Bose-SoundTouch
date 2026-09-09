@@ -441,6 +441,38 @@ func isStandbySource(source string) bool {
 	}
 }
 
+// refreshBass re-reads /bass after a payload-free bassUpdated signal.
+func (app *WebApp) refreshBass(deviceID string, conn *webtypes.DeviceConnection) {
+	if conn.Client == nil {
+		return
+	}
+
+	bass, err := conn.Client.GetBass()
+	if err != nil {
+		log.Printf("Speaker %s: bass re-read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
+
+		return
+	}
+
+	app.applyBassEvent(conn, bass)
+}
+
+// refreshPresets re-reads /presets after a payload-free presetsUpdated signal.
+func (app *WebApp) refreshPresets(deviceID string, conn *webtypes.DeviceConnection) {
+	if conn.Client == nil {
+		return
+	}
+
+	presets, err := conn.Client.GetPresets()
+	if err != nil {
+		log.Printf("Speaker %s: presets re-read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
+
+		return
+	}
+
+	app.applyPresetEvent(conn, presets)
+}
+
 // applyBalanceEvent stores a fresh balance reading on the device status.
 func (app *WebApp) applyBalanceEvent(
 	conn *webtypes.DeviceConnection,
@@ -744,15 +776,36 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
 			activity := time.Now()
 
-			app.applyPresetEvent(conn, &event.Presets)
 			conn.MarkEventStreamActivity(activity)
+
+			// The speaker sends this element both with the full list and as a
+			// bare signal. Applying the empty case as data would blank a
+			// perfectly good preset list, so re-read instead.
+			if !event.HasPayload() {
+				go app.refreshPresets(deviceID, conn)
+
+				return
+			}
+
+			app.applyPresetEvent(conn, event.Presets)
 		})
 
 		wsClient.OnBassUpdated(func(event *models.BassUpdatedEvent) {
 			activity := time.Now()
 
-			app.applyBassEvent(conn, &event.Bass)
 			conn.MarkEventStreamActivity(activity)
+
+			// Every captured bassUpdated frame is empty; it is a re-read
+			// signal, not a value. Taking the zero value out of one and
+			// storing it is what made the Player's bass slider snap to 0 on
+			// every change.
+			if !event.HasPayload() {
+				go app.refreshBass(deviceID, conn)
+
+				return
+			}
+
+			app.applyBassEvent(conn, event.Bass)
 		})
 
 		wsClient.OnGroupUpdated(func(event *models.GroupUpdatedEvent) {

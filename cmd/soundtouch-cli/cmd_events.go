@@ -407,7 +407,12 @@ func handleConnectionEvent(event *models.ConnectionStateUpdatedEvent) {
 }
 
 func handlePresetEvent(event *models.PresetUpdatedEvent, verbose bool) {
-	presets := &event.Presets
+	if !event.HasPayload() {
+		fmt.Printf("\n⭐ Presets Updated (no list sent; re-read /presets)\n")
+		return
+	}
+
+	presets := event.Presets
 
 	deviceHeader := "\n📻 Presets Update"
 	if event.DeviceID != "" {
@@ -480,7 +485,12 @@ func handleGroupEvent(event *models.GroupUpdatedEvent) {
 }
 
 func handleBassEvent(event *models.BassUpdatedEvent) {
-	bass := &event.Bass
+	if !event.HasPayload() {
+		fmt.Printf("\n🎵 Bass Updated (no value sent; re-read /bass)\n")
+		return
+	}
+
+	bass := event.Bass
 	fmt.Printf("\n🎵 Bass Update [%s]:\n", event.DeviceID)
 	fmt.Printf("  🎚️  Level: %d\n", bass.ActualBass)
 

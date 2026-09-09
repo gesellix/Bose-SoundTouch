@@ -312,6 +312,11 @@ func demonstrateWebSocketEvents(c *client.Client) error {
 	wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
 		fmt.Printf("  📡 Preset Update Event Received!\n")
 		fmt.Printf("      Device: %s\n", event.DeviceID)
+		if !event.HasPayload() {
+			fmt.Println("      (signal only; re-read /presets)")
+			return
+		}
+
 		fmt.Printf("      Presets count: %d\n", len(event.Presets.Preset))
 
 		for _, preset := range event.Presets.Preset {
