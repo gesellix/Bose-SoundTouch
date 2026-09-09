@@ -142,27 +142,31 @@ func ExampleClient_SetBass() {
 	// Bass level: 3
 }
 
-// ExampleClient_SetBalance demonstrates balance control.
-func ExampleClient_SetBalance() {
+// ExampleClient_GetBalance demonstrates reading a stereo pair's balance.
+//
+// Address it to the pair's MASTER. An unpaired speaker, and the right-hand
+// member of a pair, answer balanceAvailable=false rather than failing, and the
+// valid range comes from the device rather than being assumed.
+//
+// Writing balance is not possible over HTTP — see WebSocketClient.SetBalance.
+func ExampleClient_GetBalance() {
 	config := &client.Config{Host: "192.0.2.100"}
 	c := client.NewClient(config)
 
-	// Set balance slightly to the right (range: -50 to +50)
-	err := c.SetBalance(10)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Get current balance
 	balance, err := c.GetBalance()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Balance: %d\n", balance.ActualBalance)
+	if !balance.Available {
+		fmt.Println("Balance: not available (only the master of a stereo pair has it)")
+		return
+	}
+
+	fmt.Printf("Balance: %d (range %d to %d)\n", balance.Actual, balance.Min, balance.Max)
 
 	// Example output:
-	// Balance: 10
+	// Balance: -3 (range -7 to 7)
 }
 
 // ExampleClient_SetZone demonstrates multiroom zone management.

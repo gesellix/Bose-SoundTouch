@@ -252,12 +252,18 @@ func demonstrateBasicControls(soundtouchClient *client.Client) {
 		fmt.Printf("   Volume: %d%%\n", volume.TargetVolume)
 	}
 
-	// Balance control (if available)
+	// Balance control. Only the master of a stereo pair reports it; anything
+	// else answers balanceAvailable=false rather than failing, and the range
+	// comes from the device rather than being assumed.
 	balance, err := soundtouchClient.GetBalance()
-	if err != nil {
-		log.Printf("   Balance: Not available on this device")
-	} else {
-		fmt.Printf("   Balance: %d (range: -50 to +50)\n", balance.TargetBalance)
+
+	switch {
+	case err != nil:
+		log.Printf("   Balance: read failed: %v", err)
+	case !balance.Available:
+		fmt.Println("   Balance: not available (only the master of a stereo pair has it)")
+	default:
+		fmt.Printf("   Balance: %d (range: %d to %d)\n", balance.Target, balance.Min, balance.Max)
 	}
 }
 

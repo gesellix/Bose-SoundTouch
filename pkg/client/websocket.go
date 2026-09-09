@@ -730,6 +730,13 @@ func (ws *WebSocketClient) dispatchTypedEvent(handlers *models.WebSocketEventHan
 
 func (ws *WebSocketClient) dispatchTypedEventContinued(handlers *models.WebSocketEventHandlers, eventType models.WebSocketEventType, event *models.WebSocketEvent) bool {
 	switch eventType {
+	case models.EventTypeBalanceUpdated:
+		if handlers.OnBalanceUpdated != nil && event.BalanceUpdated != nil {
+			handlers.OnBalanceUpdated(event.BalanceUpdated)
+		}
+
+		return true
+
 	case models.EventTypeZoneUpdated:
 		if handlers.OnZoneUpdated != nil && event.ZoneUpdated != nil {
 			handlers.OnZoneUpdated(event.ZoneUpdated)
