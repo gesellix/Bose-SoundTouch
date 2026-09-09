@@ -72,9 +72,16 @@ type DeviceConnection struct {
 	speakerEventGen     uint64
 	pollEventGen        map[uint64]uint64
 
-	lastTransportGeneration    uint64
-	eventStreamConnected       bool
-	lastDirectSuccess          time.Time
+	lastTransportGeneration uint64
+	eventStreamConnected    bool
+	lastDirectSuccess       time.Time
+	// balanceRefresh coalesces concurrent balance reads: 0 idle, 1 running,
+	// 2 running with another read already requested. A slider drag emits a
+	// burst of balanceUpdated frames — four in the same second, measured —
+	// and each one used to start its own HTTP read of an endpoint that
+	// blocks on a sleeping speaker.
+	balanceRefresh atomic.Int32
+
 	speakerConnectionKnown     bool
 	speakerConnectionConnected bool
 	speakerConnectionObserved  time.Time
@@ -643,6 +650,41 @@ func (c *DeviceConnection) ApplySpeakerConnectionEvent(state SpeakerConnectionSt
 		status.LastActivity = at
 		c.applyConnectivityLocked(status, at)
 	})
+}
+
+// BeginBalanceRefresh reports whether the caller should perform a balance
+// read. When one is already in flight it records that another is wanted and
+// returns false, so a burst of events collapses into at most one extra read.
+func (c *DeviceConnection) BeginBalanceRefresh() bool {
+	for {
+		switch current := c.balanceRefresh.Load(); current {
+		case 0:
+			if c.balanceRefresh.CompareAndSwap(0, 1) {
+				return true
+			}
+		default:
+			if c.balanceRefresh.CompareAndSwap(current, 2) {
+				return false
+			}
+		}
+	}
+}
+
+// EndBalanceRefresh closes a read and reports whether another was requested
+// while it ran, in which case the caller should read once more.
+func (c *DeviceConnection) EndBalanceRefresh() bool {
+	for {
+		switch current := c.balanceRefresh.Load(); current {
+		case 2:
+			if c.balanceRefresh.CompareAndSwap(2, 1) {
+				return true
+			}
+		default:
+			if c.balanceRefresh.CompareAndSwap(current, 0) {
+				return false
+			}
+		}
+	}
 }
 
 // ObserveEventStreamTransport applies an authoritative client transport
