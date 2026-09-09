@@ -34,6 +34,9 @@ type WebSocketClient struct {
 
 	transportHandler    func(connected bool, generation uint64)
 	transportGeneration uint64
+
+	// pending correlates in-flight Request calls with their replies.
+	pending *pendingRequests
 }
 
 type webSocketDialContext func(context.Context, string, http.Header) (*websocket.Conn, *http.Response, error)
@@ -106,6 +109,7 @@ func (c *Client) NewWebSocketClient(config *WebSocketConfig) *WebSocketClient {
 		cancel:     cancel,
 		logger:     config.Logger,
 		bufferSize: config.ReadBufferSize,
+		pending:    newPendingRequests(),
 	}
 }
 
@@ -377,6 +381,10 @@ func (ws *WebSocketClient) Disconnect() error {
 	ws.conn = nil
 	ws.connected = false
 
+	// Wake anything waiting on a reply: the answer is never coming, and a
+	// caller should hear "connection lost" now rather than time out.
+	ws.pending.failAll()
+
 	var (
 		transportHandler    func(bool, uint64)
 		transportGeneration uint64
@@ -424,6 +432,10 @@ func (ws *WebSocketClient) Close() error {
 	conn := ws.conn
 	ws.conn = nil
 	ws.connected = false
+
+	// Wake anything waiting on a reply: the answer is never coming, and a
+	// caller should hear "connection lost" now rather than time out.
+	ws.pending.failAll()
 
 	var (
 		transportHandler    func(bool, uint64)
@@ -487,6 +499,7 @@ func (ws *WebSocketClient) readLoop(config *WebSocketConfig, connection *webSock
 		ws.connection = nil
 		ws.conn = nil
 		ws.connected = false
+		ws.pending.failAll()
 		ws.transportGeneration++
 		transportHandler := ws.transportHandler
 		transportGeneration := ws.transportGeneration
@@ -600,6 +613,13 @@ func (ws *WebSocketClient) attemptReconnect(config *WebSocketConfig) {
 
 // handleMessage processes incoming WebSocket messages
 func (ws *WebSocketClient) handleMessage(data []byte) {
+	// A reply to an outstanding Request is consumed here and never reaches
+	// the event handlers: it is an answer to us, not a device notification.
+	if ws.routeResponse(data) {
+		ws.fireRawMessage(data, nil)
+		return
+	}
+
 	// Special (non-updates) messages take their own decode path and
 	// surface raw payloads to the OnRawMessage hook from there, so
 	// observers see exactly one notification per frame.
