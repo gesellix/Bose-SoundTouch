@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
 func TestParseEventFilters(t *testing.T) {
@@ -342,5 +344,33 @@ func TestWebSocketConfigDefaults(t *testing.T) {
 
 	if defaultBufferSize < 1024 {
 		t.Error("Buffer size should be at least 1024 bytes")
+	}
+}
+
+// TestHandleUnknownEventNamesTheElement pins that an <updates> child we do not
+// model is reported by name.
+//
+// GetEventTypes is empty for such a frame, so printing only that produced
+// "Unknown Event / Event count: 0" — an announcement that something arrived
+// with no hint what. models.UnknownEventNames exists to name it, but
+// registering an OnUnknownEvent handler opts out of the client's own fallback
+// log, which was the only other caller.
+func TestHandleUnknownEventNamesTheElement(t *testing.T) {
+	// Captured from a SoundTouch 10 (FW 27.0.6) when a STORED_MUSIC folder is
+	// selected. nowSelectionUpdated is not modelled yet.
+	raw := []byte(`<updates deviceID="DEVICEID01"><nowSelectionUpdated>` +
+		`<preset id="0"><ContentItem source="STORED_MUSIC" type="dir" location="4:cont2:615:part12:39"` +
+		` isPresetable="true"><itemName>Swissgroove</itemName></ContentItem></preset>` +
+		`</nowSelectionUpdated></updates>`)
+
+	event, err := models.ParseWebSocketEvent(raw)
+	if err != nil {
+		t.Fatalf("ParseWebSocketEvent: %v", err)
+	}
+
+	out := captureStdout(t, func() { handleUnknownEvent(event, true) })
+
+	if !strings.Contains(out, "nowSelectionUpdated") {
+		t.Errorf("unknown-event output does not name the element:\n%s", out)
 	}
 }
