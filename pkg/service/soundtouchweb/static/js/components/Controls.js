@@ -70,6 +70,13 @@ function IconRepeat({ one = false }) {
     </svg>`;
 }
 
+// balanceLabel renders a level as a side rather than a bare signed number:
+// "L3" reads better than "-3" on a control whose whole point is left/right.
+function balanceLabel(level) {
+    if (level === 0) return 'C';
+    return level < 0 ? `L${-level}` : `R${level}`;
+}
+
 export function Controls({ deviceId, status }) {
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
@@ -80,11 +87,22 @@ export function Controls({ deviceId, status }) {
     const actualBass = status?.bass?.TargetBass ?? 0;
     const hasBass = status?.bass != null;
 
+    // Balance belongs to a stereo pair and lives on its master, so the server
+    // only reports it when it actually applies here. The bounds come from the
+    // speaker (a SoundTouch 10 pair reports -7..7) rather than being assumed.
+    const balance = status?.balance;
+    const hasBalance = balance != null && balance.Available;
+    const actualBalance = balance?.Target ?? 0;
+    const balanceMin = balance?.Min ?? 0;
+    const balanceMax = balance?.Max ?? 0;
+
     const [localVolume, setLocalVolume] = useState(actualVolume);
     const [localBass, setLocalBass] = useState(actualBass);
+    const [localBalance, setLocalBalance] = useState(actualBalance);
 
     useEffect(() => { setLocalVolume(actualVolume); }, [actualVolume]);
     useEffect(() => { setLocalBass(actualBass); }, [actualBass]);
+    useEffect(() => { setLocalBalance(actualBalance); }, [actualBalance]);
 
     const send = (key) => api.key(deviceId, key);
 
@@ -98,6 +116,12 @@ export function Controls({ deviceId, status }) {
         const val = parseInt(e.target.value, 10);
         setLocalBass(val);
         api.bass(deviceId, val);
+    }
+
+    function onBalanceChange(e) {
+        const val = parseInt(e.target.value, 10);
+        setLocalBalance(val);
+        api.balance(deviceId, val);
     }
 
     function toggleShuffle() {
@@ -149,6 +173,15 @@ export function Controls({ deviceId, status }) {
                     <input type="range" class="volume-slider" min="-9" max="9"
                         value=${localBass} onInput=${onBassChange} />
                     <span class="volume-value">${localBass > 0 ? '+' : ''}${localBass}</span>
+                </div>
+            `}
+            ${hasBalance && html`
+                <div class="bass-row">
+                    <span class="bass-label" title="Left / right balance for this stereo pair">L/R</span>
+                    <input type="range" class="volume-slider"
+                        min=${balanceMin} max=${balanceMax}
+                        value=${localBalance} onInput=${onBalanceChange} />
+                    <span class="volume-value">${balanceLabel(localBalance)}</span>
                 </div>
             `}
         </div>

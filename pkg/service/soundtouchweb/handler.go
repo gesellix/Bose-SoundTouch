@@ -483,6 +483,7 @@ func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
+		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -577,6 +578,7 @@ func (app *WebApp) HandleAPIControl(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
+		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -644,6 +646,8 @@ func (app *WebApp) handleControlAction(w http.ResponseWriter, r *http.Request, a
 		app.handleStorePreset(w, r, device)
 	case "bass":
 		app.handleBassControl(w, r, device)
+	case "balance":
+		app.handleBalanceControl(w, r, device)
 	case "source":
 		app.handleSourceControl(w, r, device)
 	default:
@@ -751,6 +755,74 @@ func (app *WebApp) handleBassControl(w http.ResponseWriter, r *http.Request, dev
 	app.sendControlResponse(w, err, fmt.Sprintf("Bass set to %d", bassReq.Level))
 }
 
+// balanceControlTimeout caps a balance read-then-write over the WebSocket.
+// Generous because it covers two round trips, but bounded: /balance is the one
+// endpoint known to block rather than refuse when a speaker is asleep.
+const balanceControlTimeout = 12 * time.Second
+
+// handleBalanceControl processes stereo-pair balance requests.
+//
+// Two things make this unlike the other audio controls:
+//
+//   - The write goes over the WEBSOCKET. POST /balance hangs rather than
+//     refusing, and the app Bose ships on the speaker writes balance only over
+//     the socket (GH-699).
+//   - The valid range comes from the DEVICE (a SoundTouch 10 pair reports
+//     -7..7), so the bound check uses the reading that precedes the write
+//     instead of a constant.
+//
+// Address it to the pair's MASTER; anything else reports the balance
+// unavailable, and that is reported back as a 409 rather than a failure.
+func (app *WebApp) handleBalanceControl(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection) {
+	if r.Method != http.MethodPost {
+		app.sendError(w, "POST required for balance control", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var balanceReq webtypes.BalanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&balanceReq); err != nil {
+		app.sendError(w, "Invalid balance data", http.StatusBadRequest)
+		return
+	}
+
+	wsClient := device.CurrentWebSocket()
+	if wsClient == nil {
+		app.sendError(w, "Balance needs a live WebSocket to the speaker, and none is connected", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), balanceControlTimeout)
+	defer cancel()
+
+	current, err := wsClient.GetBalance(ctx)
+	if err != nil {
+		app.sendControlResponse(w, err, "")
+		return
+	}
+
+	if !current.Available {
+		app.sendError(w, "This speaker does not have balance; it belongs to the master of a stereo pair", http.StatusConflict)
+		return
+	}
+
+	if validateErr := current.Validate(balanceReq.Level); validateErr != nil {
+		app.sendError(w, validateErr.Error(), http.StatusBadRequest)
+		return
+	}
+
+	updated, err := wsClient.SetBalanceWithBounds(ctx, balanceReq.Level, current)
+	if err != nil {
+		app.sendControlResponse(w, err, "")
+		return
+	}
+
+	// The write echoes the whole balance document, so the status can be
+	// refreshed from it directly. Re-reading over HTTP would risk the stale
+	// value that endpoint briefly reports after a write.
+	app.applyBalanceEvent(device, updated)
+	app.sendControlResponse(w, nil, fmt.Sprintf("Balance set to %d", updated.Target))
+}
+
 // handleSourceControl processes source control requests. POST with an exact
 // {source, account} JSON body is canonical. GET query parameters remain as a
 // temporary compatibility surface and are explicitly marked deprecated.
@@ -851,6 +923,7 @@ func (app *WebApp) HandleDeviceKey(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
+		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -883,6 +956,7 @@ func (app *WebApp) HandleDirectVolumeControl(w http.ResponseWriter, r *http.Requ
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
+		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
@@ -909,6 +983,7 @@ func (app *WebApp) HandleDevicePower(w http.ResponseWriter, r *http.Request) {
 
 	// Connect WebSocket for real-time updates if not already connected
 	if device.CurrentWebSocket() == nil {
+		//nolint:contextcheck // the supervisor outlives this request; conn.Done is its scope
 		go app.ConnectDeviceWebSocket(deviceID, device)
 	}
 
