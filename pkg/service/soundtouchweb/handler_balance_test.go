@@ -86,9 +86,39 @@ func TestBalanceIsNotOnTheStatusPollPath(t *testing.T) {
 
 	for _, forbidden := range []string{"GetBalance", "FieldBalance"} {
 		if strings.Contains(poll, forbidden) {
-			t.Errorf("updateDeviceStatus references %s; /balance must not be polled, "+
-				"it blocks while the speaker is in deep standby", forbidden)
+			t.Errorf("updateDeviceStatus references %s; /balance must not be read on the "+
+				"poll path, it blocks while the speaker is in deep standby", forbidden)
 		}
+	}
+}
+
+// TestBalanceIsRetriedAfterConnect guards the other half.
+//
+// A single read on connect is not enough, and both reasons were found on
+// hardware: a pair that existed before startup is discovered by the /getGroup
+// poll running concurrently (groupUpdated fires only when the pairing
+// CHANGES), and a sleeping speaker answers balanceAvailable=false even when it
+// is genuinely paired. Either way the symptom was the same — a paired speaker
+// with no slider until something unrelated triggered a read.
+func TestBalanceIsRetriedAfterConnect(t *testing.T) {
+	source, err := readSourceFile("websocket.go")
+	if err != nil {
+		t.Fatalf("read websocket.go: %v", err)
+	}
+
+	watch := sliceBetween(source, "func (app *WebApp) watchBalance(", "\n}\n")
+	if watch == "" {
+		t.Fatal("watchBalance is gone; a single read on connect misses an " +
+			"already-paired speaker and a sleeping one")
+	}
+
+	if !strings.Contains(watch, "Status().Balance != nil") {
+		t.Error("watchBalance no longer stops once a balance is known; it would " +
+			"keep polling a speaker that has none")
+	}
+
+	if !strings.Contains(watch, "conn.Done()") {
+		t.Error("watchBalance does not stop when the device goes away")
 	}
 }
 
