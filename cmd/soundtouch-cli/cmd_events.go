@@ -574,15 +574,23 @@ func handleDeviceError(message *models.SpecialMessage, verbose bool) {
 
 func handleUnknownEvent(event *models.WebSocketEvent, verbose bool) {
 	fmt.Printf("\n❓ Unknown Event [%s]:\n", event.DeviceID)
-	types := event.GetEventTypes()
 
-	for _, eventType := range types {
+	for _, eventType := range event.GetEventTypes() {
 		fmt.Printf("  📝 Type: %s\n", eventType)
 	}
 
+	// The interesting case is an <updates> child we don't model at all
+	// (nowSelectionUpdated, say): GetEventTypes is empty for it, and printing
+	// only that says "something arrived, and I won't tell you what".
+	// UnknownEventNames exists precisely to name it — but registering an
+	// OnUnknownEvent handler opts out of the client's own fallback log, which
+	// is the only other place it gets used.
+	for _, name := range event.UnknownEventNames() {
+		fmt.Printf("  📛 Unmodelled element: %s\n", name)
+	}
+
 	if verbose {
-		events := event.GetEvents()
-		fmt.Printf("  📱 Event count: %d\n", len(events))
+		fmt.Printf("  📱 Event count: %d\n", len(event.GetEvents()))
 		fmt.Printf("  ⏰ Timestamp: %s\n", event.Timestamp.Format(time.RFC3339))
 	}
 }
