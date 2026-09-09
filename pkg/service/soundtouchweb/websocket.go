@@ -308,12 +308,19 @@ func (app *WebApp) applyBassEvent(
 	})
 }
 
-// balanceWatchInterval and balanceWatchAttempts bound the short retry that
-// follows a new connection.
-const (
-	balanceWatchInterval = 15 * time.Second
-	balanceWatchAttempts = 8
-)
+// balanceWatchSchedule is the wait before each retry after a connection comes
+// up. It starts short because the common case resolves almost immediately —
+// the /getGroup poll only needs a moment — and a flat interval left a visible
+// gap where the pair was on screen but the slider was not. It then stretches
+// out, so a speaker that genuinely has no balance stops being asked.
+var balanceWatchSchedule = []time.Duration{
+	2 * time.Second,
+	3 * time.Second,
+	5 * time.Second,
+	10 * time.Second,
+	15 * time.Second,
+	30 * time.Second,
+}
 
 // watchBalance establishes the balance reading for a freshly connected
 // speaker, retrying briefly until it succeeds.
@@ -335,7 +342,7 @@ func (app *WebApp) watchBalance(
 	conn *webtypes.DeviceConnection,
 	wsClient *client.WebSocketClient,
 ) {
-	for attempt := 0; attempt < balanceWatchAttempts; attempt++ {
+	for _, wait := range balanceWatchSchedule {
 		if conn.CurrentWebSocket() != wsClient {
 			return // this generation's socket is gone
 		}
@@ -347,10 +354,16 @@ func (app *WebApp) watchBalance(
 		}
 
 		select {
-		case <-time.After(balanceWatchInterval):
+		case <-time.After(wait):
 		case <-conn.Done():
 			return
 		}
+	}
+
+	// One last attempt after the final wait, so the longest interval is not
+	// spent only to give up without using it.
+	if conn.CurrentWebSocket() == wsClient {
+		app.refreshBalanceForConnection(deviceID, conn, wsClient)
 	}
 }
 
