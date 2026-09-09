@@ -73,6 +73,24 @@ All subsequent messages (except `selectLastWiFiSource`, see below) use this enve
 `requestID` is a monotonically increasing integer per connection (client-side sequence).
 `{device_id}` is the speaker's MAC address with colons removed (e.g. `AABBCCDDEE0A`).
 
+**Every response is enveloped, echoes its `requestID`, and carries
+`msgType="RESPONSE"`.** This holds for `info`, `setMargeAccount`,
+`pushCustomerSupportInfoToMarge`, `bass`, `select`, `key` and
+`webserver/pingRequest`, verified across three independent mitmproxy captures
+of the official Bose app (2026-04-16, 2026-05-02 ×2) against a SoundTouch 10
+(`variant=rhino`, `moduleType=sm2`, FW 27.0.6) and a SoundTouch 20. Earlier
+revisions of this page showed some replies unwrapped — that was an editing
+elision, not a second wire format.
+
+A payload that looks like a root element (`<info>`, `<status>/route</status>`)
+is therefore the envelope's **body**, not the frame. `selectLastWiFiSource` is
+the sole exception in both directions: a plain-text request and a bare
+`<status>` reply.
+
+That echo is what lets a client correlate a reply to the exact request that
+earned it, rather than guessing from the `url` attribute — which is ambiguous,
+since the setup state machine sends five separate steps with `url="setup"`.
+
 ---
 
 ## Phase 1 — Discovery: Is the Speaker Already Paired?
@@ -83,14 +101,19 @@ All subsequent messages (except `selectLastWiFiSource`, see below) use this enve
   <request requestID="1"><info type="new"/></request>
 </header></msg>
 
-<!-- S→C: response -->
-<info deviceID="{device_id}">
-  <name>SoundTouch 10</name>
-  <type>SoundTouch 10</type>
-  <margeAccountUUID>1000002</margeAccountUUID>   <!-- empty = unpaired -->
-  <margeURL>https://streaming.bose.com</margeURL>
-  ...
-</info>
+<!-- S→C: response — note the envelope; <info> is the BODY, not the root -->
+<?xml version="1.0" encoding="UTF-8" ?>
+<msg><header deviceID="{device_id}" url="info" method="GET">
+  <request requestID="1" msgType="RESPONSE"><info type="new" /></request>
+</header><body>
+  <info deviceID="{device_id}">
+    <name>SoundTouch 10</name>
+    <type>SoundTouch 10</type>
+    <margeAccountUUID>1000002</margeAccountUUID>   <!-- empty = unpaired -->
+    <margeURL>https://streaming.bose.com</margeURL>
+    ...
+  </info>
+</body></msg>
 ```
 
 - **Empty `margeAccountUUID`** → device is unpaired, proceed to Phase 2
@@ -170,12 +193,18 @@ The pairing flow uses a setup state machine on the device. States must be sent i
   </PairDeviceWithAccount>
 </body></msg>
 
-<!-- S→C: device info response with margeAccountUUID now set -->
-<info deviceID="{device_id}">
-  ...
-  <margeAccountUUID>{accountId}</margeAccountUUID>
-  ...
-</info>
+<!-- S→C: device info response with margeAccountUUID now set.
+     Enveloped, echoing requestID and marked msgType="RESPONSE". -->
+<?xml version="1.0" encoding="UTF-8" ?>
+<msg><header deviceID="{device_id}" url="setMargeAccount" method="POST">
+  <request requestID="27" msgType="RESPONSE" />
+</header><body>
+  <info deviceID="{device_id}">
+    ...
+    <margeAccountUUID>{accountId}</margeAccountUUID>
+    ...
+  </info>
+</body></msg>
 ```
 
 The server also pushes several `sourcesUpdated` events after successful pairing.
@@ -203,8 +232,11 @@ Bearer NtJDRbNtY3hDhm5K8FC2JprRhRQNH3QdZjG6aR4ASwYQg4rvZMY6dPLc3Bm6zvWNciWzCpMWZ
   <request requestID="29"></request>
 </header></msg>
 
-<!-- S→C: -->
-<status>/pushCustomerSupportInfoToMarge</status>
+<!-- S→C: also enveloped; the bare <status> below is the body -->
+<?xml version="1.0" encoding="UTF-8" ?>
+<msg><header deviceID="{device_id}" url="pushCustomerSupportInfoToMarge" method="GET">
+  <request requestID="29" msgType="RESPONSE"><info type="new" /></request>
+</header><body><status>/pushCustomerSupportInfoToMarge</status></body></msg>
 ```
 
 ---
