@@ -308,6 +308,52 @@ func (app *WebApp) applyBassEvent(
 	})
 }
 
+// balanceWatchInterval and balanceWatchAttempts bound the short retry that
+// follows a new connection.
+const (
+	balanceWatchInterval = 15 * time.Second
+	balanceWatchAttempts = 8
+)
+
+// watchBalance establishes the balance reading for a freshly connected
+// speaker, retrying briefly until it succeeds.
+//
+// One read on connect is not enough, for two reasons found on hardware:
+//
+//   - A pair that already existed before startup is discovered by the
+//     /getGroup poll, which runs concurrently. groupUpdated only fires when
+//     the pairing CHANGES, so it does not help here.
+//   - A speaker that is asleep answers balanceAvailable=false even when it is
+//     genuinely paired. The reading only becomes truthful once it wakes.
+//
+// Both showed the same symptom: a paired speaker with no slider in the Player
+// until something unrelated happened to trigger a read. The loop stops as soon
+// as a balance is known, so a speaker that really has none costs a handful of
+// cheap requests and then nothing.
+func (app *WebApp) watchBalance(
+	deviceID string,
+	conn *webtypes.DeviceConnection,
+	wsClient *client.WebSocketClient,
+) {
+	for attempt := 0; attempt < balanceWatchAttempts; attempt++ {
+		if conn.CurrentWebSocket() != wsClient {
+			return // this generation's socket is gone
+		}
+
+		app.refreshBalanceForConnection(deviceID, conn, wsClient)
+
+		if conn.Status().Balance != nil {
+			return
+		}
+
+		select {
+		case <-time.After(balanceWatchInterval):
+		case <-conn.Done():
+			return
+		}
+	}
+}
+
 // refreshBalanceForConnection runs refreshBalance under a context bounded both
 // by balanceControlTimeout and by the connection's own lifetime, so a read
 // stops when the device is removed rather than holding the socket open.
@@ -363,6 +409,14 @@ func (app *WebApp) refreshBalance(
 	}
 
 	if !balance.Available {
+		// Worth a line. A speaker that is genuinely paired can still answer
+		// this way — it did, while asleep — and without the log the only
+		// symptom is a control that quietly never appears, which is exactly
+		// how this cost an evening to track down.
+		if conn.Status().Balance != nil {
+			log.Printf("Speaker %s: balance no longer available", sanitizeLog(deviceID))
+		}
+
 		app.clearBalance(conn)
 
 		return
@@ -379,6 +433,17 @@ func (app *WebApp) clearBalance(conn *webtypes.DeviceConnection) {
 	}
 
 	app.applyBalanceEvent(conn, nil)
+}
+
+// isStandbySource reports whether a now-playing source means the speaker is
+// idle. An empty source counts: it is what we hold before the first reading.
+func isStandbySource(source string) bool {
+	switch strings.ToUpper(strings.TrimSpace(source)) {
+	case "", "STANDBY", "INVALID_SOURCE":
+		return true
+	default:
+		return false
+	}
 }
 
 // applyBalanceEvent stores a fresh balance reading on the device status.
@@ -625,6 +690,14 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 				logNowPlayingError(deviceID, np.Source, np.SourceAccount)
 			}
 
+			// Waking up can flip whether the speaker answers for balance at
+			// all, and a reading taken while it was asleep would have been
+			// stored as "no balance here". Re-read on the transition out of
+			// standby, once, rather than on every event.
+			if np.Source != prevSource && isStandbySource(prevSource) && !isStandbySource(np.Source) {
+				go app.refreshBalanceForConnection(deviceID, conn, wsClient)
+			}
+
 			prevSource = np.Source
 
 			app.applyNowPlayingEvent(conn, np)
@@ -755,7 +828,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		// /balance BLOCKS instead of refusing while a speaker is in deep
 		// standby, so one sleeping speaker on the polled path would stall
 		// every other field with it.
-		go app.refreshBalanceForConnection(deviceID, conn, wsClient)
+		go app.watchBalance(deviceID, conn, wsClient)
 
 		<-conn.Done()
 
