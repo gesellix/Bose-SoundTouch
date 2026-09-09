@@ -5,9 +5,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -116,6 +119,23 @@ type Session struct {
 	reqID         atomic.Int64
 	stepTimeout   time.Duration
 	pairingExtras MargePairingExtras
+
+	// frames carries every received frame from the reader goroutine to
+	// whichever sendStep is waiting. It is closed when the read loop ends.
+	frames chan []byte
+	// done is closed by Close to unblock a reader parked on a send.
+	done chan struct{}
+	// readErr holds the error that ended the read loop, so a step waiting
+	// on a dead connection reports the cause rather than "closed channel".
+	readErr atomic.Pointer[error]
+	// logf receives non-fatal observations (e.g. a device error pushed
+	// while a step is in flight). Tests override it.
+	logf func(format string, args ...any)
+	// closeOnce keeps Close idempotent: closing done twice panics.
+	closeOnce sync.Once
+	// routeUses counts how many times each route has been sent on this
+	// session, which is what makes a route ambiguous. See classifyEnvelope.
+	routeUses map[string]int
 }
 
 // DialSession opens a WebSocket to the speaker at deviceIP and
@@ -169,12 +189,50 @@ func DialSession(deviceIP, deviceID string, cfg SessionConfig) (*Session, error)
 		step = defaultSetupStepTimeout
 	}
 
-	return &Session{
+	s := &Session{
 		deviceID:      deviceID,
 		conn:          conn,
 		stepTimeout:   step,
 		pairingExtras: cfg.PairingExtras,
-	}, nil
+		frames:        make(chan []byte),
+		done:          make(chan struct{}),
+		logf:          log.Printf,
+		routeUses:     make(map[string]int),
+	}
+
+	go s.readLoop(conn)
+
+	return s, nil
+}
+
+// readLoop pumps received frames to sendStep.
+//
+// It deliberately sets no read deadline. gorilla/websocket treats every read
+// error as fatal — a SetReadDeadline expiry included — and returns it
+// instantly from every later read on the same connection. Using a deadline as
+// a per-step timeout therefore poisons the whole session at the first quiet
+// moment, and every subsequent step fails immediately with "i/o timeout",
+// which reads exactly like the device refusing. sendStep gets its timeout from
+// a select instead (GH-704).
+//
+// conn is passed in rather than read from s: Close nils s.conn.
+func (s *Session) readLoop(conn *websocket.Conn) {
+	defer close(s.frames)
+
+	for {
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			s.readErr.Store(&err)
+
+			return
+		}
+
+		select {
+		case s.frames <- data:
+		case <-s.done:
+			return
+		}
+	}
 }
 
 // Close sends a normal-closure frame and closes the underlying socket.
@@ -182,6 +240,8 @@ func (s *Session) Close() error {
 	if s.conn == nil {
 		return nil
 	}
+
+	s.closeOnce.Do(func() { close(s.done) })
 
 	_ = s.conn.WriteControl(
 		websocket.CloseMessage,
@@ -196,23 +256,39 @@ func (s *Session) Close() error {
 }
 
 // sendStep wraps body in the canonical <msg><header url="…" method="…">…
-// envelope, sends it, and drains incoming frames until one references the
-// same requestID, status path, or url attribute — that frame is the ack.
-// Pushed <updates> and <SoundTouchSdkInfo> frames are ignored. The ack
-// payload is consumed for error detection (<error …/>) only and never
-// returned — every caller discards it.
+// envelope, sends it, and waits for the matching ack.
+//
+// Frames are classified by their ROOT ELEMENT, never by substring. That
+// matters: the speaker pushes root-level <errorUpdate> frames for unrelated
+// asynchronous failures (source timeouts, audio-path errors), and the previous
+// "does the text contain <error" test flagged those as a rejection of the step
+// in flight — aborting the whole init plan over an event that had nothing to do
+// with it, because "<errorupdate" contains "<error" (GH-704).
+//
+// Correlation is exact for enveloped responses: a <msg> reply is this step's
+// ack only if it echoes this step's requestID. Five of the nine init-plan
+// steps use url="setup", so accepting a bare url match — as this used to —
+// let a late response to step N satisfy step N+1.
+//
+// The ack payload is consumed for error detection only and never returned —
+// every caller discards it.
 func (s *Session) sendStep(ctx context.Context, route, method, body string) error {
 	if s.conn == nil {
 		return errors.New("setup session: connection closed")
 	}
 
 	id := s.reqID.Add(1)
+	s.routeUses[route]++
 
 	envelope := fmt.Sprintf(
 		`<msg><header deviceID="%s" url="%s" method="%s"><request requestID="%d"/></header><body>%s</body></msg>`,
 		xmlAttrEscape(s.deviceID), xmlAttrEscape(route), method, id, body,
 	)
 
+	// A context deadline, when present, wins over stepTimeout. Callers rely
+	// on this: cmd_setup.go's bare-pair path deliberately grants
+	// step-timeout+2s, and ExecuteInitPlan passes one context to all nine
+	// steps as a whole-plan budget.
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		deadline = time.Now().Add(s.stepTimeout)
@@ -224,35 +300,241 @@ func (s *Session) sendStep(ctx context.Context, route, method, body string) erro
 		return fmt.Errorf("send %s: %w", route, err)
 	}
 
-	idNeedle := fmt.Sprintf(`requestID="%d"`, id)
-	statusNeedle := fmt.Sprintf(`<status>/%s</status>`, route)
-	urlNeedle := fmt.Sprintf(`url="%s"`, route)
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
 
 	for {
-		_ = s.conn.SetReadDeadline(deadline)
+		var data []byte
 
-		_, data, err := s.conn.ReadMessage()
+		select {
+		case frame, open := <-s.frames:
+			if !open {
+				return fmt.Errorf("await ack for %s: %w", route, s.readLoopErr())
+			}
+
+			data = frame
+		case <-timer.C:
+			// The connection stays usable: no read deadline was ever set,
+			// so nothing has been poisoned and a later step can still run.
+			return fmt.Errorf("await ack for %s: %w", route, context.DeadlineExceeded)
+		case <-ctx.Done():
+			return fmt.Errorf("await ack for %s: %w", route, ctx.Err())
+		}
+
+		done, err := s.classifyFrame(data, route, id)
 		if err != nil {
-			return fmt.Errorf("await ack for %s: %w", route, err)
+			return err
 		}
 
-		text := string(data)
-
-		// Pushed event frames during setup (sourcesUpdated etc.) and the
-		// SDK banner are not acks.
-		if strings.Contains(text, "<updates ") || strings.Contains(text, "<SoundTouchSdkInfo") {
-			continue
-		}
-
-		// Device-side errors surface as <error …/> in the body.
-		if strings.Contains(strings.ToLower(text), "<error") {
-			return fmt.Errorf("device rejected %s: %s", route, strings.TrimSpace(text))
-		}
-
-		if strings.Contains(text, idNeedle) || strings.Contains(text, statusNeedle) || strings.Contains(text, urlNeedle) {
+		if done {
 			return nil
 		}
 	}
+}
+
+// readLoopErr reports why the read loop ended, or a generic closure error if
+// it ended without one.
+func (s *Session) readLoopErr() error {
+	if err := s.readErr.Load(); err != nil && *err != nil {
+		return *err
+	}
+
+	return errors.New("connection closed")
+}
+
+// classifyFrame decides what a received frame means for the step identified by
+// route and id. It returns (true, nil) for this step's ack, (false, nil) for a
+// frame to skip, and a non-nil error when the device rejected the step.
+func (s *Session) classifyFrame(data []byte, route string, id int64) (bool, error) {
+	root, err := models.RootElementName(data)
+	if err != nil {
+		// Undecodable frames are not acks. Skipping keeps the step waiting
+		// for a real answer rather than failing on a truncated push.
+		s.logf("setup session: skipping undecodable frame during %s: %v", route, sanitizeLog(err.Error()))
+
+		return false, nil
+	}
+
+	switch root {
+	case "msg":
+		return s.classifyEnvelope(data, route, id)
+
+	case "status":
+		// A bare <status>/route</status> reply. These carry no requestID at
+		// all, so they can only be correlated by arrival order — acceptable
+		// because a session runs one step at a time.
+		var status struct {
+			Value string `xml:",chardata"`
+		}
+
+		if err := xml.Unmarshal(data, &status); err != nil {
+			// Not our ack, but not a rejection either: keep waiting for a
+			// frame we can actually read.
+			s.logf("setup session: skipping undecodable status frame during %s: %v", route, sanitizeLog(err.Error()))
+
+			return false, nil
+		}
+
+		return strings.TrimSpace(status.Value) == "/"+route, nil
+
+	case "error", "errors":
+		// A rejection sent unwrapped, rather than inside an envelope.
+		return false, fmt.Errorf("device rejected %s: %s", route, sanitizeLog(strings.TrimSpace(string(data))))
+
+	case "errorUpdate":
+		// An asynchronous device error, NOT a reply to this step. Report it
+		// — these name the failure precisely and are worth seeing — but keep
+		// waiting for the actual ack.
+		s.logDeviceError(data, route)
+
+		return false, nil
+
+	default:
+		// Pushed frames: <updates>, <SoundTouchSdkInfo>, userActivityUpdate,
+		// and anything the firmware invents later.
+		return false, nil
+	}
+}
+
+// classifyEnvelope handles a <msg> frame: this step's ack, another step's
+// late response, or a rejection.
+func (s *Session) classifyEnvelope(data []byte, route string, id int64) (bool, error) {
+	var envelope struct {
+		Header struct {
+			URL string `xml:"url,attr"`
+			// Real hardware answers with <request requestID="…"
+			// msgType="RESPONSE">; the shape below also picks up a
+			// <response requestID="…"/> child. Matching the attribute
+			// wherever it appears avoids pinning either spelling.
+			Request  *envelopeRequest `xml:"request"`
+			Response *envelopeRequest `xml:"response"`
+		} `xml:"header"`
+		Body struct {
+			Error  *models.Error  `xml:"error"`
+			Errors []models.Error `xml:"errors>error"`
+			Status string         `xml:"status"`
+		} `xml:"body"`
+	}
+
+	if err := xml.Unmarshal(data, &envelope); err != nil {
+		s.logf("setup session: skipping undecodable envelope during %s: %v", route, sanitizeLog(err.Error()))
+
+		return false, nil
+	}
+
+	request := envelope.Header.Request
+	if request == nil || request.RequestID == "" {
+		request = envelope.Header.Response
+	}
+
+	requestID := ""
+	if request != nil {
+		requestID = request.RequestID
+	}
+
+	// A response that names a different requestID belongs to another step —
+	// including its errors. Attributing those to the step in flight would
+	// reintroduce, on the error path, exactly the cross-step misattribution
+	// this function exists to prevent.
+	if requestID != "" && requestID != strconv.FormatInt(id, 10) {
+		return false, nil
+	}
+
+	// Rejections arrive either as a bare <error> or wrapped in <errors>
+	// (models.ErrorsResponse's shape, which some firmware versions use).
+	if devErr := firstError(&envelope.Body.Error, envelope.Body.Errors); devErr != nil {
+		return false, fmt.Errorf("device rejected %s: %s", route, describeError(devErr))
+	}
+
+	if requestID != "" {
+		// An empty msgType is accepted because not every reply shape carries
+		// one; anything else that is not a RESPONSE is not an answer to us.
+		return request.MsgType == "" || request.MsgType == msgTypeResponse, nil
+	}
+
+	// No requestID to correlate on. Fall back to the route, but only while
+	// this session has used it once: five of the nine init-plan steps share
+	// url="setup", and accepting a route match there is what let a late
+	// response to step N satisfy step N+1 (GH-704). For a route used once,
+	// a match is unambiguous and the fallback costs nothing.
+	if s.routeUses[route] > 1 {
+		return false, nil
+	}
+
+	return envelope.Header.URL == route ||
+		strings.TrimSpace(envelope.Body.Status) == "/"+route, nil
+}
+
+// firstError picks the first device error out of either body shape.
+func firstError(single **models.Error, wrapped []models.Error) *models.Error {
+	if *single != nil {
+		return *single
+	}
+
+	if len(wrapped) > 0 {
+		return &wrapped[0]
+	}
+
+	return nil
+}
+
+// msgTypeResponse is the msgType attribute a speaker sets on a reply.
+const msgTypeResponse = "RESPONSE"
+
+// describeError renders a device error for an operator: code, symbolic name,
+// severity and detail, rather than a raw XML dump.
+func describeError(devErr *models.Error) string {
+	parts := make([]string, 0, 4)
+
+	if devErr.Name != "" {
+		parts = append(parts, devErr.Name)
+	}
+
+	if devErr.Value != "" {
+		parts = append(parts, "code "+devErr.Value)
+	}
+
+	if devErr.Severity != "" {
+		parts = append(parts, "severity "+devErr.Severity)
+	}
+
+	if text := strings.TrimSpace(devErr.Text); text != "" {
+		parts = append(parts, text)
+	}
+
+	if len(parts) == 0 {
+		return "unspecified error"
+	}
+
+	// Speaker-supplied text reaches logs through this error; strip newlines
+	// so a device cannot forge log lines (go/log-injection).
+	return sanitizeLog(strings.Join(parts, ", "))
+}
+
+// envelopeRequest models the requestID-bearing child of a <msg> header,
+// whichever tag name the firmware or a test fake uses for it.
+type envelopeRequest struct {
+	RequestID string `xml:"requestID,attr"`
+	MsgType   string `xml:"msgType,attr"`
+}
+
+// logDeviceError surfaces an asynchronous <errorUpdate> pushed while a step is
+// in flight, so it is not silently dropped.
+func (s *Session) logDeviceError(data []byte, route string) {
+	var update models.ErrorUpdate
+	if err := xml.Unmarshal(data, &update); err != nil {
+		s.logf("setup session: device error during %s (unparsed): %s", route, sanitizeLog(strings.TrimSpace(string(data))))
+
+		return
+	}
+
+	s.logf("setup session: device error during %s: %s (%s) severity=%s: %s",
+		route,
+		sanitizeLog(update.Error.Name),
+		sanitizeLog(update.Error.Value),
+		sanitizeLog(update.Error.Severity),
+		sanitizeLog(strings.TrimSpace(update.Error.Text)),
+	)
 }
 
 // Start sends SETUP_START.
