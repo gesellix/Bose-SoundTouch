@@ -263,11 +263,23 @@ func (e *ConnectionStateUpdatedEvent) GetSignalStrength() string {
 	return e.Signal
 }
 
-// PresetUpdatedEvent represents a preset update event
+// PresetUpdatedEvent represents a preset update event.
+//
+// Presets is OPTIONAL. The speaker sends this element both ways: with the full
+// list, and as a bare <presetsUpdated/> carrying nothing (3 of 9 occurrences
+// across the reference captures). A nil Presets means "re-read /presets", NOT
+// "the speaker has no presets" — treating the empty case as data blanks a
+// perfectly good preset list.
 type PresetUpdatedEvent struct {
 	XMLName  xml.Name `xml:"presetsUpdated"`
 	DeviceID string   `xml:"deviceID,attr"`
-	Presets  Presets  `xml:"presets"`
+	Presets  *Presets `xml:"presets"`
+}
+
+// HasPayload reports whether this frame carried a preset list rather than
+// being a bare re-read signal.
+func (e *PresetUpdatedEvent) HasPayload() bool {
+	return e != nil && e.Presets != nil
 }
 
 // ZoneUpdatedEvent represents a multiroom zone update event
@@ -301,11 +313,27 @@ type ZoneMember struct {
 	IP       string   `xml:"ipaddress,attr"`
 }
 
-// BassUpdatedEvent represents a bass setting update event
+// BassUpdatedEvent represents a bass setting update event.
+//
+// Bass is OPTIONAL, and in practice absent: every bassUpdated frame in the
+// reference captures is empty — <bassUpdated></bassUpdated>, 4 of 4 — and the
+// live traces agree. It is a "re-read /bass" signal, the same shape as
+// balanceUpdated.
+//
+// A nil Bass therefore means "no value was sent". Reading a value out of an
+// empty frame yields a fabricated level 0, which then overwrites the real
+// setting; the Player's bass slider snapping to 0 on every change was exactly
+// that.
 type BassUpdatedEvent struct {
 	XMLName  xml.Name `xml:"bassUpdated"`
 	DeviceID string   `xml:"deviceID,attr"`
-	Bass     Bass     `xml:"bass"`
+	Bass     *Bass    `xml:"bass"`
+}
+
+// HasPayload reports whether this frame carried a bass value rather than being
+// a bare re-read signal.
+func (e *BassUpdatedEvent) HasPayload() bool {
+	return e != nil && e.Bass != nil
 }
 
 // BalanceUpdatedEvent signals that the stereo pair's balance changed.
