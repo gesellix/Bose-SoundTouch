@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
+	"github.com/gesellix/bose-soundtouch/pkg/netcompat"
 	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
@@ -677,7 +678,7 @@ func main() {
 			// Bind the listener before logging so we print the true
 			// effective port (handles :0 and catches "address already
 			// in use" before the TLS goroutine launches).
-			ln, err := net.Listen("tcp", config.addr)
+			ln, err := netcompat.Listen("tcp", config.addr)
 			if err != nil {
 				return fmt.Errorf("failed to listen on %s: %w", config.addr, err)
 			}
@@ -2130,7 +2131,7 @@ func startHTTPSServer(httpsAddr string, r http.Handler, tlsConfig *tls.Config, h
 	}
 
 	go func() {
-		listener, err := net.Listen("tcp", httpsAddr)
+		listener, err := netcompat.Listen("tcp", httpsAddr)
 		if err != nil {
 			log.Printf("[TLS] Failed to create listener: %v", err)
 			return

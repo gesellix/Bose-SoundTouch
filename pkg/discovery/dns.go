@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/netcompat"
 	"github.com/miekg/dns"
 )
 
@@ -506,6 +507,9 @@ func (d *DNSDiscovery) Start(addr string) error {
 		Handler: mux,
 	}
 
+	// Addr and Net are left set for symmetry with the UDP server, but the TCP
+	// side is activated from a listener created below (see netcompat.Listen),
+	// so ActivateAndServe uses that listener and ignores both fields.
 	d.tcpServer = &dns.Server{
 		Addr:    addr,
 		Net:     "tcp",
@@ -530,7 +534,19 @@ func (d *DNSDiscovery) Start(addr string) error {
 	go func() {
 		log.Printf("[DNS] TCP Discovery server starting on %s", sanitizeLog(addr))
 
-		if err := tcpServer.ListenAndServe(); err != nil {
+		// netcompat.Listen rather than the library's own ListenAndServe: on a
+		// Linux kernel without accept4() the standard listener binds and then
+		// fails on the first query. Everywhere else this is plain net.Listen.
+		ln, err := netcompat.Listen("tcp", addr)
+		if err != nil {
+			errChan <- fmt.Errorf("TCP server failed: %w", err)
+
+			return
+		}
+
+		tcpServer.Listener = ln
+
+		if err := tcpServer.ActivateAndServe(); err != nil {
 			errChan <- fmt.Errorf("TCP server failed: %w", err)
 		}
 	}()
