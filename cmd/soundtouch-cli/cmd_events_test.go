@@ -328,33 +328,43 @@ func BenchmarkParseEventFilters(b *testing.B) {
 	}
 }
 
-// Test WebSocket configuration defaults
+// TestWebSocketConfigDefaults pins the tuning the `events` command uses.
+//
+// It reads webSocketConfig rather than restating the numbers: the version
+// before this declared its own local copies and compared those to each other,
+// so every branch was unreachable and the test could not fail no matter what
+// the command actually did.
 func TestWebSocketConfigDefaults(t *testing.T) {
-	// This tests the configuration values used in setupWebSocketClient
-	// We can't easily unit test the actual function without mocking the client
-	// But we can test that our expected defaults are reasonable
-	// time.Duration rather than bare nanosecond literals: 30000000000 does not
-	// fit in an int on a 32-bit platform, so this file would not compile for
-	// linux/arm. Durations also say what the numbers mean.
-	defaultReconnectInterval := 5 * time.Second
-	defaultPingInterval := 30 * time.Second
-	defaultPongTimeout := 10 * time.Second
-	defaultBufferSize := 2048
+	cfg := webSocketConfig(true, false)
 
-	if defaultReconnectInterval < time.Second {
-		t.Error("Reconnect interval should be at least 1 second")
+	if cfg.ReconnectInterval != 5*time.Second {
+		t.Errorf("ReconnectInterval = %v, want 5s", cfg.ReconnectInterval)
 	}
 
-	if defaultPingInterval < 10*time.Second {
-		t.Error("Ping interval should be at least 10 seconds")
+	if cfg.PingInterval != 30*time.Second {
+		t.Errorf("PingInterval = %v, want 30s", cfg.PingInterval)
 	}
 
-	if defaultPongTimeout < time.Second {
-		t.Error("Pong timeout should be at least 1 second")
+	// A pong timeout at or above the ping interval would time out a healthy
+	// connection before its next ping could answer.
+	if cfg.PongTimeout >= cfg.PingInterval {
+		t.Errorf("PongTimeout %v must stay below PingInterval %v", cfg.PongTimeout, cfg.PingInterval)
 	}
 
-	if defaultBufferSize < 1024 {
-		t.Error("Buffer size should be at least 1024 bytes")
+	if cfg.ReadBufferSize < 1024 || cfg.WriteBufferSize < 1024 {
+		t.Errorf("buffer sizes = %d/%d, want at least 1024 each", cfg.ReadBufferSize, cfg.WriteBufferSize)
+	}
+}
+
+// TestWebSocketConfigReconnectToggle covers the one thing webSocketConfig
+// decides rather than declares: --no-reconnect caps the attempts at one.
+func TestWebSocketConfigReconnectToggle(t *testing.T) {
+	if got := webSocketConfig(true, false).MaxReconnectAttempts; got != 0 {
+		t.Errorf("MaxReconnectAttempts with reconnect on = %d, want 0 (unlimited)", got)
+	}
+
+	if got := webSocketConfig(false, false).MaxReconnectAttempts; got != 1 {
+		t.Errorf("MaxReconnectAttempts with reconnect off = %d, want 1", got)
 	}
 }
 
