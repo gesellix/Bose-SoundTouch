@@ -47,6 +47,7 @@ PLATFORMS=(
     "linux/amd64"
     "linux/arm64"
     "linux/arm"
+    "linux/arm"
     "darwin/amd64"
     "darwin/arm64"
     "windows/amd64"
@@ -57,6 +58,7 @@ GOARM_VALUES=(
     ""  # linux/amd64
     ""  # linux/arm64
     "7" # linux/arm
+    "5" # linux/arm, for ARMv5 NAS boxes and ARMv6 boards (Pi 1, Pi Zero)
     ""  # darwin/amd64
     ""  # darwin/arm64
     ""  # windows/amd64
@@ -197,7 +199,7 @@ Built with real hardware testing and community feedback. Special thanks to the B
         ## 🏗️ Supported Platforms
 
         This release includes pre-built binaries for:
-        - Linux (amd64, arm64, armv7)
+        - Linux (amd64, arm64, armv7, armv5)
         - macOS (Intel & Apple Silicon)
         - Windows (amd64)
         - FreeBSD (amd64)
