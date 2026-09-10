@@ -284,11 +284,16 @@ sudo systemctl daemon-reload
 
 Both installers detect the CPU and pick the matching release asset automatically:
 
-| `uname -m`          | asset suffix  |
-|---------------------|---------------|
-| `aarch64`           | `linux-arm64` |
-| `armv7l` / `armv6l` | `linux-armv7` |
-| `x86_64`            | `linux-amd64` |
+| `uname -m`            | asset suffix  |
+|-----------------------|---------------|
+| `aarch64`             | `linux-arm64` |
+| `armv7l`              | `linux-armv7` |
+| `armv6l` / `armv5tel` | `linux-armv5` |
+| `x86_64`              | `linux-amd64` |
+
+A Pi 1 or Pi Zero reports `armv6l` and cannot execute the ARMv7 build: it
+contains floating-point instructions those CPUs do not have, so it dies with
+"Illegal instruction". The ARMv5 build runs on all three.
 
 Override if needed:
 
