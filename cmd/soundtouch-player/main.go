@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/netcompat"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
 	"github.com/go-chi/chi/v5"
 	"github.com/urfave/cli/v2"
@@ -188,9 +189,18 @@ func main() {
 			r := chi.NewRouter()
 			webApp.Mount(r, discoveryService)
 
+			// Bind before logging so a port that is already taken is
+			// reported as an error rather than after a "starting" line.
+			// A distinct name, not the Action's err: reusing that one would
+			// make every earlier inner err a reported shadow.
+			ln, listenErr := netcompat.Listen("tcp", addr)
+			if listenErr != nil {
+				return fmt.Errorf("failed to listen on %s: %w", addr, listenErr)
+			}
+
 			log.Printf("AfterTouch Web UI starting on %s", sanitizeLog(browsableURL(addr)))
 
-			return http.ListenAndServe(addr, r)
+			return http.Serve(ln, r)
 		},
 	}
 
