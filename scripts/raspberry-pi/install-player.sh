@@ -24,7 +24,8 @@ set -euo pipefail
 #   sudo bash install-player.sh v0.123.0
 #
 # Notes:
-# - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
+# - This script downloads a release binary for your CPU (auto-detects
+#   armv7/armv5/arm64/amd64).
 # - soundtouch-player is stateless (no data directory) — it is safe to stop/restart freely.
 # - Default port is 8080 (unprivileged — no special capabilities needed).
 # - If soundtouch-service is already installed, soundtouch-player reuses the
@@ -67,7 +68,7 @@ SERVICE_URL="${SERVICE_URL:-}"
 SERVICE_CA="${SERVICE_CA:-}"
 
 # Override if you want to force a specific asset suffix:
-#   ARCH_ASSET=linux-armv7|linux-arm64|linux-amd64
+#   ARCH_ASSET=linux-armv7|linux-armv5|linux-arm64|linux-amd64
 ARCH_ASSET="${ARCH_ASSET:-}"
 
 # Internal variables
@@ -96,8 +97,14 @@ detect_arch_asset() {
   m="$(uname -m)"
 
   case "$m" in
-    armv7l|armv6l)
+    armv7l)
       echo "linux-armv7"
+      ;;
+    # ARMv6 (Pi 1, Pi Zero) and ARMv5 cannot execute the ARMv7 build: it
+    # contains VFP instructions their CPUs do not have, so the binary dies
+    # with "Illegal instruction" before printing anything.
+    armv6l|armv5*)
+      echo "linux-armv5"
       ;;
     aarch64)
       echo "linux-arm64"

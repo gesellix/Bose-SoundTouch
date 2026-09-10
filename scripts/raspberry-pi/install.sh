@@ -21,7 +21,8 @@ set -euo pipefail
 #   sudo bash install.sh v0.123.0
 #
 # Notes:
-# - This script downloads a release binary for your CPU (auto-detects armv7/arm64/amd64).
+# - This script downloads a release binary for your CPU (auto-detects
+#   armv7/armv5/arm64/amd64).
 # - It installs a systemd unit that can bind privileged ports (80/443) using:
 #     AmbientCapabilities=CAP_NET_BIND_SERVICE
 #   so you do NOT need setcap and do NOT need to run as root.
@@ -73,7 +74,7 @@ MGMT_USERNAME="${MGMT_USERNAME:-admin}"
 MGMT_PASSWORD="${MGMT_PASSWORD:-change_me!}"
 
 # Override if you want to force a specific asset suffix:
-#   ARCH_ASSET=linux-armv7|linux-arm64|linux-amd64
+#   ARCH_ASSET=linux-armv7|linux-armv5|linux-arm64|linux-amd64
 ARCH_ASSET="${ARCH_ASSET:-}"
 
 # Internal variables
@@ -98,14 +99,21 @@ apt_install_if_missing() {
 }
 
 detect_arch_asset() {
-  # Upstream release naming expects: linux-armv7, linux-arm64, linux-amd64
+  # Upstream release naming expects: linux-armv7, linux-armv5, linux-arm64,
+  # linux-amd64
   # Map uname -m to those.
   local m
   m="$(uname -m)"
 
   case "$m" in
-    armv7l|armv6l)
+    armv7l)
       echo "linux-armv7"
+      ;;
+    # ARMv6 (Pi 1, Pi Zero) and ARMv5 cannot execute the ARMv7 build: it
+    # contains VFP instructions their CPUs do not have, so the binary dies
+    # with "Illegal instruction" before printing anything.
+    armv6l|armv5*)
+      echo "linux-armv5"
       ;;
     aarch64)
       echo "linux-arm64"
