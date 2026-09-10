@@ -26,14 +26,21 @@ type fakeDevice struct {
 	gotPostBody         string
 	margeAccountUUID    string // served by /info; empty means "unpaired"
 	configurationStatus string // served by /soundTouchConfigurationStatus; empty = route not served (404)
+
+	// nowPlayingSources is the sequence of source attributes served by
+	// /now_playing, one per request, repeating the last entry once exhausted.
+	// A speaker that is not stuck reports something like "STANDBY"; one still
+	// onboarding reports "SETUP".
+	nowPlayingSources []string
 }
 
 func newFakeDevice(t *testing.T) *fakeDevice {
 	t.Helper()
 
 	d := &fakeDevice{
-		supportsSetMarge: true,
-		postStatus:       http.StatusOK,
+		supportsSetMarge:  true,
+		postStatus:        http.StatusOK,
+		nowPlayingSources: []string{"STANDBY"},
 	}
 
 	mux := http.NewServeMux()
@@ -63,6 +70,20 @@ func newFakeDevice(t *testing.T) *fakeDevice {
 	mux.HandleFunc("/info", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
 		fmt.Fprintf(w, `<info deviceID="AABBCCDDEE0A"><margeAccountUUID>%s</margeAccountUUID></info>`, d.margeAccountUUID)
+	})
+
+	mux.HandleFunc("/now_playing", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+
+		source := "STANDBY"
+		if len(d.nowPlayingSources) > 0 {
+			source = d.nowPlayingSources[0]
+			if len(d.nowPlayingSources) > 1 {
+				d.nowPlayingSources = d.nowPlayingSources[1:]
+			}
+		}
+
+		fmt.Fprintf(w, `<nowPlaying deviceID="AABBCCDDEE0A" source="%s"><ContentItem source="%s"/></nowPlaying>`, source, source)
 	})
 
 	mux.HandleFunc("/soundTouchConfigurationStatus", func(w http.ResponseWriter, _ *http.Request) {
@@ -96,7 +117,7 @@ func TestPairAccount_HappyPathHTTP(t *testing.T) {
 
 	m := &Manager{}
 
-	res, _, err := m.PairAccount(d.addr, "1234567", nil)
+	res, _, err := m.PairAccount(t.Context(), d.addr, "1234567", nil)
 	if err != nil {
 		t.Fatalf("PairAccount: %v", err)
 	}
@@ -132,7 +153,7 @@ func TestPairAccount_FallsBackWhenSetMargeAccountMissing(t *testing.T) {
 
 	m := &Manager{}
 
-	res, _, err := m.PairAccount(d.addr, "1234567", f)
+	res, _, err := m.PairAccount(t.Context(), d.addr, "1234567", f)
 	if err != nil {
 		t.Fatalf("PairAccount: %v", err)
 	}
@@ -168,7 +189,7 @@ func TestPairAccount_FallsBackWhenHTTPReturnsServerError(t *testing.T) {
 
 	m := &Manager{}
 
-	res, _, err := m.PairAccount(d.addr, "7654321", f)
+	res, _, err := m.PairAccount(t.Context(), d.addr, "7654321", f)
 	if err != nil {
 		t.Fatalf("PairAccount: %v", err)
 	}
@@ -193,7 +214,7 @@ func TestPairAccount_HTTPSuccessSkipsTelnet(t *testing.T) {
 
 	m := &Manager{}
 
-	res, _, err := m.PairAccount(d.addr, "1234567", f)
+	res, _, err := m.PairAccount(t.Context(), d.addr, "1234567", f)
 	if err != nil {
 		t.Fatalf("PairAccount: %v", err)
 	}
@@ -213,7 +234,7 @@ func TestPairAccount_NoTelnetAndHTTPMissingReturnsClearError(t *testing.T) {
 
 	m := &Manager{}
 
-	_, _, err := m.PairAccount(d.addr, "1234567", nil)
+	_, _, err := m.PairAccount(t.Context(), d.addr, "1234567", nil)
 	if err == nil {
 		t.Fatal("expected error when both paths are unavailable")
 	}
@@ -233,7 +254,7 @@ func TestPairAccount_TelnetCommandNotFoundReportsBothPaths(t *testing.T) {
 
 	m := &Manager{}
 
-	_, _, err := m.PairAccount(d.addr, "1234567", f)
+	_, _, err := m.PairAccount(t.Context(), d.addr, "1234567", f)
 	if err == nil {
 		t.Fatal("expected error when telnet rejects the fallback")
 	}
@@ -247,7 +268,7 @@ func TestPairAccount_RejectsInvalidAccountID(t *testing.T) {
 	m := &Manager{}
 
 	for _, badID := range []string{"", "12345", "12345678", "abcdefg", "12345 6"} {
-		_, _, err := m.PairAccount("127.0.0.1:9999", badID, nil)
+		_, _, err := m.PairAccount(t.Context(), "127.0.0.1:9999", badID, nil)
 		if err == nil {
 			t.Errorf("PairAccount accepted invalid ID %q", badID)
 		}
@@ -264,7 +285,7 @@ func TestPairAccount_TelnetTransportErrorReturned(t *testing.T) {
 
 	m := &Manager{}
 
-	_, _, err := m.PairAccount(d.addr, "1234567", f)
+	_, _, err := m.PairAccount(t.Context(), d.addr, "1234567", f)
 	if err == nil {
 		t.Fatal("expected telnet transport error to be surfaced")
 	}
@@ -282,7 +303,7 @@ func TestEnsureMargeAccountPaired_AlreadyPairedSkipsPairing(t *testing.T) {
 
 	m := NewManager("", nil, nil)
 
-	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(d.addr, "", f)
+	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(t.Context(), d.addr, "", f)
 	if err != nil {
 		t.Fatalf("EnsureMargeAccountPaired: %v", err)
 	}
@@ -306,7 +327,7 @@ func TestEnsureMargeAccountPaired_UnpairedGeneratesAndPairs(t *testing.T) {
 
 	m := NewManager("", nil, nil)
 
-	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(d.addr, "", nil)
+	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(t.Context(), d.addr, "", nil)
 	if err != nil {
 		t.Fatalf("EnsureMargeAccountPaired: %v", err)
 	}
@@ -330,7 +351,7 @@ func TestEnsureMargeAccountPaired_UnpairedUsesWantAccountID(t *testing.T) {
 
 	m := NewManager("", nil, nil)
 
-	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(d.addr, "7654321", nil)
+	accountID, alreadyPaired, _, err := m.EnsureMargeAccountPaired(t.Context(), d.addr, "7654321", nil)
 	if err != nil {
 		t.Fatalf("EnsureMargeAccountPaired: %v", err)
 	}
@@ -354,7 +375,7 @@ func TestEnsureMargeAccountPaired_RejectsInvalidWantAccountID(t *testing.T) {
 
 	m := NewManager("", nil, nil)
 
-	_, _, _, err := m.EnsureMargeAccountPaired(d.addr, "not/valid", nil)
+	_, _, _, err := m.EnsureMargeAccountPaired(t.Context(), d.addr, "not/valid", nil)
 	if err == nil {
 		t.Fatal("expected an error for an invalid --account value")
 	}
@@ -367,7 +388,7 @@ func TestEnsureMargeAccountPaired_PropagatesPairingFailure(t *testing.T) {
 
 	m := NewManager("", nil, nil)
 
-	_, _, _, err := m.EnsureMargeAccountPaired(d.addr, "1234567", nil)
+	_, _, _, err := m.EnsureMargeAccountPaired(t.Context(), d.addr, "1234567", nil)
 	if err == nil {
 		t.Fatal("expected an error when HTTP pairing is unsupported and no telnet client is given")
 	}
@@ -505,5 +526,177 @@ func TestGenerateAccountID_AvoidsCollisions(t *testing.T) {
 				t.Errorf("generated %q collides with known list %v", got, known)
 			}
 		}
+	}
+}
+
+// withFastSettle shrinks the post-escalation settle so the stuck-path tests
+// do not sit through the production 2 s.
+func withFastSettle(t *testing.T) {
+	t.Helper()
+
+	prev := wsSettleDelay
+	wsSettleDelay = time.Millisecond
+
+	t.Cleanup(func() { wsSettleDelay = prev })
+}
+
+// TestPairAccount_NoEscalationWhenSpeakerLeftSetup is the ordinary case: the
+// account was written and the speaker is playing (or idle), so nothing extra
+// should happen. In particular no WebSocket session is opened against a
+// perfectly healthy speaker.
+func TestPairAccount_NoEscalationWhenSpeakerLeftSetup(t *testing.T) {
+	d := newFakeDevice(t)
+	d.nowPlayingSources = []string{"STANDBY"}
+
+	var dialled bool
+
+	m := &Manager{NewSession: func(_, _ string, _ time.Duration) (StateMachine, error) {
+		dialled = true
+		return &fakeSession{errors: map[string]error{}}, nil
+	}}
+
+	res, logs, err := m.PairAccount(t.Context(), d.addr, "1234567", nil)
+	if err != nil {
+		t.Fatalf("PairAccount: %v", err)
+	}
+
+	if dialled {
+		t.Error("opened a setup WebSocket against a speaker that was not stuck")
+	}
+
+	if res.StuckInSetup || res.WSAttempted {
+		t.Errorf("unexpected escalation: %+v", res)
+	}
+
+	if res.Method != "http" {
+		t.Errorf("Method = %q, want http", res.Method)
+	}
+
+	if !strings.Contains(logs, "out of SETUP") {
+		t.Errorf("logs should record the check, got: %s", logs)
+	}
+}
+
+// TestPairAccount_EscalatesWhenStuckInSetup is the #646 shape: the HTTP call
+// succeeds and the account ID lands, but the firmware stays in onboarding. A
+// plain fallback chain would never reach the WebSocket path here, because
+// nothing failed.
+func TestPairAccount_EscalatesWhenStuckInSetup(t *testing.T) {
+	withFastSettle(t)
+
+	d := newFakeDevice(t)
+	// Stuck on the post-pair check, recovered on the re-read afterwards.
+	d.nowPlayingSources = []string{"SETUP", "STANDBY"}
+
+	session := &fakeSession{errors: map[string]error{}}
+	m := &Manager{NewSession: func(_, _ string, _ time.Duration) (StateMachine, error) {
+		return session, nil
+	}}
+
+	res, logs, err := m.PairAccount(t.Context(), d.addr, "1234567", nil)
+	if err != nil {
+		t.Fatalf("PairAccount: %v", err)
+	}
+
+	if !res.StuckInSetup {
+		t.Error("StuckInSetup should be set when the speaker still reports SETUP")
+	}
+
+	if !res.WSAttempted {
+		t.Error("WSAttempted should be set")
+	}
+
+	if !res.LeftSetup {
+		t.Error("LeftSetup should be set once the speaker reports a different source")
+	}
+
+	if res.Method != "ws" {
+		t.Errorf("Method = %q, want ws (the WebSocket call is what completed the pairing)", res.Method)
+	}
+
+	// The escalation sends the minimal payload: no boseServer extras, since
+	// this is an escalation of the same request, not a migration.
+	want := "SetMargeAccount(1234567,)"
+	if len(session.calls) != 1 || session.calls[0] != want {
+		t.Errorf("session calls = %v, want exactly [%s]", session.calls, want)
+	}
+
+	if !session.closed {
+		t.Error("session should be closed")
+	}
+
+	if !strings.Contains(logs, "escalating") {
+		t.Errorf("logs should explain the escalation, got: %s", logs)
+	}
+}
+
+// TestPairAccount_EscalationFailureDoesNotFailPairing covers a speaker that is
+// stuck and also refuses the WebSocket. The account ID was still written, so
+// reporting the whole call as failed would be wrong and would push the UI into
+// an error state over a best-effort extra step.
+func TestPairAccount_EscalationFailureDoesNotFailPairing(t *testing.T) {
+	d := newFakeDevice(t)
+	d.nowPlayingSources = []string{"SETUP"}
+
+	m := &Manager{NewSession: func(_, _ string, _ time.Duration) (StateMachine, error) {
+		return nil, errors.New("connection refused")
+	}}
+
+	res, _, err := m.PairAccount(t.Context(), d.addr, "1234567", nil)
+	if err != nil {
+		t.Fatalf("PairAccount should still succeed, got: %v", err)
+	}
+
+	if !res.StuckInSetup || !res.WSAttempted {
+		t.Errorf("escalation should be recorded as attempted: %+v", res)
+	}
+
+	if res.WSError == "" {
+		t.Error("WSError should explain why the escalation failed")
+	}
+
+	if res.LeftSetup {
+		t.Error("LeftSetup must stay false when the escalation never ran")
+	}
+
+	if res.Method != "http" {
+		t.Errorf("Method = %q, want http (the HTTP call is what wrote the account)", res.Method)
+	}
+}
+
+// TestPairAccount_UnreadableNowPlayingSkipsEscalation covers firmware that
+// does not answer /now_playing. Not being able to check is not evidence of
+// being stuck, so nothing should escalate on the strength of it.
+func TestPairAccount_UnreadableNowPlayingSkipsEscalation(t *testing.T) {
+	d := newFakeDevice(t)
+	d.nowPlayingSources = nil
+
+	var dialled bool
+
+	m := &Manager{
+		HTTPGet: func(url string) (*http.Response, error) {
+			if strings.HasSuffix(url, "/now_playing") {
+				return nil, errors.New("connection reset")
+			}
+
+			return http.Get(url) //nolint:gosec,noctx // test-local httptest URL
+		},
+		NewSession: func(_, _ string, _ time.Duration) (StateMachine, error) {
+			dialled = true
+			return &fakeSession{errors: map[string]error{}}, nil
+		},
+	}
+
+	res, logs, err := m.PairAccount(t.Context(), d.addr, "1234567", nil)
+	if err != nil {
+		t.Fatalf("PairAccount: %v", err)
+	}
+
+	if dialled || res.StuckInSetup || res.WSAttempted {
+		t.Errorf("must not escalate when the SETUP state is unknown: %+v", res)
+	}
+
+	if !strings.Contains(logs, "SETUP check failed") {
+		t.Errorf("logs should note the failed check, got: %s", logs)
 	}
 }
