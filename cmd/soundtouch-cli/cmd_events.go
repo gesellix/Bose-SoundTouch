@@ -234,8 +234,11 @@ func parseEventFilters(eventFilter string) map[string]bool {
 	return filters
 }
 
-// setupWebSocketClient creates and configures the WebSocket client
-func setupWebSocketClient(soundTouchClient *client.Client, reconnect, verbose bool) *client.WebSocketClient {
+// webSocketConfig is the tuning `events` uses, split out from
+// setupWebSocketClient so it can be asserted on: NewWebSocketClient keeps only
+// the logger and the buffer size, so none of these intervals can be read back
+// off the client it returns.
+func webSocketConfig(reconnect, verbose bool) *client.WebSocketConfig {
 	wsConfig := &client.WebSocketConfig{
 		ReconnectInterval:    5 * time.Second,
 		MaxReconnectAttempts: 0, // Unlimited if reconnect enabled
@@ -255,7 +258,12 @@ func setupWebSocketClient(soundTouchClient *client.Client, reconnect, verbose bo
 		wsConfig.MaxReconnectAttempts = 1
 	}
 
-	return soundTouchClient.NewWebSocketClient(wsConfig)
+	return wsConfig
+}
+
+// setupWebSocketClient creates and configures the WebSocket client
+func setupWebSocketClient(soundTouchClient *client.Client, reconnect, verbose bool) *client.WebSocketClient {
+	return soundTouchClient.NewWebSocketClient(webSocketConfig(reconnect, verbose))
 }
 
 // setupEventHandlers configures all event handlers
