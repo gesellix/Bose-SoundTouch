@@ -78,8 +78,12 @@ func TestRender_OverrideSampleRateChangesByteRate(t *testing.T) {
 }
 
 func TestSafeSampleRate_ClampsOutOfRange(t *testing.T) {
+	// int64, not int: 1<<31 and 1<<33 are not representable as an int on a
+	// 32-bit platform, so an int table would not compile for linux/arm. The
+	// conversion below truncates them there, to a negative number and to zero
+	// respectively, which the same clamp already rejects.
 	cases := []struct {
-		in   int
+		in   int64
 		want uint32
 	}{
 		{22050, 22050},
@@ -90,11 +94,11 @@ func TestSafeSampleRate_ClampsOutOfRange(t *testing.T) {
 		{200000, 22050},  // above max → default
 		{1 << 31, 22050}, // way beyond uint32 → default (the original CodeQL concern)
 		{1 << 33, 22050}, // wraps to a different value on int→uint32; default protects us
-		{int(maxSampleRate) + 1, 22050},
+		{int64(maxSampleRate) + 1, 22050},
 	}
 
 	for _, c := range cases {
-		if got := safeSampleRate(c.in); got != c.want {
+		if got := safeSampleRate(int(c.in)); got != c.want {
 			t.Errorf("safeSampleRate(%d) = %d, want %d", c.in, got, c.want)
 		}
 	}
@@ -106,7 +110,12 @@ func TestRender_HugeSampleRateDoesNotTruncateOrPanic(t *testing.T) {
 	// sampleRateParam guard with an int well above uint32 used
 	// to silently wrap. The defensive clamp now substitutes the
 	// default sample rate instead.
-	data := Render(Options{SampleRate: 1 << 33}.WithDefaults())
+	// A variable, not a constant expression: int(1<<33) does not compile on a
+	// 32-bit platform at all, while converting an int64 variable truncates it
+	// there (to zero), which the same clamp rejects just as well.
+	var beyondUint32 int64 = 1 << 33
+
+	data := Render(Options{SampleRate: int(beyondUint32)}.WithDefaults())
 	if sr := binary.LittleEndian.Uint32(data[24:28]); sr != uint32(DefaultOptions().SampleRate) {
 		t.Errorf("expected clamp to default sample rate, got %d", sr)
 	}
