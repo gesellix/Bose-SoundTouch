@@ -23,14 +23,15 @@ Good choices: a Raspberry Pi, a NAS (like Synology or QNAP), an always-on PC or 
 
 See the **[Downloads page](../downloads/_index.md)** for the full list of builds and how to pick the right one for your system. You want the `soundtouch-service` tool; download the build whose suffix matches your computer:
 
-| Your system           | File to download                         |
-|-----------------------|------------------------------------------|
-| Raspberry Pi (64-bit) | `soundtouch-service-vX.Y.Z-linux-arm64`  |
-| Raspberry Pi (32-bit) | `soundtouch-service-vX.Y.Z-linux-armv7`  |
-| Linux (64-bit PC)     | `soundtouch-service-vX.Y.Z-linux-amd64`  |
-| macOS (Apple Silicon) | `soundtouch-service-vX.Y.Z-darwin-arm64` |
-| macOS (Intel)         | `soundtouch-service-vX.Y.Z-darwin-amd64` |
-| Windows               | `soundtouch-service-vX.Y.Z-windows-amd64.exe` |
+| Your system                           | File to download                              |
+|---------------------------------------|-----------------------------------------------|
+| Raspberry Pi (64-bit)                 | `soundtouch-service-vX.Y.Z-linux-arm64`       |
+| Raspberry Pi (32-bit)                 | `soundtouch-service-vX.Y.Z-linux-armv7`       |
+| Older 32-bit ARM (NAS, Pi 1, Pi Zero) | `soundtouch-service-vX.Y.Z-linux-armv5`       |
+| Linux (64-bit PC)                     | `soundtouch-service-vX.Y.Z-linux-amd64`       |
+| macOS (Apple Silicon)                 | `soundtouch-service-vX.Y.Z-darwin-arm64`      |
+| macOS (Intel)                         | `soundtouch-service-vX.Y.Z-darwin-amd64`      |
+| Windows                               | `soundtouch-service-vX.Y.Z-windows-amd64.exe` |
 
 (`X.Y.Z` is the current release version.) The download is a single ready-to-run executable called `soundtouch-service` (or `soundtouch-service.exe` on Windows) — no archive to extract.
 
@@ -117,6 +118,41 @@ By default, AfterTouch stops when you close the terminal. To keep it running per
 AfterTouch must always be reachable at the same address, because your speakers will be configured to point to it. If the IP changes, your speakers will stop working until you reconfigure them.
 
 The easiest solution is to assign a **static (fixed) IP address** to the computer running AfterTouch in your router's settings. Look for "DHCP reservation" or "static IP" in your router's administration interface, and bind the server's MAC address to a fixed IP.
+
+---
+
+## Very old NAS boxes and kernels
+
+A NAS you already own is often the most convenient place to run AfterTouch,
+but some of them are genuinely old, and old shows up in two ways. Both look
+alarming and both have a fix.
+
+**"Illegal instruction" with no other output.** The `linux-armv7` build
+contains floating-point instructions that ARMv5 and ARMv6 CPUs do not have,
+so it dies the moment it starts. Use the `linux-armv5` build instead: it runs
+on ARMv5, ARMv6 and ARMv7 alike. This is also the right download for a
+Raspberry Pi 1 or Pi Zero. The install scripts pick it for you.
+
+**`accept4: function not implemented`.** The service starts, says it is
+listening, and then dies as soon as anything connects:
+
+```
+accept tcp [::]:8000: accept4: function not implemented
+```
+
+That is a kernel older than 2.6.36 on 32-bit ARM, which predates the
+`accept4()` system call. AfterTouch detects this at startup and falls back to
+the older `accept()` call automatically, so you should not have to do
+anything; you will see a line about it in the log. If you need to switch the
+fallback on or off by hand, set `AFTERTOUCH_ACCEPT_FALLBACK` to `1`, `0` or
+`auto`.
+
+**What is not promised.** Go itself supports Linux 3.2 and newer. Kernels
+below that are outside that window and outside our CI, which has no hardware
+that old to test on, so `accept4()` may not be the last missing piece.
+AfterTouch is known to get as far as accepting connections there; if you hit
+something further along, please open an issue with the exact error, your
+`uname -a`, and what you were doing.
 
 ---
 
