@@ -44,15 +44,16 @@ soundtouch-<tool>-v<VERSION>-<os>-<arch>[.exe]
 
 Pick the `<os>-<arch>` suffix for your system:
 
-| Your system                          | `<os>-<arch>` suffix |
-|--------------------------------------|----------------------|
-| Raspberry Pi (64-bit) / ARM64 Linux  | `linux-arm64`        |
-| Raspberry Pi (32-bit) / ARMv7        | `linux-armv7`        |
-| Linux (64-bit PC)                    | `linux-amd64`        |
-| macOS (Apple Silicon: M1/M2/M3/…)    | `darwin-arm64`       |
-| macOS (Intel)                        | `darwin-amd64`       |
-| Windows (64-bit)                     | `windows-amd64.exe`  |
-| FreeBSD (64-bit)                     | `freebsd-amd64`      |
+| Your system                           | `<os>-<arch>` suffix |
+|---------------------------------------|----------------------|
+| Raspberry Pi (64-bit) / ARM64 Linux   | `linux-arm64`        |
+| Raspberry Pi (32-bit) / ARMv7         | `linux-armv7`        |
+| Older 32-bit ARM (NAS, Pi 1, Pi Zero) | `linux-armv5`        |
+| Linux (64-bit PC)                     | `linux-amd64`        |
+| macOS (Apple Silicon: M1/M2/M3/…)     | `darwin-arm64`       |
+| macOS (Intel)                         | `darwin-amd64`       |
+| Windows (64-bit)                      | `windows-amd64.exe`  |
+| FreeBSD (64-bit)                      | `freebsd-amd64`      |
 
 **Example.** To control speakers from a Raspberry Pi 4, download the CLI
 build `soundtouch-cli-vX.Y.Z-linux-arm64`. On an Apple Silicon Mac you

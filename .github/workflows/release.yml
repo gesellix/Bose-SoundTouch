@@ -104,6 +104,13 @@ jobs:
           - goos: linux
             goarch: arm
             goarm: 7
+          # ARMv5TE: old NAS hardware (and Pi 1 / Pi Zero, which are ARMv6 and
+          # cannot run the ARMv7 build either). Pairs with the accept4 fallback
+          # in pkg/netcompat, since these boxes also tend to run pre-2.6.36
+          # kernels. See issue 698.
+          - goos: linux
+            goarch: arm
+            goarm: 5
           - goos: darwin
             goarch: amd64
           - goos: darwin
@@ -286,7 +293,7 @@ jobs:
             cat checksums.sha256
 
             # Verify all expected files are present (binaries only, not checksum files)
-            EXPECTED_COUNT=28  # 7 platforms * 4 binaries
+            EXPECTED_COUNT=32  # 8 platforms * 4 binaries
             ACTUAL_COUNT=$(ls soundtouch-* | grep -v '\.sha256$' | grep -v '\.sha512$' | wc -l)
 
             if [[ $ACTUAL_COUNT -ne $EXPECTED_COUNT ]]; then
@@ -365,7 +372,7 @@ jobs:
 
           ## What's included
 
-          Pre-built binaries for Linux (amd64, arm64, armv7), macOS (Intel & Apple Silicon), Windows (amd64), and FreeBSD (amd64):
+          Pre-built binaries for Linux (amd64, arm64, armv7, armv5), macOS (Intel & Apple Silicon), Windows (amd64), and FreeBSD (amd64):
 
           - **soundtouch-service** (see above)
           - **soundtouch-cli** (see above)
