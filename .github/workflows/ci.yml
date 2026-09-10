@@ -83,10 +83,9 @@ jobs:
           args: --timeout=5m
 
       # pkg/netcompat's accept4 fallback is behind `//go:build linux && arm`, so
-      # the lint pass above never even parses it. Cross-lint the packages that
-      # bind listeners so the fallback is held to the same standard as the rest.
-      # Scoped rather than repo-wide: scripts/extract-ws needs cgo and libpcap,
-      # which do not cross-compile here.
+      # the lint pass above never even parses it. This one does, and it holds
+      # the whole module to 32-bit as well: an int is 32 bits wide there, and
+      # nothing else in CI would notice a constant that no longer fits.
       - name: Run golangci-lint (linux/arm)
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         env:
@@ -96,12 +95,7 @@ jobs:
           CGO_ENABLED: "0"
         with:
           version: latest
-          args: >-
-            --timeout=5m
-            ./pkg/netcompat/...
-            ./pkg/discovery/...
-            ./cmd/soundtouch-service/...
-            ./cmd/soundtouch-player/...
+          args: --timeout=5m
 
   build:
     name: Build

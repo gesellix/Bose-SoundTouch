@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
@@ -332,20 +333,23 @@ func TestWebSocketConfigDefaults(t *testing.T) {
 	// This tests the configuration values used in setupWebSocketClient
 	// We can't easily unit test the actual function without mocking the client
 	// But we can test that our expected defaults are reasonable
-	defaultReconnectInterval := 5000000000 // 5 seconds in nanoseconds
-	defaultPingInterval := 30000000000     // 30 seconds in nanoseconds
-	defaultPongTimeout := 10000000000      // 10 seconds in nanoseconds
+	// time.Duration rather than bare nanosecond literals: 30000000000 does not
+	// fit in an int on a 32-bit platform, so this file would not compile for
+	// linux/arm. Durations also say what the numbers mean.
+	defaultReconnectInterval := 5 * time.Second
+	defaultPingInterval := 30 * time.Second
+	defaultPongTimeout := 10 * time.Second
 	defaultBufferSize := 2048
 
-	if defaultReconnectInterval < 1000000000 { // Less than 1 second
+	if defaultReconnectInterval < time.Second {
 		t.Error("Reconnect interval should be at least 1 second")
 	}
 
-	if defaultPingInterval < 10000000000 { // Less than 10 seconds
+	if defaultPingInterval < 10*time.Second {
 		t.Error("Ping interval should be at least 10 seconds")
 	}
 
-	if defaultPongTimeout < 1000000000 { // Less than 1 second
+	if defaultPongTimeout < time.Second {
 		t.Error("Pong timeout should be at least 1 second")
 	}
 
