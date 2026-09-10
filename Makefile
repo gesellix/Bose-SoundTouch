@@ -88,7 +88,7 @@ build-backup:
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME) $(BACKUP_PATH)
 
-build-all: build-linux build-linux-armv7 build-darwin build-windows build-examples-all
+build-all: build-linux build-linux-armv7 build-linux-armv5 build-darwin build-windows build-examples-all
 
 build-linux:
 	@echo "Building for Linux..."
@@ -103,6 +103,16 @@ build-linux-armv7:
 	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME)-linux-armv7 $(SERVICE_PATH)
 	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-armv7 $(BINARY_PATH)
 	GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME)-linux-armv7 $(BACKUP_PATH)
+
+# ARMv5TE, for old NAS hardware and for ARMv6 boards (Pi 1, Pi Zero) that
+# cannot execute the ARMv7 build at all. GOARM=5 emits no VFP instructions, so
+# it runs anywhere the ARMv7 build does and in a few places it does not.
+build-linux-armv5:
+	@echo "Building for Linux ARMv5 (old NAS / ARMv6 boards, CGO_ENABLED=0)..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(SERVICE_NAME)-linux-armv5 $(SERVICE_PATH)
+	GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-armv5 $(BINARY_PATH)
+	GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 $(GOBUILD) $(BUILDFLAGS) -o $(BUILD_DIR)/$(BACKUP_NAME)-linux-armv5 $(BACKUP_PATH)
 
 build-darwin:
 	@echo "Building for macOS..."
@@ -521,6 +531,7 @@ help:
 	@echo "  build-examples - Build only the example programs"
 	@echo "  build-all     - Build for all platforms"
 	@echo "  build-linux-armv7 - Build for Linux ARMv7 (kernel 3.14+ compatible, CGO_ENABLED=0)"
+	@echo "  build-linux-armv5 - Build for Linux ARMv5 (old NAS / Pi 1 / Pi Zero, CGO_ENABLED=0)"
 	@echo "  test          - Run tests"
 	@echo "  test-coverage - Run tests with coverage report"
 	@echo "  test-browser             - Run browser-level (chromedp) player compatibility tests"

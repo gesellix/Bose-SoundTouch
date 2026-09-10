@@ -18,6 +18,7 @@ BASE_URL="https://github.com/${REPOSITORY}/releases/download/${TAG_NAME}"
 PLATFORMS=(
   "linux-arm64|Raspberry Pi (64-bit) / ARM64 Linux"
   "linux-armv7|Raspberry Pi (32-bit) / ARMv7"
+  "linux-armv5|Older 32-bit ARM (ARMv5/ARMv6 NAS, Pi 1, Pi Zero)"
   "linux-amd64|Linux (64-bit PC)"
   "darwin-arm64|macOS (Apple Silicon)"
   "darwin-amd64|macOS (Intel)"
