@@ -17,10 +17,32 @@ function commandAction(command) {
     return typeof command === 'string' ? command : command?.action;
 }
 
+function statusEpoch(status) {
+    const epoch = status?.epoch;
+    return Number.isSafeInteger(epoch) ? epoch : null;
+}
+
+// The revision a command is verified against, tagged with the epoch it was
+// counted in: mute is volume state and advances the aggregate revision, every
+// other command advances the now-playing one.
 function commandRevision(status, command) {
-    return commandAction(command)?.startsWith('mute-')
+    const revision = commandAction(command)?.startsWith('mute-')
         ? statusRevision(status)
         : nowPlayingRevision(status);
+    return revision === null ? null : { epoch: statusEpoch(status), revision };
+}
+
+// Revisions are only comparable within one epoch. A device id backed by a new
+// DeviceConnection, or a restarted service, restarts its revisions at 0, so a
+// reconnect in the middle of a command would otherwise leave every readback
+// looking older than the revision the command started at, and the command
+// could never confirm. Same rule as app.js acceptsNewerStatus.
+function isNewerRevision(start, candidate) {
+    if (!start || !candidate) return false;
+    if (start.epoch !== null && candidate.epoch !== null && candidate.epoch !== start.epoch) {
+        return candidate.epoch > start.epoch;
+    }
+    return candidate.revision > start.revision;
 }
 
 // Track skips cannot be confirmed by reading the speaker back. Confirming on
@@ -191,13 +213,12 @@ export function useDiscreteCommand({
 
     useEffect(() => {
         const revision = commandRevision(status, command);
-        if (!command || revision === null || command.startRevision === null ||
-            revision <= command.startRevision || command.outcome === 'failed' ||
-            command.outcome === 'unverified') return;
+        if (!command || !isNewerRevision(command.startRevision, revision) ||
+            command.outcome === 'failed' || command.outcome === 'unverified') return;
 
         const matches = matchesCommand(status, command);
         if (command.outcome === 'final-confirmed') {
-            if (revision > command.confirmedRevision && !matches) {
+            if (isNewerRevision(command.confirmedRevision, revision) && !matches) {
                 setCommand(previous => previous?.generation === command.generation
                     ? null : previous);
             }
@@ -328,12 +349,11 @@ export function useDiscreteCommand({
                     const currentStatus = statusRef.current;
                     const currentRevision = commandRevision(currentStatus, currentRequest);
                     const canonicalStatus = currentRevision !== null &&
-                        (readbackRevision === null || currentRevision >= readbackRevision)
+                        !isNewerRevision(currentRevision, readbackRevision)
                         ? currentStatus
                         : readbackStatus;
                     const canonicalRevision = commandRevision(canonicalStatus, currentRequest);
-                    const revisionIsNewer = startRevision !== null && canonicalRevision !== null &&
-                        canonicalRevision > startRevision;
+                    const revisionIsNewer = isNewerRevision(startRevision, canonicalRevision);
                     onStatusReadback?.(deviceId, readbackStatus, response.data.info);
 
                     if (revisionIsNewer && commandFailed(canonicalStatus, currentRequest)) {
