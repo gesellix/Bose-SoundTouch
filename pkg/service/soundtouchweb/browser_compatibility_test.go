@@ -847,6 +847,84 @@ func TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	}
 }
 
+// TestEmptyPresetSlotStaysSavableWhileACommandIsPending: an empty slot's
+// tile is a save gesture, not a playback command, so an in-flight command
+// has no reason to disable it -- and the sibling star button, which saves the
+// same thing, stays enabled throughout anyway.
+func TestEmptyPresetSlotStaysSavableWhileACommandIsPending(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [{ ID: 1, ContentItem: { Source: 'TUNEIN', Location: '/station/preset', ItemName: 'Preset station' } }] },
+  sources: { SourceItem: [] },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	storedSlots := []string{}
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/action/preset", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/action/storepreset", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			storedSlots = append(storedSlots, req.URL.Query().Get("id"))
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		// Never matches the preset, so the command stays pending for the whole
+		// readback window while the empty slot is clicked.
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"status": map[string]any{
+					"revision": 1, "nowPlayingRevision": 1,
+					"nowPlaying": map[string]any{"Source": "PRODUCT", "PlayStatus": "PLAY_STATE"},
+					"volume":     map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var savableEnabled bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.preset-slot.savable`, chromedp.ByQuery),
+		chromedp.Click(`.preset-slot:not(.empty)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Starting preset'`, nil),
+		chromedp.Evaluate(`document.querySelector('.preset-slot.savable').disabled === false`, &savableEnabled),
+		chromedp.Click(`.preset-slot.savable`, chromedp.ByQuery),
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exercise empty preset slot during a pending command: %v", err)
+	}
+
+	if !savableEnabled {
+		t.Error("the empty slot's save gesture was disabled while a command was pending")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if got, want := fmt.Sprint(storedSlots), "[2]"; got != want {
+		t.Errorf("stored preset slots = %s, want %s", got, want)
+	}
+}
+
 // TestControlsStayLiveOnAnUnpolledSpeaker: a speaker that is offline or has
 // not been polled yet reports no state, so nothing can be reconciled -- but
 // the power button and the transport must still work. That is exactly the
