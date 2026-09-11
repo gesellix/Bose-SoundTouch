@@ -656,7 +656,7 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var powerPending, pausePending, mutePending, shufflePending, repeatPending bool
-	var nextPending, previousPending bool
+	var nextFreedTransport bool
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 		chromedp.WaitVisible(`.page-header .command-btn`, chromedp.ByQuery),
@@ -682,21 +682,24 @@ render(h(Fixture), document.getElementById('fixture'));
 		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Repeat all enabled'`, nil),
 		chromedp.Evaluate(`window.publishStatus({revision: 500, nowPlayingRevision: 500, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'First track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
 		chromedp.Poll(`document.querySelector('.track-title').textContent === 'First track'`, nil),
+		// Track skips settle on their write, so they confirm without a
+		// readback and free the transport again immediately.
 		chromedp.Click(`.next-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.next-btn').getAttribute('aria-busy') === 'true'`, &nextPending),
 		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+		chromedp.Evaluate(`document.querySelector('.next-btn').disabled === false`, &nextFreedTransport),
 		chromedp.Evaluate(`window.publishStatus({revision: 600, nowPlayingRevision: 600, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'Second track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
 		chromedp.Poll(`document.querySelector('.track-title').textContent === 'Second track'`, nil),
 		chromedp.Click(`.previous-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.previous-btn').getAttribute('aria-busy') === 'true'`, &previousPending),
 		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`, nil),
 	); err != nil {
 		t.Fatalf("exercise bounded discrete commands: %v", err)
 	}
-	if !powerPending || !pausePending || !mutePending || !shufflePending || !repeatPending ||
-		!nextPending || !previousPending {
-		t.Errorf("pending state: power=%v pause=%v mute=%v shuffle=%v repeat=%v next=%v previous=%v, want all true",
-			powerPending, pausePending, mutePending, shufflePending, repeatPending, nextPending, previousPending)
+	if !powerPending || !pausePending || !mutePending || !shufflePending || !repeatPending {
+		t.Errorf("pending state: power=%v pause=%v mute=%v shuffle=%v repeat=%v, want all true",
+			powerPending, pausePending, mutePending, shufflePending, repeatPending)
+	}
+	if !nextFreedTransport {
+		t.Error("the transport stayed disabled after a track skip settled on its write")
 	}
 
 	mu.Lock()
@@ -707,13 +710,18 @@ render(h(Fixture), document.getElementById('fixture'));
 	if got, want := fmt.Sprint(keys), "[PAUSE MUTE SHUFFLE_ON REPEAT_ALL NEXT_TRACK PREV_TRACK]"; got != want {
 		t.Errorf("key writes = %s, want %s", got, want)
 	}
-	for _, command := range []string{"power", "pause", "mute", "shuffle", "repeat", "next", "previous"} {
+	for _, command := range []string{"power", "pause", "mute", "shuffle", "repeat"} {
 		if reads[command] != 3 {
 			t.Errorf("%s readbacks = %d, want 3", command, reads[command])
 		}
 	}
-	if fullReads != 3 || nowPlayingReads != 18 {
-		t.Errorf("readback endpoints: full=%d now-playing=%d, want 3 and 18", fullReads, nowPlayingReads)
+	for _, command := range []string{"next", "previous"} {
+		if reads[command] != 0 {
+			t.Errorf("%s readbacks = %d, want 0 for a command that settles on its write", command, reads[command])
+		}
+	}
+	if fullReads != 3 || nowPlayingReads != 12 {
+		t.Errorf("readback endpoints: full=%d now-playing=%d, want 3 and 12", fullReads, nowPlayingReads)
 	}
 }
 
