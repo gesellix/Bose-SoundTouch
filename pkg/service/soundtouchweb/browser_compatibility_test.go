@@ -847,6 +847,61 @@ func TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	}
 }
 
+// TestDiscreteCommandConfirmsAcrossAReconnectEpoch: revisions restart at 0
+// when a device id is backed by a new DeviceConnection or the service is
+// restarted, so they only compare within one epoch. Comparing them raw made
+// every readback after a mid-command reconnect look older than the revision
+// the command started at, and the command could never confirm.
+func TestDiscreteCommandConfirmsAcrossAReconnectEpoch(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  epoch: 1,
+  revision: 50,
+  nowPlayingRevision: 50,
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [] },
+  sources: { SourceItem: [] },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		// The connection was re-established mid-command: a new epoch, whose
+		// revisions start again from 0.
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"epoch":2,"revision":3,"nowPlayingRevision":3,` +
+				`"nowPlaying":{"Source":"PRODUCT","PlayStatus":"PAUSE_STATE"}}}}`))
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.play-btn`, chromedp.ByQuery),
+		chromedp.Click(`.play-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`, nil),
+	); err != nil {
+		t.Fatalf("exercise command confirmation across a reconnect: %v", err)
+	}
+}
+
 // TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail: a command the
 // event stream already confirmed must not be retracted by a later readback
 // that fails. Announcing "unverified" for a pause the speaker demonstrably
