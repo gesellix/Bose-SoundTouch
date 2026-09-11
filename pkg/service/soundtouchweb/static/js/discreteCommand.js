@@ -23,19 +23,15 @@ function commandRevision(status, command) {
         : nowPlayingRevision(status);
 }
 
-export function playbackIdentity(nowPlaying) {
-    if (!nowPlaying) return '';
-    const item = nowPlaying.ContentItem || {};
-    return [
-        nowPlaying.Source,
-        nowPlaying.SourceAccount,
-        item.Source,
-        item.SourceAccount,
-        item.Location,
-        nowPlaying.TrackID,
-        nowPlaying.Track,
-        nowPlaying.StationName,
-    ].map(value => value || '').join('\u0000');
+// Track skips cannot be confirmed by reading the speaker back. Confirming on
+// "what is playing changed" is wrong in both directions: a live stream rolls
+// its track metadata over by itself, so a skip that did nothing looks
+// confirmed, while AUX, PRODUCT and radio have no track concept at all, so a
+// skip that worked never changes anything and would always end unverified
+// after a full readback window of dead transport. A write the speaker
+// accepted is the only honest evidence available, so these settle on it.
+function settlesOnWrite(action) {
+    return action === 'next-track' || action === 'previous-track';
 }
 
 export function contentExpectation(item) {
@@ -98,10 +94,6 @@ export function matchesCommand(status, command) {
     if (action === 'repeat-all') return nowPlaying?.RepeatSetting === 'REPEAT_ALL';
     if (action === 'repeat-one') return nowPlaying?.RepeatSetting === 'REPEAT_ONE';
     if (action === 'repeat-off') return nowPlaying?.RepeatSetting === 'REPEAT_OFF';
-    if (action === 'next-track' || action === 'previous-track') {
-        const identity = playbackIdentity(nowPlaying);
-        return Boolean(identity) && identity !== command?.expected?.previousIdentity;
-    }
     if (['preset', 'recent', 'tunein', 'radiobrowser', 'url', 'library'].includes(action)) {
         return matchesContentExpectation(nowPlaying, command?.expected);
     }
@@ -111,7 +103,7 @@ export function matchesCommand(status, command) {
 function commandFailed(status, command) {
     const action = commandAction(command);
     if (![
-        'play', 'pause', 'next-track', 'previous-track', 'preset', 'recent',
+        'play', 'pause', 'preset', 'recent',
         'tunein', 'radiobrowser', 'url', 'library',
     ].includes(action)) return false;
     const nowPlaying = status?.nowPlaying;
@@ -247,6 +239,8 @@ export function useDiscreteCommand({
         commandRef.current.active = active;
         setCommand({ ...request, generation, outcome: 'pending', startRevision });
         const startedAt = Date.now();
+        // A command that settles on its write schedules no readbacks at all.
+        const delays = settlesOnWrite(action) ? [] : readbackDelays;
 
         function fail(error) {
             if (commandRef.current.active !== active) return;
@@ -287,7 +281,23 @@ export function useDiscreteCommand({
             });
         }
 
-        readbackDelays.forEach((delay, index) => {
+        // Settles a command the speaker accepted but nothing will read back.
+        function confirmOnWrite() {
+            if (commandRef.current.active !== active) return;
+            clearReadbacks();
+            commandRef.current.active = null;
+            setCommand(previous => previous?.generation === generation
+                ? {
+                    ...active.request,
+                    generation,
+                    outcome: 'final-confirmed',
+                    startRevision,
+                    confirmedRevision: commandRevision(statusRef.current, active.request),
+                }
+                : previous);
+        }
+
+        delays.forEach((delay, index) => {
             const timer = setTimeout(async () => {
                 if (commandRef.current.active !== active) return;
                 active.latestReadback = index;
@@ -342,7 +352,7 @@ export function useDiscreteCommand({
                         // last deadline passes. So keep the remaining
                         // readbacks only as a fallback for a device whose
                         // events we are not receiving.
-                        const isFinalReadback = index === readbackDelays.length - 1;
+                        const isFinalReadback = index === delays.length - 1;
                         const eventStreamWatching = readbackStatus?.webSocketConnected === true;
                         const settled = isFinalReadback || eventStreamWatching;
                         setCommand({
@@ -356,12 +366,12 @@ export function useDiscreteCommand({
                             clearReadbacks();
                             commandRef.current.active = null;
                         }
-                    } else if (index === readbackDelays.length - 1) {
+                    } else if (index === delays.length - 1) {
                         unverified();
                     }
                 } catch (error) {
                     if (commandRef.current.active === active && active.latestReadback === index &&
-                        index === readbackDelays.length - 1) {
+                        index === delays.length - 1) {
                         unverified(error);
                     }
                 }
@@ -389,6 +399,7 @@ export function useDiscreteCommand({
             // Checked writes reject instead, and are classified below.
             if (response?.success === false) {
                 active.writeError = new Error(response.error || 'Command rejected');
+                if (settlesOnWrite(action)) unverified();
                 return;
             }
             if (options.expectedFromResponse) {
@@ -412,6 +423,7 @@ export function useDiscreteCommand({
                     ? { ...previous, expected: refinedExpected, expectationReady: true }
                     : previous);
             }
+            if (settlesOnWrite(action)) confirmOnWrite();
         }).catch(error => {
             if (commandRef.current.active !== active) return;
             // A definitive refusal (4xx) means the speaker never saw the
@@ -427,6 +439,9 @@ export function useDiscreteCommand({
                 return;
             }
             active.writeError = error;
+            // Nothing will read this one back, so the ambiguous failure is as
+            // far as it gets.
+            if (settlesOnWrite(action)) unverified(error);
         });
         return true;
     }
