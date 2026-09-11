@@ -82,7 +82,7 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
                 class="preset-slot ${isEmpty ? 'empty' : ''} ${active ? 'active' : ''} ${savableEmpty ? 'savable' : ''}"
                 data-source=${item?.Source ?? ''}
                 onClick=${select}
-                disabled=${(isEmpty && !savableEmpty) || commandBusy}
+                disabled=${!savableEmpty && (isEmpty || commandBusy)}
                 aria-busy=${command?.action === 'preset' && commandBusy &&
                     command?.expected?.targetId === String(preset.ID) ? 'true' : null}
                 title=${slotTitle}
