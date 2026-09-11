@@ -252,15 +252,29 @@ export function useDiscreteCommand({
             });
         }
 
+        // Called when the readback window closes without this round matching.
+        // "Unverified" is only honest for a command nothing ever confirmed: a
+        // nowPlayingUpdated event may already have confirmed it at t=1s, and a
+        // failed readback at t=10s must not retract that. Such a command is
+        // settled as confirmed instead, since no further readback will run.
         function unverified(error) {
             if (commandRef.current.active !== active) return;
             commandRef.current.active = null;
-            setCommand({
-                ...active.request,
-                generation,
-                outcome: 'unverified',
-                startRevision,
-                error: active.writeError?.message || error?.message,
+            setCommand(previous => {
+                if (previous?.generation !== generation) return previous;
+                if (previous.outcome === 'provisional-confirmed' ||
+                    previous.outcome === 'final-confirmed') {
+                    return { ...previous, outcome: 'final-confirmed' };
+                }
+                if (previous.outcome === 'failed') return previous;
+
+                return {
+                    ...active.request,
+                    generation,
+                    outcome: 'unverified',
+                    startRevision,
+                    error: active.writeError?.message || error?.message,
+                };
             });
         }
 
