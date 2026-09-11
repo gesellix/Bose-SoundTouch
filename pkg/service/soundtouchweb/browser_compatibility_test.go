@@ -877,6 +877,41 @@ func TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
 	}
 }
 
+// TestPlayConfirmationAcceptsBuffering: BUFFERING_STATE is a real firmware
+// play status (models.PlayStatusBuffering), and internet radio sits in it for
+// seconds at a time. Requiring PLAY_STATE reported a working play command as
+// unverified and held the transport disabled for the whole readback window.
+func TestPlayConfirmationAcceptsBuffering(t *testing.T) {
+	const fixture = `
+import { matchesCommand } from '/app/static/js/discreteCommand.js';
+const play = {action: 'play'};
+window.playConfirmationChecks = {
+  playing: matchesCommand({nowPlaying: {Source: 'TUNEIN', PlayStatus: 'PLAY_STATE'}}, play),
+  buffering: matchesCommand({nowPlaying: {Source: 'TUNEIN', PlayStatus: 'BUFFERING_STATE'}}, play),
+  paused: !matchesCommand({nowPlaying: {Source: 'TUNEIN', PlayStatus: 'PAUSE_STATE'}}, play),
+  standby: !matchesCommand({nowPlaying: {Source: 'STANDBY', PlayStatus: 'BUFFERING_STATE'}}, play),
+  emptySource: !matchesCommand({nowPlaying: {Source: '', PlayStatus: 'BUFFERING_STATE'}}, play),
+};
+`
+
+	server := newPlayerFixtureServer(t, fixture, func(chi.Router) {})
+	ctx := newHeadlessChromeContext(t)
+
+	var checks map[string]bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.Poll(`window.playConfirmationChecks !== undefined`, nil),
+		chromedp.Evaluate(`window.playConfirmationChecks`, &checks),
+	); err != nil {
+		t.Fatalf("exercise play confirmation matrix: %v", err)
+	}
+	for name, passed := range checks {
+		if !passed {
+			t.Errorf("play confirmation check %s failed", name)
+		}
+	}
+}
+
 func TestPresetAndRecentCommandsUseOneWriteAndBoundedReadbacks(t *testing.T) {
 	const fixture = `
 import { h, render } from 'preact';

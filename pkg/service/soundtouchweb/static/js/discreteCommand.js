@@ -81,7 +81,16 @@ export function matchesCommand(status, command) {
             (nowPlaying?.PlayStatus === 'STOP_STATE' &&
                 Boolean(nowPlaying.Source) && nowPlaying.Source !== 'STANDBY');
     }
-    if (action === 'play') return nowPlaying?.PlayStatus === 'PLAY_STATE';
+    if (action === 'play') {
+        // Internet radio reports BUFFERING_STATE for seconds at a time before
+        // the first audio arrives, sometimes past the last readback deadline.
+        // That is the command working, so treat it as confirmed -- but only
+        // for a real source, since a speaker in standby is not starting
+        // anything.
+        return nowPlaying?.PlayStatus === 'PLAY_STATE' ||
+            (nowPlaying?.PlayStatus === 'BUFFERING_STATE' &&
+                Boolean(nowPlaying.Source) && nowPlaying.Source !== 'STANDBY');
+    }
     if (action === 'mute-on') return status?.volume?.MuteEnabled === true;
     if (action === 'mute-off') return status?.volume?.MuteEnabled === false;
     if (action === 'shuffle-on') return nowPlaying?.ShuffleSetting === 'SHUFFLE_ON';
