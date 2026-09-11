@@ -108,7 +108,7 @@ export function TuneInBrowser({
             deviceId,
             action: 'tunein',
             readbackDelays: commandReadbackDelays,
-            invoke: () => api.tuneInPlay(deviceId, {
+            invoke: () => api.tuneInPlayChecked(deviceId, {
                 location: item.location,
                 type: item.type,
                 name: item.name,

@@ -375,8 +375,11 @@ export function useDiscreteCommand({
         }
         Promise.resolve(write).then(response => {
             if (commandRef.current.active !== active) return;
+            // A response-level failure carries no status code, so it is no
+            // proof the speaker never acted: record it and keep verifying.
+            // Checked writes reject instead, and are classified below.
             if (response?.success === false) {
-                fail(new Error(response.error || 'Command rejected'));
+                active.writeError = new Error(response.error || 'Command rejected');
                 return;
             }
             if (options.expectedFromResponse) {
@@ -401,7 +404,20 @@ export function useDiscreteCommand({
                     : previous);
             }
         }).catch(error => {
-            if (commandRef.current.active === active) active.writeError = error;
+            if (commandRef.current.active !== active) return;
+            // A definitive refusal (4xx) means the speaker never saw the
+            // command, so there is nothing for the readbacks to confirm and
+            // reporting it now beats waiting out the readback window. Anything
+            // else stays pending: a 5xx or a transport error does not tell us
+            // whether the speaker acted -- a request that timed out after the
+            // speaker already switched looks exactly like one it never
+            // received -- so we keep verifying and carry the reason into
+            // whatever outcome the readbacks reach.
+            if (error?.definitive) {
+                fail(error);
+                return;
+            }
+            active.writeError = error;
         });
         return true;
     }

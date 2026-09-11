@@ -50,7 +50,7 @@ export function PlayURL({
             deviceId,
             action: 'url',
             readbackDelays: commandReadbackDelays,
-            invoke: () => api.playURL(deviceId, item.url, item.name, '', effectiveServiceUrl),
+            invoke: () => api.playURLChecked(deviceId, item.url, item.name, '', effectiveServiceUrl),
             expected: {
                 source: 'LOCAL_INTERNET_RADIO',
                 itemName: item.name,

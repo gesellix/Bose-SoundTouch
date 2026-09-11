@@ -40,7 +40,7 @@ export function RadioBrowser({
             deviceId,
             action: 'radiobrowser',
             readbackDelays: commandReadbackDelays,
-            invoke: () => api.radioBrowserPlay(deviceId, {
+            invoke: () => api.radioBrowserPlayChecked(deviceId, {
                 location: item.location,
                 type: item.type,
                 name: item.name,

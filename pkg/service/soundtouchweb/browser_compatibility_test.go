@@ -1235,7 +1235,7 @@ function Fixture() {
     targetIdentity,
     action: 'tunein',
     readbackDelays: [100, 250, 500],
-    invoke: () => api.tuneInPlay('speaker', { location: '/' + scenario, type: 'stationurl', name: scenario }),
+    invoke: () => api.tuneInPlayChecked('speaker', { location: '/' + scenario, type: 'stationurl', name: scenario }),
     expected: { source: 'TUNEIN', location: '/' + scenario, itemName: scenario },
   });
   const start = scenario => setRequest(commandRequest(scenario));
@@ -1269,6 +1269,7 @@ function Fixture() {
     h('button', { id: 'reject', onClick: () => start('reject') }, 'Reject'),
     h('button', { id: 'target', onClick: () => start('target') }, 'Target'),
     h('button', { id: 'pretarget', onClick: startWithReplacement }, 'Pre-write target'),
+    h('button', { id: 'indefinite', onClick: () => start('indefinite') }, 'Indefinite'),
     h('button', { id: 'stale', onClick: () => start('stale') }, 'Stale'),
     request ? h(ContentPlaybackCommand, {
       key: request.key,
@@ -1300,8 +1301,17 @@ render(h(Fixture), document.getElementById('fixture'));
 			mode = currentMode
 			writes[currentMode]++
 			mu.Unlock()
+			// 4xx is the only definitive refusal: the service produces it
+			// before any speaker call, so nothing was sent onward. 5xx is not
+			// proof of anything, since a request that timed out after the
+			// speaker already acted looks exactly like one it never received.
 			if currentMode == "reject" {
+				w.WriteHeader(http.StatusBadRequest)
 				_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: false, Error: "catalog rejected"})
+				return
+			}
+			if currentMode == "indefinite" {
+				http.Error(w, "speaker call failed", http.StatusInternalServerError)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
@@ -1354,6 +1364,13 @@ render(h(Fixture), document.getElementById('fixture'));
 		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
 		chromedp.Evaluate(`window.restoreTarget()`, nil),
 
+		// A 5xx says nothing about whether the speaker acted, so the readbacks
+		// must keep verifying and can still confirm the command.
+		chromedp.Click(`#indefinite`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
+
 		chromedp.Click(`#stale`, chromedp.ByQuery),
 		chromedp.WaitVisible(`.content-command-status.pending`, chromedp.ByQuery),
 		chromedp.Evaluate(`window.publishNewer()`, nil),
@@ -1364,7 +1381,7 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	mu.Lock()
 	defer mu.Unlock()
-	for _, command := range []string{"reject", "target", "stale"} {
+	for _, command := range []string{"reject", "target", "indefinite", "stale"} {
 		if writes[command] != 1 {
 			t.Errorf("%s writes = %d, want 1", command, writes[command])
 		}
