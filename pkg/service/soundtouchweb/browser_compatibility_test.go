@@ -747,6 +747,77 @@ window.pauseConfirmationChecks = {
 	}
 }
 
+// TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail: a command the
+// event stream already confirmed must not be retracted by a later readback
+// that fails. Announcing "unverified" for a pause the speaker demonstrably
+// performed is worse than saying nothing.
+func TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [] },
+  sources: { SourceItem: [] },
+};
+let publishStatus;
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  publishStatus = status => setDevices(previous => mergeStatusUpdate(previous, 'speaker', status));
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+window.publishStatus = status => publishStatus(status);
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		// Every readback fails, so only the pushed status can confirm anything.
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		})
+		r.Get("/api/control/devices/speaker/zone", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/zone/candidates", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{}})
+		})
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{"Items": []any{}}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var statusText string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.play-btn`, chromedp.ByQuery),
+		chromedp.Click(`.play-btn`, chromedp.ByQuery),
+		// The speaker reports the pause before the first readback deadline.
+		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE'}, volume: {ActualVolume: 20, MuteEnabled: false}})`, nil),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused, confirming'`, nil),
+		// Outlast the last readback deadline (500ms in this fixture).
+		chromedp.Sleep(900*time.Millisecond),
+		chromedp.Text(`.discrete-command-status`, &statusText, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("exercise push-confirmed command with failing readbacks: %v", err)
+	}
+
+	if statusText != "Playback paused" {
+		t.Errorf("status = %q, want the push confirmation to stand as %q", statusText, "Playback paused")
+	}
+}
+
 func TestPresetAndRecentCommandsUseOneWriteAndBoundedReadbacks(t *testing.T) {
 	const fixture = `
 import { h, render } from 'preact';
