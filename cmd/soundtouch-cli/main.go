@@ -1308,7 +1308,7 @@ func main() {
 							&cli.IntFlag{
 								Name:     "level",
 								Aliases:  []string{"l"},
-								Usage:    "Balance level (-50 to 50, negative=left, positive=right)",
+								Usage:    "Balance level within the range the speaker reports (-7 to 7 on a SoundTouch 10); negative=left, positive=right",
 								Required: true,
 							},
 						},
@@ -1322,7 +1322,7 @@ func main() {
 							&cli.IntFlag{
 								Name:    "amount",
 								Aliases: []string{"a"},
-								Usage:   "Amount to shift left (1-10, default: 5)",
+								Usage:   "Amount to shift left, clamped to the speaker's reported range",
 								Value:   5,
 							},
 						},
@@ -1336,7 +1336,7 @@ func main() {
 							&cli.IntFlag{
 								Name:    "amount",
 								Aliases: []string{"a"},
-								Usage:   "Amount to shift right (1-10, default: 5)",
+								Usage:   "Amount to shift right, clamped to the speaker's reported range",
 								Value:   5,
 							},
 						},

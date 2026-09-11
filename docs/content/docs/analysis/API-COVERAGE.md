@@ -71,7 +71,8 @@ This Go implementation provides near-complete coverage of the Bose SoundTouch We
 | Endpoint        | Method   | Status       | Notes                                                              |
 |-----------------|----------|--------------|--------------------------------------------------------------------|
 | `/name`         | GET      | 🔍 **Extra** | Official API only documents POST, but GET works with real hardware |
-| `/balance`      | GET/POST | 🔍 **Extra** | Stereo balance control (-50 to +50) - not in API v1.0              |
+| `/balance`      | GET      | 🔍 **Extra** | Stereo pair balance, device-reported range (-7..7 on an ST-10)     |
+| `/balance`      | POST     | ❌ **Hangs** | HTTP write never returns; write over the WebSocket instead         |
 | `/clockTime`    | GET/POST | 🔍 **Extra** | Device time management - works with real devices                   |
 | `/clockDisplay` | GET/POST | 🔍 **Extra** | Clock display settings and brightness                              |
 | `/networkInfo`  | GET      | 🔍 **Extra** | Network connectivity information                                   |

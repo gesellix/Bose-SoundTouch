@@ -699,26 +699,36 @@ soundtouch-cli --host 192.0.2.10 bass down
 
 ### Balance Control
 
-Adjust left/right balance.
+Adjust the left/right balance of a stereo **pair** (two SoundTouch 10s taking the
+LEFT and RIGHT channel). A speaker that is not in a pair reports balance as
+unavailable. Either member of the pair can be addressed: both report the same
+value and both accept the setting.
+
+The range comes from the speaker, not from the CLI: `-7` to `7`, default `0`, on
+a SoundTouch 10. `balance get` prints it.
+
+Writing the balance opens a WebSocket to the speaker, because the HTTP `POST
+/balance` endpoint hangs instead of applying the change. `balance get` is a plain
+HTTP read.
 
 #### `balance <subcommand>`
 
 Balance control commands.
 
 ```bash
-# Get current balance
+# Get current balance, including the range the speaker reports
 soundtouch-cli --host <device> balance get
 
-# Set balance (-50 to 50, negative=left, positive=right)
-soundtouch-cli --host <device> balance set --level <-50 to 50>
+# Set balance (negative=left, positive=right, within the reported range)
+soundtouch-cli --host <device> balance set --level <level>
 
-# Shift balance left
-soundtouch-cli --host <device> balance left [--amount <1-10>]
+# Shift balance left (clamped to the speaker's range)
+soundtouch-cli --host <device> balance left [--amount <n>]
 
-# Shift balance right
-soundtouch-cli --host <device> balance right [--amount <1-10>]
+# Shift balance right (clamped to the speaker's range)
+soundtouch-cli --host <device> balance right [--amount <n>]
 
-# Center balance
+# Center balance, at whatever the speaker reports as its default
 soundtouch-cli --host <device> balance center
 ```
 
@@ -727,10 +737,13 @@ soundtouch-cli --host <device> balance center
 # Get balance
 soundtouch-cli --host 192.0.2.10 balance get
 
-# Set balance 10 units to the right
-soundtouch-cli --host 192.0.2.10 balance set --level 10
+# Hard right, on a speaker reporting a -7..7 range
+soundtouch-cli --host 192.0.2.10 balance set --level 7
 
-# Shift left by 5 units (default)
+# Slightly left
+soundtouch-cli --host 192.0.2.10 balance set --level -3
+
+# Shift left by 5 units (default), clamped at the range end
 soundtouch-cli --host 192.0.2.10 balance left
 
 # Center the balance
@@ -1571,7 +1584,7 @@ soundtouch-cli --host 192.0.2.10 balance get
 
 # Adjust for better sound
 soundtouch-cli --host 192.0.2.10 bass set --level 2      # Slight bass boost
-soundtouch-cli --host 192.0.2.10 balance set --level -5  # Slightly left
+soundtouch-cli --host 192.0.2.10 balance set --level -3  # Slightly left
 soundtouch-cli --host 192.0.2.10 volume set --level 35   # Good listening level
 ```
 

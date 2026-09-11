@@ -442,10 +442,11 @@ func (pm *ProfileManager) CreateProfile(name string) error {
         return fmt.Errorf("failed to get bass: %w", err)
     }
 
+    // Balance exists only on a stereo pair; an unpaired speaker answers
+    // Available=false rather than failing, so check the flag, not just err.
     balance, err := pm.client.GetBalance()
-    if err != nil {
-        // Balance might not be supported, use default
-        balance = &models.Balance{TargetBalance: 0}
+    if err != nil || !balance.Available {
+        balance = &models.Balance{}
     }
 
     nowPlaying, err := pm.client.GetNowPlaying()
@@ -458,7 +459,7 @@ func (pm *ProfileManager) CreateProfile(name string) error {
         Name:    name,
         Volume:  volume.TargetVolume,
         Bass:    bass.TargetBass,
-        Balance: balance.TargetBalance,
+        Balance: balance.Target,
         Source:  source,
     }
 
@@ -486,7 +487,9 @@ func (pm *ProfileManager) ApplyProfile(name string) error {
         log.Printf("Warning: failed to set bass: %v", err)
     }
 
-    if err := pm.client.SetBalanceSafe(profile.Balance); err != nil {
+    // Balance is the odd one out: POST /balance hangs, so the write goes over
+    // the WebSocket. See applyBalance below.
+    if err := pm.applyBalance(profile.Balance); err != nil {
         log.Printf("Warning: failed to set balance: %v", err)
     }
 
@@ -497,6 +500,42 @@ func (pm *ProfileManager) ApplyProfile(name string) error {
     }
 
     fmt.Printf("✅ Profile '%s' applied successfully\n", name)
+    return nil
+}
+
+// applyBalance writes the balance over the WebSocket, which is the only
+// transport the speakers accept it on.
+//
+// The speaker echoes the whole balance document in its reply, so the returned
+// value is the confirmation — do not read back over HTTP to check, that
+// endpoint lags a write by about a second.
+func (pm *ProfileManager) applyBalance(level int) error {
+    ws := pm.client.NewWebSocketClient(nil)
+    if err := ws.Connect(); err != nil {
+        return fmt.Errorf("open websocket: %w", err)
+    }
+    defer func() { _ = ws.Disconnect() }()
+
+    ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+    defer cancel()
+
+    current, err := ws.GetBalance(ctx)
+    if err != nil {
+        return fmt.Errorf("read balance: %w", err)
+    }
+
+    if !current.Available {
+        return fmt.Errorf("balance needs a stereo pair; this speaker has none")
+    }
+
+    // Clamp to the range the device reports rather than an assumed one.
+    updated, err := ws.SetBalanceWithBounds(ctx, current.Clamp(level), current)
+    if err != nil {
+        return err
+    }
+
+    fmt.Printf("   Balance now %d\n", updated.Target)
+
     return nil
 }
 
