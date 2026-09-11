@@ -135,21 +135,21 @@ export function DeviceDetail({
     function togglePower() {
         if (!source) return;
         runDiscreteCommand(source === 'STANDBY' ? 'power-on' : 'power-off',
-            () => api.power(deviceId));
+            () => api.powerChecked(deviceId));
     }
 
     function togglePlayback() {
         if (!playStatus) return;
         const isPlaying = playStatus === 'PLAY_STATE';
         runDiscreteCommand(isPlaying ? 'pause' : 'play',
-            () => api.key(deviceId, isPlaying ? 'PAUSE' : 'PLAY'));
+            () => api.keyChecked(deviceId, isPlaying ? 'PAUSE' : 'PLAY'));
     }
 
     function toggleMute() {
         const muted = status?.volume?.MuteEnabled;
         if (typeof muted !== 'boolean') return;
         runDiscreteCommand(muted ? 'mute-off' : 'mute-on',
-            () => api.key(deviceId, 'MUTE'));
+            () => api.keyChecked(deviceId, 'MUTE'));
     }
 
     function toggleShuffle() {
@@ -157,7 +157,7 @@ export function DeviceDetail({
         if (!shuffle) return;
         const target = shuffle === 'SHUFFLE_ON' ? 'SHUFFLE_OFF' : 'SHUFFLE_ON';
         runDiscreteCommand(target === 'SHUFFLE_ON' ? 'shuffle-on' : 'shuffle-off',
-            () => api.key(deviceId, target));
+            () => api.keyChecked(deviceId, target));
     }
 
     function cycleRepeat() {
@@ -166,32 +166,32 @@ export function DeviceDetail({
         const target = repeat === 'REPEAT_OFF' ? 'REPEAT_ALL'
             : repeat === 'REPEAT_ALL' ? 'REPEAT_ONE' : 'REPEAT_OFF';
         runDiscreteCommand(`repeat-${target.substring('REPEAT_'.length).toLowerCase()}`,
-            () => api.key(deviceId, target));
+            () => api.keyChecked(deviceId, target));
     }
 
     function previousTrack() {
         runDiscreteCommand('previous-track',
-            () => api.key(deviceId, 'PREV_TRACK'),
+            () => api.keyChecked(deviceId, 'PREV_TRACK'),
             { previousIdentity: playbackIdentity(status?.nowPlaying) });
     }
 
     function nextTrack() {
         runDiscreteCommand('next-track',
-            () => api.key(deviceId, 'NEXT_TRACK'),
+            () => api.keyChecked(deviceId, 'NEXT_TRACK'),
             { previousIdentity: playbackIdentity(status?.nowPlaying) });
     }
 
     function selectPreset(preset) {
         if (!preset?.ContentItem) return;
         runDiscreteCommand('preset',
-            () => api.control(deviceId, 'preset', preset.ID),
+            () => api.controlChecked(deviceId, 'preset', preset.ID),
             { ...contentExpectation(preset.ContentItem), targetId: String(preset.ID) });
     }
 
     function playRecent(item) {
         const content = item?.ContentItem;
         if (!content?.Location) return;
-        runDiscreteCommand('recent', () => api.play(deviceId, {
+        runDiscreteCommand('recent', () => api.playChecked(deviceId, {
             source: content.Source,
             type: content.Type,
             location: content.Location,

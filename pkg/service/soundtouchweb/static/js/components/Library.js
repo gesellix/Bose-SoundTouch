@@ -127,7 +127,7 @@ export function Library({
             deviceId: selectedDeviceId,
             action: 'library',
             readbackDelays: commandReadbackDelays,
-            invoke: () => api.libraryPlay(selectedDeviceId, {
+            invoke: () => api.libraryPlayChecked(selectedDeviceId, {
                 account: selectedServer.account,
                 location: entry.location,
                 type: entry.type || 'track',
