@@ -747,12 +747,10 @@ window.pauseConfirmationChecks = {
 	}
 }
 
-// TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail: a command the
-// event stream already confirmed must not be retracted by a later readback
-// that fails. Announcing "unverified" for a pause the speaker demonstrably
-// performed is worse than saying nothing.
-func TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
-	const fixture = `
+// discreteCommandFixtureScript renders a device detail page whose readback
+// delays are compressed to [100, 250, 500]ms, and exposes window.publishStatus
+// so a test can play the part of the event stream.
+const discreteCommandFixtureScript = `
 import { h, render } from 'preact';
 import { useState } from 'preact/hooks';
 import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
@@ -777,7 +775,76 @@ window.publishStatus = status => publishStatus(status);
 render(h(Fixture), document.getElementById('fixture'));
 `
 
-	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+// registerDeviceDetailSideRoutes answers the requests the device detail page
+// makes besides the command under test, so they neither 404 nor interfere.
+func registerDeviceDetailSideRoutes(r chi.Router) {
+	r.Get("/api/control/devices/speaker/zone", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+	})
+	r.Get("/api/control/devices/speaker/zone/candidates", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{}})
+	})
+	r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{"Items": []any{}}})
+	})
+}
+
+// TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms: with a live
+// event stream the first matching readback settles the command, which frees
+// the transport again instead of holding every button disabled until the last
+// readback deadline (10s in production). The no-event-stream half is covered
+// by TestDiscreteCommandsUseOneWriteAndBoundedReadbacks, whose readbacks all
+// report webSocketConnected as absent and so run to the end of the window.
+func TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
+	var mu sync.Mutex
+	reads := 0
+	server := newPlayerFixtureServer(t, discreteCommandFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			reads++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"status":{"revision":9,"nowPlayingRevision":9,` +
+				`"webSocketConnected":true,"nowPlaying":{"Source":"PRODUCT","PlayStatus":"PAUSE_STATE"}}}}`))
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var transportEnabled bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.play-btn`, chromedp.ByQuery),
+		chromedp.Click(`.play-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`, nil),
+		chromedp.Evaluate(`document.querySelector('.play-btn').disabled === false`, &transportEnabled),
+		// Outlast the remaining readback deadlines (250ms and 500ms here).
+		chromedp.Sleep(900*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exercise event-stream-confirmed command: %v", err)
+	}
+
+	if !transportEnabled {
+		t.Error("transport stayed disabled after the event stream confirmed the command")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads != 1 {
+		t.Errorf("readbacks with a live event stream = %d, want 1", reads)
+	}
+}
+
+// TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail: a command the
+// event stream already confirmed must not be retracted by a later readback
+// that fails. Announcing "unverified" for a pause the speaker demonstrably
+// performed is worse than saying nothing.
+func TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
+	server := newPlayerFixtureServer(t, discreteCommandFixtureScript, func(r chi.Router) {
 		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
@@ -786,15 +853,7 @@ render(h(Fixture), document.getElementById('fixture'));
 		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 		})
-		r.Get("/api/control/devices/speaker/zone", func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
-		})
-		r.Get("/api/control/devices/speaker/zone/candidates", func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{}})
-		})
-		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{"Items": []any{}}})
-		})
+		registerDeviceDetailSideRoutes(r)
 	})
 
 	ctx := newHeadlessChromeContext(t)

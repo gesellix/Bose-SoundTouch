@@ -320,15 +320,30 @@ export function useDiscreteCommand({
                     if (revisionIsNewer && commandFailed(canonicalStatus, currentRequest)) {
                         fail(new Error('Device rejected the selected source'));
                     } else if (revisionIsNewer && matchesCommand(canonicalStatus, currentRequest)) {
+                        // A match is not always the end of the story: the
+                        // speaker can still transition into an error source a
+                        // few seconds later, so something has to keep watching.
+                        //
+                        // The event stream is the better watcher when it is
+                        // live: it reports that transition as it happens, and
+                        // the status effect above already turns it into a
+                        // failure. Polling on top of that only re-asks a
+                        // question we are already subscribed to the answer of,
+                        // and keeps every command button disabled until the
+                        // last deadline passes. So keep the remaining
+                        // readbacks only as a fallback for a device whose
+                        // events we are not receiving.
                         const isFinalReadback = index === readbackDelays.length - 1;
+                        const eventStreamWatching = readbackStatus?.webSocketConnected === true;
+                        const settled = isFinalReadback || eventStreamWatching;
                         setCommand({
                             ...currentRequest,
                             generation,
-                            outcome: isFinalReadback ? 'final-confirmed' : 'provisional-confirmed',
+                            outcome: settled ? 'final-confirmed' : 'provisional-confirmed',
                             startRevision,
                             confirmedRevision: canonicalRevision,
                         });
-                        if (isFinalReadback) {
+                        if (settled) {
                             clearReadbacks();
                             commandRef.current.active = null;
                         }
