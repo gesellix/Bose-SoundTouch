@@ -41,7 +41,7 @@ The SoundTouch Plus community wiki documents **87 distinct API endpoints** with 
 | `/audioproducttonecontrols`  | ✅ Documented | ✅ Complete | Advanced bass/treble controls     |
 | `/audioproductlevelcontrols` | ✅ Documented | ✅ Complete | Speaker level controls            |
 | `/name` (GET/POST)           | ✅ Documented | ✅ Complete | Device name management            |
-| `/balance`                   | ✅ Documented | ✅ Complete | Stereo balance control            |
+| `/balance`                   | ✅ Documented | ⚠️ Read-only | Stereo pair; WS write, HTTP read  |
 | `/clockTime`                 | ✅ Documented | ✅ Complete | Device time management            |
 | `/clockDisplay`              | ✅ Documented | ✅ Complete | Clock display settings            |
 | `/networkInfo`               | ✅ Documented | ✅ Complete | Network connectivity info         |

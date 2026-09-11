@@ -57,7 +57,15 @@
 //		log.Fatal(err)
 //	}
 //
-//	err = client.SetBalance(-10)  // Range: -50 (left) to +50 (right)
+//	// Balance is the exception: POST /balance hangs, so the write goes over
+//	// the WebSocket, and the range comes from the device (-7..7 on an ST-10).
+//	ws := client.NewWebSocketClient(nil)
+//	if err = ws.Connect(); err != nil {
+//		log.Fatal(err)
+//	}
+//	defer func() { _ = ws.Disconnect() }()
+//
+//	updated, err := ws.SetBalance(context.Background(), -3)
 //	if err != nil {
 //		log.Fatal(err)
 //	}
@@ -132,7 +140,8 @@
 //   - Playback Control (Play/Pause/Stop/Next/Previous/Key commands)
 //   - Volume Control (Get/Set/Increment/Decrement)
 //   - Bass Control (-9 to +9 range)
-//   - Balance Control (-50 to +50 range)
+//   - Balance Control (stereo pairs; device-reported range, -7..7 on an ST-10;
+//     read over HTTP, written over the WebSocket)
 //   - Source Selection (Spotify, Bluetooth, AUX, Radio, etc.)
 //   - Preset Management (Get configured presets)
 //   - Clock/Time Management

@@ -280,11 +280,14 @@ Retrieves multiroom zone information.
 Configures multiroom zones.
 
 ### GET /balance ✅ **Implemented**
-Retrieves balance settings (stereo devices). Only works if device is configured as part of a stereo pair.
+Retrieves balance settings. Balance belongs to a stereo **pair** (two SoundTouch
+10s taking the LEFT and RIGHT channel), not to a multiroom zone and not to one
+speaker. Either member answers, with the same document; an unpaired speaker
+answers `balanceAvailable=false` rather than failing.
 
 **Response XML:**
 ```xml
-<balance deviceID="...">
+<balance deviceID="DEVICEID01">
   <balanceAvailable>true</balanceAvailable>
   <balanceMin>-7</balanceMin>
   <balanceMax>7</balanceMax>
@@ -294,20 +297,58 @@ Retrieves balance settings (stereo devices). Only works if device is configured 
 </balance>
 ```
 
-### POST /balance ✅ **Implemented**
-Sets balance settings. Value must be within the range specified by `balanceMin` and `balanceMax`.
+Take the range from `balanceMin`/`balanceMax`; do not hardcode it. On a
+SoundTouch 10 it is `-7..7`, default `0`, negative = left.
 
-**Request XML:**
+⚠️ This endpoint **blocks rather than refusing** on a speaker in deep standby
+(12 s and counting, measured). Give it its own short timeout and keep it off any
+polled path.
+
+### POST /balance ❌ **Does not work — write over the WebSocket instead**
+`POST /balance` **hangs** rather than returning or refusing. The app Bose ships
+on the speaker never writes balance over HTTP either; it writes exclusively over
+the WebSocket. `Client.SetBalance` therefore returns an error pointing at
+`WebSocketClient.SetBalance` / `SetBalanceWithBounds` instead of issuing a
+request (GH-699).
+
+The write is a normal `<msg>` envelope on the event socket (port 8080), with
+`mainNode="balanceSet"`:
+
 ```xml
-<balance>
-  <targetBalance>0</targetBalance>
-</balance>
+<msg><header deviceID="DEVICEID01" url="balance" method="POST">
+  <request requestID="3"><info mainNode="balanceSet" type="new"/></request>
+</header><body><balance><targetBalance>-3</targetBalance></balance></body></msg>
 ```
+
+The speaker answers on the same socket, 25-55 ms later, with the `requestID`
+echoed, `msgType="RESPONSE"`, and the **whole balance document including the new
+value**:
+
+```xml
+<msg><header deviceID="DEVICEID01" url="balance" method="POST">
+  <request requestID="3" msgType="RESPONSE"><info mainNode="balanceSet" type="new" /></request>
+</header><body>
+  <balance deviceID="DEVICEID01"><balanceAvailable>true</balanceAvailable>
+    <balanceMin>-7</balanceMin><balanceMax>7</balanceMax><balanceDefault>0</balanceDefault>
+    <targetBalance>-3</targetBalance><actualBalance>-3</actualBalance></balance>
+</body></msg>
+```
+
+So the write is self-confirming: parse that response and **do not read back**.
+`GET /balance` lags a write by about a second, so a read-back to confirm can
+report the old value.
+
+Either member of the pair accepts the write and both reflect it; addressing the
+master is a convention, not a requirement. The write leaves the pairing
+untouched (`/getGroup` is byte-identical before and after).
 
 **Range Examples:**
 - `-7` = left speaker
 - `0` = centered
 - `7` = right speaker
+
+The `balanceUpdated` WebSocket event that follows a change is **empty** and is
+broadcast to every connected client. It is a signal to re-read, not a value.
 
 ### GET /clockTime ✅ **Implemented**
 Retrieves the device time.
@@ -608,7 +649,9 @@ These endpoints work with real hardware but are NOT in official API v1.0:
 - `GET /networkInfo` ✅ **Implemented** - Network information
 
 ### Balance Control 🔍 **Extra**
-- `GET/POST /balance` ✅ **Implemented** - Stereo balance adjustment
+- `GET /balance` ✅ **Implemented** - Stereo pair balance, read over HTTP
+- `POST /balance` ❌ **Hangs** - the write goes over the WebSocket
+  (`mainNode="balanceSet"`), never over HTTP
 
 **Note**: Not documented in official API v1.0 but works with real devices.
 

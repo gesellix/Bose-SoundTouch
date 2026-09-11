@@ -827,12 +827,16 @@ if err == nil {
 2. **Use safe methods:**
 ```go
 client.SetBassSafe(-5)       // Won't fail on unsupported devices
-client.SetBalanceSafe(10)    // Falls back gracefully
 ```
 
+There is no safe variant for balance, and no HTTP write at all: `POST /balance`
+hangs, so `Client.SetBalance` returns an error telling you to use
+`WebSocketClient.SetBalance` instead. Check `Balance.Available` from a read
+first; a speaker that is not in a stereo pair reports `false`.
+
 3. **Device-specific features:**
-- SoundTouch 10: Basic bass only
-- SoundTouch 20/30: Full bass and balance
+- Balance: stereo pairs only (two SoundTouch 10s); either member reports and
+  accepts it, an unpaired speaker reports it as unavailable
 - Soundbar models: Advanced audio controls
 
 ---

@@ -40,7 +40,7 @@ Basic device functionality required for operation:
 ### 🔊 Audio Features
 Sound quality and audio processing:
 - **Bass Control** - Bass level adjustment (-9 to +9)
-- **Balance Control** - Left/right audio balance (-50 to +50)
+- **Balance Control** - Left/right balance of a stereo pair, in the range the device reports (-7 to +7 on a SoundTouch 10)
 - **Advanced Audio Controls** - DSP controls, tone controls, audio processing
 
 ### ▶️ Playback Features

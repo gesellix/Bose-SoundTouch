@@ -252,16 +252,20 @@ func demonstrateBasicControls(soundtouchClient *client.Client) {
 		fmt.Printf("   Volume: %d%%\n", volume.TargetVolume)
 	}
 
-	// Balance control. Only the master of a stereo pair reports it; anything
-	// else answers balanceAvailable=false rather than failing, and the range
-	// comes from the device rather than being assumed.
+	// Balance control. Balance belongs to a stereo PAIR, and either member
+	// reports it with the same value; an unpaired speaker answers
+	// balanceAvailable=false rather than failing. The range comes from the
+	// device rather than being assumed.
+	//
+	// Reading is HTTP. Writing is not: POST /balance hangs, so a write goes
+	// over the WebSocket (see WebSocketClient.SetBalance).
 	balance, err := soundtouchClient.GetBalance()
 
 	switch {
 	case err != nil:
 		log.Printf("   Balance: read failed: %v", err)
 	case !balance.Available:
-		fmt.Println("   Balance: not available (only the master of a stereo pair has it)")
+		fmt.Println("   Balance: not available (this speaker is not in a stereo pair)")
 	default:
 		fmt.Printf("   Balance: %d (range: %d to %d)\n", balance.Target, balance.Min, balance.Max)
 	}
@@ -321,7 +325,7 @@ func printNotes() {
 // Consumer Devices (SoundTouch 10, 20, 30):
 // - Basic bass control: ✅ Available
 // - Basic volume control: ✅ Available
-// - Basic balance control: ✅ Available (some models)
+// - Basic balance control: ✅ Available (stereo pairs only)
 // - Advanced DSP controls: ❌ Not available
 // - Advanced tone controls: ❌ Not available
 // - Speaker level controls: ❌ Not available
@@ -341,4 +345,5 @@ func printNotes() {
 // These complement the existing basic audio controls:
 // - GET/POST /bass - Basic bass control (-9 to +9)
 // - GET/POST /volume - Volume and mute control
-// - GET/POST /balance - Stereo balance control (-50 to +50)
+// - GET /balance - Stereo pair balance, range reported by the device (-7..7 on
+//   a SoundTouch 10). The write is WebSocket-only; POST /balance hangs.
