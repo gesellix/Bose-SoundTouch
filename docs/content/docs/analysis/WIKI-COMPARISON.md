@@ -21,61 +21,61 @@ The SoundTouch Plus community wiki documents **87 distinct API endpoints** with 
 
 ### ✅ Already Implemented (23 endpoints)
 
-| Endpoint                     | Wiki Status  | Our Status | Notes                             |
-|------------------------------|--------------|------------|-----------------------------------|
-| `/info`                      | ✅ Documented | ✅ Complete | Device information                |
-| `/now_playing`               | ✅ Documented | ✅ Complete | Current playback status           |
-| `/key`                       | ✅ Documented | ✅ Complete | Key press/release simulation      |
-| `/volume`                    | ✅ Documented | ✅ Complete | Volume and mute control           |
-| `/bass`                      | ✅ Documented | ✅ Complete | Bass level control                |
-| `/bassCapabilities`          | ✅ Documented | ✅ Complete | Bass capability detection         |
-| `/sources`                   | ✅ Documented | ✅ Complete | Available audio sources           |
-| `/select`                    | ✅ Documented | ✅ Complete | Source selection                  |
-| `/presets`                   | ✅ Documented | ✅ Complete | Preset configurations (read-only) |
-| `/getZone`                   | ✅ Documented | ✅ Complete | Zone status and membership        |
-| `/setZone`                   | ✅ Documented | ✅ Complete | Zone creation and management      |
-| `/addZoneSlave`              | ✅ Documented | ✅ Complete | Add device to zone                |
-| `/removeZoneSlave`           | ✅ Documented | ✅ Complete | Remove device from zone           |
-| `/capabilities`              | ✅ Documented | ✅ Complete | Device feature capabilities       |
-| `/audiodspcontrols`          | ✅ Documented | ✅ Complete | Audio DSP modes and video sync    |
-| `/audioproducttonecontrols`  | ✅ Documented | ✅ Complete | Advanced bass/treble controls     |
-| `/audioproductlevelcontrols` | ✅ Documented | ✅ Complete | Speaker level controls            |
-| `/name` (GET/POST)           | ✅ Documented | ✅ Complete | Device name management            |
+| Endpoint                     | Wiki Status   | Our Status   | Notes                             |
+|------------------------------|---------------|--------------|-----------------------------------|
+| `/info`                      | ✅ Documented | ✅ Complete  | Device information                |
+| `/now_playing`               | ✅ Documented | ✅ Complete  | Current playback status           |
+| `/key`                       | ✅ Documented | ✅ Complete  | Key press/release simulation      |
+| `/volume`                    | ✅ Documented | ✅ Complete  | Volume and mute control           |
+| `/bass`                      | ✅ Documented | ✅ Complete  | Bass level control                |
+| `/bassCapabilities`          | ✅ Documented | ✅ Complete  | Bass capability detection         |
+| `/sources`                   | ✅ Documented | ✅ Complete  | Available audio sources           |
+| `/select`                    | ✅ Documented | ✅ Complete  | Source selection                  |
+| `/presets`                   | ✅ Documented | ✅ Complete  | Preset configurations (read-only) |
+| `/getZone`                   | ✅ Documented | ✅ Complete  | Zone status and membership        |
+| `/setZone`                   | ✅ Documented | ✅ Complete  | Zone creation and management      |
+| `/addZoneSlave`              | ✅ Documented | ✅ Complete  | Add device to zone                |
+| `/removeZoneSlave`           | ✅ Documented | ✅ Complete  | Remove device from zone           |
+| `/capabilities`              | ✅ Documented | ✅ Complete  | Device feature capabilities       |
+| `/audiodspcontrols`          | ✅ Documented | ✅ Complete  | Audio DSP modes and video sync    |
+| `/audioproducttonecontrols`  | ✅ Documented | ✅ Complete  | Advanced bass/treble controls     |
+| `/audioproductlevelcontrols` | ✅ Documented | ✅ Complete  | Speaker level controls            |
+| `/name` (GET/POST)           | ✅ Documented | ✅ Complete  | Device name management            |
 | `/balance`                   | ✅ Documented | ⚠️ Read-only | Stereo pair; WS write, HTTP read  |
-| `/clockTime`                 | ✅ Documented | ✅ Complete | Device time management            |
-| `/clockDisplay`              | ✅ Documented | ✅ Complete | Clock display settings            |
-| `/networkInfo`               | ✅ Documented | ✅ Complete | Network connectivity info         |
-| `/requestToken`              | ✅ Documented | ✅ Complete | Bearer token generation           |
+| `/clockTime`                 | ✅ Documented | ✅ Complete  | Device time management            |
+| `/clockDisplay`              | ✅ Documented | ✅ Complete  | Clock display settings            |
+| `/networkInfo`               | ✅ Documented | ✅ Complete  | Network connectivity info         |
+| `/requestToken`              | ✅ Documented | ✅ Complete  | Bearer token generation           |
 
 ### 🔥 High Priority Missing (20 endpoints)
 
 | Endpoint                     | Wiki Status | Priority | Use Case                           |
 |------------------------------|-------------|----------|------------------------------------|
-| `/storePreset`               | ✅ Detailed  | **HIGH** | Save stations/playlists to presets |
-| `/removePreset`              | ✅ Detailed  | **HIGH** | Delete saved presets               |
-| `/selectPreset`              | ✅ Detailed  | **HIGH** | Play preset by ID                  |
-| `/setMusicServiceAccount`    | ✅ Detailed  | **HIGH** | Add Spotify/Pandora accounts       |
-| `/removeMusicServiceAccount` | ✅ Detailed  | **HIGH** | Remove music service accounts      |
-| `/searchStation`             | ✅ Detailed  | **HIGH** | Find Pandora/Spotify content       |
-| `/addStation`                | ✅ Detailed  | **HIGH** | Add stations to favorites          |
-| `/removeStation`             | ✅ Detailed  | **HIGH** | Remove stations from favorites     |
-| `/navigate`                  | ✅ Detailed  | **HIGH** | Browse music libraries/services    |
-| `/search`                    | ✅ Detailed  | **HIGH** | Search music content               |
-| `/userPlayControl`           | ✅ Detailed  | **HIGH** | Play/pause/stop controls           |
-| `/userRating`                | ✅ Detailed  | **HIGH** | Thumbs up/down ratings             |
-| `/recents`                   | ✅ Detailed  | **HIGH** | Recently played content            |
-| `/standby`                   | ✅ Detailed  | **HIGH** | Power management                   |
-| `/powerManagement`           | ✅ Detailed  | **HIGH** | Power state information            |
-| `/lowPowerStandby`           | ✅ Detailed  | **HIGH** | Low-power mode                     |
-| `/listMediaServers`          | ✅ Detailed  | **HIGH** | UPnP/DLNA server discovery         |
-| `/serviceAvailability`       | ✅ Detailed  | **HIGH** | Source availability status         |
-| `/introspect`                | ✅ Detailed  | **HIGH** | Music service account status       |
-| `/language`                  | ✅ Detailed  | **HIGH** | Device language settings           |
+| `/storePreset`               | ✅ Detailed | **HIGH** | Save stations/playlists to presets |
+| `/removePreset`              | ✅ Detailed | **HIGH** | Delete saved presets               |
+| `/selectPreset`              | ✅ Detailed | **HIGH** | Play preset by ID                  |
+| `/setMusicServiceAccount`    | ✅ Detailed | **HIGH** | Add Spotify/Pandora accounts       |
+| `/removeMusicServiceAccount` | ✅ Detailed | **HIGH** | Remove music service accounts      |
+| `/searchStation`             | ✅ Detailed | **HIGH** | Find Pandora/Spotify content       |
+| `/addStation`                | ✅ Detailed | **HIGH** | Add stations to favorites          |
+| `/removeStation`             | ✅ Detailed | **HIGH** | Remove stations from favorites     |
+| `/navigate`                  | ✅ Detailed | **HIGH** | Browse music libraries/services    |
+| `/search`                    | ✅ Detailed | **HIGH** | Search music content               |
+| `/userPlayControl`           | ✅ Detailed | **HIGH** | Play/pause/stop controls           |
+| `/userRating`                | ✅ Detailed | **HIGH** | Thumbs up/down ratings             |
+| `/recents`                   | ✅ Detailed | **HIGH** | Recently played content            |
+| `/standby`                   | ✅ Detailed | **HIGH** | Power management                   |
+| `/powerManagement`           | ✅ Detailed | **HIGH** | Power state information            |
+| `/lowPowerStandby`           | ✅ Detailed | **HIGH** | Low-power mode                     |
+| `/listMediaServers`          | ✅ Detailed | **HIGH** | UPnP/DLNA server discovery         |
+| `/serviceAvailability`       | ✅ Detailed | **HIGH** | Source availability status         |
+| `/introspect`                | ✅ Detailed | **HIGH** | Music service account status       |
+| `/language`                  | ✅ Detailed | **HIGH** | Device language settings           |
 
 ### 🎵 Music Service Management (12 endpoints)
 
-| Category               | Endpoints                                               | Wiki Coverage       | Notes                           |
-|------------------------|---------------------------------------------------------|---------------------|---------------------------------|
+| Category               | Endpoints                                               | Wiki Coverage        | Notes                           |
+|------------------------|---------------------------------------------------------|----------------------|---------------------------------|
 | **Account Management** | `/setMusicServiceAccount`, `/removeMusicServiceAccount` | ✅ Full XML examples | Pandora, Spotify, NAS setup     |
 | **Station Management** | `/searchStation`, `/addStation`, `/removeStation`       | ✅ Pandora tested    | Station discovery and favorites |
 | **Content Navigation** | `/navigate`, `/search`                                  | ✅ Detailed examples | Music library browsing          |
@@ -83,8 +83,8 @@ The SoundTouch Plus community wiki documents **87 distinct API endpoints** with 
 
 ### 🏠 Smart Home Integration (15 endpoints)
 
-| Category               | Endpoints                                                                        | Wiki Coverage      | Notes                        |
-|------------------------|----------------------------------------------------------------------------------|--------------------|------------------------------|
+| Category               | Endpoints                                                                        | Wiki Coverage       | Notes                        |
+|------------------------|----------------------------------------------------------------------------------|---------------------|------------------------------|
 | **Notifications**      | `/speaker`, `/playNotification`                                                  | ✅ TTS examples     | Text-to-speech, URL playback |
 | **Power Management**   | `/standby`, `/powerManagement`, `/lowPowerStandby`                               | ✅ Complete         | Smart home automation        |
 | **Network Management** | `/performWirelessSiteSurvey`, `/addWirelessProfile`, `/getActiveWirelessProfile` | ✅ WiFi setup       | Network configuration        |
@@ -93,8 +93,8 @@ The SoundTouch Plus community wiki documents **87 distinct API endpoints** with 
 
 ### 📱 Advanced Device Features (19 endpoints)
 
-| Category             | Endpoints                                                                     | Wiki Coverage       | Notes                   |
-|----------------------|-------------------------------------------------------------------------------|---------------------|-------------------------|
+| Category             | Endpoints                                                                     | Wiki Coverage        | Notes                   |
+|----------------------|-------------------------------------------------------------------------------|----------------------|-------------------------|
 | **Stereo Pairs**     | `/getGroup`, `/addGroup`, `/removeGroup`, `/updateGroup`                      | ✅ ST-10 specific    | L/R speaker pairing     |
 | **System Info**      | `/soundTouchConfigurationStatus`, `/systemtimeout`, `/rebroadcastlatencymode` | ✅ Configuration     | Device state management |
 | **Software Updates** | `/swUpdateCheck`, `/swUpdateQuery`, `/swUpdateAbort`, `/swUpdateStart`        | ✅ Update process    | Firmware management     |
