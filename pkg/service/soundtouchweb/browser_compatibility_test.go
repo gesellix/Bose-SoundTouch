@@ -847,6 +847,77 @@ func TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	}
 }
 
+// TestControlsStayLiveOnAnUnpolledSpeaker: a speaker that is offline or has
+// not been polled yet reports no state, so nothing can be reconciled -- but
+// the power button and the transport must still work. That is exactly the
+// speaker you would want to power cycle from the UI.
+func TestControlsStayLiveOnAnUnpolledSpeaker(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail } from '/app/static/js/app.js';
+function Fixture() {
+  const [devices] = useState({ speaker: { info: { name: 'Speaker' } } });
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+  });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	powerWrites := 0
+	var keys []string
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/power", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			powerWrites++
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			keys = append(keys, chi.URLParam(req, "key"))
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var powerEnabled, transportEnabled bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.page-header .command-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.page-header .command-btn').disabled === false`, &powerEnabled),
+		chromedp.Evaluate(`document.querySelector('.play-btn').disabled === false`, &transportEnabled),
+		chromedp.Click(`.page-header .command-btn`, chromedp.ByQuery),
+		chromedp.Click(`.play-btn`, chromedp.ByQuery),
+		// Both writes are fire-and-forget, so give them a moment to land.
+		chromedp.Sleep(300*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exercise controls on an unpolled speaker: %v", err)
+	}
+
+	if !powerEnabled || !transportEnabled {
+		t.Errorf("enabled state: power=%v transport=%v, want both true", powerEnabled, transportEnabled)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if powerWrites != 1 {
+		t.Errorf("power writes = %d, want 1", powerWrites)
+	}
+	if got, want := fmt.Sprint(keys), "[PLAY]"; got != want {
+		t.Errorf("key writes = %s, want %s", got, want)
+	}
+}
+
 // TestDiscreteCommandConfirmsAcrossAReconnectEpoch: revisions restart at 0
 // when a device id is backed by a new DeviceConnection or the service is
 // restarted, so they only compare within one epoch. Comparing them raw made

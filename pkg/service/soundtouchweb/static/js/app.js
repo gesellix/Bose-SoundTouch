@@ -131,14 +131,26 @@ export function DeviceDetail({
     const source = status?.nowPlaying?.Source;
     const playStatus = status?.nowPlaying?.PlayStatus;
 
+    // A speaker that is offline, or that has not been polled yet, reports no
+    // state to predict an outcome from. Reconciling such a command is
+    // impossible, but disabling the control is worse: that is exactly the
+    // speaker you want to power cycle or prod. These fall back to the
+    // behaviour from before reconciliation -- send the key, report nothing --
+    // rather than going dead.
     function togglePower() {
-        if (!source) return;
+        if (!source) {
+            api.power(deviceId);
+            return;
+        }
         runDiscreteCommand(source === 'STANDBY' ? 'power-on' : 'power-off',
             () => api.powerChecked(deviceId));
     }
 
     function togglePlayback() {
-        if (!playStatus) return;
+        if (!playStatus) {
+            api.key(deviceId, 'PLAY');
+            return;
+        }
         const isPlaying = playStatus === 'PLAY_STATE';
         runDiscreteCommand(isPlaying ? 'pause' : 'play',
             () => api.keyChecked(deviceId, isPlaying ? 'PAUSE' : 'PLAY'));
@@ -146,14 +158,20 @@ export function DeviceDetail({
 
     function toggleMute() {
         const muted = status?.volume?.MuteEnabled;
-        if (typeof muted !== 'boolean') return;
+        if (typeof muted !== 'boolean') {
+            api.key(deviceId, 'MUTE');
+            return;
+        }
         runDiscreteCommand(muted ? 'mute-off' : 'mute-on',
             () => api.keyChecked(deviceId, 'MUTE'));
     }
 
     function toggleShuffle() {
         const shuffle = status?.nowPlaying?.ShuffleSetting;
-        if (!shuffle) return;
+        if (!shuffle) {
+            api.key(deviceId, 'SHUFFLE_ON');
+            return;
+        }
         const target = shuffle === 'SHUFFLE_ON' ? 'SHUFFLE_OFF' : 'SHUFFLE_ON';
         runDiscreteCommand(target === 'SHUFFLE_ON' ? 'shuffle-on' : 'shuffle-off',
             () => api.keyChecked(deviceId, target));
@@ -161,7 +179,10 @@ export function DeviceDetail({
 
     function cycleRepeat() {
         const repeat = status?.nowPlaying?.RepeatSetting;
-        if (!repeat) return;
+        if (!repeat) {
+            api.key(deviceId, 'REPEAT_OFF');
+            return;
+        }
         const target = repeat === 'REPEAT_OFF' ? 'REPEAT_ALL'
             : repeat === 'REPEAT_ALL' ? 'REPEAT_ONE' : 'REPEAT_OFF';
         runDiscreteCommand(`repeat-${target.substring('REPEAT_'.length).toLowerCase()}`,
@@ -219,7 +240,7 @@ export function DeviceDetail({
                     class="btn-icon command-btn ${command?.action?.startsWith('power-') ? command.outcome : ''}"
                     onClick=${togglePower}
                     title="Power"
-                    disabled=${commandBusy || !source}
+                    disabled=${commandBusy}
                     aria-busy=${command?.action?.startsWith('power-') && commandBusy ? 'true' : null}
                 >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">

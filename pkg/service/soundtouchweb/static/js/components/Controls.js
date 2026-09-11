@@ -160,7 +160,7 @@ export function Controls({
                 <button
                     class="ctrl-btn command-btn previous-btn ${previousCommand?.outcome || ''}"
                     onClick=${onPreviousTrack || (() => send('PREV_TRACK'))}
-                    disabled=${commandBusy || !np}
+                    disabled=${commandBusy}
                     aria-busy=${previousCommand && commandBusy ? 'true' : null}
                     title=${previousCommand && commandBusy ? commandStatus : 'Previous'}
                     aria-label="Previous"
@@ -170,7 +170,7 @@ export function Controls({
                 <button
                     class="ctrl-btn play-btn command-btn ${transportCommand?.outcome || ''}"
                     onClick=${onTogglePlayback || (() => send(isPlaying ? 'PAUSE' : 'PLAY'))}
-                    disabled=${commandBusy || !np?.PlayStatus}
+                    disabled=${commandBusy}
                     aria-busy=${transportCommand && commandBusy ? 'true' : null}
                     title=${transportCommand && commandBusy ? commandStatus : (isPlaying ? 'Pause' : 'Play')}
                     aria-label=${isPlaying ? 'Pause' : 'Play'}
@@ -180,7 +180,7 @@ export function Controls({
                 <button
                     class="ctrl-btn command-btn next-btn ${nextCommand?.outcome || ''}"
                     onClick=${onNextTrack || (() => send('NEXT_TRACK'))}
-                    disabled=${commandBusy || !np}
+                    disabled=${commandBusy}
                     aria-busy=${nextCommand && commandBusy ? 'true' : null}
                     title=${nextCommand && commandBusy ? commandStatus : 'Next'}
                     aria-label="Next"
@@ -190,7 +190,7 @@ export function Controls({
                 <button
                     class="ctrl-btn command-btn mute-btn ${isMuted ? 'active' : ''} ${muteCommand?.outcome || ''}"
                     onClick=${onToggleMute || (() => send('MUTE'))}
-                    disabled=${commandBusy || typeof status?.volume?.MuteEnabled !== 'boolean'}
+                    disabled=${commandBusy}
                     aria-busy=${muteCommand && commandBusy ? 'true' : null}
                     title=${muteCommand && commandBusy ? commandStatus : (isMuted ? 'Unmute' : 'Mute')}
                     aria-label=${isMuted ? 'Unmute' : 'Mute'}
@@ -201,7 +201,7 @@ export function Controls({
                 <button
                     class="ctrl-btn command-btn shuffle-btn ${shuffle === 'SHUFFLE_ON' ? 'active' : ''} ${shuffleCommand?.outcome || ''}"
                     onClick=${onToggleShuffle || (() => send(shuffle === 'SHUFFLE_ON' ? 'SHUFFLE_OFF' : 'SHUFFLE_ON'))}
-                    disabled=${commandBusy || !np?.ShuffleSetting}
+                    disabled=${commandBusy}
                     aria-busy=${shuffleCommand && commandBusy ? 'true' : null}
                     title=${shuffleCommand && commandBusy ? commandStatus : 'Shuffle'}
                     aria-label="Shuffle"
@@ -216,7 +216,7 @@ export function Controls({
                         else if (repeat === 'REPEAT_ALL') send('REPEAT_ONE');
                         else send('REPEAT_OFF');
                     })}
-                    disabled=${commandBusy || !np?.RepeatSetting}
+                    disabled=${commandBusy}
                     aria-busy=${repeatCommand && commandBusy ? 'true' : null}
                     title=${repeatCommand && commandBusy ? commandStatus : (repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat')}
                     aria-label=${repeat === 'REPEAT_ONE' ? 'Repeat one' : repeat === 'REPEAT_ALL' ? 'Repeat all' : 'Repeat'}
