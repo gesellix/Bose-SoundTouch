@@ -75,6 +75,9 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				r.Get("/now-playing", app.HandleDeviceNowPlaying)
 				// Low-level "play this ContentItem" primitive (not a provider).
 				r.Post("/play", app.HandleDevicePlay)
+				// Low-level "store this ContentItem in a slot" primitive. The
+				// /action/storepreset form stores whatever is playing instead.
+				r.Post("/preset/{slot}", app.HandleStorePresetContent)
 				// Generic key / preset / source / bass actions. Source selection is
 				// canonically POSTed as JSON; its GET form remains temporarily for
 				// compatibility and marks every response as deprecated.

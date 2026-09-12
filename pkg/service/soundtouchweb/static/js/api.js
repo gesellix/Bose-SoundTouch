@@ -107,6 +107,13 @@ export const api = {
     control: (id, action, presetId) => req(`/api/control/devices/${id}/action/${action}?id=${presetId}`),
     controlChecked: (id, action, presetId) => checkedReq(`/api/control/devices/${id}/action/${action}?id=${presetId}`),
     storePreset: (id, slotId) => req(`/api/control/devices/${id}/action/storepreset?id=${slotId}`),
+    // Stores named content rather than whatever is playing, so a Library row
+    // can be saved to a slot without interrupting playback (issue 700).
+    storePresetContent: (id, slotId, item) => req(`/api/control/devices/${id}/preset/${slotId}`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(item),
+    }),
     selectSource: (id, source, account) => checkedReq(`/api/control/devices/${id}/action/source`, {
         method: 'POST',
         headers: JSON_HEADERS,

@@ -195,6 +195,7 @@ POST     /api/control/devices/{id}/library/play                       soundtouch
 POST     /api/control/devices/{id}/library/servers                    soundtouchweb.(*WebApp).HandleAddLibraryServer-fm
 POST     /api/control/devices/{id}/play                               soundtouchweb.(*WebApp).HandleDevicePlay-fm
 POST     /api/control/devices/{id}/power                              soundtouchweb.(*WebApp).HandleDevicePower-fm
+POST     /api/control/devices/{id}/preset/{slot}                      soundtouchweb.(*WebApp).HandleStorePresetContent-fm
 POST     /api/control/devices/{id}/providers/radiobrowser/play        soundtouchweb.(*WebApp).HandlePlayRadioBrowser-fm
 POST     /api/control/devices/{id}/providers/tts/play                 soundtouchweb.(*WebApp).HandleAPISpeakText-fm
 POST     /api/control/devices/{id}/providers/tunein/play              soundtouchweb.(*WebApp).HandlePlayTuneIn-fm

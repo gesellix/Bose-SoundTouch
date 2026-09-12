@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
+import { PresetPicker } from './PresetPicker.js';
 
 const html = htm.bind(h);
 
@@ -140,6 +141,42 @@ export function Library({
                 itemName: entry.name,
             },
         });
+    }
+
+    // Saving a row to a preset names the content rather than storing whatever
+    // is playing, so nothing has to be interrupted first (issue 700). The
+    // speaker accepts a folder ContentItem with no type attribute at all —
+    // that is how it stores one itself — so the type is sent only for items
+    // that are not containers.
+    function savePresetFor(entry, slot) {
+        const account = server?.account;
+
+        if (!deviceId || !account || !entry?.location) {
+            return Promise.reject(new Error('no device, server or location'));
+        }
+
+        return api.storePresetContent(deviceId, slot, {
+            source: 'STORED_MUSIC',
+            sourceAccount: account,
+            location: entry.location,
+            type: entry.isDir ? '' : (entry.type || 'track'),
+            itemName: entry.name,
+        }).then(res => {
+            if (!res?.success) throw new Error(res?.error || 'preset save failed');
+        });
+    }
+
+    // The slot this row already occupies, if any, so the star can say so.
+    const presetList = devices[deviceId]?.status?.presets?.Preset ?? [];
+
+    function mappedSlotFor(entry) {
+        const match = entry?.location
+            ? presetList.find(p =>
+                p.ContentItem?.Source === 'STORED_MUSIC' &&
+                p.ContentItem?.Location === entry.location)
+            : undefined;
+
+        return match ? match.ID : null;
     }
 
     function toggleFinding() {
@@ -288,6 +325,14 @@ export function Library({
                                         disabled=${playbackBusy}
                                         onClick=${(e) => { e.stopPropagation(); playEntry(entry); }}
                                     >▶</button>
+                                    <${PresetPicker}
+                                        onSave=${slot => savePresetFor(entry, slot)}
+                                        mappedSlot=${mappedSlotFor(entry)}
+                                        label=${entry.isDir ? 'Save folder as preset' : 'Save as preset'}
+                                        wrapClass="library-preset-wrap"
+                                        buttonClass="library-preset-btn"
+                                        overlayClass="preset-picker-overlay"
+                                    />
                                 ` : null}
                                 ${entry.isDir ? html`<span class="tunein-item-arrow">›</span>` : null}
                             </li>
