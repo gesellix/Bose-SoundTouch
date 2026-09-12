@@ -196,20 +196,64 @@ func syncConfiguredSources(ds *datastore.DataStore, accountID, deviceID string, 
 	}
 }
 
+// canonicalSourceAccount resolves the account a speaker reported for a preset
+// or recent to the account identity we keyed its source by, so that what gets
+// persisted is the form /full later matches on (issue 697). A speaker reports
+// a media server's display name here, while the source is keyed by its UDN.
+//
+// The reported value is returned unchanged when nothing matches: an account we
+// cannot explain is still better evidence than an empty one, and the read-side
+// match in sourceAccountMatchesClaim covers what remains.
+//
+// Note the order in SyncFromAccountFull: presets and recents are written
+// before syncConfiguredSources runs, so this reads the sources persisted by
+// the previous sync. A media server's entry survives between syncs, which is
+// the case this repairs; a server seen for the very first time normalises on
+// the next sync instead.
+func canonicalSourceAccount(sources []models.ConfiguredSource, sourceType, reported string) string {
+	if reported == "" || sourceType == "" {
+		return reported
+	}
+
+	for i := range sources {
+		s := sources[i]
+		if s.SourceKeyType != sourceType && s.SourceKey.Type != sourceType {
+			continue
+		}
+
+		if !sourceAccountMatchesClaim(s, sourceType, reported) {
+			continue
+		}
+
+		if s.SourceKeyAccount != "" {
+			return s.SourceKeyAccount
+		}
+
+		if s.SourceKey.Account != "" {
+			return s.SourceKey.Account
+		}
+	}
+
+	return reported
+}
+
 func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSource []models.FullResponsePreset) {
 	var presets []models.ServicePreset
 
+	knownSources, _ := ds.GetConfiguredSources(accountID, deviceID)
+
 	for i := range presetsSource {
 		p := &presetsSource[i]
+		sourceType := sourceKeyTypeFromFullSource(p.Source)
 		preset := models.ServicePreset{
 			ServiceContentItem: models.ServiceContentItem{
 				ID:              p.ButtonNumber,
 				ContentItemType: p.ContentItemType,
 				Location:        p.Location,
 				Name:            p.Name,
-				Source:          sourceKeyTypeFromFullSource(p.Source),
+				Source:          sourceType,
 				SourceID:        p.Source.ID,
-				SourceAccount:   p.Source.Username,
+				SourceAccount:   canonicalSourceAccount(knownSources, sourceType, p.Source.Username),
 				Type:            p.ContentItemType,
 			},
 			ButtonNumber: p.ButtonNumber,
@@ -229,17 +273,20 @@ func syncPresets(ds *datastore.DataStore, accountID, deviceID string, presetsSou
 func syncRecents(ds *datastore.DataStore, accountID, deviceID string, recentsSource []models.FullResponseRecent) {
 	var recents []models.ServiceRecent
 
+	knownSources, _ := ds.GetConfiguredSources(accountID, deviceID)
+
 	for i := range recentsSource {
 		r := &recentsSource[i]
+		sourceType := sourceKeyTypeFromFullSource(r.Source)
 		recent := models.ServiceRecent{
 			ServiceContentItem: models.ServiceContentItem{
 				ID:              r.ID,
 				ContentItemType: r.ContentItemType,
 				Location:        r.Location,
 				Name:            r.Name,
-				Source:          sourceKeyTypeFromFullSource(r.Source),
+				Source:          sourceType,
 				SourceID:        r.Source.ID,
-				SourceAccount:   r.Source.Username,
+				SourceAccount:   canonicalSourceAccount(knownSources, sourceType, r.Source.Username),
 				Type:            r.ContentItemType,
 			},
 			CreatedOn:    r.CreatedOn,
