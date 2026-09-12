@@ -6,18 +6,26 @@ sidebar:
 
 # Bose SoundTouch Toolkit Documentation
 
-Welcome to the documentation for the Bose SoundTouch Toolkit. This comprehensive toolkit helps you keep your Bose SoundTouch speakers functional even after the Bose Cloud shutdown in May 2026, with enhanced local management and monitoring capabilities.
+Bose shut down the SoundTouch cloud on 6 May 2026. This toolkit, **AfterTouch**,
+runs the missing service on a machine in your own home, so your speakers keep
+their presets, music browsing and stereo pairing.
 
-## 🚀 Start Here
+## 🚀 Start here
 
-### For New Users
-- **[Complete Migration Guide](guides/MIGRATION-GUIDE.md)** - Step-by-step guide from Bose Cloud to local control
-- **[Getting Started](guides/GETTING-STARTED.md)** - Quick introduction to the toolkit
+### I want my speakers working again
+- **[Getting Started](guides/GETTING-STARTED.md)** - the short route: run the service, migrate a speaker, get the preset buttons working
+- **[Migration Guide](guides/MIGRATION-GUIDE.md)** - the full process, one step at a time
+- **[What the shutdown broke](guides/SURVIVAL-GUIDE.md)** - what stopped working, what still works without AfterTouch, and what AfterTouch restores
+- **[Troubleshooting](guides/TROUBLESHOOTING.md)** - when a speaker will not appear, or a source is missing
 
-### For Existing Users
-- **[Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md)** - Prepare for the May 2026 shutdown
-- **[Backup Tool](https://github.com/gesellix/Bose-SoundTouch/blob/main/cmd/soundtouch-backup/README.md)** - Back up your cloud account and speaker data before shutdown
-- **[SoundTouch Service Guide](guides/SOUNDTOUCH-SERVICE.md)** - Advanced service configuration
+### I want to build on this
+- **[Quick start: the Go client library](guides/GO-CLIENT-QUICKSTART.md)** - control a speaker from your own Go program
+- **[API Endpoints](reference/API-ENDPOINTS.md)** - the service and speaker HTTP surface
+- **[CLI Reference](guides/CLI-REFERENCE.md)** - every `soundtouch-cli` command
+
+### Running it day to day
+- **[SoundTouch Service Guide](guides/SOUNDTOUCH-SERVICE.md)** - service operation and configuration
+- **[Backup Tool](https://github.com/gesellix/Bose-SoundTouch/blob/main/cmd/soundtouch-backup/README.md)** - back up speaker data and, if you still have one, a cloud account export
 
 ## 📋 Essential Documentation
 
@@ -33,7 +41,7 @@ The documentation is organized into three main categories:
 
 ### Migration & Setup
 - **[Complete Migration Guide](guides/MIGRATION-GUIDE.md)** - 📖 **Main guide** for migrating from Bose Cloud
-- [Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md) - Prepare for service shutdown
+- [Cloud Shutdown Survival Guide](guides/SURVIVAL-GUIDE.md) - What the shutdown broke and what AfterTouch restores
 - [Migration & Safety Guide](guides/MIGRATION-SAFETY.md) - Advanced migration strategies
 - [Initial Device Setup](guides/DEVICE-INITIAL-SETUP.md) - First-time device configuration
 - [Raspberry Pi Setup](guides/RASPBERRY-PI.md) - Installing on Raspberry Pi
