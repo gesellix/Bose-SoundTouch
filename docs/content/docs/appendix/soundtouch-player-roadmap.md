@@ -11,7 +11,7 @@ infrastructure that is either shut down or already handled by soundtouch-service
 > **Shipped:** Saving the current content to a preset slot (slots 1–6) is
 > already implemented — a ★ star button in the top-right corner of the Now
 > Playing card opens a slot picker, and a **+** button on each preset tile
-> saves to that slot directly.  See [PRESET-QUICKSTART.md](PRESET-QUICKSTART.md)
+> saves to that slot directly.  See [the preset guide](../guides/PRESETS.md)
 > for usage details.
 
 ---

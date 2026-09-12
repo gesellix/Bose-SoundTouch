@@ -72,8 +72,7 @@ This is the part most people came for. In the web UI you can browse internet
 radio, search for a station, play it, and save it to one of the six slots with
 the star button. Those are the same six buttons on top of the speaker.
 
-[Preset Management Quick Start](../appendix/PRESET-QUICKSTART.md) walks
-through it, including
+[Get your preset buttons working again](PRESETS.md) walks through it, including
 saving music from a NAS or USB drive, and the command-line equivalent if you
 would rather script your setup.
 

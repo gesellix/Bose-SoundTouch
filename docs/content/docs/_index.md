@@ -16,6 +16,7 @@ their presets, music browsing and stereo pairing.
 - **[Getting Started](guides/GETTING-STARTED.md)** - the short route: run the service, migrate a speaker, get the preset buttons working
 - **[Migration Guide](guides/MIGRATION-GUIDE.md)** - the full process, one step at a time
 - **[What the shutdown broke](guides/SURVIVAL-GUIDE.md)** - what stopped working, what still works without AfterTouch, and what AfterTouch restores
+- **[Get your preset buttons working again](guides/PRESETS.md)** - save stations, library folders and playlists to the six slots
 - **[Troubleshooting](guides/TROUBLESHOOTING.md)** - when a speaker will not appear, or a source is missing
 
 ### I want to build on this
@@ -66,7 +67,7 @@ The documentation is organized into three main categories:
 - [Spotify Account Addition](reference/spotify-account-addition.md) - Technical requests for Spotify
 - [WebSocket Events](reference/WEBSOCKET-EVENTS.md) - Real-time events
 - [Zone Management](reference/ZONE-MANAGEMENT.md) - Multi-room control
-- [Preset Management](reference/PRESET-MANAGEMENT.md) - Preset operations
+- [Preset Management](reference/PRESET-MANAGEMENT.md) - Preset operations (the user guide is [Get your preset buttons working again](guides/PRESETS.md))
 
 ### Analysis & Research
 - [Upstream URLs](analysis/UPSTREAM-URLS.md) - Bose service endpoints
