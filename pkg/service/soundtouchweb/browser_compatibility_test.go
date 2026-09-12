@@ -955,6 +955,160 @@ func TestTrackSkipIsNotConfirmedByRollingStreamMetadata(t *testing.T) {
 	}
 }
 
+// libraryFixtureScript renders the device detail page for a source shaped like
+// STORED_MUSIC as measured on hardware: it claims skipEnabled but reports no
+// trackID, so only its track metadata can confirm a skip.
+const libraryFixtureScript = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: {
+    Source: 'STORED_MUSIC', PlayStatus: 'PLAY_STATE',
+    Track: 'First track', Artist: 'An artist', Album: 'An album',
+    SkipEnabled: {}, SkipPreviousEnabled: {},
+  },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [] },
+  sources: { SourceItem: [] },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+// TestTrackSkipConfirmsByMetadataWhereTheSourceClaimsSkip: a media library
+// changes its track title only when the track really changes, and says so by
+// claiming skipEnabled. Measured on hardware: STORED_MUSIC reports
+// skipEnabled and skipPreviousEnabled with no trackID at all, so refusing to
+// verify without a trackID would leave a whole source unverifiable.
+func TestTrackSkipConfirmsByMetadataWhereTheSourceClaimsSkip(t *testing.T) {
+	var mu sync.Mutex
+	reads := 0
+	server := newPlayerFixtureServer(t, libraryFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			reads++
+			read := reads
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"status": map[string]any{
+					"revision": read + 1, "nowPlayingRevision": read + 1,
+					"nowPlaying": map[string]any{
+						"Source": "STORED_MUSIC", "PlayStatus": "PLAY_STATE",
+						"Track": "Second track", "Artist": "An artist", "Album": "An album",
+						"SkipEnabled": map[string]any{}, "SkipPreviousEnabled": map[string]any{},
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
+		chromedp.Click(`.next-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+	); err != nil {
+		t.Fatalf("exercise a library skip confirmed by metadata: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads == 0 {
+		t.Error("a skip against a source claiming skipEnabled was not verified by readback")
+	}
+}
+
+// TestTrackSkipSettlesOnWriteWhereTheSourceClaimsNoSkip: live radio rewrites
+// its own title while the same stream plays on, and claims no skip support.
+// Measured on hardware: TUNEIN and RADIO_BROWSER report neither a trackID nor
+// skipEnabled. Trusting the title there would confirm skips that never
+// happened, so nothing is read back at all.
+func TestTrackSkipSettlesOnWriteWhereTheSourceClaimsNoSkip(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: {
+    Source: 'TUNEIN', PlayStatus: 'PLAY_STATE',
+    Track: 'Rolling stream title', StationName: 'A station',
+  },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [] },
+  sources: { SourceItem: [] },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	reads := 0
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			reads++
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"status": map[string]any{
+					"revision": 9, "nowPlayingRevision": 9,
+					"nowPlaying": map[string]any{
+						"Source": "TUNEIN", "PlayStatus": "PLAY_STATE",
+						"Track": "A different rolling title", "StationName": "A station",
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
+		chromedp.Click(`.next-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+		// Outlast every readback deadline in the fixture.
+		chromedp.Sleep(900*time.Millisecond),
+	); err != nil {
+		t.Fatalf("exercise a skip against a source claiming no skip support: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads != 0 {
+		t.Errorf("readbacks = %d, want 0 where a rolling title is the only thing that changes", reads)
+	}
+}
+
 // TestEmptyPresetSlotStaysSavableWhileACommandIsPending: an empty slot's
 // tile is a save gesture, not a playback command, so an in-flight command
 // has no reason to disable it -- and the sibling star button, which saves the

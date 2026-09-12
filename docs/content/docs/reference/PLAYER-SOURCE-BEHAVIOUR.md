@@ -143,33 +143,63 @@ confirmed. `trackID` is a stable per-track identity (`spotify:track:...` in the
 captured firmware responses), so it stays put through a title rewrite and moves
 on a real skip.
 
-Sources with no track concept report no `trackID` at all. There a readback can
-never say anything, so the player settles the command on a write the speaker
-accepted rather than holding the transport disabled for the whole readback
-window only to report "unverified".
+Not every source reports one. A media library skips perfectly well while
+reporting no `trackID` at all, and there its track metadata is the signal,
+because a library's title changes only when the track really changes. Live
+radio changes its title on its own and can skip nothing, so there no readback
+can ever say anything, and the player settles the command on a write the
+speaker accepted rather than holding the transport disabled for the whole
+readback window only to report "unverified".
 
-| What the speaker reports | Player behaviour             |
-|--------------------------|------------------------------|
-| a `trackID`              | verify the skip against it   |
-| no `trackID`             | settle on the accepted write |
+| What the speaker reports          | Player behaviour                  |
+|-----------------------------------|-----------------------------------|
+| a `trackID`                       | verify the skip against it        |
+| no `trackID`, but `skipEnabled`   | verify against the track metadata |
+| neither                           | settle on the accepted write      |
 
-The firmware also reports `skipEnabled` and `skipPreviousEnabled` on
-now-playing (parsed as `models.CanSkip` / `models.CanSkipPrevious`). The player
-does not use them yet: they say whether a source can skip at all, which is a
-question about whether to *offer* the buttons, not about how to verify a press.
+The middle row is why `skipEnabled` / `skipPreviousEnabled` (parsed as
+`models.CanSkip` / `models.CanSkipPrevious`) matter: a media library changes
+its track title only when the track really changes, and says so by claiming
+skip support, while live radio rewrites its title with the same stream playing
+on and claims no skip support at all. The claim is what tells the two apart,
+and without it a whole source would be unverifiable. The metadata identity is
+`track`, `artist`, `album` and the ContentItem's `location` together.
 
-### The unmeasured part
+The flags are **not** used to enable or disable the skip buttons, deliberately:
+they flap while a source buffers. The same Spotify track reported
+`skipPreviousEnabled` false mid-buffer and true a few seconds later, and
+Spotify reported no `trackID` at all during one buffering window, so buttons
+driven by them would flicker.
 
-The only captured now-playing responses in the tree are Spotify, and both carry
-`skipEnabled`, `skipPreviousEnabled` and a `trackID`. "Sources with no track
-concept report no `trackID`" is therefore reasoned from the model, not measured
-across sources. The failure mode if a source reports a `trackID` that never
-changes across a skip is "unverified", not a false confirmation, which is the
-safe direction to be wrong in.
+### What the hardware reports
 
-Filling this in needs a speaker and two passes. The first collects what each
-source *reports*, by watching while you switch sources on the speaker or in the
-Bose app:
+Measured on a SoundTouch 10 (server version 4) by walking its sources:
+
+| Source                 | `trackID` | `skipEnabled` | `skipPreviousEnabled` | Skip confirmed by  |
+|------------------------|-----------|---------------|-----------------------|--------------------|
+| `SPOTIFY`              | yes       | yes           | yes                   | `trackID`          |
+| `STORED_MUSIC`         | no        | yes           | yes                   | track metadata     |
+| `TUNEIN`               | no        | no            | no                    | nothing: the write |
+| `RADIO_BROWSER`        | no        | no            | no                    | nothing: the write |
+| `AUX`                  | no        | no            | no                    | nothing: the write |
+| `LOCAL_INTERNET_RADIO` | ?         | ?             | ?                     | ?                  |
+| `BLUETOOTH`            | ?         | ?             | ?                     | ?                  |
+
+`STORED_MUSIC` is the case the design turns on: it skips perfectly well and
+says so, but reports no `trackID`, so a trackID-only rule would leave an entire
+source unverifiable. It was measured against this repository's own
+`cmd/example-dlna-server`; another media server may report a `trackID`, and
+nothing guarantees either way. That is why a `trackID` is preferred wherever
+one is present and the metadata path is only the fallback.
+
+The reports are not stable moment to moment. Mid-buffer, the same Spotify track
+reported `skipPreviousEnabled` false and, in a later buffering window, no
+`trackID` at all. The player reads these only at the moment the button is
+pressed, so a press inside such a window simply settles on the write.
+
+Both passes below are worth repeating on other hardware, other firmware and
+other media servers. The first collects what each source *reports*, by watching
+while you switch sources on the speaker or in the Bose app:
 
 ```bash
 soundtouch-cli --host <speaker> play capabilities --watch
@@ -191,26 +221,23 @@ soundtouch-cli --host <speaker> play capabilities --probe-skip
 That really does skip a track: it sends one `NEXT_TRACK`, watches for up to
 `--probe-wait` (6s by default), prints the before and after rows, and states
 whether the `trackID` moved, whether only the title moved, or whether nothing
-changed. Record both passes here:
+changed. Add what you find to the table above.
 
-| Source                 | `trackID` | `skipEnabled` | `skipPreviousEnabled` | Skip moves `trackID` | Skip verifiable |
-|------------------------|-----------|---------------|-----------------------|----------------------|-----------------|
-| `SPOTIFY`              | yes       | yes           | yes                   | ?                    | expected        |
-| `TUNEIN`               | ?         | ?             | ?                     | ?                    | ?               |
-| `RADIO_BROWSER`        | ?         | ?             | ?                     | ?                    | ?               |
-| `LOCAL_INTERNET_RADIO` | ?         | ?             | ?                     | ?                    | ?               |
-| `STORED_MUSIC`         | ?         | ?             | ?                     | ?                    | ?               |
-| `BLUETOOTH`            | ?         | ?             | ?                     | ?                    | ?               |
-| `AUX` / `PRODUCT`      | ?         | ?             | ?                     | ?                    | ?               |
+Still open:
 
-The `SPOTIFY` row's first three columns come from the captured fixtures; its
-probe has not been run either, so "skip verifiable" is an expectation until it
-is.
+- `LOCAL_INTERNET_RADIO` and `BLUETOOTH` have not been observed at all.
+- The probe pass has not been run per source. Reporting a `trackID` is not the
+  same as that `trackID` moving on a skip, and the table's right-hand column is
+  so far an inference from the first pass rather than a measurement.
+- Media servers other than this repository's `cmd/example-dlna-server` may
+  report a `trackID` for `STORED_MUSIC`, which would simply move that source
+  onto the `trackID` path.
 
 Two findings would change the player: a source reporting a `trackID` that does
-not change across a real skip (the readback would have to stop trusting it for
-that source), and a source whose `skipEnabled` is absent while skipping works
-anyway (which would rule out using the flag to hide the buttons).
+not move across a real skip (the readback would have to stop trusting it
+there), and a source that claims `skipEnabled` while rewriting its track
+metadata on its own (that would break the metadata fallback the way the title
+broke the original rule).
 
 ## Ordering: revisions and epochs
 

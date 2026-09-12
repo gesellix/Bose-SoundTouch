@@ -22,6 +22,7 @@ import { removeDeviceAndRefresh } from './deviceRemoval.js';
 import {
     DISCRETE_COMMAND_READBACK_DELAYS_MS,
     contentExpectation,
+    trackSkipExpectation,
     useDiscreteCommand,
 } from './discreteCommand.js';
 
@@ -192,13 +193,15 @@ export function DeviceDetail({
     function previousTrack() {
         runDiscreteCommand('previous-track',
             () => api.keyChecked(deviceId, 'PREV_TRACK'),
-            { previousTrackID: status?.nowPlaying?.TrackID || '' });
+            trackSkipExpectation(status?.nowPlaying,
+                Boolean(status?.nowPlaying?.SkipPreviousEnabled)));
     }
 
     function nextTrack() {
         runDiscreteCommand('next-track',
             () => api.keyChecked(deviceId, 'NEXT_TRACK'),
-            { previousTrackID: status?.nowPlaying?.TrackID || '' });
+            trackSkipExpectation(status?.nowPlaying,
+                Boolean(status?.nowPlaying?.SkipEnabled)));
     }
 
     function selectPreset(preset) {
