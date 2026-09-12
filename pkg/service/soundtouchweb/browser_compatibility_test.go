@@ -847,6 +847,114 @@ func TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	}
 }
 
+// trackSkipFixtureScript renders the device detail page for a source that
+// reports a trackID, which is what makes a skip verifiable at all.
+const trackSkipFixtureScript = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'SPOTIFY', PlayStatus: 'PLAY_STATE', Track: 'First track', TrackID: 'track-1' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [] },
+  sources: { SourceItem: [] },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+// trackSkipServer answers a NEXT_TRACK write and then reports the given
+// trackID and track title back, with a revision that always advances.
+func trackSkipServer(t *testing.T, reads *int, mu *sync.Mutex, trackID string, rollingTitle bool) *httptest.Server {
+	t.Helper()
+
+	return newPlayerFixtureServer(t, trackSkipFixtureScript, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			*reads++
+			read := *reads
+			mu.Unlock()
+			track := "First track"
+			if rollingTitle {
+				track = fmt.Sprintf("Rolling stream title %d", read)
+			}
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"status": map[string]any{
+					"revision": read + 1, "nowPlayingRevision": read + 1,
+					"nowPlaying": map[string]any{
+						"Source": "SPOTIFY", "PlayStatus": "PLAY_STATE",
+						"Track": track, "TrackID": trackID,
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+}
+
+// TestTrackSkipConfirmsByTrackID: where the speaker reports a trackID, a skip
+// is genuinely verifiable, and the readbacks confirm it.
+func TestTrackSkipConfirmsByTrackID(t *testing.T) {
+	var mu sync.Mutex
+	reads := 0
+	server := trackSkipServer(t, &reads, &mu, "track-2", false)
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
+		chromedp.Click(`.next-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+	); err != nil {
+		t.Fatalf("exercise a verifiable track skip: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads == 0 {
+		t.Error("a skip against a source with a trackID was not verified by readback")
+	}
+}
+
+// TestTrackSkipIsNotConfirmedByRollingStreamMetadata: a live stream rewrites
+// its own track title while the same track keeps playing. That is not a skip,
+// and confirming on it would report a skip that never happened as done. The
+// trackID is what stays put.
+func TestTrackSkipIsNotConfirmedByRollingStreamMetadata(t *testing.T) {
+	var mu sync.Mutex
+	reads := 0
+	server := trackSkipServer(t, &reads, &mu, "track-1", true)
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
+		chromedp.Click(`.next-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next-track command unverified'`, nil),
+	); err != nil {
+		t.Fatalf("exercise a skip against rolling stream metadata: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if reads != 3 {
+		t.Errorf("readbacks = %d, want all 3 while the trackID never changed", reads)
+	}
+}
+
 // TestEmptyPresetSlotStaysSavableWhileACommandIsPending: an empty slot's
 // tile is a save gesture, not a playback command, so an in-flight command
 // has no reason to disable it -- and the sibling star button, which saves the
