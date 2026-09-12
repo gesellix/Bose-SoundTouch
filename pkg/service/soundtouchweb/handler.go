@@ -1592,16 +1592,35 @@ func (app *WebApp) HandleDeviceRecents(w http.ResponseWriter, r *http.Request) {
 }
 
 // storedMusicTypeForReplay derives a STORED_MUSIC ContentItem type from the
-// speaker-native location, which ends with the item kind (e.g. "1$4$2 TRACK"
-// or a container's "… DIR"). Recents don't store the type, and the speaker
-// rejects an empty-type STORED_MUSIC select with INVALID_SOURCE. Falls back to
-// "track" when the location has no kind suffix.
+// speaker-native location. Recents don't store the type, and the speaker
+// rejects an empty-type STORED_MUSIC select with INVALID_SOURCE.
+//
+// An explicit kind suffix is honoured; everything else is a container.
+// Measured on a SoundTouch 10 (FW 27.0.6) against two independent media
+// servers, plus a third shape from the issue 702 report:
+//
+//	tracks      "1$0 TRACK", "5:audio5:part13:3171:5 TRACK"
+//	containers  "1", "4:cont1:20:0:0:", "22$2935"
+//
+// Track locations reliably carry the suffix on every server seen; container
+// locations never do, and the " DIR" suffix this function's first version
+// assumed was not produced by any of them.
+//
+// The fallback therefore points at "dir", not "track" (issue 702). It used to
+// be "track", which silently mis-typed every folder recent: replaying one
+// selected a directory as a track, and the failure surfaced at play time
+// rather than at write time. The remaining exposure is a server that emits
+// track locations without the suffix, which would now be typed as a
+// container; none of the three seen does. Keeping the real type instead of
+// deriving it would remove the guess altogether, since /navigate reports the
+// kind in the item's <type> element and nowSelectionUpdated carries
+// type="dir" explicitly.
 func storedMusicTypeForReplay(location string) string {
 	if fields := strings.Fields(location); len(fields) >= 2 {
 		return strings.ToLower(fields[len(fields)-1])
 	}
 
-	return "track"
+	return "dir"
 }
 
 // HandleDevicePlay plays an arbitrary content item on a device. Generic

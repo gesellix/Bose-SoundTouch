@@ -14,7 +14,7 @@ Bose SoundTouch devices support up to 6 presets that can store favorite music so
 - Comprehensive preset analysis and helper methods
 - Integration with CLI tool for viewing presets
 
-### ❌ **Not Supported - Write Operations**  
+### ❌ **Not Supported - Write Operations**
 - `POST /presets` - Officially marked as "N/A" in Bose API documentation
 - Preset clearing/deletion via API
 - Direct preset creation from currently playing content
@@ -68,38 +68,38 @@ import (
 func main() {
     // Create client
     soundtouchClient := client.NewClientFromHost("192.0.2.10")
-    
+
     // Get all presets
     presets, err := soundtouchClient.GetPresets()
     if err != nil {
         panic(err)
     }
-    
+
     // Display preset information
     fmt.Printf("Total presets: %d\n", presets.GetPresetCount())
     fmt.Printf("Used slots: %d\n", len(presets.GetUsedPresetSlots()))
     fmt.Printf("Empty slots: %v\n", presets.GetEmptyPresetSlots())
-    
+
     // Check for Spotify presets
     spotifyPresets := presets.GetSpotifyPresets()
     fmt.Printf("Spotify presets: %d\n", len(spotifyPresets))
-    
+
     // Get specific preset
     preset1 := presets.GetPresetByID(1)
     if preset1 != nil && !preset1.IsEmpty() {
         fmt.Printf("Preset 1: %s\n", preset1.GetDisplayName())
         fmt.Printf("  Source: %s\n", preset1.GetSource())
         fmt.Printf("  Type: %s\n", preset1.GetContentType())
-        
+
         if preset1.HasTimestamps() {
             fmt.Printf("  Created: %s\n", preset1.GetCreatedTime())
             fmt.Printf("  Updated: %s\n", preset1.GetUpdatedTime())
         }
     }
-    
+
     // Find most recent preset
     if recent := presets.GetMostRecentPreset(); recent != nil {
-        fmt.Printf("Most recent: Preset %d (%s)\n", 
+        fmt.Printf("Most recent: Preset %d (%s)\n",
             recent.ID, recent.GetDisplayName())
     }
 }
@@ -111,16 +111,16 @@ func main() {
 ```xml
 <presets>
   <preset id="1" createdOn="1745991460" updatedOn="1745991460">
-    <ContentItem source="SPOTIFY" type="tracklisturl" 
-                 location="/playback/container/..." 
-                 sourceAccount="user@example.com" 
+    <ContentItem source="SPOTIFY" type="tracklisturl"
+                 location="/playback/container/..."
+                 sourceAccount="user@example.com"
                  isPresetable="true">
       <itemName>My Favorite Songs</itemName>
       <containerArt>https://i.scdn.co/image/...</containerArt>
     </ContentItem>
   </preset>
   <preset id="2">
-    <ContentItem source="TUNEIN" type="station" 
+    <ContentItem source="TUNEIN" type="station"
                  location="s12345" isPresetable="true">
       <itemName>Classic Rock Radio</itemName>
       <containerArt>https://cdn-radiotime-logos.tunein.com/...</containerArt>
@@ -190,14 +190,14 @@ if preset.HasTimestamps() {
 
 Common content types found in presets:
 
-| Source | Type | Description | Example Location |
-|--------|------|-------------|------------------|
-| `SPOTIFY` | `tracklisturl` | Playlist/Album | `/playback/container/c3Bv...` |
-| `SPOTIFY` | `track` | Single Track | `/playback/container/c3Bv...` |
-| `TUNEIN` | `station` | Radio Station | `s12345` |
-| `PANDORA` | `station` | Pandora Station | `TR:station:12345` |
-| `AMAZON` | `playlist` | Amazon Playlist | `amzn1.dv.gti...` |
-| `STORED_MUSIC` | *(none)* | Media-server folder or track | `4:cont1:20:0:0:`, `1` |
+| Source         | Type           | Description                  | Example Location              |
+|----------------|----------------|------------------------------|-------------------------------|
+| `SPOTIFY`      | `tracklisturl` | Playlist/Album               | `/playback/container/c3Bv...` |
+| `SPOTIFY`      | `track`        | Single Track                 | `/playback/container/c3Bv...` |
+| `TUNEIN`       | `station`      | Radio Station                | `s12345`                      |
+| `PANDORA`      | `station`      | Pandora Station              | `TR:station:12345`            |
+| `AMAZON`       | `playlist`     | Amazon Playlist              | `amzn1.dv.gti...`             |
+| `STORED_MUSIC` | *(none)*       | Media-server folder or track | `4:cont1:20:0:0:`, `1`        |
 
 ### Folder presets (STORED_MUSIC)
 
@@ -337,7 +337,7 @@ if len(emptySlots) == 0 {
 ```go
 // Get summary statistics
 summary := presets.GetPresetsSummary()
-fmt.Printf("Total: %d, Used: %d, Empty: %d\n", 
+fmt.Printf("Total: %d, Used: %d, Empty: %d\n",
     summary["total"], summary["used"], summary["empty"])
 
 // Check source distribution
@@ -353,12 +353,12 @@ if summary["TUNEIN"] > 0 {
 ```go
 // Find recently used presets
 if recent := presets.GetMostRecentPreset(); recent != nil {
-    fmt.Printf("Most recently updated: Preset %d (%s)\n", 
+    fmt.Printf("Most recently updated: Preset %d (%s)\n",
         recent.ID, recent.GetDisplayName())
 }
 
 if oldest := presets.GetOldestPreset(); oldest != nil {
-    fmt.Printf("Oldest preset: Preset %d (%s)\n", 
+    fmt.Printf("Oldest preset: Preset %d (%s)\n",
         oldest.ID, oldest.GetDisplayName())
 }
 ```
@@ -385,7 +385,7 @@ The original API limitation appears to have been either:
 This implementation now provides the full preset management lifecycle:
 - ✅ **Create** - Store new presets from any supported content source
 - ✅ **Read** - List and inspect all configured presets
-- ✅ **Update** - Modify existing preset content and metadata  
+- ✅ **Update** - Modify existing preset content and metadata
 - ✅ **Delete** - Remove presets and clear slots
 - ✅ **Select** - Activate presets for immediate playback
 - ✅ **Monitor** - Real-time WebSocket events for preset changes
