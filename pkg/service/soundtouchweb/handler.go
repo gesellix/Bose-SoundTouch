@@ -1152,14 +1152,15 @@ func (app *WebApp) HandleDevicePowerStatus(w http.ResponseWriter, r *http.Reques
 // call -- including when it runs synchronously from an HTTP handler such as
 // HandleDeleteDevice -- from delivering to every other, healthy client.
 func (app *WebApp) BroadcastDeviceList() {
-	message := webtypes.WebSocketMessage{
-		Type: "devices",
-		Data: app.deviceViewSnapshot(),
-	}
-
 	for _, client := range app.globalWebSocketClients() {
 		if err := app.withConnWrite(client, func(batch webSocketWriteBatch) error {
-			return batch.writeJSON(client, message)
+			// Capture under this client's writer lock. If an older broadcast was
+			// waiting behind a newer one, both now observe current state instead
+			// of letting the delayed write regress topology for this browser.
+			return batch.writeJSON(client, webtypes.WebSocketMessage{
+				Type: "devices",
+				Data: app.deviceViewSnapshot(),
+			})
 		}); err != nil {
 			if !errors.Is(err, errConnUnregistered) {
 				log.Printf("Failed to send device update to WebSocket client: %v", err)
@@ -1341,6 +1342,8 @@ func (app *WebApp) HandleGetZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	zoneGeneration := device.BeginZoneRefresh()
+
 	zone, err := device.Client.GetZone()
 	if err != nil {
 		app.sendError(w, err.Error(), http.StatusInternalServerError)
@@ -1350,6 +1353,10 @@ func (app *WebApp) HandleGetZone(w http.ResponseWriter, r *http.Request) {
 	currentHwID := ""
 	if device.DeviceInfo != nil {
 		currentHwID = device.DeviceInfo.DeviceID
+	}
+
+	if device.ApplyPolledZone(zoneGeneration, currentHwID, zone) {
+		app.BroadcastDeviceList()
 	}
 
 	masterIP := app.findIPByHwID(zone.Master)
@@ -1362,35 +1369,67 @@ func (app *WebApp) HandleGetZone(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	type memberInfo struct {
-		IP   string `json:"ip"`
-		HwID string `json:"hwId"`
-		Name string `json:"name"`
-	}
+	var masterMember *zoneMemberView
 
-	members := make([]memberInfo, 0, len(zone.Members))
+	members := make([]zoneMemberView, 0, len(zone.Members))
 
-	for _, m := range zone.Members {
-		name := ""
+	projection, projected := projectZoneInfo(zone, captureDeviceProjectionEntries(app.DeviceSnapshot()))
+	if projected {
+		masterIP = projection.MasterControlID
+		for index := range projection.Members {
+			member := &projection.Members[index]
+			if member.ControlID == projection.MasterControlID {
+				master := *member
+				masterMember = &master
+				masterName = member.Name
 
-		if conn, ok := app.GetDevice(m.IP); ok {
-			if info := conn.Info(); info != nil {
-				name = info.Name
+				continue
 			}
-		}
 
-		members = append(members, memberInfo{IP: m.IP, HwID: m.DeviceID, Name: name})
+			members = append(members, *member)
+		}
+	} else {
+		for _, m := range zone.Members {
+			// SoundTouch masters may include themselves in /getZone. Keep the
+			// detail endpoint role-based so the master is not removable.
+			if strings.TrimSpace(m.DeviceID) == strings.TrimSpace(zone.Master) {
+				continue
+			}
+
+			member := zoneMemberView{
+				Kind:         "speaker",
+				ControlID:    m.IP,
+				IP:           m.IP,
+				HardwareID:   m.DeviceID,
+				DeviceIDs:    []string{m.DeviceID},
+				Connectivity: "offline",
+				PhysicalMembers: []zonePhysicalMemberView{{
+					DeviceID:     m.DeviceID,
+					IP:           m.IP,
+					Connectivity: "offline",
+				}},
+			}
+			if conn, ok := app.GetDevice(m.IP); ok {
+				if conn.DeviceInfo != nil {
+					member.Name = conn.DeviceInfo.Name
+					member.Model = conn.DeviceInfo.Type
+					member.Type = conn.DeviceInfo.Type
+				}
+
+				member.Connectivity = string(projectedConnectivity(conn.Status()))
+				member.Available = member.Connectivity == "online"
+				member.PhysicalMembers[0].Name = member.Name
+				member.PhysicalMembers[0].Type = member.Type
+				member.PhysicalMembers[0].Available = member.Available
+				member.PhysicalMembers[0].Connectivity = member.Connectivity
+			}
+
+			members = append(members, member)
+		}
 	}
 
-	isMaster := zone.Master == currentHwID && !zone.IsStandalone()
-	isSlave := false
-
-	for _, m := range zone.Members {
-		if m.DeviceID == currentHwID {
-			isSlave = true
-			break
-		}
-	}
+	isMaster := zone.Master == currentHwID && zoneHasMultipleDevices(zone)
+	isSlave := zone.Master != currentHwID && zone.IsMember(currentHwID)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -1400,6 +1439,7 @@ func (app *WebApp) HandleGetZone(w http.ResponseWriter, r *http.Request) {
 			"masterIp":     masterIP,
 			"masterHwId":   zone.Master,
 			"masterName":   masterName,
+			"master":       masterMember,
 			"members":      members,
 			"isMaster":     isMaster,
 			"isSlave":      isSlave,
