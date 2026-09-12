@@ -136,13 +136,40 @@ SKIP_BACKUP=no
 
 if [ -n "$NEW_BINARY_BYTES" ]; then
   NEW_BINARY_KB=$((NEW_BINARY_BYTES / 1024))
+
+  # What an upgrade costs is the DIFFERENCE between the new binary and the one
+  # it replaces, not the new binary's full size: the new file is written over
+  # the existing path (the `mv` further down), so the old file's blocks are
+  # released by the same operation that consumes new ones. Charging for the
+  # full size counts the installed binary twice and aborts upgrades on devices
+  # that have ample room -- 72KB short on a 31.6MB /mnt/nv in
+  # https://github.com/gesellix/Bose-SoundTouch/issues/693, where the speaker
+  # was replacing a 14.1MB binary with a 15.5MB one.
+  #
+  # A fresh install still needs the full size, which is exactly what
+  # CURRENT_BINARY_KB=0 yields here. A downgrade frees space rather than
+  # consuming it, so the difference is floored at zero.
+  #
+  # The difference is also the only figure that stays honest on a compressing
+  # filesystem: `df` reports what UBIFS actually stores, while both sizes here
+  # are logical (HEAD Content-Length and `du`, which reports the uncompressed
+  # size on UBIFS). Old and new compress at the same ratio, so the unknown
+  # ratio cancels out of the difference -- it does not cancel out of a
+  # full-size comparison.
+  REPLACE_COST_KB=$((NEW_BINARY_KB - CURRENT_BINARY_KB))
+  if [ "$REPLACE_COST_KB" -lt 0 ]; then
+    REPLACE_COST_KB=0
+  fi
+
   # Backups compress to roughly 70% of the original size in practice
   # (observed: a ~14.8MB binary gzipped to ~10.1MB); used as a conservative
   # estimate since the real ratio isn't known until compression actually runs.
+  # Unlike the binary itself this is a genuine addition to what is stored, so
+  # it is charged in full.
   BACKUP_ESTIMATE_KB=$((CURRENT_BINARY_KB * 7 / 10))
 
-  NEEDED_WITH_BACKUP_KB=$((NEW_BINARY_KB + BACKUP_ESTIMATE_KB + SAFETY_MARGIN_KB))
-  NEEDED_NO_BACKUP_KB=$((NEW_BINARY_KB + SAFETY_MARGIN_KB))
+  NEEDED_WITH_BACKUP_KB=$((REPLACE_COST_KB + BACKUP_ESTIMATE_KB + SAFETY_MARGIN_KB))
+  NEEDED_NO_BACKUP_KB=$((REPLACE_COST_KB + SAFETY_MARGIN_KB))
 
   if [ "$AVAILABLE_KB" -ge "$NEEDED_WITH_BACKUP_KB" ]; then
     : # plenty of room; proceed normally, with a backup
@@ -177,7 +204,14 @@ if [ -n "$NEW_BINARY_BYTES" ]; then
   else
     echo "ERROR: not enough free space on $INSTALL_DIR to install AfterTouch" >&2
     echo "$VERSION safely (${AVAILABLE_KB}KB available, ~${NEEDED_NO_BACKUP_KB}KB" >&2
-    echo "needed). Free up space and try again." >&2
+    echo "needed for a ${NEW_BINARY_KB}KB binary replacing a ${CURRENT_BINARY_KB}KB one)." >&2
+    echo "" >&2
+    echo "The installer already pruned its own leftovers, so there may be" >&2
+    echo "nothing left for you to delete. Options:" >&2
+    echo "  * install an older, smaller release, e.g.:" >&2
+    echo "      curl -sSL https://raw.githubusercontent.com/$GH_REPO/main/scripts/on-device-install/install.sh | sh -s -- --version $FALLBACK_VERSION" >&2
+    echo "  * free space elsewhere on $INSTALL_DIR (ls -lh $INSTALL_DIR)" >&2
+    echo "  * see docs: guides/ON-DEVICE-INSTALL-WALKTHROUGH.md, Troubleshooting" >&2
     exit 1
   fi
 else
