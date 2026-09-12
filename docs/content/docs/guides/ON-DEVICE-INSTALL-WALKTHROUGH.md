@@ -398,17 +398,17 @@ should start playing the corresponding stream.
 
 ## Troubleshooting
 
-| Symptom                                              | First check                                         |
-|------------------------------------------------------|-----------------------------------------------------|
-| SSH "no matching host key type"                      | Add `-oHostKeyAlgorithms=+ssh-rsa`                  |
-| Port 8000 not reachable from LAN                     | Use the SSH tunnel (Step 5)                         |
-| `margeAccountUUID` still empty after reboot          | Re-run Health QuickFix, reboot again; if it still won't stick, try `setup pair --mode=bare` (Step 7), which pairs over a different channel |
-| Radio source error 1005                              | `margeAccountUUID` is empty — complete Step 7 first |
-| `http://localhost:8000` not responding after install | `logread \| grep aftertouch \| tail -20`            |
-| No space left on device during install               | Run the cleanup in Step 2; check `df -h /mnt/nv`    |
+| Symptom                                                     | First check                                                                                                                                                                                                                                                       |
+|-------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| SSH "no matching host key type"                             | Add `-oHostKeyAlgorithms=+ssh-rsa`                                                                                                                                                                                                                                |
+| Port 8000 not reachable from LAN                            | Use the SSH tunnel (Step 5)                                                                                                                                                                                                                                       |
+| `margeAccountUUID` still empty after reboot                 | Re-run Health QuickFix, reboot again; if it still won't stick, try `setup pair --mode=bare` (Step 7), which pairs over a different channel                                                                                                                        |
+| Radio source error 1005                                     | `margeAccountUUID` is empty — complete Step 7 first                                                                                                                                                                                                               |
+| `http://localhost:8000` not responding after install        | `logread \| grep aftertouch \| tail -20`                                                                                                                                                                                                                          |
+| No space left on device during install                      | Run the cleanup in Step 2; check `df -h /mnt/nv`                                                                                                                                                                                                                  |
 | Install aborts with `ERROR: not enough free space … needed` | The installer has already pruned its own leftovers, so there is usually nothing left for you to delete. Update the installer first (it is fetched fresh from `main` by the one-liner), and if it still aborts, install an older, smaller release with `--version` |
-| `Continue without a backup? [y/N]` prompt during install | `/mnt/nv` has room for the new binary but not also for a rollback backup. Answering `n` (the default) aborts and changes nothing. To proceed unattended, re-run with `AFTERTOUCH_FORCE_NO_BACKUP=yes` — but then keep your own copy of the current binary first |
-| `subsystem request failed` when copying a binary with `scp` | The speakers ship no `sftp-server`; use `scp -O` |
+| `Continue without a backup? [y/N]` prompt during install    | `/mnt/nv` has room for the new binary but not also for a rollback backup. Answering `n` (the default) aborts and changes nothing. To proceed unattended, re-run with `AFTERTOUCH_FORCE_NO_BACKUP=yes` — but then keep your own copy of the current binary first   |
+| `subsystem request failed` when copying a binary with `scp` | The speakers ship no `sftp-server`; use `scp -O`                                                                                                                                                                                                                  |
 
 For more detail see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
