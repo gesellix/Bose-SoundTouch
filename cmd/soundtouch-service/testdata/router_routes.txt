@@ -193,6 +193,7 @@ POST     /api/control/devices/{id}/action/{action}                    soundtouch
 POST     /api/control/devices/{id}/key/{key}                          soundtouchweb.(*WebApp).HandleDeviceKey-fm
 POST     /api/control/devices/{id}/library/play                       soundtouchweb.(*WebApp).HandlePlayLibrary-fm
 POST     /api/control/devices/{id}/library/servers                    soundtouchweb.(*WebApp).HandleAddLibraryServer-fm
+POST     /api/control/devices/{id}/library/servers/refresh            soundtouchweb.(*WebApp).HandleRefreshLibraryServers-fm
 POST     /api/control/devices/{id}/play                               soundtouchweb.(*WebApp).HandleDevicePlay-fm
 POST     /api/control/devices/{id}/power                              soundtouchweb.(*WebApp).HandleDevicePower-fm
 POST     /api/control/devices/{id}/preset/{slot}                      soundtouchweb.(*WebApp).HandleStorePresetContent-fm

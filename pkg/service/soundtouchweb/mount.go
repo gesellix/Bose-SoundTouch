@@ -88,6 +88,9 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				r.Route("/library", func(r chi.Router) {
 					r.Get("/servers", app.HandleDeviceLibraryServers)
 					r.Post("/servers", app.HandleAddLibraryServer)
+					// Ask the speaker to re-read its own account list, then
+					// report what it has (issue 580).
+					r.Post("/servers/refresh", app.HandleRefreshLibraryServers)
 					r.Delete("/servers/{account}", app.HandleRemoveLibraryServer)
 					r.Get("/browse", app.HandleLibraryBrowse)
 					r.Post("/play", app.HandlePlayLibrary)

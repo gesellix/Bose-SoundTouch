@@ -678,6 +678,9 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
 .preset-picker-slot.saved  { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
 .preset-picker-slot.error  { border-color: var(--danger); color: var(--danger); }
 
+/* Feedback line beside the Library refresh button (issue 580). */
+.library-refresh-note { font-size: .8rem; }
+
 /* The "Load more" row under a partially listed folder (issue 583). */
 .library-more {
     display: flex; align-items: center; gap: .75rem;
