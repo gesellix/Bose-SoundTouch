@@ -167,25 +167,45 @@ across sources. The failure mode if a source reports a `trackID` that never
 changes across a skip is "unverified", not a false confirmation, which is the
 safe direction to be wrong in.
 
-Filling this in needs a speaker and one pass through its sources:
+Filling this in needs a speaker and two passes. The first collects what each
+source *reports*, by watching while you switch sources on the speaker or in the
+Bose app:
 
 ```bash
 soundtouch-cli --host <speaker> play capabilities --watch
 ```
 
 It prints one row per observation and a new row whenever the report changes, so
-switching sources on the speaker (or in the Bose app) collects the matrix in a
-single run. Record the results here:
+one run covers every source you visit. A radio stream rewriting its own title
+while the `trackID` stays put shows up here as a new row too, which is the
+behaviour that rules the title out as a confirmation signal.
 
-| Source                 | `trackID` | `skipEnabled` | `skipPreviousEnabled` | Skip verifiable |
-|------------------------|-----------|---------------|-----------------------|-----------------|
-| `SPOTIFY`              | yes       | yes           | yes                   | yes (captured)  |
-| `TUNEIN`               | ?         | ?             | ?                     | ?               |
-| `RADIO_BROWSER`        | ?         | ?             | ?                     | ?               |
-| `LOCAL_INTERNET_RADIO` | ?         | ?             | ?                     | ?               |
-| `STORED_MUSIC`         | ?         | ?             | ?                     | ?               |
-| `BLUETOOTH`            | ?         | ?             | ?                     | ?               |
-| `AUX` / `PRODUCT`      | ?         | ?             | ?                     | ?               |
+Reporting a `trackID` is not the same as that `trackID` moving when a skip
+happens, and only the second is what the player relies on. The second pass
+measures it, once per source, while that source is playing:
+
+```bash
+soundtouch-cli --host <speaker> play capabilities --probe-skip
+```
+
+That really does skip a track: it sends one `NEXT_TRACK`, watches for up to
+`--probe-wait` (6s by default), prints the before and after rows, and states
+whether the `trackID` moved, whether only the title moved, or whether nothing
+changed. Record both passes here:
+
+| Source                 | `trackID` | `skipEnabled` | `skipPreviousEnabled` | Skip moves `trackID` | Skip verifiable |
+|------------------------|-----------|---------------|-----------------------|----------------------|-----------------|
+| `SPOTIFY`              | yes       | yes           | yes                   | ?                    | expected        |
+| `TUNEIN`               | ?         | ?             | ?                     | ?                    | ?               |
+| `RADIO_BROWSER`        | ?         | ?             | ?                     | ?                    | ?               |
+| `LOCAL_INTERNET_RADIO` | ?         | ?             | ?                     | ?                    | ?               |
+| `STORED_MUSIC`         | ?         | ?             | ?                     | ?                    | ?               |
+| `BLUETOOTH`            | ?         | ?             | ?                     | ?                    | ?               |
+| `AUX` / `PRODUCT`      | ?         | ?             | ?                     | ?                    | ?               |
+
+The `SPOTIFY` row's first three columns come from the captured fixtures; its
+probe has not been run either, so "skip verifiable" is an expectation until it
+is.
 
 Two findings would change the player: a source reporting a `trackID` that does
 not change across a real skip (the readback would have to stop trusting it for

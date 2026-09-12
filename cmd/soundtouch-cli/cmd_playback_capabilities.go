@@ -111,6 +111,77 @@ func capabilityRow(observed time.Time, o capabilityObservation) []string {
 	}
 }
 
+// classifySkipProbe reports what a real skip did to the fields a readback
+// could confirm it with. This is the decisive measurement: observing that a
+// source reports a trackID says nothing until a skip has been seen to move it,
+// and a source whose title changes while the trackID stays put is exactly the
+// case that made the player's first confirmation rule wrong.
+func classifySkipProbe(before, after capabilityObservation) string {
+	switch {
+	case before.Source != after.Source:
+		return "source changed during the probe, so nothing can be concluded; rerun while one source stays put"
+	case before.TrackID == "" && after.TrackID == "":
+		return "no trackID before or after: a readback has nothing to verify, so the player settles on the write"
+	case before.TrackID != after.TrackID:
+		return "trackID changed: skips are verifiable on this source"
+	case before.Track != after.Track:
+		return "trackID unchanged while the title changed: the title moves on its own and cannot confirm a skip"
+	default:
+		return "nothing changed within the probe window: either the skip did not land, or this source reports no change for one"
+	}
+}
+
+// probeSkip sends one NEXT_TRACK and reports what changed, polling rather than
+// sleeping once, so a slow source is given its time without making a fast one
+// wait for it.
+func probeSkip(c *cli.Context, soundTouchClient skipProbeClient, before capabilityObservation,
+	report func(capabilityObservation),
+) error {
+	if before.Source == "" || before.Source == "STANDBY" {
+		return fmt.Errorf("nothing is playing, so a skip would measure nothing")
+	}
+
+	fmt.Printf("\nProbing: sending %s and watching what changes. This really does skip a track.\n\n",
+		models.KeyNextTrack)
+
+	if err := soundTouchClient.SendKeyPressOnly(models.KeyNextTrack); err != nil {
+		return fmt.Errorf("failed to send next track command: %w", err)
+	}
+
+	wait := c.Duration("probe-wait")
+	interval := c.Duration("interval")
+	deadline := time.Now().Add(wait)
+	after := before
+
+	for time.Now().Before(deadline) {
+		time.Sleep(interval)
+
+		nowPlaying, err := soundTouchClient.GetNowPlaying()
+		if err != nil {
+			PrintWarning(fmt.Sprintf("readback failed: %v", err))
+
+			continue
+		}
+
+		after = observeCapabilities(nowPlaying)
+		if !reportsSameCapabilities(before, after) {
+			break
+		}
+	}
+
+	report(after)
+
+	fmt.Printf("\nVerdict: %s\n", classifySkipProbe(before, after))
+
+	return nil
+}
+
+// skipProbeClient is the slice of the SoundTouch client a probe needs.
+type skipProbeClient interface {
+	GetNowPlaying() (*models.NowPlaying, error)
+	SendKeyPressOnly(key string) error
+}
+
 // playbackCapabilities polls now-playing and reports the skip-relevant
 // capabilities, once or until the watch window closes.
 func playbackCapabilities(c *cli.Context) error {
@@ -138,6 +209,10 @@ func playbackCapabilities(c *cli.Context) error {
 
 	previous := observeCapabilities(nowPlaying)
 	printObservation(previous)
+
+	if c.Bool("probe-skip") {
+		return probeSkip(c, soundTouchClient, previous, printObservation)
+	}
 
 	if !c.Bool("watch") {
 		return nil

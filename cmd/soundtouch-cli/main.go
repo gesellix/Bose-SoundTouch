@@ -323,6 +323,15 @@ func main() {
 								Name:  "duration",
 								Usage: "Stop watching after this long (default: until interrupted)",
 							},
+							&cli.BoolFlag{
+								Name:  "probe-skip",
+								Usage: "Send one NEXT_TRACK and report what it changed (this really skips a track)",
+							},
+							&cli.DurationFlag{
+								Name:  "probe-wait",
+								Value: 6 * time.Second,
+								Usage: "How long to watch for a change after the probe's skip",
+							},
 						},
 					},
 					{

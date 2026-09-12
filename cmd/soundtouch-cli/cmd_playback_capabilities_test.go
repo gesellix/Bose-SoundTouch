@@ -119,6 +119,59 @@ func TestReportsSameCapabilitiesDetectsTheChangesThatMatter(t *testing.T) {
 	}
 }
 
+// The probe is the measurement the matrix actually turns on: a trackID is only
+// worth trusting once a real skip has been seen to move it.
+func TestClassifySkipProbe(t *testing.T) {
+	observe := func(source, trackID, track string) capabilityObservation {
+		return observeCapabilities(&models.NowPlaying{Source: source, TrackID: trackID, Track: track})
+	}
+
+	tests := []struct {
+		name          string
+		before, after capabilityObservation
+		want          string
+	}{
+		{
+			name:   "a real skip moves the trackID",
+			before: observe("SPOTIFY", "track:one", "First"),
+			after:  observe("SPOTIFY", "track:two", "Second"),
+			want:   "trackID changed: skips are verifiable on this source",
+		},
+		{
+			name:   "a rolling stream title is not a skip",
+			before: observe("TUNEIN", "station:one", "Song A"),
+			after:  observe("TUNEIN", "station:one", "Song B"),
+			want:   "trackID unchanged while the title changed: the title moves on its own and cannot confirm a skip",
+		},
+		{
+			name:   "a source with no track concept has nothing to verify",
+			before: observe("AUX", "", ""),
+			after:  observe("AUX", "", ""),
+			want:   "no trackID before or after: a readback has nothing to verify, so the player settles on the write",
+		},
+		{
+			name:   "a frozen trackID is reported, not glossed over",
+			before: observe("STORED_MUSIC", "track:one", "First"),
+			after:  observe("STORED_MUSIC", "track:one", "First"),
+			want:   "nothing changed within the probe window: either the skip did not land, or this source reports no change for one",
+		},
+		{
+			name:   "a source change invalidates the probe",
+			before: observe("SPOTIFY", "track:one", "First"),
+			after:  observe("AUX", "", ""),
+			want:   "source changed during the probe, so nothing can be concluded; rerun while one source stays put",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := classifySkipProbe(test.before, test.after); got != test.want {
+				t.Errorf("classifySkipProbe() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestCapabilityRowFillsEveryColumn(t *testing.T) {
 	observed := time.Date(2026, 9, 12, 14, 30, 15, 0, time.UTC)
 	row := capabilityRow(observed, observeCapabilities(&models.NowPlaying{
