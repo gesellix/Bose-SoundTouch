@@ -3,10 +3,11 @@ import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
+import { artworkFor, presetArtIndex } from '../recentsArt.mjs';
 
 const html = htm.bind(h);
 
-export function Recents({ deviceId, command, commandBusy = false, onPlay }) {
+export function Recents({ deviceId, presets, command, commandBusy = false, onPlay }) {
     const [items, setItems] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -46,6 +47,10 @@ export function Recents({ deviceId, command, commandBusy = false, onPlay }) {
         });
     }
 
+    // The speaker sends no artwork with recents; a preset for the same content
+    // is the one place the player can borrow it from. See recentsArt.mjs.
+    const artIndex = presetArtIndex(presets);
+
     return html`
         <div class="recents-section">
             <div class="section-title">Recents</div>
@@ -53,6 +58,7 @@ export function Recents({ deviceId, command, commandBusy = false, onPlay }) {
                 ${items.map(item => {
                     const ci = item.ContentItem;
                     if (!ci) return null;
+                    const art = artworkFor(ci, artIndex);
                     return html`
                         <button
                             class="recent-item"
@@ -63,8 +69,8 @@ export function Recents({ deviceId, command, commandBusy = false, onPlay }) {
                                 command?.expected?.targetId === String(item.ID || item.UTCTime || ci.Location)
                                 ? 'true' : null}
                         >
-                            ${ci.ContainerArt
-                                ? html`<img class="recent-art" src=${ci.ContainerArt} alt="" />`
+                            ${art
+                                ? html`<img class="recent-art" src=${art} alt="" />`
                                 : html`<div class="recent-art recent-art-empty"><${SourceIcon} source=${ci.Source} className="recent-source-icon" /></div>`
                             }
                             <div class="recent-info">
