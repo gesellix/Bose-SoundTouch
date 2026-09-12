@@ -58,8 +58,9 @@ You should see a prompt such as `root@soundtouch-device:~#`.
 
 ## Step 2 — Check free space (and clean up if needed)
 
-The persistent `/mnt/nv` partition typically has 20–40 MB free — enough for
-the AfterTouch binary (~12 MB) plus one backup. Check first:
+The persistent `/mnt/nv` partition is ~31 MB in total, with ~20 MB free once
+AfterTouch (~15.5 MB at v0.131.0) is installed. That is enough for the binary
+plus one gzip-compressed rollback backup, but not for much else. Check first:
 
 ```bash
 rw            # remount rootfs read-write

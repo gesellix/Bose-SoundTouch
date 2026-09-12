@@ -21,7 +21,7 @@ rm -f /etc/init.d/aftertouch
 update-rc.d -f aftertouch remove
 
 # If /opt/aftertouch is a symlink, resolve it and remove the target
-# before unlinking, so we don't leave ~12 MB of orphan binary on
+# before unlinking, so we don't leave ~15 MB of orphan binary on
 # /mnt/nv. Tolerate either layout — readlink -f returns the same
 # path for a real directory, and rm -rf on a missing path with
 # set -eu would abort.

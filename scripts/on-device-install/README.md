@@ -19,13 +19,18 @@ If your device doesn't expose the port, you can still use the on-device installe
 
 ### Space Limitation
 
-The storage space on the SoundTouch devices is very limited — stock rootfs typically has only a few MB free (e.g. ~4 MB on the ST20, see issue #268), well below the AfterTouch binary's ~12 MB. To work around this, the installer puts everything on `/mnt/nv/aftertouch` by default (the persistent partition, typically ~30 MB free) and points `/opt/aftertouch` at it via a symlink so the init script and runtime paths stay unchanged. Override the install target with `INSTALL_DIR=/some/path` if you've got room elsewhere.
+The storage space on the SoundTouch devices is very limited — stock rootfs typically has only a few MB free (e.g. ~4 MB on the ST20, see issue #268), well below the AfterTouch binary's ~15.5 MB (v0.131.0). To work around this, the installer puts everything on `/mnt/nv/aftertouch` by default (the persistent partition, ~31 MB in total and ~20 MB still free once AfterTouch is installed) and points `/opt/aftertouch` at it via a symlink so the init script and runtime paths stay unchanged. Override the install target with `INSTALL_DIR=/some/path` if you've got room elsewhere.
+
+The binary grows with every Go toolchain bump — roughly 1.4 MB over the ten releases up to v0.131.0, almost none of it from this project's own code — so the headroom shrinks over time.
 
 Updating is genuinely tight on this partition, since the old binary, the new one, and a rollback backup can't all comfortably fit at once, and binaries only keep growing (the Go toolchain's own defaults alone add hundreds of KB per major version, independent of anything in this project). The installer handles this in a few ways:
 - The rollback backup is gzip-compressed (`.backup.gz`) rather than a plain copy, cutting its footprint by roughly a third.
 - Before downloading anything, it checks whether there's actually enough free space for the update, using the new binary's real size (a HEAD request), not a guess.
+- An **upgrade is charged only the difference** between the new binary and the one it replaces, because the new file is written over the old path and releases its blocks in the same operation. A fresh install is charged the full size. (Charging upgrades the full size is what made installs abort on speakers that had ample room — see [#693](https://github.com/gesellix/Bose-SoundTouch/issues/693).)
 - If there's enough room for the update itself but not enough extra for a backup, it asks for confirmation before proceeding without one — reading from `/dev/tty` since the installer is normally run as `curl | sh`. The default (empty input, or no `/dev/tty` available at all) is always to abort rather than silently skip the backup; set `AFTERTOUCH_FORCE_NO_BACKUP=yes` to skip that prompt for unattended/scripted installs.
-- If there isn't even enough room for the update itself, it aborts before downloading anything, rather than leaving a partially-overwritten, non-executable binary in place.
+- If there isn't even enough room for the update itself, it aborts before downloading anything, rather than leaving a partially-overwritten, non-executable binary in place. The abort message names both binary sizes and suggests installing an older, smaller release with `--version`.
+- If a write fails anyway, or the newly-installed binary doesn't answer on `:8000`, the installer **restores the backup, restarts, and re-checks** before reporting failure — so a failed update leaves the speaker running what it ran before, not a broken binary.
+- The download is verified against the `.sha256` published alongside it. A mismatch aborts before anything is replaced; a missing checksum or a firmware without `sha256sum` skips the check with a note.
 
 ### Logs
 
