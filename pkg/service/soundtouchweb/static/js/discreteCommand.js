@@ -90,10 +90,16 @@ const EMPTY_TRACK_IDENTITY = trackMetadataIdentity(null);
 // With neither, no readback can ever say anything, so the command settles on a
 // write the speaker accepted instead of spending the whole readback window
 // with the transport dead to end "unverified".
+function nowPlayingPosition(nowPlaying) {
+    const position = nowPlaying?.Time?.Position;
+    return Number.isSafeInteger(position) && position >= 0 ? position : null;
+}
+
 export function trackSkipExpectation(nowPlaying, skipSupported) {
     return {
         previousTrackID: nowPlaying?.TrackID || '',
         previousTrackIdentity: skipSupported ? trackMetadataIdentity(nowPlaying) : '',
+        previousPosition: nowPlayingPosition(nowPlaying),
     };
 }
 
@@ -166,6 +172,16 @@ export function matchesCommand(status, command) {
     if (action === 'repeat-off') return nowPlaying?.RepeatSetting === 'REPEAT_OFF';
     if (isTrackSkip(action)) {
         const expected = command?.expected;
+        // Measured on a SoundTouch 10: the first PREV_TRACK restarts the
+        // track that is playing, and only a second press steps back. A
+        // restart moves no identity at all, so the play position falling back
+        // is the only evidence that the press did anything -- without it a
+        // working Previous reports "unverified" every time it lands on a
+        // track that is already under way.
+        if (action === 'previous-track' && expected?.previousPosition > 0) {
+            const position = nowPlayingPosition(nowPlaying);
+            if (position !== null && position < expected.previousPosition) return true;
+        }
         if (expected?.previousTrackID) {
             const trackID = nowPlaying?.TrackID;
             return Boolean(trackID) && trackID !== expected.previousTrackID;
