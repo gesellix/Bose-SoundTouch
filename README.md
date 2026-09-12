@@ -93,8 +93,9 @@ See the [API Reference](https://gesellix.github.io/Bose-SoundTouch/docs/referenc
 
 ## Documentation
 
-- [Getting Started](https://gesellix.github.io/Bose-SoundTouch/docs/guides/GETTING-STARTED/)
+- [Getting Started](https://gesellix.github.io/Bose-SoundTouch/docs/guides/GETTING-STARTED/) (start here: service, migration, presets)
 - [Survival Guide](https://gesellix.github.io/Bose-SoundTouch/docs/guides/SURVIVAL-GUIDE/)
+- [Go client library quick start](https://gesellix.github.io/Bose-SoundTouch/docs/guides/GO-CLIENT-QUICKSTART/)
 - [Migration Guide](https://gesellix.github.io/Bose-SoundTouch/docs/guides/MIGRATION-GUIDE/)
 - [Device Initial Setup](https://gesellix.github.io/Bose-SoundTouch/docs/guides/DEVICE-INITIAL-SETUP/)
 - [Migration & Safety Guide](https://gesellix.github.io/Bose-SoundTouch/docs/guides/MIGRATION-SAFETY/)

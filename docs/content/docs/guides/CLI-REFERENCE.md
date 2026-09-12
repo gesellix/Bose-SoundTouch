@@ -1657,7 +1657,8 @@ SOUNDTOUCH_DISCOVERY_TIMEOUT=10s
 
 ## See Also
 
-- [Getting Started Guide](GETTING-STARTED.md) - Basic setup and usage
+- [Getting Started](GETTING-STARTED.md) - Get a speaker working again, from scratch
+- [Quick start: the Go client library](GO-CLIENT-QUICKSTART.md) - The same operations from Go
 - [WebSocket Events](../reference/WEBSOCKET-EVENTS.md) - Real-time monitoring
 - [Zone Management](../reference/ZONE-MANAGEMENT.md) - Multi-room setup
 - [API Endpoints](../reference/API-ENDPOINTS.md) - Complete API reference
