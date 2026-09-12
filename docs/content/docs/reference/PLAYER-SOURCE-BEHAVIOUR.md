@@ -133,6 +133,65 @@ A rejected write is not always proof the command never landed:
   already switched looks identical to one it never received. The readbacks
   keep running and the reason is carried into whatever outcome they reach.
 
+## Track skips: what can be verified
+
+A skip is confirmed by watching *what is playing* change, and picking the wrong
+field gets it wrong in both directions. `track` and `stationName` are the
+obvious candidates and the wrong ones: a live stream rewrites its own title
+while the same stream keeps playing, so a skip that did nothing looks
+confirmed. `trackID` is a stable per-track identity (`spotify:track:...` in the
+captured firmware responses), so it stays put through a title rewrite and moves
+on a real skip.
+
+Sources with no track concept report no `trackID` at all. There a readback can
+never say anything, so the player settles the command on a write the speaker
+accepted rather than holding the transport disabled for the whole readback
+window only to report "unverified".
+
+| What the speaker reports | Player behaviour             |
+|--------------------------|------------------------------|
+| a `trackID`              | verify the skip against it   |
+| no `trackID`             | settle on the accepted write |
+
+The firmware also reports `skipEnabled` and `skipPreviousEnabled` on
+now-playing (parsed as `models.CanSkip` / `models.CanSkipPrevious`). The player
+does not use them yet: they say whether a source can skip at all, which is a
+question about whether to *offer* the buttons, not about how to verify a press.
+
+### The unmeasured part
+
+The only captured now-playing responses in the tree are Spotify, and both carry
+`skipEnabled`, `skipPreviousEnabled` and a `trackID`. "Sources with no track
+concept report no `trackID`" is therefore reasoned from the model, not measured
+across sources. The failure mode if a source reports a `trackID` that never
+changes across a skip is "unverified", not a false confirmation, which is the
+safe direction to be wrong in.
+
+Filling this in needs a speaker and one pass through its sources:
+
+```bash
+soundtouch-cli --host <speaker> play capabilities --watch
+```
+
+It prints one row per observation and a new row whenever the report changes, so
+switching sources on the speaker (or in the Bose app) collects the matrix in a
+single run. Record the results here:
+
+| Source                 | `trackID` | `skipEnabled` | `skipPreviousEnabled` | Skip verifiable |
+|------------------------|-----------|---------------|-----------------------|-----------------|
+| `SPOTIFY`              | yes       | yes           | yes                   | yes (captured)  |
+| `TUNEIN`               | ?         | ?             | ?                     | ?               |
+| `RADIO_BROWSER`        | ?         | ?             | ?                     | ?               |
+| `LOCAL_INTERNET_RADIO` | ?         | ?             | ?                     | ?               |
+| `STORED_MUSIC`         | ?         | ?             | ?                     | ?               |
+| `BLUETOOTH`            | ?         | ?             | ?                     | ?               |
+| `AUX` / `PRODUCT`      | ?         | ?             | ?                     | ?               |
+
+Two findings would change the player: a source reporting a `trackID` that does
+not change across a real skip (the readback would have to stop trusting it for
+that source), and a source whose `skipEnabled` is absent while skipping works
+anyway (which would rule out using the flag to hide the buttons).
+
 ## Ordering: revisions and epochs
 
 Status reaches the browser three ways — a full `devices` snapshot, a
