@@ -52,8 +52,20 @@ function isNewerRevision(start, candidate) {
 // skip that worked never changes anything and would always end unverified
 // after a full readback window of dead transport. A write the speaker
 // accepted is the only honest evidence available, so these settle on it.
-function settlesOnWrite(action) {
+function isTrackSkip(action) {
     return action === 'next-track' || action === 'previous-track';
+}
+
+// A skip is verifiable exactly where the speaker reports a trackID. That is a
+// stable per-track identity (`spotify:track:...` in the captured firmware
+// responses), so unlike track/stationName it does not move when a live stream
+// rolls its own title metadata over, and it does change when a skip really
+// happens. Sources with no track concept -- AUX, PRODUCT, internet radio --
+// report no trackID at all, and there no readback can ever say anything, so
+// the command settles on a write the speaker accepted instead of spending the
+// whole readback window with the transport dead to end "unverified".
+function settlesOnWrite(action, expected) {
+    return isTrackSkip(action) && !expected?.previousTrackID;
 }
 
 export function contentExpectation(item) {
@@ -116,6 +128,10 @@ export function matchesCommand(status, command) {
     if (action === 'repeat-all') return nowPlaying?.RepeatSetting === 'REPEAT_ALL';
     if (action === 'repeat-one') return nowPlaying?.RepeatSetting === 'REPEAT_ONE';
     if (action === 'repeat-off') return nowPlaying?.RepeatSetting === 'REPEAT_OFF';
+    if (isTrackSkip(action)) {
+        const trackID = nowPlaying?.TrackID;
+        return Boolean(trackID) && trackID !== command?.expected?.previousTrackID;
+    }
     if (['preset', 'recent', 'tunein', 'radiobrowser', 'url', 'library'].includes(action)) {
         return matchesContentExpectation(nowPlaying, command?.expected);
     }
@@ -125,7 +141,7 @@ export function matchesCommand(status, command) {
 function commandFailed(status, command) {
     const action = commandAction(command);
     if (![
-        'play', 'pause', 'preset', 'recent',
+        'play', 'pause', 'next-track', 'previous-track', 'preset', 'recent',
         'tunein', 'radiobrowser', 'url', 'library',
     ].includes(action)) return false;
     const nowPlaying = status?.nowPlaying;
@@ -261,7 +277,7 @@ export function useDiscreteCommand({
         setCommand({ ...request, generation, outcome: 'pending', startRevision });
         const startedAt = Date.now();
         // A command that settles on its write schedules no readbacks at all.
-        const delays = settlesOnWrite(action) ? [] : readbackDelays;
+        const delays = settlesOnWrite(action, expected) ? [] : readbackDelays;
 
         function fail(error) {
             if (commandRef.current.active !== active) return;
@@ -419,7 +435,7 @@ export function useDiscreteCommand({
             // Checked writes reject instead, and are classified below.
             if (response?.success === false) {
                 active.writeError = new Error(response.error || 'Command rejected');
-                if (settlesOnWrite(action)) unverified();
+                if (settlesOnWrite(action, expected)) unverified();
                 return;
             }
             if (options.expectedFromResponse) {
@@ -443,7 +459,7 @@ export function useDiscreteCommand({
                     ? { ...previous, expected: refinedExpected, expectationReady: true }
                     : previous);
             }
-            if (settlesOnWrite(action)) confirmOnWrite();
+            if (settlesOnWrite(action, expected)) confirmOnWrite();
         }).catch(error => {
             if (commandRef.current.active !== active) return;
             // A definitive refusal (4xx) means the speaker never saw the
@@ -461,7 +477,7 @@ export function useDiscreteCommand({
             active.writeError = error;
             // Nothing will read this one back, so the ambiguous failure is as
             // far as it gets.
-            if (settlesOnWrite(action)) unverified(error);
+            if (settlesOnWrite(action, expected)) unverified(error);
         });
         return true;
     }

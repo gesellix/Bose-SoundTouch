@@ -191,12 +191,14 @@ export function DeviceDetail({
 
     function previousTrack() {
         runDiscreteCommand('previous-track',
-            () => api.keyChecked(deviceId, 'PREV_TRACK'));
+            () => api.keyChecked(deviceId, 'PREV_TRACK'),
+            { previousTrackID: status?.nowPlaying?.TrackID || '' });
     }
 
     function nextTrack() {
         runDiscreteCommand('next-track',
-            () => api.keyChecked(deviceId, 'NEXT_TRACK'));
+            () => api.keyChecked(deviceId, 'NEXT_TRACK'),
+            { previousTrackID: status?.nowPlaying?.TrackID || '' });
     }
 
     function selectPreset(preset) {
