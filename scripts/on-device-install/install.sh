@@ -58,8 +58,10 @@ INIT_SCRIPT_URL=${INIT_SCRIPT_URL:-https://raw.githubusercontent.com/$GH_REPO/v$
 # Default install location is /mnt/nv/aftertouch (the persistent
 # partition), not /opt/aftertouch on rootfs. Stock SoundTouch rootfs
 # has ~4 MB free on devices like the ST20 (issue #268); the
-# AfterTouch binary is ~12 MB. /mnt/nv typically has tens of MB
-# free and persists across reboots the same way /opt would.
+# AfterTouch binary is ~15.5 MB as of v0.130.0 and grows by roughly
+# 1 MB per Go toolchain bump. /mnt/nv is ~31 MB in total, of which
+# ~20 MB is free with AfterTouch installed, and it persists across
+# reboots the same way /opt would.
 #
 # /opt/aftertouch becomes a symlink into the install target so the
 # init script's hardcoded DAEMON path keeps working unchanged.

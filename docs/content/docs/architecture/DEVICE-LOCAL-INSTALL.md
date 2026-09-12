@@ -46,7 +46,7 @@ A separate machine (Raspberry Pi, NAS, always-on laptop) runs `soundtouch-servic
 User SSHes in once, pipes the installer. Installs to `/mnt/nv/aftertouch`, symlinks `/opt/aftertouch`, registers `/etc/init.d/aftertouch` via `update-rc.d`. Daemon serves `:8000` on the speaker's own LAN address.
 
 - **Pros:** no separate host, per-speaker isolation, survives router replacement.
-- **Cons:** SSH required for install and updates, ~12 MB binary stresses tiny rootfs partitions, no in-process restart on crash, some firmware images bind only loopback (issue #196).
+- **Cons:** SSH required for install and updates, a ~15.5 MB binary (v0.131.0) stresses tiny rootfs partitions, no in-process restart on crash, some firmware images bind only loopback (issue #196).
 
 #### Pattern C — Stick-driven on-device (*not* implemented here)
 
@@ -105,7 +105,11 @@ No new SSH plumbing required. The pieces already exist for the setup probes.
 
 ### Storage budget
 
-The on-device patterns share one hard constraint: storage. ST20 stock rootfs has ~4 MB free (issue #268); even with `/mnt/nv` (~30 MB free) the budget is tight, and a second binary for safe OTA updates doubles it. This is the primary motivation for a slimmer `soundtouch-service-mini` build target — see the appendix.
+The on-device patterns share one hard constraint: storage. ST20 stock rootfs has ~4 MB free (issue #268). `/mnt/nv` is ~31 MB in total, leaving ~20 MB free once AfterTouch (~15.5 MB at v0.131.0) is installed, so the budget is tight and a second binary for safe OTA updates does not fit alongside it. The installer works within this by charging an upgrade only the difference between the old and new binary, and by keeping its rollback backup gzip-compressed.
+
+Measured on an ST speaker (2026-09-12): `/mnt/nv` 31.6 MB total, 20.2 MB free with AfterTouch installed; rootfs 8.9 MB free; `/mnt/update` 6.2 MB free; 120 MB RAM with no swap. Neither rootfs nor `/mnt/update` can hold the binary.
+
+This is the primary motivation for a slimmer `soundtouch-service-mini` build target — see the appendix.
 
 ### Open decisions for this journey
 
@@ -249,7 +253,7 @@ A mini build target in this repo would look like:
 - same codebase, different `cmd/` entry point,
 - compiled with only the packages needed for Internet Radio + TuneIn shim + presets,
 - no Spotify, no parity tests, no setup wizard, no Bose-protocol-level proxy,
-- target size: under 4 MB so it fits the rootfs without `/mnt/nv` gymnastics, leaving room for a second binary for safe updates.
+- target size: as small as Go allows, which is not very small. Measured floor for `GOOS=linux GOARCH=arm GOARM=7` with `-trimpath -ldflags="-s -w"`: 5.8 MB for `net/http` alone, 6.4 MB adding TLS/x509/XML, 7.0 MB adding `miekg/dns`, chi and gorilla/websocket. A realistic mini target is therefore ~7-9 MB, not the "under 4 MB" this document previously claimed; 4 MB is unreachable in Go and would mean a different language, which is not on the table. Even at 7-9 MB it does not fit the ~4 MB rootfs, so a mini build buys headroom on `/mnt/nv`, not freedom from it.
 
 Open questions before committing:
 
