@@ -409,13 +409,22 @@ func (app *WebApp) readBalanceOnce(deviceID string, conn *webtypes.DeviceConnect
 	if !balance.Available {
 		// Log the whole answer, not just the fact of it: the range and target
 		// reported alongside are the evidence for why it is unavailable.
-		log.Printf("Speaker %s: balance reported unavailable (range %d..%d, default %d, target %d, actual %d)",
-			sanitizeLog(deviceID), balance.Min, balance.Max, balance.Default, balance.Target, balance.Actual)
+		//
+		// Only when the state changes. This read runs on every balanceUpdated
+		// frame and every status poll, so a speaker that reports no usable
+		// balance — a standalone unit, most of them — emitted one identical
+		// line per poll, per speaker, and buried everything else in the log.
+		if conn.MarkBalanceUnavailable() {
+			log.Printf("Speaker %s: balance reported unavailable (range %d..%d, default %d, target %d, actual %d)",
+				sanitizeLog(deviceID), balance.Min, balance.Max, balance.Default, balance.Target, balance.Actual)
+		}
 
 		app.clearBalance(conn)
 
 		return
 	}
+
+	conn.MarkBalanceAvailable()
 
 	app.applyBalanceEvent(conn, balance)
 }
