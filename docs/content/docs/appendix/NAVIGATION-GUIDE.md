@@ -100,6 +100,30 @@ if err != nil {
 }
 ```
 
+### What a navigate item actually contains
+
+Measured on a SoundTouch 10 (FW 27.0.6) against two independent media servers,
+a FRITZ!Box UPnP server and this repository's `cmd/example-dlna-server`. Both
+agreed, and three details matter to anyone parsing this by hand:
+
+- **Every item carries two ContentItems.** The one inside
+  `<mediaItemContainer>` is the *parent container* and repeats identically on
+  every item of the page; the item's own is the sibling that follows it.
+  `models.NavigateItem` keeps them apart, so read `item.ContentItem` and not
+  the container's.
+- **Directories report `Playable="1"` and `isPresetable="true"`.** The speaker
+  will play a whole folder, and will store one as a preset. Note that
+  `models.ContentItem.IsPresetable` is a plain bool, so an absent attribute and
+  an explicit `false` arrive identically: treat `false` on a playable directory
+  as "unknown" rather than "no".
+- **The item's ContentItem has no `type` attribute.** The kind is the `<type>`
+  element on the item (`dir`, `track`). Anything reconstructing a ContentItem
+  for `/select` has to supply the type itself.
+
+Location tokens are opaque and server-specific (`4:cont1:20:0:0:` on one
+server, `1` on another) and index-dependent, so they can break when the media
+server reindexes.
+
 ### Navigate Into Directories
 
 ```go

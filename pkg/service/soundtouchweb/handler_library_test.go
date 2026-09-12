@@ -14,25 +14,51 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 )
 
-// cannedNavigateResponse is a minimal XML navigateResponse the fake speaker
-// returns for /navigate in browse tests. It contains one directory and one
-// track so we can assert both are mapped correctly.
+// cannedNavigateResponse is an XML navigateResponse the fake speaker returns
+// for /navigate in browse tests: one directory and one track, so we can assert
+// both are mapped correctly.
+//
+// The shape is taken from real captures (issue 700) rather than written by
+// hand, because the hand-written version disagreed with hardware on four
+// counts and the wrong one was load-bearing: it claimed isPresetable="false"
+// on the directory, which was the only reason to doubt that saving a folder to
+// a preset works at all. Captured from a SoundTouch 10 (FW 27.0.6) against two
+// independent media servers, which agreed on all of it:
+//
+//   - directories report Playable="1", not "0"
+//   - isPresetable is "true" on directories and tracks alike
+//   - the ContentItem carries NO type attribute; the kind is the <type>
+//     element on the item
+//   - every item carries a <mediaItemContainer> whose ContentItem repeats the
+//     parent container, so each item has two ContentItems
+//
+// Names and identifiers are placeholders; the structure is verbatim.
 // Note: totalItems is an XML element, not an attribute, per models.NavigateResponse.
 const cannedNavigateResponse = `<?xml version="1.0" encoding="UTF-8" ?>
 <navigateResponse source="STORED_MUSIC" sourceAccount="uuid:test-udn/0">
   <totalItems>2</totalItems>
   <items>
-    <item Playable="0">
+    <item Playable="1">
       <name>Albums</name>
       <type>dir</type>
-      <ContentItem source="STORED_MUSIC" type="dir" location="4:cont2:150:0:0:" sourceAccount="uuid:test-udn/0" isPresetable="false">
+      <mediaItemContainer offset="0">
+        <ContentItem source="STORED_MUSIC" location="0" sourceAccount="uuid:test-udn/0" isPresetable="true">
+          <itemName>uuid:test-udn/0</itemName>
+        </ContentItem>
+      </mediaItemContainer>
+      <ContentItem source="STORED_MUSIC" location="4:cont2:150:0:0:" sourceAccount="uuid:test-udn/0" isPresetable="true">
         <itemName>Albums</itemName>
       </ContentItem>
     </item>
     <item Playable="1">
       <name>Great Song</name>
       <type>track</type>
-      <ContentItem source="STORED_MUSIC" type="track" location="5:audio5:part13:3171:5 TRACK" sourceAccount="uuid:test-udn/0" isPresetable="true">
+      <mediaItemContainer offset="1">
+        <ContentItem source="STORED_MUSIC" location="4:cont2:150:0:0:" sourceAccount="uuid:test-udn/0" isPresetable="true">
+          <itemName>Albums</itemName>
+        </ContentItem>
+      </mediaItemContainer>
+      <ContentItem source="STORED_MUSIC" location="5:audio5:part13:3171:5 TRACK" sourceAccount="uuid:test-udn/0" isPresetable="true">
         <itemName>Great Song</itemName>
       </ContentItem>
     </item>
@@ -300,10 +326,20 @@ func TestHandleLibraryBrowse_RootMapsEntries(t *testing.T) {
 		t.Error("dir.IsDir should be true")
 	}
 
-	if dir.Playable {
-		t.Error("dir.Playable should be false")
+	// Hardware reports Playable="1" on directories: the speaker will happily
+	// play a whole folder, which is what makes a folder preset work.
+	if !dir.Playable {
+		t.Error("dir.Playable should be true, as hardware reports Playable=1 for directories")
 	}
 
+	// Dropped before issue 700, so the UI could not tell whether a folder was
+	// savable to a preset.
+	if !dir.IsPresetable {
+		t.Error("dir.IsPresetable should be true")
+	}
+
+	// The item's own ContentItem, not the parent repeated inside
+	// mediaItemContainer (location "0" here).
 	if dir.Location != "4:cont2:150:0:0:" {
 		t.Errorf("dir location: expected '4:cont2:150:0:0:', got %q", dir.Location)
 	}

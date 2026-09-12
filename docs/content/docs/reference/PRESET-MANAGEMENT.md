@@ -197,6 +197,31 @@ Common content types found in presets:
 | `TUNEIN` | `station` | Radio Station | `s12345` |
 | `PANDORA` | `station` | Pandora Station | `TR:station:12345` |
 | `AMAZON` | `playlist` | Amazon Playlist | `amzn1.dv.gti...` |
+| `STORED_MUSIC` | *(none)* | Media-server folder or track | `4:cont1:20:0:0:`, `1` |
+
+### Folder presets (STORED_MUSIC)
+
+A folder on a DLNA/NAS media server can be saved to a preset slot, and
+recalling it reopens and plays that folder. Verified on a SoundTouch 10 against
+two independent servers. No special API is involved:
+
+1. Play the folder (`/select` with the folder's ContentItem and `type="dir"`).
+2. Read `/now_playing`. It keeps the **folder** location, not the playing
+   track's, and reports `isPresetable="true"`. The `<track>` element advances
+   with playback; the ContentItem does not.
+3. Store it with the ordinary "save what is playing" preset flow. The stored
+   ContentItem carries **no `type` attribute**, because now-playing does not
+   report one, and the speaker accepts and persists it regardless.
+
+Two caveats:
+
+- **A folder preset is more fragile than a station preset.** Media-server
+  location tokens are opaque, server-specific and index-dependent, so a preset
+  can break when the server reindexes its library. Nothing in the protocol
+  identifies content independently of that index.
+- **The folder has to be playing before it can be saved.** Storing one without
+  playing it first would need a route that accepts an arbitrary ContentItem,
+  which does not exist today.
 
 ## Preset Selection
 

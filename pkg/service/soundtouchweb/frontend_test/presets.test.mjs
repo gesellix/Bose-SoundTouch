@@ -14,6 +14,18 @@ test('the save button is disabled rather than hidden when nothing is playing', (
     assert.doesNotMatch(presets, /\$\{canSave && html/);
 });
 
+// Issue 700: a STORED_MUSIC preset tile showed the raw source name and had no
+// accent colour, leaving it the only tile rendered with the default border.
+// RADIO_BROWSER had the same label gap.
+test('library and radio-browser presets get a readable label', () => {
+    assert.match(presets, /STORED_MUSIC:\s*'Library'/);
+    assert.match(presets, /RADIO_BROWSER:\s*'Radio Browser'/);
+});
+
+test('a library preset tile has its own accent colour', () => {
+    assert.match(css, /\[data-source="STORED_MUSIC"\][^{]*\{[^}]*--slot-color/);
+});
+
 test('the save button is not hidden behind a hover reveal', () => {
     const rule = css.match(/\.preset-save-btn \{[^}]*\}/);
     assert.ok(rule, 'expected a .preset-save-btn rule');

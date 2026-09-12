@@ -71,6 +71,10 @@ img { display: block; max-width: 100%; }
 [data-source="DEEZER"]               { --slot-color: #A238FF; }
 [data-source="IHEARTRADIO"]          { --slot-color: #C6002B; }
 [data-source="BLUETOOTH"]            { --slot-color: #0082FC; }
+/* Local media-server content. Deliberately the one desaturated accent here:
+   it is the only source that is not a brand, and it used to be the only tile
+   left with the default border (issue 700). */
+[data-source="STORED_MUSIC"]         { --slot-color: #7D8CA1; }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .app { display: flex; flex-direction: column; min-height: 100vh; }
