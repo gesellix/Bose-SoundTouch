@@ -508,6 +508,8 @@ func loadTreeFromDir(dir, fallbackName string) (*dlnatest.Tree, int, error) {
 			order = append(order, trackDir)
 		}
 
+		params := probeAudio(mime, payload)
+
 		g.items = append(g.items, &dlnatest.Item{
 			Title:      base,
 			Class:      "object.item.audioItem.musicTrack",
@@ -515,6 +517,10 @@ func loadTreeFromDir(dir, fallbackName string) (*dlnatest.Tree, int, error) {
 			Album:      albumTitle(trackDir, rootClean, fallbackName),
 			MimeType:   mime,
 			Payload:    payload,
+			DurSec:     params.DurSec,
+			Bitrate:    params.Bitrate,
+			SampleRate: params.SampleRate,
+			Channels:   params.Channels,
 			ArtPayload: art,
 			ArtMime:    artMime,
 		})
@@ -541,12 +547,18 @@ func loadTreeFromDir(dir, fallbackName string) (*dlnatest.Tree, int, error) {
 			it.ParentID = cid
 		}
 
+		// The album folder's own cover, so the container advertises album art
+		// rather than leaving a client to fall back on a track's.
+		cover, coverMime := dirCover(d)
+
 		containers = append(containers, &dlnatest.Container{
-			ID:       cid,
-			ParentID: "0",
-			Title:    albumTitle(d, rootClean, fallbackName),
-			Class:    "object.container.storageFolder",
-			Children: g.items,
+			ID:         cid,
+			ParentID:   "0",
+			Title:      albumTitle(d, rootClean, fallbackName),
+			Class:      "object.container.storageFolder",
+			Children:   g.items,
+			ArtPayload: cover,
+			ArtMime:    coverMime,
 		})
 	}
 
