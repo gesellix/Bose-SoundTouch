@@ -221,7 +221,7 @@ Where today's surfaces fall short for this user:
 |------------------------------------|---------------------|-------------------|-------------------|------------------------|
 | `soundtouch-cli`                   | partial (today)     | partial (today)   | no                | primary                |
 | `soundtouch-service` web UI        | wizard portion      | primary           | partial           | indirect (REST)        |
-| `soundtouch-player`                   | no                  | no                | primary           | no                     |
+| `soundtouch-player`                | no                  | no                | primary           | no                     |
 | GUI admin app (Gio, planned)       | primary             | primary           | mobile mode       | no                     |
 | Pre-flashed stick (hypothetical)   | primary             | recovery          | no                | no                     |
 | Physical preset buttons            | no                  | no                | primary           | no                     |
