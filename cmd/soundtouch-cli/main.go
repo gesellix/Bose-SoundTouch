@@ -304,6 +304,28 @@ func main() {
 						},
 					},
 					{
+						Name:   "capabilities",
+						Usage:  "Report what the current source says about skipping (trackID, skipEnabled, seek)",
+						Action: playbackCapabilities,
+						Before: RequireHost,
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:    "watch",
+								Aliases: []string{"w"},
+								Usage:   "Keep polling and print a row whenever the speaker reports something different",
+							},
+							&cli.DurationFlag{
+								Name:  "interval",
+								Value: 2 * time.Second,
+								Usage: "Poll interval while watching",
+							},
+							&cli.DurationFlag{
+								Name:  "duration",
+								Usage: "Stop watching after this long (default: until interrupted)",
+							},
+						},
+					},
+					{
 						Name:   "start",
 						Usage:  "Start playback",
 						Action: playCommand,
