@@ -316,9 +316,6 @@ export function Library({
                     ${refreshNote ? html`
                         <span class="library-refresh-note tunein-item-desc">${refreshNote}</span>
                     ` : null}
-                    <span style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);padding:.2rem .4rem;border:1px solid var(--border);border-radius:4px">
-                        BETA
-                    </span>
                 </div>
             `}
 
