@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -958,5 +959,151 @@ func TestHandleLibraryBrowse_ReportsTotalItems(t *testing.T) {
 	if !resp.Success || resp.Data.TotalItems != 2 || len(resp.Data.Entries) != 2 {
 		t.Errorf("got success=%v totalItems=%d entries=%d, want true/2/2",
 			resp.Success, resp.Data.TotalItems, len(resp.Data.Entries))
+	}
+}
+
+// cannedSourcesWithoutLibrary is the same speaker answering with no
+// STORED_MUSIC source at all, which is what issue 580 reports: the media
+// server disappears from one speaker while others still see it.
+const cannedSourcesWithoutLibrary = `<?xml version="1.0" encoding="UTF-8" ?>
+<sources deviceID="AABBCCDDEEFF">
+  <sourceItem source="BLUETOOTH" sourceAccount="" status="READY" isLocal="true" multiroomallowed="false">Bluetooth</sourceItem>
+</sources>`
+
+// TestHandleRefreshLibraryServers_NudgesThenReads verifies the order the
+// refresh depends on: the speaker is told its sources changed, and only then
+// asked what it has. Reading first would report the stale list the user is
+// already looking at.
+func TestHandleRefreshLibraryServers_NudgesThenReads(t *testing.T) {
+	var mu sync.Mutex
+	var calls []string
+
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls = append(calls, r.URL.Path)
+		mu.Unlock()
+
+		if r.URL.Path == "/sources" {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(cannedSourcesResponse))
+
+			return
+		}
+
+		// /notification answers with the posted status echoed back.
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8" ?><status>/notification</status>`))
+	}))
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	req := httptest.NewRequest("POST", "/api/control/devices/lib-device/library/servers/refresh", nil)
+	req = withChiParams(req, map[string]string{"id": "lib-device"})
+	w := httptest.NewRecorder()
+
+	app.HandleRefreshLibraryServers(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Refreshed bool `json:"refreshed"`
+			Servers   []struct {
+				UDN   string `json:"udn"`
+				Name  string `json:"name"`
+				Ready bool   `json:"ready"`
+			} `json:"servers"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !resp.Success || !resp.Data.Refreshed {
+		t.Errorf("got success=%v refreshed=%v, want both true", resp.Success, resp.Data.Refreshed)
+	}
+
+	if len(resp.Data.Servers) != 1 || resp.Data.Servers[0].UDN != "uuid:nas-udn" || !resp.Data.Servers[0].Ready {
+		t.Errorf("servers = %+v, want the one READY STORED_MUSIC source", resp.Data.Servers)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	notifyAt, sourcesAt := -1, -1
+
+	for i, p := range calls {
+		if p == "/notification" && notifyAt < 0 {
+			notifyAt = i
+		}
+
+		if p == "/sources" && sourcesAt < 0 {
+			sourcesAt = i
+		}
+	}
+
+	if notifyAt < 0 || sourcesAt < 0 || notifyAt > sourcesAt {
+		t.Errorf("calls = %v, want /notification before /sources", calls)
+	}
+}
+
+// TestHandleRefreshLibraryServers_ReportsAnEmptyList covers the case the
+// reporter of issue 580 sees: the speaker genuinely has no media server left.
+// The refresh must answer with an empty list rather than an error, so the UI
+// can say so and point at "Find servers".
+func TestHandleRefreshLibraryServers_ReportsAnEmptyList(t *testing.T) {
+	speaker, _ := setupSpeakerMock(t, map[string]string{"/sources": cannedSourcesWithoutLibrary})
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	req := httptest.NewRequest("POST", "/api/control/devices/lib-device/library/servers/refresh", nil)
+	req = withChiParams(req, map[string]string{"id": "lib-device"})
+	w := httptest.NewRecorder()
+
+	app.HandleRefreshLibraryServers(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Servers []any `json:"servers"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !resp.Success || len(resp.Data.Servers) != 0 {
+		t.Errorf("got success=%v servers=%v, want true and an empty list", resp.Success, resp.Data.Servers)
+	}
+}
+
+// TestHandleRefreshLibraryServers_UnknownDevice keeps the 404 distinct from an
+// empty list: "no such speaker" and "this speaker has no media server" are
+// different answers.
+func TestHandleRefreshLibraryServers_UnknownDevice(t *testing.T) {
+	speaker, _ := setupSpeakerMock(t, nil)
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	req := httptest.NewRequest("POST", "/api/control/devices/nope/library/servers/refresh", nil)
+	req = withChiParams(req, map[string]string{"id": "nope"})
+	w := httptest.NewRecorder()
+
+	app.HandleRefreshLibraryServers(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }

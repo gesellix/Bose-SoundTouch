@@ -158,6 +158,9 @@ export const api = {
     libraryDiscover: (timeout) => req(`/api/control/providers/library/servers${timeout ? `?timeout=${timeout}` : ''}`),
     libraryServers: (id) => req(`/api/control/devices/${id}/library/servers`),
     libraryAddServer: (id, body) => req(`/api/control/devices/${id}/library/servers`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) }),
+    // Nudges the speaker to re-read its sources, then returns what it has
+    // (issue 580: a media server can vanish from one speaker's list).
+    libraryRefreshServers: (id) => req(`/api/control/devices/${id}/library/servers/refresh`, { method: 'POST' }),
     libraryRemoveServer: (id, account) => req(`/api/control/devices/${id}/library/servers/${encodeURIComponent(account)}`, { method: 'DELETE' }),
     libraryBrowse: (id, { account, location, type, start, count }) => {
         const qs = [

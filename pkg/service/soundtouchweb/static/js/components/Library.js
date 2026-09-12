@@ -32,6 +32,8 @@ export function Library({
     const browseGeneration = useRef(0);
     const [loading, setLoading] = useState(false);
     const [finding, setFinding] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshNote, setRefreshNote] = useState('');
 
     // Sync deviceId when devices prop first arrives or changes enough to
     // invalidate the current selection.
@@ -73,6 +75,41 @@ export function Library({
         const resp = await api.libraryServers(id);
         setLoading(false);
         if (resp.success) setServers(resp.data || []);
+    }
+
+    // A registered media server sometimes disappears from one speaker's source
+    // list while other speakers still see it, and a reboot brings it back
+    // (issue 580). This asks the speaker to re-read its accounts and then
+    // reports what it has, which is the same nudge that makes a newly added
+    // server appear without a power cycle.
+    async function refreshServers() {
+        if (!deviceId || refreshing) return;
+
+        setRefreshing(true);
+        setRefreshNote('');
+
+        const before = servers.length;
+        const resp = await api.libraryRefreshServers(deviceId);
+
+        setRefreshing(false);
+
+        if (!resp?.success) {
+            setRefreshNote(resp?.error || 'Refresh failed');
+            return;
+        }
+
+        const found = resp.data?.servers || [];
+        setServers(found);
+
+        // Say what happened either way: a refresh that changes nothing looks
+        // identical to one that did not run.
+        if (found.length > before) {
+            setRefreshNote(`Found ${found.length} server${found.length === 1 ? '' : 's'}`);
+        } else if (found.length === 0) {
+            setRefreshNote('The speaker reports no media server. Use "Find servers" to add one again.');
+        } else {
+            setRefreshNote('No change');
+        }
     }
 
     async function discover() {
@@ -268,6 +305,17 @@ export function Library({
                     >
                         ${finding ? 'Hide' : 'Find servers'}
                     </button>
+                    <button
+                        class="btn-secondary"
+                        onClick=${refreshServers}
+                        disabled=${refreshing}
+                        title="Ask the speaker to re-read its media servers"
+                    >
+                        ${refreshing ? 'Refreshing…' : 'Refresh'}
+                    </button>
+                    ${refreshNote ? html`
+                        <span class="library-refresh-note tunein-item-desc">${refreshNote}</span>
+                    ` : null}
                     <span style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);padding:.2rem .4rem;border:1px solid var(--border);border-radius:4px">
                         BETA
                     </span>

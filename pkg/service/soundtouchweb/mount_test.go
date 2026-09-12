@@ -75,6 +75,8 @@ func TestMountWebControlAPIShape(t *testing.T) {
 		"/api/control/devices/{id}/stereo-pair/",
 		// The named-content preset store (issue 700), sibling of /play.
 		"/api/control/devices/{id}/preset/{slot}",
+		// Re-read a speaker's media servers (issue 580).
+		"/api/control/devices/{id}/library/servers/refresh",
 	}
 	for _, want := range mustExist {
 		if !registered[want] {

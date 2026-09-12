@@ -3558,3 +3558,89 @@ render(h(Fixture), document.getElementById('fixture'));
 		}
 	}
 }
+
+// TestLibraryRefreshReportsWhatTheSpeakerNowHas covers the issue 580 gesture.
+// A registered media server sometimes vanishes from one speaker's source list
+// while other speakers still see it, and the only recovery was a reboot. The
+// Refresh button asks the speaker to re-read its accounts and then shows what
+// it has, and says which of the three things happened, because a refresh that
+// changes nothing otherwise looks identical to one that never ran.
+func TestLibraryRefreshReportsWhatTheSpeakerNowHas(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { Library } from '/app/static/js/components/Library.js';
+function Fixture() {
+  const [devices] = useState({ speaker: { info: { device_id: 'DEVICE1', name: 'Speaker' }, status: { revision: 1 } } });
+  return h('section', { id: 'library' }, h(Library, { devices, onPlaybackRequest: () => true }));
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	refreshes := 0
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		// The speaker starts out having lost its media server, which is the
+		// state the issue describes.
+		r.Get("/api/control/devices/speaker/library/servers", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: []any{}})
+		})
+		r.Post("/api/control/devices/speaker/library/servers/refresh", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			refreshes++
+			found := refreshes > 1
+			mu.Unlock()
+
+			servers := []any{}
+			if found {
+				servers = append(servers, map[string]any{
+					"udn": "uuid:library", "name": "Media server", "ready": true, "registered": true,
+				})
+			}
+
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"servers": servers, "refreshed": true,
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var emptyNote string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#library .tunein-toolbar`, chromedp.ByQuery),
+		// First refresh: still nothing, and the UI says where to go next.
+		chromedp.Evaluate(`[...document.querySelectorAll('#library .tunein-toolbar button')].find(b => b.textContent.trim() === 'Refresh').click()`, nil),
+		chromedp.WaitVisible(`#library .library-refresh-note`, chromedp.ByQuery),
+		chromedp.Text(`#library .library-refresh-note`, &emptyNote, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("refresh with nothing registered: %v", err)
+	}
+
+	if !strings.Contains(emptyNote, "no media server") {
+		t.Errorf("note after an empty refresh = %q, want it to say the speaker reports no media server", emptyNote)
+	}
+
+	var foundNote string
+	var serverRows int
+	if err := chromedp.Run(ctx,
+		// Second refresh: the speaker has it again, so it is listed.
+		chromedp.Evaluate(`[...document.querySelectorAll('#library .tunein-toolbar button')].find(b => b.textContent.trim() === 'Refresh').click()`, nil),
+		chromedp.Poll(`document.querySelectorAll('#library .tunein-item').length === 1`, nil),
+		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-item').length`, &serverRows),
+		chromedp.Text(`#library .library-refresh-note`, &foundNote, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("refresh that finds the server: %v", err)
+	}
+
+	if serverRows != 1 || !strings.Contains(foundNote, "Found 1 server") {
+		t.Errorf("after the second refresh: %d rows, note %q; want 1 row and a found note", serverRows, foundNote)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if refreshes != 2 {
+		t.Errorf("refresh calls = %d, want 2", refreshes)
+	}
+}

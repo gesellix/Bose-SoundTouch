@@ -2,6 +2,7 @@ package soundtouchweb
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,6 +30,12 @@ import (
 // the browser handles a long list, so this is a likely candidate for a setting
 // later.
 const defaultLibraryPageSize = 500
+
+// sourcesUpdatedSettleDelay is how long a refresh waits between telling a
+// speaker its sources changed and asking what it now has. Measured informally:
+// a speaker acts on the notification within a second. Too short and the
+// re-read returns the list we already had; too long and the UI feels stuck.
+const sourcesUpdatedSettleDelay = 1500 * time.Millisecond
 
 // libraryServer is the JSON DTO for a DLNA media server. The registered and
 // ready fields reflect state on the specific speaker that was queried;
@@ -244,6 +251,101 @@ func (app *WebApp) HandleDeviceLibraryServers(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	out := storedMusicServers(sources)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: out}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// HandleRefreshLibraryServers re-reads a speaker's STORED_MUSIC sources after
+// asking it to re-read its own account list first.
+//
+// A media server sometimes disappears from one speaker's source list while
+// other speakers still see it (issue 580). Rebooting that speaker brings it
+// back, which says the registration itself survived and only the speaker's
+// live view of it was lost. The same sourcesUpdated nudge that makes a newly
+// registered server appear without a power cycle (see HandleAddLibraryServer)
+// is the cheapest thing that can rebuild that view, so this handler offers it
+// as an explicit gesture rather than making the user reboot.
+//
+// The nudge is best effort and its outcome is reported as "refreshed": the
+// re-read happens either way, so a speaker that ignores the notification still
+// answers with its current list rather than an error. Whether this actually
+// restores a lost library is not confirmed; the reporter of issue 580 has the
+// intermittent case we cannot reproduce here.
+func (app *WebApp) HandleRefreshLibraryServers(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	refreshed := false
+
+	if boseDeviceID := app.boseDeviceID(device); boseDeviceID != "" {
+		if err := device.Client.NotifySourcesUpdated(boseDeviceID); err == nil {
+			refreshed = true
+		} else {
+			slog.Debug("library refresh: sourcesUpdated failed", "err", sanitizeLog(err.Error()))
+		}
+	}
+
+	// Give the speaker a moment to act on the notification before asking what
+	// it now has. Without this the re-read races the speaker's own work and
+	// reports the list we were already showing.
+	if refreshed {
+		select {
+		case <-time.After(sourcesUpdatedSettleDelay):
+		case <-r.Context().Done():
+			return
+		}
+	}
+
+	sources, err := device.Client.GetSources()
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	out := storedMusicServers(sources)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
+		Success: true,
+		Data:    map[string]interface{}{"servers": out, "refreshed": refreshed},
+	}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// boseDeviceID resolves the speaker's own device ID for notifications,
+// preferring the cached DeviceInfo over a live /info round-trip.
+func (app *WebApp) boseDeviceID(device *webtypes.DeviceConnection) string {
+	if device.DeviceInfo != nil && device.DeviceInfo.DeviceID != "" {
+		return device.DeviceInfo.DeviceID
+	}
+
+	if info, err := device.Client.GetDeviceInfo(); err == nil && info != nil {
+		return info.DeviceID
+	}
+
+	return ""
+}
+
+// storedMusicServers maps a speaker's /sources response to the media servers
+// registered on it.
+func storedMusicServers(sources *models.Sources) []libraryServer {
 	out := make([]libraryServer, 0)
 
 	for _, si := range sources.SourceItem {
@@ -260,11 +362,7 @@ func (app *WebApp) HandleDeviceLibraryServers(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: out}); encErr != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	return out
 }
 
 // HandleAddLibraryServer registers a DLNA media server on a specific speaker
