@@ -87,7 +87,9 @@ df -h /mnt/nv   # confirm space recovered
 
 > **From v0.93.0 onwards the installer prunes stale artefacts automatically**
 > during every upgrade — manual cleanup should no longer be necessary on
-> fresh installs.
+> fresh installs. The flip side: if an install still aborts for lack of
+> space, there is probably nothing left for you to delete. See the
+> Troubleshooting entry for that error below.
 
 ---
 
@@ -404,6 +406,9 @@ should start playing the corresponding stream.
 | Radio source error 1005                              | `margeAccountUUID` is empty — complete Step 7 first |
 | `http://localhost:8000` not responding after install | `logread \| grep aftertouch \| tail -20`            |
 | No space left on device during install               | Run the cleanup in Step 2; check `df -h /mnt/nv`    |
+| Install aborts with `ERROR: not enough free space … needed` | The installer has already pruned its own leftovers, so there is usually nothing left for you to delete. Update the installer first (it is fetched fresh from `main` by the one-liner), and if it still aborts, install an older, smaller release with `--version` |
+| `Continue without a backup? [y/N]` prompt during install | `/mnt/nv` has room for the new binary but not also for a rollback backup. Answering `n` (the default) aborts and changes nothing. To proceed unattended, re-run with `AFTERTOUCH_FORCE_NO_BACKUP=yes` — but then keep your own copy of the current binary first |
+| `subsystem request failed` when copying a binary with `scp` | The speakers ship no `sftp-server`; use `scp -O` |
 
 For more detail see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -435,14 +440,30 @@ speaker first**: an Admin UI tab left open from before the update, or a
 browser cache of the previous page load, can otherwise still show the old
 version even though the new binary is already running.
 
-**Rollback:** the installer keeps a `.backup` file alongside the binary:
+**Rollback:** the installer keeps one backup alongside the binary, named
+after the version it replaced. It is normally gzip-compressed
+(`.backup.gz`); the uncompressed `.backup` form only appears when `gzip`
+was unavailable:
 
 ```bash
-ls /mnt/nv/aftertouch/aftertouch-service*.backup
+ls /mnt/nv/aftertouch/aftertouch-service*.backup*   # note the trailing *
+
+# compressed (.backup.gz) — the usual case:
+gunzip -c /mnt/nv/aftertouch/aftertouch-service.<old-version>.backup.gz \
+   > /mnt/nv/aftertouch/aftertouch-service
+
+# or, for an uncompressed .backup:
 cp /mnt/nv/aftertouch/aftertouch-service.<old-version>.backup \
    /mnt/nv/aftertouch/aftertouch-service
+
+chmod +x /mnt/nv/aftertouch/aftertouch-service
 /etc/init.d/aftertouch restart
 ```
+
+You usually won't need this by hand: an install that fails to write the
+binary, or whose new binary doesn't answer on `:8000`, restores this backup
+and restarts by itself before reporting failure (installers released after
+v0.131.0).
 
 **Testing a pre-release build (from `main`, not yet tagged):** `install.sh`
 only ever downloads from GitHub Releases, so there's no one-line installer
@@ -455,13 +476,24 @@ make build-linux-armv7   # builds build/soundtouch-service-linux-armv7,
                           # build/soundtouch-cli-linux-armv7, and
                           # build/soundtouch-backup-linux-armv7
 
-scp build/soundtouch-service-linux-armv7 root@192.0.2.1:/mnt/nv/aftertouch/aftertouch-service.new
+# First, on the speaker: stop the service and compress the current binary
+# into a rollback backup. Order matters — /mnt/nv has only ~20 MB free, so a
+# second full-size binary plus an uncompressed backup does not fit.
 ssh -oHostKeyAlgorithms=+ssh-rsa root@192.0.2.1
-
 rw
 /etc/init.d/aftertouch stop
-cp /mnt/nv/aftertouch/aftertouch-service /mnt/nv/aftertouch/aftertouch-service.pre-test.backup
-mv /mnt/nv/aftertouch/aftertouch-service.new /mnt/nv/aftertouch/aftertouch-service
+gzip -c /mnt/nv/aftertouch/aftertouch-service \
+   > /mnt/nv/aftertouch/aftertouch-service.pre-test.backup.gz
+exit
+
+# Then, from your machine, copy the new binary straight over the old one.
+# -O is required: the speakers ship no sftp-server, and OpenSSH 9.0+ uses
+# SFTP by default, so plain `scp` fails with "subsystem request failed".
+scp -O build/soundtouch-service-linux-armv7 \
+   root@192.0.2.1:/mnt/nv/aftertouch/aftertouch-service
+
+# Back on the speaker:
+ssh -oHostKeyAlgorithms=+ssh-rsa root@192.0.2.1
 chmod +x /mnt/nv/aftertouch/aftertouch-service
 /etc/init.d/aftertouch start
 ```
@@ -471,11 +503,11 @@ service), swap that binary too — same idea, and it lands in the same
 `/mnt/nv/aftertouch` directory Step 9 above uses:
 
 ```bash
-scp build/soundtouch-cli-linux-armv7 root@192.0.2.1:/mnt/nv/aftertouch/soundtouch-cli
+scp -O build/soundtouch-cli-linux-armv7 root@192.0.2.1:/mnt/nv/aftertouch/soundtouch-cli
 ssh -oHostKeyAlgorithms=+ssh-rsa root@192.0.2.1 chmod +x /mnt/nv/aftertouch/soundtouch-cli
 ```
 
-Roll back the same way as above, using the `.pre-test.backup` file.
+Roll back the same way as above, using the `.pre-test.backup.gz` file.
 
 ---
 
