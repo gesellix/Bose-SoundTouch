@@ -470,8 +470,8 @@ func findMatchingSourceForPreset(sources []models.ConfiguredSource, p models.Ser
 	// Then try type and account match
 	for j := range sources {
 		s := &sources[j]
-		if (s.SourceKey.Type == p.Source && (p.SourceAccount == "" || s.SourceKey.Account == p.SourceAccount)) ||
-			(s.SourceKeyType == p.Source && (p.SourceAccount == "" || s.SourceKeyAccount == p.SourceAccount)) {
+		if (s.SourceKey.Type == p.Source || s.SourceKeyType == p.Source) &&
+			sourceAccountMatchesClaim(*s, p.Source, p.SourceAccount) {
 			return s
 		}
 	}
@@ -515,7 +515,8 @@ func RecentsToXML(ds *datastore.DataStore, account, deviceID string) ([]byte, er
 		} else if r.Source != "" {
 			// Try to find by Source and SourceAccount if SourceID didn't match
 			for j := range sources {
-				if sources[j].SourceKeyType == r.Source && sources[j].SourceKeyAccount == r.SourceAccount {
+				if sources[j].SourceKeyType == r.Source &&
+					sourceAccountMatchesClaim(sources[j], r.Source, r.SourceAccount) {
 					matchingSrc = &sources[j]
 					PrepareConfiguredSource(matchingSrc)
 
@@ -875,6 +876,8 @@ func canonicalProviderIDByID(id string) string {
 		return strconv.Itoa(constants.TuneinProviderID)
 	case "10005":
 		return strconv.Itoa(constants.RadioBrowserProviderID)
+	case "10007":
+		return strconv.Itoa(constants.StoredMusicProviderID)
 	}
 
 	return ""
@@ -945,6 +948,14 @@ func canonicalDefaultsByType(sourceKeyType string) (id, providerID string) {
 		return "10004", strconv.Itoa(constants.TuneinProviderID)
 	case constants.ProviderRadioBrowser:
 		return "10005", strconv.Itoa(constants.RadioBrowserProviderID)
+	case constants.ProviderStoredMusic:
+		// A media server's account is its UDN, which we cannot invent, so a
+		// synthesised block carries no credential and play-time will fail
+		// until the server is registered again. That is still better than
+		// dropping the preset, which empties the speaker's slot (issue 697).
+		// With the display-name match in sourceAccountMatchesClaim this only
+		// fires when the server is genuinely gone from the configured list.
+		return "10007", strconv.Itoa(constants.StoredMusicProviderID)
 	}
 
 	return "", ""
@@ -994,7 +1005,7 @@ func mapPresetsToFullResponse(presets []models.ServicePreset, sources []models.C
 		if matchedSource == nil {
 			for j := range sources {
 				s := sources[j]
-				if s.SourceKeyType == p.Source && (p.SourceAccount == "" || s.SourceKeyAccount == p.SourceAccount) {
+				if s.SourceKeyType == p.Source && sourceAccountMatchesClaim(s, p.Source, p.SourceAccount) {
 					copySource := s
 					PrepareConfiguredSource(&copySource)
 					matchedSource = &copySource
@@ -1121,7 +1132,7 @@ func findMatchingSourceForRecent(r *models.ServiceRecent, sources []models.Confi
 
 	for j := range sources {
 		s := sources[j]
-		if s.SourceKeyType == r.Source && (r.SourceAccount == "" || s.SourceKeyAccount == r.SourceAccount) {
+		if s.SourceKeyType == r.Source && sourceAccountMatchesClaim(s, r.Source, r.SourceAccount) {
 			copySource := s
 			PrepareConfiguredSource(&copySource)
 
@@ -1159,6 +1170,41 @@ func upsertPresetByButton(presets []models.ServicePreset, next models.ServicePre
 	}
 
 	return append(presets, next)
+}
+
+// sourceAccountMatchesClaim reports whether a preset or recent claiming
+// `account` belongs to the configured source s, given its `sourceType`.
+//
+// The account a speaker reports is not always the account we keyed the source
+// by. AddSource keys a media server by its UDN ("<UDN>/0"), while the speaker
+// echoes the server's *display name* in the preset's source block, which
+// syncPresets then persists verbatim. Comparing accounts alone therefore
+// matched nothing for media-server presets, and an unmatched preset is
+// dropped from /full, which empties that slot on the speaker (issue 697).
+//
+// The display-name forms are accepted for STORED_MUSIC only. For every other
+// provider the account *is* the identity (a Spotify user name, say), where
+// matching a display name could bind a preset to the wrong account.
+func sourceAccountMatchesClaim(s models.ConfiguredSource, sourceType, account string) bool {
+	if account == "" {
+		return true
+	}
+
+	if account == s.SourceKeyAccount || account == s.SourceKey.Account {
+		return true
+	}
+
+	if sourceType != constants.ProviderStoredMusic {
+		return false
+	}
+
+	for _, name := range []string{s.SourceName, s.DisplayName, s.Name} {
+		if name != "" && account == name {
+			return true
+		}
+	}
+
+	return false
 }
 
 func sourceTypeCompatible(claimed, configured string) bool {
