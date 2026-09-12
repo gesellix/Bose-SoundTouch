@@ -1077,7 +1077,9 @@ func (ds *DataStore) GetPresets(account, device string) ([]models.ServicePreset,
 	}
 
 	if needsRewrite {
-		log.Printf("[Datastore] Presets.xml for device %s used legacy <ContentItem> format; rewriting in canonical form", sanitizeLog(device))
+		// Either the legacy <ContentItem> spelling or a duplicate button
+		// number; readPresetsNoLock logs which.
+		log.Printf("[Datastore] Presets.xml for device %s needed canonicalising; rewriting", sanitizeLog(device))
 
 		if werr := ds.SavePresets(account, device, presets); werr != nil {
 			log.Printf("[Datastore] failed to rewrite normalised Presets.xml for device %s: %s", sanitizeLog(device), sanitizeErr(werr))
@@ -1213,7 +1215,103 @@ func (ds *DataStore) readPresetsNoLock(account, device string) ([]models.Service
 		})
 	}
 
+	// Collapse duplicate button numbers, and let the caller rewrite the file
+	// once rather than filtering on every read.
+	if deduped, collapsed := collapseDuplicatePresets(presets); collapsed > 0 {
+		log.Printf("[Datastore] readPresetsNoLock: Presets.xml for device %s carries %d duplicate button number(s); collapsing to one entry per slot",
+			sanitizeLog(device), collapsed)
+
+		presets = deduped
+		needsRewrite = true
+	}
+
 	return presets, needsRewrite, nil
+}
+
+// effectivePresetButton returns the slot a preset occupies: its ButtonNumber,
+// falling back to its ID. That is the same fallback savePresetsNoLock applies
+// when writing the id attribute, so ordering and duplicate detection must use
+// it too — an entry carrying only an ID still occupies a slot.
+func effectivePresetButton(p models.ServicePreset) string {
+	if p.ButtonNumber != "" {
+		return p.ButtonNumber
+	}
+
+	return p.ID
+}
+
+// sortPresetsByButton returns the presets ordered by numeric button number.
+// Entries whose button number is missing or not a number keep their relative
+// order and sort last, since there is no slot to place them in.
+func sortPresetsByButton(presets []models.ServicePreset) []models.ServicePreset {
+	out := make([]models.ServicePreset, len(presets))
+	copy(out, presets)
+
+	button := func(p models.ServicePreset) (int, bool) {
+		n, err := strconv.Atoi(effectivePresetButton(p))
+		if err != nil {
+			return 0, false
+		}
+
+		return n, true
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		left, leftOK := button(out[i])
+		right, rightOK := button(out[j])
+
+		if leftOK != rightOK {
+			return leftOK
+		}
+
+		if !leftOK {
+			return false
+		}
+
+		return left < right
+	})
+
+	return out
+}
+
+// collapseDuplicatePresets returns the preset list with one entry per button
+// number, and how many duplicates it removed.
+//
+// UpdatePreset used to address presets by list position, so saving into a
+// sparse list could append a second entry for a button that already existed
+// (issue 715). That matters beyond tidiness: a list with more entries than the
+// speaker has slots costs a slot, which is how a preset vanished from a device
+// whose Presets.xml still held it.
+//
+// The later entry wins, since the newest save is the one the user just made,
+// while the surviving entry keeps the position of the first occurrence so slot
+// order stays stable. Entries with no button number are left alone: they carry
+// no slot identity to collide on.
+func collapseDuplicatePresets(presets []models.ServicePreset) ([]models.ServicePreset, int) {
+	positionOf := make(map[string]int, len(presets))
+	out := make([]models.ServicePreset, 0, len(presets))
+	collapsed := 0
+
+	for i := range presets {
+		button := effectivePresetButton(presets[i])
+		if button == "" {
+			out = append(out, presets[i])
+
+			continue
+		}
+
+		if at, seen := positionOf[button]; seen {
+			out[at] = presets[i]
+			collapsed++
+
+			continue
+		}
+
+		positionOf[button] = len(out)
+		out = append(out, presets[i])
+	}
+
+	return out, collapsed
 }
 
 // repairLeakedSource quietly substitutes the speaker-perspective
@@ -1322,6 +1420,23 @@ func (ds *DataStore) SavePresets(account, device string, presets []models.Servic
 // savePresetsNoLock is the lock-free write half of
 // SavePresets/MutatePresets. Callers must already hold ds.fileMutex.Lock().
 func (ds *DataStore) savePresetsNoLock(account, device string, presets []models.ServicePreset) error {
+	// Backstop, so no write path can persist two entries for one slot even if
+	// it addresses presets by position again. Mirrors SaveRecents and
+	// SaveConfiguredSources, which both deduplicate before writing.
+	if deduped, collapsed := collapseDuplicatePresets(presets); collapsed > 0 {
+		log.Printf("[Datastore] savePresetsNoLock: dropping %d duplicate button number(s) for device %s before writing",
+			collapsed, sanitizeLog(device))
+
+		presets = deduped
+	}
+
+	// Persist in button order. Callers now address presets by button number
+	// rather than by list position, so insertion order would otherwise depend
+	// on the order saves happened to arrive in — including concurrent ones. A
+	// speaker's own /presets is ordered by slot too, and an empty slot is
+	// simply absent rather than padded.
+	presets = sortPresetsByButton(presets)
+
 	path := filepath.Join(ds.AccountDeviceDir(account, device), constants.PresetsFile)
 	if err := ds.rootMkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err

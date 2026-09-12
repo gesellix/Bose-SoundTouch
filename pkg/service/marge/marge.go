@@ -1138,6 +1138,29 @@ func findMatchingSourceForRecent(r *models.ServiceRecent, sources []models.Confi
 // side empty is treated as "no info, allow" (matches pre-fix behaviour for
 // records that lost their Source attribute). Refuse when both are set and
 // disagree — that's the GH-343 cross-type rewrite the speaker reflects.
+// upsertPresetByButton replaces the entry for next's button number, or appends
+// next when that button is not in the list yet.
+//
+// Addressing the preset by button number rather than by list position is the
+// point. UpdatePreset used to pad the slice to presetNumber entries and write
+// presets[presetNumber-1], which assumed the stored list was dense and ordered
+// by button. It need not be: on a list holding buttons [1 2 3 4 6], saving
+// preset 6 padded to six entries and wrote index 5, leaving the original
+// button-6 entry at index 4 — two entries for one slot. The speaker then
+// received more presets than it has slots and dropped one, which is how a
+// preset disappeared from a device whose Presets.xml still held it (issue 715).
+func upsertPresetByButton(presets []models.ServicePreset, next models.ServicePreset) []models.ServicePreset {
+	for i := range presets {
+		if presets[i].ButtonNumber == next.ButtonNumber {
+			presets[i] = next
+
+			return presets
+		}
+	}
+
+	return append(presets, next)
+}
+
 func sourceTypeCompatible(claimed, configured string) bool {
 	if claimed == "" || configured == "" {
 		return true
@@ -1693,13 +1716,7 @@ func UpdatePreset(ds *datastore.DataStore, account, device string, presetNumber 
 	// MutatePresets — this is the exact interleave that dropped a preset
 	// during #614's rapid-fire repro.
 	if _, err = ds.MutatePresets(account, device, func(presets []models.ServicePreset) ([]models.ServicePreset, error) {
-		for len(presets) < presetNumber {
-			presets = append(presets, models.ServicePreset{})
-		}
-
-		presets[presetNumber-1] = presetObj
-
-		return presets, nil
+		return upsertPresetByButton(presets, presetObj), nil
 	}); err != nil {
 		return nil, err
 	}
