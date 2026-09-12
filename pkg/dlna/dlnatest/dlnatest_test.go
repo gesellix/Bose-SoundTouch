@@ -156,11 +156,12 @@ type didlLite struct {
 }
 
 type didlContainer struct {
-	ID         string `xml:"id,attr"`
-	ParentID   string `xml:"parentID,attr"`
-	ChildCount string `xml:"childCount,attr"`
-	Title      string `xml:"title"`
-	Class      string `xml:"class"`
+	ID          string `xml:"id,attr"`
+	ParentID    string `xml:"parentID,attr"`
+	ChildCount  string `xml:"childCount,attr"`
+	Title       string `xml:"title"`
+	Class       string `xml:"class"`
+	AlbumArtURI string `xml:"albumArtURI"`
 }
 
 type didlItem struct {
@@ -172,8 +173,12 @@ type didlItem struct {
 }
 
 type didlRes struct {
-	ProtocolInfo string `xml:"protocolInfo,attr"`
-	URL          string `xml:",chardata"`
+	ProtocolInfo    string `xml:"protocolInfo,attr"`
+	Duration        string `xml:"duration,attr"`
+	Bitrate         int    `xml:"bitrate,attr"`
+	SampleFrequency int    `xml:"sampleFrequency,attr"`
+	NrAudioChannels int    `xml:"nrAudioChannels,attr"`
+	URL             string `xml:",chardata"`
 }
 
 func TestBrowseRoot_ReturnsMusicContainer(t *testing.T) {
@@ -330,6 +335,128 @@ func min8(n int) int {
 // ----------------------------------------------------------------------------
 // Custom tree
 // ----------------------------------------------------------------------------
+
+// albumTree is a one-album library whose container carries its own art and
+// whose track carries measured audio parameters.
+func albumTree() *dlnatest.Tree {
+	cover := []byte("cover-bytes")
+
+	return &dlnatest.Tree{
+		Containers: []*dlnatest.Container{
+			{
+				ID:         "7",
+				ParentID:   "0",
+				Title:      "An Album",
+				Class:      "object.container.storageFolder",
+				ArtPayload: cover,
+				ArtMime:    "image/jpeg",
+				Children: []*dlnatest.Item{
+					{
+						ID:         "7$0",
+						ParentID:   "7",
+						Title:      "01 - A Track",
+						Class:      "object.item.audioItem.musicTrack",
+						MimeType:   "audio/mpeg",
+						DurSec:     212.5,
+						Bitrate:    320000,
+						SampleRate: 44100,
+						Channels:   2,
+						Payload:    []byte("audio"),
+						ArtPayload: cover,
+						ArtMime:    "image/jpeg",
+					},
+				},
+			},
+		},
+	}
+}
+
+// A container that advertises no art leaves a speaker saving a preset for the
+// whole album with nothing to store but the art of whichever track happened to
+// be playing, which is what a SoundTouch 10 was measured doing.
+func TestBrowseRootAdvertisesContainerAlbumArt(t *testing.T) {
+	ts, _ := dlnatest.NewHTTPTest(dlnatest.WithTree(albumTree()))
+	defer ts.Close()
+
+	_, didl := soapBrowse(t, ts.URL, "0")
+
+	if len(didl.Containers) != 1 {
+		t.Fatalf("root browse returned %d containers, want 1", len(didl.Containers))
+	}
+
+	artURL := didl.Containers[0].AlbumArtURI
+	if artURL == "" {
+		t.Fatal("container advertises no albumArtURI")
+	}
+
+	if want := ts.URL + "/AlbumArt/7.jpg"; artURL != want {
+		t.Errorf("albumArtURI = %q, want %q", artURL, want)
+	}
+
+	resp, err := http.Get(artURL)
+	if err != nil {
+		t.Fatalf("GET %s: %v", artURL, err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s: status %d", artURL, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading art: %v", err)
+	}
+
+	if string(body) != "cover-bytes" {
+		t.Errorf("container art body = %q, want the container's own art", body)
+	}
+
+	if got := resp.Header.Get("Content-Type"); got != "image/jpeg" {
+		t.Errorf("container art Content-Type = %q, want image/jpeg", got)
+	}
+}
+
+// A container with no art of its own must not advertise one, rather than
+// pointing at a URL that 404s.
+func TestBrowseRootOmitsAlbumArtWhenTheContainerHasNone(t *testing.T) {
+	ts, _ := dlnatest.NewHTTPTest()
+	defer ts.Close()
+
+	_, didl := soapBrowse(t, ts.URL, "0")
+
+	for _, c := range didl.Containers {
+		if c.AlbumArtURI != "" {
+			t.Errorf("container %q advertises albumArtURI %q with no art set", c.Title, c.AlbumArtURI)
+		}
+	}
+}
+
+// Durations and audio parameters are what a client draws a progress bar from.
+// Reporting zero for everything, as this server used to, leaves the speaker
+// reporting <time total="0"> in turn.
+func TestItemResCarriesMeasuredAudioParameters(t *testing.T) {
+	ts, _ := dlnatest.NewHTTPTest(dlnatest.WithTree(albumTree()))
+	defer ts.Close()
+
+	_, didl := soapBrowse(t, ts.URL, "7")
+
+	if len(didl.Items) != 1 || len(didl.Items[0].Res) != 1 {
+		t.Fatalf("container browse returned %d items, want 1 with one <res>", len(didl.Items))
+	}
+
+	res := didl.Items[0].Res[0]
+
+	if res.Duration != "0:03:32.500" {
+		t.Errorf("duration = %q, want %q", res.Duration, "0:03:32.500")
+	}
+
+	if res.Bitrate != 320000 || res.SampleFrequency != 44100 || res.NrAudioChannels != 2 {
+		t.Errorf("res bitrate=%d sampleFrequency=%d channels=%d, want 320000, 44100 and 2",
+			res.Bitrate, res.SampleFrequency, res.NrAudioChannels)
+	}
+}
 
 func TestCustomTree(t *testing.T) {
 	customTree := &dlnatest.Tree{
