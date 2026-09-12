@@ -1,8 +1,9 @@
 import { h } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
+import { PresetPicker } from './PresetPicker.js';
 
 const html = htm.bind(h);
 
@@ -13,19 +14,17 @@ function fmt(secs) {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// PresetPicker — ★ star button in the top-right corner of the now-playing card.
-// Translucent when nothing is mapped; golden when the current content already
-// exists in one of the device's presets, in which case the tooltip names the
-// slot.  Click to open a slot picker (1–6).
-function PresetPicker({ deviceId, nowPlaying, presets }) {
-    const [open, setOpen] = useState(false);
-    const [savingSlot, setSavingSlot] = useState(null);
-    const [savedSlot, setSavedSlot] = useState(null);
-    const [errorSlot, setErrorSlot] = useState(null);
-    const wrapRef = useRef(null);
-
+// NowPlayingPresetPicker — the ★ star button in the top-right corner of the
+// now-playing card. Translucent when nothing is mapped; golden when the
+// current content already exists in one of the device's presets, in which
+// case the tooltip names the slot.
+//
+// The popover itself lives in PresetPicker, shared with the Library rows
+// (issue 700). Here the store is a single request against whatever is already
+// playing, so its result is known immediately and shown inline.
+function NowPlayingPresetPicker({ deviceId, nowPlaying, presets }) {
     // Detect whether the current content is already saved as any preset.
-    const currentSource   = nowPlaying?.ContentItem?.Source;
+    const currentSource = nowPlaying?.ContentItem?.Source;
     const currentLocation = nowPlaying?.ContentItem?.Location;
     const presetList = presets?.Preset ?? [];
     // Keep the matching preset, not just a boolean, so the tooltip can name
@@ -33,67 +32,22 @@ function PresetPicker({ deviceId, nowPlaying, presets }) {
     const mappedPreset = currentLocation
         ? presetList.find(p =>
             p.ContentItem?.Location === currentLocation &&
-            p.ContentItem?.Source   === currentSource)
+            p.ContentItem?.Source === currentSource)
         : undefined;
-    const isMapped = !!mappedPreset;
-    const favTitle = isMapped
-        ? `Saved as preset ${mappedPreset.ID}. Save again to update.`
-        : 'Save as preset';
-
-    // Close popover on outside click.
-    useEffect(() => {
-        if (!open) return;
-        function onDocClick(e) {
-            if (!wrapRef.current?.contains(e.target)) setOpen(false);
-        }
-        document.addEventListener('click', onDocClick, true);
-        return () => document.removeEventListener('click', onDocClick, true);
-    }, [open]);
-
-    // Mirrors the feedback the preset tiles give (see Presets.js): a failed
-    // save used to close the overlay silently, which looked identical to a
-    // successful one.
-    function finish(setter, slotId) {
-        setSavingSlot(null);
-        setter(slotId);
-        setTimeout(() => {
-            setter(null);
-            setOpen(false);
-        }, 900);
-    }
 
     function save(slotId) {
-        setSavingSlot(slotId);
-        api.storePreset(deviceId, slotId)
-            .then(res => finish(res.success ? setSavedSlot : setErrorSlot, slotId))
-            .catch(() => finish(setErrorSlot, slotId));
+        return api.storePreset(deviceId, slotId).then(res => {
+            if (!res?.success) throw new Error(res?.error || 'preset save failed');
+        });
     }
 
-    return html`
-        <div class="now-playing-fav-wrap" ref=${wrapRef}>
-            <button
-                class="now-playing-fav-btn ${isMapped ? 'mapped' : ''} ${open ? 'open' : ''}"
-                onClick=${() => setOpen(o => !o)}
-                title=${favTitle}
-                aria-label=${favTitle}
-            >★</button>
-            ${open && html`
-                <div class="now-playing-fav-overlay">
-                    <div class="preset-picker-label">Save as preset</div>
-                    <div class="preset-picker-slots">
-                        ${[1, 2, 3, 4, 5, 6].map(n => html`
-                            <button
-                                key=${n}
-                                class="preset-picker-slot ${savingSlot === n ? 'saving' : savedSlot === n ? 'saved' : errorSlot === n ? 'error' : ''}"
-                                onClick=${() => save(n)}
-                                disabled=${savingSlot !== null}
-                            >${savedSlot === n ? '✓' : errorSlot === n ? '✗' : n}</button>
-                        `)}
-                    </div>
-                </div>
-            `}
-        </div>
-    `;
+    return html`<${PresetPicker}
+        onSave=${save}
+        mappedSlot=${mappedPreset ? mappedPreset.ID : null}
+        wrapClass="now-playing-fav-wrap"
+        buttonClass="now-playing-fav-btn"
+        overlayClass="now-playing-fav-overlay"
+    />`;
 }
 
 export function NowPlaying({ nowPlaying, deviceId, presets }) {
@@ -161,7 +115,7 @@ export function NowPlaying({ nowPlaying, deviceId, presets }) {
                 `}
             </div>
             ${deviceId && html`
-                <${PresetPicker}
+                <${NowPlayingPresetPicker}
                     deviceId=${deviceId}
                     nowPlaying=${nowPlaying}
                     presets=${presets}

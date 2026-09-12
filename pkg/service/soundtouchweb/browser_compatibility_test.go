@@ -3279,3 +3279,58 @@ func TestStaleSourcesRemainVisibleButCannotBeSelected(t *testing.T) {
 		t.Errorf("empty inventory: hidden=%v staleAnnounced=%v", emptyInventoryHidden, staleEmptyAnnounced)
 	}
 }
+
+// TestNowPlayingStarSavesThroughTheSharedPicker renders the now-playing card
+// in Chrome and saves the current content to a slot. The card's star was
+// extracted into the shared PresetPicker for issue 700 and nothing exercised
+// it in a browser, so two module-level mistakes (a missing import, and the
+// card rendering the shared picker directly with the wrapper's props) went
+// unnoticed: both leave the star gone or inert at runtime.
+func TestNowPlayingStarSavesThroughTheSharedPicker(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { NowPlaying } from '/app/static/js/components/NowPlaying.js';
+const nowPlaying = {
+  Source: 'STORED_MUSIC', PlayStatus: 'PLAY_STATE', Track: 'Great Song',
+  ContentItem: { Source: 'STORED_MUSIC', Location: '5:audio5:part13:3171:5 TRACK', ItemName: 'Great Song' },
+};
+const presets = { Preset: [{ ID: 2, ContentItem: { Source: 'STORED_MUSIC', Location: '5:audio5:part13:3171:5 TRACK' } }] };
+render(h(NowPlaying, { nowPlaying, deviceId: 'speaker', presets }), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	var slots []string
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/action/storepreset", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			slots = append(slots, req.URL.Query().Get("id"))
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var starTitle string
+	var mapped bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.now-playing-fav-btn`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.now-playing-fav-btn').title`, &starTitle),
+		chromedp.Evaluate(`document.querySelector('.now-playing-fav-btn').classList.contains('mapped')`, &mapped),
+		chromedp.Click(`.now-playing-fav-btn`, chromedp.ByQuery),
+		chromedp.Click(`.preset-picker-slot:nth-child(5)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.preset-picker-slot.saved')?.textContent === '✓'`, nil),
+	); err != nil {
+		t.Fatalf("save the now-playing content as a preset: %v", err)
+	}
+
+	if !mapped || !strings.Contains(starTitle, "preset 2") {
+		t.Errorf("now-playing star: mapped=%v title=%q, want it marked and naming preset 2", mapped, starTitle)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(slots) != 1 || slots[0] != "5" {
+		t.Errorf("storepreset calls = %v, want one for slot 5", slots)
+	}
+}
