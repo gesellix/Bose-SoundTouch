@@ -377,12 +377,9 @@ func TestWebSocketConfigReconnectToggle(t *testing.T) {
 // registering an OnUnknownEvent handler opts out of the client's own fallback
 // log, which was the only other caller.
 func TestHandleUnknownEventNamesTheElement(t *testing.T) {
-	// Captured from a SoundTouch 10 (FW 27.0.6) when a STORED_MUSIC folder is
-	// selected. nowSelectionUpdated is not modelled yet.
-	raw := []byte(`<updates deviceID="DEVICEID01"><nowSelectionUpdated>` +
-		`<preset id="0"><ContentItem source="STORED_MUSIC" type="dir" location="4:cont2:615:part12:39"` +
-		` isPresetable="true"><itemName>Swissgroove</itemName></ContentItem></preset>` +
-		`</nowSelectionUpdated></updates>`)
+	// Any <updates> child we do not model yet. nowSelectionUpdated used to
+	// stand in here and is modelled now, so this uses a name that is not.
+	raw := []byte(`<updates deviceID="DEVICEID01"><someFutureUpdated><whatever/></someFutureUpdated></updates>`)
 
 	event, err := models.ParseWebSocketEvent(raw)
 	if err != nil {
@@ -391,7 +388,39 @@ func TestHandleUnknownEventNamesTheElement(t *testing.T) {
 
 	out := captureStdout(t, func() { handleUnknownEvent(event, true) })
 
-	if !strings.Contains(out, "nowSelectionUpdated") {
+	if !strings.Contains(out, "someFutureUpdated") {
 		t.Errorf("unknown-event output does not name the element:\n%s", out)
+	}
+}
+
+// TestHandleNowSelectionEventPrintsTheSelection: the frame that used to print
+// as "Unmodelled element" now names what the speaker selected.
+func TestHandleNowSelectionEventPrintsTheSelection(t *testing.T) {
+	// Captured from a SoundTouch 10 when a STORED_MUSIC folder is selected.
+	raw := []byte(`<updates deviceID="DEVICEID01"><nowSelectionUpdated>` +
+		`<preset id="0"><ContentItem source="STORED_MUSIC" type="dir" location="4:cont2:615:part12:39"` +
+		` isPresetable="true"><itemName>A Folder</itemName></ContentItem></preset>` +
+		`</nowSelectionUpdated></updates>`)
+
+	event, err := models.ParseWebSocketEvent(raw)
+	if err != nil {
+		t.Fatalf("ParseWebSocketEvent: %v", err)
+	}
+
+	if len(event.UnknownEventNames()) != 0 {
+		t.Errorf("still reported as unmodelled: %v", event.UnknownEventNames())
+	}
+
+	out := captureStdout(t, func() { handleNowSelectionEvent(event.NowSelectionUpdated, true) })
+
+	for _, want := range []string{"DEVICEID01", "A Folder", "STORED_MUSIC", "4:cont2:615:part12:39"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("now-selection output does not contain %q:\n%s", want, out)
+		}
+	}
+
+	// Preset id 0 means "not a stored preset", so no slot should be claimed.
+	if strings.Contains(out, "Preset:") {
+		t.Errorf("output claims a preset slot for id 0:\n%s", out)
 	}
 }

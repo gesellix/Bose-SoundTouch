@@ -210,7 +210,7 @@ func parseEventFilters(eventFilter string) map[string]bool {
 		"nowPlaying": true, "volume": true, "connection": true,
 		"preset": true, "zone": true, "group": true, "bass": true,
 		"sdkInfo": true, "userActivity": true, "userInactivity": true,
-		"errors": true, "balance": true,
+		"errors": true, "balance": true, "nowSelection": true,
 	}
 
 	if eventFilter == "" {
@@ -293,6 +293,13 @@ func setupEventHandlers(wsClient *client.WebSocketClient, filters map[string]boo
 	if filters == nil || filters["preset"] {
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
 			handlePresetEvent(event, verbose)
+		})
+	}
+
+	// Now-selection events
+	if filters == nil || filters["nowSelection"] {
+		wsClient.OnNowSelection(func(event *models.NowSelectionUpdatedEvent) {
+			handleNowSelectionEvent(event, verbose)
 		})
 	}
 
@@ -608,6 +615,44 @@ func handleBalanceEvent(_ *models.BalanceUpdatedEvent, verbose bool) {
 
 	if verbose {
 		fmt.Printf("  ⏰ Timestamp: %s\n", time.Now().Format("15:04:05"))
+	}
+}
+
+// handleNowSelectionEvent prints what the speaker now considers selected. It
+// arrives alongside nowPlayingUpdated and names the ContentItem the speaker
+// acted on, which is the identity a selection can be checked against.
+func handleNowSelectionEvent(event *models.NowSelectionUpdatedEvent, verbose bool) {
+	fmt.Printf("\n🎯 Now Selection Updated [%s]:\n", event.DeviceID)
+
+	item := event.SelectedContentItem()
+	if item == nil {
+		fmt.Printf("  ⏹️  No selection reported\n")
+
+		return
+	}
+
+	if item.ItemName != "" {
+		fmt.Printf("  🎵 %s\n", item.ItemName)
+	}
+
+	fmt.Printf("  📻 Source: %s\n", item.Source)
+
+	if item.SourceAccount != "" {
+		fmt.Printf("  👤 Account: %s\n", item.SourceAccount)
+	}
+
+	if id, ok := event.PresetID(); ok {
+		fmt.Printf("  ⭐ Preset: %d\n", id)
+	}
+
+	if verbose {
+		if item.Type != "" {
+			fmt.Printf("  🏷️  Type: %s\n", item.Type)
+		}
+
+		if item.Location != "" {
+			fmt.Printf("  📍 Location: %s\n", item.Location)
+		}
 	}
 }
 

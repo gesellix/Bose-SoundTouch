@@ -153,6 +153,15 @@ func (ws *WebSocketClient) OnPresetUpdated(handler models.TypedEventHandler[*mod
 	ws.handlers.OnPresetUpdated = handler
 }
 
+// OnNowSelection sets a handler for now-selection update events, which report
+// the ContentItem the speaker considers selected.
+func (ws *WebSocketClient) OnNowSelection(handler models.TypedEventHandler[*models.NowSelectionUpdatedEvent]) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	ws.handlers.OnNowSelection = handler
+}
+
 // OnZoneUpdated sets a handler for zone update events
 func (ws *WebSocketClient) OnZoneUpdated(handler models.TypedEventHandler[*models.ZoneUpdatedEvent]) {
 	ws.mu.Lock()
@@ -769,6 +778,23 @@ func (ws *WebSocketClient) dispatchTypedEventContinued(handlers *models.WebSocke
 		return true
 
 	case models.EventTypeLanguageUpdated:
+		return true
+
+	default:
+		return ws.dispatchTypedEventTail(handlers, eventType, event)
+	}
+}
+
+// dispatchTypedEventTail carries the events added after the switch above
+// reached the complexity limit. Splitting the chain keeps each switch within
+// it rather than suppressing the check.
+func (ws *WebSocketClient) dispatchTypedEventTail(handlers *models.WebSocketEventHandlers, eventType models.WebSocketEventType, event *models.WebSocketEvent) bool {
+	switch eventType {
+	case models.EventTypeNowSelectionUpdated:
+		if handlers.OnNowSelection != nil && event.NowSelectionUpdated != nil {
+			handlers.OnNowSelection(event.NowSelectionUpdated)
+		}
+
 		return true
 
 	default:
