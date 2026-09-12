@@ -593,12 +593,11 @@ func TestCreateMockWebSocketEvent(t *testing.T) {
 }
 
 // TestParseWebSocketEvent_UnknownElements verifies that an <updates> envelope
-// whose only child is an unmodeled element (e.g. nowSelectionUpdated, observed
-// on real SoundTouch 10 firmware) parses with no known event types but with
-// the element captured by name, so callers can log something useful instead
-// of an empty list.
+// whose only child is an unmodeled element parses with no known event types
+// but with the element captured by name, so callers can log something useful
+// instead of an empty list.
 func TestParseWebSocketEvent_UnknownElements(t *testing.T) {
-	raw := []byte(`<updates deviceID="A81B6A536A98"><nowSelectionUpdated><preset id="0"><ContentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s308770" sourceAccount="" isPresetable="true"><itemName>Willy</itemName></ContentItem></preset></nowSelectionUpdated></updates>`)
+	raw := []byte(`<updates deviceID="DEVICEID01"><someFutureUpdated><whatever/></someFutureUpdated></updates>`)
 
 	event, err := ParseWebSocketEvent(raw)
 	if err != nil {
@@ -610,8 +609,115 @@ func TestParseWebSocketEvent_UnknownElements(t *testing.T) {
 	}
 
 	names := event.UnknownEventNames()
-	if len(names) != 1 || names[0] != "nowSelectionUpdated" {
-		t.Errorf("expected [nowSelectionUpdated], got %v", names)
+	if len(names) != 1 || names[0] != "someFutureUpdated" {
+		t.Errorf("expected [someFutureUpdated], got %v", names)
+	}
+}
+
+// TestParseWebSocketEvent_NowSelectionUpdated pins the two shapes captured on
+// SoundTouch 10 firmware: a TuneIn station and a stored-music container. The
+// preset id is 0 in both, because neither selection came from a preset slot.
+func TestParseWebSocketEvent_NowSelectionUpdated(t *testing.T) {
+	tests := []struct {
+		name         string
+		raw          string
+		wantSource   string
+		wantType     string
+		wantLocation string
+		wantItemName string
+	}{
+		{
+			name:         "tunein station",
+			raw:          `<updates deviceID="DEVICEID01"><nowSelectionUpdated><preset id="0"><ContentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s308770" sourceAccount="" isPresetable="true"><itemName>A Station</itemName></ContentItem></preset></nowSelectionUpdated></updates>`,
+			wantSource:   "TUNEIN",
+			wantType:     "stationurl",
+			wantLocation: "/v1/playback/station/s308770",
+			wantItemName: "A Station",
+		},
+		{
+			name:         "stored music container",
+			raw:          `<updates deviceID="DEVICEID01"><nowSelectionUpdated><preset id="0"><ContentItem source="STORED_MUSIC" type="dir" location="4:cont2:615:part12:39" isPresetable="true"><itemName>A Folder</itemName></ContentItem></preset></nowSelectionUpdated></updates>`,
+			wantSource:   "STORED_MUSIC",
+			wantType:     "dir",
+			wantLocation: "4:cont2:615:part12:39",
+			wantItemName: "A Folder",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			event, err := ParseWebSocketEvent([]byte(test.raw))
+			if err != nil {
+				t.Fatalf("ParseWebSocketEvent: %v", err)
+			}
+
+			if names := event.UnknownEventNames(); len(names) != 0 {
+				t.Errorf("modeled event still reported as unknown: %v", names)
+			}
+
+			types := event.GetEventTypes()
+			if len(types) != 1 || types[0] != EventTypeNowSelectionUpdated {
+				t.Fatalf("event types = %v, want [%s]", types, EventTypeNowSelectionUpdated)
+			}
+
+			selection := event.NowSelectionUpdated
+			if selection == nil {
+				t.Fatal("NowSelectionUpdated is nil")
+			}
+
+			// The device ID lives on <updates> and is copied down to children.
+			if selection.DeviceID != "DEVICEID01" {
+				t.Errorf("deviceID = %q, want DEVICEID01", selection.DeviceID)
+			}
+
+			if _, ok := selection.PresetID(); ok {
+				t.Error("preset id 0 reported as a stored preset")
+			}
+
+			item := selection.SelectedContentItem()
+			if item == nil {
+				t.Fatal("SelectedContentItem is nil")
+			}
+
+			if item.Source != test.wantSource || item.Type != test.wantType ||
+				item.Location != test.wantLocation || item.ItemName != test.wantItemName {
+				t.Errorf("content item = %+v, want source=%q type=%q location=%q itemName=%q",
+					item, test.wantSource, test.wantType, test.wantLocation, test.wantItemName)
+			}
+		})
+	}
+}
+
+// A non-zero preset id names the slot the selection came from.
+func TestNowSelectionUpdatedReportsAPresetSlot(t *testing.T) {
+	raw := []byte(`<updates deviceID="DEVICEID01"><nowSelectionUpdated><preset id="4"><ContentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s1" isPresetable="true"><itemName>A Station</itemName></ContentItem></preset></nowSelectionUpdated></updates>`)
+
+	event, err := ParseWebSocketEvent(raw)
+	if err != nil {
+		t.Fatalf("ParseWebSocketEvent: %v", err)
+	}
+
+	id, ok := event.NowSelectionUpdated.PresetID()
+	if !ok || id != 4 {
+		t.Errorf("PresetID() = (%d, %t), want (4, true)", id, ok)
+	}
+}
+
+// The accessors are nil-safe, since a frame may carry no preset at all.
+func TestNowSelectionUpdatedAccessorsTolerateEmptyFrames(t *testing.T) {
+	var nilEvent *NowSelectionUpdatedEvent
+
+	if nilEvent.SelectedContentItem() != nil {
+		t.Error("SelectedContentItem on a nil event is not nil")
+	}
+
+	if _, ok := nilEvent.PresetID(); ok {
+		t.Error("PresetID on a nil event reported a slot")
+	}
+
+	empty := &NowSelectionUpdatedEvent{}
+	if empty.SelectedContentItem() != nil {
+		t.Error("SelectedContentItem without a preset is not nil")
 	}
 }
 

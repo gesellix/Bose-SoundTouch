@@ -42,6 +42,9 @@ const (
 	EventTypeRecentsUpdated WebSocketEventType = "recentsUpdated"
 	// EventTypeLanguageUpdated indicates a language setting change
 	EventTypeLanguageUpdated WebSocketEventType = "languageUpdated"
+	// EventTypeNowSelectionUpdated reports what the speaker now considers
+	// selected, as a preset slot wrapping the ContentItem.
+	EventTypeNowSelectionUpdated WebSocketEventType = "nowSelectionUpdated"
 	// EventTypePairDeviceWithAccount indicates a device pairing request
 	EventTypePairDeviceWithAccount WebSocketEventType = "PairDeviceWithAccount"
 	// EventTypeUnPairDeviceWithAccount indicates a device unpairing request
@@ -85,6 +88,8 @@ func (e WebSocketEventType) String() string {
 		return "Pair Device With Account"
 	case EventTypeUnPairDeviceWithAccount:
 		return "UnPair Device With Account"
+	case EventTypeNowSelectionUpdated:
+		return "Now Selection Updated"
 	default:
 		return "Unknown Event"
 	}
@@ -108,6 +113,7 @@ type WebSocketEvent struct {
 	ErrorUpdated           *ErrorUpdatedEvent           `xml:"errorUpdated,omitempty"`
 	RecentsUpdated         *RecentsUpdatedEvent         `xml:"recentsUpdated,omitempty"`
 	LanguageUpdated        *LanguageUpdatedEvent        `xml:"languageUpdated,omitempty"`
+	NowSelectionUpdated    *NowSelectionUpdatedEvent    `xml:"nowSelectionUpdated,omitempty"`
 	// UnknownElements captures <updates> children we don't model yet (e.g.
 	// nowSelectionUpdated), so callers can log them by name instead of an
 	// empty list when no known event matched.
@@ -150,6 +156,10 @@ func (e *WebSocketEvent) GetEvents() []interface{} {
 
 	if e.PresetUpdated != nil {
 		events = append(events, e.PresetUpdated)
+	}
+
+	if e.NowSelectionUpdated != nil {
+		events = append(events, e.NowSelectionUpdated)
 	}
 
 	if e.ZoneUpdated != nil {
@@ -400,7 +410,46 @@ type Error struct {
 	Text     string   `xml:",chardata"`
 }
 
-// RecentsUpdatedEvent represents a recent items update event
+// NowSelectionUpdatedEvent reports what the speaker now considers selected.
+// It arrives alongside nowPlayingUpdated after a selection, and carries the
+// ContentItem the speaker actually acted on, wrapped in a preset element.
+//
+// Observed on SoundTouch 10 firmware for TUNEIN (a station) and STORED_MUSIC
+// (a container). The preset id is 0 for a selection that is not a stored
+// preset, so it identifies a slot only when non-zero.
+type NowSelectionUpdatedEvent struct {
+	XMLName  xml.Name            `xml:"nowSelectionUpdated"`
+	DeviceID string              `xml:"deviceID,attr"`
+	Preset   *NowSelectionPreset `xml:"preset"`
+}
+
+// NowSelectionPreset is the preset wrapper inside a nowSelectionUpdated event.
+type NowSelectionPreset struct {
+	ID          int          `xml:"id,attr"`
+	ContentItem *ContentItem `xml:"ContentItem"`
+}
+
+// SelectedContentItem returns the ContentItem this selection names, or nil
+// when the frame carried none.
+func (e *NowSelectionUpdatedEvent) SelectedContentItem() *ContentItem {
+	if e == nil || e.Preset == nil {
+		return nil
+	}
+
+	return e.Preset.ContentItem
+}
+
+// PresetID returns the preset slot this selection came from, and false when
+// the selection is not a stored preset.
+func (e *NowSelectionUpdatedEvent) PresetID() (int, bool) {
+	if e == nil || e.Preset == nil || e.Preset.ID <= 0 {
+		return 0, false
+	}
+
+	return e.Preset.ID, true
+}
+
+// RecentsUpdatedEvent represents a recents update event
 type RecentsUpdatedEvent struct {
 	XMLName  xml.Name `xml:"recentsUpdated"`
 	DeviceID string   `xml:"deviceID,attr"`
@@ -531,6 +580,7 @@ type WebSocketEventHandlers struct {
 	OnNameUpdated         TypedEventHandler[*NameUpdatedEvent]
 	OnErrorUpdated        TypedEventHandler[*ErrorUpdatedEvent]
 	OnRecentsUpdated      TypedEventHandler[*RecentsUpdatedEvent]
+	OnNowSelection        TypedEventHandler[*NowSelectionUpdatedEvent]
 	OnLanguageUpdated     TypedEventHandler[*LanguageUpdatedEvent]
 	OnUnknownEvent        EventHandler
 	// OnDeviceError fires for root-level <errorUpdate> frames — the
@@ -637,6 +687,10 @@ func (e *WebSocketEvent) propagateDeviceID() {
 
 	if e.LanguageUpdated != nil {
 		targets = append(targets, &e.LanguageUpdated.DeviceID)
+	}
+
+	if e.NowSelectionUpdated != nil {
+		targets = append(targets, &e.NowSelectionUpdated.DeviceID)
 	}
 
 	for _, target := range targets {
@@ -859,6 +913,10 @@ func (e *WebSocketEvent) GetEventTypes() []WebSocketEventType {
 
 	if e.LanguageUpdated != nil {
 		types = append(types, EventTypeLanguageUpdated)
+	}
+
+	if e.NowSelectionUpdated != nil {
+		types = append(types, EventTypeNowSelectionUpdated)
 	}
 
 	return types
