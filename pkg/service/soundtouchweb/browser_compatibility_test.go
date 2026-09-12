@@ -1175,6 +1175,84 @@ render(h(Fixture), document.getElementById('fixture'));
 	}
 }
 
+// TestRecentsBorrowArtworkFromAMatchingPreset: the speaker sends no artwork
+// with /recents (measured on a SoundTouch 10: every preset carried
+// containerArt and not one of ten recents did), so the player borrows it from
+// a preset for the same content. The recents entry here also carries the
+// echoed source-name account the speaker writes there, which is what a naive
+// comparison against the preset's empty account would miss.
+func TestRecentsBorrowArtworkFromAMatchingPreset(t *testing.T) {
+	const art = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+
+	fixture := `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: { Source: 'TUNEIN', PlayStatus: 'PLAY_STATE' },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [{ ID: 1, ContentItem: {
+    Source: 'TUNEIN', SourceAccount: '', Location: '/v1/playback/station/s6634',
+    ItemName: 'A Station', ContainerArt: '` + art + `',
+  } }] },
+  sources: { SourceItem: [] },
+};
+function Fixture() {
+  const [devices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  return h(DeviceDetail, { deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500] });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{"Items": []any{
+				// No ContainerArt, and the account the speaker echoes back.
+				map[string]any{"ID": "recent-1", "ContentItem": map[string]any{
+					"Source": "TUNEIN", "SourceAccount": "TUNEIN",
+					"Location": "/v1/playback/station/s6634", "ItemName": "A Station",
+				}},
+				map[string]any{"ID": "recent-2", "ContentItem": map[string]any{
+					"Source": "TUNEIN", "SourceAccount": "TUNEIN",
+					"Location": "/v1/playback/station/s999999", "ItemName": "Not A Preset",
+				}},
+			}}})
+		})
+		r.Get("/api/control/devices/speaker/zone", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/zone/candidates", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	var borrowed string
+
+	var fallbacks int
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.recent-item`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('.recent-item img.recent-art')?.getAttribute('src') || ''`, &borrowed),
+		// The entry with no matching preset keeps the source-icon placeholder.
+		chromedp.Evaluate(`document.querySelectorAll('.recent-art-empty').length`, &fallbacks),
+	); err != nil {
+		t.Fatalf("exercise recents artwork borrowing: %v", err)
+	}
+
+	if borrowed != art {
+		t.Errorf("recents artwork = %q, want the matching preset's art", borrowed)
+	}
+
+	if fallbacks != 1 {
+		t.Errorf("source-icon fallbacks = %d, want 1 for the entry with no matching preset", fallbacks)
+	}
+}
+
 // TestEmptyPresetSlotStaysSavableWhileACommandIsPending: an empty slot's
 // tile is a save gesture, not a playback command, so an in-flight command
 // has no reason to disable it -- and the sibling star button, which saves the

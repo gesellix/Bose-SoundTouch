@@ -297,6 +297,7 @@ export function DeviceDetail({
             <${Zone} deviceId=${deviceId} devices=${devices} />
             <${Recents}
                 deviceId=${deviceId}
+                presets=${device.status?.presets}
                 command=${command}
                 commandBusy=${commandBusy}
                 onPlay=${playRecent}
