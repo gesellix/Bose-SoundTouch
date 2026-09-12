@@ -429,8 +429,12 @@ else
   echo "  http://localhost:8000 isn't responding. The daemon may have" >&2
   echo "  panicked shortly after start. Recent aftertouch syslog:" >&2
   echo "" >&2
-  logread 2>/dev/null | grep aftertouch | tail -20 >&2 || \
-    echo "  (logread returned nothing for tag 'aftertouch'; the daemon" >&2
+  logread 2>/dev/null | grep aftertouch | tail -20 >&2 || {
+    echo "  (logread returned nothing for tag 'aftertouch': the daemon may" >&2
+    echo "   have died before it could log anything, or syslogd is not" >&2
+    echo "   running on this firmware. Try '/etc/init.d/aftertouch status'" >&2
+    echo "   and 'logread | tail -50'.)" >&2
+  }
   echo "" >&2
   echo "  For a live view of the daemon's output, run:" >&2
   echo "    logread -f | grep aftertouch" >&2
