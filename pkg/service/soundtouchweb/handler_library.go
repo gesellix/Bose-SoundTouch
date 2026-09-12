@@ -40,6 +40,18 @@ type libraryEntry struct {
 	SourceAccount string `json:"sourceAccount"`
 	Playable      bool   `json:"playable"`
 	IsDir         bool   `json:"isDir"`
+
+	// IsPresetable reports the speaker's own isPresetable attribute for this
+	// item, which is what says whether it can be saved to a preset slot. It
+	// was previously dropped here, so the UI had no way to know.
+	//
+	// Read false as "unknown", not "no": models.ContentItem.IsPresetable is a
+	// plain bool, so an absent attribute and an explicit false are the same
+	// value by the time it reaches us. Both media servers measured (a
+	// FRITZ!Box UPnP server and this repo's example-dlna-server) reported
+	// true on every directory and track, so a false in practice means the
+	// attribute was missing.
+	IsPresetable bool `json:"isPresetable"`
 }
 
 // libraryPage wraps a slice of libraryEntry as the Data payload.
@@ -445,8 +457,14 @@ func (app *WebApp) HandleLibraryBrowse(w http.ResponseWriter, r *http.Request) {
 
 	for _, item := range resp.Items {
 		loc := ""
+		presetable := false
+
+		// The item's own ContentItem, not the one inside mediaItemContainer:
+		// that one repeats the parent container identically on every item.
+		// models.NavigateItem keeps them apart.
 		if item.ContentItem != nil {
 			loc = item.ContentItem.Location
+			presetable = item.ContentItem.IsPresetable
 		}
 
 		entries = append(entries, libraryEntry{
@@ -456,6 +474,7 @@ func (app *WebApp) HandleLibraryBrowse(w http.ResponseWriter, r *http.Request) {
 			SourceAccount: account,
 			Playable:      item.Playable == 1,
 			IsDir:         item.Type == "dir",
+			IsPresetable:  presetable,
 		})
 	}
 

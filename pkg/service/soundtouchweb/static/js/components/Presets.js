@@ -10,6 +10,10 @@ const SOURCE_LABELS = {
     TUNEIN: 'TuneIn', SPOTIFY: 'Spotify', AMAZON: 'Amazon',
     PANDORA: 'Pandora', IHEARTRADIO: 'iHeart', DEEZER: 'Deezer',
     LOCAL_INTERNET_RADIO: 'Internet Radio',
+    // A folder or track from a DLNA/NAS media server. Without this the tile
+    // showed the raw source name (issue 700).
+    STORED_MUSIC: 'Library',
+    RADIO_BROWSER: 'Radio Browser',
 };
 
 function sourceLabel(source) {
