@@ -7,6 +7,13 @@ The icon represents the letters **S** and **T** in international Morse code:
 - **S**: `...` (three dots), displayed in blue.
 - **T**: `-` (one long dash), displayed in yellow.
 
+## Editable Source
+
+The Braille icons in this directory are exports, not originals. The source
+document is `media/favicon-braille.afphoto` (Affinity Photo) — every
+`favicon-braille.*` image, here and in `media/`, is exported from it. Change
+the icon there and re-export; don't edit a PNG, SVG or ICO by hand.
+
 ## Braille Variant (`favicon-braille.*`)
 The icon uses the 6-dot Braille grid to represent a stylized combination of the letters **S** and **T**:
 - The blue dots represent the base shape.
