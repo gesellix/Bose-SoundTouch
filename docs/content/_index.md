@@ -41,7 +41,7 @@ layout: hextra-home
   >}}
   {{< hextra/feature-card
     title="Stereo Pairing"
-    subtitle="SoundTouch 10 stereo pairing via soundtouch-cli, no Bose cloud required."
+    subtitle="SoundTouch 10 stereo pairing via soundtouch-player and soundtouch-cli, no Bose cloud required."
     icon="adjustments"
   >}}
   {{< hextra/feature-card

@@ -19,7 +19,7 @@ What **continues to work** regardless:
 
 - **Presets** — full preset management including long-press assignment and recently-played sync; music service presets (Spotify, TuneIn, etc.) work once the service is linked (see [Connecting Music Services](MUSIC-SERVICES.md))
 - **Music browsing and playback** — TuneIn, Internet Radio, and RadioBrowser via `soundtouch-player`; direct station/URL playback via `soundtouch-cli`; Spotify via Spotify Connect (speaker-native) or AfterTouch's OAuth integration; Amazon Music OAuth infrastructure is in place but streaming is not yet verified
-- **Stereo pairing** — via `soundtouch-cli`
+- **Stereo pairing** — via `soundtouch-player` (a speaker's detail page) or `soundtouch-cli`
 
 Alexa voice commands are not currently supported.
 
