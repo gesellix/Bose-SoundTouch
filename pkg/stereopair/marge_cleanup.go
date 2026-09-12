@@ -270,9 +270,9 @@ func MargeGroupGenerationURL(ref GenerationRef) (string, error) {
 }
 
 // EnsureMargeNoGroupGenerations checks that the backend has no persisted group
-// for speakers already proven physically standalone by the coordinator. The
-// check is deliberately read-only so it cannot retire a concurrently created
-// physical generation.
+// for speakers whose fresh physical group state is empty. The check is
+// deliberately read-only so it cannot retire a concurrently created physical
+// generation.
 func EnsureMargeNoGroupGenerations(httpClient *http.Client, refs []GenerationRef) error {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
@@ -294,7 +294,7 @@ func EnsureMargeNoGroupGenerations(httpClient *http.Client, refs []GenerationRef
 			return errors.New("marge returned an unsafe or unrelated stale group generation")
 		}
 
-		return fmt.Errorf("persisted group generation %s still contains standalone device %s",
+		return fmt.Errorf("persisted group generation %s still contains device %s",
 			group.ID, ref.DeviceID)
 	}
 
