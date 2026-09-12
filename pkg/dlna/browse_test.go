@@ -252,3 +252,69 @@ func TestIsAudioItem(t *testing.T) {
 		}
 	}
 }
+
+// TestMetadata_ContainerAlbumArt covers the single-object lookup and the
+// container's own artwork. Both exist for the same reason: a SoundTouch
+// speaker's /navigate response carries no artwork at all (measured on
+// hardware), so saving a library folder as a preset has to ask the media
+// server, and a container's albumArtURI is the only art a folder has.
+//
+// BrowseMetadata is the cheap way to ask, since it describes exactly the one
+// object whose ID we already hold.
+func TestMetadata_ContainerAlbumArt(t *testing.T) {
+	tree := &dlnatest.Tree{Containers: []*dlnatest.Container{{
+		ID:         "1$6$7$2",
+		ParentID:   "1$6$7",
+		Title:      "Some Album",
+		Class:      "object.container.album.musicAlbum",
+		ArtPayload: []byte{0x89, 'P', 'N', 'G'},
+		ArtMime:    "image/png",
+		Children: []*dlnatest.Item{{
+			ID:         "1$6$7$2$5",
+			ParentID:   "1$6$7$2",
+			Title:      "Great Song",
+			Class:      "object.item.audioItem.musicTrack",
+			MimeType:   "audio/mpeg",
+			ArtPayload: []byte{0x89, 'P', 'N', 'G'},
+			ArtMime:    "image/jpeg",
+		}},
+	}}}
+
+	ts, _ := dlnatest.NewHTTPTest(dlnatest.WithTree(tree))
+	defer ts.Close()
+
+	srv := discovery.MediaServer{
+		FriendlyName:  "Test Server",
+		CDSControlURL: ts.URL + "/ctl/ContentDir",
+	}
+
+	ctx := context.Background()
+
+	container, err := dlna.Metadata(ctx, srv, "1$6$7$2")
+	if err != nil {
+		t.Fatalf("Metadata container: %v", err)
+	}
+
+	if len(container.Containers) != 1 || len(container.Items) != 0 {
+		t.Fatalf("Metadata container: got %d containers / %d items, want exactly 1 container",
+			len(container.Containers), len(container.Items))
+	}
+
+	if art := container.Containers[0].AlbumArtURL; art == "" {
+		t.Error("container metadata carries no AlbumArtURL")
+	}
+
+	item, err := dlna.Metadata(ctx, srv, "1$6$7$2$5")
+	if err != nil {
+		t.Fatalf("Metadata item: %v", err)
+	}
+
+	if len(item.Items) != 1 || len(item.Containers) != 0 {
+		t.Fatalf("Metadata item: got %d containers / %d items, want exactly 1 item",
+			len(item.Containers), len(item.Items))
+	}
+
+	if art := item.Items[0].AlbumArtURL; art == "" {
+		t.Error("item metadata carries no AlbumArtURL")
+	}
+}

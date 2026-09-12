@@ -31,6 +31,12 @@ type Container struct {
 	ParentID   string
 	Title      string
 	ChildCount int
+	// AlbumArtURL is the container's own cover, which album containers
+	// generally carry: MiniDLNA reports it on every musicAlbum container (but
+	// not on its synthetic "- All Albums -" node). It is the only source of
+	// art for a folder, since a SoundTouch speaker's /navigate response
+	// carries no artwork at all.
+	AlbumArtURL string
 }
 
 // Item is a single playable object (track, photo, video). Use IsAudioItem to
@@ -64,16 +70,29 @@ func (it Item) IsAudioItem() bool {
 // objectID "0" is the server root. start is the page offset, count the page
 // size (0 defaults to 50 on the caller side so the request is always bounded).
 func Browse(ctx context.Context, srv discovery.MediaServer, objectID string, start, count int) (BrowseResult, error) {
+	if count <= 0 {
+		count = 50
+	}
+
+	return browse(ctx, srv, objectID, "BrowseDirectChildren", start, count)
+}
+
+// Metadata calls ContentDirectory:Browse with BrowseMetadata, which describes
+// one object rather than listing its children. The result holds exactly one
+// container or one item, so it is the cheapest way to answer a question about
+// a single known object ID (e.g. "what is this album's cover?") without
+// paging through its parent.
+func Metadata(ctx context.Context, srv discovery.MediaServer, objectID string) (BrowseResult, error) {
+	return browse(ctx, srv, objectID, "BrowseMetadata", 0, 1)
+}
+
+func browse(ctx context.Context, srv discovery.MediaServer, objectID, flag string, start, count int) (BrowseResult, error) {
 	if srv.CDSControlURL == "" {
 		return BrowseResult{}, fmt.Errorf("dlna: server %q has no ContentDirectory control URL", srv.FriendlyName)
 	}
 
 	if objectID == "" {
 		objectID = "0"
-	}
-
-	if count <= 0 {
-		count = 50
 	}
 
 	body := fmt.Sprintf(
@@ -83,7 +102,7 @@ func Browse(ctx context.Context, srv discovery.MediaServer, objectID string, sta
 			`<s:Body>`+
 			`<u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">`+
 			`<ObjectID>%s</ObjectID>`+
-			`<BrowseFlag>BrowseDirectChildren</BrowseFlag>`+
+			`<BrowseFlag>%s</BrowseFlag>`+
 			`<Filter>*</Filter>`+
 			`<StartingIndex>%d</StartingIndex>`+
 			`<RequestedCount>%d</RequestedCount>`+
@@ -91,7 +110,7 @@ func Browse(ctx context.Context, srv discovery.MediaServer, objectID string, sta
 			`</u:Browse>`+
 			`</s:Body>`+
 			`</s:Envelope>`,
-		xmlEscape(objectID), start, count,
+		xmlEscape(objectID), flag, start, count,
 	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.CDSControlURL, strings.NewReader(body))
@@ -146,6 +165,7 @@ type didlContainer struct {
 	ParentID   string `xml:"parentID,attr"`
 	ChildCount int    `xml:"childCount,attr"`
 	Title      string `xml:"title"`
+	AlbumArt   string `xml:"albumArtURI"`
 }
 
 type didlItem struct {
@@ -197,10 +217,11 @@ func parseBrowseResponse(raw []byte) (BrowseResult, error) {
 
 	for _, c := range didl.Containers {
 		out.Containers = append(out.Containers, Container{
-			ID:         c.ID,
-			ParentID:   c.ParentID,
-			Title:      c.Title,
-			ChildCount: c.ChildCount,
+			ID:          c.ID,
+			ParentID:    c.ParentID,
+			Title:       c.Title,
+			ChildCount:  c.ChildCount,
+			AlbumArtURL: strings.TrimSpace(c.AlbumArt),
 		})
 	}
 
