@@ -726,6 +726,87 @@ func (app *WebApp) handleStorePreset(w http.ResponseWriter, r *http.Request, dev
 	app.sendControlResponse(w, err, fmt.Sprintf("Stored current as preset %d", presetID))
 }
 
+// HandleStorePresetContent stores an explicitly named ContentItem in a preset
+// slot, without requiring that content to be playing first.
+//
+// The speaker's own /storePreset endpoint takes the ContentItem, so naming the
+// content is enough — the same path `soundtouch-cli preset store` has always
+// used. handleStorePreset above reaches for StoreCurrentAsPreset, which reads
+// /now_playing instead, and that is the only reason saving something from a
+// browser used to require playing it first (issue 700).
+//
+// Verified on hardware for the awkward case, a STORED_MUSIC folder: the
+// speaker accepted a ContentItem carrying no type attribute at all, and
+// recalling the preset played the folder from its first track. The speaker
+// then PUT the new preset back to AfterTouch's marge endpoint on its own, so
+// the datastore picks it up without this handler writing anything.
+func (app *WebApp) HandleStorePresetContent(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	slot, err := strconv.Atoi(chi.URLParam(r, "slot"))
+	if err != nil || slot < 1 || slot > 6 {
+		app.sendError(w, "Preset slot must be between 1 and 6", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Source        string `json:"source"`
+		Type          string `json:"type"`
+		Location      string `json:"location"`
+		SourceAccount string `json:"sourceAccount"`
+		ItemName      string `json:"itemName"`
+		ContainerArt  string `json:"containerArt"`
+	}
+
+	if decErr := json.NewDecoder(r.Body).Decode(&req); decErr != nil {
+		app.sendError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Source == "" {
+		app.sendError(w, "source is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Location == "" {
+		app.sendError(w, "location is required", http.StatusBadRequest)
+		return
+	}
+
+	contentItem := &models.ContentItem{
+		Source:       req.Source,
+		Type:         req.Type,
+		Location:     req.Location,
+		ItemName:     req.ItemName,
+		ContainerArt: req.ContainerArt,
+		// A preset the speaker stores for itself is presetable by definition;
+		// saying otherwise would have it refuse its own entry on recall.
+		IsPresetable: true,
+	}
+
+	// Only pass SourceAccount when it's a real credential, not the placeholder
+	// value speakers echo back (source name == source account, e.g. "TUNEIN").
+	if req.SourceAccount != "" && req.SourceAccount != req.Source {
+		contentItem.SourceAccount = req.SourceAccount
+	}
+
+	logPlaybackRequest("store-preset", deviceID, contentItem.Source, contentItem.SourceAccount, contentItem.Location, contentItem.ItemName)
+
+	err = device.Client.StorePreset(slot, contentItem)
+	app.sendControlResponse(w, err, fmt.Sprintf("Stored %s as preset %d", req.Source, slot))
+}
+
 // handleBassControl processes bass control requests
 func (app *WebApp) handleBassControl(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection) {
 	if r.Method != http.MethodPost {

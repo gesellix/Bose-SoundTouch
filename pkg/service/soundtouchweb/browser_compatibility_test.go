@@ -3280,6 +3280,108 @@ func TestStaleSourcesRemainVisibleButCannotBeSelected(t *testing.T) {
 	}
 }
 
+// TestLibraryRowSavesNamedContentToAPreset covers the issue 700 save button:
+// a Library row stores itself into a slot by naming its content, so nothing
+// has to start playing first. It asserts the request body the row sends (a
+// folder with no type, a track with one), the inline save feedback, and that
+// a row already occupying a slot says so.
+func TestLibraryRowSavesNamedContentToAPreset(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { Library } from '/app/static/js/components/Library.js';
+const status = {
+  revision: 1,
+  presets: { Preset: [{ ID: 3, ContentItem: { Source: 'STORED_MUSIC', Location: '5:audio5:part13:3171:5 TRACK' } }] },
+};
+function Fixture() {
+  const [devices] = useState({ speaker: { info: { device_id: 'DEVICE1', name: 'Speaker' }, status } });
+  return h('section', { id: 'library' }, h(Library, { devices, onPlaybackRequest: () => true }));
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	var stored []string
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/library/servers", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: []any{
+				map[string]any{"udn": "uuid:library", "name": "Media server", "ready": true, "account": "uuid:library/0"},
+			}})
+		})
+		r.Get("/api/control/devices/speaker/library/browse", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"entries": []any{
+					map[string]any{"name": "Some Album", "location": "1$7$0", "type": "dir", "isDir": true, "isPresetable": true},
+					map[string]any{"name": "Great Song", "location": "5:audio5:part13:3171:5 TRACK", "type": "track", "playable": true, "isPresetable": true},
+				},
+			}})
+		})
+		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
+			body, _ := io.ReadAll(req.Body)
+			mu.Lock()
+			stored = append(stored, chi.URLParam(req, "slot")+" "+string(body))
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var trackStarTitle string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#library .tunein-item`, chromedp.ByQuery),
+		// The first list is the registered servers; open it to get the rows.
+		chromedp.Click(`#library .tunein-item`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#library .library-preset-btn`, chromedp.ByQuery),
+
+		// Row 1 is the folder: save it to slot 4 and wait for the ✓.
+		chromedp.Click(`#library .tunein-item:nth-child(1) .library-preset-btn`, chromedp.ByQuery),
+		chromedp.Click(`#library .tunein-item:nth-child(1) .preset-picker-slot:nth-child(4)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('#library .tunein-item:nth-child(1) .preset-picker-slot.saved')?.textContent === '✓'`, nil),
+
+		// Row 2 is a single track, and it already occupies slot 3, so its star
+		// is marked and says which slot without the popover being opened.
+		chromedp.Evaluate(`document.querySelector('#library .tunein-item:nth-child(2) .library-preset-btn').title`, &trackStarTitle),
+		chromedp.Click(`#library .tunein-item:nth-child(2) .library-preset-btn`, chromedp.ByQuery),
+		chromedp.Click(`#library .tunein-item:nth-child(2) .preset-picker-slot:nth-child(1)`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('#library .tunein-item:nth-child(2) .preset-picker-slot.saved') !== null`, nil),
+	); err != nil {
+		t.Fatalf("save library rows as presets: %v", err)
+	}
+
+	var mappedClass bool
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(`document.querySelector('#library .tunein-item:nth-child(2) .library-preset-btn').classList.contains('mapped')`, &mappedClass),
+	); err != nil {
+		t.Fatalf("read mapped star: %v", err)
+	}
+	if !mappedClass {
+		t.Error("a row already saved in a slot should have a mapped star")
+	}
+	if !strings.Contains(trackStarTitle, "preset 3") {
+		t.Errorf("mapped star title = %q, want it to name preset 3", trackStarTitle)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(stored) != 2 {
+		t.Fatalf("store requests = %d (%v), want 2", len(stored), stored)
+	}
+	// The folder: type is sent empty, which is how the speaker stores a
+	// container itself (issue 700 hardware run).
+	for _, want := range []string{`4 `, `"source":"STORED_MUSIC"`, `"sourceAccount":"uuid:library/0"`, `"location":"1$7$0"`, `"type":""`, `"itemName":"Some Album"`} {
+		if !strings.Contains(stored[0], want) {
+			t.Errorf("folder store request should contain %q, got %s", want, stored[0])
+		}
+	}
+	for _, want := range []string{`1 `, `"location":"5:audio5:part13:3171:5 TRACK"`, `"type":"track"`} {
+		if !strings.Contains(stored[1], want) {
+			t.Errorf("track store request should contain %q, got %s", want, stored[1])
+		}
+	}
+}
+
 // TestNowPlayingStarSavesThroughTheSharedPicker renders the now-playing card
 // in Chrome and saves the current content to a slot. The card's star was
 // extracted into the shared PresetPicker for issue 700 and nothing exercised

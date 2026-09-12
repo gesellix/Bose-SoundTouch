@@ -678,6 +678,26 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
 .preset-picker-slot.saved  { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
 .preset-picker-slot.error  { border-color: var(--danger); color: var(--danger); }
 
+/* Library rows reuse the picker overlay above. The star sits beside the row's
+   play button, so it is sized like that button, wears the gold --fav colour
+   the other save gestures use, and its popover hangs off the right edge
+   because the controls are right-aligned in the row. */
+.library-preset-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.library-preset-btn {
+    background: transparent;
+    border: 1px solid var(--text-dim);
+    color: var(--text-dim);
+    border-radius: 999px;
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    font-size: .8rem; line-height: 1; padding: 0;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.library-preset-btn:hover, .library-preset-btn.open { border-color: var(--fav); color: var(--fav); }
+.library-preset-btn.mapped { color: var(--fav); border-color: var(--fav); }
+.library-preset-wrap .preset-picker-overlay { right: 0; left: auto; }
+
 /* ── Presets ─────────────────────────────────────────────────────────────── */
 .presets-section, .sources-section { margin-top: 1.25rem; }
 .section-title { font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: .6rem; }
