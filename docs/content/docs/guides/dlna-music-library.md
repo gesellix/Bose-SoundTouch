@@ -144,7 +144,7 @@ command you need to run first.
 
 ---
 
-## Player UI (BETA)
+## Player UI
 
 The soundtouch-player "Library" tab provides a browser-based interface for the
 same workflow:
@@ -155,12 +155,19 @@ same workflow:
 4. Click **Find servers** to run an SSDP sweep.
 5. Click **Add** next to a server to register it on the speaker.
 6. Open the server to browse folders and tracks.
-7. Click a track to play it on the speaker.
+7. Click a track to play it, or the star on its row to save it to a preset.
 
-> **BETA notice:** DLNA behavior varies across server implementations. Some
-> servers expose non-standard browse trees or restrict access by IP. If a
-> server appears in discovery but does not load in the library browser, check
-> that the media server allows UPnP browsing from the speaker's IP address.
+**Refresh** asks the speaker to re-read its own account list and reports what
+it has. Use it when a server you registered is no longer listed on one speaker
+while other speakers still see it.
+
+A folder larger than one page lists its first page and offers **Load more**,
+with the count so far shown beside it.
+
+> DLNA behaviour varies across server implementations. Some servers expose
+> non-standard browse trees or restrict access by IP. If a server appears in
+> discovery but does not load in the library browser, check that the media
+> server allows UPnP browsing from the speaker's IP address.
 
 ---
 
