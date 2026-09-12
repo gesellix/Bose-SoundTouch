@@ -171,6 +171,26 @@ they flap while a source buffers. The same Spotify track reported
 Spotify reported no `trackID` at all during one buffering window, so buttons
 driven by them would flicker.
 
+### Previous-track restarts before it steps back
+
+The first `PREV_TRACK` restarts the track that is playing; only a second press
+moves to the previous one. Measured on a SoundTouch 10 against a media library:
+at position 97s a press left the track and the queue offset untouched and reset
+the position to 0, and a press five seconds later stepped from track 10 to
+track 09. Pressing from a track that has just begun steps back immediately,
+since there is nothing to restart: a walk back through a whole album, each
+press landing at position 0 or 1, moved one track per press from 10 down to 01.
+
+`NEXT_TRACK` has no such rule and always advances.
+
+This matters twice over. It looks like a broken Previous button when a track is
+well under way, and it defeats any confirmation based on identity, because a
+restart changes no track, no `trackID` and no metadata. The player therefore
+also accepts a play position that has moved backwards as a confirmed
+`previous-track`. Nothing about it is specific to a source or a queue position:
+there is no "first track of the queue" border, and an album selected as a
+container keeps every track before the current one available.
+
 ### What the hardware reports
 
 Measured on a SoundTouch 10 (server version 4) by walking its sources:

@@ -1109,6 +1109,72 @@ render(h(Fixture), document.getElementById('fixture'));
 	}
 }
 
+// TestPreviousTrackConfirmsARestart: measured on a SoundTouch 10, the first
+// PREV_TRACK restarts the current track and only a second press steps back.
+// The restart changes no identity, so without reading the play position a
+// working Previous would report "unverified" every time.
+func TestPreviousTrackConfirmsARestart(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
+const initialStatus = {
+  revision: 1,
+  nowPlayingRevision: 1,
+  nowPlaying: {
+    Source: 'STORED_MUSIC', PlayStatus: 'PLAY_STATE',
+    Track: 'Something To Believe', Artist: 'An artist', Album: 'An album',
+    Time: { Total: 0, Position: 97 },
+    SkipEnabled: {}, SkipPreviousEnabled: {},
+  },
+  volume: { ActualVolume: 20, MuteEnabled: false },
+  presets: { Preset: [] },
+  sources: { SourceItem: [] },
+};
+function Fixture() {
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  return h(DeviceDetail, {
+    deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
+    onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
+  });
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Post("/api/control/devices/speaker/key/{key}", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		// The same track, back at the beginning: a restart, not a step back.
+		r.Get("/api/control/devices/speaker/now-playing", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"status": map[string]any{
+					"revision": 5, "nowPlayingRevision": 5,
+					"nowPlaying": map[string]any{
+						"Source": "STORED_MUSIC", "PlayStatus": "PLAY_STATE",
+						"Track": "Something To Believe", "Artist": "An artist", "Album": "An album",
+						"Time":        map[string]any{"Total": 0, "Position": 2},
+						"SkipEnabled": map[string]any{}, "SkipPreviousEnabled": map[string]any{},
+					},
+					"volume": map[string]any{"ActualVolume": 20, "MuteEnabled": false},
+				},
+			}})
+		})
+		registerDeviceDetailSideRoutes(r)
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`.previous-btn`, chromedp.ByQuery),
+		chromedp.Click(`.previous-btn`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`, nil),
+	); err != nil {
+		t.Fatalf("exercise a previous-track restart: %v", err)
+	}
+}
+
 // TestEmptyPresetSlotStaysSavableWhileACommandIsPending: an empty slot's
 // tile is a save gesture, not a playback command, so an in-flight command
 // has no reason to disable it -- and the sibling star button, which saves the
