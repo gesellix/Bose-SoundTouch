@@ -73,7 +73,11 @@ func (app *WebApp) storedMusicArtURL(ctx context.Context, device *webtypes.Devic
 
 	result, err := dlna.Metadata(ctx, server, objectID)
 	if err != nil {
-		slog.Debug("library art: metadata lookup failed", "object", objectID, "err", err.Error())
+		// The object ID comes from a request body and the error can quote a
+		// media server's response, so both are sanitised (CodeQL
+		// go/log-injection, same reason as logPlaybackRequest).
+		slog.Debug("library art: metadata lookup failed",
+			"object", sanitizeLog(objectID), "err", sanitizeLog(err.Error()))
 
 		return ""
 	}
@@ -121,7 +125,7 @@ func (app *WebApp) mediaServerForAccount(ctx context.Context, device *webtypes.D
 	if location := app.mediaServerLocation(device, udn); location != "" {
 		server, ok, err := discovery.MediaServerAt(ctx, location)
 		if err != nil {
-			slog.Debug("library art: media server description fetch failed", "err", err.Error())
+			slog.Debug("library art: media server description fetch failed", "err", sanitizeLog(err.Error()))
 		}
 
 		resolved.server = server
@@ -145,7 +149,7 @@ func (app *WebApp) mediaServerLocation(device *webtypes.DeviceConnection, udn st
 	resp, err := device.Client.ListMediaServers()
 	if err != nil || resp == nil {
 		if err != nil {
-			slog.Debug("library art: listMediaServers failed", "err", err.Error())
+			slog.Debug("library art: listMediaServers failed", "err", sanitizeLog(err.Error()))
 		}
 
 		return ""
