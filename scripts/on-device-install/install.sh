@@ -226,6 +226,37 @@ curl \
   --fail \
   "$BINARY_URL"
 
+# Verify the download against the checksum published alongside it before it is
+# allowed anywhere near the installed binary. `curl --fail` already catches
+# HTTP errors, and a body short of its Content-Length, so this is not about
+# truncation: it is about the download being intact but wrong (a corrupted
+# proxy cache, a tampered mirror).
+#
+# Best effort by design: releases before the checksum assets existed, a
+# firmware without sha256sum, or an offline mirror serving only the binary all
+# skip the check with a warning rather than blocking an install that would
+# otherwise have worked. A checksum that is present and does NOT match is
+# always fatal.
+CHECKSUM_URL=${CHECKSUM_URL:-$BINARY_URL.sha256}
+if ! command -v sha256sum >/dev/null 2>&1; then
+  echo "NOTE: sha256sum is not available; skipping checksum verification." >&2
+elif ! EXPECTED_SHA=$(curl -sSL --fail "$CHECKSUM_URL" 2>/dev/null | awk 'NR==1 {print $1}') \
+    || [ -z "$EXPECTED_SHA" ]; then
+  echo "NOTE: no checksum published at $CHECKSUM_URL; skipping verification." >&2
+else
+  ACTUAL_SHA=$(sha256sum < "$UPDATE_TMP_DIR/binary" | awk '{print $1}')
+  if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+    echo "ERROR: the downloaded binary does not match its published checksum." >&2
+    echo "  expected: $EXPECTED_SHA" >&2
+    echo "  actual:   $ACTUAL_SHA" >&2
+    echo "Nothing was installed. Retry; if it keeps failing, download the" >&2
+    echo "binary on another machine and copy it over instead." >&2
+    rm -f "$UPDATE_TMP_DIR/binary"
+    exit 1
+  fi
+  echo "Checksum verified (sha256 $(echo "$ACTUAL_SHA" | cut -c1-8)...)."
+fi
+
 # Put the backed-up binary back in place. Used on every path that can leave a
 # broken or incomplete binary installed: a failed write (disk full mid-copy is
 # the documented failure mode on this filesystem) and a service that does not
