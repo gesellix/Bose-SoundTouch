@@ -163,9 +163,16 @@ if [ -n "$NEW_BINARY_BYTES" ]; then
     REPLACE_COST_KB=0
   fi
 
-  # Backups compress to roughly 70% of the original size in practice
-  # (observed: a ~14.8MB binary gzipped to ~10.1MB); used as a conservative
-  # estimate since the real ratio isn't known until compression actually runs.
+  # Deliberately conservative: measured on an ST20 (2026-09-12), a 15.5MB
+  # armv7 binary gzipped to 5.9MB, i.e. 38%, and the v0.131.0 -> v0.132.0
+  # upgrade kept its backup with room to spare. 70% is kept as the estimate
+  # because the real ratio is unknown until compression actually runs, and a
+  # future binary carrying less compressible content (embedded assets, an
+  # already-compressed payload) moves it up rather than down. Over-estimating
+  # only costs an unnecessary "continue without a backup?" prompt on a volume
+  # tighter than any seen so far; under-estimating promises space that is not
+  # there, which is what this whole check exists to prevent.
+  #
   # Unlike the binary itself this is a genuine addition to what is stored, so
   # it is charged in full.
   BACKUP_ESTIMATE_KB=$((CURRENT_BINARY_KB * 7 / 10))
