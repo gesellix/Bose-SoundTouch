@@ -884,3 +884,79 @@ func TestDiscoverDeviceMediaServers_UnreachableSpeakerSkippedSilently(t *testing
 		t.Errorf("expected the reachable speaker's server, got %+v", got[0])
 	}
 }
+
+// TestHandleLibraryBrowse_PageSize checks the two halves of the paging
+// contract (issue 583): the default page size the handler asks the speaker
+// for, and that an explicit start and count are passed through so the player
+// can fetch the next slice.
+func TestHandleLibraryBrowse_PageSize(t *testing.T) {
+	tests := []struct {
+		name      string
+		query     string
+		wantStart string
+		wantNum   string
+	}{
+		{"defaults", "account=uuid:test-udn/0", "<startItem>1</startItem>", "<numItems>500</numItems>"},
+		{"explicit page", "account=uuid:test-udn/0&start=501&count=250", "<startItem>501</startItem>", "<numItems>250</numItems>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			speaker, captured := setupSpeakerMock(t, map[string]string{"/navigate": cannedNavigateResponse})
+			defer speaker.Close()
+
+			app := newLibraryTestApp(speaker.URL)
+
+			req := httptest.NewRequest("GET", "/api/control/devices/lib-device/library/browse?"+tt.query, nil)
+			req = withChiParams(req, map[string]string{"id": "lib-device"})
+			w := httptest.NewRecorder()
+
+			app.HandleLibraryBrowse(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+
+			navigateXML := captured["/navigate"]
+			for _, want := range []string{tt.wantStart, tt.wantNum} {
+				if !strings.Contains(navigateXML, want) {
+					t.Errorf("navigate XML should contain %q, got:\n%s", want, navigateXML)
+				}
+			}
+		})
+	}
+}
+
+// TestHandleLibraryBrowse_ReportsTotalItems pins the field the player pages
+// against: without it there is no way to know a page is partial.
+func TestHandleLibraryBrowse_ReportsTotalItems(t *testing.T) {
+	speaker, _ := setupSpeakerMock(t, map[string]string{"/navigate": cannedNavigateResponse})
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	req := httptest.NewRequest("GET", "/api/control/devices/lib-device/library/browse?account=uuid:test-udn/0", nil)
+	req = withChiParams(req, map[string]string{"id": "lib-device"})
+	w := httptest.NewRecorder()
+
+	app.HandleLibraryBrowse(w, req)
+
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			TotalItems int `json:"totalItems"`
+			Entries    []struct {
+				Name string `json:"name"`
+			} `json:"entries"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !resp.Success || resp.Data.TotalItems != 2 || len(resp.Data.Entries) != 2 {
+		t.Errorf("got success=%v totalItems=%d entries=%d, want true/2/2",
+			resp.Success, resp.Data.TotalItems, len(resp.Data.Entries))
+	}
+}

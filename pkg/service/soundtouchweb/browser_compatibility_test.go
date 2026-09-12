@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -3434,5 +3435,126 @@ render(h(NowPlaying, { nowPlaying, deviceId: 'speaker', presets }), document.get
 	defer mu.Unlock()
 	if len(slots) != 1 || slots[0] != "5" {
 		t.Errorf("storepreset calls = %v, want one for slot 5", slots)
+	}
+}
+
+// TestLibraryPagesThroughALargeFolder covers issue 583: a folder with more
+// entries than one page carries showed only the first page, with nothing to
+// say there was more. The speaker does page correctly (measured on a
+// SoundTouch 10: a 484-entry folder answers start=201 with the next slice and
+// reports totalItems=484 on every page), so the truncation was ours.
+//
+// The fixture returns 3 entries per request regardless of the requested count,
+// which is what a media server is free to do, and reports a total of 7.
+func TestLibraryPagesThroughALargeFolder(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { useState } from 'preact/hooks';
+import { Library } from '/app/static/js/components/Library.js';
+function Fixture() {
+  const [devices] = useState({ speaker: { info: { device_id: 'DEVICE1', name: 'Speaker' }, status: { revision: 1 } } });
+  return h('section', { id: 'library' }, h(Library, { devices, onPlaybackRequest: () => true }));
+}
+render(h(Fixture), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	var starts []string
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/library/servers", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: []any{
+				map[string]any{"udn": "uuid:library", "name": "Media server", "ready": true},
+			}})
+		})
+		r.Get("/api/control/devices/speaker/library/browse", func(w http.ResponseWriter, req *http.Request) {
+			start := req.URL.Query().Get("start")
+			if start == "" {
+				start = "1"
+			}
+
+			mu.Lock()
+			starts = append(starts, start)
+			mu.Unlock()
+
+			offset, _ := strconv.Atoi(start)
+
+			entries := []any{}
+			for i := offset; i < offset+3 && i <= 7; i++ {
+				// Directories, so the last step can browse into one and
+				// check that a new listing starts empty.
+				entries = append(entries, map[string]any{
+					"name": fmt.Sprintf("Folder %02d", i), "location": fmt.Sprintf("/t/%d", i),
+					"type": "dir", "isDir": true,
+				})
+			}
+
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"entries": entries, "totalItems": 7,
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+	var firstCount int
+	var firstLabel string
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#library .tunein-item`, chromedp.ByQuery),
+		chromedp.Click(`#library .tunein-item`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#library .library-more`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &firstCount),
+		chromedp.Text(`#library .library-more .tunein-item-desc`, &firstLabel, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("browse the first page: %v", err)
+	}
+
+	if firstCount != 3 || firstLabel != "3 of 7" {
+		t.Errorf("first page: %d rows labelled %q, want 3 rows labelled \"3 of 7\"", firstCount, firstLabel)
+	}
+
+	var total int
+	var moreGone bool
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`#library .library-more button`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelectorAll('#library .tunein-list .tunein-item').length === 6`, nil),
+		chromedp.Click(`#library .library-more button`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelectorAll('#library .tunein-list .tunein-item').length === 7`, nil),
+		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &total),
+		// Everything is listed, so the row that offers more is gone.
+		chromedp.Evaluate(`document.querySelector('#library .library-more') === null`, &moreGone),
+	); err != nil {
+		t.Fatalf("page through the folder: %v", err)
+	}
+
+	if total != 7 || !moreGone {
+		t.Errorf("after paging: %d rows, load-more gone = %v; want 7 and true", total, moreGone)
+	}
+
+	// Browsing into a row must start a fresh listing rather than appending to
+	// the folder we were in.
+	var afterDescend int
+	if err := chromedp.Run(ctx,
+		chromedp.Click(`#library .tunein-list .tunein-item`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelectorAll('#library .tunein-list .tunein-item').length === 3`, nil),
+		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &afterDescend),
+	); err != nil {
+		t.Fatalf("browse into a row after paging: %v", err)
+	}
+
+	if afterDescend != 3 {
+		t.Errorf("a new listing shows %d rows, want 3 (the accumulated pages must not carry over)", afterDescend)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if want := []string{"1", "4", "7", "1"}; len(starts) != len(want) {
+		t.Fatalf("browse starts = %v, want %v", starts, want)
+	} else {
+		for i := range want {
+			if starts[i] != want[i] {
+				t.Errorf("browse start %d = %q, want %q (%v)", i, starts[i], want[i], starts)
+			}
+		}
 	}
 }

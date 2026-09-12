@@ -678,6 +678,12 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
 .preset-picker-slot.saved  { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
 .preset-picker-slot.error  { border-color: var(--danger); color: var(--danger); }
 
+/* The "Load more" row under a partially listed folder (issue 583). */
+.library-more {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .75rem 0;
+}
+
 /* Library rows reuse the picker overlay above. The star sits beside the row's
    play button, so it is sized like that button, wears the gold --fav colour
    the other save gestures use, and its popover hangs off the right edge

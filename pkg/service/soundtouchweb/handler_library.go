@@ -16,6 +16,20 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// defaultLibraryPageSize is how many items one browse asks the speaker for
+// when the caller does not say.
+//
+// The speaker honours numItems well past this (measured on a SoundTouch 10
+// against a 484-entry folder: 200, 400 and 1000 all came back correctly, the
+// last one with every entry), so a larger page costs response size rather than
+// correctness. 500 covers most real folders in one request while leaving the
+// paging path in use for the libraries that need it (issue 583).
+//
+// A named constant because the right value depends on the library and on how
+// the browser handles a long list, so this is a likely candidate for a setting
+// later.
+const defaultLibraryPageSize = 500
+
 // libraryServer is the JSON DTO for a DLNA media server. The registered and
 // ready fields reflect state on the specific speaker that was queried;
 // HandleDiscoverLibraryServers leaves them false because it performs a
@@ -387,7 +401,8 @@ func (app *WebApp) HandleRemoveLibraryServer(w http.ResponseWriter, r *http.Requ
 //   - location (optional) location token from a previous browse; empty means root
 //   - type     (optional) type hint for the container item, defaults to "dir"
 //   - start    (optional) 1-based start index, defaults to 1
-//   - count    (optional) number of items to return, defaults to 200
+//   - count    (optional) number of items to return, defaults to
+//     defaultLibraryPageSize
 func (app *WebApp) HandleLibraryBrowse(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
 
@@ -419,7 +434,7 @@ func (app *WebApp) HandleLibraryBrowse(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	count := 200
+	count := defaultLibraryPageSize
 
 	if raw := r.URL.Query().Get("count"); raw != "" {
 		if v, err := strconv.Atoi(raw); err == nil && v >= 1 {
