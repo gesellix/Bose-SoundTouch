@@ -1,5 +1,10 @@
 ---
 title: "Get your preset buttons working again"
+# Kept so links to the old location keep working. This page used to live at
+# docs/appendix/PRESET-QUICKSTART. Hugo builds a redirect at every alias, so
+# add one whenever a page moves or is renamed, and never remove an old entry.
+aliases:
+  - /docs/appendix/PRESET-QUICKSTART/
 ---
 The six buttons on top of your speaker are the first thing the Bose shutdown
 took away: pressing one used to ask Bose's servers what to play. With

@@ -216,6 +216,33 @@ and any other flag that overrides a git safety mechanism must be
 proposed and confirmed before running, for the same reason: they
 bypass protections that exist intentionally.
 
+### Moving or renaming a docs page keeps its old URL
+
+The published docs are linked from issues, release notes, and other
+people's blog posts. The site is built with Hugo (`disablePathToLower`,
+so URLs keep the file's capitalisation), and a moved file silently
+changes its URL.
+
+Whenever a page under `docs/content/` moves or is renamed, add the old
+path to the new file's front matter:
+
+```yaml
+---
+title: "..."
+aliases:
+  - /docs/appendix/PRESET-QUICKSTART/
+---
+```
+
+Hugo generates a redirect page at every alias, which GitHub Pages serves
+like any other file. Aliases accumulate: when a page moves twice, keep
+both entries. Never delete one, because the links that used it are on
+someone else's site.
+
+The exception is a URL deliberately taken over by a different page (as
+`docs/guides/GETTING-STARTED` was, when the Go tutorial moved aside for
+the owner-facing guide). Say so in the commit message when that happens.
+
 ## What never goes into this repo
 
 This repository is public. The following must never be committed:
