@@ -117,6 +117,26 @@ func DiscoverMediaServers(ctx context.Context, timeout time.Duration) ([]MediaSe
 	return out, nil
 }
 
+// MediaServerAt resolves a single media server from the URL of its UPnP root
+// description, skipping SSDP entirely. A SoundTouch speaker already reports
+// that URL for every server it knows (/listMediaServers -> location), so a
+// caller holding a speaker's own list can reach a server's ContentDirectory
+// without sweeping the LAN, which is both slower and blind to anything the
+// service host cannot see but the speaker can.
+//
+// ok=false means the description parsed but exposes no ContentDirectory, i.e.
+// the device is not a usable media server.
+func MediaServerAt(ctx context.Context, location string) (MediaServer, bool, error) {
+	desc, err := FetchDescription(ctx, location)
+	if err != nil {
+		return MediaServer{}, false, err
+	}
+
+	srv, ok := mediaServerFromDescription(desc)
+
+	return srv, ok, nil
+}
+
 // mediaServerFromDescription maps a parsed Description to a MediaServer.
 // Returns ok=false when the description does not expose a ContentDirectory
 // service (i.e. the device is not a usable DLNA media server).

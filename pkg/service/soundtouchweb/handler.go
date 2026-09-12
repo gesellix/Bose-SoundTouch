@@ -127,6 +127,13 @@ type WebApp struct {
 	// mutation lock covers concurrent CLI-like requests from every browser.
 	StereoPairs StereoPairLifecycle
 
+	// mediaServers caches the ContentDirectory of each DLNA server behind a
+	// STORED_MUSIC account, keyed by bare UDN (see mediaServerForAccount). It
+	// exists so the album-art lookup on a preset save costs one SOAP call
+	// instead of also re-resolving the server every time.
+	mediaServersMu sync.Mutex
+	mediaServers   map[string]cachedMediaServer
+
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }
 
@@ -799,6 +806,14 @@ func (app *WebApp) HandleStorePresetContent(w http.ResponseWriter, r *http.Reque
 	// value speakers echo back (source name == source account, e.g. "TUNEIN").
 	if req.SourceAccount != "" && req.SourceAccount != req.Source {
 		contentItem.SourceAccount = req.SourceAccount
+	}
+
+	// A library item has no artwork by the time it reaches us: the speaker's
+	// /navigate carries none, so a saved folder showed a generic tile even
+	// though the same folder playing showed its cover. Ask the media server
+	// for it, best effort (see storedMusicArtURL).
+	if contentItem.ContainerArt == "" && req.Source == "STORED_MUSIC" {
+		contentItem.ContainerArt = app.storedMusicArtURL(r.Context(), device, contentItem.SourceAccount, contentItem.Location)
 	}
 
 	logPlaybackRequest("store-preset", deviceID, contentItem.Source, contentItem.SourceAccount, contentItem.Location, contentItem.ItemName)

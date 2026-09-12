@@ -120,9 +120,24 @@ agreed, and three details matter to anyone parsing this by hand:
   element on the item (`dir`, `track`). Anything reconstructing a ContentItem
   for `/select` has to supply the type itself.
 
+- **No artwork, anywhere.** Neither the item nor its ContentItem carries a
+  `containerArt`, on any of the servers measured. The cover you see while a
+  library track plays comes from the speaker resolving the media server's own
+  metadata at play time, which is why a folder saved to a preset straight from
+  a navigate result has no art unless the caller supplies it.
+
 Location tokens are opaque and server-specific (`4:cont1:20:0:0:` on one
 server, `1` on another) and index-dependent, so they can break when the media
 server reindexes.
+
+They are, however, the media server's own DLNA object IDs: a container's
+location is its object ID verbatim, and a playable item's is the object ID plus
+a ` TRACK` suffix. Measured on MiniDLNA (album `1$6$7$2`, track
+`1$6$7$2$5 TRACK`) and a FRITZ!Box (container `4:cont2:150:0:0:`, track
+`5:audio5:part13:3171:5 TRACK`). That is what lets AfterTouch ask the media
+server directly about an item the speaker named, e.g. for the album art the
+navigate response omits (`pkg/dlna.Metadata`, a ContentDirectory
+`BrowseMetadata` call).
 
 ### Navigate Into Directories
 
