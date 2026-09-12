@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { PresetPicker } from './PresetPicker.js';
@@ -21,6 +21,15 @@ export function Library({
     const [server, setServer] = useState(null);       // { udn, name, account }
     const [navStack, setNavStack] = useState([]);     // [{ label, location, type }]
     const [entries, setEntries] = useState([]);
+    // What the speaker says the open container holds, which is how we know a
+    // page is partial. It answers /navigate with totalItems regardless of how
+    // many items the page carries (measured: a 484-entry folder reports 484
+    // whether 200, 400 or all 484 come back).
+    const [totalItems, setTotalItems] = useState(0);
+    const [loadingMore, setLoadingMore] = useState(false);
+    // Fences a page against a browse that started after it: navigating away
+    // while a page is in flight must not append that page to the new folder.
+    const browseGeneration = useRef(0);
     const [loading, setLoading] = useState(false);
     const [finding, setFinding] = useState(false);
 
@@ -98,10 +107,52 @@ export function Library({
     }
 
     async function browseLevel(account, location, type) {
+        const generation = ++browseGeneration.current;
+
         setLoading(true);
+        setEntries([]);
+        setTotalItems(0);
+
         const resp = await api.libraryBrowse(deviceId, { account, location, type });
+
+        if (generation !== browseGeneration.current) return;
+
         setLoading(false);
-        if (resp.success) setEntries(resp.data?.entries || []);
+        if (!resp.success) return;
+
+        setEntries(resp.data?.entries || []);
+        setTotalItems(resp.data?.totalItems || 0);
+    }
+
+    // The speaker pages: a large folder comes back in slices, and the rest is
+    // only fetched when asked for. Before this, the first page was all anyone
+    // ever saw, so a 393-entry folder looked like it held 200 (issue 583).
+    async function loadMore() {
+        const generation = browseGeneration.current;
+        const frame = navStack[navStack.length - 1];
+
+        if (!server || !frame || loadingMore) return;
+
+        setLoadingMore(true);
+
+        const resp = await api.libraryBrowse(deviceId, {
+            account: server.account,
+            location: frame.location,
+            type: frame.type,
+            start: entries.length + 1,
+        });
+
+        if (generation !== browseGeneration.current) return;
+
+        setLoadingMore(false);
+        if (!resp.success) return;
+
+        const page = resp.data?.entries || [];
+
+        // A page that comes back empty would otherwise leave the button
+        // offering a next page forever, so trust the page over the count.
+        setTotalItems(page.length === 0 ? entries.length : (resp.data?.totalItems || 0));
+        setEntries(current => [...current, ...page]);
     }
 
     async function browseEntry(entry) {
@@ -285,6 +336,7 @@ export function Library({
                             </li>
                         `)}
                     </ul>
+
                 </div>
             ` : null}
 
@@ -338,6 +390,19 @@ export function Library({
                             </li>
                         `)}
                     </ul>
+
+                    ${entries.length > 0 && entries.length < totalItems ? html`
+                        <div class="library-more">
+                            <button
+                                class="btn-secondary"
+                                onClick=${loadMore}
+                                disabled=${loadingMore}
+                            >${loadingMore ? 'Loading…' : 'Load more'}</button>
+                            <span class="tunein-item-desc">
+                                ${entries.length} of ${totalItems}
+                            </span>
+                        </div>
+                    ` : null}
                 </div>
             ` : null}
 
