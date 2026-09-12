@@ -17,6 +17,7 @@ type deviceView struct {
 	Status     *webtypes.DeviceStatus `json:"status"`
 	LastSeen   time.Time              `json:"lastSeen"`
 	StereoPair *stereoPairView        `json:"stereoPair,omitempty"`
+	Zone       *zoneView              `json:"zone,omitempty"`
 }
 
 // deviceProjectionEntry captures one immutable status pointer per physical
@@ -51,6 +52,43 @@ type stereoPairMemberView struct {
 	IPAddress string `json:"ipAddress,omitempty"`
 	Name      string `json:"name,omitempty"`
 	Available bool   `json:"available"`
+}
+
+// zoneView describes one master-authoritative multiroom zone after physical
+// stereo members have been folded into logical player targets.
+type zoneView struct {
+	MasterDeviceID       string           `json:"masterDeviceId"`
+	MasterControlID      string           `json:"masterControlId"`
+	MemberCount          int              `json:"memberCount"`
+	PhysicalMemberCount  int              `json:"physicalMemberCount"`
+	AvailableMemberCount int              `json:"availableMemberCount"`
+	Degraded             bool             `json:"degraded"`
+	Members              []zoneMemberView `json:"members"`
+}
+
+type zoneMemberView struct {
+	Kind            string                   `json:"kind"`
+	ControlID       string                   `json:"controlId,omitempty"`
+	IP              string                   `json:"ip,omitempty"`
+	HardwareID      string                   `json:"hwId,omitempty"`
+	Name            string                   `json:"name,omitempty"`
+	Model           string                   `json:"model"`
+	Type            string                   `json:"type"`
+	DeviceIDs       []string                 `json:"deviceIds"`
+	Available       bool                     `json:"available"`
+	Connectivity    string                   `json:"connectivity"`
+	PhysicalMembers []zonePhysicalMemberView `json:"physicalMembers"`
+	StereoPair      *stereoPairView          `json:"stereoPair,omitempty"`
+}
+
+type zonePhysicalMemberView struct {
+	DeviceID     string `json:"deviceId"`
+	Role         string `json:"role,omitempty"`
+	IP           string `json:"ip"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Available    bool   `json:"available"`
+	Connectivity string `json:"connectivity"`
 }
 
 // stereoPairCapable reports whether info's model supports stereo pairing
@@ -110,6 +148,19 @@ func captureDeviceProjectionEntries(snapshot []DeviceEntry) []deviceProjectionEn
 }
 
 func projectCapturedDeviceEntries(snapshot []deviceProjectionEntry) map[string]deviceView {
+	devices, physicalToLogical, byDeviceID := projectLogicalDeviceEntries(snapshot)
+
+	return projectZoneViews(snapshot, devices, physicalToLogical, byDeviceID)
+}
+
+// projectLogicalDeviceEntries folds physical stereo members into their shared
+// control target. Zone projection and the zone-detail endpoint both build on
+// this representation so names and member status cannot diverge.
+func projectLogicalDeviceEntries(snapshot []deviceProjectionEntry) (
+	map[string]deviceView,
+	map[string]string,
+	map[string][]deviceProjectionEntry,
+) {
 	byDeviceID := make(map[string][]deviceProjectionEntry, len(snapshot))
 	for _, entry := range snapshot {
 		if entry.Info == nil {
@@ -124,6 +175,13 @@ func projectCapturedDeviceEntries(snapshot []deviceProjectionEntry) map[string]d
 
 	masters := make(map[string]*stereoPairView)
 	hidden := make(map[string]bool)
+
+	physicalToLogical := make(map[string]string, len(byDeviceID))
+	for deviceID, entries := range byDeviceID {
+		if len(entries) == 1 {
+			physicalToLogical[deviceID] = entries[0].ID
+		}
+	}
 
 	for _, entry := range snapshot {
 		if entry.Info == nil {
@@ -143,6 +201,8 @@ func projectCapturedDeviceEntries(snapshot []deviceProjectionEntry) map[string]d
 		masters[entry.ID] = pair
 
 		for _, role := range entry.Status.Group.Roles.Roles {
+			physicalToLogical[strings.TrimSpace(role.DeviceID)] = entry.ID
+
 			member, ok := uniqueDeviceEntry(byDeviceID, role.DeviceID)
 			if ok && member.ID != entry.ID {
 				hidden[member.ID] = true
@@ -165,7 +225,314 @@ func projectCapturedDeviceEntries(snapshot []deviceProjectionEntry) map[string]d
 		}
 	}
 
+	return devices, physicalToLogical, byDeviceID
+}
+
+func projectZoneInfo(zone *models.ZoneInfo, snapshot []deviceProjectionEntry) (*zoneView, bool) {
+	devices, physicalToLogical, byDeviceID := projectLogicalDeviceEntries(snapshot)
+	candidate, ok := newZoneProjectionCandidate(zone, devices, physicalToLogical, byDeviceID)
+
+	return candidate.view, ok
+}
+
+type zoneProjectionCandidate struct {
+	masterControlID string
+	view            *zoneView
+	logicalMembers  []string
+	physicalMembers []string
+}
+
+func projectZoneViews(
+	snapshot []deviceProjectionEntry,
+	devices map[string]deviceView,
+	physicalToLogical map[string]string,
+	byDeviceID map[string][]deviceProjectionEntry,
+) map[string]deviceView {
+	candidates := make([]zoneProjectionCandidate, 0)
+	logicalClaims := make(map[string]int)
+	physicalClaims := make(map[string]int)
+
+	for _, entry := range snapshot {
+		if entry.Info == nil || entry.Status == nil ||
+			!validMasterZone(entry.Info.DeviceID, entry.Status.Zone) {
+			continue
+		}
+
+		candidate, ok := newZoneProjectionCandidate(entry.Status.Zone, devices, physicalToLogical, byDeviceID)
+		if !ok {
+			continue
+		}
+
+		candidates = append(candidates, candidate)
+		for _, logicalID := range candidate.logicalMembers {
+			logicalClaims[logicalID]++
+		}
+
+		for _, deviceID := range candidate.physicalMembers {
+			physicalClaims[deviceID]++
+		}
+	}
+
+	for _, candidate := range candidates {
+		conflict := false
+
+		for _, logicalID := range candidate.logicalMembers {
+			if logicalClaims[logicalID] != 1 {
+				conflict = true
+				break
+			}
+		}
+
+		if !conflict {
+			for _, deviceID := range candidate.physicalMembers {
+				if physicalClaims[deviceID] != 1 {
+					conflict = true
+					break
+				}
+			}
+		}
+
+		if conflict {
+			continue
+		}
+
+		master := devices[candidate.masterControlID]
+		master.Zone = candidate.view
+		devices[candidate.masterControlID] = master
+
+		for _, logicalID := range candidate.logicalMembers {
+			if logicalID != candidate.masterControlID {
+				delete(devices, logicalID)
+			}
+		}
+	}
+
 	return devices
+}
+
+func validMasterZone(deviceID string, zone *models.ZoneInfo) bool {
+	return zone != nil && zoneHasMultipleDevices(zone) &&
+		strings.TrimSpace(zone.Master) != "" &&
+		strings.TrimSpace(zone.Master) == strings.TrimSpace(deviceID)
+}
+
+func zoneHasMultipleDevices(zone *models.ZoneInfo) bool {
+	if zone == nil {
+		return false
+	}
+
+	master := strings.TrimSpace(zone.Master)
+	for _, member := range zone.Members {
+		memberID := strings.TrimSpace(member.DeviceID)
+		if memberID != "" && memberID != master {
+			return true
+		}
+	}
+
+	return false
+}
+
+func newZoneProjectionCandidate(
+	zone *models.ZoneInfo,
+	devices map[string]deviceView,
+	physicalToLogical map[string]string,
+	byDeviceID map[string][]deviceProjectionEntry,
+) (zoneProjectionCandidate, bool) {
+	if !zoneHasMultipleDevices(zone) {
+		return zoneProjectionCandidate{}, false
+	}
+
+	masterDeviceID := strings.TrimSpace(zone.Master)
+
+	masterControlID := physicalToLogical[masterDeviceID]
+	if masterControlID == "" {
+		return zoneProjectionCandidate{}, false
+	}
+
+	if _, ok := devices[masterControlID]; !ok {
+		return zoneProjectionCandidate{}, false
+	}
+
+	zoneMemberIPs := make(map[string]string, len(zone.Members))
+	for _, zoneMember := range zone.Members {
+		deviceID := strings.TrimSpace(zoneMember.DeviceID)
+		if deviceID != "" {
+			zoneMemberIPs[deviceID] = strings.TrimSpace(zoneMember.IP)
+		}
+	}
+
+	members := make([]zoneMemberView, 0, zone.GetTotalDeviceCount())
+	memberByLogicalID := make(map[string]bool)
+	logicalMembers := make([]string, 0, zone.GetTotalDeviceCount())
+	physicalMembers := make([]string, 0, zone.GetTotalDeviceCount())
+	seenPhysical := make(map[string]bool)
+	availableCount := 0
+	physicalMemberCount := 0
+	degraded := false
+
+	for _, rawDeviceID := range zone.GetAllDeviceIDs() {
+		deviceID := strings.TrimSpace(rawDeviceID)
+		if deviceID == "" || seenPhysical[deviceID] {
+			continue
+		}
+
+		seenPhysical[deviceID] = true
+		physicalMembers = append(physicalMembers, deviceID)
+
+		logicalID := physicalToLogical[deviceID]
+		if logicalID != "" && memberByLogicalID[logicalID] {
+			continue
+		}
+
+		controlID := logicalID
+		if controlID == "" {
+			controlID = zoneMemberIPs[deviceID]
+		}
+
+		member, memberDegraded := newZoneMember(
+			deviceID,
+			logicalID,
+			controlID,
+			devices,
+			zoneMemberIPs,
+			byDeviceID,
+		)
+
+		degraded = degraded || memberDegraded || !member.Available
+		if member.Available {
+			availableCount++
+		}
+
+		members = append(members, member)
+		physicalMemberCount += len(member.PhysicalMembers)
+
+		if logicalID != "" {
+			memberByLogicalID[logicalID] = true
+			logicalMembers = append(logicalMembers, logicalID)
+		}
+	}
+
+	if len(members) < 2 {
+		return zoneProjectionCandidate{}, false
+	}
+
+	return zoneProjectionCandidate{
+		masterControlID: masterControlID,
+		logicalMembers:  logicalMembers,
+		physicalMembers: physicalMembers,
+		view: &zoneView{
+			MasterDeviceID:       masterDeviceID,
+			MasterControlID:      masterControlID,
+			MemberCount:          len(members),
+			PhysicalMemberCount:  physicalMemberCount,
+			AvailableMemberCount: availableCount,
+			Degraded:             degraded,
+			Members:              members,
+		},
+	}, true
+}
+
+func newZoneMember(
+	deviceID string,
+	logicalID string,
+	controlID string,
+	devices map[string]deviceView,
+	zoneMemberIPs map[string]string,
+	byDeviceID map[string][]deviceProjectionEntry,
+) (zoneMemberView, bool) {
+	member := zoneMemberView{
+		Kind:         "speaker",
+		ControlID:    controlID,
+		IP:           controlID,
+		HardwareID:   deviceID,
+		DeviceIDs:    []string{deviceID},
+		Connectivity: "offline",
+		PhysicalMembers: []zonePhysicalMemberView{{
+			DeviceID:     deviceID,
+			IP:           zoneMemberIPs[deviceID],
+			Connectivity: "offline",
+		}},
+	}
+
+	view, ok := devices[logicalID]
+	if !ok {
+		return member, true
+	}
+
+	if view.Info != nil {
+		member.Name = view.Info.Name
+		member.Model = view.Info.Type
+		member.Type = view.Info.Type
+	}
+
+	member.Connectivity = string(projectedConnectivity(view.Status))
+	member.Available = member.Connectivity == "online"
+
+	if view.StereoPair != nil {
+		member.Kind = "stereoPair"
+		member.HardwareID = view.StereoPair.MasterDeviceID
+		member.StereoPair = view.StereoPair
+
+		member.DeviceIDs = member.DeviceIDs[:0]
+		for _, pairMember := range view.StereoPair.Members {
+			member.DeviceIDs = append(member.DeviceIDs, pairMember.DeviceID)
+		}
+
+		member.PhysicalMembers = physicalZoneMembers(view.StereoPair, byDeviceID)
+	} else {
+		member.PhysicalMembers = []zonePhysicalMemberView{
+			newZonePhysicalMember(deviceID, "", zoneMemberIPs[deviceID], byDeviceID),
+		}
+	}
+
+	return member, view.StereoPair != nil && view.StereoPair.Degraded
+}
+
+func physicalZoneMembers(
+	pair *stereoPairView,
+	byDeviceID map[string][]deviceProjectionEntry,
+) []zonePhysicalMemberView {
+	members := make([]zonePhysicalMemberView, 0, len(pair.Members))
+	for _, pairMember := range pair.Members {
+		members = append(members, newZonePhysicalMember(
+			pairMember.DeviceID,
+			pairMember.Role,
+			pairMember.IPAddress,
+			byDeviceID,
+		))
+	}
+
+	return members
+}
+
+func newZonePhysicalMember(
+	deviceID string,
+	role string,
+	fallbackIP string,
+	byDeviceID map[string][]deviceProjectionEntry,
+) zonePhysicalMemberView {
+	member := zonePhysicalMemberView{
+		DeviceID:     deviceID,
+		Role:         role,
+		IP:           fallbackIP,
+		Connectivity: "offline",
+	}
+
+	entry, ok := uniqueDeviceEntry(byDeviceID, deviceID)
+	if !ok {
+		return member
+	}
+
+	member.IP = entry.ID
+	if entry.Info != nil {
+		member.Name = entry.Info.Name
+		member.Type = entry.Info.Type
+	}
+
+	member.Connectivity = string(projectedConnectivity(entry.Status))
+	member.Available = member.Connectivity == "online"
+
+	return member
 }
 
 func validMasterGroup(deviceID string, group *models.Group) bool {

@@ -6,6 +6,7 @@ import {
     connectivityState,
     sortDeviceEntries,
 } from '../devicePresentation.js';
+import { zoneCardPresentation } from '../zonePresentation.mjs';
 
 const html = htm.bind(h);
 
@@ -14,30 +15,45 @@ const SORT_LS_KEY = 'aftertouch_device_sort';
 function DeviceCard({ id, device, onSelect }) {
     const { info, status } = device;
     const stereoPair = device.stereoPair;
+    const zoneCard = device.zone ? zoneCardPresentation(device.zone) : null;
+    const controlID = device.zone?.masterControlId || id;
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
     const isStandby = !np || np.Source === 'STANDBY';
     const connectivity = connectivityState(device);
-    const statusLabel = `Connectivity: ${connectivityLabel(device)}`;
+    const indicatorClass = zoneCard?.health || connectivity;
+    const healthLabel = zoneCard?.healthLabel || `Connectivity: ${connectivityLabel(device)}`;
 
     return html`
-        <button type="button" class="device-card" onClick=${() => onSelect(id)}>
+        <button type="button" class="device-card ${zoneCard ? `zone-card ${zoneCard.health}` : ''}"
+                onClick=${() => onSelect(controlID)}>
             <span class="device-header">
                 <span class="device-name" title=${info?.name || id}>${info?.name || id}</span>
-                <span class="device-indicator ${connectivity}" role="status"
-                      title=${statusLabel} aria-label=${statusLabel}></span>
+                <span class="device-indicator ${indicatorClass}" role="status"
+                      title=${healthLabel} aria-label=${healthLabel}></span>
             </span>
             <span class="device-type">
                 ${info?.type || ''}
                 ${info?.ip_address ? html`<span class="device-ip">(${info.ip_address})</span>` : null}
-                ${stereoPair ? html`
+                ${!zoneCard && stereoPair ? html`
                     <span class="stereo-pair-state ${stereoPair.degraded ? 'degraded' : ''}">
                         Stereo pair ${stereoPair.availableMemberCount}/${stereoPair.memberCount}
                     </span>
                 ` : null}
             </span>
+            ${zoneCard ? html`
+                <span class="zone-card-summary">
+                    <span class="zone-card-badge">${zoneCard.groupLabel}</span>
+                    ${zoneCard.availabilityLabel ? html`
+                        <span class="zone-card-availability" title=${zoneCard.availabilityTitle}>
+                            ${zoneCard.availabilityLabel}
+                        </span>
+                    ` : null}
+                </span>
+            ` : null}
             ${!isStandby ? html`
-                <span class="now-playing-mini" title=${[np.Track || np.StationName || np.Source, np.Artist].filter(Boolean).join(' - ')}>
+                <span class="now-playing-mini"
+                      title=${[np.Track || np.StationName || np.Source, np.Artist].filter(Boolean).join(' - ')}>
                     <span class="play-status">${isPlaying ? '▶' : '⏸'}</span>
                     <span class="track-mini">${np.Track || np.StationName || np.Source}</span>
                     ${np.Artist ? html`<span class="artist-mini"> — ${np.Artist}</span>` : null}

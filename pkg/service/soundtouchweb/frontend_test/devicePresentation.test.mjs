@@ -4,7 +4,10 @@ import test from 'node:test';
 import {
     connectivityLabel,
     connectivityState,
+    currentZoneMember,
+    resolvedZoneMember,
     sortDeviceEntries,
+    zoneMemberControlID,
 } from '../static/js/devicePresentation.js';
 
 test('uses tri-state connectivity before the compatibility flag', () => {
@@ -64,4 +67,26 @@ test('uses stable control-ID tie breaks for equal names and addresses', () => {
         'speaker-a',
         'speaker-b',
     ]);
+});
+
+test('resolves stale zone-detail identities from the current projection', () => {
+    const initial = {
+        controlId: '192.0.2.20',
+        name: 'Living left',
+        deviceIds: ['left-id', 'right-id'],
+    };
+    const current = {
+        controlId: 'living.local',
+        name: 'Living',
+        deviceIds: ['left-id', 'right-id'],
+        connectivity: 'online',
+    };
+
+    assert.equal(currentZoneMember({ members: [current] }, initial), current);
+    assert.deepEqual(resolvedZoneMember({ members: [current] }, initial), {
+        member: current,
+        controlId: 'living.local',
+        name: 'Living',
+    });
+    assert.equal(zoneMemberControlID({ ip: '192.0.2.99' }), '192.0.2.99');
 });

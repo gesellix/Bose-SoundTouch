@@ -716,28 +716,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		// UpdateStatus so concurrent events and the periodic poller
 		// (UpdateDeviceStatus) cannot lose each other's writes.
 		wsClient.OnNowPlaying(func(event *models.NowPlayingUpdatedEvent) {
-			activity := time.Now()
-			np := &event.NowPlaying
-
-			// A /select returns 200 even when the source is rejected; the
-			// failure shows up here as a transition to an error source. Log it
-			// so it lands in a diagnostic export without needing a live trace.
-			if np.Source != prevSource && isErrorSource(np.Source) {
-				logNowPlayingError(deviceID, np.Source, np.SourceAccount)
-			}
-
-			// Waking up can flip whether the speaker answers for balance at
-			// all, and a reading taken while it was asleep would have been
-			// stored as "no balance here". Re-read on the transition out of
-			// standby, once, rather than on every event.
-			if np.Source != prevSource && isStandbySource(prevSource) && !isStandbySource(np.Source) {
-				go app.refreshBalance(deviceID, conn)
-			}
-
-			prevSource = np.Source
-
-			app.applyNowPlayingEvent(conn, np)
-			conn.MarkEventStreamActivity(activity)
+			prevSource = app.handleNowPlayingUpdatedEvent(deviceID, conn, prevSource, event)
 		})
 
 		wsClient.OnVolumeUpdated(func(event *models.VolumeUpdatedEvent) {
@@ -825,6 +804,16 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			go app.refreshBalance(deviceID, conn)
 		})
 
+		wsClient.OnZoneUpdated(func(event *models.ZoneUpdatedEvent) {
+			eventDeviceID := zoneEventDeviceID(event.DeviceID, conn)
+
+			refreshes := app.reserveZoneRefreshesAfterEvent(eventDeviceID, event.Zone.Master)
+			for _, refresh := range refreshes {
+				refresh := refresh
+				go app.completeAuthoritativeZoneRefresh(refresh)
+			}
+		})
+
 		wsClient.OnNameUpdated(func(event *models.NameUpdatedEvent) {
 			conn.MarkEventStreamActivity(time.Now())
 			conn.ApplyNameEvent(event.Name.Value)
@@ -885,6 +874,38 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 		return
 	}
+}
+
+func (app *WebApp) handleNowPlayingUpdatedEvent(
+	deviceID string,
+	conn *webtypes.DeviceConnection,
+	previousSource string,
+	event *models.NowPlayingUpdatedEvent,
+) string {
+	activity := time.Now()
+	nowPlaying := &event.NowPlaying
+
+	// A /select returns 200 even when the source is rejected; the failure
+	// shows up here as a transition to an error source. Log it so it lands in
+	// a diagnostic export without needing a live trace.
+	if nowPlaying.Source != previousSource && isErrorSource(nowPlaying.Source) {
+		logNowPlayingError(deviceID, nowPlaying.Source, nowPlaying.SourceAccount)
+	}
+
+	// Waking up can flip whether the speaker answers for balance at all, and a
+	// reading taken while it was asleep would have been stored as "no balance
+	// here". Re-read on the transition out of standby, once, rather than on
+	// every event.
+	if nowPlaying.Source != previousSource &&
+		isStandbySource(previousSource) &&
+		!isStandbySource(nowPlaying.Source) {
+		go app.refreshBalance(deviceID, conn)
+	}
+
+	app.applyNowPlayingEvent(conn, nowPlaying)
+	conn.MarkEventStreamActivity(activity)
+
+	return nowPlaying.Source
 }
 
 func publishAndConnectDeviceWebSocket(
@@ -999,6 +1020,8 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 	presets, presetsErr := conn.Client.GetPresets()
 	sources, sourcesErr := conn.Client.GetSources()
 	bass, bassErr := conn.Client.GetBass()
+	zoneGeneration := conn.BeginZoneRefresh()
+	zone, zoneErr := conn.Client.GetZone()
 
 	var (
 		group    *models.Group
@@ -1094,6 +1117,11 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 			conn.ApplyPolledGroup(groupGeneration, group)
 		}
 	}
+
+	if zoneErr == nil && conn.DeviceInfo != nil &&
+		conn.ApplyPolledZone(zoneGeneration, conn.DeviceInfo.DeviceID, zone) {
+		app.BroadcastDeviceList()
+	}
 }
 
 func (app *WebApp) applyGroupUpdatedEvent(
@@ -1103,6 +1131,112 @@ func (app *WebApp) applyGroupUpdatedEvent(
 	conn.MarkEventStreamActivity(time.Now())
 
 	return app.queueBroadcastIfChanged(conn.ApplyGroupEvent(&event.Group, time.Now()))
+}
+
+type pendingZoneRefresh struct {
+	masterDeviceID string
+	connection     *webtypes.DeviceConnection
+	generation     uint64
+}
+
+func zoneEventDeviceID(eventDeviceID string, conn *webtypes.DeviceConnection) string {
+	if eventDeviceID = strings.TrimSpace(eventDeviceID); eventDeviceID != "" {
+		return eventDeviceID
+	}
+
+	if conn == nil || conn.DeviceInfo == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(conn.DeviceInfo.DeviceID)
+}
+
+// reserveZoneRefreshesAfterEvent is the synchronous ordering barrier for a
+// zoneUpdated event. Every affected connection receives a new generation
+// before any /getZone request starts, so an older in-flight poll cannot restore
+// stale topology while the event refresh is pending or fails.
+func (app *WebApp) reserveZoneRefreshesAfterEvent(
+	eventDeviceID string,
+	eventMasterID string,
+) []pendingZoneRefresh {
+	candidates := map[string]struct{}{}
+	if eventDeviceID = strings.TrimSpace(eventDeviceID); eventDeviceID != "" {
+		candidates[eventDeviceID] = struct{}{}
+	}
+
+	if eventMasterID = strings.TrimSpace(eventMasterID); eventMasterID != "" {
+		candidates[eventMasterID] = struct{}{}
+	}
+
+	snapshot := app.DeviceSnapshot()
+
+	connectionsByDeviceID := make(map[string][]*webtypes.DeviceConnection, len(snapshot))
+	for _, entry := range snapshot {
+		if entry.Device == nil || entry.Device.DeviceInfo == nil {
+			continue
+		}
+
+		deviceID := strings.TrimSpace(entry.Device.DeviceInfo.DeviceID)
+		if deviceID != "" {
+			connectionsByDeviceID[deviceID] = append(connectionsByDeviceID[deviceID], entry.Device)
+		}
+
+		status := entry.Device.Status()
+		if eventDeviceID == "" || status == nil || status.Zone == nil ||
+			!status.Zone.IsInZone(eventDeviceID) {
+			continue
+		}
+
+		if masterID := strings.TrimSpace(status.Zone.Master); masterID != "" {
+			candidates[masterID] = struct{}{}
+		}
+	}
+
+	refreshes := make([]pendingZoneRefresh, 0, len(candidates))
+
+	seenConnections := make(map[*webtypes.DeviceConnection]struct{}, len(candidates))
+	for masterID := range candidates {
+		connections := connectionsByDeviceID[masterID]
+		if len(connections) != 1 || connections[0].Client == nil {
+			continue
+		}
+
+		connection := connections[0]
+		if _, duplicate := seenConnections[connection]; duplicate {
+			continue
+		}
+
+		seenConnections[connection] = struct{}{}
+
+		refreshes = append(refreshes, pendingZoneRefresh{
+			masterDeviceID: masterID,
+			connection:     connection,
+			generation:     connection.BeginZoneEventRefresh(),
+		})
+	}
+
+	return refreshes
+}
+
+// refreshZonesAfterEvent is the synchronous form used by focused tests and
+// callers that already run outside an event callback. Production callbacks
+// reserve synchronously, then complete each network request asynchronously.
+func (app *WebApp) refreshZonesAfterEvent(eventDeviceID, eventMasterID string) {
+	for _, refresh := range app.reserveZoneRefreshesAfterEvent(eventDeviceID, eventMasterID) {
+		app.completeAuthoritativeZoneRefresh(refresh)
+	}
+}
+
+func (app *WebApp) completeAuthoritativeZoneRefresh(refresh pendingZoneRefresh) {
+	zone, err := refresh.connection.Client.GetZone()
+	if err != nil {
+		log.Printf("Failed to refresh zone master %s: %v", sanitizeLog(refresh.masterDeviceID), err)
+		return
+	}
+
+	if refresh.connection.ApplyPolledZone(refresh.generation, refresh.masterDeviceID, zone) {
+		app.BroadcastDeviceList()
+	}
 }
 
 // HandleDeviceWebSocket handles individual device WebSocket connections for real-time device-specific updates

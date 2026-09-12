@@ -21,11 +21,26 @@ func projectionDeviceAt(controlID, address, deviceID, name string, connected boo
 	conn := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{
 		DeviceID:  deviceID,
 		Name:      name,
+		Type:      "SoundTouch 10",
 		IPAddress: address,
 	})
 	conn.SetStatus(&webtypes.DeviceStatus{IsConnected: connected, Group: group})
 
 	return DeviceEntry{ID: controlID, Device: conn, LastSeen: conn.LastSeen}
+}
+
+func projectionDeviceWithZone(
+	host, deviceID, name string,
+	connected bool,
+	group *models.Group,
+	zone *models.ZoneInfo,
+) DeviceEntry {
+	entry := projectionDevice(host, deviceID, name, connected, group)
+	entry.Device.UpdateStatus(func(status *webtypes.DeviceStatus) {
+		status.Zone = zone
+	})
+
+	return entry
 }
 
 func testStereoGroup() *models.Group {
@@ -179,6 +194,148 @@ func TestProjectDeviceEntriesKeepsStablePairWhenMasterIsDisconnected(t *testing.
 	pair := got["192.0.2.10"].StereoPair
 	if pair == nil || !pair.Degraded || pair.AvailableMemberCount != 1 {
 		t.Errorf("disconnected master should produce a degraded logical pair: %+v", got)
+	}
+}
+
+func TestProjectDeviceEntriesCollapsesMasterConfirmedZone(t *testing.T) {
+	zone := &models.ZoneInfo{
+		Master: "master-id",
+		Members: []models.Member{
+			{DeviceID: "master-id", IP: "192.0.2.10"},
+			{DeviceID: "member-id", IP: "192.0.2.20"},
+		},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.10", "master-id", "Kitchen", true, nil, zone),
+		projectionDeviceWithZone("192.0.2.20", "member-id", "Dining", true, nil, nil),
+		projectionDeviceWithZone("192.0.2.30", "other-id", "Bedroom", true, nil, nil),
+	})
+
+	if len(got) != 2 {
+		t.Fatalf("projected devices = %d, want zone plus standalone: %+v", len(got), got)
+	}
+
+	master := got["192.0.2.10"]
+	if master.Zone == nil {
+		t.Fatalf("logical zone master missing: %+v", got)
+	}
+	if master.Zone.MasterDeviceID != "master-id" || master.Zone.MasterControlID != "192.0.2.10" ||
+		master.Zone.MemberCount != 2 || master.Zone.PhysicalMemberCount != 2 ||
+		master.Zone.AvailableMemberCount != 2 || master.Zone.Degraded {
+		t.Fatalf("unexpected zone projection: %+v", master.Zone)
+	}
+	if member := master.Zone.Members[1]; member.ControlID != "192.0.2.20" ||
+		member.HardwareID != "member-id" || member.Name != "Dining" ||
+		member.Type != "SoundTouch 10" || member.IP != "192.0.2.20" ||
+		!member.Available || member.Connectivity != "online" || len(member.PhysicalMembers) != 1 {
+		t.Fatalf("unexpected logical zone member: %+v", member)
+	}
+	if _, exists := got["192.0.2.20"]; exists {
+		t.Fatal("zone member remained a separate control target")
+	}
+}
+
+func TestProjectDeviceEntriesFoldsStereoBeforeZone(t *testing.T) {
+	group := testStereoGroup()
+	group.Name = "Living Room"
+	zone := &models.ZoneInfo{
+		Master: "master-id",
+		Members: []models.Member{
+			{DeviceID: "master-id", IP: "192.0.2.5"},
+			{DeviceID: "left-id", IP: "192.0.2.10"},
+		},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.5", "master-id", "Kitchen", true, nil, zone),
+		projectionDeviceWithZone("192.0.2.10", "left-id", "Living Room Left", true, group, nil),
+		projectionDeviceWithZone("192.0.2.11", "right-id", "Living Room Right", false, group, nil),
+	})
+
+	view := got["192.0.2.5"].Zone
+	if len(got) != 1 || view == nil {
+		t.Fatalf("zone with stereo member was not collapsed: %+v", got)
+	}
+	if view.MemberCount != 2 || view.PhysicalMemberCount != 3 || !view.Degraded {
+		t.Fatalf("logical/physical counts or degradation are wrong: %+v", view)
+	}
+	pair := view.Members[1]
+	if pair.Kind != "stereoPair" || pair.ControlID != "192.0.2.10" ||
+		pair.HardwareID != "left-id" || pair.StereoPair == nil ||
+		len(pair.DeviceIDs) != 2 || len(pair.PhysicalMembers) != 2 {
+		t.Fatalf("stereo zone member was not nested: %+v", pair)
+	}
+	if pair.PhysicalMembers[0].Role != "LEFT" || pair.PhysicalMembers[1].Role != "RIGHT" ||
+		pair.PhysicalMembers[1].Available || pair.PhysicalMembers[1].Connectivity != "offline" {
+		t.Fatalf("physical stereo status was not preserved: %+v", pair.PhysicalMembers)
+	}
+}
+
+func TestProjectDeviceEntriesFailsOpenWithoutMasterZoneClaim(t *testing.T) {
+	zone := &models.ZoneInfo{
+		Master:  "master-id",
+		Members: []models.Member{{DeviceID: "member-id", IP: "192.0.2.20"}},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.10", "master-id", "Kitchen", true, nil, nil),
+		projectionDeviceWithZone("192.0.2.20", "member-id", "Dining", true, nil, zone),
+	})
+
+	if len(got) != 2 || got["192.0.2.10"].Zone != nil || got["192.0.2.20"].Zone != nil {
+		t.Fatalf("member-only zone claim hid physical cards: %+v", got)
+	}
+}
+
+func TestProjectDeviceEntriesFailsOpenForConflictingZoneClaims(t *testing.T) {
+	zoneA := &models.ZoneInfo{
+		Master:  "a-id",
+		Members: []models.Member{{DeviceID: "b-id", IP: "192.0.2.20"}},
+	}
+	zoneB := &models.ZoneInfo{
+		Master:  "b-id",
+		Members: []models.Member{{DeviceID: "c-id", IP: "192.0.2.30"}},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.10", "a-id", "A", true, nil, zoneA),
+		projectionDeviceWithZone("192.0.2.20", "b-id", "B", true, nil, zoneB),
+		projectionDeviceWithZone("192.0.2.30", "c-id", "C", true, nil, nil),
+	})
+
+	if len(got) != 3 {
+		t.Fatalf("conflicting zones hid a physical card: %+v", got)
+	}
+	for id, view := range got {
+		if view.Zone != nil {
+			t.Fatalf("conflicting zone was projected for %s: %+v", id, view.Zone)
+		}
+	}
+}
+
+func TestProjectDeviceEntriesFailsOpenForUnknownPhysicalMemberConflict(t *testing.T) {
+	zoneA := &models.ZoneInfo{
+		Master:  "a-id",
+		Members: []models.Member{{DeviceID: "unknown-id", IP: "192.0.2.99"}},
+	}
+	zoneB := &models.ZoneInfo{
+		Master:  "b-id",
+		Members: []models.Member{{DeviceID: "unknown-id", IP: "192.0.2.99"}},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.10", "a-id", "A", true, nil, zoneA),
+		projectionDeviceWithZone("192.0.2.20", "b-id", "B", true, nil, zoneB),
+	})
+
+	if len(got) != 2 {
+		t.Fatalf("zones sharing an unknown physical member hid a master card: %+v", got)
+	}
+	for id, view := range got {
+		if view.Zone != nil {
+			t.Fatalf("conflicting zone was projected for %s: %+v", id, view.Zone)
+		}
 	}
 }
 
