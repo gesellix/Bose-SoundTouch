@@ -226,6 +226,40 @@ curl \
   --fail \
   "$BINARY_URL"
 
+# Put the backed-up binary back in place. Used on every path that can leave a
+# broken or incomplete binary installed: a failed write (disk full mid-copy is
+# the documented failure mode on this filesystem) and a service that does not
+# answer after the install. Without this the installer exits leaving the
+# speaker with no working AfterTouch and the rollback left to the operator --
+# who, on a headless device reached over SSH, may not get a second chance.
+#
+# Returns non-zero when there is nothing to restore (fresh install, or the
+# operator chose to proceed without a backup), so callers can say so.
+restore_backup() {
+  if [ -z "$BACKUP_FILE" ] || [ ! -f "$BACKUP_FILE" ]; then
+    return 1
+  fi
+
+  echo "Restoring the previous binary from $BACKUP_FILE ..." >&2
+  case "$BACKUP_FILE" in
+    *.gz)
+      if ! gunzip -c "$BACKUP_FILE" > "$INSTALL_DIR/aftertouch-service"; then
+        echo "ERROR: could not restore from $BACKUP_FILE." >&2
+        return 1
+      fi
+      ;;
+    *)
+      if ! cp -p "$BACKUP_FILE" "$INSTALL_DIR/aftertouch-service"; then
+        echo "ERROR: could not restore from $BACKUP_FILE." >&2
+        return 1
+      fi
+      ;;
+  esac
+
+  chmod +x "$INSTALL_DIR/aftertouch-service"
+  return 0
+}
+
 # Back up the current binary before overwriting so a one-step rollback
 # is always available.  The version string comes from the binary itself;
 # if it is absent (very old build or corrupted) we fall back to a timestamp.
@@ -260,7 +294,23 @@ if [ -f "$INSTALL_DIR/aftertouch-service" ] && [ "$SKIP_BACKUP" != "yes" ]; then
   echo "Backed up current binary ($current_version) → $BACKUP_FILE"
 fi
 
-mv "$UPDATE_TMP_DIR/binary" "$INSTALL_DIR/aftertouch-service"
+# `set -e` would abort here on a failed write, leaving a truncated binary in
+# place and the backup untouched on disk -- the exact state the preflight check
+# above exists to prevent, but it cannot rule out (the filesystem may still
+# refuse a write it was predicted to accept). Handle it instead of aborting.
+if ! mv "$UPDATE_TMP_DIR/binary" "$INSTALL_DIR/aftertouch-service"; then
+  echo "" >&2
+  echo "ERROR: writing the new binary to $INSTALL_DIR failed (out of space?)." >&2
+  if restore_backup; then
+    echo "The previous binary is back in place; AfterTouch is unchanged." >&2
+    /etc/init.d/aftertouch restart || true
+  else
+    echo "No rollback backup is available, so the installed binary may be" >&2
+    echo "incomplete. Re-run this installer to replace it, optionally with" >&2
+    echo "an older --version." >&2
+  fi
+  exit 1
+fi
 chmod +x "$INSTALL_DIR/aftertouch-service"
 
 # Keep only the backup we just created; prune all older *.backup, *.old, and
@@ -384,5 +434,26 @@ else
   echo "" >&2
   echo "  For a live view of the daemon's output, run:" >&2
   echo "    logread -f | grep aftertouch" >&2
+
+  # A new binary that does not answer is worse than the old one that did, and
+  # the operator is typically on a single SSH session with no local console to
+  # fall back to. Put the previous binary back and restart, so the speaker is
+  # left in the state it was in before this install rather than in a broken
+  # one. The install still reports failure -- this is a rollback, not a
+  # success path.
+  echo "" >&2
+  if restore_backup; then
+    /etc/init.d/aftertouch restart || true
+    if curl -fsS --max-time 10 http://localhost:8000 >/dev/null 2>&1; then
+      echo "  Rolled back to the previous binary, which is answering again." >&2
+      echo "  AfterTouch $VERSION was NOT installed." >&2
+    else
+      echo "  Rolled back to the previous binary, but it is not answering" >&2
+      echo "  either -- the problem is unlikely to be this release." >&2
+    fi
+  else
+    echo "  No rollback backup was kept, so the new binary is still in place." >&2
+  fi
+
   exit 1
 fi
