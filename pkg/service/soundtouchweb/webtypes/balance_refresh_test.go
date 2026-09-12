@@ -38,6 +38,44 @@ func TestBalanceRefreshCoalesces(t *testing.T) {
 	}
 }
 
+// TestBalanceUnavailableIsLoggedOnChange pins the log gate. A balance read
+// happens on every balanceUpdated frame and every status poll, so a speaker
+// that reports no usable balance — a standalone unit — used to emit one
+// identical line per poll, per speaker.
+func TestBalanceUnavailableIsLoggedOnChange(t *testing.T) {
+	conn := &DeviceConnection{}
+
+	if !conn.MarkBalanceUnavailable() {
+		t.Fatal("the first unavailable reading must be logged")
+	}
+
+	for i := range 5 {
+		if conn.MarkBalanceUnavailable() {
+			t.Errorf("poll %d logged the same unavailable state again", i+2)
+		}
+	}
+
+	// A speaker that starts reporting a usable balance, then stops again, is
+	// worth one more line: the state genuinely changed twice.
+	conn.MarkBalanceAvailable()
+
+	if !conn.MarkBalanceUnavailable() {
+		t.Error("becoming unavailable again was swallowed")
+	}
+}
+
+// A fresh connection has logged nothing yet, so the first available reading
+// must not leave the marker set and swallow a later change.
+func TestBalanceAvailableKeepsTheMarkerClear(t *testing.T) {
+	conn := &DeviceConnection{}
+
+	conn.MarkBalanceAvailable()
+
+	if !conn.MarkBalanceUnavailable() {
+		t.Error("the first unavailable reading after an available one was not logged")
+	}
+}
+
 // TestBalanceRefreshIsRaceFree exercises the CAS loops under concurrency.
 func TestBalanceRefreshIsRaceFree(t *testing.T) {
 	conn := &DeviceConnection{}

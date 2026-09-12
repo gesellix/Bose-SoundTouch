@@ -82,6 +82,14 @@ type DeviceConnection struct {
 	// blocks on a sleeping speaker.
 	balanceRefresh atomic.Int32
 
+	// balanceUnavailableLogged remembers that this speaker's balance has
+	// already been reported as unavailable, so that line is logged when the
+	// state changes rather than on every read. A balance read runs on every
+	// balanceUpdated frame and every status poll, so a speaker that reports
+	// no usable balance produced one identical line per poll, per speaker,
+	// which buried everything else in the log.
+	balanceUnavailableLogged atomic.Bool
+
 	speakerConnectionKnown     bool
 	speakerConnectionConnected bool
 	speakerConnectionObserved  time.Time
@@ -685,6 +693,18 @@ func (c *DeviceConnection) EndBalanceRefresh() bool {
 			}
 		}
 	}
+}
+
+// MarkBalanceUnavailable records that this speaker reports no usable balance,
+// and reports whether that is a change — i.e. whether it is worth logging.
+func (c *DeviceConnection) MarkBalanceUnavailable() bool {
+	return c.balanceUnavailableLogged.CompareAndSwap(false, true)
+}
+
+// MarkBalanceAvailable clears the marker, so a speaker that later stops
+// reporting a usable balance is logged once more rather than silently.
+func (c *DeviceConnection) MarkBalanceAvailable() {
+	c.balanceUnavailableLogged.Store(false)
 }
 
 // ObserveEventStreamTransport applies an authoritative client transport
