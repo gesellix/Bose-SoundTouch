@@ -56,16 +56,52 @@ function isTrackSkip(action) {
     return action === 'next-track' || action === 'previous-track';
 }
 
-// A skip is verifiable exactly where the speaker reports a trackID. That is a
-// stable per-track identity (`spotify:track:...` in the captured firmware
-// responses), so unlike track/stationName it does not move when a live stream
-// rolls its own title metadata over, and it does change when a skip really
-// happens. Sources with no track concept -- AUX, PRODUCT, internet radio --
-// report no trackID at all, and there no readback can ever say anything, so
-// the command settles on a write the speaker accepted instead of spending the
-// whole readback window with the transport dead to end "unverified".
+// What identifies "the same track" where the speaker reports no trackID.
+// Stringified so an absent field cannot merge into its neighbour.
+export function trackMetadataIdentity(nowPlaying) {
+    return JSON.stringify([
+        nowPlaying?.Track,
+        nowPlaying?.Artist,
+        nowPlaying?.Album,
+        nowPlaying?.ContentItem?.Location,
+    ].map(value => value || ''));
+}
+
+const EMPTY_TRACK_IDENTITY = trackMetadataIdentity(null);
+
+// What a skip against this source can be confirmed with, measured on a
+// SoundTouch 10 (server version 4) by walking its sources:
+//
+//   SPOTIFY       trackID, skipEnabled          -> the trackID is the signal
+//   STORED_MUSIC  no trackID, skipEnabled       -> track metadata is the signal
+//   TUNEIN        no trackID, no skipEnabled    -> nothing to verify
+//   RADIO_BROWSER no trackID, no skipEnabled    -> nothing to verify
+//   AUX           no trackID, no skipEnabled    -> nothing to verify
+//
+// trackID is preferred wherever it exists: it is a stable per-track identity
+// (`spotify:track:...`), so it survives a stream rewriting its own title and
+// still moves on a real skip.
+//
+// Track metadata is the fallback, and only where the speaker claims the skip
+// is supported. That claim is what separates a library, whose title changes
+// only when the track really changes, from live radio, which rewrites its
+// title while the same stream plays on and claims no skip support at all.
+//
+// With neither, no readback can ever say anything, so the command settles on a
+// write the speaker accepted instead of spending the whole readback window
+// with the transport dead to end "unverified".
+export function trackSkipExpectation(nowPlaying, skipSupported) {
+    return {
+        previousTrackID: nowPlaying?.TrackID || '',
+        previousTrackIdentity: skipSupported ? trackMetadataIdentity(nowPlaying) : '',
+    };
+}
+
 function settlesOnWrite(action, expected) {
-    return isTrackSkip(action) && !expected?.previousTrackID;
+    return isTrackSkip(action) &&
+        !expected?.previousTrackID &&
+        (!expected?.previousTrackIdentity ||
+            expected.previousTrackIdentity === EMPTY_TRACK_IDENTITY);
 }
 
 export function contentExpectation(item) {
@@ -129,8 +165,17 @@ export function matchesCommand(status, command) {
     if (action === 'repeat-one') return nowPlaying?.RepeatSetting === 'REPEAT_ONE';
     if (action === 'repeat-off') return nowPlaying?.RepeatSetting === 'REPEAT_OFF';
     if (isTrackSkip(action)) {
-        const trackID = nowPlaying?.TrackID;
-        return Boolean(trackID) && trackID !== command?.expected?.previousTrackID;
+        const expected = command?.expected;
+        if (expected?.previousTrackID) {
+            const trackID = nowPlaying?.TrackID;
+            return Boolean(trackID) && trackID !== expected.previousTrackID;
+        }
+        if (expected?.previousTrackIdentity) {
+            const identity = trackMetadataIdentity(nowPlaying);
+            return identity !== EMPTY_TRACK_IDENTITY &&
+                identity !== expected.previousTrackIdentity;
+        }
+        return false;
     }
     if (['preset', 'recent', 'tunein', 'radiobrowser', 'url', 'library'].includes(action)) {
         return matchesContentExpectation(nowPlaying, command?.expected);
