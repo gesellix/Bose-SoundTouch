@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
@@ -93,12 +94,26 @@ func TestUpdatePreset_AutoAddsCanonicalSource(t *testing.T) {
 		t.Fatalf("GetPresets: %v", err)
 	}
 
-	if len(presets) < 3 {
-		t.Fatalf("expected at least 3 presets stored after UpdatePreset(slot 3), got %d", len(presets))
+	// Saving slot 3 stores exactly one preset. It used to store three, because
+	// UpdatePreset padded the list to the slot's index with empty entries;
+	// addressing presets by button number instead means empty slots are simply
+	// absent, which is also what a speaker's own /presets does (issue 715).
+	var stored *models.ServicePreset
+
+	for i := range presets {
+		if presets[i].ButtonNumber == "3" {
+			stored = &presets[i]
+
+			break
+		}
 	}
 
-	if presets[2].Name != "SMOOTH JAZZ" {
-		t.Errorf("preset 3: expected name SMOOTH JAZZ, got %q", presets[2].Name)
+	if stored == nil {
+		t.Fatalf("expected a preset stored for button 3 after UpdatePreset(slot 3), got %+v", presets)
+	}
+
+	if stored.Name != "SMOOTH JAZZ" {
+		t.Errorf("preset 3: expected name SMOOTH JAZZ, got %q", stored.Name)
 	}
 }
 
