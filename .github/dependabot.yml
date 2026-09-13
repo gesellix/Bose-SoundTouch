@@ -57,7 +57,7 @@ updates:
     labels:
       - "dependencies"
       - "go"
-      - "docs"
+      - "documentation"
     rebase-strategy: "auto"
 
   # Example module dependency updates
