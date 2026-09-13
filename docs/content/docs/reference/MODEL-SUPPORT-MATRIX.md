@@ -28,17 +28,22 @@ invisible from the outside. If you have a model that isn't filled in yet,
 
 ## Matrix
 
-| Model               | variant  | moduleType | BCO | On-device install | `:8000` from LAN | Entry port | Evidence                                                              |
-|---------------------|----------|------------|-----|-------------------|------------------|------------|-----------------------------------------------------------------------|
-| SoundTouch 20       | `spotty` | `scm`      | yes | works             | ✗ blocked       | `17008`    | verified on hardware 2026-08-16 (FW 27.0.6), redirect survives reboot |
-| SoundTouch 10       | ?        | ?          | ?   | reported working  | ?                | ?          | not tested for LAN reachability                                       |
-| SoundTouch 30       | ?        | ?          | ?   | reported working  | ?                | ?          | not tested for LAN reachability                                       |
-| SoundTouch Portable | ?        | ?          | ?   | ?                 | ?                | ?          | not tested                                                            |
-| Wave / SA-4         | ?        | ?          | ?   | ?                 | ?                | ?          | not tested                                                            |
+| Model               | variant  | moduleType | BCO | On-device install | `:8000` from LAN | Entry port      | Evidence                                                                                                   |
+|---------------------|----------|------------|-----|-------------------|------------------|-----------------|------------------------------------------------------------------------------------------------------------|
+| SoundTouch 20       | `spotty` | `scm`      | yes | works             | ✗ blocked       | `17008`         | verified on hardware 2026-08-16 (FW 27.0.6), redirect survives reboot                                      |
+| SoundTouch 10       | ?        | ?          | ?   | reported working  | ?                | ?               | not tested for LAN reachability                                                                            |
+| SoundTouch 30       | `mojo`   | ?          | ?   | reported working  | ✗ reported      | `17008`         | reported by a user (Series I, v0.112.0): redirect works, see [discussion 490][d490]                        |
+| SoundTouch Portable | `taigan` | ?          | ?   | reported working  | ✗ reported      | `17008` or `82` | reported by a user (Series I, FW 27.0.6): both work, `82` stable across reboot, see [discussion 490][d490] |
+| Wave / SA-4         | ?        | ?          | ?   | ?                 | ?                | ?               | not tested                                                                                                 |
 
 Not every SoundTouch shares one firmware image, so treat a `?` as genuinely
 unknown. In particular, do not assume a model is unaffected just because it is
 newer or older than a model that is.
+
+Rows marked *reported* come from users' own tests and have not been reproduced
+by the maintainers yet.
+
+[d490]: https://github.com/gesellix/Bose-SoundTouch/discussions/490
 
 ## LAN access on co-processor chassis
 
@@ -90,6 +95,33 @@ Two caveats worth knowing:
   through a tunnel works for linking where a plain LAN address does not.
 - **The `streborn` project defaults to the same port** for the same reason. If
   you run both on one speaker, change `AFTERTOUCH_LAN_PORT`.
+- **`17008` may be briefly unreliable on some models (reported, not
+  reproduced).** On a SoundTouch Portable, a user saw the UI on `17008`
+  intermittently stop responding while Bose's `Shepherd` supervisor restarted
+  `SoftwareUpdate`, even though the `iptables` rule stayed in place. Port `82`
+  (`PtsServer`) was stable across a full reboot. If you see this, set
+  `AFTERTOUCH_LAN_PORT=82` and restart AfterTouch.
+
+### Bose ports by variant
+
+Listening Bose services, as reported on the speaker itself. Any of them is a
+candidate entry port, but a port whose service is still in use (such as
+`8090`, the SoundTouch API) must not be redirected.
+
+| Port    | Service (`taigan`, SoundTouch Portable) | Notes                                         |
+|---------|-----------------------------------------|-----------------------------------------------|
+| `82`    | `PtsServer` ("xfer")                    | reported stable as an entry port              |
+| `8080`  | `WebServer`                             | speaker WebSocket; in use                     |
+| `8090`  | `BoseApp`                               | SoundTouch API; in use                        |
+| `8200`  | `STSCertified`                          |                                               |
+| `17000` | `CLIServer`                             | telnet CLI; used for migration and SSH unlock |
+| `17004` | `BoseApp`                               |                                               |
+| `17005` | `BoseApp`                               |                                               |
+| `17008` | `SoftwareUpdate`                        | default entry port; periodically restarted    |
+| `17018` | `LegacyProduct`                         | untested as an entry port                     |
+
+Source: [discussion 490][d490] (reported on FW 27.0.6). Other variants may
+differ.
 
 ## How to fill in a row
 
@@ -105,7 +137,7 @@ curl -s http://<speaker-ip>:8090/info
 curl -v --max-time 5 http://<speaker-ip>:8000/health
 
 # which Bose ports the chassis relays at all
-for p in 82 8080 8090 8091 8200 17000 17008; do
+for p in 82 8080 8090 8091 8200 17000 17008 17018; do
   printf '%s: ' "$p"
   curl -s -o /dev/null -w '%{http_code}\n' --max-time 3 "http://<speaker-ip>:$p/" || echo unreachable
 done
