@@ -41,6 +41,7 @@ type fakeClient struct {
 	getGroupCalls int
 	addGroup      func(*models.Group) *models.Group
 	addResponse   func(*models.Group) *models.Group
+	getZone       func(int, *models.ZoneInfo) (*models.ZoneInfo, error)
 	getGroup      func(int, *models.Group) *models.Group
 }
 
@@ -74,8 +75,14 @@ func (f *fakeClient) GetZone() (*models.ZoneInfo, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.zoneCalls++
+	if f.getZone != nil {
+		f.zone, f.zoneErr = f.getZone(f.zoneCalls, f.zone)
+	}
 	if f.zoneErr != nil {
 		return nil, f.zoneErr
+	}
+	if f.zone == nil {
+		return nil, errors.New("fake zone response is nil")
 	}
 	result := *f.zone
 	result.Members = append([]models.Member(nil), f.zone.Members...)
@@ -172,6 +179,171 @@ func TestCreateSuccessPreservesAsymmetricPayloadAndVerifies(t *testing.T) {
 			t.Errorf("member not verified from fresh group state: %+v", member)
 		}
 	}
+	if left.zoneCalls != 2 || right.zoneCalls != 2 {
+		t.Fatalf("fresh zone reads LEFT=%d RIGHT=%d, want preflight and post-mutation reads", left.zoneCalls, right.zoneCalls)
+	}
+}
+
+func TestCreateAcceptsEmptyStandaloneZonePreflight(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	left.zone = &models.ZoneInfo{}
+	right.zone = &models.ZoneInfo{}
+	left.getZone = transitionToStandalone(leftID)
+	right.getZone = transitionToStandalone(rightID)
+
+	result, err := coordinator.Create(CreateRequest{
+		LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Pair",
+	})
+	if err != nil || result.Status != StatusSucceeded {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.addRequest == nil || right.addRequest == nil {
+		t.Fatal("empty standalone zone responses blocked pair creation")
+	}
+}
+
+func TestCreateAcceptsEmptyPostMutationZoneVerification(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	left.getZone = transitionToEmptyZone()
+	right.getZone = transitionToEmptyZone()
+
+	result, err := coordinator.Create(CreateRequest{
+		LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Pair",
+	})
+	if err != nil || result.Status != StatusSucceeded {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	for _, member := range result.Members {
+		if !member.Verified || member.VerificationError != nil {
+			t.Fatalf("empty post-create zone was not accepted: %+v", member)
+		}
+	}
+}
+
+func TestCreateTransitionsConsistentTemporaryZoneToStereoPair(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	left.zone = temporaryZone(leftID, rightID)
+	right.zone = temporaryZone(leftID, rightID)
+	left.getZone = transitionToStandalone(leftID)
+	right.getZone = transitionToStandalone(rightID)
+
+	result, err := coordinator.Create(CreateRequest{
+		LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Living Room Pair",
+	})
+	if err != nil || result.Status != StatusSucceeded {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.addRequest == nil || right.addRequest == nil {
+		t.Fatal("same-zone candidates were not mutated")
+	}
+	if left.zoneCalls != 2 || right.zoneCalls != 2 {
+		t.Fatalf("fresh zone reads LEFT=%d RIGHT=%d, want 2/2", left.zoneCalls, right.zoneCalls)
+	}
+}
+
+func TestCreateTransitionsCandidatesFromLargerZoneWithThirdMaster(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	left.zone = temporaryZone("THIRD-ID", leftID, rightID)
+	right.zone = temporaryZone("THIRD-ID", leftID, rightID)
+	left.getZone = transitionToStandalone(leftID)
+	right.getZone = transitionToStandalone(rightID)
+
+	result, err := coordinator.Create(CreateRequest{
+		LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Living Room Pair",
+	})
+	if err != nil || result.Status != StatusSucceeded {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.addRequest == nil || right.addRequest == nil {
+		t.Fatal("same larger-zone candidates were not mutated")
+	}
+	if left.zoneCalls != 2 || right.zoneCalls != 2 {
+		t.Fatalf("fresh zone reads LEFT=%d RIGHT=%d, want 2/2", left.zoneCalls, right.zoneCalls)
+	}
+}
+
+func TestCreateRejectsOneSidedTemporaryZoneWithoutMutation(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	left.zone = temporaryZone(leftID, rightID)
+
+	result, err := coordinator.Create(CreateRequest{LeftIPAddress: leftIP, RightIPAddress: rightIP})
+	if err == nil || result.Status != StatusFailed {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.addRequest != nil || right.addRequest != nil {
+		t.Fatal("addGroup called for one-sided temporary-zone state")
+	}
+}
+
+func TestCreateRejectsDifferentTemporaryZonesWithoutMutation(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	left.zone = temporaryZone(leftID, rightID)
+	right.zone = temporaryZone(rightID, leftID)
+
+	result, err := coordinator.Create(CreateRequest{LeftIPAddress: leftIP, RightIPAddress: rightIP})
+	if err == nil || result.Status != StatusFailed {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.addRequest != nil || right.addRequest != nil {
+		t.Fatal("addGroup called for candidates reporting different temporary zones")
+	}
+}
+
+func TestCreateRejectsInconsistentOrMalformedZoneViewsWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name      string
+		leftZone  *models.ZoneInfo
+		rightZone *models.ZoneInfo
+	}{
+		{
+			name:      "inconsistent membership",
+			leftZone:  temporaryZone(leftID, rightID),
+			rightZone: temporaryZone(leftID, rightID, "OTHER-ID"),
+		},
+		{
+			name:      "empty master",
+			leftZone:  &models.ZoneInfo{Members: []models.Member{{DeviceID: leftID}, {DeviceID: rightID}}},
+			rightZone: temporaryZone(leftID, rightID),
+		},
+		{
+			name:      "whitespace master",
+			leftZone:  &models.ZoneInfo{Master: "  "},
+			rightZone: &models.ZoneInfo{Master: rightID},
+		},
+		{
+			name:      "standalone master is another device",
+			leftZone:  &models.ZoneInfo{Master: "OTHER-ID"},
+			rightZone: &models.ZoneInfo{Master: rightID},
+		},
+		{
+			name: "duplicate member",
+			leftZone: &models.ZoneInfo{Master: leftID, Members: []models.Member{
+				{DeviceID: leftID}, {DeviceID: rightID}, {DeviceID: rightID},
+			}},
+			rightZone: temporaryZone(leftID, rightID),
+		},
+		{
+			name:      "candidate absent from matching zone",
+			leftZone:  temporaryZone(leftID, "OTHER-ID"),
+			rightZone: temporaryZone(leftID, "OTHER-ID"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			left, right, coordinator := newCreateCoordinator()
+			left.zone = test.leftZone
+			right.zone = test.rightZone
+
+			result, err := coordinator.Create(CreateRequest{LeftIPAddress: leftIP, RightIPAddress: rightIP})
+			if err == nil || result.Status != StatusFailed {
+				t.Fatalf("result = %+v, err = %v", result, err)
+			}
+			if left.addRequest != nil || right.addRequest != nil {
+				t.Fatal("addGroup called after invalid zone preflight")
+			}
+		})
+	}
 }
 
 func TestCreateRejectsInvalidPreflightWithoutMutation(t *testing.T) {
@@ -266,6 +438,108 @@ func TestCreatePartialFailureIsCompensatedAndReported(t *testing.T) {
 	}
 	if !result.Members[0].CompensationVerified || !result.Members[1].CompensationVerified {
 		t.Fatalf("cleanup was not verified empty: %+v", result.Members)
+	}
+	if left.zoneCalls != 2 || right.zoneCalls != 2 {
+		t.Fatalf("fresh compensation zone reads LEFT=%d RIGHT=%d, want 2/2", left.zoneCalls, right.zoneCalls)
+	}
+}
+
+func TestCreateSameZonePartialFailureRequiresZoneTopologyRestoration(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	left.zone = temporaryZone(leftID, leftID, rightID)
+	right.zone = temporaryZone(leftID, leftID, rightID)
+	right.addErr = errors.New("right add failed")
+	coordinator.uncertainOutcomeDelays = nil
+	left.getZone = func(call int, current *models.ZoneInfo) (*models.ZoneInfo, error) {
+		if call == 2 {
+			return &models.ZoneInfo{Master: leftID}, nil
+		}
+
+		return current, nil
+	}
+
+	result, err := coordinator.Create(CreateRequest{
+		LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Pair",
+	})
+	if err == nil || result.Status != StatusDegraded || result.CompensationComplete {
+		t.Fatalf("result = %+v, err = %v; want degraded rollback proof", result, err)
+	}
+	if left.removeCalls != 1 || right.removeCalls != 0 {
+		t.Fatalf("remove calls LEFT=%d RIGHT=%d, want 1/0", left.removeCalls, right.removeCalls)
+	}
+	if result.Members[0].CompensationVerified || result.Members[0].CompensationError == nil {
+		t.Fatalf("changed LEFT zone topology was accepted: %+v", result.Members[0])
+	}
+	if !result.Members[1].CompensationVerified {
+		t.Fatalf("unchanged RIGHT zone topology was not verified: %+v", result.Members[1])
+	}
+	if left.zoneCalls != 2 || right.zoneCalls != 2 {
+		t.Fatalf("fresh compensation zone reads LEFT=%d RIGHT=%d, want 2/2", left.zoneCalls, right.zoneCalls)
+	}
+}
+
+func TestCreateCompensationRejectsUnprovenZonePostcondition(t *testing.T) {
+	tests := []struct {
+		name    string
+		getZone func(int, *models.ZoneInfo) (*models.ZoneInfo, error)
+	}{
+		{
+			name: "read failure",
+			getZone: func(call int, current *models.ZoneInfo) (*models.ZoneInfo, error) {
+				if call == 2 {
+					return nil, errors.New("zone unavailable")
+				}
+
+				return current, nil
+			},
+		},
+		{
+			name: "malformed response",
+			getZone: func(call int, current *models.ZoneInfo) (*models.ZoneInfo, error) {
+				if call == 2 {
+					return &models.ZoneInfo{Master: "  "}, nil
+				}
+
+				return current, nil
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			left, right, coordinator := newCreateCoordinator()
+			right.addErr = errors.New("right add failed")
+			coordinator.uncertainOutcomeDelays = nil
+			left.getZone = test.getZone
+
+			result, err := coordinator.Create(CreateRequest{
+				LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Pair",
+			})
+			if err == nil || result.Status != StatusDegraded || result.CompensationComplete {
+				t.Fatalf("result = %+v, err = %v; want degraded rollback proof", result, err)
+			}
+			if result.Members[0].CompensationVerified || result.Members[0].CompensationError == nil {
+				t.Fatalf("unproven LEFT zone postcondition was accepted: %+v", result.Members[0])
+			}
+			if !result.Members[1].CompensationVerified {
+				t.Fatalf("RIGHT compensation was not verified: %+v", result.Members[1])
+			}
+			if left.zoneCalls != 2 || right.zoneCalls != 2 {
+				t.Fatalf("fresh compensation zone reads LEFT=%d RIGHT=%d, want 2/2", left.zoneCalls, right.zoneCalls)
+			}
+		})
+	}
+}
+
+func TestVerifyCompensationZoneAcceptsEquivalentStandaloneRepresentations(t *testing.T) {
+	empty := &models.ZoneInfo{}
+	explicit := &models.ZoneInfo{Master: leftID}
+
+	if err := verifyCompensationZone(empty, explicit, leftID); err != nil {
+		t.Fatalf("empty to explicit standalone rejected: %v", err)
+	}
+	if err := verifyCompensationZone(explicit, empty, leftID); err != nil {
+		t.Fatalf("explicit to empty standalone rejected: %v", err)
 	}
 }
 
@@ -520,6 +794,64 @@ func TestCreateRevalidatesPhysicalStateAfterGenerationPreflight(t *testing.T) {
 	}
 	if left.addRequest != nil || right.addRequest != nil {
 		t.Fatal("addGroup called after physical state changed during persistence preflight")
+	}
+}
+
+func TestCreateRevalidatesZoneTopologyAfterGenerationPreflight(t *testing.T) {
+	left, right, _ := newCreateCoordinator()
+	left.zone = temporaryZone(leftID, rightID)
+	right.zone = temporaryZone(leftID, rightID)
+	coordinator := NewWithGenerationPersistence(
+		factoryFor(map[string]*fakeClient{leftIP: left, rightIP: right}),
+		nil,
+		func([]GenerationRef) error {
+			right.mu.Lock()
+			right.zone = &models.ZoneInfo{Master: rightID}
+			right.mu.Unlock()
+
+			return nil
+		},
+	)
+
+	result, err := coordinator.Create(CreateRequest{
+		LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Pair",
+	})
+	if err == nil || result.Status != StatusFailed {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.zoneCalls != 2 || right.zoneCalls != 2 {
+		t.Fatalf("fresh zone reads LEFT=%d RIGHT=%d, want initial and post-barrier reads", left.zoneCalls, right.zoneCalls)
+	}
+	if left.addRequest != nil || right.addRequest != nil {
+		t.Fatal("addGroup called after zone topology changed during persistence preflight")
+	}
+}
+
+func TestCreatePreservesVerifiedPairWhenPostMutationZoneReadbackDiffers(t *testing.T) {
+	left, right, coordinator := newCreateCoordinator()
+	right.getZone = func(call int, current *models.ZoneInfo) (*models.ZoneInfo, error) {
+		if call == 2 {
+			return temporaryZone(leftID, rightID), nil
+		}
+
+		return current, nil
+	}
+
+	result, err := coordinator.Create(CreateRequest{
+		LeftIPAddress: leftIP, RightIPAddress: rightIP, Name: "Pair",
+	})
+	if err == nil || result.Status != StatusDegraded {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if result.Group == nil || result.Group.ID != "PAIR-ID" {
+		t.Fatalf("verified pair was not preserved: %+v", result.Group)
+	}
+	if !result.Members[0].Verified || !result.Members[1].Verified ||
+		result.Members[1].VerificationError == nil {
+		t.Fatalf("zone proof failure not reported alongside verified group: %+v", result.Members)
+	}
+	if result.CompensationAttempted || left.removeCalls != 0 || right.removeCalls != 0 {
+		t.Fatalf("verified pair was compensated after zone-only mismatch: %+v", result)
 	}
 }
 
@@ -1436,6 +1768,35 @@ func readyClient(deviceID, name string) *fakeClient {
 		capabilities: &models.Capabilities{DeviceID: deviceID, LRStereo: true},
 		zone:         &models.ZoneInfo{Master: deviceID},
 		group:        &models.Group{},
+	}
+}
+
+func temporaryZone(master string, members ...string) *models.ZoneInfo {
+	zone := &models.ZoneInfo{Master: master}
+	for _, deviceID := range members {
+		zone.Members = append(zone.Members, models.Member{DeviceID: deviceID})
+	}
+
+	return zone
+}
+
+func transitionToStandalone(deviceID string) func(int, *models.ZoneInfo) (*models.ZoneInfo, error) {
+	return func(call int, current *models.ZoneInfo) (*models.ZoneInfo, error) {
+		if call == 2 {
+			return &models.ZoneInfo{Master: deviceID}, nil
+		}
+
+		return current, nil
+	}
+}
+
+func transitionToEmptyZone() func(int, *models.ZoneInfo) (*models.ZoneInfo, error) {
+	return func(call int, current *models.ZoneInfo) (*models.ZoneInfo, error) {
+		if call == 2 {
+			return &models.ZoneInfo{}, nil
+		}
+
+		return current, nil
 	}
 }
 
