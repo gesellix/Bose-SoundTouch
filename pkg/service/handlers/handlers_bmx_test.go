@@ -313,6 +313,7 @@ func TestHandleTuneInToken_MalformedBodyRejected(t *testing.T) {
 }
 
 func TestHandleTuneInPlayback_Authorized(t *testing.T) {
+	stub := stubTuneIn(t)
 	r, _ := setupRouter("http://localhost:8001", nil)
 
 	ts := httptest.NewServer(r)
@@ -326,13 +327,19 @@ func TestHandleTuneInPlayback_Authorized(t *testing.T) {
 	}
 	defer res.Body.Close()
 
+	body, _ := io.ReadAll(res.Body)
+
 	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %v", res.Status)
+		t.Errorf("Expected status 200, got %v: %s", res.Status, body)
 	}
 
 	var resp map[string]interface{}
-	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatal(err)
+	}
+
+	if !stub.served("/Tune.ashx") {
+		t.Error("playback did not go through the TuneIn stub")
 	}
 
 	if resp["name"] == "" {

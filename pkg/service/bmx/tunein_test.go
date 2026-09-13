@@ -721,3 +721,25 @@ func TestTuneInClassifyItemMarksUnrecognizedTypesInsteadOfDroppingThem(t *testin
 		}
 	})
 }
+
+func TestSaveTuneInEndpointsRestoresBasesAndAllowlist(t *testing.T) {
+	restore := SaveTuneInEndpoints()
+
+	SetTuneInEndpoints("http://127.0.0.1:1", "http://127.0.0.2:1")
+
+	if tuneInAPIBase != "http://127.0.0.2:1" || !allowedTuneInHosts["127.0.0.1"] {
+		t.Fatalf("override did not apply: api=%q hosts=%v", tuneInAPIBase, allowedTuneInHosts)
+	}
+
+	restore()
+
+	if tuneInOpmlTuneBase != "http://opml.radiotime.com" || tuneInOpmlDescribeBase != "https://opml.radiotime.com" ||
+		tuneInOpmlNavigateBase != "http://opml.radiotime.com" || tuneInAPIBase != "https://api.radiotime.com" {
+		t.Errorf("bases not restored: tune=%q describe=%q navigate=%q api=%q",
+			tuneInOpmlTuneBase, tuneInOpmlDescribeBase, tuneInOpmlNavigateBase, tuneInAPIBase)
+	}
+
+	if len(allowedTuneInHosts) != 2 || allowedTuneInHosts["127.0.0.1"] || allowedTuneInHosts["127.0.0.2"] {
+		t.Errorf("allowlist not restored: %v", allowedTuneInHosts)
+	}
+}

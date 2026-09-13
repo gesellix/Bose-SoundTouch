@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -85,6 +86,24 @@ func SetTuneInEndpoints(opmlBase, apiBase string) {
 		if u, err := url.Parse(b); err == nil && u.Hostname() != "" {
 			allowedTuneInHosts[u.Hostname()] = true
 		}
+	}
+}
+
+// SaveTuneInEndpoints records the current TuneIn base URLs and host allowlist
+// and returns a function that puts them back. Tests that redirect TuneIn with
+// SetTuneInEndpoints use it to leave the package state as they found it:
+//
+//	t.Cleanup(bmx.SaveTuneInEndpoints())
+//	bmx.SetTuneInEndpoints(server.URL, server.URL)
+func SaveTuneInEndpoints() (restore func()) {
+	tune, describe, navigate, api := tuneInOpmlTuneBase, tuneInOpmlDescribeBase, tuneInOpmlNavigateBase, tuneInAPIBase
+	hosts := maps.Clone(allowedTuneInHosts)
+
+	return func() {
+		tuneInOpmlTuneBase, tuneInOpmlDescribeBase, tuneInOpmlNavigateBase, tuneInAPIBase = tune, describe, navigate, api
+
+		clear(allowedTuneInHosts)
+		maps.Copy(allowedTuneInHosts, hosts)
 	}
 }
 
