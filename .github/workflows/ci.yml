@@ -60,6 +60,42 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  # pkg/netcompat's accept4 fallback only builds for linux/arm, so the Test job
+  # above never runs its tests. Its first version passed lint and review and
+  # then failed on the first real connection on ARMv5 hardware (issue 698). Run
+  # the tests under QEMU instead: AFTERTOUCH_ACCEPT_FALLBACK=1 in those tests
+  # takes the raw accept() path even though the runner's kernel has accept4().
+  test-arm:
+    name: Test (linux/arm, QEMU)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: "go.mod"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+        with:
+          platforms: arm
+
+      - name: Build netcompat tests for ARMv5
+        env:
+          GOOS: linux
+          GOARCH: arm
+          GOARM: "5"
+          CGO_ENABLED: "0"
+        run: go test -c -o "$RUNNER_TEMP/netcompat.test" ./pkg/netcompat/
+
+      - name: Run netcompat tests under QEMU
+        run: |
+          docker run --rm --platform linux/arm/v5 -v "$RUNNER_TEMP:/t" busybox:1.36 \
+            /t/netcompat.test -test.v -test.timeout 120s
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -450,7 +486,7 @@ jobs:
   notify:
     name: Notify Status
     runs-on: ubuntu-latest
-    needs: [test, lint, build, security, docs, docker]
+    needs: [test, test-arm, lint, build, security, docs, docker]
     if: always()
     permissions:
       statuses: write
@@ -460,6 +496,7 @@ jobs:
       - name: Check overall status
         run: |
           if [[ "${{ needs.test.result }}" == "success" && \
+                "${{ needs.test-arm.result }}" == "success" && \
                 "${{ needs.lint.result }}" == "success" && \
                 "${{ needs.build.result }}" == "success" && \
                 "${{ needs.security.result }}" == "success" && \

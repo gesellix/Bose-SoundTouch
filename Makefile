@@ -1,4 +1,4 @@
-.PHONY: all build build-cli test test-coverage test-browser test-frontend test-http-client test-http-client-rotate check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm update-static-deps dev-docs dev-docs-tidy hugo
+.PHONY: all build build-cli test test-arm test-coverage test-browser test-frontend test-http-client test-http-client-rotate check fmt vet lint clean dev help screenshots build-stockholm-image prepare-stockholm update-static-deps dev-docs dev-docs-tidy hugo
 
 # Load .env if present (simple KEY=VALUE format, no shell quoting)
 -include .env
@@ -150,6 +150,17 @@ build-examples-all:
 test:
 	@echo "Running tests..."
 	$(GOTEST) -v ./...
+
+# pkg/netcompat's accept4 fallback builds only for linux/arm, so `make test`
+# never runs its tests. Run this after touching pkg/netcompat: it cross-compiles
+# the tests for ARMv5 and runs them under QEMU. Needs Docker with arm emulation
+# (Docker Desktop has it; on Linux, install qemu-user-static/binfmt first).
+# Same as the "Test (linux/arm, QEMU)" CI job.
+test-arm:
+	@echo "Running pkg/netcompat tests for linux/arm/v5 under QEMU..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=arm GOARM=5 CGO_ENABLED=0 $(GOTEST) -c -o $(BUILD_DIR)/netcompat-armv5.test ./pkg/netcompat/
+	docker run --rm --platform linux/arm/v5 -v "$(CURDIR)/$(BUILD_DIR):/t" busybox:1.36 /t/netcompat-armv5.test -test.v -test.timeout 120s
 
 test-coverage:
 	@echo "Running tests with coverage..."
@@ -533,6 +544,7 @@ help:
 	@echo "  build-linux-armv7 - Build for Linux ARMv7 (kernel 3.14+ compatible, CGO_ENABLED=0)"
 	@echo "  build-linux-armv5 - Build for Linux ARMv5 (old NAS / Pi 1 / Pi Zero, CGO_ENABLED=0)"
 	@echo "  test          - Run tests"
+	@echo "  test-arm      - Run pkg/netcompat tests for linux/arm/v5 under QEMU (needs Docker)"
 	@echo "  test-coverage - Run tests with coverage report"
 	@echo "  test-browser             - Run browser-level (chromedp) player compatibility tests"
 	@echo "  test-frontend            - Run player static JS unit tests (Node's test runner)"
