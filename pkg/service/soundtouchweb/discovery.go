@@ -106,6 +106,8 @@ func (app *WebApp) addDeviceByHost(
 		return nil
 	}
 
+	app.retireStaleAliases(host, conn)
+
 	go app.UpdateDeviceStatus(host, conn)
 
 	// Establish the stereo-pair balance reading. It lives here, not on the
