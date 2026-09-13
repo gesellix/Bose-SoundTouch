@@ -777,6 +777,29 @@ iptables -t nat -S PREROUTING              # shows the redirect rule
 
 Set `AFTERTOUCH_LAN_PORT` in `/opt/aftertouch/aftertouch.conf` to a different port, or to `none` to disable the redirect and use an SSH tunnel instead; then `/etc/init.d/aftertouch restart`. Note that **linking music-service accounts still works best through the tunnel** (`http://localhost:8000`), because Spotify only accepts `https://` or loopback OAuth redirect URIs. If you also run the `streborn` project on the same speaker, note it defaults to the same port, so change one of them. Which models are affected is tracked in [MODEL-SUPPORT-MATRIX.md](../reference/MODEL-SUPPORT-MATRIX.md).
 
+### ❌ Speaker is stuck in a restart loop (e.g. after an interrupted or repeated migration) {#restart-loop-recovery}
+
+**Symptoms:**
+
+- The speaker keeps rebooting and never becomes usable.
+- A normal factory reset doesn't help.
+
+**Cause:**
+
+Usually a configuration on the speaker that its firmware can't recover from, for example after a migration was attempted several times or with different methods. A normal factory reset doesn't fix this, because it preserves parts of the speaker's filesystem.
+
+**Fix:**
+
+Reinstall the firmware from a USB stick. That brings the speaker back to a truly fresh state.
+
+1. Download the firmware for **your exact model** from the community archive: [archive.org: SoundTouch software and firmware](https://archive.org/download/bose-soundtouch-software-and-firmware/Firmware/).
+2. Follow the [SoundTouch Firmware Downgrade Guide](https://bose.fandom.com/wiki/SoundTouch_Firmware_Downgrade_Guide) on the Bose wiki. Despite its name, it describes installing any firmware file from a USB stick: preparing the stick, and the button combination that starts the update.
+3. After the speaker comes back up, migrate it again.
+
+Both links are community-maintained third-party sites, not part of AfterTouch. Double-check that the firmware file matches your model before starting.
+
+This recovered a SoundTouch 20 stuck in a restart loop after repeated migration attempts; see [discussion 418](https://github.com/gesellix/Bose-SoundTouch/discussions/418).
+
 ## 🔊 **Volume & Audio Issues**
 
 ### ❌ "Volume control not working"
