@@ -78,6 +78,26 @@ func runDefaultAccountNonBoseDevicesCheck(ds *datastore.DataStore) []Finding {
 			continue
 		}
 
+		if isDiscoveryPlaceholder(dev) {
+			findings = append(findings, Finding{
+				Severity: SeverityWarning,
+				Target:   Target{Account: "default", Device: dev.DeviceID},
+				Message: fmt.Sprintf(
+					"%q is a discovery placeholder: something at this address answered the network scan but never answered as a SoundTouch speaker.",
+					labelForDevice(dev),
+				),
+				Details: "AfterTouch stores a UPnP hit under its address when the device's /info can't be read. A real speaker is stored under its MAC-based device ID once /info answers, so this entry only adds unreachable-device warnings. " +
+					"Evict it via the QuickFix; if a SoundTouch speaker really lives at this address, the next scan stores it properly.",
+				QuickFixes: []QuickFix{{
+					ID:      FixIDEvictDefaultNonBoseDevice,
+					Label:   "Evict from default account",
+					Confirm: fmt.Sprintf("This will delete data/accounts/default/devices/%s/ and all its contents. The entry was created by AfterTouch's discovery; no real speaker state is affected.", dev.DeviceID),
+				}},
+			})
+
+			continue
+		}
+
 		if looksLikeSoundTouch(dev) {
 			continue
 		}
@@ -117,6 +137,25 @@ func looksLikeSoundTouch(dev *models.ServiceDeviceInfo) bool {
 	hay := strings.ToLower(dev.ProductCode + " " + dev.Name)
 
 	return strings.Contains(hay, "soundtouch") || strings.Contains(hay, "wave music system")
+}
+
+// isDiscoveryPlaceholder reports whether dev is the entry discovery writes when
+// a UPnP hit's /info can't be read (handleDiscoveredDeviceFallback): keyed by
+// its address, no model type, and the default "SoundTouch-<host>" name from
+// pkg/discovery. That name would otherwise satisfy looksLikeSoundTouch, so
+// these entries were never offered for eviction (issue 728).
+func isDiscoveryPlaceholder(dev *models.ServiceDeviceInfo) bool {
+	if dev == nil || strings.TrimSpace(dev.ProductCode) != "" {
+		return false
+	}
+
+	for _, host := range []string{dev.DeviceID, dev.IPAddress} {
+		if host != "" && dev.Name == "SoundTouch-"+host {
+			return true
+		}
+	}
+
+	return false
 }
 
 func labelForDevice(dev *models.ServiceDeviceInfo) string {

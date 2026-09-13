@@ -81,6 +81,69 @@ func TestDefaultAccountNonBoseCheck_FlagsNonBoseAndIgnoresBose(t *testing.T) {
 	}
 }
 
+// TestDefaultAccountNonBoseCheck_FlagsDiscoveryPlaceholders uses the shape
+// from the issue 728 diagnostic: two address-keyed entries whose /info never
+// answered, named "SoundTouch-<ip>" by discovery, next to the real speaker.
+// The name used to pass looksLikeSoundTouch, hiding them from this check.
+func TestDefaultAccountNonBoseCheck_FlagsDiscoveryPlaceholders(t *testing.T) {
+	tmp := t.TempDir()
+	ds := datastore.NewDataStore(tmp)
+
+	t.Cleanup(func() { _ = ds.Close() })
+
+	placeholder := func(ip string) string {
+		return `<?xml version="1.0" encoding="UTF-8"?><info deviceID="` + ip + `"><name>SoundTouch-` + ip + `</name><type></type><moduleType></moduleType>` +
+			`<components><component><componentCategory>SCM</componentCategory><softwareVersion>0.0.0</softwareVersion></component></components>` +
+			`<networkInfo type="SCM"><ipAddress>` + ip + `</ipAddress><macAddress></macAddress></networkInfo><discoveryMethod>SSDP/UPnP</discoveryMethod></info>`
+	}
+
+	mustWriteDeviceInfo(t, tmp, "default", "192.0.2.56", placeholder("192.0.2.56"))
+	mustWriteDeviceInfo(t, tmp, "default", "192.0.2.59", placeholder("192.0.2.59"))
+	mustWriteDeviceInfo(t, tmp, "default", "AABBCCDDEEFF",
+		`<?xml version="1.0" encoding="UTF-8"?><info deviceID="AABBCCDDEEFF"><name>SoundTouch 30</name><type>SoundTouch</type><moduleType>30 sm2</moduleType><discoveryMethod>power_on</discoveryMethod></info>`)
+
+	got := runDefaultAccountNonBoseDevicesCheck(ds)
+
+	flagged := map[string]bool{}
+	for _, f := range got {
+		flagged[f.Target.Device] = true
+
+		if len(f.QuickFixes) != 1 || f.QuickFixes[0].ID != FixIDEvictDefaultNonBoseDevice {
+			t.Errorf("expected one Evict QuickFix, got %+v", f.QuickFixes)
+		}
+	}
+
+	if len(got) != 2 || !flagged["192.0.2.56"] || !flagged["192.0.2.59"] {
+		t.Errorf("expected both placeholders flagged, got %d findings: %v", len(got), flagged)
+	}
+
+	if flagged["AABBCCDDEEFF"] {
+		t.Errorf("real speaker must not be flagged; got: %v", flagged)
+	}
+}
+
+func TestIsDiscoveryPlaceholder(t *testing.T) {
+	cases := []struct {
+		name string
+		dev  *models.ServiceDeviceInfo
+		want bool
+	}{
+		{name: "address-keyed placeholder", dev: &models.ServiceDeviceInfo{DeviceID: "192.0.2.56", Name: "SoundTouch-192.0.2.56"}, want: true},
+		{name: "placeholder with serial id", dev: &models.ServiceDeviceInfo{DeviceID: "SERIAL01", IPAddress: "192.0.2.56", Name: "SoundTouch-192.0.2.56"}, want: true},
+		{name: "has a model type", dev: &models.ServiceDeviceInfo{DeviceID: "192.0.2.56", Name: "SoundTouch-192.0.2.56", ProductCode: "SoundTouch 10"}, want: false},
+		{name: "user-named speaker", dev: &models.ServiceDeviceInfo{DeviceID: "AABBCCDDEEFF", IPAddress: "192.0.2.53", Name: "SoundTouch 30"}, want: false},
+		{name: "Nil", dev: nil, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isDiscoveryPlaceholder(tc.dev); got != tc.want {
+				t.Errorf("got %v, want %v (dev=%+v)", got, tc.want, tc.dev)
+			}
+		})
+	}
+}
+
 // mustWriteDeviceInfo writes a DeviceInfo.xml under
 // <baseDir>/accounts/<account>/devices/<device>/DeviceInfo.xml.
 // Fails the test on any IO error.
