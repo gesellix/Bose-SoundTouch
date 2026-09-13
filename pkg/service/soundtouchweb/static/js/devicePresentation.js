@@ -40,3 +40,27 @@ export function sortDeviceEntries(entries, mode) {
 
     return sorted;
 }
+
+export function zoneMemberControlID(member) {
+    return member?.controlId || member?.ip;
+}
+
+export function currentZoneMember(projection, member) {
+    const controlID = zoneMemberControlID(member);
+    const deviceIDs = new Set(member?.deviceIds || []);
+
+    return (projection?.members || []).find(candidate =>
+        candidate.controlId === controlID ||
+        candidate.deviceIds?.some(deviceID => deviceIDs.has(deviceID))) || member;
+}
+
+export function resolvedZoneMember(projection, member) {
+    const current = currentZoneMember(projection, member);
+    const controlID = zoneMemberControlID(current) || zoneMemberControlID(member);
+
+    return {
+        member: current,
+        controlId: controlID,
+        name: current?.name || member?.name || controlID || '',
+    };
+}

@@ -2,6 +2,7 @@
 package webtypes
 
 import (
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -120,6 +121,13 @@ type DeviceConnection struct {
 	groupGeneration        uint64
 	groupAppliedGeneration uint64
 
+	// zoneMu orders master-authoritative /getZone responses. A routine poll
+	// supersedes older reads only after it succeeds; an event refresh reserves
+	// an immediate barrier so no pre-event response can cross it.
+	zoneMu                sync.Mutex
+	zoneGeneration        uint64
+	zoneAppliedGeneration uint64
+
 	// done is closed by Close when the device is removed from the
 	// registry, signalling its background goroutines (the status poller
 	// and the WebSocket reconnect loop) to exit. closeOnce keeps Close
@@ -138,6 +146,7 @@ type DeviceStatus struct {
 	Bass                   *models.Bass            `json:"bass,omitempty"`
 	Balance                *models.Balance         `json:"balance,omitempty"`
 	Group                  *models.Group           `json:"group,omitempty"`
+	Zone                   *models.ZoneInfo        `json:"zone,omitempty"`
 	Connectivity           Connectivity            `json:"connectivity"`
 	HTTPReachable          bool                    `json:"httpReachable"`
 	WebSocketConnected     bool                    `json:"webSocketConnected"`
@@ -566,7 +575,7 @@ func (c *DeviceConnection) ApplySourcesRead(generation uint64, sources *models.S
 //
 // The copy mut receives is a shallow value copy of the previous status.
 // Nested pointer fields (NowPlaying, Volume, Presets, Sources, Bass, Balance,
-// Group)
+// Group, Zone)
 // share their backing struct with the previous version: callers MUST
 // REPLACE these pointers (s.Volume = &models.Volume{...}) rather than
 // mutate through them (s.Volume.ActualVolume++ would race with any
@@ -953,6 +962,98 @@ func normalizeGroup(group *models.Group) *models.Group {
 	}
 
 	return group
+}
+
+// BeginZoneRefresh starts a routine asynchronous master /getZone request.
+// Merely starting it does not invalidate an earlier successful response: this
+// request may itself fail before producing authoritative topology.
+func (c *DeviceConnection) BeginZoneRefresh() uint64 {
+	c.zoneMu.Lock()
+	defer c.zoneMu.Unlock()
+
+	c.zoneGeneration++
+
+	return c.zoneGeneration
+}
+
+// BeginZoneEventRefresh reserves a generation for the authoritative read
+// triggered by a zoneUpdated event. The event is an ordering barrier even if
+// its follow-up HTTP request fails, so every pre-event response is invalidated
+// before any asynchronous network I/O begins.
+func (c *DeviceConnection) BeginZoneEventRefresh() uint64 {
+	c.zoneMu.Lock()
+	defer c.zoneMu.Unlock()
+
+	c.zoneGeneration++
+	c.zoneAppliedGeneration = c.zoneGeneration
+
+	return c.zoneGeneration
+}
+
+// ApplyPolledZone stores topology only when it was returned by the queried
+// master and no newer result or event barrier superseded it. A standalone
+// response from the queried master authoritatively clears the cache; member
+// responses and malformed masterless responses are ignored.
+func (c *DeviceConnection) ApplyPolledZone(
+	generation uint64,
+	queriedDeviceID string,
+	zone *models.ZoneInfo,
+) bool {
+	c.zoneMu.Lock()
+	defer c.zoneMu.Unlock()
+
+	if generation < c.zoneAppliedGeneration || zone == nil {
+		return false
+	}
+
+	master := strings.TrimSpace(zone.Master)
+
+	queriedDeviceID = strings.TrimSpace(queriedDeviceID)
+	if queriedDeviceID == "" ||
+		(master == "" && len(zone.Members) != 0) ||
+		(master != "" && master != queriedDeviceID) {
+		return false
+	}
+
+	c.zoneAppliedGeneration = generation
+
+	return c.replaceZone(normalizeZone(zone))
+}
+
+func (c *DeviceConnection) replaceZone(zone *models.ZoneInfo) bool {
+	changed := !reflect.DeepEqual(c.Status().Zone, zone)
+	if !changed {
+		return false
+	}
+
+	c.UpdateStatus(func(status *DeviceStatus) {
+		status.Zone = zone
+	})
+
+	return true
+}
+
+func normalizeZone(zone *models.ZoneInfo) *models.ZoneInfo {
+	if zone == nil {
+		return nil
+	}
+
+	deviceIDs := make(map[string]struct{}, len(zone.Members)+1)
+	if master := strings.TrimSpace(zone.Master); master != "" {
+		deviceIDs[master] = struct{}{}
+	}
+
+	for _, member := range zone.Members {
+		if deviceID := strings.TrimSpace(member.DeviceID); deviceID != "" {
+			deviceIDs[deviceID] = struct{}{}
+		}
+	}
+
+	if len(deviceIDs) < 2 {
+		return nil
+	}
+
+	return zone
 }
 
 // APIResponse is a standard JSON response wrapper
