@@ -515,6 +515,22 @@ streamed normally once the console was back on the SoundTouch input.
 
 ## 🎶 **Music Service & Preset Issues**
 
+### ❌ Connecting Spotify fails with `redirect_uri: Insecure` {#spotify-redirect-uri-insecure}
+
+**Symptoms:**
+- Clicking **Connect Spotify to this Account** opens a Spotify page that shows `redirect_uri: Insecure` instead of a login.
+- Opening the AfterTouch web interface over `https://...:8443` instead of `http://...:8000` doesn't help.
+
+**Cause:**
+Spotify only accepts HTTPS redirect URIs, apart from loopback IP literals like `http://127.0.0.1:PORT`. A registered `http://<ip>:8000/mgmt/spotify/callback` is rejected. The redirect URI comes from AfterTouch's **Settings** tab, not from the address in the browser, so switching the browser to HTTPS changes nothing.
+
+**Solution:**
+1. In the [Spotify developer dashboard](https://developer.spotify.com/dashboard), replace the redirect URI with `https://<your-aftertouch-host>:8443/mgmt/spotify/callback`.
+2. In AfterTouch **Settings → Spotify Integration**, enter exactly the same URI and save.
+3. Connect again from the **Local Account** tab.
+
+See [Music Services, Spotify step 1](MUSIC-SERVICES.md#step-1-register-a-spotify-developer-app) for the details.
+
 ### ❌ Spotify preset fails with "Current content cannot be saved as preset"
 
 **Symptoms:**

@@ -52,11 +52,15 @@ The developer app is what allows AfterTouch to talk to Spotify's or Amazon's ser
 1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and log in with your Spotify account.
 2. Click **Create app**.
 3. Give it any name and description (e.g., "My AfterTouch").
-4. Under **Redirect URIs**, add:
+4. Under **Redirect URIs**, add AfterTouch's **HTTPS** address:
    ```
-   http://<your-aftertouch-ip>:8000/mgmt/spotify/callback
+   https://<your-aftertouch-host>:8443/mgmt/spotify/callback
    ```
-   Replace `<your-aftertouch-ip>:8000` with the address of your AfterTouch server.
+   Replace `<your-aftertouch-host>:8443` with the name and HTTPS port of your AfterTouch server, for example `https://aftertouch.local:8443/mgmt/spotify/callback`.
+
+   Spotify refuses plain `http://` redirect URIs and reports `redirect_uri: Insecure`. The only exception is a loopback IP literal such as `http://127.0.0.1:8000/mgmt/spotify/callback`, which works only when the browser runs on the AfterTouch machine itself. `localhost` is not accepted at all. See [Spotify's redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
+
+   Prefer a name that resolves on your LAN over a raw IP address. It survives an address change, and the certificate AfterTouch serves on port 8443 has to match what you type into the browser.
 5. Save the app.
 6. Open the app's settings and note down the **Client ID** and **Client Secret**.
 
@@ -64,7 +68,7 @@ The developer app is what allows AfterTouch to talk to Spotify's or Amazon's ser
 
 1. Open the AfterTouch web interface and go to the **Settings** tab.
 2. Scroll to **Spotify Integration**.
-3. Enter your **Client ID**, **Client Secret**, and the **Redirect URI** you registered above.
+3. Enter your **Client ID**, **Client Secret**, and the **Redirect URI** you registered above, character for character. AfterTouch sends this value to Spotify; the address you opened the web interface with doesn't change it.
 4. Click **Save Settings**.
 
 The status should change to **Active**.
@@ -73,7 +77,7 @@ The status should change to **Active**.
 
 1. Go to the **Local Account** tab (tab 7).
 2. Click **Connect Spotify to this Account**.
-3. A Spotify login window opens. Log in and grant permission.
+3. A Spotify login window opens. Log in and grant permission. Spotify then sends the browser to the HTTPS redirect URI. If the browser doesn't trust AfterTouch's certificate yet, it shows a warning first: import AfterTouch's CA certificate, or accept the warning for this page.
 4. When the window closes, your account is linked. You should see your Spotify username appear.
 
 ### Step 4: Prime your speaker
@@ -136,6 +140,9 @@ Repeat step 4 for each speaker.
 
 **"Failed to initialize" when clicking Connect:**
 The app credentials in Settings are missing or incorrect. Double-check the Client ID, Client Secret, and Redirect URI. The Redirect URI in AfterTouch must exactly match the one registered in the developer portal.
+
+**Spotify shows `redirect_uri: Insecure`:**
+The registered Redirect URI uses plain `http://`. Register and enter the HTTPS form from Step 1 instead; see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#spotify-redirect-uri-insecure).
 
 **The login window opens but redirects to an error page:**
 The Redirect URI registered with Spotify/Amazon does not match what AfterTouch is sending. Make sure the address (including the port) is identical in both places.
