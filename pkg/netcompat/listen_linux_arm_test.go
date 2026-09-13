@@ -3,13 +3,20 @@
 package netcompat
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 )
+
+// testDeadline keeps a broken accept path from hanging the run: without it a
+// client whose connection is never accepted waits in ReadAll forever.
+const testDeadline = 10 * time.Second
 
 // These tests run on any linux/arm machine, including one whose kernel has
 // accept4(): AFTERTOUCH_ACCEPT_FALLBACK=1 takes the raw accept() path
@@ -59,9 +66,13 @@ func TestForcedFallbackAcceptsConnections(t *testing.T) {
 
 	defer func() { _ = client.Close() }()
 
+	_ = client.SetDeadline(time.Now().Add(testDeadline))
+
 	select {
 	case err := <-errs:
 		t.Fatalf("Accept: %v", err)
+	case <-time.After(testDeadline):
+		t.Fatal("Accept did not return a connection")
 	case conn := <-accepted:
 		defer func() { _ = conn.Close() }()
 
@@ -125,6 +136,8 @@ func TestForcedFallbackAcceptsSequentially(t *testing.T) {
 			t.Fatalf("Dial %d: %v", i, err)
 		}
 
+		_ = client.SetDeadline(time.Now().Add(testDeadline))
+
 		got, err := io.ReadAll(client)
 		_ = client.Close()
 
@@ -138,6 +151,93 @@ func TestForcedFallbackAcceptsSequentially(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+// TestForcedFallbackCloseUnblocksAccept makes sure an idle Accept notices Close
+// and reports net.ErrClosed. http.Server relies on that to stop serving, and
+// the raw path waits in poll(2) rather than netpoll, so Close cannot wake it
+// directly.
+func TestForcedFallbackCloseUnblocksAccept(t *testing.T) {
+	t.Setenv(FallbackEnv, "1")
+
+	ln, err := Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+
+	errs := make(chan error, 1)
+
+	go func() {
+		conn, err := ln.Accept()
+		if conn != nil {
+			_ = conn.Close()
+		}
+
+		errs <- err
+	}()
+
+	// Let Accept reach its wait before closing.
+	time.Sleep(3 * acceptWaitTimeout)
+
+	if err := ln.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	select {
+	case err := <-errs:
+		if !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("Accept after Close returned %v, want net.ErrClosed", err)
+		}
+	case <-time.After(testDeadline):
+		t.Fatal("Accept did not return after Close")
+	}
+}
+
+// TestForcedFallbackServesHTTP runs the listener the way soundtouch-service
+// does, under http.Serve. The first fallback passed code review and failed on
+// the first real request (issue 698), so the end-to-end path gets its own test.
+func TestForcedFallbackServesHTTP(t *testing.T) {
+	t.Setenv(FallbackEnv, "1")
+
+	ln, err := Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+
+	served := make(chan error, 1)
+
+	go func() {
+		served <- http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, "ok")
+		}))
+	}()
+
+	client := &http.Client{Timeout: testDeadline}
+
+	for i := 0; i < 3; i++ {
+		resp, err := client.Get("http://" + ln.Addr().String() + "/")
+		if err != nil {
+			t.Fatalf("GET %d: %v", i, err)
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		if string(body) != "ok" {
+			t.Fatalf("GET %d body %q, want %q", i, body, "ok")
+		}
+	}
+
+	_ = ln.Close()
+
+	select {
+	case err := <-served:
+		if !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("http.Serve returned %v after Close, want net.ErrClosed", err)
+		}
+	case <-time.After(testDeadline):
+		t.Fatal("http.Serve did not return after Close")
+	}
 }
 
 // TestFallbackOffKeepsTheStandardListener guards the promise that the override

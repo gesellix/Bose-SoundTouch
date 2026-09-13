@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
 // defaultKeepAlivePeriod matches what net.TCPListener.Accept applies to the
@@ -136,47 +137,71 @@ func (l *fallbackListener) Accept() (net.Conn, error) {
 	return l.acceptRaw()
 }
 
-// acceptRaw waits for the listening socket to become readable through netpoll,
-// the same way the standard library does, and then accepts on the raw fd.
+// acceptWaitTimeout bounds each poll(2) wait in acceptRaw. The wait runs inside
+// rc.Control, which holds a reference on the listening fd, so Close cannot
+// finish until the wait returns. This is the most Close can be delayed by.
+const acceptWaitTimeout = 250 * time.Millisecond
+
+// acceptRaw accepts on the raw listening fd, waiting for it to become readable
+// with poll(2).
+//
+// It cannot park in netpoll the way the standard library does: the RawConn of a
+// listener refuses Read and Write with a bare EINVAL (net.rawListener), which
+// is what issue 698's first fallback ran into on real hardware. Control is the
+// only RawConn method a listener allows, so each round accepts once and, if the
+// queue is empty, waits a bounded time for the next connection.
 func (l *fallbackListener) acceptRaw() (net.Conn, error) {
 	rc, err := l.inner.SyscallConn()
 	if err != nil {
 		return nil, err
 	}
 
-	var (
-		nfd       int
-		acceptErr error
-	)
+	for {
+		var (
+			nfd       int
+			acceptErr error
+		)
 
-	if err := rc.Read(func(fd uintptr) bool {
-		for {
+		if err := rc.Control(func(fd uintptr) {
 			nfd, acceptErr = rawAccept(int(fd))
-
-			switch {
-			case acceptErr == nil:
-				return true
-			case errors.Is(acceptErr, syscall.EINTR), errors.Is(acceptErr, syscall.ECONNABORTED):
-				// Nothing was returned to us and the queue may still hold
-				// other connections; ask the kernel again straight away.
-				continue
-			case errors.Is(acceptErr, syscall.EAGAIN):
-				// Park until the socket is readable; rc.Read calls us again.
-				return false
-			default:
-				return true
+			if errors.Is(acceptErr, syscall.EAGAIN) {
+				waitReadable(int(fd), acceptWaitTimeout)
 			}
+		}); err != nil {
+			// The listener was closed; err wraps net.ErrClosed.
+			return nil, err
 		}
-	}); err != nil {
-		return nil, err
-	}
 
-	if acceptErr != nil {
-		return nil, &net.OpError{Op: "accept", Net: l.Addr().Network(), Addr: l.Addr(), Err: acceptErr}
+		switch {
+		case acceptErr == nil:
+			return connFromFD(nfd, l.Addr())
+		case errors.Is(acceptErr, syscall.EAGAIN),
+			errors.Is(acceptErr, syscall.EINTR),
+			errors.Is(acceptErr, syscall.ECONNABORTED):
+			// Nothing was handed to us: the queue was empty, or a client gave
+			// up before we got to it. Try again.
+			continue
+		default:
+			return nil, &net.OpError{Op: "accept", Net: l.Addr().Network(), Addr: l.Addr(), Err: acceptErr}
+		}
 	}
-
-	return connFromFD(nfd, l.Addr())
 }
+
+// waitReadable blocks until fd is readable or timeout passes. Its result is
+// deliberately ignored: the caller accepts again either way, and accept(2)
+// reports anything that matters.
+func waitReadable(fd int, timeout time.Duration) {
+	pfd := struct {
+		fd      int32
+		events  int16
+		revents int16
+	}{fd: int32(fd), events: pollIn}
+
+	_, _, _ = syscall.Syscall(syscall.SYS_POLL, uintptr(unsafe.Pointer(&pfd)), 1, uintptr(timeout.Milliseconds()))
+}
+
+// pollIn is POLLIN, which package syscall does not define.
+const pollIn = 0x1
 
 // rawAccept calls accept(2) directly. syscall.Accept cannot be used: on Linux
 // it is defined as Accept4(fd, 0), which is the syscall we are working around.
