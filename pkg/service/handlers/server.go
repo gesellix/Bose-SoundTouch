@@ -1742,6 +1742,18 @@ func (s *Server) handleDiscoveredDevice(d models.DiscoveredDevice) {
 
 // handleDiscoveredDeviceFallback handles device discovery when /info endpoint is not available
 func (s *Server) handleDiscoveredDeviceFallback(d models.DiscoveredDevice) {
+	// A hit with neither a serial nor a model name never identified itself:
+	// UPnP accepts it only tentatively when the device description can't be
+	// read, pending this /info probe. Storing it anyway left address-keyed
+	// "SoundTouch-<ip>" entries that nothing could reach and that came back on
+	// every scan after eviction (issue 728).
+	if d.SerialNo == "" && strings.TrimSpace(d.ModelID) == "" {
+		log.Printf("Not storing unverified discovery hit at %s: /info did not answer and discovery carried no serial or model",
+			sanitizeLog(d.Host))
+
+		return
+	}
+
 	log.Printf("Using fallback discovery method for device: %s at %s", sanitizeLog(d.Name), sanitizeLog(d.Host))
 
 	// Use discovery data as-is with the old logic

@@ -629,3 +629,36 @@ func TestMACBasedDeviceDiscovery_FallbackScenario(t *testing.T) {
 
 	t.Logf("\n✅ MAC-based discovery fallback test passed!")
 }
+
+// TestDiscoveryFallback_DoesNotStoreUnverifiedHit covers the placeholders in
+// the issue 728 diagnostic: a UPnP hit whose description couldn't be read (no
+// serial, no model) and whose /info doesn't answer must not be persisted under
+// its address.
+func TestDiscoveryFallback_DoesNotStoreUnverifiedHit(t *testing.T) {
+	tempDir := t.TempDir()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	host := server.URL[len("http://"):]
+	ds := datastore.NewDataStore(tempDir)
+	sm := setup.NewManager(server.URL, ds, nil)
+	srv := NewServer(ds, sm, server.URL, false, false, false)
+
+	srv.handleDiscoveredDevice(models.DiscoveredDevice{
+		Host:            host,
+		Name:            "SoundTouch-" + host,
+		DiscoveryMethod: "SSDP/UPnP",
+	})
+
+	all, err := ds.ListAllDevices()
+	if err != nil {
+		t.Fatalf("ListAllDevices: %v", err)
+	}
+
+	if len(all) != 0 {
+		t.Errorf("unverified discovery hit was stored: %+v", all)
+	}
+}
