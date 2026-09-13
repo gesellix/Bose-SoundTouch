@@ -17,13 +17,13 @@ soundtouch-cli [global-flags] <command> [command-flags] [subcommand] [subcommand
 
 These flags can be used with any command:
 
-| Flag | Short | Description | Default |
-|------|-------|-------------|---------|
-| `--host` | `-h` | Device IP address or hostname | Required for most commands |
-| `--port` | `-p` | Device port number | `8090` |
-| `--timeout` | `-t` | Request timeout duration | `10s` |
-| `--help` | | Show command help | |
-| `--version` | `-v` | Show CLI version | |
+| Flag        | Short | Description                   | Default                    |
+|-------------|-------|-------------------------------|----------------------------|
+| `--host`    | `-h`  | Device IP address or hostname | Required for most commands |
+| `--port`    | `-p`  | Device port number            | `8090`                     |
+| `--timeout` | `-t`  | Request timeout duration      | `10s`                      |
+| `--help`    |       | Show command help             |                            |
+| `--version` | `-v`  | Show CLI version              |                            |
 
 ## Commands
 
@@ -150,6 +150,11 @@ soundtouch-cli --host 192.0.2.10 preset store \
   --location "https://stream.example.com/jazz" \
   --name "Jazz Radio Stream"
 ```
+
+For TuneIn, `--name` and `--artwork` are optional: when either is missing, the
+CLI looks up the station's name and logo at TuneIn, both for a
+`/v1/playback/...` location and for a `https://tunein.com/radio/...` URL. A
+failed lookup doesn't stop the preset from being stored.
 
 **Selection and Management Examples:**
 ```bash
@@ -483,13 +488,13 @@ soundtouch-cli --host 192.0.2.10 source compare
 
 **Content Selection Commands:**
 
-| Command | Description | Requirements |
-|---------|-------------|--------------|
-| `internet-radio` | Select internet radio stream (LOCAL_INTERNET_RADIO) | Stream URL |
-| `custom-radio` | Select custom radio stream via soundtouch-service | Stream URL and service URL |
-| `local-music` | Select local music content (LOCAL_MUSIC) | SoundTouch App Media Server |
-| `stored-music` | Select stored music content (STORED_MUSIC) | UPnP/DLNA media server |
-| `content` | Generic content selection (advanced) | Source and location |
+| Command          | Description                                         | Requirements                |
+|------------------|-----------------------------------------------------|-----------------------------|
+| `internet-radio` | Select internet radio stream (LOCAL_INTERNET_RADIO) | Stream URL                  |
+| `custom-radio`   | Select custom radio stream via soundtouch-service   | Stream URL and service URL  |
+| `local-music`    | Select local music content (LOCAL_MUSIC)            | SoundTouch App Media Server |
+| `stored-music`   | Select stored music content (STORED_MUSIC)          | UPnP/DLNA media server      |
+| `content`        | Generic content selection (advanced)                | Source and location         |
 
 **streamUrl Format Support:**
 

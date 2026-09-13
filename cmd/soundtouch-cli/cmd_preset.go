@@ -145,6 +145,8 @@ func resolveLocationAndMetadata(params *presetParams) error {
 
 		if params.source == "TUNEIN" && strings.Contains(originalLocation, "tunein.com/radio/") {
 			metadata, err = fetchTuneInMetadata(originalLocation)
+		} else if id := tuneInGuideID(params.location); params.source == "TUNEIN" && id != "" {
+			metadata, err = describeTuneIn(id)
 		} else if params.source == "SPOTIFY" && strings.Contains(originalLocation, "open.spotify.com/") {
 			metadata, err = fetchSpotifyMetadata(originalLocation)
 		}
@@ -328,4 +330,34 @@ func selectPresetNew(c *cli.Context) error {
 // listPresets handles listing all presets (alias for existing getPresets command)
 func listPresets(c *cli.Context) error {
 	return getPresets(c)
+}
+
+// tuneInDescribe is bmx.TuneInDescribeMeta, swappable in tests.
+var tuneInDescribe = bmxpkg.TuneInDescribeMeta
+
+// tuneInGuideID returns the guide ID of a BMX TuneIn playback location such as
+// /v1/playback/station/s1217, or "" for anything else. The location forms are
+// the ones `source tunein` builds (tuneInKinds).
+func tuneInGuideID(location string) string {
+	for _, k := range tuneInKinds {
+		prefix := strings.TrimSuffix(k.location, "%s")
+		if id, ok := strings.CutPrefix(location, prefix); ok && id != "" && !strings.Contains(id, "/") {
+			return id
+		}
+	}
+
+	return ""
+}
+
+// describeTuneIn looks up the name and logo of a TuneIn guide ID, so a preset
+// stored with a bare BMX location gets the same artwork as one stored through
+// `source tunein` or from a tunein.com URL. Before this, such presets were
+// always stored without containerArt.
+func describeTuneIn(id string) (*Metadata, error) {
+	name, logo, err := tuneInDescribe(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Metadata{Name: name, Artwork: logo}, nil
 }
