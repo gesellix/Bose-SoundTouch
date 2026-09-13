@@ -66,9 +66,9 @@ func HandleTune(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(body))
 }
 
-// HandleDescribe simulates TuneIn's describe.ashx metadata endpoint. The service
-// reads the first <outline> element's text + image attributes
-// (bmx.TuneInDescribeMeta).
+// HandleDescribe simulates TuneIn's describe.ashx metadata endpoint, in the shape
+// the real service returns: the logo sits in a <station> child of the outline,
+// not in an outline attribute (bmx.TuneInDescribeMeta).
 func HandleDescribe(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	log.Printf("[TuneIn Mock] describe.ashx id=%s", sanitizeLog(id))
@@ -83,8 +83,10 @@ func HandleDescribe(w http.ResponseWriter, r *http.Request) {
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
 		`<opml version="1">`+
 		`<head><title>%s</title><status>200</status></head>`+
-		`<body><outline type="object" text="Mock Radio %s" image="http://192.0.2.20:8000/%s/logo.png"/></body>`+
-		`</opml>`, id, id, id)
+		`<body><outline type="object" text="Mock Radio %s"><station>`+
+		`<guide_id>%s</guide_id><name>Mock Radio %s</name><logo>http://192.0.2.20:8000/%s/logo.png</logo>`+
+		`</station></outline></body>`+
+		`</opml>`, id, id, id, id, id)
 
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	_, _ = w.Write([]byte(body))

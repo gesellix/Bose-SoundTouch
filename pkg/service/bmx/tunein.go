@@ -947,24 +947,63 @@ func TuneInDescribeMeta(id string) (name, logo string, err error) {
 		return "", "", fmt.Errorf("tunein describe failed with status %d", resp.StatusCode)
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+
+	name, logo, ok := parseTuneInDescribe(body)
+	if !ok {
+		return "", "", fmt.Errorf("no metadata found for %s", id)
+	}
+
+	return name, logo, nil
+}
+
+// parseTuneInDescribe extracts the display name and logo from a describe.ashx
+// response.
+//
+// TuneIn puts the logo in a child element of the outline, named after the kind
+// of guide item (<station>, <program>, ...), as <logo>. It is not an attribute
+// of <outline> itself:
+//
+//	<outline type="object" text="RMF FM"><station><name>RMF FM</name><logo>https://...</logo></station></outline>
+//
+// Reading only outline@image returned an empty logo for every station, so the
+// speaker got no imageUrl and showed its default artwork (discussion 499). An
+// outline image attribute, where present, still takes precedence.
+func parseTuneInDescribe(body []byte) (name, logo string, ok bool) {
 	var opml struct {
 		Body struct {
 			Outline []struct {
-				Text  string `xml:"text,attr"`
-				Image string `xml:"image,attr"`
+				Text    string `xml:"text,attr"`
+				Image   string `xml:"image,attr"`
+				Details []struct {
+					Name string `xml:"name"`
+					Logo string `xml:"logo"`
+				} `xml:",any"`
 			} `xml:"outline"`
 		} `xml:"body"`
 	}
 
-	if err := xml.NewDecoder(resp.Body).Decode(&opml); err != nil {
-		return "", "", err
+	if err := xml.Unmarshal(body, &opml); err != nil || len(opml.Body.Outline) == 0 {
+		return "", "", false
 	}
 
-	if len(opml.Body.Outline) > 0 {
-		return opml.Body.Outline[0].Text, opml.Body.Outline[0].Image, nil
+	outline := opml.Body.Outline[0]
+	name, logo = strings.TrimSpace(outline.Text), strings.TrimSpace(outline.Image)
+
+	for _, detail := range outline.Details {
+		if logo == "" {
+			logo = strings.TrimSpace(detail.Logo)
+		}
+
+		if name == "" {
+			name = strings.TrimSpace(detail.Name)
+		}
 	}
 
-	return "", "", fmt.Errorf("no metadata found for %s", id)
+	return name, logo, true
 }
 
 // TuneInPlayback returns a playback response for a TuneIn station.
