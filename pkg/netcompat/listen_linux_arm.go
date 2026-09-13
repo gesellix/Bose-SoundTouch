@@ -11,7 +11,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 // defaultKeepAlivePeriod matches what net.TCPListener.Accept applies to the
@@ -189,19 +190,13 @@ func (l *fallbackListener) acceptRaw() (net.Conn, error) {
 
 // waitReadable blocks until fd is readable or timeout passes. Its result is
 // deliberately ignored: the caller accepts again either way, and accept(2)
-// reports anything that matters.
+// reports anything that matters. unix.Poll is ppoll(2) underneath, which Linux
+// has had since 2.6.16.
 func waitReadable(fd int, timeout time.Duration) {
-	pfd := struct {
-		fd      int32
-		events  int16
-		revents int16
-	}{fd: int32(fd), events: pollIn}
+	fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
 
-	_, _, _ = syscall.Syscall(syscall.SYS_POLL, uintptr(unsafe.Pointer(&pfd)), 1, uintptr(timeout.Milliseconds()))
+	_, _ = unix.Poll(fds, int(timeout.Milliseconds()))
 }
-
-// pollIn is POLLIN, which package syscall does not define.
-const pollIn = 0x1
 
 // rawAccept calls accept(2) directly. syscall.Accept cannot be used: on Linux
 // it is defined as Accept4(fd, 0), which is the syscall we are working around.
