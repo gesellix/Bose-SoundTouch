@@ -1178,6 +1178,82 @@ func TestHandleSourceControl_CanonicalPOSTRejectsUnknownFields(t *testing.T) {
 	}
 }
 
+func TestHandleGetZoneProjectsLogicalStereoMember(t *testing.T) {
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/getZone" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		_, _ = w.Write([]byte(`<zone master="master-id"><member ipaddress="192.0.2.5">master-id</member><member ipaddress="192.0.2.10">left-id</member></zone>`))
+	}))
+	defer speaker.Close()
+
+	app := NewWebApp()
+	master := webtypes.NewDeviceConnection(client.NewClientFromHost(speaker.URL), &models.DeviceInfo{
+		DeviceID:  "master-id",
+		Name:      "Kitchen",
+		Type:      "SoundTouch 30",
+		IPAddress: "192.0.2.5",
+	})
+	master.SetStatus(&webtypes.DeviceStatus{IsConnected: true})
+	app.AddDevice("192.0.2.5", master)
+
+	group := testStereoGroup()
+	for _, entry := range []DeviceEntry{
+		projectionDevice("192.0.2.10", "left-id", "Living Room", true, group),
+		projectionDevice("192.0.2.11", "right-id", "Living Room", true, group),
+	} {
+		app.AddDevice(entry.ID, entry.Device)
+	}
+
+	req := withChiParams(
+		httptest.NewRequest(http.MethodGet, "/api/control/devices/192.0.2.5/zone", nil),
+		map[string]string{"id": "192.0.2.5"},
+	)
+	response := httptest.NewRecorder()
+	app.HandleGetZone(response, req)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("HandleGetZone status = %d, body=%s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Master     *zoneMemberView  `json:"master"`
+			Members    []zoneMemberView `json:"members"`
+			IsMaster   bool             `json:"isMaster"`
+			IsSlave    bool             `json:"isSlave"`
+			MasterIP   string           `json:"masterIp"`
+			MasterHwID string           `json:"masterHwId"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode HandleGetZone response: %v", err)
+	}
+	if !payload.Success || !payload.Data.IsMaster || payload.Data.IsSlave ||
+		payload.Data.MasterIP != "192.0.2.5" || payload.Data.MasterHwID != "master-id" {
+		t.Fatalf("unexpected master projection: %+v", payload.Data)
+	}
+	if payload.Data.Master == nil || len(payload.Data.Members) != 1 {
+		t.Fatalf("logical zone roles missing: %+v", payload.Data)
+	}
+	member := payload.Data.Members[0]
+	if member.Kind != "stereoPair" || member.ControlID != "192.0.2.10" ||
+		member.HardwareID != "left-id" || member.Name != "Living Room" ||
+		len(member.DeviceIDs) != 2 || len(member.PhysicalMembers) != 2 {
+		t.Fatalf("logical stereo member = %+v", member)
+	}
+	if master.Status().Zone == nil {
+		t.Fatal("authoritative HandleGetZone response was not cached")
+	}
+	if body := response.Body.String(); strings.Contains(body, "actualVolume") ||
+		strings.Contains(body, `"volume"`) || strings.Contains(body, `"balance"`) {
+		t.Fatalf("volume/balance leaked into zone projection: %s", body)
+	}
+}
+
 // TestHandleZoneRemove_UsesRemoveZoneSlave is the #511 regression: removing one
 // member from a multi-member zone must target that member via /removeZoneSlave.
 // The previous implementation rebuilt the zone with /setZone and the remaining

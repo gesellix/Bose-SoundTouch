@@ -337,6 +337,7 @@ func TestUpdateStatus_PreservesUnchangedFields(t *testing.T) {
 		Volume:      &models.Volume{ActualVolume: 10},
 		Bass:        &models.Bass{ActualBass: 3},
 		Group:       &models.Group{ID: "pair-1", Name: "Living Room"},
+		Zone:        &models.ZoneInfo{Master: "zone-master", Members: []models.Member{{DeviceID: "zone-member"}}},
 		IsConnected: true,
 	})
 
@@ -356,6 +357,10 @@ func TestUpdateStatus_PreservesUnchangedFields(t *testing.T) {
 
 	if got.Group == nil || got.Group.ID != "pair-1" {
 		t.Errorf("Group not preserved: %+v", got.Group)
+	}
+
+	if got.Zone == nil || got.Zone.Master != "zone-master" {
+		t.Errorf("Zone not preserved: %+v", got.Zone)
 	}
 
 	if !got.IsConnected {
@@ -619,6 +624,141 @@ func TestTransportStateObservationDoesNotFenceFieldConnectivityPoll(t *testing.T
 
 	if !conn.Status().IsConnected {
 		t.Fatal("FieldConnectivity poll result was discarded by an unrelated transport-state observation")
+	}
+}
+
+func TestZoneCacheDoesNotStoreMemberResponse(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "member"})
+	zone := &models.ZoneInfo{
+		Master: "MASTER",
+		Members: []models.Member{
+			{DeviceID: "MASTER", IP: "192.0.2.10"},
+			{DeviceID: "MEMBER", IP: "192.0.2.20"},
+		},
+	}
+
+	memberRefresh := conn.BeginZoneRefresh()
+	if conn.ApplyPolledZone(memberRefresh, "MEMBER", zone) {
+		t.Fatal("member response unexpectedly changed the empty cache")
+	}
+	if conn.Status().Zone != nil {
+		t.Fatalf("member response was cached as authoritative topology: %+v", conn.Status().Zone)
+	}
+
+	if conn.ApplyPolledZone(memberRefresh-1, "MEMBER", &models.ZoneInfo{}) {
+		t.Fatal("response older than the accepted member observation changed the cache")
+	}
+}
+
+func TestZoneCacheClearsAfterMasterHandoff(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "former master"})
+	oldZone := &models.ZoneInfo{
+		Master: "FORMER",
+		Members: []models.Member{
+			{DeviceID: "FORMER", IP: "192.0.2.10"},
+			{DeviceID: "MEMBER", IP: "192.0.2.20"},
+		},
+	}
+
+	initial := conn.BeginZoneRefresh()
+	if !conn.ApplyPolledZone(initial, "FORMER", oldZone) {
+		t.Fatal("former master's initial zone was not stored")
+	}
+
+	handoff := conn.BeginZoneRefresh()
+	if !conn.ApplyPolledZone(handoff, "FORMER", &models.ZoneInfo{
+		Master: "NEW-MASTER",
+		Members: []models.Member{
+			{DeviceID: "NEW-MASTER", IP: "192.0.2.30"},
+			{DeviceID: "FORMER", IP: "192.0.2.10"},
+		},
+	}) {
+		t.Fatal("new-master response did not clear the former master's cached claim")
+	}
+	if conn.Status().Zone != nil {
+		t.Fatalf("former-master topology remained cached after handoff: %+v", conn.Status().Zone)
+	}
+	if conn.ApplyPolledZone(initial, "FORMER", oldZone) {
+		t.Fatal("stale former-master response restored cleared topology")
+	}
+}
+
+func TestZoneCacheIgnoresUnrelatedForeignMasterResponse(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "master"})
+	zone := &models.ZoneInfo{
+		Master:  "MASTER",
+		Members: []models.Member{{DeviceID: "MEMBER", IP: "192.0.2.20"}},
+	}
+
+	initial := conn.BeginZoneRefresh()
+	if !conn.ApplyPolledZone(initial, "MASTER", zone) {
+		t.Fatal("initial master zone was not stored")
+	}
+
+	unrelated := conn.BeginZoneRefresh()
+	if conn.ApplyPolledZone(unrelated, "MASTER", &models.ZoneInfo{
+		Master:  "OTHER",
+		Members: []models.Member{{DeviceID: "THIRD", IP: "192.0.2.30"}},
+	}) {
+		t.Fatal("unrelated foreign-master response changed the cache")
+	}
+	if conn.Status().Zone == nil || conn.Status().Zone.Master != "MASTER" {
+		t.Fatalf("unrelated response cleared authoritative topology: %+v", conn.Status().Zone)
+	}
+}
+
+func TestZoneCacheRejectsStaleRefreshAndClearsOnMasterStandalone(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "master"})
+	zone := &models.ZoneInfo{
+		Master: "MASTER",
+		Members: []models.Member{
+			{DeviceID: "MASTER", IP: "192.0.2.10"},
+			{DeviceID: "MEMBER", IP: "192.0.2.20"},
+		},
+	}
+
+	initial := conn.BeginZoneRefresh()
+	if !conn.ApplyPolledZone(initial, "MASTER", zone) {
+		t.Fatal("initial zone was not stored")
+	}
+
+	stale := conn.BeginZoneRefresh()
+	standalone := conn.BeginZoneRefresh()
+	if !conn.ApplyPolledZone(standalone, "MASTER", &models.ZoneInfo{
+		Master:  "MASTER",
+		Members: []models.Member{{DeviceID: "MASTER", IP: "192.0.2.10"}},
+	}) {
+		t.Fatal("master-confirmed standalone response did not clear the zone")
+	}
+	if conn.Status().Zone != nil {
+		t.Fatalf("standalone topology remained cached: %+v", conn.Status().Zone)
+	}
+	if conn.ApplyPolledZone(stale, "MASTER", zone) {
+		t.Fatal("older response was accepted after a newer result applied")
+	}
+	if conn.Status().Zone != nil {
+		t.Fatal("stale response restored cleared topology")
+	}
+}
+
+func TestZoneEventBarrierSurvivesLaterRoutineRefreshStart(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "master"})
+	conn.SetStatus(&DeviceStatus{Zone: &models.ZoneInfo{
+		Master:  "MASTER",
+		Members: []models.Member{{DeviceID: "MEMBER", IP: "192.0.2.20"}},
+	}})
+
+	eventRefresh := conn.BeginZoneEventRefresh()
+	_ = conn.BeginZoneRefresh() // Simulates a later routine poll that then fails.
+
+	if !conn.ApplyPolledZone(eventRefresh, "MASTER", &models.ZoneInfo{
+		Master:  "MASTER",
+		Members: []models.Member{{DeviceID: "MASTER", IP: "192.0.2.10"}},
+	}) {
+		t.Fatal("later routine start invalidated the successful event refresh")
+	}
+	if conn.Status().Zone != nil {
+		t.Fatalf("event-confirmed standalone topology remained cached: %+v", conn.Status().Zone)
 	}
 }
 

@@ -25,6 +25,8 @@ Based on captured WebSocket interactions and device API capabilities, this web U
 - **Real-time status monitoring** via WebSocket connections
 - **Multi-device support** with centralized control
 - **Connection status** indicators and health monitoring
+- **Multiroom zones** summarized on the master while every member remains
+  individually controllable; confirmed stereo pairs count as one logical member
 - **SoundTouch 10 stereo pairs** shown as one target, with verified create,
   rename, and dissolve operations across both physical speakers and their
   exact persisted group generation
