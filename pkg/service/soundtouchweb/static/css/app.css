@@ -12,6 +12,8 @@
     --online:    #22c55e;
     --stale:     #f59e0b;
     --offline:   #9ca3af;
+    --success:   #16794b;
+    --warning:   #9a6700;
     --danger:    #b42318;
     --fav:       #c9a000; /* preset star: warm gold, not too bright */
     --fav-bright:#e0b800;
@@ -33,6 +35,8 @@
         --text-dim: #ccc;
         --accent:   #e0e0e0;
         --accent-fg:#111;
+        --success:  #61d095;
+        --warning:  #f2c14e;
         --danger:   #ff8a80;
         --fav:      #d4ae1a;
         --fav-bright:#f0c800;
@@ -437,6 +441,8 @@ img { display: block; max-width: 100%; }
 /* ── Device detail ───────────────────────────────────────────────────────── */
 .device-detail { max-width: 560px; }
 
+/* ── Device settings ────────────────────────────────────────────────────── */
+.settings-section,
 .device-management-section {
     margin-top: 1.5rem;
     padding-top: 1.25rem;
@@ -457,6 +463,243 @@ img { display: block; max-width: 100%; }
 .device-remove-action:focus-visible {
     outline: 2px solid var(--danger);
     outline-offset: 2px;
+}
+.settings-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    color: var(--text);
+    cursor: pointer;
+    list-style: none;
+}
+.settings-summary::-webkit-details-marker { display: none; }
+.settings-summary .section-title { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.settings-chevron {
+    width: 9px;
+    height: 9px;
+    margin-right: .35rem;
+    border-right: 2px solid var(--text-dim);
+    border-bottom: 2px solid var(--text-dim);
+    transform: rotate(45deg);
+    transition: transform .15s ease;
+}
+.settings-section[open] .settings-chevron { transform: rotate(225deg); }
+.settings-content { padding-top: .25rem; }
+.settings-loading, .settings-empty, .settings-value {
+    color: var(--text-dim);
+    font-size: .85rem;
+}
+.settings-load-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    color: var(--danger);
+    font-size: .82rem;
+}
+.settings-group {
+    padding: 1rem 0;
+    border-top: 1px solid var(--border);
+}
+.settings-group:first-child { border-top: 0; }
+.settings-group h4 {
+    margin-bottom: .65rem;
+    font-size: .9rem;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+.settings-error {
+    margin: -.2rem 0 .65rem;
+    color: var(--danger);
+    font-size: .78rem;
+    line-height: 1.4;
+}
+.settings-result {
+    margin: -.2rem 0 .65rem;
+    font-size: .78rem;
+    line-height: 1.4;
+}
+.settings-result-busy { color: var(--text-dim); }
+.settings-result-success { color: var(--success); }
+.settings-result-unverified { color: var(--warning); }
+.settings-result-error { color: var(--danger); }
+.settings-action {
+    min-height: 44px;
+    padding: .45rem .8rem;
+}
+.settings-action:disabled, .settings-field select:disabled,
+.settings-source-row input:disabled { cursor: wait; opacity: .55; }
+.settings-toggle {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    min-height: 44px;
+    width: fit-content;
+    cursor: pointer;
+    font-size: .875rem;
+}
+.settings-toggle input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+}
+.settings-toggle-track {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    flex: 0 0 42px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--offline);
+    transition: background .15s, border-color .15s;
+}
+.settings-toggle-track::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(0,0,0,.25);
+    transition: transform .15s;
+}
+.settings-toggle input:checked + .settings-toggle-track {
+    border-color: var(--accent);
+    background: var(--accent);
+}
+.settings-toggle input:checked + .settings-toggle-track::after { transform: translateX(18px); }
+.settings-toggle input:focus + .settings-toggle-track {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+.settings-toggle input:disabled ~ span { opacity: .55; cursor: wait; }
+.settings-field {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) minmax(9rem, auto);
+    align-items: center;
+    gap: .75rem;
+    min-height: 44px;
+    font-size: .875rem;
+}
+.settings-field select, .settings-source-row input {
+    min-width: 0;
+    min-height: 40px;
+    padding: .4rem .55rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: .875rem;
+}
+.settings-field select:focus, .settings-source-row input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+.settings-command-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    margin: .35rem 0;
+}
+.settings-command-row > div { min-width: 0; }
+.settings-command-label, .settings-command-row .settings-value { display: block; }
+.settings-command-label { font-size: .875rem; }
+.settings-command-row .settings-value { overflow-wrap: anywhere; }
+.settings-command-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+.settings-segmented { border: 0; }
+.settings-segmented legend {
+    margin-bottom: .4rem;
+    color: var(--text-dim);
+    font-size: .75rem;
+}
+.settings-segmented label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 8rem;
+    min-height: 44px;
+    padding: .45rem .75rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    font-size: .85rem;
+}
+.settings-segmented label:first-of-type { border-radius: 4px 0 0 4px; }
+.settings-segmented label:last-of-type { margin-left: -1px; border-radius: 0 4px 4px 0; }
+.settings-segmented label.selected {
+    position: relative;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-fg);
+}
+.settings-segmented input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+.settings-segmented input:focus + span { outline: 2px solid currentColor; outline-offset: 3px; }
+
+@supports selector(:focus-visible) {
+    .settings-toggle input:focus:not(:focus-visible) + .settings-toggle-track,
+    .settings-segmented input:focus:not(:focus-visible) + span { outline: none; }
+}
+.settings-data-list { margin-bottom: .6rem; }
+.settings-data-list > div {
+    display: grid;
+    grid-template-columns: minmax(7rem, .6fr) minmax(0, 1fr);
+    gap: .75rem;
+    padding: .25rem 0;
+    font-size: .83rem;
+}
+.settings-data-list dt { color: var(--text-dim); }
+.settings-data-list dd { min-width: 0; overflow-wrap: anywhere; }
+.settings-danger-zone {
+    margin-top: .85rem;
+    padding-top: .85rem;
+    border-top: 1px solid var(--border);
+}
+.settings-danger-action { color: var(--danger); border-color: var(--danger); }
+.settings-source-list { display: flex; flex-direction: column; }
+.settings-source-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: .6rem;
+    padding: .55rem 0;
+    border-top: 1px solid var(--border);
+}
+.settings-source-row:first-child { border-top: 0; padding-top: 0; }
+.settings-source-row label { min-width: 0; }
+.settings-source-row label > span {
+    display: block;
+    margin-bottom: .25rem;
+    color: var(--text-dim);
+    font-size: .72rem;
+    overflow-wrap: anywhere;
+}
+.settings-source-row input { width: 100%; }
+@media (max-width: 520px) {
+    .settings-field { grid-template-columns: 1fr; gap: .25rem; padding: .25rem 0; }
+    .settings-field select { width: 100%; }
+    .settings-command-row { align-items: stretch; flex-direction: column; }
+    .settings-command-row .settings-action { width: 100%; }
+    .settings-segmented { display: flex; }
+    .settings-segmented label { min-width: 0; flex: 1; }
+    .settings-source-row { grid-template-columns: 1fr; }
+    .settings-source-row .settings-action { width: 100%; }
 }
 
 /* ── Now playing ─────────────────────────────────────────────────────────── */

@@ -491,6 +491,14 @@ var serviceFlags = []cli.Flag{
 	},
 }
 
+func stockholmOnboardingURL(handler *stockholm.Handler) string {
+	if handler == nil {
+		return ""
+	}
+
+	return "/setup/"
+}
+
 func main() {
 	updateBuildInfo()
 
@@ -672,6 +680,7 @@ func main() {
 
 			internalURL := "http://" + net.JoinHostPort(loopbackHost, config.port)
 			webApp := newEmbeddedWebApp(server, config.serverURL, internalURL, ds, config.deviceSeedRetryInterval, config.deviceSeedRetryWindow)
+			webApp.OnboardingURL = stockholmOnboardingURL(stockholmHandler)
 
 			r := setupRouter(server, stockholmHandler, webApp)
 

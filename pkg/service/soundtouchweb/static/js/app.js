@@ -16,6 +16,8 @@ import { PlayURL } from './components/PlayURL.js';
 import { TTS } from './components/TTS.js';
 import { Announcements } from './components/Announcements.js';
 import { ContentPlaybackCommand } from './components/ContentPlaybackCommand.js';
+import { Settings } from './components/Settings.js';
+import { deviceSettingsTarget } from './settingsPresentation.mjs';
 import { api } from './api.js';
 import { isSoundTouch10StereoPair } from './stereoPresentation.mjs';
 import { removeDeviceAndRefresh } from './deviceRemoval.js';
@@ -237,6 +239,8 @@ export function DeviceDetail({
         `;
     }
 
+    const settingsTarget = deviceSettingsTarget(deviceId, device);
+
     return html`
         <div class="device-detail">
             <div class="page-header">
@@ -302,6 +306,15 @@ export function DeviceDetail({
                 commandBusy=${commandBusy}
                 onPlay=${playRecent}
             />
+            ${settingsTarget ? html`
+                <${Settings}
+                    key=${`settings:${settingsTarget.controlId}:${settingsTarget.physicalId}`}
+                    deviceId=${settingsTarget.controlId}
+                    targetIdentity=${settingsTarget.physicalId}
+                    targetName=${settingsTarget.name}
+                    targetRole=${settingsTarget.role}
+                />
+            ` : null}
             ${!device.stereoPair ? html`
                 <div class="device-management-section">
                     <div class="section-title">Device management</div>

@@ -64,6 +64,17 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", app.HandleAPIDevice)
 				r.Delete("/", app.HandleDeleteDevice)
+				r.Route("/settings", func(r chi.Router) {
+					r.Get("/", app.HandleGetDeviceSettings)
+					r.Patch("/clock-display", app.HandleSetClockDisplay)
+					r.Post("/clock-time", app.HandleSetClockTime)
+					r.Patch("/system-timeout", app.HandleSetSystemTimeout)
+					r.Patch("/language", app.HandleSetSystemLanguage)
+					r.Patch("/sync", app.HandleSetRebroadcastLatencyMode)
+					r.Post("/bluetooth/pair", app.HandleEnterBluetoothPairing)
+					r.Delete("/bluetooth/pairings", app.HandleClearBluetoothPairings)
+					r.Patch("/source-name", app.HandleSetSourceName)
+				})
 				r.Post("/key/{key}", app.HandleDeviceKey)
 				r.Post("/volume/{volume}", app.HandleDirectVolumeControl)
 				r.Post("/power", app.HandleDevicePower)
