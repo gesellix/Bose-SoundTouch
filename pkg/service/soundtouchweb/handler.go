@@ -36,6 +36,10 @@ import (
 type WebApp struct {
 	devicesMu sync.RWMutex
 	devices   map[string]*webtypes.DeviceConnection
+	// settingsLocks serializes multi-request settings operations by physical
+	// device identity, including across registry connection generations.
+	settingsLocksMu sync.Mutex
+	settingsLocks   map[string]*sync.Mutex
 
 	Upgrader websocket.Upgrader
 	// WSClients maps each registered browser WebSocket connection to its own
@@ -84,6 +88,11 @@ type WebApp struct {
 	// or the service's self-signed CA. Standalone soundtouch-player leaves it
 	// empty and falls back to ServiceURL.
 	InternalServiceURL string
+
+	// OnboardingURL identifies a separately mounted, confirmation-driven Wi-Fi
+	// setup workflow. Embedded service builds set it only when that workflow is
+	// actually mounted; standalone player builds leave it empty.
+	OnboardingURL string
 
 	// ServiceClient is used for server-side calls to the AfterTouch service
 	// (currently the TTS proxy). When nil, serviceHTTPClient falls back to
@@ -172,6 +181,7 @@ type DeviceEntry struct {
 func NewWebApp() *WebApp {
 	app := &WebApp{
 		devices:         make(map[string]*webtypes.DeviceConnection),
+		settingsLocks:   make(map[string]*sync.Mutex),
 		WSClients:       make(map[*websocket.Conn]*sync.Mutex),
 		DeviceWSClients: make(map[webSocketWriter]*sync.Mutex),
 		Upgrader: websocket.Upgrader{
@@ -332,29 +342,50 @@ func (app *WebApp) TouchDevice(id string) bool {
 
 // RemoveDevice removes the device registered under id and stops its
 // background goroutines (status poller + WebSocket reconnect loop) via
-// conn.Close. Returns true if id was present. Close runs outside the
-// registry lock because it performs network I/O (WebSocket disconnect).
+// conn.Close. It waits for an in-flight settings operation on the same
+// physical device without holding the registry lock. Returns true if id was
+// present. Close runs outside the registry lock because it performs network
+// I/O (WebSocket disconnect).
 func (app *WebApp) RemoveDevice(id string) bool {
-	app.devicesMu.Lock()
+	for {
+		conn, ok := app.GetDevice(id)
+		if !ok {
+			return false
+		}
 
-	conn, ok := app.devices[id]
-	if ok {
+		release := app.beginDeviceSettingsOperation(conn)
+		app.devicesMu.Lock()
+
+		current, exists := app.devices[id]
+		switch {
+		case !exists:
+			app.devicesMu.Unlock()
+			release()
+
+			return false
+		case current != conn:
+			app.devicesMu.Unlock()
+			release()
+
+			continue
+		}
+
 		delete(app.devices, id)
-	}
-
-	app.devicesMu.Unlock()
-
-	if ok {
+		app.devicesMu.Unlock()
 		conn.Close()
-	}
+		release()
 
-	return ok
+		return true
+	}
 }
 
 // removeDeviceIfMatch removes id only when it still points at expected. It is
 // used when an asynchronous probe must not delete a newer replacement that was
 // registered under the same host.
 func (app *WebApp) removeDeviceIfMatch(id string, expected *webtypes.DeviceConnection) bool {
+	release := app.beginDeviceSettingsOperation(expected)
+	defer release()
+
 	app.devicesMu.Lock()
 
 	current, ok := app.devices[id]
@@ -381,6 +412,9 @@ func (app *WebApp) removeDeviceIfMatchOrAbsent(
 	id string,
 	expected *webtypes.DeviceConnection,
 ) bool {
+	release := app.beginDeviceSettingsOperation(expected)
+	defer release()
+
 	app.devicesMu.Lock()
 
 	current, ok := app.devices[id]
