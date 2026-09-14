@@ -609,7 +609,7 @@ func runEnableSSHInjection(m *setup.Manager, host, serviceURL string, fullConfig
 // unpaired device never polls margeServerUrl is not yet confirmed on every
 // device this command targets, so the injection is still worth attempting
 // even if the pairing step itself couldn't be verified.
-func ensureMargeAccountPaired(m *setup.Manager, deviceIP, wantAccountID string) {
+func ensureMargeAccountPaired(ctx context.Context, m *setup.Manager, deviceIP, wantAccountID string) {
 	var t setup.TelnetClient
 
 	if m.NewTelnet != nil {
@@ -622,7 +622,7 @@ func ensureMargeAccountPaired(m *setup.Manager, deviceIP, wantAccountID string) 
 		}
 	}
 
-	accountID, alreadyPaired, logs, err := m.EnsureMargeAccountPaired(deviceIP, wantAccountID, t)
+	accountID, alreadyPaired, logs, err := m.EnsureMargeAccountPaired(ctx, deviceIP, wantAccountID, t)
 	if logs != "" {
 		fmt.Print(logs)
 	}
@@ -713,7 +713,7 @@ func setupEnableSSHCmd() *cli.Command {
 			}
 
 			if !c.Bool("no-auto-pair") {
-				ensureMargeAccountPaired(m, cfg.Host, c.String("account"))
+				ensureMargeAccountPaired(c.Context, m, cfg.Host, c.String("account"))
 			}
 
 			if err := runEnableSSHInjection(m, cfg.Host, serviceURL, c.Bool("full-config"), c.Duration("command-delay")); err != nil {
