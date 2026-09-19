@@ -468,6 +468,8 @@ img { display: block; max-width: 100%; }
 
 .now-playing-mini { font-size: .8rem; color: var(--text-dim); margin-top: .25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .play-status { margin-right: .3rem; }
+.now-playing-mini.unconfirmed,
+.standby-label.unconfirmed { opacity: .6; font-style: italic; }
 .standby-label { font-size: .8rem; color: var(--text-dim); margin-top: .25rem; }
 
 /* ── Device detail ───────────────────────────────────────────────────────── */

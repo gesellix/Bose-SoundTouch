@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
     connectivityLabel,
     connectivityState,
+    nowPlayingFreshness,
     currentZoneMember,
     resolvedZoneMember,
     sortDeviceEntries,
@@ -89,4 +90,21 @@ test('resolves stale zone-detail identities from the current projection', () => 
         name: 'Living',
     });
     assert.equal(zoneMemberControlID({ ip: '192.0.2.99' }), '192.0.2.99');
+});
+
+test('now playing is presented as live only while the speaker is online', () => {
+    assert.deepEqual(nowPlayingFreshness({ status: { connectivity: 'online' } }), {
+        live: true,
+        label: '',
+        title: '',
+    });
+
+    const stale = nowPlayingFreshness({ status: { connectivity: 'stale', isConnected: true } });
+    assert.equal(stale.live, false);
+    assert.equal(stale.label, 'Last known');
+    assert.match(stale.title, /missed an update/);
+
+    const offline = nowPlayingFreshness({ status: { isConnected: false } });
+    assert.equal(offline.live, false);
+    assert.match(offline.title, /went offline/);
 });

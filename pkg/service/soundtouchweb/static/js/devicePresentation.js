@@ -12,6 +12,22 @@ export function connectivityLabel(device) {
     return state.charAt(0).toUpperCase() + state.slice(1);
 }
 
+// nowPlayingFreshness says whether a card may present its now-playing as
+// live. Once a speaker is stale or offline, the status it shows is only the
+// last one it reported, and a play glyph would claim otherwise.
+export function nowPlayingFreshness(device) {
+    const state = connectivityState(device);
+    if (state === 'online') return { live: true, label: '', title: '' };
+
+    return {
+        live: false,
+        label: 'Last known',
+        title: state === 'offline'
+            ? 'Last reported before the speaker went offline'
+            : 'Not confirmed since the speaker missed an update',
+    };
+}
+
 function compareText(a, b) {
     return String(a).localeCompare(String(b), undefined, {
         numeric: true,
