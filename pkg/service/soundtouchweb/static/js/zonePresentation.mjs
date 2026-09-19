@@ -76,7 +76,10 @@ export function effectiveZoneDetail(restZone, projection, topLevelDevice, device
             member?.deviceIds?.includes(projection.masterDeviceId));
         const selected = members.find(member => member?.controlId === deviceId);
         const isMaster = projection.masterControlId === deviceId;
-        if (!isMaster && !selected) return null;
+        // A projection that has not caught up with a join yet does not list
+        // the selected device; its own fresh slave role still holds, and is
+        // the only route to "Leave zone" until the master refreshes.
+        if (!isMaster && !selected) return restZone?.isSlave ? restZone : null;
 
         return {
             masterIp: projection.masterControlId,

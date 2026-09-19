@@ -232,3 +232,30 @@ test('fresh slave REST role survives an inventory entry without master cache', (
         slave,
     );
 });
+
+test('fresh slave REST role survives a master projection that has not caught up', () => {
+    const projection = {
+        masterControlId: '192.0.2.10',
+        masterDeviceId: 'master-id',
+        physicalMemberCount: 2,
+        members: [
+            { controlId: '192.0.2.10', deviceIds: ['master-id'], name: 'Kitchen' },
+            { controlId: '192.0.2.20', deviceIds: ['member-id'], name: 'Dining' },
+        ],
+    };
+    const joined = {
+        masterIp: '192.0.2.10',
+        masterHwId: 'master-id',
+        masterName: 'Kitchen',
+        members: [],
+        isStandalone: false,
+        isMaster: false,
+        isSlave: true,
+    };
+
+    assert.equal(effectiveZoneDetail(joined, projection, null, '192.0.2.30'), joined);
+    assert.equal(
+        effectiveZoneDetail({ isStandalone: true, isMaster: false, isSlave: false }, projection, null, '192.0.2.30'),
+        null,
+    );
+});
