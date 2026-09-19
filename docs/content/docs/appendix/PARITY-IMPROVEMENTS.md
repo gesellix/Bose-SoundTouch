@@ -11,7 +11,7 @@ This document summarizes the improvements made to the **Marge service** to impro
 #### ✅ Completed Improvements (Marge Service)
 *   **Mapped Preset `buttonNumber`**: Correctly mapped the internal `ServicePreset.ID` or `ButtonNumber` to the `buttonNumber` XML attribute in the `/full` response and ensured it is persisted in the local datastore.
 *   **High-Fidelity Device Metadata**: Improved the datastore to correctly extract, persist, and report detailed device `<components>` (e.g., `LIGHTSWITCH`, `SMSC`) and their firmware versions from upstream responses.
-*   **Standardized Preferred Language**: Updated the default `preferredLanguage` to `de` in the `/full` response and added synchronization to persist it from upstream responses.
+*   **Standardized Preferred Language**: The `/full` response defaults `preferredLanguage` to `en` when the account has none stored, and synchronization persists the value from upstream responses.
 *   **Persisted Provider Settings**: Added support for persisting and echoing back `providerSettings` (e.g., `STREAMING_QUALITY`, `ELIGIBLE_FOR_TRIAL`) from the `/full` response.
 *   **Populated `contentItemType`**: The `contentItemType` (e.g., `tracklisturl`) is now correctly synchronized from upstream, persisted in the local datastore, and returned in the `/full` response for both presets and recents.
 *   **Standardized Credential Types**: Adjusted the logic for Spotify to use the correct `token_version_3` type when a token is present in the `/full` response, improving parity with the upstream service. The service now respects existing `credential_type` values from `Sources.xml` (e.g., `token_version_3` for Spotify) while providing sensible defaults for new or incomplete sources.
