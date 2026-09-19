@@ -58,6 +58,10 @@ func TestOpenZoneDetailTracksExternalTopologyChanges(t *testing.T) {
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/app"),
 		chromedp.WaitVisible(".zone-card", chromedp.ByQuery),
+		chromedp.Poll(`Array.from(document.querySelectorAll('.device-card')).some(card =>
+			card.querySelector('.device-name')?.textContent.trim() === 'Breakfast Room' &&
+			card.querySelector('.zone-member-badge')?.textContent.trim() === 'In group · Atrium') &&
+			!document.querySelector('.zone-card .zone-member-badge')`, nil),
 		chromedp.Click(".zone-card", chromedp.ByQuery),
 		chromedp.WaitVisible(".zone-member-details > summary", chromedp.ByQuery),
 		chromedp.Click(".zone-member-details > summary", chromedp.ByQuery),

@@ -6,7 +6,7 @@ import {
     connectivityState,
     sortDeviceEntries,
 } from '../devicePresentation.js';
-import { zoneCardPresentation } from '../zonePresentation.mjs';
+import { zoneCardPresentation, zoneMembershipPresentation } from '../zonePresentation.mjs';
 
 const html = htm.bind(h);
 
@@ -16,6 +16,7 @@ function DeviceCard({ id, device, onSelect }) {
     const { info, status } = device;
     const stereoPair = device.stereoPair;
     const zoneCard = device.zone ? zoneCardPresentation(device.zone) : null;
+    const membership = zoneCard ? null : zoneMembershipPresentation(device.zoneMembership);
     const controlID = device.zone?.masterControlId || id;
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
@@ -49,6 +50,12 @@ function DeviceCard({ id, device, onSelect }) {
                             ${zoneCard.availabilityLabel}
                         </span>
                     ` : null}
+                </span>
+            ` : null}
+            ${membership ? html`
+                <span class="zone-card-summary">
+                    <span class="zone-member-badge ${membership.degraded ? 'degraded' : ''}"
+                          title=${membership.title}>${membership.label}</span>
                 </span>
             ` : null}
             ${!isStandby ? html`

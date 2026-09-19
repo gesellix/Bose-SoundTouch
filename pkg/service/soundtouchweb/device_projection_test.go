@@ -562,3 +562,78 @@ func TestProjectDeviceEntriesIgnoresOfflineFormerMasterClaim(t *testing.T) {
 		t.Fatalf("current zone was not projected on its online master: %+v", view)
 	}
 }
+
+func TestProjectDeviceEntriesMarksZoneMembers(t *testing.T) {
+	zone := &models.ZoneInfo{
+		Master: "master-id",
+		Members: []models.Member{
+			{DeviceID: "master-id", IP: "192.0.2.10"},
+			{DeviceID: "member-id", IP: "192.0.2.20"},
+		},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.10", "master-id", "Kitchen", true, nil, zone),
+		projectionDeviceWithZone("192.0.2.20", "member-id", "Dining", true, nil, nil),
+		projectionDeviceWithZone("192.0.2.30", "other-id", "Bedroom", true, nil, nil),
+	})
+
+	membership := got["192.0.2.20"].ZoneMembership
+	if membership == nil || membership.MasterControlID != "192.0.2.10" ||
+		membership.MasterName != "Kitchen" || membership.Degraded {
+		t.Fatalf("zone member is not marked with its master: %+v", membership)
+	}
+	if got["192.0.2.10"].ZoneMembership != nil {
+		t.Fatalf("zone master marked as a member of its own zone: %+v", got["192.0.2.10"].ZoneMembership)
+	}
+	if got["192.0.2.30"].ZoneMembership != nil {
+		t.Fatalf("standalone speaker marked as a zone member: %+v", got["192.0.2.30"].ZoneMembership)
+	}
+}
+
+func TestProjectDeviceEntriesMarksStereoPairZoneMember(t *testing.T) {
+	group := testStereoGroup()
+	group.Name = "Living Room"
+	zone := &models.ZoneInfo{
+		Master: "master-id",
+		Members: []models.Member{
+			{DeviceID: "master-id", IP: "192.0.2.5"},
+			{DeviceID: "left-id", IP: "192.0.2.10"},
+		},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.5", "master-id", "Kitchen", true, nil, zone),
+		projectionDeviceWithZone("192.0.2.10", "left-id", "Living Room Left", true, group, nil),
+		projectionDeviceWithZone("192.0.2.11", "right-id", "Living Room Right", false, group, nil),
+	})
+
+	membership := got["192.0.2.10"].ZoneMembership
+	if membership == nil || membership.MasterControlID != "192.0.2.5" ||
+		membership.MasterName != "Kitchen" || !membership.Degraded {
+		t.Fatalf("stereo-pair zone member is not marked with its degraded zone: %+v", membership)
+	}
+}
+
+func TestProjectDeviceEntriesDoesNotMarkMembersOfConflictingZones(t *testing.T) {
+	zoneA := &models.ZoneInfo{
+		Master:  "a-id",
+		Members: []models.Member{{DeviceID: "c-id", IP: "192.0.2.30"}},
+	}
+	zoneB := &models.ZoneInfo{
+		Master:  "b-id",
+		Members: []models.Member{{DeviceID: "c-id", IP: "192.0.2.30"}},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.10", "a-id", "A", true, nil, zoneA),
+		projectionDeviceWithZone("192.0.2.20", "b-id", "B", true, nil, zoneB),
+		projectionDeviceWithZone("192.0.2.30", "c-id", "C", true, nil, nil),
+	})
+
+	for id, view := range got {
+		if view.ZoneMembership != nil {
+			t.Fatalf("member of a conflicting zone claim was marked on %s: %+v", id, view.ZoneMembership)
+		}
+	}
+}

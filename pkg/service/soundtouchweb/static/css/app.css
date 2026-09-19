@@ -428,6 +428,18 @@ img { display: block; max-width: 100%; }
     white-space: nowrap;
 }
 .zone-card-availability { color: var(--danger); font-weight: 600; }
+.zone-member-badge {
+    max-width: 100%;
+    padding: .05rem .45rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-dim);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.zone-member-badge.degraded { border-color: var(--stale); }
 
 .device-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .25rem; gap: .5rem; }
 .device-name { font-weight: 600; font-size: .95rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

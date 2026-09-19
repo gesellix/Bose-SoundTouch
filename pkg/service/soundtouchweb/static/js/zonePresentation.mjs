@@ -118,6 +118,23 @@ export function effectiveZoneDetail(restZone, projection, topLevelDevice, device
     return restZone;
 }
 
+// zoneMembershipPresentation labels a member's own card with the group it
+// belongs to. Only the master's card carries the full zone summary.
+export function zoneMembershipPresentation(membership) {
+    if (!membership) return null;
+
+    const master = String(membership.masterName || membership.masterControlId || '').trim();
+    if (!master) return null;
+
+    return {
+        label: `In group · ${master}`,
+        title: membership.degraded
+            ? `Member of the group led by ${master}; the group is degraded`
+            : `Member of the group led by ${master}`,
+        degraded: Boolean(membership.degraded),
+    };
+}
+
 export function zoneCardPresentation(zone) {
     const members = zone?.members || [];
     const memberCount = count(zone?.memberCount, members.length);

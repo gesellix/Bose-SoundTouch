@@ -18,6 +18,16 @@ type deviceView struct {
 	LastSeen   time.Time              `json:"lastSeen"`
 	StereoPair *stereoPairView        `json:"stereoPair,omitempty"`
 	Zone       *zoneView              `json:"zone,omitempty"`
+	// ZoneMembership marks a non-master member of a projected zone, so its
+	// own card can say which group it belongs to. Only the master carries
+	// the full Zone view.
+	ZoneMembership *zoneMembershipView `json:"zoneMembership,omitempty"`
+}
+
+type zoneMembershipView struct {
+	MasterControlID string `json:"masterControlId"`
+	MasterName      string `json:"masterName,omitempty"`
+	Degraded        bool   `json:"degraded"`
 }
 
 // deviceProjectionEntry captures one immutable status pointer per physical
@@ -308,9 +318,47 @@ func projectZoneViews(
 		master := devices[candidate.masterControlID]
 		master.Zone = candidate.view
 		devices[candidate.masterControlID] = master
+
+		membership := &zoneMembershipView{
+			MasterControlID: candidate.masterControlID,
+			MasterName:      zoneMasterName(master, candidate.view),
+			Degraded:        candidate.view.Degraded,
+		}
+
+		for _, logicalID := range candidate.logicalMembers {
+			if logicalID == candidate.masterControlID {
+				continue
+			}
+
+			member, ok := devices[logicalID]
+			if !ok {
+				continue
+			}
+
+			member.ZoneMembership = membership
+			devices[logicalID] = member
+		}
 	}
 
 	return devices
+}
+
+// zoneMasterName prefers the master's logical name, which is the stereo-pair
+// name when the master is a pair, over its physical device name.
+func zoneMasterName(master deviceView, view *zoneView) string {
+	if view != nil {
+		for _, member := range view.Members {
+			if member.ControlID == view.MasterControlID && strings.TrimSpace(member.Name) != "" {
+				return member.Name
+			}
+		}
+	}
+
+	if master.Info != nil {
+		return master.Info.Name
+	}
+
+	return ""
 }
 
 func validMasterZone(deviceID string, zone *models.ZoneInfo) bool {

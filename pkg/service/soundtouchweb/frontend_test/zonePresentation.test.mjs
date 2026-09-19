@@ -5,6 +5,7 @@ import {
     effectiveZoneDetail,
     physicalMemberMetadata,
     zoneCardPresentation,
+    zoneMembershipPresentation,
     zoneMemberCountSummary,
     zoneMemberIdentifiers,
     zoneMemberMetadata,
@@ -258,4 +259,23 @@ test('fresh slave REST role survives a master projection that has not caught up'
         effectiveZoneDetail({ isStandalone: true, isMaster: false, isSlave: false }, projection, null, '192.0.2.30'),
         null,
     );
+});
+
+test('zone member cards name the group they belong to', () => {
+    assert.deepEqual(zoneMembershipPresentation({
+        masterControlId: '192.0.2.10',
+        masterName: 'Kitchen',
+        degraded: false,
+    }), {
+        label: 'In group · Kitchen',
+        title: 'Member of the group led by Kitchen',
+        degraded: false,
+    });
+
+    const degraded = zoneMembershipPresentation({ masterControlId: '192.0.2.10', degraded: true });
+    assert.equal(degraded.label, 'In group · 192.0.2.10');
+    assert.equal(degraded.degraded, true);
+
+    assert.equal(zoneMembershipPresentation(null), null);
+    assert.equal(zoneMembershipPresentation({ masterName: ' ', masterControlId: '' }), null);
 });
