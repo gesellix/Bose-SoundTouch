@@ -193,6 +193,29 @@ test('confirmed stereo settings target follows the physical firmware master', ()
         'Device settings · RIGHT · Living right');
 });
 
+test('stereo settings target keeps the registry key of the pair master', () => {
+    const target = deviceSettingsTarget('living-master.example', {
+        stereoPair: {
+            masterDeviceId: 'right-id',
+            members: [
+                { deviceId: 'right-id', ipAddress: '198.51.100.11', name: 'Living right', role: 'RIGHT' },
+                { deviceId: 'left-id', ipAddress: '192.0.2.10', name: 'Living left', role: 'LEFT' },
+            ],
+        },
+    });
+
+    assert.equal(target.controlId, 'living-master.example');
+    assert.equal(target.physicalId, 'right-id');
+
+    const noAddress = deviceSettingsTarget('192.0.2.11', {
+        stereoPair: {
+            masterDeviceId: 'right-id',
+            members: [{ deviceId: 'right-id', name: 'Living right', role: 'RIGHT' }],
+        },
+    });
+    assert.equal(noAddress?.controlId, '192.0.2.11');
+});
+
 test('incomplete stereo ownership never falls back to a logical target', () => {
     assert.equal(deviceSettingsTarget('logical-pair', {
         stereoPair: {

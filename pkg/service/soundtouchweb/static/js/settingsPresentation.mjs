@@ -32,14 +32,17 @@ export function deviceSettingsTarget(deviceId, device) {
     const master = Array.isArray(pair.members)
         ? pair.members.find(member => String(member?.deviceId || '').trim() === masterDeviceId)
         : null;
-    const controlId = String(master?.ipAddress || '').trim();
 
-    if (!masterDeviceId || !controlId) return null;
+    // A pair is listed under its master's registry key, which is the page's
+    // deviceId. The member's ipAddress is what the speaker reports about
+    // itself; it differs from the key for a speaker registered by hostname or
+    // one with a second interface, and the service does not know it as an id.
+    if (!fallbackId || !masterDeviceId || !master) return null;
 
     return {
-        controlId,
+        controlId: fallbackId,
         physicalId: masterDeviceId,
-        name: master.name || controlId,
+        name: master.name || fallbackId,
         role: String(master.role || '').trim().toUpperCase(),
     };
 }
