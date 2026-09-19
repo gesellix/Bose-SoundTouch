@@ -258,6 +258,15 @@ func projectZoneViews(
 			continue
 		}
 
+		// Only a master's own /getZone answer clears its cached claim. An
+		// offline master cannot answer, so its claim would otherwise outlive
+		// a regrouping of its members under another master and knock that
+		// zone out as a conflict. Stale (a missed poll within the grace
+		// period) still counts, so one hiccup does not flicker the summary.
+		if projectedConnectivity(entry.Status) == webtypes.ConnectivityOffline {
+			continue
+		}
+
 		candidate, ok := newZoneProjectionCandidate(entry.Status.Zone, devices, physicalToLogical, byDeviceID)
 		if !ok {
 			continue

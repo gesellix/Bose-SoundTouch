@@ -529,3 +529,36 @@ func TestHandleAPIDeviceKeepsZoneMemberAddressable(t *testing.T) {
 		t.Fatalf("zone member unexpectedly owns the master projection: %+v", payload.Data.Zone)
 	}
 }
+
+func TestProjectDeviceEntriesIgnoresOfflineFormerMasterClaim(t *testing.T) {
+	staleZoneA := &models.ZoneInfo{
+		Master: "a-id",
+		Members: []models.Member{
+			{DeviceID: "a-id", IP: "192.0.2.10"},
+			{DeviceID: "c-id", IP: "192.0.2.30"},
+		},
+	}
+	zoneB := &models.ZoneInfo{
+		Master: "b-id",
+		Members: []models.Member{
+			{DeviceID: "b-id", IP: "192.0.2.20"},
+			{DeviceID: "c-id", IP: "192.0.2.30"},
+		},
+	}
+
+	got := projectDeviceEntries([]DeviceEntry{
+		projectionDeviceWithZone("192.0.2.10", "a-id", "A", false, nil, staleZoneA),
+		projectionDeviceWithZone("192.0.2.20", "b-id", "B", true, nil, zoneB),
+		projectionDeviceWithZone("192.0.2.30", "c-id", "C", true, nil, nil),
+	})
+
+	if len(got) != 3 {
+		t.Fatalf("projected devices = %d, want every physical target: %+v", len(got), got)
+	}
+	if got["192.0.2.10"].Zone != nil {
+		t.Fatalf("offline former master kept its zone claim: %+v", got["192.0.2.10"].Zone)
+	}
+	if view := got["192.0.2.20"].Zone; view == nil || view.MemberCount != 2 {
+		t.Fatalf("current zone was not projected on its online master: %+v", view)
+	}
+}
