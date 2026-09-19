@@ -2,7 +2,7 @@
 package webtypes
 
 import (
-	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1042,8 +1042,7 @@ func (c *DeviceConnection) ApplyPolledZone(
 }
 
 func (c *DeviceConnection) replaceZone(zone *models.ZoneInfo) bool {
-	changed := !reflect.DeepEqual(c.Status().Zone, zone)
-	if !changed {
+	if models.SameZone(c.Status().Zone, zone) {
 		return false
 	}
 
@@ -1074,7 +1073,17 @@ func normalizeZone(zone *models.ZoneInfo) *models.ZoneInfo {
 		return nil
 	}
 
-	return zone
+	// Store members in a canonical order, so the cached zone, the projection
+	// built from it and the frontend's topology fingerprint do not change when
+	// the firmware lists the same members in a different order. Copy first:
+	// the caller's response must not be reordered underneath it.
+	normalized := *zone
+	normalized.Members = slices.Clone(zone.Members)
+	slices.SortStableFunc(normalized.Members, func(a, b models.Member) int {
+		return strings.Compare(strings.TrimSpace(a.DeviceID), strings.TrimSpace(b.DeviceID))
+	})
+
+	return &normalized
 }
 
 // APIResponse is a standard JSON response wrapper

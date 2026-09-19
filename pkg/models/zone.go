@@ -454,3 +454,45 @@ func (zsr *ZoneSlaveRequest) String() string {
 	return fmt.Sprintf("Zone slave operation: master=%s, slave=%s",
 		zsr.Master, slave.DeviceID)
 }
+
+// SameZone reports whether left and right describe the same multiroom zone:
+// the same master and the same members at the same IP addresses. Members are
+// compared by device ID rather than by slice order, because /getZone lists
+// them in wire order and nothing guarantees two reads of one zone agree on
+// it; comparing with reflect.DeepEqual would report a reorder as a change.
+// XMLName is ignored. Two nil zones are equal; exactly one nil is not.
+func SameZone(left, right *ZoneInfo) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+
+	if strings.TrimSpace(left.Master) != strings.TrimSpace(right.Master) {
+		return false
+	}
+
+	leftMembers, rightMembers := zoneMemberIPs(left), zoneMemberIPs(right)
+	if len(leftMembers) != len(rightMembers) {
+		return false
+	}
+
+	for deviceID, ip := range leftMembers {
+		other, ok := rightMembers[deviceID]
+		if !ok || !sameRoleIPAddress(ip, other) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// zoneMemberIPs maps each member's device ID to its IP address. Building the
+// map for both sides, rather than looking one side's members up in the other,
+// keeps a duplicated member from matching a zone with a distinct one.
+func zoneMemberIPs(zone *ZoneInfo) map[string]string {
+	members := make(map[string]string, len(zone.Members))
+	for _, member := range zone.Members {
+		members[strings.TrimSpace(member.DeviceID)] = strings.TrimSpace(member.IP)
+	}
+
+	return members
+}

@@ -786,3 +786,85 @@ func BenchmarkZoneRequest_Validate(b *testing.B) {
 		_ = zr.Validate()
 	}
 }
+
+func TestSameZone(t *testing.T) {
+	base := func() *ZoneInfo {
+		return &ZoneInfo{
+			Master: "MASTER-ID",
+			Members: []Member{
+				{DeviceID: "MASTER-ID", IP: "192.0.2.10"},
+				{DeviceID: "MEMBER-A", IP: "192.0.2.20"},
+				{DeviceID: "MEMBER-B", IP: "192.0.2.30"},
+			},
+		}
+	}
+
+	tests := []struct {
+		name  string
+		left  *ZoneInfo
+		right func() *ZoneInfo
+		want  bool
+	}{
+		{"identical zones match", base(), base, true},
+		{"member order does not matter", base(), func() *ZoneInfo {
+			zone := base()
+			zone.Members[0], zone.Members[2] = zone.Members[2], zone.Members[0]
+
+			return zone
+		}, true},
+		{"XMLName and whitespace do not matter", base(), func() *ZoneInfo {
+			zone := base()
+			zone.XMLName = xml.Name{Local: "zone"}
+			zone.Master = " MASTER-ID "
+			zone.Members[1].XMLName = xml.Name{Local: "member"}
+			zone.Members[1].DeviceID = "MEMBER-A\n"
+
+			return zone
+		}, true},
+		{"differently formatted equal IP matches", base(), func() *ZoneInfo {
+			zone := base()
+			zone.Members[1].IP = "::ffff:192.0.2.20"
+
+			return zone
+		}, true},
+		{"different master does not match", base(), func() *ZoneInfo {
+			zone := base()
+			zone.Master = "MEMBER-A"
+
+			return zone
+		}, false},
+		{"changed member IP does not match", base(), func() *ZoneInfo {
+			zone := base()
+			zone.Members[1].IP = "198.51.100.20"
+
+			return zone
+		}, false},
+		{"extra member does not match", base(), func() *ZoneInfo {
+			zone := base()
+			zone.Members = append(zone.Members, Member{DeviceID: "MEMBER-C", IP: "192.0.2.40"})
+
+			return zone
+		}, false},
+		{"duplicated member does not match a distinct one", base(), func() *ZoneInfo {
+			zone := base()
+			zone.Members[2] = zone.Members[1]
+
+			return zone
+		}, false},
+		{"nil and empty zone do not match", nil, func() *ZoneInfo { return &ZoneInfo{} }, false},
+		{"two nil zones match", nil, func() *ZoneInfo { return nil }, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			right := tt.right()
+			if got := SameZone(tt.left, right); got != tt.want {
+				t.Fatalf("SameZone(left, right) = %v, want %v", got, tt.want)
+			}
+
+			if got := SameZone(right, tt.left); got != tt.want {
+				t.Fatalf("SameZone(right, left) = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

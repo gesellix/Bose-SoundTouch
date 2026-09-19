@@ -860,3 +860,43 @@ func TestStatusConcurrent(t *testing.T) {
 		t.Error("NowPlaying should be non-nil after writers ran")
 	}
 }
+
+func TestZoneCacheIgnoresMemberReorder(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "master"})
+	polled := &models.ZoneInfo{
+		Master: "MASTER",
+		Members: []models.Member{
+			{DeviceID: "MEMBER-B", IP: "192.0.2.30"},
+			{DeviceID: "MASTER", IP: "192.0.2.10"},
+			{DeviceID: "MEMBER-A", IP: "192.0.2.20"},
+		},
+	}
+
+	if !conn.ApplyPolledZone(conn.BeginZoneRefresh(), "MASTER", polled) {
+		t.Fatal("initial master zone was not stored")
+	}
+
+	if polled.Members[0].DeviceID != "MEMBER-B" {
+		t.Fatalf("normalizing reordered the caller's response: %+v", polled.Members)
+	}
+
+	cached := conn.Status().Zone
+	if cached == nil || len(cached.Members) != 3 ||
+		cached.Members[0].DeviceID != "MASTER" ||
+		cached.Members[1].DeviceID != "MEMBER-A" ||
+		cached.Members[2].DeviceID != "MEMBER-B" {
+		t.Fatalf("cached zone members are not in canonical order: %+v", cached)
+	}
+
+	reordered := &models.ZoneInfo{
+		Master: "MASTER",
+		Members: []models.Member{
+			{DeviceID: "MEMBER-A", IP: "192.0.2.20"},
+			{DeviceID: "MEMBER-B", IP: "192.0.2.30"},
+			{DeviceID: "MASTER", IP: "192.0.2.10"},
+		},
+	}
+	if conn.ApplyPolledZone(conn.BeginZoneRefresh(), "MASTER", reordered) {
+		t.Fatal("a reordered listing of the same zone was reported as a change")
+	}
+}
