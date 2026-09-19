@@ -71,3 +71,28 @@ test('legacy API consumers retain response-level error handling', async () => {
 
     assert.deepEqual(await api.devices(), { success: false, error: 'offline' });
 });
+
+test('settings mutations report an answerless failure as unverified, not rejected', async () => {
+    globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    const transport = await api.setSystemTimeout('speaker', 'target-id', false);
+    assert.equal(transport.outcome, 'unverified');
+    assert.equal(transport.success, false);
+
+    globalThis.fetch = async () => new Response('<html>Gateway Timeout</html>', { status: 504 });
+    const proxy = await api.setSystemTimeout('speaker', 'target-id', false);
+    assert.equal(proxy.outcome, 'unverified');
+    assert.match(proxy.error, /504/);
+
+    globalThis.fetch = async () => new Response('Not Found', { status: 404 });
+    const missing = await api.setSystemTimeout('speaker', 'target-id', false);
+    assert.equal(missing.outcome, undefined);
+    assert.match(missing.error, /404/);
+
+    globalThis.fetch = async () => new Response(
+        '{"success":false,"error":"Automatic standby is not supported by this device"}',
+        { status: 409, headers: { 'Content-Type': 'application/json' } },
+    );
+    const rejected = await api.setSystemTimeout('speaker', 'target-id', false);
+    assert.equal(rejected.outcome, undefined);
+    assert.match(rejected.error, /not supported/);
+});

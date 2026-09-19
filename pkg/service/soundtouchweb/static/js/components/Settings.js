@@ -198,6 +198,13 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
             if (response?.outcome === 'unverified') {
                 if (response.data) {
                     setSnapshotState({ targetGeneration, data: checkedSnapshot(response.data) });
+                } else {
+                    // Nothing came back to show what the speaker holds now;
+                    // re-read it rather than keep presenting the old values.
+                    setSnapshotState({ targetGeneration, data: null });
+                    requested.current = false;
+                    await load();
+                    if (generation !== loadGeneration.current) return;
                 }
                 const message = response.error || 'The speaker accepted the command, but its result could not be verified.';
                 setActionResults(previous => ({

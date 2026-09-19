@@ -37,14 +37,43 @@ async function checkedReq(url, opts = {}) {
     return response;
 }
 
-function settingsMutation(url, method, targetIdentity, body) {
+// settingsMutation returns the settings API's own answer, which already says
+// whether a change was confirmed, rejected or unverified. Only a request that
+// produced no such answer is ambiguous: a transport failure, or a non-JSON 5xx
+// from a proxy or a timeout, can come after the speaker applied the change, so
+// it is reported as unverified rather than rejected. A non-JSON 4xx never
+// reached the handler that talks to the speaker.
+async function settingsMutation(url, method, targetIdentity, body) {
     const headers = { [SETTINGS_TARGET_HEADER]: targetIdentity };
     const options = { method, headers };
     if (body !== undefined) {
         Object.assign(headers, JSON_HEADERS);
         options.body = JSON.stringify(body);
     }
-    return req(url, options);
+
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (_) {
+        return {
+            success: false,
+            outcome: 'unverified',
+            error: 'The request did not complete; the change may or may not have been applied.',
+        };
+    }
+
+    try {
+        return await response.json();
+    } catch (_) {
+        if (response.status >= 400 && response.status < 500) {
+            return { success: false, error: `Request failed (${response.status})` };
+        }
+        return {
+            success: false,
+            outcome: 'unverified',
+            error: `The service answered ${response.status} without a result; the change may or may not have been applied.`,
+        };
+    }
 }
 
 export const api = {
