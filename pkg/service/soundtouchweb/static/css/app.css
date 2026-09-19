@@ -675,6 +675,7 @@ img { display: block; max-width: 100%; }
     cursor: pointer;
     font-size: .85rem;
 }
+.settings-segmented:disabled label { cursor: not-allowed; opacity: .6; }
 .settings-segmented label:first-of-type { border-radius: 4px 0 0 4px; }
 .settings-segmented label:last-of-type { margin-left: -1px; border-radius: 0 4px 4px 0; }
 .settings-segmented label.selected {
