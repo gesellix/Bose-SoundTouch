@@ -125,6 +125,8 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
     const [busy, setBusy] = useState('');
     const [actionResults, setActionResults] = useState({});
     const requested = useRef(false);
+    const detailsRef = useRef(null);
+    const resetTarget = useRef(targetGeneration);
     const loadGeneration = useRef(0);
     const generationTarget = useRef(targetGeneration);
     const snapshot = snapshotState.targetGeneration === targetGeneration ? snapshotState.data : null;
@@ -135,12 +137,21 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
     }
 
     useEffect(() => {
+        // Only a real target change resets. On mount there is nothing to
+        // reset, and the effect can run after the first load has already
+        // started, which a reset would orphan.
+        if (resetTarget.current === targetGeneration) return;
+        resetTarget.current = targetGeneration;
+
         setSnapshotState({ targetGeneration, data: null });
         setLoading(false);
         setLoadError('');
         setBusy('');
         setActionResults({});
         requested.current = false;
+        // An open section that changes target will not see another toggle
+        // event, so load the new target now instead of leaving it empty.
+        if (detailsRef.current?.open) load();
     }, [targetGeneration]);
 
     function checkedSnapshot(data) {
@@ -268,7 +279,7 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
     }
 
     return html`
-        <details class="settings-section" onToggle=${onToggle}>
+        <details class="settings-section" ref=${detailsRef} onToggle=${onToggle}>
             <summary class="settings-summary">
                 <span class="section-title">${deviceSettingsTitle(targetName, targetRole)}</span>
                 <span class="settings-chevron" aria-hidden="true"></span>
