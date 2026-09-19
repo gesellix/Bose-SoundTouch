@@ -521,3 +521,73 @@ func TestSettingsNarrowTouchAndKeyboardContract(t *testing.T) {
 		t.Fatalf("settings narrow touch contract: %v", err)
 	}
 }
+
+func TestSettingsReloadRereadsTheSpeaker(t *testing.T) {
+	app := NewWebApp()
+	router := chi.NewRouter()
+	app.Mount(router, nil)
+
+	server := httptest.NewServer(router)
+	t.Cleanup(server.Close)
+
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/app"),
+		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
+		chromedp.Evaluate(`(async () => {
+            const [{ Settings }, { api }, { h, render }] = await Promise.all([
+                import('/app/static/js/components/Settings.js'),
+                import('/app/static/js/api.js'),
+                import('/app/static/lib/preact.module.js'),
+            ]);
+            const original = api.settings;
+            const root = document.createElement('div');
+            document.body.append(root);
+            const waitFor = async (predicate, message) => {
+                for (let attempt = 0; attempt < 100; attempt += 1) {
+                    if (predicate()) return;
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                throw new Error(message);
+            };
+            let reads = 0;
+
+            try {
+                api.settings = async () => {
+                    reads += 1;
+                    return {
+                        success: true,
+                        data: {
+                            targetIdentity: 'reload-physical',
+                            support: { sourceNaming: true },
+                            sources: [{ source: 'AUX', displayName: 'read ' + reads }],
+                        },
+                    };
+                };
+                render(h(Settings, {
+                    deviceId: 'reload-target', targetIdentity: 'reload-physical', targetName: 'Reload',
+                }), root);
+                await new Promise(resolve => setTimeout(resolve, 0));
+                const details = root.querySelector('details');
+                details.open = true;
+                details.dispatchEvent(new Event('toggle'));
+
+                const inputValue = () => root.querySelector('.settings-source-row input')?.value;
+                await waitFor(() => inputValue() === 'read 1', 'first read did not render');
+                const reload = Array.from(root.querySelectorAll('button'))
+                    .find(button => button.textContent.trim() === 'Reload');
+                if (!reload) throw new Error('reload action is missing once settings are loaded');
+
+                reload.click();
+                await waitFor(() => inputValue() === 'read 2', 'reload did not re-read the speaker');
+                if (reads !== 2) throw new Error('reload read the speaker ' + reads + ' times');
+            } finally {
+                render(null, root);
+                root.remove();
+                api.settings = original;
+            }
+        })()`, nil, awaitPromise),
+	); err != nil {
+		t.Fatalf("settings reload: %v", err)
+	}
+}

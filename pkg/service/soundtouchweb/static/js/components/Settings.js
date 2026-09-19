@@ -264,6 +264,14 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
         }
     }
 
+    // reload re-reads the settings on demand. The shown values stay until the
+    // fresh snapshot replaces them; several answers tell the user to reload.
+    function reload() {
+        if (busy || loading) return;
+        requested.current = false;
+        load();
+    }
+
     function onToggle(event) {
         if (event.currentTarget.open && !snapshot && !loading) load();
     }
@@ -525,6 +533,12 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
                     </section>
                 ` : null}
 
+                ${snapshot ? html`
+                    <div class="settings-reload-row">
+                        <button class="btn-secondary settings-action" type="button"
+                                disabled=${Boolean(busy) || loading} onClick=${reload}>Reload</button>
+                    </div>
+                ` : null}
             </div>
         </details>
     `;

@@ -528,6 +528,7 @@ img { display: block; max-width: 100%; }
     color: var(--text-dim);
     font-size: .85rem;
 }
+.settings-reload-row { display: flex; justify-content: flex-end; }
 .settings-load-error {
     display: flex;
     align-items: center;
