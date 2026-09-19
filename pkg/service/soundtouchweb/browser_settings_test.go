@@ -8,9 +8,17 @@ import (
 	"testing"
 
 	"github.com/chromedp/cdproto/input"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/go-chi/chi/v5"
 )
+
+// awaitPromise makes chromedp.Evaluate wait for an async script and fail on
+// its rejection. Without it, Evaluate returns as soon as the script starts,
+// and nothing past its first await is checked.
+func awaitPromise(p *runtime.EvaluateParams) *runtime.EvaluateParams {
+	return p.WithAwaitPromise(true)
+}
 
 // TestSettingsOwnershipAndMutationStates exercises the settings component in
 // the shipped browser module graph without importing a broader player harness.
@@ -258,7 +266,7 @@ func TestSettingsOwnershipAndMutationStates(t *testing.T) {
                 window.confirm = original.confirm;
                 window.fetch = original.fetch;
             }
-        })()`, nil),
+        })()`, nil, awaitPromise),
 	); err != nil {
 		t.Fatalf("settings browser contract: %v", err)
 	}
@@ -345,7 +353,7 @@ func TestSettingsStandbyAndWiFiOnboardingBrowserContract(t *testing.T) {
                 api.settings = original.settings;
                 api.setSystemTimeout = original.setSystemTimeout;
             }
-        })()`, nil),
+        })()`, nil, awaitPromise),
 	); err != nil {
 		t.Fatalf("settings standby/onboarding browser contract: %v", err)
 	}
@@ -424,7 +432,7 @@ func TestSettingsNarrowTouchAndKeyboardContract(t *testing.T) {
             details.open = true;
             details.dispatchEvent(new Event('toggle'));
             window.__settingsInputContract = { calls, original, root, api, render };
-		})()`, nil),
+		})()`, nil, awaitPromise),
 		chromedp.WaitVisible(toggle, chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("settings narrow setup: %v", err)
