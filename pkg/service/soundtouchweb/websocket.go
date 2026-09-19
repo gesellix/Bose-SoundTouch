@@ -805,6 +805,8 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		})
 
 		wsClient.OnZoneUpdated(func(event *models.ZoneUpdatedEvent) {
+			conn.MarkEventStreamActivity(time.Now())
+
 			eventDeviceID := zoneEventDeviceID(event.DeviceID, conn)
 
 			refreshes := app.reserveZoneRefreshesAfterEvent(eventDeviceID, event.Zone.Master)
