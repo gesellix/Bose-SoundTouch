@@ -144,6 +144,9 @@ func TestSettingsOwnershipAndMutationStates(t *testing.T) {
 				if (!root.querySelector('.settings-source-row input')?.disabled) {
 					throw new Error('busy mutation did not lock controls in other settings sections');
 				}
+				if (!root.querySelector('.settings-toggle input')?.checked) {
+					throw new Error('busy toggle snapped back to its confirmed value');
+				}
                 await renderTarget('current-mutation');
                 await waitFor(() => loads.length === 3, 'current mutation target did not load');
                 loads[2].resolve({ success: true, data: snapshot('current mutation') });

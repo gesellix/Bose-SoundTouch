@@ -7,6 +7,7 @@ import {
     deviceSettingsTarget,
     deviceSettingsTitle,
     settingsSections,
+    withPendingView,
 } from '../static/js/settingsPresentation.mjs';
 
 test('settings sections follow the stable presentation order', () => {
@@ -223,4 +224,22 @@ test('incomplete stereo ownership never falls back to a logical target', () => {
             members: [{ deviceId: 'left-id', ipAddress: '192.0.2.10' }],
         },
     }), null);
+});
+
+test('a pending change is shown over the confirmed snapshot until its outcome', () => {
+    const snapshot = {
+        targetIdentity: 'speaker',
+        clockDisplay: { enabled: false, format: '24' },
+        sync: { mode: 'SYNC_TO_ROOM' },
+    };
+
+    const view = withPendingView(snapshot, { clockDisplay: { enabled: true }, sync: { mode: 'SYNC_TO_ZONE' } });
+    assert.deepEqual(view.clockDisplay, { enabled: true, format: '24' });
+    assert.equal(view.sync.mode, 'SYNC_TO_ZONE');
+    assert.equal(snapshot.clockDisplay.enabled, false, 'the confirmed snapshot must not change');
+
+    assert.equal(withPendingView(snapshot, null), snapshot);
+    assert.equal(withPendingView(null, { sync: { mode: 'SYNC_TO_ZONE' } }), null);
+    assert.equal(withPendingView(snapshot, { language: { code: 3 } }).language, undefined,
+        'a pending value never invents a setting the snapshot lacks');
 });

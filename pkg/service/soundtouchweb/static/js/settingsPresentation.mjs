@@ -91,6 +91,21 @@ export function clockDisplayPatch(snapshot, field, value) {
     return null;
 }
 
+// withPendingView lays a change that is still being applied over the last
+// confirmed snapshot, one setting group deep, so a control keeps showing what
+// the user chose instead of snapping back until the outcome arrives.
+export function withPendingView(snapshot, pending) {
+    if (!snapshot || !pending || typeof pending !== 'object') return snapshot;
+
+    const view = { ...snapshot };
+    for (const [key, value] of Object.entries(pending)) {
+        if (snapshot[key] && typeof snapshot[key] === 'object' && value && typeof value === 'object') {
+            view[key] = { ...snapshot[key], ...value };
+        }
+    }
+    return view;
+}
+
 export function settingsSections(snapshot) {
     const support = snapshot?.support || {};
     const errors = snapshot?.errors;
