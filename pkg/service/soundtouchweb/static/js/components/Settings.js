@@ -16,7 +16,9 @@ const SECTION_ERROR_KEYS = {
     standby: ['standby', 'systemTimeout'],
     language: ['language'],
     sync: ['sync'],
-    bluetooth: ['bluetooth', 'bluetoothPair', 'bluetoothClear'],
+    // bluetoothClear is not listed: the API sets it only to explain an
+    // unverified clear, which the section's own result already shows.
+    bluetooth: ['bluetooth', 'bluetoothPair'],
     sources: ['sources', 'sourceNaming'],
 };
 

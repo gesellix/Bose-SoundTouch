@@ -210,6 +210,9 @@ func TestSettingsOwnershipAndMutationStates(t *testing.T) {
                             targetIdentity,
                             support: { bluetooth: true, bluetoothClear: true },
                             bluetooth: { connectionStatus: 'READY' },
+                            // As the API sends it: the unverified explanation
+                            // travels in the snapshot's errors too.
+                            errors: { bluetoothClear: 'clear unverified for ' + deviceId },
                         },
                     };
                 };
@@ -236,6 +239,11 @@ func TestSettingsOwnershipAndMutationStates(t *testing.T) {
                 await waitFor(() => clearCalls === 1, 'confirmed clear did not send exactly one request');
                 await waitFor(() => root.querySelector('.settings-result-unverified'),
                     'clear unverified result is not visible');
+                await new Promise(resolve => setTimeout(resolve, 50));
+                if (root.querySelector('.settings-error')) {
+                    throw new Error('unverified clear was also shown as a section error: ' +
+                        root.querySelector('.settings-error').textContent);
+                }
 
                 await renderTarget('identity-mismatch', 'physical-expected');
                 await waitFor(() => loads.length === 7, 'identity-mismatch target did not load');
