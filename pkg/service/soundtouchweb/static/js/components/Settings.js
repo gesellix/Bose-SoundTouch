@@ -7,6 +7,7 @@ import {
     clockDisplayPatch,
     deviceSettingsTitle,
     settingsSections,
+    withPendingView,
 } from '../settingsPresentation.mjs';
 
 const html = htm.bind(h);
@@ -125,6 +126,7 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState('');
     const [busy, setBusy] = useState('');
+    const [pendingView, setPendingView] = useState(null);
     const [actionResults, setActionResults] = useState({});
     const requested = useRef(false);
     const detailsRef = useRef(null);
@@ -149,6 +151,7 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
         setLoading(false);
         setLoadError('');
         setBusy('');
+        setPendingView(null);
         setActionResults({});
         requested.current = false;
         // An open section that changes target will not see another toggle
@@ -189,7 +192,7 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
         }
     }
 
-    async function mutate(section, action, fallback) {
+    async function mutate(section, action, fallback, pending = null) {
         if (busy) return;
         const snapshotIdentity = String(snapshot?.targetIdentity || '').trim();
         if (!snapshotIdentity || snapshotIdentity !== expectedIdentity) {
@@ -201,6 +204,7 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
         }
         const generation = loadGeneration.current;
         setBusy(section);
+        setPendingView(pending);
         setActionResults(previous => ({
             ...previous,
             [section]: { kind: 'busy', message: 'Applying change…' },
@@ -260,7 +264,10 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
                 [section]: { kind: 'error', message },
             }));
         } finally {
-            if (generation === loadGeneration.current) setBusy('');
+            if (generation === loadGeneration.current) {
+                setBusy('');
+                setPendingView(null);
+            }
         }
     }
 
@@ -278,14 +285,17 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
 
     const sections = settingsSections(snapshot);
     const support = snapshot?.support || {};
-    const clock = snapshot?.clockDisplay || {};
+    // Controls show the change being applied, not the snapshot it replaces.
+    const shown = busy ? withPendingView(snapshot, pendingView) : snapshot;
+    const clock = shown?.clockDisplay || {};
     const clockControl = clockControls(snapshot);
     const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     function updateClockDisplay(field, value, fallback) {
         const patch = clockDisplayPatch(snapshot, field, value);
         if (!patch) return;
-        mutate('clock', targetIdentity => api.setClockDisplay(deviceId, targetIdentity, patch), fallback);
+        mutate('clock', targetIdentity => api.setClockDisplay(deviceId, targetIdentity, patch), fallback,
+            { clockDisplay: patch });
     }
 
     return html`
@@ -384,13 +394,14 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
                         <${SectionResult} result=${actionResults.standby} />
                         ${snapshot.systemTimeout ? html`
                             <${Toggle}
-                                checked=${snapshot.systemTimeout.enabled}
+                                checked=${shown.systemTimeout.enabled}
                                 disabled=${Boolean(busy)}
                                 label="Enter standby automatically when idle"
                                 onChange=${enabled => mutate(
                                     'standby',
                                     targetIdentity => api.setSystemTimeout(deviceId, targetIdentity, enabled),
                                     'Could not update automatic standby.',
+                                    { systemTimeout: { enabled } },
                                 )}
                             />
                         ` : null}
@@ -406,13 +417,14 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
                             <label class="settings-field">
                                 <span>System language</span>
                                 <select
-                                    value=${String(snapshot.language.code)}
+                                    value=${String(shown.language.code)}
                                     disabled=${Boolean(busy)}
                                     onChange=${event => mutate(
                                         'language',
                                         targetIdentity => api.setLanguage(
                                             deviceId, targetIdentity, Number(event.target.value)),
                                         'Could not update the system language.',
+                                        { language: { code: Number(event.target.value) } },
                                     )}
                                 >
                                     ${(snapshot.language.options || []).map(option => html`
@@ -436,16 +448,17 @@ export function Settings({ deviceId, targetIdentity = '', targetName = '', targe
                                     ['SYNC_TO_ROOM', 'Video'],
                                     ['SYNC_TO_ZONE', 'Multi-room'],
                                 ].map(([mode, label]) => html`
-                                    <label key=${mode} class=${snapshot.sync.mode === mode ? 'selected' : ''}>
+                                    <label key=${mode} class=${shown.sync.mode === mode ? 'selected' : ''}>
                                         <input
                                             type="radio"
                                             name=${`sync-mode-${deviceId}`}
                                             value=${mode}
-                                            checked=${snapshot.sync.mode === mode}
+                                            checked=${shown.sync.mode === mode}
                                             onChange=${() => mutate(
                                                 'sync',
                                                 targetIdentity => api.setSync(deviceId, targetIdentity, mode),
                                                 'Could not update audio sync.',
+                                                { sync: { mode } },
                                             )}
                                         />
                                         <span>${label}</span>
