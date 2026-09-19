@@ -347,7 +347,8 @@ func projectZoneViews(
 // name when the master is a pair, over its physical device name.
 func zoneMasterName(master deviceView, view *zoneView) string {
 	if view != nil {
-		for _, member := range view.Members {
+		for i := range view.Members {
+			member := &view.Members[i]
 			if member.ControlID == view.MasterControlID && strings.TrimSpace(member.Name) != "" {
 				return member.Name
 			}
