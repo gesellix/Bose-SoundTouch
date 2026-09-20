@@ -51,6 +51,7 @@ GET      /api/control/devices/{id}/power-status                       soundtouch
 GET      /api/control/devices/{id}/recents                            soundtouchweb.(*WebApp).HandleDeviceRecents-fm
 GET      /api/control/devices/{id}/settings/                          soundtouchweb.(*WebApp).HandleGetDeviceSettings-fm
 GET      /api/control/devices/{id}/stereo-pair/                       soundtouchweb.(*WebApp).HandleGetStereoPair-fm
+GET      /api/control/devices/{id}/stored-presets/                    soundtouchweb.(*WebApp).HandleStoredPresets-fm
 GET      /api/control/devices/{id}/ws                                 soundtouchweb.(*WebApp).HandleDeviceWebSocket-fm
 GET      /api/control/devices/{id}/zone/                              soundtouchweb.(*WebApp).HandleGetZone-fm
 GET      /api/control/devices/{id}/zone/candidates                    soundtouchweb.(*WebApp).HandleGetZoneCandidates-fm
@@ -213,6 +214,7 @@ POST     /api/control/devices/{id}/providers/url/play                 soundtouch
 POST     /api/control/devices/{id}/settings/bluetooth/pair            soundtouchweb.(*WebApp).HandleEnterBluetoothPairing-fm
 POST     /api/control/devices/{id}/settings/clock-time                soundtouchweb.(*WebApp).HandleSetClockTime-fm
 POST     /api/control/devices/{id}/stereo-pair/                       soundtouchweb.(*WebApp).HandleCreateStereoPair-fm
+POST     /api/control/devices/{id}/stored-presets/repair              soundtouchweb.(*WebApp).HandleRepairStoredPresets-fm
 POST     /api/control/devices/{id}/volume/{volume}                    soundtouchweb.(*WebApp).HandleDirectVolumeControl-fm
 POST     /api/control/devices/{id}/zone/add/{slaveId}                 soundtouchweb.(*WebApp).HandleZoneAdd-fm
 POST     /api/control/devices/{id}/zone/dissolve                      soundtouchweb.(*WebApp).HandleZoneDissolve-fm

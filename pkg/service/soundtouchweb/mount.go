@@ -98,6 +98,15 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				// Empty a slot. Safe to offer because the catalog keeps the
 				// entry: clearing a slot no longer loses the station.
 				r.Delete("/preset/{slot}", app.HandleRemovePreset)
+
+				// What AfterTouch stores for this speaker, and the repair for
+				// when that disagrees with what the speaker reports. Separate
+				// from preset/{slot} because it addresses the service's own
+				// rows, several of which name no slot at all (issue 697).
+				r.Route("/stored-presets", func(r chi.Router) {
+					r.Get("/", app.HandleStoredPresets)
+					r.Post("/repair", app.HandleRepairStoredPresets)
+				})
 				// Generic key / preset / source / bass actions. Source selection is
 				// canonically POSTed as JSON; its GET form remains temporarily for
 				// compatibility and marks every response as deprecated.
