@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/catalog"
 )
 
@@ -104,5 +105,85 @@ func TestUnsetCatalogSizeUsesTheDefault(t *testing.T) {
 
 	if got := ds.catalogSize(); got != catalog.DefaultSize {
 		t.Fatalf("catalogSize() = %d, want the default %d", got, catalog.DefaultSize)
+	}
+}
+
+// The feed: every preset write files what it stored, so nothing has to be
+// recovered from hand-edited XML later.
+func TestSavePresetsFilesTheCatalog(t *testing.T) {
+	ds := NewDataStore(t.TempDir())
+
+	preset := models.ServicePreset{ContainerArt: "http://192.0.2.10/art.png"}
+	preset.Source = "TUNEIN"
+	preset.Location = "s12345"
+	preset.Name = "WDR 2"
+	preset.ButtonNumber = "1"
+
+	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
+		t.Fatalf("SavePresets: %v", err)
+	}
+
+	entries := ds.GetCatalog()
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 catalog entry, got %d", len(entries))
+	}
+
+	if entries[0].Origin != catalog.OriginPreset {
+		t.Errorf("Origin = %q, want %q", entries[0].Origin, catalog.OriginPreset)
+	}
+
+	if entries[0].DeviceID != "DEVICEID01" {
+		t.Errorf("DeviceID = %q, want the device that was written", entries[0].DeviceID)
+	}
+
+	// Clearing the slot must not cost the catalog entry -- that is the whole
+	// point of keeping one (issues 697, 715).
+	if err := ds.SavePresets("1234567", "DEVICEID01", nil); err != nil {
+		t.Fatalf("SavePresets (clear): %v", err)
+	}
+
+	if entries := ds.GetCatalog(); len(entries) != 1 {
+		t.Fatalf("an emptied slot took its catalog entry with it: %d entries left", len(entries))
+	}
+}
+
+// Recents carry no artwork, so a station that plays after having been a preset
+// must not lose the logo the preset sighting contributed.
+func TestSaveRecentsDoesNotCostAPresetEntryItsArtwork(t *testing.T) {
+	ds := NewDataStore(t.TempDir())
+
+	preset := models.ServicePreset{ContainerArt: "http://192.0.2.10/art.png"}
+	preset.Source = "TUNEIN"
+	preset.Location = "s12345"
+	preset.Name = "WDR 2"
+	preset.ButtonNumber = "1"
+
+	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
+		t.Fatalf("SavePresets: %v", err)
+	}
+
+	// The speaker echoes the source name back as sourceAccount in recents.
+	recent := models.ServiceRecent{}
+	recent.Source = "TUNEIN"
+	recent.SourceAccount = "TUNEIN"
+	recent.Location = "s12345"
+	recent.Name = "WDR 2"
+	recent.ID = "1"
+
+	if err := ds.SaveRecents("1234567", "DEVICEID01", []models.ServiceRecent{recent}); err != nil {
+		t.Fatalf("SaveRecents: %v", err)
+	}
+
+	entries := ds.GetCatalog()
+	if len(entries) != 1 {
+		t.Fatalf("expected the recents sighting to merge into the preset entry, got %d entries", len(entries))
+	}
+
+	if entries[0].ContainerArt != "http://192.0.2.10/art.png" {
+		t.Errorf("artwork lost: %q", entries[0].ContainerArt)
+	}
+
+	if entries[0].Origin != catalog.OriginPreset {
+		t.Errorf("Origin = %q, want it to stay %q", entries[0].Origin, catalog.OriginPreset)
 	}
 }
