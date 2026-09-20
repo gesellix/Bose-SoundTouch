@@ -179,6 +179,14 @@ export const api = {
     // Sources the service's other speakers have and this one does not
     // (issue 754). Identity only; the service never projects credentials.
     sourcesElsewhere: (id) => req(`/api/control/devices/${id}/sources-elsewhere`),
+    // Gives this speaker a source one of the others has. Only the addable
+    // kinds get this far; a music service has to be linked on the speaker
+    // itself, and the service says so.
+    addSourceElsewhere: (id, body) => req(`/api/control/devices/${id}/sources-elsewhere/add`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body),
+    }),
     // What the service stores for a speaker, and the repair for when that
     // disagrees with what the speaker reports (issue 697). The repair is the
     // one preset write that goes to the service rather than to the speaker.

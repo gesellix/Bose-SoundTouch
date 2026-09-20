@@ -503,3 +503,97 @@ render(h('section', { id: 'sources' }, h(Sources, {
 		t.Error("nothing to offer must render nothing at all")
 	}
 }
+
+// TestAddingASourceFromAnotherSpeaker covers the action half: the addable
+// kinds get a button, the link-required ones deliberately do not, and a
+// successful add re-reads the list so what was added stops being "elsewhere".
+func TestAddingASourceFromAnotherSpeaker(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { Sources } from '/app/static/js/components/Sources.js';
+render(h('section', { id: 'sources' }, h(Sources, {
+  deviceId: 'speaker',
+  status: {
+    revision: 1,
+    nowPlayingRevision: 1,
+    sources: { SourceItem: [{ Source: 'TUNEIN', SourceAccount: '', DisplayName: 'TuneIn', Status: 'READY' }] },
+    nowPlaying: { Source: 'STANDBY' },
+  },
+})), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	var added []string
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/sources-elsewhere", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			done := len(added) > 0
+			mu.Unlock()
+
+			sources := []any{
+				map[string]any{
+					"type": "STORED_MUSIC", "account": "uuid:theirs/0", "display_name": "fritz",
+					"availability": "addable", "devices": []string{"DEVICEID02"},
+				},
+				map[string]any{
+					"type": "SPOTIFY", "account": "listener", "display_name": "Spotify",
+					"availability": "link-required", "devices": []string{"DEVICEID02"},
+				},
+			}
+			if done {
+				sources = sources[1:]
+			}
+
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"available": true, "sources": sources,
+			}})
+		})
+		r.Post("/api/control/devices/speaker/sources-elsewhere/add", func(w http.ResponseWriter, req *http.Request) {
+			body, _ := io.ReadAll(req.Body)
+			mu.Lock()
+			added = append(added, string(body))
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"added": true, "refreshed": true,
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	var buttons int
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#sources .sources-elsewhere-add`, chromedp.ByQuery),
+
+		// Only the media server offers to be added; a music service cannot be
+		// given to a speaker, so offering a button would be a lie.
+		chromedp.Evaluate(`document.querySelectorAll('#sources .sources-elsewhere-add').length`, &buttons),
+
+		chromedp.Click(`#sources .sources-elsewhere-add`, chromedp.ByQuery),
+
+		// The list is re-read, so what was added is no longer "elsewhere".
+		chromedp.Poll(`document.querySelectorAll('#sources .sources-elsewhere-row').length === 1`, nil),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if buttons != 1 {
+		t.Errorf("expected only the addable source to offer a button, got %d", buttons)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(added) != 1 {
+		t.Fatalf("expected one add request, got %v", added)
+	}
+
+	for _, want := range []string{`"type":"STORED_MUSIC"`, `"account":"uuid:theirs/0"`, `"name":"fritz"`} {
+		if !strings.Contains(added[0], want) {
+			t.Errorf("add body %q should contain %q", added[0], want)
+		}
+	}
+}
