@@ -10,8 +10,8 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/catalog"
 )
 
-func seen(min int) time.Time {
-	return time.Date(2026, 9, 20, 12, min, 0, 0, time.UTC)
+func seen(minute int) time.Time {
+	return time.Date(2026, 9, 20, 12, minute, 0, 0, time.UTC)
 }
 
 func TestCatalogRoundTrip(t *testing.T) {

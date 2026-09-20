@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-func at(min int) time.Time {
-	return time.Date(2026, 9, 20, 12, min, 0, 0, time.UTC)
+func at(minute int) time.Time {
+	return time.Date(2026, 9, 20, 12, minute, 0, 0, time.UTC)
 }
 
 // The speaker echoes the source name back as sourceAccount in recents while

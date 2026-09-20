@@ -107,8 +107,8 @@ func (ds *DataStore) RecordCatalogEntries(entries []catalog.Entry) {
 	// next write rather than only once the catalog overflows again.
 	changed := c.Trim(size)
 
-	for _, e := range entries {
-		if c.Record(e, size) {
+	for i := range entries {
+		if c.Record(entries[i], size) {
 			changed = true
 		}
 	}

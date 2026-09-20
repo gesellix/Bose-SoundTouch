@@ -13,8 +13,9 @@
 package catalog
 
 import (
-	"encoding/json"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -73,10 +74,17 @@ func normalizeAccount(source, account string) string {
 // Identity keys an entry by what actually identifies the content: source, the
 // normalised account, and location. Item names are deliberately excluded --
 // the same name can belong to two different stations on two sources.
+//
+// The parts are quoted rather than joined on a separator, so that a location
+// containing the separator cannot collide with a different entry. The exact
+// format is internal: it is never persisted or sent anywhere, and the player
+// builds its own key for its own lookups.
 func Identity(source, sourceAccount, location string) string {
-	key, _ := json.Marshal([]string{source, normalizeAccount(source, sourceAccount), location})
-
-	return string(key)
+	return strings.Join([]string{
+		strconv.Quote(source),
+		strconv.Quote(normalizeAccount(source, sourceAccount)),
+		strconv.Quote(location),
+	}, ":")
 }
 
 // Identity returns e's identity key.
@@ -139,11 +147,17 @@ func (c *Catalog) Record(e Entry, size int) bool {
 
 // sameEntry compares two entries on everything except LastSeen.
 func sameEntry(a, b Entry) bool {
-	a.LastSeen, b.LastSeen = time.Time{}, time.Time{}
-	left, _ := json.Marshal(a)
-	right, _ := json.Marshal(b)
-
-	return string(left) == string(right)
+	return a.Source == b.Source &&
+		a.SourceAccount == b.SourceAccount &&
+		a.Location == b.Location &&
+		a.Type == b.Type &&
+		a.Name == b.Name &&
+		a.ContainerArt == b.ContainerArt &&
+		a.IsPresetable == b.IsPresetable &&
+		a.SourceID == b.SourceID &&
+		a.Origin == b.Origin &&
+		a.DeviceID == b.DeviceID &&
+		a.FirstSeen.Equal(b.FirstSeen)
 }
 
 // Trim applies a (possibly reduced) size limit without recording anything, so
