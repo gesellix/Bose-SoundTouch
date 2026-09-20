@@ -248,8 +248,8 @@ func PropagatePresetWrite(ds *datastore.DataStore, account, sourceDevice string,
 			func(presets []models.ServicePreset) ([]models.ServicePreset, error) {
 				return upsertPresetByButton(presets, written), nil
 			}); mutateErr != nil {
-			log.Printf("[PresetSync] %s -> %s slot %s: %v",
-				sanitizeLog(sourceDevice), sanitizeLog(targets[i].DeviceID), button, mutateErr)
+			log.Printf("[PresetSync] %s -> %s slot %s: %s",
+				sanitizeLog(sourceDevice), sanitizeLog(targets[i].DeviceID), button, sanitizeErr(mutateErr))
 
 			continue
 		}
@@ -288,7 +288,7 @@ func PropagatePresetRemoval(ds *datastore.DataStore, account, sourceDevice strin
 
 				return presets, nil
 			}); err != nil {
-			log.Printf("[PresetSync] clear %s slot %s: %v", sanitizeLog(targets[i].DeviceID), button, err)
+			log.Printf("[PresetSync] clear %s slot %s: %s", sanitizeLog(targets[i].DeviceID), button, sanitizeErr(err))
 
 			continue
 		}

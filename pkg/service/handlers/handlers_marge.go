@@ -560,7 +560,7 @@ func (s *Server) sharePresetWrite(account, device string, presetNumber int,
 		go func() {
 			c := client.NewClientFromHost(target.IPAddress)
 			if err := c.NotifySourcesUpdated(target.DeviceID); err != nil {
-				log.Printf("[PresetSync] notify %s: %v", sanitizeLog(target.DeviceID), err)
+				log.Printf("[PresetSync] notify %s: %s", sanitizeLog(target.DeviceID), sanitizeErr(err))
 			}
 		}()
 	}
