@@ -240,7 +240,7 @@ func TestHandleRepairStoredPresetsRejectsAnEmptyRequest(t *testing.T) {
 // speaker's own margeAccountUUID is the signal that settles it, and the player
 // already holds it.
 func TestStoredPresetsAreReadUnderTheAccountTheSpeakerReports(t *testing.T) {
-	app := speakerWithPresetsOn(t, 6, "6919733")
+	app := speakerWithPresetsOn(t, 6, "ACCOUNT01")
 
 	var askedAccount string
 
@@ -254,7 +254,7 @@ func TestStoredPresetsAreReadUnderTheAccountTheSpeakerReports(t *testing.T) {
 	app.HandleStoredPresets(w, storedPresetsRequest("GET", "/stored-presets/", ""))
 	decodeStoredPresets(t, w)
 
-	if askedAccount != "6919733" {
+	if askedAccount != "ACCOUNT01" {
 		t.Errorf("asked under account %q, want the one the speaker reports", askedAccount)
 	}
 
@@ -269,7 +269,7 @@ func TestStoredPresetsAreReadUnderTheAccountTheSpeakerReports(t *testing.T) {
 	w = httptest.NewRecorder()
 	app.HandleRepairStoredPresets(w, storedPresetsRequest("POST", "/stored-presets/repair", `{"drop":[7],"expected":8}`))
 
-	if repairedAccount != "6919733" {
+	if repairedAccount != "ACCOUNT01" {
 		t.Errorf("repaired under account %q, want the same account the view was read from", repairedAccount)
 	}
 }

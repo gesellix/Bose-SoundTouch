@@ -119,7 +119,7 @@ func TestSavePresetsFilesTheCatalog(t *testing.T) {
 	preset.Name = "WDR 2"
 	preset.ButtonNumber = "1"
 
-	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
 		t.Fatalf("SavePresets: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func TestSavePresetsFilesTheCatalog(t *testing.T) {
 
 	// Clearing the slot must not cost the catalog entry -- that is the whole
 	// point of keeping one (issues 697, 715).
-	if err := ds.SavePresets("1234567", "DEVICEID01", nil); err != nil {
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", nil); err != nil {
 		t.Fatalf("SavePresets (clear): %v", err)
 	}
 
@@ -158,7 +158,7 @@ func TestSaveRecentsDoesNotCostAPresetEntryItsArtwork(t *testing.T) {
 	preset.Name = "WDR 2"
 	preset.ButtonNumber = "1"
 
-	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
 		t.Fatalf("SavePresets: %v", err)
 	}
 
@@ -170,7 +170,7 @@ func TestSaveRecentsDoesNotCostAPresetEntryItsArtwork(t *testing.T) {
 	recent.Name = "WDR 2"
 	recent.ID = "1"
 
-	if err := ds.SaveRecents("1234567", "DEVICEID01", []models.ServiceRecent{recent}); err != nil {
+	if err := ds.SaveRecents("ACCOUNT01", "DEVICEID01", []models.ServiceRecent{recent}); err != nil {
 		t.Fatalf("SaveRecents: %v", err)
 	}
 
@@ -207,11 +207,11 @@ func TestBackfillCatalogFilesWhatIsAlreadyStored(t *testing.T) {
 	recent.Name = "White Water"
 	recent.ID = "1"
 
-	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
 		t.Fatalf("SavePresets: %v", err)
 	}
 
-	if err := ds.SaveRecents("1234567", "DEVICEID01", []models.ServiceRecent{recent}); err != nil {
+	if err := ds.SaveRecents("ACCOUNT01", "DEVICEID01", []models.ServiceRecent{recent}); err != nil {
 		t.Fatalf("SaveRecents: %v", err)
 	}
 

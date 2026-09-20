@@ -66,11 +66,11 @@ func TestDropStoredPresetRowsCutsTheListToWhatFits(t *testing.T) {
 		storedPreset("", "TUNEIN", "s8", "No id at all"),
 	}
 
-	if err := ds.SavePresets("1234567", "DEVICEID01", stored); err != nil {
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", stored); err != nil {
 		t.Fatalf("SavePresets: %v", err)
 	}
 
-	rows, err := ds.StoredPresets("1234567", "DEVICEID01")
+	rows, err := ds.StoredPresets("ACCOUNT01", "DEVICEID01")
 	if err != nil {
 		t.Fatalf("StoredPresets: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestDropStoredPresetRowsCutsTheListToWhatFits(t *testing.T) {
 		}
 	}
 
-	kept, err := ds.DropStoredPresetRows("1234567", "DEVICEID01", drop, len(rows))
+	kept, err := ds.DropStoredPresetRows("ACCOUNT01", "DEVICEID01", drop, len(rows))
 	if err != nil {
 		t.Fatalf("DropStoredPresetRows: %v", err)
 	}
@@ -122,14 +122,14 @@ func TestDropStoredPresetRowsCutsTheListToWhatFits(t *testing.T) {
 func TestDropStoredPresetRowsRefusesAStaleView(t *testing.T) {
 	ds := NewDataStore(t.TempDir())
 
-	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", []models.ServicePreset{
 		storedPreset("1", "TUNEIN", "s1", "MDR JUMP"),
 		storedPreset("2", "SPOTIFY", "spotify:album:1", "White Water"),
 	}); err != nil {
 		t.Fatalf("SavePresets: %v", err)
 	}
 
-	_, err := ds.DropStoredPresetRows("1234567", "DEVICEID01", []int{1}, 3)
+	_, err := ds.DropStoredPresetRows("ACCOUNT01", "DEVICEID01", []int{1}, 3)
 	if err == nil {
 		t.Fatal("expected a stale row count to be refused")
 	}
@@ -138,7 +138,7 @@ func TestDropStoredPresetRowsRefusesAStaleView(t *testing.T) {
 		t.Errorf("the error should tell the caller what to do, got %q", err)
 	}
 
-	rows, _ := ds.StoredPresets("1234567", "DEVICEID01")
+	rows, _ := ds.StoredPresets("ACCOUNT01", "DEVICEID01")
 	if len(rows) != 2 {
 		t.Fatalf("a refused repair must change nothing, got %d rows", len(rows))
 	}
@@ -147,17 +147,17 @@ func TestDropStoredPresetRowsRefusesAStaleView(t *testing.T) {
 func TestDropStoredPresetRowsRejectsAnIndexOutsideTheList(t *testing.T) {
 	ds := NewDataStore(t.TempDir())
 
-	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", []models.ServicePreset{
 		storedPreset("1", "TUNEIN", "s1", "MDR JUMP"),
 	}); err != nil {
 		t.Fatalf("SavePresets: %v", err)
 	}
 
-	if _, err := ds.DropStoredPresetRows("1234567", "DEVICEID01", []int{5}, 1); err == nil {
+	if _, err := ds.DropStoredPresetRows("ACCOUNT01", "DEVICEID01", []int{5}, 1); err == nil {
 		t.Fatal("expected an out-of-list row index to be refused")
 	}
 
-	if rows, _ := ds.StoredPresets("1234567", "DEVICEID01"); len(rows) != 1 {
+	if rows, _ := ds.StoredPresets("ACCOUNT01", "DEVICEID01"); len(rows) != 1 {
 		t.Fatalf("a refused repair must change nothing, got %d rows", len(rows))
 	}
 }
@@ -168,21 +168,21 @@ func TestDropStoredPresetRowsRejectsAnIndexOutsideTheList(t *testing.T) {
 func TestDeviceDirExists(t *testing.T) {
 	ds := NewDataStore(t.TempDir())
 
-	if err := ds.SavePresets("6919733", "DEVICEID01", []models.ServicePreset{
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", []models.ServicePreset{
 		storedPreset("1", "TUNEIN", "s1", "MDR JUMP"),
 	}); err != nil {
 		t.Fatalf("SavePresets: %v", err)
 	}
 
-	if !ds.DeviceDirExists("6919733", "DEVICEID01") {
+	if !ds.DeviceDirExists("ACCOUNT01", "DEVICEID01") {
 		t.Error("expected the account we just wrote under to exist")
 	}
 
 	for _, tt := range []struct{ account, device string }{
-		{"3230304", "DEVICEID01"},
-		{"6919733", "DEVICEID02"},
+		{"ACCOUNT02", "DEVICEID01"},
+		{"ACCOUNT01", "DEVICEID02"},
 		{"", "DEVICEID01"},
-		{"6919733", ""},
+		{"ACCOUNT01", ""},
 		{"../escape", "DEVICEID01"},
 	} {
 		if ds.DeviceDirExists(tt.account, tt.device) {
