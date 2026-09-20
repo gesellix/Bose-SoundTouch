@@ -214,6 +214,7 @@ POST     /api/control/devices/{id}/providers/tunein/play              soundtouch
 POST     /api/control/devices/{id}/providers/url/play                 soundtouchweb.(*WebApp).HandlePlayURL-fm
 POST     /api/control/devices/{id}/settings/bluetooth/pair            soundtouchweb.(*WebApp).HandleEnterBluetoothPairing-fm
 POST     /api/control/devices/{id}/settings/clock-time                soundtouchweb.(*WebApp).HandleSetClockTime-fm
+POST     /api/control/devices/{id}/sources-elsewhere/add              soundtouchweb.(*WebApp).HandleAddSourceElsewhere-fm
 POST     /api/control/devices/{id}/stereo-pair/                       soundtouchweb.(*WebApp).HandleCreateStereoPair-fm
 POST     /api/control/devices/{id}/stored-presets/repair              soundtouchweb.(*WebApp).HandleRepairStoredPresets-fm
 POST     /api/control/devices/{id}/volume/{volume}                    soundtouchweb.(*WebApp).HandleDirectVolumeControl-fm

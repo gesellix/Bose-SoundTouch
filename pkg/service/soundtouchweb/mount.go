@@ -105,7 +105,11 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				// rows, several of which name no slot at all (issue 697).
 				// What the other speakers have and this one does not. Not
 				// under /library, which is about one kind of source only.
+				// Registered as two literal paths rather than a subrouter:
+				// a subrouter would move the GET to a trailing slash, and
+				// that path is already published.
 				r.Get("/sources-elsewhere", app.HandleSourcesElsewhere)
+				r.Post("/sources-elsewhere/add", app.HandleAddSourceElsewhere)
 
 				r.Route("/stored-presets", func(r chi.Router) {
 					r.Get("/", app.HandleStoredPresets)

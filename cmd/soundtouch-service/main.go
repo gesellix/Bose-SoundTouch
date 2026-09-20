@@ -1585,6 +1585,15 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 		return ds.SourcesElsewhere(account, device)
 	}
 
+	webApp.AddCanonicalSource = func(deviceID, reported, sourceType string) (bool, error) {
+		account, device, err := accountForDevice(ds, deviceID, reported)
+		if err != nil {
+			return false, err
+		}
+
+		return ds.AddCanonicalSource(account, device, sourceType)
+	}
+
 	// A removal from the player UI cascades to the datastore (the single
 	// source of truth), so the device does not reappear on the next re-sync.
 	webApp.RemoveDeviceHook = func(deviceID string) error {

@@ -152,6 +152,12 @@ type WebApp struct {
 	// outward as it is stored.
 	SourcesElsewhere func(deviceID, account string) ([]models.SourceIdentity, error)
 
+	// AddCanonicalSource, when set, gives a device one of the sources
+	// AfterTouch defines itself (TuneIn, Radio Browser, Local Internet
+	// Radio), reporting whether anything was added. It takes the definition
+	// from the service's own defaults, never from the speaker that has it.
+	AddCanonicalSource func(deviceID, account, sourceType string) (bool, error)
+
 	// RemoveDeviceHook, when set, removes a device from the backing store by
 	// its device ID (MAC). The embedded build wires it to the service's
 	// datastore removal so a removal from the player UI also clears the
