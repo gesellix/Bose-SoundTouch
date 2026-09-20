@@ -77,8 +77,8 @@ source, and a name. Two consequences worth knowing:
 ## Presets on several speakers
 
 Speakers that share one AfterTouch account share their presets: saving or
-clearing a preset on one applies it to the others, and AfterTouch nudges them
-so they pick it up without a reboot or a manual "Refresh sources".
+clearing a preset on one applies it to the others. How quickly they show it
+depends on your setup, see "When the other speakers pick it up" below.
 
 What happens by default:
 
@@ -99,11 +99,31 @@ curl -X POST http://192.0.2.10:8000/api/mgmt/accounts/<accountId>/preset-sync \
 (a speaker with no presets still adopts them, since nothing is lost that way),
 and `auto` is the default described above.
 
-Only saving or clearing a single preset is shared. Importing a speaker's
-presets into AfterTouch ("Sync Data" in the admin UI, or `setup sync`) stays
-on that speaker: it takes the whole list as that speaker reports it at that
-moment, which can be shorter or out of date, and spreading that to every
-speaker is exactly what you would not want.
+### Sharing a preset is not the same as "Sync Data"
+
+The two move in opposite directions, which is easy to mix up:
+
+|                                        | What it does                                            | Reaches other speakers                   |
+|----------------------------------------|---------------------------------------------------------|------------------------------------------|
+| Saving or clearing one preset          | writes that slot, on the speaker and in AfterTouch      | yes, this is the sharing described above |
+| "Sync Data" (admin UI) or `setup sync` | imports one speaker's whole preset list into AfterTouch | no, it stays on that speaker             |
+
+An import takes the list exactly as that one speaker reports it at that
+moment. If that list is shorter or out of date, handing it to every other
+speaker would spread the loss, so an import is never shared. AfterTouch even
+refuses an import that would shrink what it already holds, unless you confirm
+it.
+
+### When the other speakers pick it up
+
+Storing the preset in AfterTouch is the sharing. The speakers fetch their own
+presets, so each one picks the change up by itself: at its next fetch, when it
+is switched on or rebooted, or when you press "Refresh sources on speaker".
+
+Where AfterTouch can reach the speakers, it also nudges them, and the change
+shows up within seconds. That nudge is an accelerator, not the mechanism: if
+AfterTouch runs somewhere it cannot reach them (a public cloud host, for
+example), the presets still arrive, just whenever the speakers next ask.
 
 ## From the command line
 
