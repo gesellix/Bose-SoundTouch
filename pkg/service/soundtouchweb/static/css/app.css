@@ -1098,6 +1098,77 @@ img.preset-source-icon { object-fit: contain; filter: var(--content-icon-filter)
    otherwise disappear into it. */
 .preset-slot-wrap.active .preset-save-btn:disabled { color: var(--accent-fg); }
 
+/* The pencil sits left of the star in the same corner, so a tile carries its
+   two save gestures in one place: the star stores what is playing, the pencil
+   fills the slot from the catalog (issue 754). */
+.preset-edit-wrap { position: absolute; right: 1.5rem; bottom: .2rem; z-index: 1; display: flex; }
+.preset-edit-btn {
+    font-size: .75rem; line-height: 1;
+    background: none; border: none; padding: 2px 3px;
+    border-radius: 3px; cursor: pointer;
+    color: var(--text-dim); opacity: .8;
+    transition: opacity .15s, color .15s;
+}
+.preset-edit-btn:hover, .preset-edit-btn:focus-visible { opacity: 1; color: var(--text); }
+.preset-edit-btn.open { opacity: 1; color: var(--accent); }
+.preset-slot-wrap.active .preset-edit-btn { color: var(--accent-fg); }
+
+/* ── Catalog picker ──────────────────────────────────────────────────────── */
+.catalog-picker {
+    margin-top: .6rem; padding: .6rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; flex-direction: column; gap: .5rem;
+}
+.catalog-picker-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.catalog-picker-title {
+    margin: 0; font-size: .8rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim);
+}
+.catalog-picker-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: .9rem; line-height: 1; padding: .2rem .3rem;
+}
+.catalog-picker-close:hover, .catalog-picker-close:focus-visible { color: var(--text); }
+.catalog-picker-note { margin: 0; font-size: .8rem; color: var(--text-dim); }
+.catalog-picker-note.error { color: var(--danger); }
+.catalog-picker-filter {
+    width: 100%; box-sizing: border-box;
+    padding: .4rem .5rem; font: inherit; font-size: .85rem;
+    color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--radius);
+}
+/* Capped rather than unbounded: the catalog holds up to 30 entries, and a
+   list that long would push the rest of the device page off the screen. */
+.catalog-picker-list {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: .25rem;
+    max-height: 17rem; overflow-y: auto;
+}
+.catalog-entry {
+    width: 100%; display: flex; align-items: center; gap: .5rem;
+    padding: .35rem .4rem; text-align: left; cursor: pointer;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text);
+}
+.catalog-entry:hover:not(:disabled), .catalog-entry:focus-visible:not(:disabled) { border-color: var(--accent); }
+.catalog-entry:disabled { cursor: default; opacity: .6; }
+.catalog-entry.saving { border-color: var(--accent); }
+.catalog-entry-thumb {
+    flex: 0 0 32px; width: 32px; height: 32px;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--bg); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+}
+.catalog-entry-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* The theme filter is scoped to img, as everywhere else a SourceIcon is used:
+   applied to the emoji span it washes the brand emoji out. */
+.catalog-entry-icon { width: 18px; height: 18px; font-size: 14px; line-height: 1; }
+img.catalog-entry-icon { object-fit: contain; filter: var(--content-icon-filter); opacity: .85; }
+.catalog-entry-text { display: flex; flex-direction: column; min-width: 0; gap: .1rem; }
+.catalog-entry-name { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-entry-meta { font-size: .7rem; color: var(--text-dim); }
+
 /* ── Sources ─────────────────────────────────────────────────────────────── */
 .source-list { display: flex; flex-wrap: wrap; gap: .4rem; }
 

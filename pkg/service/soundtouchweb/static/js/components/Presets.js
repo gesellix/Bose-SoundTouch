@@ -3,22 +3,10 @@ import { useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
+import { sourceLabel } from '../sourceLabels.js';
+import { CatalogPicker } from './CatalogPicker.js';
 
 const html = htm.bind(h);
-
-const SOURCE_LABELS = {
-    TUNEIN: 'TuneIn', SPOTIFY: 'Spotify', AMAZON: 'Amazon',
-    PANDORA: 'Pandora', IHEARTRADIO: 'iHeart', DEEZER: 'Deezer',
-    LOCAL_INTERNET_RADIO: 'Internet Radio',
-    // A folder or track from a DLNA/NAS media server. Without this the tile
-    // showed the raw source name (issue 700).
-    STORED_MUSIC: 'Library',
-    RADIO_BROWSER: 'Radio Browser',
-};
-
-function sourceLabel(source) {
-    return SOURCE_LABELS[source] || source;
-}
 
 // PresetSlot renders a single preset button plus an overlaid save button that
 // stores the currently playing content into that slot.  The save button lives
@@ -30,7 +18,7 @@ function sourceLabel(source) {
 // unreachable on touch devices and easy to miss everywhere else.  It shares
 // the star glyph and the gold --fav colour with the now-playing preset
 // picker (see NowPlaying.js) so both save paths read as the same gesture.
-function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, onSelect }) {
+function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, onSelect, onEdit, editing }) {
     const [saveState, setSaveState] = useState(null); // null | 'saved' | 'error'
 
     const item = preset?.ContentItem;
@@ -70,11 +58,21 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
         store();
     }
 
+    function edit(e) {
+        e.stopPropagation();
+        onEdit?.(editing ? null : preset.ID);
+    }
+
     const saveTitle = !canSave
         ? 'Play something first, then save it to a preset'
         : mapped
             ? `Save again to preset ${preset.ID} (already saved there)`
             : `Save what's playing to preset ${preset.ID}`;
+
+    // The star saves what is playing; the pencil fills the slot from the
+    // catalog, which is how a slot that was emptied gets its station back
+    // without anyone editing XML (issue 754).
+    const editTitle = `Fill preset ${preset.ID} from the catalog`;
 
     const slotTitle = isEmpty
         ? (savableEmpty ? "Save what's playing here" : 'Empty')
@@ -109,6 +107,14 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
                 </span>
                 <span class="preset-num">${preset?.ID ?? ''}</span>
             </button>
+            <span class="preset-edit-wrap" title=${editTitle}>
+                <button
+                    class="preset-edit-btn ${editing ? 'open' : ''}"
+                    onClick=${edit}
+                    aria-label=${editTitle}
+                    aria-expanded=${editing ? 'true' : 'false'}
+                >✎</button>
+            </span>
             <span class="preset-save-wrap" title=${saveTitle}>
                 <button
                     class="preset-save-btn ${mapped ? 'mapped' : ''} ${saveState ?? ''}"
@@ -124,6 +130,12 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
 }
 
 export function Presets({ deviceId, status, command, commandBusy = false, onSelect }) {
+    // Which slot the catalog picker is open for, if any. One picker for the
+    // whole section rather than a popover per tile: six tiles wrap to two or
+    // three rows on a phone, and a list that has to be filtered needs the
+    // width of the section, not the width of a tile.
+    const [editingSlot, setEditingSlot] = useState(null);
+
     const presets = status?.presets?.Preset ?? [];
     const currentSource = status?.nowPlaying?.Source;
     const currentLocation = status?.nowPlaying?.ContentItem?.Location;
@@ -156,9 +168,21 @@ export function Presets({ deviceId, status, command, commandBusy = false, onSele
                         command=${command}
                         commandBusy=${commandBusy}
                         onSelect=${onSelect}
+                        onEdit=${setEditingSlot}
+                        editing=${editingSlot === preset.ID}
                     />
                 `)}
             </div>
+            ${editingSlot !== null && html`
+                <${CatalogPicker}
+                    key=${`catalog:${editingSlot}`}
+                    deviceId=${deviceId}
+                    slot=${editingSlot}
+                    presets=${status?.presets}
+                    onClose=${() => setEditingSlot(null)}
+                    onAssigned=${() => setEditingSlot(null)}
+                />
+            `}
         </div>
     `;
 }
