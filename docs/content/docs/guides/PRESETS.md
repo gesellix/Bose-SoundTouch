@@ -99,9 +99,11 @@ curl -X POST http://192.0.2.10:8000/api/mgmt/accounts/<accountId>/preset-sync \
 (a speaker with no presets still adopts them, since nothing is lost that way),
 and `auto` is the default described above.
 
-Syncing a speaker's data into AfterTouch ("Sync Data", or `setup sync`) is
-deliberately not shared: that reads the whole list from one speaker, and it
-can be shorter than what AfterTouch holds.
+Only saving or clearing a single preset is shared. Importing a speaker's
+presets into AfterTouch ("Sync Data" in the admin UI, or `setup sync`) stays
+on that speaker: it takes the whole list as that speaker reports it at that
+moment, which can be shorter or out of date, and spreading that to every
+speaker is exactly what you would not want.
 
 ## From the command line
 
