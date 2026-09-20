@@ -187,3 +187,95 @@ func TestSaveRecentsDoesNotCostAPresetEntryItsArtwork(t *testing.T) {
 		t.Errorf("Origin = %q, want it to stay %q", entries[0].Origin, catalog.OriginPreset)
 	}
 }
+
+// The case the screenshot showed: presets stored months ago, a catalog that
+// had never seen a write, and therefore an empty pick list next to six full
+// slots.
+func TestBackfillCatalogFilesWhatIsAlreadyStored(t *testing.T) {
+	ds := NewDataStore(t.TempDir())
+
+	preset := models.ServicePreset{CreatedOn: "1600000000", UpdatedOn: "1600000600"}
+	preset.Source = "TUNEIN"
+	preset.Location = "s12345"
+	preset.Name = "MDR JUMP"
+	preset.ButtonNumber = "1"
+
+	recent := models.ServiceRecent{UtcTime: "1600001000"}
+	recent.Source = "SPOTIFY"
+	recent.SourceAccount = "listener"
+	recent.Location = "spotify:album:1"
+	recent.Name = "White Water"
+	recent.ID = "1"
+
+	if err := ds.SavePresets("1234567", "DEVICEID01", []models.ServicePreset{preset}); err != nil {
+		t.Fatalf("SavePresets: %v", err)
+	}
+
+	if err := ds.SaveRecents("1234567", "DEVICEID01", []models.ServiceRecent{recent}); err != nil {
+		t.Fatalf("SaveRecents: %v", err)
+	}
+
+	// Throw the catalog away, leaving exactly the state an install upgraded
+	// to this version starts in: full Presets.xml, no catalog.
+	if err := os.Remove(filepath.Join(ds.DataDir, CatalogFile)); err != nil {
+		t.Fatalf("remove catalog: %v", err)
+	}
+
+	fresh := NewDataStore(ds.DataDir)
+	fresh.BackfillCatalog()
+
+	entries := fresh.GetCatalog()
+	if len(entries) != 2 {
+		t.Fatalf("expected the stored preset and recent to be filed, got %d entries", len(entries))
+	}
+
+	// The speaker's own timestamps, not the moment of the backfill: six
+	// presets filed in one pass would otherwise share one timestamp and the
+	// pick list would be in arbitrary order.
+	if got := entries[0].Name; got != "White Water" {
+		t.Errorf("expected the more recently played entry first, got %q", got)
+	}
+
+	if want := time.Unix(1600000000, 0).UTC(); !entries[1].FirstSeen.Equal(want) {
+		t.Errorf("FirstSeen = %v, want the preset's own createdOn %v", entries[1].FirstSeen, want)
+	}
+
+	// A second pass must be a no-op, or every restart would rewrite the file.
+	before, err := os.Stat(filepath.Join(ds.DataDir, CatalogFile))
+	if err != nil {
+		t.Fatalf("stat catalog: %v", err)
+	}
+
+	fresh.BackfillCatalog()
+
+	after, err := os.Stat(filepath.Join(ds.DataDir, CatalogFile))
+	if err != nil {
+		t.Fatalf("stat catalog: %v", err)
+	}
+
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Error("a second backfill rewrote the catalog; it must be idempotent")
+	}
+}
+
+func TestSightingTimeReadsBothStoredFormats(t *testing.T) {
+	epoch := time.Unix(1600000000, 0).UTC()
+
+	tests := map[string]time.Time{
+		"1600000000":                    epoch,
+		"2026-09-20T12:00:00Z":          time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC),
+		"2015-03-11T19:12:38.000+00:00": time.Date(2015, 3, 11, 19, 12, 38, 0, time.UTC),
+	}
+
+	for value, want := range tests {
+		if got := sightingTime(value); !got.Equal(want) {
+			t.Errorf("sightingTime(%q) = %v, want %v", value, got, want)
+		}
+	}
+
+	for _, value := range []string{"", "   ", "0", "not a time"} {
+		if got := sightingTime(value); !got.IsZero() {
+			t.Errorf("sightingTime(%q) = %v, want the zero time so the caller falls back to now", value, got)
+		}
+	}
+}
