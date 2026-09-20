@@ -1132,6 +1132,15 @@ img.sources-elsewhere-icon { object-fit: contain; filter: var(--content-icon-fil
 .sources-elsewhere-text { display: flex; flex-direction: column; min-width: 0; }
 .sources-elsewhere-name { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sources-elsewhere-meta { font-size: .7rem; color: var(--text-dim); }
+.sources-elsewhere-row .sources-elsewhere-text { flex: 1 1 auto; }
+.sources-elsewhere-add {
+    padding: .25rem .5rem; font-size: .75rem; cursor: pointer;
+    color: var(--text-dim); background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+}
+.sources-elsewhere-add:hover:not(:disabled), .sources-elsewhere-add:focus-visible:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.sources-elsewhere-add:disabled { opacity: .5; cursor: default; }
+.sources-elsewhere-error { margin: 0 0 .4rem; font-size: .78rem; color: var(--danger); }
 
 /* ── Stored-preset problems ──────────────────────────────────────────────── */
 /* Only ever rendered when the stored list and the speaker disagree, so it can

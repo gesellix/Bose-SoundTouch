@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useCallback } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
@@ -25,16 +25,42 @@ const AVAILABILITY = {
 // the thing an owner has to understand first.
 export function SourcesElsewhere({ deviceId }) {
     const [payload, setPayload] = useState(null);
+    const [busy, setBusy] = useState(null);
+    const [error, setError] = useState(null);
 
-    useEffect(() => {
-        let cancelled = false;
+    const load = useCallback(() => api.sourcesElsewhere(deviceId)
+        .then(res => setPayload(res?.data ?? null))
+        .catch(() => setPayload(null)), [deviceId]);
 
-        api.sourcesElsewhere(deviceId)
-            .then(res => { if (!cancelled) setPayload(res?.data ?? null); })
-            .catch(() => { if (!cancelled) setPayload(null); });
+    useEffect(() => { load(); }, [load]);
 
-        return () => { cancelled = true; };
-    }, [deviceId]);
+    function add(source) {
+        setBusy(keyOf(source));
+        setError(null);
+
+        api.addSourceElsewhere(deviceId, {
+            type: source.type,
+            account: source.account ?? '',
+            name: source.display_name ?? '',
+        })
+            .then(res => {
+                setBusy(null);
+
+                if (res?.success === false) {
+                    setError(res.error || 'The speaker refused that source.');
+
+                    return;
+                }
+
+                // The list is derived from what the speaker has, so re-reading
+                // it is how the added source disappears from "elsewhere".
+                return load();
+            })
+            .catch(() => {
+                setBusy(null);
+                setError('The request did not complete; reload to see what this speaker has now.');
+            });
+    }
 
     const sources = payload?.sources ?? [];
 
@@ -45,9 +71,10 @@ export function SourcesElsewhere({ deviceId }) {
     return html`
         <div class="sources-elsewhere">
             <h4 class="sources-elsewhere-title">On your other speakers</h4>
+            ${error && html`<p class="sources-elsewhere-error" role="alert">${error}</p>`}
             <ul class="sources-elsewhere-list">
                 ${sources.map(source => html`
-                    <li key=${`${source.type}:${source.account || ''}`} class="sources-elsewhere-row">
+                    <li key=${keyOf(source)} class="sources-elsewhere-row">
                         <${SourceIcon} source=${source.type} className="sources-elsewhere-icon" />
                         <span class="sources-elsewhere-text">
                             <span class="sources-elsewhere-name">
@@ -60,9 +87,22 @@ export function SourcesElsewhere({ deviceId }) {
                                     : null}
                             </span>
                         </span>
+                        ${source.availability === 'addable' && html`
+                            <button
+                                type="button"
+                                class="sources-elsewhere-add"
+                                disabled=${busy !== null}
+                                title=${`Add ${source.display_name || sourceLabel(source.type)} to this speaker`}
+                                onClick=${() => add(source)}
+                            >${busy === keyOf(source) ? 'Adding…' : 'Add'}</button>
+                        `}
                     </li>
                 `)}
             </ul>
         </div>
     `;
+}
+
+function keyOf(source) {
+    return `${source.type}:${source.account || ''}`;
 }
