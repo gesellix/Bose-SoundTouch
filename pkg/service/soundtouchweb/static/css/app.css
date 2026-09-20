@@ -1113,6 +1113,59 @@ img.preset-source-icon { object-fit: contain; filter: var(--content-icon-filter)
 .preset-edit-btn.open { opacity: 1; color: var(--accent); }
 .preset-slot-wrap.active .preset-edit-btn { color: var(--accent-fg); }
 
+/* ── Stored-preset problems ──────────────────────────────────────────────── */
+/* Only ever rendered when the stored list and the speaker disagree, so it can
+   afford to be noticeable. */
+.stored-presets {
+    margin-bottom: .6rem;
+    border: 1px solid var(--warning); border-radius: var(--radius);
+    background: var(--surface);
+}
+.stored-presets-summary {
+    display: flex; align-items: center; gap: .6rem; width: 100%;
+    padding: .55rem .6rem; text-align: left; cursor: pointer;
+    background: none; border: none; color: var(--text);
+}
+.stored-presets-mark {
+    flex: 0 0 1.4rem; height: 1.4rem; border-radius: 50%;
+    background: var(--warning); color: var(--surface);
+    font-size: .8rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.stored-presets-text { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.stored-presets-headline { font-size: .85rem; }
+.stored-presets-hint { font-size: .72rem; color: var(--text-dim); }
+.stored-presets-body {
+    padding: 0 .6rem .6rem;
+    display: flex; flex-direction: column; gap: .5rem;
+}
+.stored-presets-note { margin: 0; font-size: .78rem; color: var(--text-dim); }
+.stored-presets-note.error { color: var(--danger); }
+.stored-presets-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.stored-presets-row {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .35rem .4rem;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.stored-presets-row.broken { border-color: var(--warning); }
+.stored-presets-button {
+    flex: 0 0 1.7rem; height: 1.7rem; border-radius: 4px;
+    border: 1px solid var(--border); color: var(--text-dim);
+    font-size: .75rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.stored-presets-detail { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.stored-presets-name { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stored-presets-meta { font-size: .7rem; color: var(--text-dim); }
+.stored-presets-remove, .stored-presets-fix {
+    padding: .3rem .5rem; font-size: .78rem; cursor: pointer;
+    color: var(--text-dim); background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--radius);
+}
+.stored-presets-remove:hover:not(:disabled), .stored-presets-fix:hover:not(:disabled) { color: var(--text); }
+.stored-presets-fix { align-self: flex-start; color: var(--text); border-color: var(--warning); }
+.stored-presets-remove:disabled, .stored-presets-fix:disabled { opacity: .5; cursor: default; }
+
 /* ── Catalog picker ──────────────────────────────────────────────────────── */
 .catalog-picker {
     margin-top: .6rem; padding: .6rem;

@@ -176,6 +176,15 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
+    // What the service stores for a speaker, and the repair for when that
+    // disagrees with what the speaker reports (issue 697). The repair is the
+    // one preset write that goes to the service rather than to the speaker.
+    storedPresets: (id) => req(`/api/control/devices/${id}/stored-presets/`),
+    repairStoredPresets: (id, drop, expected) => req(`/api/control/devices/${id}/stored-presets/repair`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ drop, expected }),
+    }),
     // Empties a slot. The catalog keeps the entry, so this loses the slot's
     // contents, not the station (issue 754).
     removePreset: (id, slotId) => req(`/api/control/devices/${id}/preset/${slotId}`, { method: 'DELETE' }),

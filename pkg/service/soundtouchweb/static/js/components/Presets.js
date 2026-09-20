@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
 import { sourceLabel } from '../sourceLabels.js';
 import { CatalogPicker } from './CatalogPicker.js';
+import { StoredPresets } from './StoredPresets.js';
 
 const html = htm.bind(h);
 
@@ -157,6 +158,7 @@ export function Presets({ deviceId, status, command, commandBusy = false, onSele
     return html`
         <div class="presets-section">
             <h3 class="section-title">Presets</h3>
+            <${StoredPresets} deviceId=${deviceId} revision=${status?.revision} />
             <div class="preset-grid">
                 ${slots.map(preset => html`
                     <${PresetSlot}
