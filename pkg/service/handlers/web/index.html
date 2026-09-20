@@ -230,6 +230,20 @@
             </div>
         </div>
         <div style="margin-bottom: 20px">
+            <strong>Preset catalog size:</strong>
+            <div style="margin-top: 6px">
+                <input id="catalog-size" type="number" min="0" step="1" placeholder="100 (default)"
+                       style="width: 10em" />
+            </div>
+            <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                How many entries the player&rsquo;s preset picker remembers, so a slot
+                that gets emptied can be filled with the same station again. Roughly
+                450 bytes each. Leave empty for the default of 100; set
+                <code>0</code> to switch the catalog off and discard what is stored,
+                which is worth doing on a speaker&rsquo;s own flash volume.
+            </div>
+        </div>
+        <div style="margin-bottom: 20px">
             <strong>Admin area login:</strong>
             <div style="margin-top: 6px">
                 <select id="admin-area-auth">

@@ -123,8 +123,9 @@ An entry already sitting in a slot is still listed, and says which slot it is
 in. Putting the same station in two slots is allowed; it is sometimes what you
 want.
 
-The list holds the 100 most recently seen entries, which costs about 45 KB. To
-change that, set `catalog_size` in `settings.json`:
+The list holds the 100 most recently seen entries, which costs about 45 KB.
+Change that in the admin UI under Settings ("Preset catalog size"), or by
+setting `catalog_size` in `settings.json`:
 
 ```json
 { "catalog_size": 250 }
@@ -135,7 +136,9 @@ were saved as a preset, so what you are most likely to want back stays longest.
 
 Setting it to `0` turns the catalog off and discards what is stored, which is
 worth knowing if you run AfterTouch on the speaker itself and want to keep the
-flash volume as quiet as possible. Leaving it out keeps the default of 100.
+flash volume as quiet as possible. An empty box (or leaving the setting out of
+`settings.json`) keeps the default of 100, and follows it if the default
+changes later.
 
 ### When AfterTouch and the speaker disagree
 

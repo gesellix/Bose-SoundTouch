@@ -131,6 +131,66 @@ func (s *Server) RemoveDeviceByID(deviceID string) (bool, error) {
 	return false, nil
 }
 
+// persistedCatalogSize reports the configured preset-catalog cap, or nil when
+// the operator has never set one.
+func (s *Server) persistedCatalogSize() *int {
+	persisted, err := s.ds.GetSettings()
+	if err != nil {
+		return nil
+	}
+
+	return persisted.CatalogSize
+}
+
+// applyCatalogSize sets the preset catalog's cap from what the form sent.
+//
+// A nil value means the caller did not send the field at all, and then nothing
+// is touched: a form that does not know about the setting must not reset one
+// that is configured, which is the shape of issue #589.
+func applyCatalogSize(persisted *datastore.Settings, sent *string) error {
+	if sent == nil {
+		return nil
+	}
+
+	size, configured, err := parseCatalogSize(*sent)
+	if err != nil {
+		return err
+	}
+
+	persisted.CatalogSize = nil
+
+	if configured {
+		persisted.CatalogSize = &size
+	}
+
+	return nil
+}
+
+// parseCatalogSize turns the form's value into the setting: an empty string
+// means "not configured", so the service uses its default, and a number sets
+// the cap -- including 0, which switches the catalog off and discards what is
+// stored. A negative number is not "less than off"; it is a mistake.
+//
+// The three states are returned separately rather than as a possibly-nil
+// pointer, so "no value" cannot be confused with "no answer".
+func parseCatalogSize(raw string) (size int, configured bool, err error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return 0, false, nil
+	}
+
+	size, err = strconv.Atoi(trimmed)
+	if err != nil {
+		return 0, false, errors.New("invalid catalog_size: must be a whole number, or empty for the default")
+	}
+
+	if size < 0 {
+		return 0, false, errors.New("invalid catalog_size: must be 0 (off) or more")
+	}
+
+	return size, true, nil
+}
+
 // HandleRemoveDevice removes a device from the datastore.
 func (s *Server) HandleRemoveDevice(w http.ResponseWriter, r *http.Request) {
 	deviceId := chi.URLParam(r, "deviceId")
@@ -282,6 +342,10 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"tts_volume":                    ttsVolume,
 		"default_landing":               defaultLanding,
 		"admin_area_auth":               adminAreaAuth,
+		// nil means "never configured", which the form shows as an empty box
+		// and the service reads as the default. Zero means the operator turned
+		// the catalog off, which is a different thing (issue 754).
+		"catalog_size": s.persistedCatalogSize(),
 	}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
@@ -370,6 +434,11 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		TLSExtraHosts          *[]string      `json:"tls_extra_hosts"`
 		DefaultLanding         string         `json:"default_landing"`
 		AdminAreaAuth          string         `json:"admin_area_auth"`
+		// Sent as a string so all three states fit on the wire, following the
+		// same rule as tls_extra_hosts: omitted (nil) means "preserve what is
+		// stored", "" means "unset, use the default", and a number sets the
+		// cap -- including 0, which switches the catalog off.
+		CatalogSize *string `json:"catalog_size"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -537,6 +606,14 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	persisted.TLSExtraHosts = resolvedTLSExtraHosts
 	persisted.DefaultLanding = defaultLanding
 	persisted.AdminAreaAuth = s.adminAreaAuth
+
+	if sizeErr := applyCatalogSize(&persisted, settings.CatalogSize); sizeErr != nil {
+		s.mu.Unlock()
+		http.Error(w, sizeErr.Error(), http.StatusBadRequest)
+
+		return
+	}
+
 	err = s.ds.SaveSettings(persisted)
 
 	dnsEnabled := s.dnsEnabled
