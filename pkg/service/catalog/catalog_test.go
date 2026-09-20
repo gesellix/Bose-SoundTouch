@@ -186,3 +186,48 @@ func TestListDoesNotAliasTheStoredEntries(t *testing.T) {
 		t.Fatal("List returned a view onto the stored entries")
 	}
 }
+
+// A speaker re-posts its whole preset list on every sync. Each of those is a
+// genuine new sighting, but rewriting the catalog for a moved clock reading
+// alone is write amplification on a speaker's flash volume.
+func TestRepeatedSightingsDoNotCountAsChangesWithinTheGranularity(t *testing.T) {
+	var c Catalog
+
+	e := Entry{Source: "TUNEIN", Location: "s1", Name: "WDR 2", LastSeen: at(0)}
+	c.Record(e, DefaultSize)
+
+	e.LastSeen = at(0).Add(SeenGranularity - time.Minute)
+
+	if c.Record(e, DefaultSize) {
+		t.Fatal("a sighting within the granularity must not count as a change")
+	}
+
+	if !c.Entries[0].LastSeen.Equal(at(0)) {
+		t.Fatal("the stored entry was rewritten anyway")
+	}
+
+	e.LastSeen = at(0).Add(SeenGranularity)
+
+	if !c.Record(e, DefaultSize) {
+		t.Fatal("a sighting past the granularity must count as a change")
+	}
+
+	if !c.Entries[0].LastSeen.Equal(at(0).Add(SeenGranularity)) {
+		t.Fatalf("LastSeen was not advanced: %v", c.Entries[0].LastSeen)
+	}
+}
+
+// Metadata that actually differs is worth a write whatever the clock says:
+// this is how a station that gains artwork reaches the pick list.
+func TestNewMetadataCountsAsAChangeWithinTheGranularity(t *testing.T) {
+	var c Catalog
+
+	c.Record(Entry{Source: "TUNEIN", Location: "s1", Name: "WDR 2", LastSeen: at(0)}, DefaultSize)
+
+	if !c.Record(Entry{
+		Source: "TUNEIN", Location: "s1", Name: "WDR 2",
+		ContainerArt: "http://192.0.2.10/art.png", LastSeen: at(1),
+	}, DefaultSize) {
+		t.Fatal("newly learned artwork must count as a change")
+	}
+}

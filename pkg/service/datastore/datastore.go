@@ -1513,7 +1513,15 @@ func (ds *DataStore) savePresetsNoLock(account, device string, presets []models.
 
 	header := []byte(xml.Header)
 
-	return ds.atomicWriteFile(path, append(header, data...))
+	if err := ds.atomicWriteFile(path, append(header, data...)); err != nil {
+		return err
+	}
+
+	// Every preset write, whoever made it, also files what it stored in the
+	// catalog, so a slot emptied later can be picked again (issue 754).
+	ds.RecordCatalogEntries(catalogEntriesFromPresets(device, presets))
+
+	return nil
 }
 
 // atomicWriteFile writes data to filename atomically AND durably: it writes a
@@ -1843,7 +1851,13 @@ func (ds *DataStore) saveRecentsNoLock(account, device string, recents []models.
 
 	header := []byte(xml.Header)
 
-	return ds.atomicWriteFile(path, append(header, data...))
+	if err := ds.atomicWriteFile(path, append(header, data...)); err != nil {
+		return err
+	}
+
+	ds.RecordCatalogEntries(catalogEntriesFromRecents(device, recents))
+
+	return nil
 }
 
 // SaveDeviceInfo saves device information for the specified account and device.

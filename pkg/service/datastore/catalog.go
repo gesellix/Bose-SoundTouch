@@ -5,7 +5,9 @@ import (
 	"log"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/catalog"
 )
 
@@ -118,4 +120,66 @@ func (ds *DataStore) RecordCatalogEntries(entries []catalog.Entry) {
 	if err := ds.writeCatalogNoLock(c); err != nil {
 		log.Printf("[Datastore] RecordCatalogEntries: could not persist the catalog: %v", err)
 	}
+}
+
+// catalogEntriesFromPresets turns a preset list into catalog sightings. A
+// preset is the strongest kind of sighting: content someone deliberately kept.
+func catalogEntriesFromPresets(device string, presets []models.ServicePreset) []catalog.Entry {
+	now := time.Now().UTC()
+	entries := make([]catalog.Entry, 0, len(presets))
+
+	for i := range presets {
+		p := &presets[i]
+		entries = append(entries, catalog.Entry{
+			Source:        p.Source,
+			SourceAccount: p.SourceAccount,
+			Location:      p.Location,
+			Type:          p.Type,
+			Name:          p.Name,
+			ContainerArt:  p.ContainerArt,
+			IsPresetable:  p.IsPresetable,
+			SourceID:      p.SourceID,
+			Origin:        catalog.OriginPreset,
+			DeviceID:      device,
+			FirstSeen:     now,
+			LastSeen:      now,
+		})
+	}
+
+	return entries
+}
+
+// catalogEntriesFromRecents turns a recents list into catalog sightings. They
+// carry no artwork -- the speaker never puts any there -- which is exactly why
+// a recents sighting is merged into, rather than over, what a preset sighting
+// of the same content contributed.
+func catalogEntriesFromRecents(device string, recents []models.ServiceRecent) []catalog.Entry {
+	now := time.Now().UTC()
+	entries := make([]catalog.Entry, 0, len(recents))
+
+	for i := range recents {
+		r := &recents[i]
+
+		deviceID := r.DeviceID
+		if deviceID == "" {
+			deviceID = device
+		}
+
+		entries = append(entries, catalog.Entry{
+			Source:        r.Source,
+			SourceAccount: r.SourceAccount,
+			Location:      r.Location,
+			Type:          r.Type,
+			Name:          r.Name,
+			ContainerArt:  r.ContainerArt,
+			IsPresetable:  r.IsPresetable,
+			SourceID:      r.SourceID,
+			Origin:        catalog.OriginRecent,
+			DeviceID:      deviceID,
+			FirstSeen:     now,
+			LastSeen:      now,
+		})
+	}
+
+	return entries
 }

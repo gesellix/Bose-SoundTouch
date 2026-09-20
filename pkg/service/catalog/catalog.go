@@ -18,6 +18,13 @@ import (
 	"time"
 )
 
+// SeenGranularity is how much a sighting's timestamp has to move before it is
+// worth rewriting the catalog for. A speaker re-posts its whole preset list on
+// every sync, so without this every one of those would rewrite catalog.json
+// with nothing changed but a clock reading -- write amplification on a
+// speaker's flash volume, for no information gained.
+const SeenGranularity = time.Hour
+
 // DefaultSize is the entry cap when nothing is configured. Small enough to
 // keep on a speaker's flash volume, large enough to be a useful pick list.
 const DefaultSize = 30
@@ -108,19 +115,35 @@ func (c *Catalog) Record(e Entry, size int) bool {
 		e.FirstSeen = e.LastSeen
 	}
 
-	before, _ := json.Marshal(c.Entries)
-
 	if existing := c.indexOf(e.Identity()); existing >= 0 {
-		c.Entries[existing] = merge(c.Entries[existing], e)
+		old := c.Entries[existing]
+		merged := merge(old, e)
+
+		// Nothing new: same content, same metadata, and a timestamp that has
+		// not moved far enough to be worth a write. Leaving the stored entry
+		// untouched is what keeps a speaker's repeated syncs from rewriting
+		// the file.
+		if sameEntry(old, merged) && merged.LastSeen.Sub(old.LastSeen) < SeenGranularity {
+			return false
+		}
+
+		c.Entries[existing] = merged
 	} else {
 		c.Entries = append(c.Entries, e)
 	}
 
 	c.sortAndTrim(size)
 
-	after, _ := json.Marshal(c.Entries)
+	return true
+}
 
-	return string(before) != string(after)
+// sameEntry compares two entries on everything except LastSeen.
+func sameEntry(a, b Entry) bool {
+	a.LastSeen, b.LastSeen = time.Time{}, time.Time{}
+	left, _ := json.Marshal(a)
+	right, _ := json.Marshal(b)
+
+	return string(left) == string(right)
 }
 
 // Trim applies a (possibly reduced) size limit without recording anything, so
