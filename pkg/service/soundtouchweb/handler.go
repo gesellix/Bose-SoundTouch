@@ -127,6 +127,21 @@ type WebApp struct {
 	// catalog here" rather than as an empty one.
 	CatalogEntries func() []catalog.Entry
 
+	// StoredPresets, when set, returns the preset rows the service has stored
+	// for a device, as stored (issue 697). The embedded build wires it to the
+	// service datastore; standalone soundtouch-player leaves it nil, which the
+	// player surfaces as "nothing to compare against".
+	StoredPresets func(deviceID string) ([]models.StoredPresetRow, error)
+
+	// RepairStoredPresets, when set, deletes stored rows by position and
+	// returns what is left. expected is the row count the caller was looking
+	// at, so a repair computed against a stale view deletes nothing.
+	//
+	// This is the one editor write the speaker cannot carry: the rows are
+	// AfterTouch's own, and several of them name no button a speaker could be
+	// asked about.
+	RepairStoredPresets func(deviceID string, drop []int, expected int) ([]models.StoredPresetRow, error)
+
 	// RemoveDeviceHook, when set, removes a device from the backing store by
 	// its device ID (MAC). The embedded build wires it to the service's
 	// datastore removal so a removal from the player UI also clears the

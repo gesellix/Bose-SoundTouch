@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/netcompat"
 	"github.com/gesellix/bose-soundtouch/pkg/service/amazon"
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
@@ -1285,6 +1286,25 @@ func initDataStore(dataDir string) *datastore.DataStore {
 	return ds
 }
 
+// accountForDevice resolves the account a speaker is filed under, from the id
+// the speaker reports. ListAllDevices already sorts the "default" pre-pair
+// placeholder behind real accounts, which is the same choice the device
+// removal makes.
+func accountForDevice(ds *datastore.DataStore, deviceID string) (account, device string, err error) {
+	devices, err := ds.ListAllDevices()
+	if err != nil {
+		return "", "", err
+	}
+
+	for i := range devices {
+		if devices[i].DeviceID == deviceID {
+			return devices[i].AccountID, devices[i].DeviceID, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("no stored data for this speaker yet")
+}
+
 // warnIfDataDirNotWritable probes the data dir and logs an actionable message
 // when the process can't write to it. The common cause is running the
 // container as non-root (uid 65532) while a bind-mounted host directory is
@@ -1520,6 +1540,26 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 	// player's preset editor picks from (issue 754). Standalone
 	// soundtouch-player has no datastore, so it leaves this nil.
 	webApp.CatalogEntries = ds.GetCatalog
+
+	// The stored preset list, and its repair (issue 697). Both resolve the
+	// account the speaker is filed under the same way the device removal does.
+	webApp.StoredPresets = func(deviceID string) ([]models.StoredPresetRow, error) {
+		account, device, err := accountForDevice(ds, deviceID)
+		if err != nil {
+			return nil, err
+		}
+
+		return ds.StoredPresets(account, device)
+	}
+
+	webApp.RepairStoredPresets = func(deviceID string, drop []int, expected int) ([]models.StoredPresetRow, error) {
+		account, device, err := accountForDevice(ds, deviceID)
+		if err != nil {
+			return nil, err
+		}
+
+		return ds.DropStoredPresetRows(account, device, drop, expected)
+	}
 
 	// A removal from the player UI cascades to the datastore (the single
 	// source of truth), so the device does not reappear on the next re-sync.
