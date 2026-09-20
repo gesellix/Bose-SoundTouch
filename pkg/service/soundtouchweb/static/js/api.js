@@ -196,6 +196,14 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify({ drop, expected }),
     }),
+    // Takes the speaker's side for one slot: what it reports for that button
+    // becomes what AfterTouch stores (issue 697). The per-slot alternative to
+    // importing the speaker's whole list.
+    adoptSpeakerPreset: (id, slot) => req(`/api/control/devices/${id}/stored-presets/adopt`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ slot }),
+    }),
     // Empties a slot. The catalog keeps the entry, so this loses the slot's
     // contents, not the station (issue 754).
     removePreset: (id, slotId) => req(`/api/control/devices/${id}/preset/${slotId}`, { method: 'DELETE' }),

@@ -40,6 +40,68 @@ export function StoredPresets({ deviceId, revision }) {
 
     const rows = payload.rows ?? [];
     const unrecallable = rows.filter(row => row.verdict !== 'ok');
+    const slots = payload.slots ?? [];
+
+    // Taking the speaker's side is a service-side write: what the speaker
+    // reports for that button becomes what AfterTouch stores.
+    function takeTheirs(slot) {
+        setBusy(true);
+        setError(null);
+
+        api.adoptSpeakerPreset(deviceId, slot)
+            .then(res => {
+                setBusy(false);
+
+                if (res?.success === false) {
+                    setError(res.error || 'The speaker refused that slot.');
+
+                    return;
+                }
+
+                setPayload(res?.data ?? null);
+            })
+            .catch(() => {
+                setBusy(false);
+                setError('The request did not complete; reload to see what is stored now.');
+            });
+    }
+
+    // Keeping ours is a write to the SPEAKER: the stored list already wins at
+    // the speaker's next fetch, so the only thing missing is the speaker
+    // catching up now. It goes through the ordinary preset store, so it is
+    // validated like any other (the speaker must have the source).
+    function keepOurs(slot) {
+        const content = slots.find(entry => entry.slot === slot)?.ours;
+
+        if (!content?.present) return;
+
+        setBusy(true);
+        setError(null);
+
+        api.storePresetContent(deviceId, slot, {
+            source: content.source,
+            sourceAccount: content.sourceAccount ?? '',
+            location: content.location,
+            type: content.type ?? '',
+            itemName: content.itemName ?? '',
+            containerArt: content.containerArt ?? '',
+        })
+            .then(res => {
+                setBusy(false);
+
+                if (res?.success === false) {
+                    setError(res.error || 'The speaker refused that preset.');
+
+                    return;
+                }
+
+                return load();
+            })
+            .catch(() => {
+                setBusy(false);
+                setError('The request did not complete; reload to see what the speaker has now.');
+            });
+    }
 
     function repair(drop) {
         setBusy(true);
@@ -73,7 +135,9 @@ export function StoredPresets({ deviceId, revision }) {
     // without losing something.
     const summary = unrecallable.length > 0
         ? `AfterTouch stores ${rows.length} presets for this speaker, ${unrecallable.length} of which it can never play.`
-        : `AfterTouch stores ${rows.length} presets for this speaker; the speaker itself reports ${payload.speaker_count}.`;
+        : rows.length !== payload.speaker_count
+            ? `AfterTouch stores ${rows.length} presets for this speaker; the speaker itself reports ${payload.speaker_count}.`
+            : `${slots.length} preset${slots.length === 1 ? '' : 's'} hold${slots.length === 1 ? 's' : ''} different things in AfterTouch and on the speaker.`;
 
     return html`
         <section class="stored-presets" aria-label="Stored preset problems">
@@ -106,6 +170,50 @@ export function StoredPresets({ deviceId, revision }) {
                     </p>
 
                     ${error && html`<p class="stored-presets-note error" role="alert">${error}</p>`}
+
+                    ${slots.length > 0 && html`
+                        <div class="stored-presets-slots">
+                            <p class="stored-presets-note">
+                                These buttons hold different things on each side. Pick one per
+                                button; the other stays in the list you fill slots from.
+                            </p>
+                            ${slots.map(entry => html`
+                                <div key=${entry.slot} class="stored-presets-slot">
+                                    <span class="stored-presets-button">${entry.slot}</span>
+                                    <span class="stored-presets-side">
+                                        <span class="stored-presets-side-label">AfterTouch</span>
+                                        <span class="stored-presets-side-name">
+                                            ${entry.ours?.present ? (entry.ours.itemName || entry.ours.location) : 'nothing'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            class="stored-presets-choose"
+                                            disabled=${busy || !entry.ours?.present}
+                                            title=${entry.ours?.present
+                                                ? `Put what AfterTouch stores into the speaker's preset ${entry.slot}`
+                                                : 'AfterTouch stores nothing for this button'}
+                                            onClick=${() => keepOurs(entry.slot)}
+                                        >Keep ours</button>
+                                    </span>
+                                    <span class="stored-presets-side">
+                                        <span class="stored-presets-side-label">Speaker</span>
+                                        <span class="stored-presets-side-name">
+                                            ${entry.theirs?.present ? (entry.theirs.itemName || entry.theirs.location) : 'nothing'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            class="stored-presets-choose"
+                                            disabled=${busy || !entry.theirs?.present}
+                                            title=${entry.theirs?.present
+                                                ? `Store what the speaker has in preset ${entry.slot}`
+                                                : 'The speaker holds nothing in this button'}
+                                            onClick=${() => takeTheirs(entry.slot)}
+                                        >Take the speaker's</button>
+                                    </span>
+                                </div>
+                            `)}
+                        </div>
+                    `}
 
                     <ul class="stored-presets-list">
                         ${rows.map(row => html`
