@@ -360,6 +360,16 @@ async function fetchSettings() {
         if (settings.update_check_enabled !== undefined) {
             document.getElementById("update-check-enabled").checked = settings.update_check_enabled;
         }
+        // An unset catalog size is an empty box, not a zero: zero means the
+        // operator switched the catalog off (issue 754).
+        const catalogSizeEl = document.getElementById("catalog-size");
+        if (catalogSizeEl) {
+            catalogSizeEl.value =
+                settings.catalog_size === null || settings.catalog_size === undefined
+                    ? ""
+                    : settings.catalog_size;
+        }
+
         if (settings.default_landing) {
             document.getElementById("default-landing").value = settings.default_landing;
         }
@@ -501,12 +511,30 @@ async function updateLoggingSettings() {
     }
 }
 
+// readCatalogSize returns the box as a string, which is how the three states
+// travel: "" means "not configured, use the default", and a number sets the
+// cap, including "0" for switching the catalog off. The field is omitted only
+// when the box is not on the page at all, and omitting it preserves whatever
+// is stored.
+function readCatalogSize() {
+    const el = document.getElementById("catalog-size");
+    if (!el) return undefined;
+
+    const raw = el.value.trim();
+    if (raw === "") return "";
+
+    const parsed = Number.parseInt(raw, 10);
+
+    return Number.isNaN(parsed) ? "" : String(Math.max(0, parsed));
+}
+
 async function updateSettings() {
     const httpsOverrideEl = document.getElementById("https-url-override");
     const settings = {
         server_url: document.getElementById("target-domain").value,
         https_server_url_override: httpsOverrideEl ? httpsOverrideEl.value.trim() : "",
         default_landing: document.getElementById("default-landing").value,
+        catalog_size: readCatalogSize(),
         admin_area_auth: document.getElementById("admin-area-auth").value,
         discovery_interval: document.getElementById("discovery-interval").value,
         discovery_enabled: document.getElementById("discovery-enabled").checked,
