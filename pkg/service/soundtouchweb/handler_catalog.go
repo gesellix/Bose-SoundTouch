@@ -22,7 +22,7 @@ type CatalogPayload struct {
 
 // HandleCatalog returns the preset/source entries this service has seen
 // (issue 754), newest sighting first.
-func (app *WebApp) HandleCatalog(w http.ResponseWriter, r *http.Request) {
+func (app *WebApp) HandleCatalog(w http.ResponseWriter, _ *http.Request) {
 	payload := CatalogPayload{Entries: []catalog.Entry{}}
 
 	if app.CatalogEntries != nil {
