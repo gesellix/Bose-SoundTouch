@@ -95,6 +95,9 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				// Low-level "store this ContentItem in a slot" primitive. The
 				// /action/storepreset form stores whatever is playing instead.
 				r.Post("/preset/{slot}", app.HandleStorePresetContent)
+				// Empty a slot. Safe to offer because the catalog keeps the
+				// entry: clearing a slot no longer loses the station.
+				r.Delete("/preset/{slot}", app.HandleRemovePreset)
 				// Generic key / preset / source / bass actions. Source selection is
 				// canonically POSTed as JSON; its GET form remains temporarily for
 				// compatibility and marks every response as deprecated.

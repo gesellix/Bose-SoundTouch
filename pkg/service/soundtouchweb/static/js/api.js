@@ -176,6 +176,9 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
+    // Empties a slot. The catalog keeps the entry, so this loses the slot's
+    // contents, not the station (issue 754).
+    removePreset: (id, slotId) => req(`/api/control/devices/${id}/preset/${slotId}`, { method: 'DELETE' }),
     selectSource: (id, source, account) => checkedReq(`/api/control/devices/${id}/action/source`, {
         method: 'POST',
         headers: JSON_HEADERS,

@@ -1169,6 +1169,20 @@ img.catalog-entry-icon { object-fit: contain; filter: var(--content-icon-filter)
 .catalog-entry-name { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .catalog-entry-meta { font-size: .7rem; color: var(--text-dim); }
 
+.catalog-picker-foot {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: .4rem; border-top: 1px solid var(--border); padding-top: .5rem;
+}
+.catalog-picker-confirm { display: flex; gap: .4rem; }
+.catalog-clear-btn {
+    padding: .3rem .5rem; font-size: .78rem;
+    color: var(--text-dim); background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
+}
+.catalog-clear-btn:hover:not(:disabled), .catalog-clear-btn:focus-visible:not(:disabled) { color: var(--text); }
+.catalog-clear-btn.danger { color: var(--danger); border-color: var(--danger); }
+.catalog-clear-btn:disabled { opacity: .5; cursor: default; }
+
 /* ── Sources ─────────────────────────────────────────────────────────────── */
 .source-list { display: flex; flex-wrap: wrap; gap: .4rem; }
 

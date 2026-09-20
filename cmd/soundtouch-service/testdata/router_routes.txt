@@ -6,6 +6,7 @@ DELETE   /accounts/{account}/group/                                   handlers.(
 DELETE   /accounts/{account}/group/{groupId}                          handlers.(*Server).HandleUnsupported-fm
 DELETE   /api/control/devices/{id}/                                   soundtouchweb.(*WebApp).HandleDeleteDevice-fm
 DELETE   /api/control/devices/{id}/library/servers/{account}          soundtouchweb.(*WebApp).HandleRemoveLibraryServer-fm
+DELETE   /api/control/devices/{id}/preset/{slot}                      soundtouchweb.(*WebApp).HandleRemovePreset-fm
 DELETE   /api/control/devices/{id}/settings/bluetooth/pairings        soundtouchweb.(*WebApp).HandleClearBluetoothPairings-fm
 DELETE   /api/control/devices/{id}/stereo-pair/                       soundtouchweb.(*WebApp).HandleDissolveStereoPair-fm
 DELETE   /api/setup/devices/{deviceId}                                handlers.(*Server).HandleRemoveDevice-fm

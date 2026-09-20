@@ -18,11 +18,12 @@ const html = htm.bind(h);
 // It deliberately does not hide entries that already sit in a slot. Copying
 // one station into a second slot, or onto a second speaker, is a thing people
 // do on purpose; the list only says where an entry already is.
-export function CatalogPicker({ deviceId, slot, presets, onClose, onAssigned }) {
+export function CatalogPicker({ deviceId, slot, presets, occupied = false, onClose, onAssigned }) {
     const [state, setState] = useState({ status: 'loading' });
     const [query, setQuery] = useState('');
     const [saving, setSaving] = useState(null);
     const [error, setError] = useState(null);
+    const [confirmingClear, setConfirmingClear] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -101,6 +102,29 @@ export function CatalogPicker({ deviceId, slot, presets, onClose, onAssigned }) 
             });
     }
 
+    function clear() {
+        setSaving('clear');
+        setError(null);
+
+        api.removePreset(deviceId, slot)
+            .then(res => {
+                setSaving(null);
+                setConfirmingClear(false);
+
+                if (res?.success === false) {
+                    setError(res.error || 'The speaker refused to clear this slot.');
+
+                    return;
+                }
+
+                onAssigned?.(null);
+            })
+            .catch(() => {
+                setSaving(null);
+                setError('The request did not complete; the slot may or may not have been cleared.');
+            });
+    }
+
     return html`
         <section class="catalog-picker" aria-label=${`Fill preset ${slot}`}>
             <header class="catalog-picker-head">
@@ -172,6 +196,31 @@ export function CatalogPicker({ deviceId, slot, presets, onClose, onAssigned }) 
                     })}
                 </ul>
                 ${entries.length === 0 && html`<p class="catalog-picker-note">Nothing matches that filter.</p>`}
+            `}
+
+            ${occupied && html`
+                <footer class="catalog-picker-foot">
+                    ${confirmingClear
+                        ? html`
+                            <span class="catalog-picker-note">
+                                Empty preset ${slot}? The station stays on this list.
+                            </span>
+                            <span class="catalog-picker-confirm">
+                                <button type="button" class="catalog-clear-btn danger"
+                                        disabled=${saving !== null}
+                                        onClick=${clear}>Empty it</button>
+                                <button type="button" class="catalog-clear-btn"
+                                        disabled=${saving !== null}
+                                        onClick=${() => setConfirmingClear(false)}>Keep it</button>
+                            </span>
+                        `
+                        : html`
+                            <button type="button" class="catalog-clear-btn"
+                                    onClick=${() => setConfirmingClear(true)}>
+                                Empty this slot
+                            </button>
+                        `}
+                </footer>
             `}
         </section>
     `;
