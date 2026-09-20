@@ -84,6 +84,8 @@ func TestStoredPresetProblemsAreShownAndRepaired(t *testing.T) {
 
 	var headline string
 	var rowsShownBeforeOpening int
+	var removeTitle string
+	var bodyText string
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
@@ -95,6 +97,12 @@ func TestStoredPresetProblemsAreShownAndRepaired(t *testing.T) {
 
 		chromedp.Click(`#presets .stored-presets-summary`, chromedp.ByQuery),
 		chromedp.WaitVisible(`#presets .stored-presets-fix`, chromedp.ByQuery),
+
+		// Where a removal lands has to be legible without hovering: a touch
+		// device has no hover, so the tooltip cannot be the only carrier.
+		chromedp.Evaluate(`document.querySelector('#presets .stored-presets-remove').title`, &removeTitle),
+		chromedp.Text(`#presets .stored-presets-body`, &bodyText, chromedp.ByQuery),
+
 		chromedp.Click(`#presets .stored-presets-fix`, chromedp.ByQuery),
 
 		// A repaired list stops warning at all.
@@ -109,6 +117,14 @@ func TestStoredPresetProblemsAreShownAndRepaired(t *testing.T) {
 
 	if rowsShownBeforeOpening != 0 {
 		t.Errorf("expected the rows to stay collapsed until asked for, got %d", rowsShownBeforeOpening)
+	}
+
+	if !strings.Contains(removeTitle, "AfterTouch stores") || !strings.Contains(removeTitle, "speaker") {
+		t.Errorf("the remove tooltip should name what it removes from, got %q", removeTitle)
+	}
+
+	if !strings.Contains(bodyText, "deletes the row from what AfterTouch stores") {
+		t.Errorf("the panel should say where a removal lands without hovering, got %q", bodyText)
 	}
 
 	mu.Lock()

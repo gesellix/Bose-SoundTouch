@@ -67,9 +67,13 @@ export function StoredPresets({ deviceId, revision }) {
             });
     }
 
+    // Two different problems, so two different sentences. Rows the speaker can
+    // never play are a fault in the stored list; a list that is merely longer
+    // than the speaker's is not faulty row by row, it just cannot be imported
+    // without losing something.
     const summary = unrecallable.length > 0
         ? `AfterTouch stores ${rows.length} presets for this speaker, ${unrecallable.length} of which it can never play.`
-        : `AfterTouch stores ${rows.length} presets for this speaker, which has ${payload.speaker_count} in its ${rows.length > 6 ? '6 buttons' : 'buttons'}.`;
+        : `AfterTouch stores ${rows.length} presets for this speaker; the speaker itself reports ${payload.speaker_count}.`;
 
     return html`
         <section class="stored-presets" aria-label="Stored preset problems">
@@ -91,9 +95,14 @@ export function StoredPresets({ deviceId, revision }) {
             ${open && html`
                 <div class="stored-presets-body">
                     <p class="stored-presets-note">
-                        Extra rows are why a "Sync Data" is refused as destructive, and why the
-                        speaker keeps being handed the old list. Removing one here does not lose
-                        the station: it stays in the preset list you pick from.
+                        A stored list that does not match the speaker's is why a "Sync Data" is
+                        refused as destructive, and why the speaker can keep being handed the old
+                        list.
+                    </p>
+                    <p class="stored-presets-note">
+                        <strong>Remove</strong> deletes the row from what AfterTouch stores. It does
+                        not press anything on the speaker, and it does not lose the station: that
+                        stays in the list you pick from when filling a slot.
                     </p>
 
                     ${error && html`<p class="stored-presets-note error" role="alert">${error}</p>`}
@@ -113,7 +122,8 @@ export function StoredPresets({ deviceId, revision }) {
                                     type="button"
                                     class="stored-presets-remove"
                                     disabled=${busy}
-                                    title=${`Remove the stored row at position ${row.index + 1}`}
+                                    title=${`Remove row ${row.index + 1} from what AfterTouch stores. The speaker's own buttons are not touched.`}
+                                    aria-label=${`Remove ${row.name || row.location || 'this row'} from what AfterTouch stores`}
                                     onClick=${() => repair([row.index])}
                                 >Remove</button>
                             </li>
@@ -127,7 +137,7 @@ export function StoredPresets({ deviceId, revision }) {
                             disabled=${busy}
                             onClick=${() => repair(unrecallable.map(row => row.index))}
                         >
-                            Remove the ${unrecallable.length} row${unrecallable.length === 1 ? '' : 's'} this speaker cannot play
+                            Remove ${unrecallable.length === 1 ? 'that row' : `those ${unrecallable.length} rows`} from AfterTouch
                         </button>
                     `}
                 </div>
