@@ -158,6 +158,18 @@ buttons is why:
 - **A preset you just saved comes back as the old one.** AfterTouch serves its
   stored list to the speaker, so the extra rows keep winning.
 
+Where a button holds different things on the two sides, it is listed with both,
+and you pick one:
+
+- **Keep ours** puts what AfterTouch stores onto the speaker, so the speaker
+  catches up now instead of at its next fetch.
+- **Take the speaker's** stores what the speaker has, so AfterTouch stops
+  handing back the old entry.
+
+Either way the other one stays in the list you fill slots from, so a choice can
+be undone. This is the piece "Sync Data" cannot do: that imports a speaker's
+whole list at once, and refuses outright when it would shrink what is stored.
+
 **Remove** deletes the row from what AfterTouch stores. It presses nothing on
 the speaker, and it does not lose the station: that stays in the list you pick
 from, so you can put it straight back into a slot.
