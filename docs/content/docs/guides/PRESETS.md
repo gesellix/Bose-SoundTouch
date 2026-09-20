@@ -95,6 +95,19 @@ Nothing here needs the speaker to be playing, and none of it involves editing
 files. If you have been recovering presets by hand from `Presets.xml` or over
 SSH, this replaces that.
 
+### Content another speaker has
+
+The list is shared across your speakers, so it also offers things only one of
+them can play: an album on a media server this speaker has not discovered, or a
+service linked on another one. Those entries are dimmed and say why, for
+example "not on this speaker's Library accounts".
+
+You can still pick one. The marking is based on the source list the player last
+read, which can be a few minutes old, so AfterTouch checks again against the
+speaker before writing and refuses with what is missing, naming the sources the
+speaker does have. To use such an entry here, add that media server or link that
+service on this speaker first, then pick it again.
+
 ### The list, and what is on it
 
 The list is a catalog of what AfterTouch has seen: every preset it has stored
