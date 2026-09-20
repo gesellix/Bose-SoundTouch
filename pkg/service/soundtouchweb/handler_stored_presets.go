@@ -42,7 +42,9 @@ func (app *WebApp) HandleStoredPresets(w http.ResponseWriter, r *http.Request) {
 	payload := StoredPresetsPayload{Rows: []models.StoredPresetRow{}}
 
 	if app.StoredPresets != nil {
-		rows, err := app.StoredPresets(storedPresetDeviceID(device, chi.URLParam(r, "id")))
+		id, account := storedPresetTarget(device, chi.URLParam(r, "id"))
+
+		rows, err := app.StoredPresets(id, account)
 		if err != nil {
 			app.sendError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -87,7 +89,9 @@ func (app *WebApp) HandleRepairStoredPresets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	rows, err := app.RepairStoredPresets(storedPresetDeviceID(device, chi.URLParam(r, "id")), req.Drop, req.Expected)
+	id, account := storedPresetTarget(device, chi.URLParam(r, "id"))
+
+	rows, err := app.RepairStoredPresets(id, account, req.Drop, req.Expected)
 	if err != nil {
 		// A refused repair is the caller's to resolve (a stale view, an
 		// index that is not in the list), not a service failure.
@@ -112,15 +116,33 @@ func (app *WebApp) deviceForStoredPresets(w http.ResponseWriter, r *http.Request
 	return device, true
 }
 
-// storedPresetDeviceID prefers the speaker's own device id over the player's
-// registry key: the datastore files a speaker under the id it reports, which
-// is not necessarily the key the player registered it under.
-func storedPresetDeviceID(device *webtypes.DeviceConnection, fallback string) string {
-	if info := device.Info(); info != nil && info.DeviceID != "" {
-		return info.DeviceID
+// storedPresetTarget names the device directory to read, and the account it
+// should be read under.
+//
+// Both come from the speaker's own /info, which the player already holds:
+//
+//   - the device id, because the datastore files a speaker under the id it
+//     reports, not under the key the player registered it as;
+//   - margeAccountUUID, because a speaker can have directories under several
+//     accounts after being re-paired, and only one of them is the list the
+//     speaker is actually being served. Guessing from what is on disk can pick
+//     a months-old directory from a previous pairing and report a
+//     disagreement that says more about the leftover than about the speaker.
+//
+// An empty account leaves the choice to the service, which falls back to its
+// on-disk guess.
+func storedPresetTarget(device *webtypes.DeviceConnection, fallback string) (deviceID, account string) {
+	info := device.Info()
+	if info == nil {
+		return fallback, ""
 	}
 
-	return fallback
+	deviceID = info.DeviceID
+	if deviceID == "" {
+		deviceID = fallback
+	}
+
+	return deviceID, info.MargeAccountUUID
 }
 
 // describeStoredPresets fills in the comparison the player acts on. The

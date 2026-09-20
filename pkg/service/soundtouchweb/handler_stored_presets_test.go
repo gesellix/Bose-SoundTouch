@@ -35,8 +35,16 @@ func decodeStoredPresets(t *testing.T, w *httptest.ResponseRecorder) StoredPrese
 func speakerWithPresets(t *testing.T, filled int) *WebApp {
 	t.Helper()
 
+	return speakerWithPresetsOn(t, filled, "")
+}
+
+func speakerWithPresetsOn(t *testing.T, filled int, margeAccount string) *WebApp {
+	t.Helper()
+
 	app := NewWebApp()
-	conn := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{DeviceID: "DEVICEID01", Name: "Speaker"})
+	conn := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{
+		DeviceID: "DEVICEID01", Name: "Speaker", MargeAccountUUID: margeAccount,
+	})
 
 	presets := &models.Presets{}
 	for i := 1; i <= filled; i++ {
@@ -62,7 +70,7 @@ func TestHandleStoredPresetsReportsTheDisagreement(t *testing.T) {
 
 	var askedFor string
 
-	app.StoredPresets = func(deviceID string) ([]models.StoredPresetRow, error) {
+	app.StoredPresets = func(deviceID, _ string) ([]models.StoredPresetRow, error) {
 		askedFor = deviceID
 
 		return []models.StoredPresetRow{
@@ -100,7 +108,7 @@ func TestHandleStoredPresetsReportsTheDisagreement(t *testing.T) {
 // meaning anything.
 func TestHandleStoredPresetsStaysQuietWhenTheListsAgree(t *testing.T) {
 	app := speakerWithPresets(t, 2)
-	app.StoredPresets = func(string) ([]models.StoredPresetRow, error) {
+	app.StoredPresets = func(string, string) ([]models.StoredPresetRow, error) {
 		return []models.StoredPresetRow{
 			{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK},
 			{Index: 1, Button: "2", Slot: 2, Verdict: models.StoredPresetOK},
@@ -119,7 +127,7 @@ func TestHandleStoredPresetsStaysQuietWhenTheListsAgree(t *testing.T) {
 // the case a sync refuses to shrink, so it counts as a disagreement too.
 func TestHandleStoredPresetsFlagsASurplusOfValidRows(t *testing.T) {
 	app := speakerWithPresets(t, 1)
-	app.StoredPresets = func(string) ([]models.StoredPresetRow, error) {
+	app.StoredPresets = func(string, string) ([]models.StoredPresetRow, error) {
 		return []models.StoredPresetRow{
 			{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK},
 			{Index: 1, Button: "2", Slot: 2, Verdict: models.StoredPresetOK},
@@ -157,14 +165,14 @@ func TestHandleStoredPresetsWithoutAServiceReportsUnavailable(t *testing.T) {
 
 func TestHandleRepairStoredPresetsPassesTheRowsAndTheGuard(t *testing.T) {
 	app := speakerWithPresets(t, 1)
-	app.StoredPresets = func(string) ([]models.StoredPresetRow, error) {
+	app.StoredPresets = func(string, string) ([]models.StoredPresetRow, error) {
 		return []models.StoredPresetRow{{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK}}, nil
 	}
 
 	var gotDrop []int
 	var gotExpected int
 
-	app.RepairStoredPresets = func(_ string, drop []int, expected int) ([]models.StoredPresetRow, error) {
+	app.RepairStoredPresets = func(_, _ string, drop []int, expected int) ([]models.StoredPresetRow, error) {
 		gotDrop, gotExpected = drop, expected
 
 		return []models.StoredPresetRow{{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK}}, nil
@@ -187,7 +195,7 @@ func TestHandleRepairStoredPresetsPassesTheRowsAndTheGuard(t *testing.T) {
 // reloads and offers the repair again.
 func TestHandleRepairStoredPresetsReportsARefusalAsAConflict(t *testing.T) {
 	app := speakerWithPresets(t, 1)
-	app.RepairStoredPresets = func(string, []int, int) ([]models.StoredPresetRow, error) {
+	app.RepairStoredPresets = func(string, string, []int, int) ([]models.StoredPresetRow, error) {
 		return nil, errors.New("the stored list now holds 6 rows, not 8; reload and try again")
 	}
 
@@ -208,7 +216,7 @@ func TestHandleRepairStoredPresetsRejectsAnEmptyRequest(t *testing.T) {
 
 	var called bool
 
-	app.RepairStoredPresets = func(string, []int, int) ([]models.StoredPresetRow, error) {
+	app.RepairStoredPresets = func(string, string, []int, int) ([]models.StoredPresetRow, error) {
 		called = true
 
 		return nil, nil
@@ -223,5 +231,71 @@ func TestHandleRepairStoredPresetsRejectsAnEmptyRequest(t *testing.T) {
 
 	if called {
 		t.Error("a repair naming no rows must never reach the service")
+	}
+}
+
+// A speaker re-paired at some point keeps its old directory, and reading that
+// one reports a disagreement that says more about the leftover than about the
+// speaker -- and a repair would edit a file nothing is being served from. The
+// speaker's own margeAccountUUID is the signal that settles it, and the player
+// already holds it.
+func TestStoredPresetsAreReadUnderTheAccountTheSpeakerReports(t *testing.T) {
+	app := speakerWithPresetsOn(t, 6, "6919733")
+
+	var askedAccount string
+
+	app.StoredPresets = func(_, account string) ([]models.StoredPresetRow, error) {
+		askedAccount = account
+
+		return nil, nil
+	}
+
+	w := httptest.NewRecorder()
+	app.HandleStoredPresets(w, storedPresetsRequest("GET", "/stored-presets/", ""))
+	decodeStoredPresets(t, w)
+
+	if askedAccount != "6919733" {
+		t.Errorf("asked under account %q, want the one the speaker reports", askedAccount)
+	}
+
+	var repairedAccount string
+
+	app.RepairStoredPresets = func(_, account string, _ []int, _ int) ([]models.StoredPresetRow, error) {
+		repairedAccount = account
+
+		return nil, nil
+	}
+
+	w = httptest.NewRecorder()
+	app.HandleRepairStoredPresets(w, storedPresetsRequest("POST", "/stored-presets/repair", `{"drop":[7],"expected":8}`))
+
+	if repairedAccount != "6919733" {
+		t.Errorf("repaired under account %q, want the same account the view was read from", repairedAccount)
+	}
+}
+
+// A speaker that reports no account at all (or one we hold nothing for) leaves
+// the choice to the service rather than failing.
+func TestStoredPresetsFallBackWhenTheSpeakerNamesNoAccount(t *testing.T) {
+	app := speakerWithPresetsOn(t, 6, "")
+
+	var asked bool
+
+	app.StoredPresets = func(_, account string) ([]models.StoredPresetRow, error) {
+		asked = true
+
+		if account != "" {
+			t.Errorf("account = %q, want it left to the service", account)
+		}
+
+		return nil, nil
+	}
+
+	w := httptest.NewRecorder()
+	app.HandleStoredPresets(w, storedPresetsRequest("GET", "/stored-presets/", ""))
+	decodeStoredPresets(t, w)
+
+	if !asked {
+		t.Error("expected the service to be asked anyway")
 	}
 }

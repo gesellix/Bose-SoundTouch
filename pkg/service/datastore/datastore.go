@@ -2895,6 +2895,25 @@ func (ds *DataStore) GetETagForPresets(account, device string) int64 {
 	return info.ModTime().UnixNano() / int64(time.Millisecond)
 }
 
+// DeviceDirExists reports whether this account holds a directory for the
+// device. It is the cheap "is this pairing on disk at all" question, used
+// where a caller has been handed an account by a speaker and needs to know
+// whether we have anything filed under it.
+func (ds *DataStore) DeviceDirExists(account, device string) bool {
+	if ds == nil || account == "" || device == "" {
+		return false
+	}
+
+	if !IsSafeIdentifier(account) || !IsSafeIdentifier(device) {
+		return false
+	}
+
+	ds.fileMutex.RLock()
+	defer ds.fileMutex.RUnlock()
+
+	return ds.rootExists(ds.AccountDeviceDir(account, device))
+}
+
 // HasConfiguredSources reports whether a non-empty Sources.xml file exists for
 // the given account and device. A present-but-0-byte file (truncated by an
 // unclean power-cut) counts as absent. See #458.

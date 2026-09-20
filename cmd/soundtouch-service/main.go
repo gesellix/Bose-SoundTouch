@@ -1286,11 +1286,26 @@ func initDataStore(dataDir string) *datastore.DataStore {
 	return ds
 }
 
-// accountForDevice resolves the account a speaker is filed under, from the id
-// the speaker reports. ListAllDevices already sorts the "default" pre-pair
-// placeholder behind real accounts, which is the same choice the device
-// removal makes.
-func accountForDevice(ds *datastore.DataStore, deviceID string) (account, device string, err error) {
+// accountForDevice resolves the account a speaker's stored data lives under.
+//
+// The speaker's own margeAccountUUID wins whenever it names a directory we
+// actually have. A speaker re-paired at some point keeps its old directory,
+// and picking that one reports a disagreement that says more about the
+// leftover than about the speaker -- and a repair would then edit a file
+// nothing is being served from. Those leftovers are what the consistency
+// health check reports separately; this only has to avoid mistaking one for
+// the live list.
+//
+// Without that signal it falls back to ListAllDevices, which already sorts the
+// "default" pre-pair placeholder behind real accounts, the same choice the
+// device removal makes.
+func accountForDevice(ds *datastore.DataStore, deviceID, reportedAccount string) (account, device string, err error) {
+	if reportedAccount != "" && datastore.IsSafeIdentifier(reportedAccount) {
+		if ds.DeviceDirExists(reportedAccount, deviceID) {
+			return reportedAccount, deviceID, nil
+		}
+	}
+
 	devices, err := ds.ListAllDevices()
 	if err != nil {
 		return "", "", err
@@ -1543,8 +1558,8 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 
 	// The stored preset list, and its repair (issue 697). Both resolve the
 	// account the speaker is filed under the same way the device removal does.
-	webApp.StoredPresets = func(deviceID string) ([]models.StoredPresetRow, error) {
-		account, device, err := accountForDevice(ds, deviceID)
+	webApp.StoredPresets = func(deviceID, reported string) ([]models.StoredPresetRow, error) {
+		account, device, err := accountForDevice(ds, deviceID, reported)
 		if err != nil {
 			return nil, err
 		}
@@ -1552,8 +1567,8 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 		return ds.StoredPresets(account, device)
 	}
 
-	webApp.RepairStoredPresets = func(deviceID string, drop []int, expected int) ([]models.StoredPresetRow, error) {
-		account, device, err := accountForDevice(ds, deviceID)
+	webApp.RepairStoredPresets = func(deviceID, reported string, drop []int, expected int) ([]models.StoredPresetRow, error) {
+		account, device, err := accountForDevice(ds, deviceID, reported)
 		if err != nil {
 			return nil, err
 		}

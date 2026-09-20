@@ -161,3 +161,32 @@ func TestDropStoredPresetRowsRejectsAnIndexOutsideTheList(t *testing.T) {
 		t.Fatalf("a refused repair must change nothing, got %d rows", len(rows))
 	}
 }
+
+// DeviceDirExists is what lets a caller holding a speaker-reported account
+// tell "this pairing is on disk" from "this is a name we have nothing for",
+// without that question costing a full device listing.
+func TestDeviceDirExists(t *testing.T) {
+	ds := NewDataStore(t.TempDir())
+
+	if err := ds.SavePresets("6919733", "DEVICEID01", []models.ServicePreset{
+		storedPreset("1", "TUNEIN", "s1", "MDR JUMP"),
+	}); err != nil {
+		t.Fatalf("SavePresets: %v", err)
+	}
+
+	if !ds.DeviceDirExists("6919733", "DEVICEID01") {
+		t.Error("expected the account we just wrote under to exist")
+	}
+
+	for _, tt := range []struct{ account, device string }{
+		{"3230304", "DEVICEID01"},
+		{"6919733", "DEVICEID02"},
+		{"", "DEVICEID01"},
+		{"6919733", ""},
+		{"../escape", "DEVICEID01"},
+	} {
+		if ds.DeviceDirExists(tt.account, tt.device) {
+			t.Errorf("DeviceDirExists(%q, %q) = true, want false", tt.account, tt.device)
+		}
+	}
+}
