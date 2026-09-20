@@ -103,6 +103,10 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				// when that disagrees with what the speaker reports. Separate
 				// from preset/{slot} because it addresses the service's own
 				// rows, several of which name no slot at all (issue 697).
+				// What the other speakers have and this one does not. Not
+				// under /library, which is about one kind of source only.
+				r.Get("/sources-elsewhere", app.HandleSourcesElsewhere)
+
 				r.Route("/stored-presets", func(r chi.Router) {
 					r.Get("/", app.HandleStoredPresets)
 					r.Post("/repair", app.HandleRepairStoredPresets)

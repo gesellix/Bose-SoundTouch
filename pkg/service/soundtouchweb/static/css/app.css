@@ -1113,6 +1113,26 @@ img.preset-source-icon { object-fit: contain; filter: var(--content-icon-filter)
 .preset-edit-btn.open { opacity: 1; color: var(--accent); }
 .preset-slot-wrap.active .preset-edit-btn { color: var(--accent-fg); }
 
+/* ── Sources on other speakers ───────────────────────────────────────────── */
+/* Rendered only when there is something this speaker could be given, so a
+   single-speaker setup never sees it. */
+.sources-elsewhere { margin-top: .75rem; }
+.sources-elsewhere-title {
+    margin: 0 0 .4rem; font-size: .7rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim);
+}
+.sources-elsewhere-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.sources-elsewhere-row {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .3rem .4rem;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.sources-elsewhere-icon { width: 16px; height: 16px; font-size: 13px; line-height: 1; }
+img.sources-elsewhere-icon { object-fit: contain; filter: var(--content-icon-filter); opacity: .85; }
+.sources-elsewhere-text { display: flex; flex-direction: column; min-width: 0; }
+.sources-elsewhere-name { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sources-elsewhere-meta { font-size: .7rem; color: var(--text-dim); }
+
 /* ── Stored-preset problems ──────────────────────────────────────────────── */
 /* Only ever rendered when the stored list and the speaker disagree, so it can
    afford to be noticeable. */

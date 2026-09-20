@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
+import { SourcesElsewhere } from './SourcesElsewhere.js';
 
 const html = htm.bind(h);
 
@@ -425,6 +426,7 @@ export function Sources({
             >
                 ${availabilityMessage || commandMessage(command)}
             </div>
+            <${SourcesElsewhere} deviceId=${deviceId} />
         </div>
     `;
 }

@@ -176,6 +176,9 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
+    // Sources the service's other speakers have and this one does not
+    // (issue 754). Identity only; the service never projects credentials.
+    sourcesElsewhere: (id) => req(`/api/control/devices/${id}/sources-elsewhere`),
     // What the service stores for a speaker, and the repair for when that
     // disagrees with what the speaker reports (issue 697). The repair is the
     // one preset write that goes to the service rather than to the speaker.

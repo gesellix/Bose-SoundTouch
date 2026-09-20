@@ -396,3 +396,110 @@ render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status 
 		t.Fatalf("a marked entry must still be clickable, got %v", stored)
 	}
 }
+
+// TestSourcesElsewhereListsWhatOtherSpeakersHave covers the read half of the
+// sources part of issue 754: what could this speaker be given? The two
+// availabilities are the point, because one can be acted on for the owner and
+// the other cannot.
+func TestSourcesElsewhereListsWhatOtherSpeakersHave(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { Sources } from '/app/static/js/components/Sources.js';
+render(h('section', { id: 'sources' }, h(Sources, {
+  deviceId: 'speaker',
+  status: {
+    revision: 1,
+    nowPlayingRevision: 1,
+    sources: { SourceItem: [{ Source: 'TUNEIN', SourceAccount: '', DisplayName: 'TuneIn', Status: 'READY' }] },
+    nowPlaying: { Source: 'STANDBY' },
+  },
+})), document.getElementById('fixture'));
+`
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/sources-elsewhere", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"available": true,
+				"sources": []any{
+					map[string]any{
+						"type": "STORED_MUSIC", "account": "uuid:theirs/0", "display_name": "fritz",
+						"availability": "addable", "devices": []string{"DEVICEID02"},
+					},
+					map[string]any{
+						"type": "SPOTIFY", "account": "listener", "display_name": "Spotify",
+						"availability": "link-required", "devices": []string{"DEVICEID02"},
+					},
+				},
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	var rows int
+	var first, second string
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#sources .sources-elsewhere-row`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('#sources .sources-elsewhere-row').length`, &rows),
+		chromedp.Text(`#sources .sources-elsewhere-row:nth-child(1)`, &first, chromedp.ByQuery),
+		chromedp.Text(`#sources .sources-elsewhere-row:nth-child(2)`, &second, chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if rows != 2 {
+		t.Fatalf("expected both sources, got %d", rows)
+	}
+
+	if !strings.Contains(first, "fritz") || !strings.Contains(first, "can be added here") {
+		t.Errorf("first row = %q, want the media server marked as addable", first)
+	}
+
+	if !strings.Contains(second, "needs linking on this speaker") {
+		t.Errorf("second row = %q, want the music service marked as needing a link", second)
+	}
+}
+
+// A single-speaker setup, or a player with no service behind it, must show
+// nothing rather than an empty heading.
+func TestSourcesElsewhereStaysSilentWithNothingToOffer(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { Sources } from '/app/static/js/components/Sources.js';
+render(h('section', { id: 'sources' }, h(Sources, {
+  deviceId: 'speaker',
+  status: {
+    revision: 1,
+    nowPlayingRevision: 1,
+    sources: { SourceItem: [{ Source: 'TUNEIN', SourceAccount: '', DisplayName: 'TuneIn', Status: 'READY' }] },
+    nowPlaying: { Source: 'STANDBY' },
+  },
+})), document.getElementById('fixture'));
+`
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/sources-elsewhere", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"available": true, "sources": []any{},
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	var shown bool
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#sources .source-btn`, chromedp.ByQuery),
+		chromedp.Poll(`performance.getEntriesByType('resource').some(e => e.name.includes('sources-elsewhere'))`, nil),
+		chromedp.Evaluate(`document.querySelector('#sources .sources-elsewhere') !== null`, &shown),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if shown {
+		t.Error("nothing to offer must render nothing at all")
+	}
+}
