@@ -171,6 +171,29 @@ with the count so far shown beside it.
 
 ---
 
+## Giving another speaker the same server
+
+A media server registered on one speaker is not automatically known to the
+others. The device page's **Sources** section lists what your other speakers
+have and this one does not, under "On your other speakers", with an **Add**
+button next to each one that can be added here.
+
+A media server can always be added that way: it is identified by its address on
+the network and has no password of its own, so AfterTouch just registers it on
+this speaker too. The same goes for TuneIn, Radio Browser and Internet Radio,
+whose access AfterTouch provides itself. That last case is worth knowing about:
+a speaker that is missing TuneIn while another has it is one of the reasons
+radio stations do not appear, and this is the quickest way to fix it.
+
+A music service such as Spotify or Amazon Music is listed too, but without a
+button, and says "needs linking on this speaker". That is not a missing
+feature: the login belongs to the speaker that was linked, and AfterTouch
+cannot hand it to another speaker. Link the account on that speaker instead,
+see [Connecting Music Services](MUSIC-SERVICES.md).
+
+The section is not shown at all if you have one speaker, or if there is nothing
+the others have that this one lacks.
+
 ## Removing a server
 
 ```bash
