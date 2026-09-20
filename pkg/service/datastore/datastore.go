@@ -3067,6 +3067,14 @@ type Settings struct {
 	// The tri-state (rather than a plain bool) is what lets "never decided"
 	// be told apart from "explicitly chose off" once that default flips.
 	AdminAreaAuth string `json:"admin_area_auth,omitempty"`
+
+	// CatalogSize caps the preset/source catalog (issue 754): the entries
+	// AfterTouch has seen, kept so an emptied slot can be picked again instead
+	// of being recovered from hand-edited XML. Unset means catalog.DefaultSize;
+	// zero turns the catalog off and drops what is stored, which is the knob an
+	// on-device install on a tight flash volume needs. A pointer, because "never
+	// configured" and "deliberately disabled" have to be tellable apart.
+	CatalogSize *int `json:"catalog_size,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.
