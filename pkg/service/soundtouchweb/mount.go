@@ -32,6 +32,12 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 	r.Route("/api/control", func(r chi.Router) {
 		r.Get("/version", app.HandleAPIVersion)
 
+		// What this service has seen stored or played, which is what the
+		// preset editor picks from (issue 754). Service-wide, not
+		// device-scoped: the whole point is that one speaker can be given
+		// what another one had.
+		r.Get("/catalog", app.HandleCatalog)
+
 		// App-wide event stream: device list, discovery status, per-device
 		// status updates. The read/event half of the control surface (the
 		// per-device socket lives at devices/{id}/ws).

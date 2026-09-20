@@ -1509,6 +1509,11 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 	// UI "discover" runs the service's sweep, not a second mDNS stack.
 	webApp.TriggerDiscovery = server.DiscoverDevices
 
+	// The catalog of what this service has seen stored or played, which the
+	// player's preset editor picks from (issue 754). Standalone
+	// soundtouch-player has no datastore, so it leaves this nil.
+	webApp.CatalogEntries = ds.GetCatalog
+
 	// A removal from the player UI cascades to the datastore (the single
 	// source of truth), so the device does not reappear on the next re-sync.
 	webApp.RemoveDeviceHook = func(deviceID string) error {

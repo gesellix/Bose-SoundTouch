@@ -18,6 +18,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
+	"github.com/gesellix/bose-soundtouch/pkg/service/catalog"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/service/stations"
 	"github.com/gesellix/bose-soundtouch/pkg/stereopair"
@@ -118,6 +119,13 @@ type WebApp struct {
 	// datastore); DiscoverDevices then re-syncs from ExtraDeviceHosts. Standalone
 	// soundtouch-player leaves it nil and runs its own sweep.
 	TriggerDiscovery func(ctx context.Context)
+
+	// CatalogEntries, when set, returns the service's catalog of preset and
+	// source entries seen so far (issue 754), newest sighting first. The
+	// embedded build wires it to the service datastore; standalone
+	// soundtouch-player leaves it nil, which the player surfaces as "no
+	// catalog here" rather than as an empty one.
+	CatalogEntries func() []catalog.Entry
 
 	// RemoveDeviceHook, when set, removes a device from the backing store by
 	// its device ID (MAC). The embedded build wires it to the service's

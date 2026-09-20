@@ -39,6 +39,7 @@ GET      /accounts/{account}/full                                     handlers.(
 GET      /accounts/{account}/sources                                  handlers.(*Server).HandleUnsupported-fm
 GET      /admin                                                       handlers.(*Server).HandleAdmin-fm
 GET      /api/announcements                                           handlers.(*Server).HandleListAnnouncements-fm
+GET      /api/control/catalog                                         soundtouchweb.(*WebApp).HandleCatalog-fm
 GET      /api/control/devices/                                        soundtouchweb.(*WebApp).HandleAPIDevices-fm
 GET      /api/control/devices/{id}/                                   soundtouchweb.(*WebApp).HandleAPIDevice-fm
 GET      /api/control/devices/{id}/action/{action}                    soundtouchweb.(*WebApp).HandleAPIControl-fm
