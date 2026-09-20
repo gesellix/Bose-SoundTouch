@@ -146,6 +146,12 @@ type WebApp struct {
 	// asked about.
 	RepairStoredPresets func(deviceID, account string, drop []int, expected int) ([]models.StoredPresetRow, error)
 
+	// SourcesElsewhere, when set, returns the sources other speakers of this
+	// service have that the given device does not (issue 754). Identity only:
+	// see models.SourceIdentity for why a configured source cannot be handed
+	// outward as it is stored.
+	SourcesElsewhere func(deviceID, account string) ([]models.SourceIdentity, error)
+
 	// RemoveDeviceHook, when set, removes a device from the backing store by
 	// its device ID (MAC). The embedded build wires it to the service's
 	// datastore removal so a removal from the player UI also clears the

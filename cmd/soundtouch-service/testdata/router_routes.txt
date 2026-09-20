@@ -50,6 +50,7 @@ GET      /api/control/devices/{id}/now-playing                        soundtouch
 GET      /api/control/devices/{id}/power-status                       soundtouchweb.(*WebApp).HandleDevicePowerStatus-fm
 GET      /api/control/devices/{id}/recents                            soundtouchweb.(*WebApp).HandleDeviceRecents-fm
 GET      /api/control/devices/{id}/settings/                          soundtouchweb.(*WebApp).HandleGetDeviceSettings-fm
+GET      /api/control/devices/{id}/sources-elsewhere                  soundtouchweb.(*WebApp).HandleSourcesElsewhere-fm
 GET      /api/control/devices/{id}/stereo-pair/                       soundtouchweb.(*WebApp).HandleGetStereoPair-fm
 GET      /api/control/devices/{id}/stored-presets/                    soundtouchweb.(*WebApp).HandleStoredPresets-fm
 GET      /api/control/devices/{id}/ws                                 soundtouchweb.(*WebApp).HandleDeviceWebSocket-fm
