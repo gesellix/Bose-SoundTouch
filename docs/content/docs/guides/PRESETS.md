@@ -74,6 +74,53 @@ source, and a name. Two consequences worth knowing:
   disappears from a directory, the stored location may no longer resolve. Save
   it again to fix it.
 
+## Change a slot without playing anything
+
+The **✎** next to each preset tile opens the slot editor. It lists what
+AfterTouch has seen this household play or store, so filling a slot is picking
+from that list rather than finding the station again first.
+
+From the editor you can:
+
+- **Fill the slot** from the list. Type in the filter box to narrow it.
+- **Rename** what is in the slot. The name is yours; it does not have to match
+  what the station calls itself.
+- **Move it to another slot.** Press a slot number under "Move to". A slot that
+  already holds something is marked, says what it would replace, and needs a
+  second press.
+- **Empty the slot.** The station stays on the list, so this loses the slot's
+  contents, not the station.
+
+Nothing here needs the speaker to be playing, and none of it involves editing
+files. If you have been recovering presets by hand from `Presets.xml` or over
+SSH, this replaces that.
+
+### The list, and what is on it
+
+The list is a catalog of what AfterTouch has seen: every preset it has stored
+and everything that has played, across all your speakers, whichever one it
+happened on. That is what makes it useful for two jobs at once.
+
+- **Getting something back.** A slot that gets emptied, by you or by anything
+  else, leaves its station on the list. Putting it back is picking it again.
+- **Copying between speakers.** Open the editor on the second speaker and pick
+  the same entry.
+
+An entry already sitting in a slot is still listed, and says which slot it is
+in. Putting the same station in two slots is allowed; it is sometimes what you
+want.
+
+The list holds the 30 most recently seen entries. To change that, set
+`catalog_size` in `settings.json`:
+
+```json
+{ "catalog_size": 60 }
+```
+
+Setting it to `0` turns the catalog off and discards what is stored, which is
+worth knowing if you run AfterTouch on the speaker itself and want to keep the
+flash volume as quiet as possible. Leaving it out keeps the default of 30.
+
 ## Presets on several speakers
 
 Speakers that share one AfterTouch account share their presets: saving or
