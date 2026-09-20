@@ -1930,6 +1930,7 @@ func setupRouter(server *handlers.Server, stockholmHandler *stockholm.Handler, w
 			r.Get("/", server.HandleMgmtListAccounts)
 			r.Get("/{accountId}", server.HandleMgmtAccountDetails)
 			r.Post("/{accountId}/language", server.HandleMgmtUpdateAccountLanguage)
+			r.Post("/{accountId}/preset-sync", server.HandleMgmtUpdateAccountPresetSync)
 			r.Post("/{accountId}/provider-settings", server.HandleMgmtUpdateAccountProviderSetting)
 			r.Get("/{accountId}/speakers", server.HandleMgmtListSpeakers)
 		})

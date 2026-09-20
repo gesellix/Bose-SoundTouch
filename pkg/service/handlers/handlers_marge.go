@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
@@ -508,6 +509,10 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Capture the bank before the write: preset sharing decides on the state
+	// the speakers were in, not on the one this write just created.
+	before, _ := s.ds.GetPresetsReadOnly(account, device)
+
 	data, err := marge.UpdatePreset(s.ds, account, device, presetNumber, body)
 	if err != nil {
 		log.Printf("[Marge] UpdatePreset failed for account=%s, device=%s, preset=%d: %s", sanitizeLog(account), sanitizeLog(device), presetNumber, sanitizeErr(err))
@@ -516,8 +521,49 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	s.sharePresetWrite(account, device, presetNumber, before, false)
+
 	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
 	_, _ = w.Write(data)
+}
+
+// sharePresetWrite mirrors a single-slot preset write to the account's other
+// speakers and nudges them to re-read (issue 495). Speakers poll their own
+// presets endpoint with an ETag, so without the nudge a sibling only picks the
+// change up on its next reboot or a manual "Refresh sources".
+//
+// Fire-and-forget: the write is already on disk, and a speaker that is
+// unreachable now reads the new bank on its next poll anyway.
+func (s *Server) sharePresetWrite(account, device string, presetNumber int,
+	before []models.ServicePreset, removal bool) {
+	var applied []models.ServiceDeviceInfo
+
+	if removal {
+		applied = marge.PropagatePresetRemoval(s.ds, account, device, presetNumber, before)
+	} else {
+		applied = marge.PropagatePresetWrite(s.ds, account, device, presetNumber, before)
+	}
+
+	if len(applied) == 0 {
+		return
+	}
+
+	log.Printf("[PresetSync] slot %d from %s shared with %d other device(s)",
+		presetNumber, sanitizeLog(device), len(applied))
+
+	for i := range applied {
+		target := applied[i]
+		if target.IPAddress == "" {
+			continue
+		}
+
+		go func() {
+			c := client.NewClientFromHost(target.IPAddress)
+			if err := c.NotifySourcesUpdated(target.DeviceID); err != nil {
+				log.Printf("[PresetSync] notify %s: %v", sanitizeLog(target.DeviceID), err)
+			}
+		}()
+	}
 }
 
 // HandleMargeRecents returns the Marge recents for a device.
@@ -693,10 +739,14 @@ func (s *Server) HandleMargeRemovePreset(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	before, _ := s.ds.GetPresetsReadOnly(account, device)
+
 	if err := marge.RemovePreset(s.ds, account, device, presetNumber); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	s.sharePresetWrite(account, device, presetNumber, before, true)
 
 	w.WriteHeader(http.StatusOK)
 }

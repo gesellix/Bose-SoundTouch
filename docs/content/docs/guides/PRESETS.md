@@ -74,6 +74,35 @@ source, and a name. Two consequences worth knowing:
   disappears from a directory, the stored location may no longer resolve. Save
   it again to fix it.
 
+## Presets on several speakers
+
+Speakers that share one AfterTouch account share their presets: saving or
+clearing a preset on one applies it to the others, and AfterTouch nudges them
+so they pick it up without a reboot or a manual "Refresh sources".
+
+What happens by default:
+
+- **One speaker, or speakers that already hold the same presets**: sharing is
+  on, so a change reaches all of them.
+- **A speaker added later with no presets**: it adopts the account's presets.
+- **Speakers that already hold different presets**: nothing is overwritten.
+  AfterTouch leaves them as they are until you say which way it should go.
+
+To change that for an account:
+
+```bash
+curl -X POST http://192.0.2.10:8000/api/mgmt/accounts/<accountId>/preset-sync \
+  -H 'Content-Type: application/json' -d '{"preset_sync": "on"}'
+```
+
+`on` always shares a change, `off` never overwrites another speaker's preset
+(a speaker with no presets still adopts them, since nothing is lost that way),
+and `auto` is the default described above.
+
+Syncing a speaker's data into AfterTouch ("Sync Data", or `setup sync`) is
+deliberately not shared: that reads the whole list from one speaker, and it
+can be shorter than what AfterTouch holds.
+
 ## From the command line
 
 `soundtouch-cli` talks to the speaker directly, and is the right tool for
