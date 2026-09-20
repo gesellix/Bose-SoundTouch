@@ -424,3 +424,59 @@ func TestHandleMgmtAccountDetails_Sources(t *testing.T) {
 		}
 	}
 }
+
+func TestHandleMgmtUpdateAccountPresetSync(t *testing.T) {
+	tempBaseDir := "mgmt_test_data_preset_sync"
+	if err := os.MkdirAll(tempBaseDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(tempBaseDir)
+
+	ds := datastore.NewDataStore(tempBaseDir)
+	if err := ds.Initialize(); err != nil {
+		t.Fatal(err)
+	}
+
+	accountID := "1234567"
+	server := &Server{ds: ds}
+
+	r := chi.NewRouter()
+	r.Post("/mgmt/accounts/{accountId}/preset-sync", server.HandleMgmtUpdateAccountPresetSync)
+
+	for _, mode := range []string{"off", "on", "auto"} {
+		t.Run("accepts "+mode, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]string{"preset_sync": mode})
+			req := httptest.NewRequest("POST", "/mgmt/accounts/"+accountID+"/preset-sync", bytes.NewBuffer(body))
+			w := httptest.NewRecorder()
+
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+			}
+
+			accInfo, _ := ds.GetAccountInfo(accountID)
+			if accInfo.PresetSync != mode {
+				t.Fatalf("stored preset sync = %q, want %q", accInfo.PresetSync, mode)
+			}
+		})
+	}
+
+	t.Run("rejects an unknown mode", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{"preset_sync": "sometimes"})
+		req := httptest.NewRequest("POST", "/mgmt/accounts/"+accountID+"/preset-sync", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+		}
+
+		accInfo, _ := ds.GetAccountInfo(accountID)
+		if accInfo.PresetSync != "auto" {
+			t.Fatalf("stored preset sync = %q, want the previous value", accInfo.PresetSync)
+		}
+	})
+}

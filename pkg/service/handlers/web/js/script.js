@@ -1101,7 +1101,7 @@ async function fetchAccountDetails(accountId) {
         if (metadataEl) {
             const warningNotice = data.account.is_placeholder ?
                 `<div style="background: #fff3cd; color: #856404; padding: 10px; border: 1px solid #ffeeba; border-radius: 4px; margin-bottom: 10px; font-size: 0.85em;">
-                    <strong>Notice:</strong> This account hasn't saved any custom settings yet (language, provider preferences). Defaults are in effect — they'll be saved once you change something below.
+                    <strong>Notice:</strong> This account hasn't saved any custom settings yet (language, preset sync, provider preferences). Defaults are in effect — they'll be saved once you change something below.
                 </div>` : "";
 
             metadataEl.innerHTML = `
@@ -1114,6 +1114,19 @@ async function fetchAccountDetails(accountId) {
                             <option value="de" ${data.account.preferred_language === "de" ? "selected" : ""}>de</option>
                         </select>
                         <span id="language-update-status" style="margin-left: 8px; font-size: 0.8em; display: none;">Saving...</span>
+                    </td></tr>
+                    <tr><td style="padding: 4px"><strong>Preset sync:</strong></td><td style="padding: 4px">
+                        <select id="account-preset-sync-select" style="font-size: 0.9em; padding: 2px;">
+                            <option value="auto" ${!data.account.preset_sync || data.account.preset_sync === "auto" ? "selected" : ""}>auto (share unless speakers differ)</option>
+                            <option value="on" ${data.account.preset_sync === "on" ? "selected" : ""}>on (always share)</option>
+                            <option value="off" ${data.account.preset_sync === "off" ? "selected" : ""}>off (never overwrite)</option>
+                        </select>
+                        <span id="preset-sync-update-status" style="margin-left: 8px; font-size: 0.8em; display: none;">Saving...</span>
+                        <div style="font-size: 0.8em; color: #666; margin-top: 2px;">
+                            Saving or clearing a single preset on one speaker of this account applies it to
+                            the others. A speaker without presets adopts them in every mode. Importing a
+                            speaker's presets with "Sync Data" stays on that speaker.
+                        </div>
                     </td></tr>
                     <tr><td style="padding: 4px"><strong>Provider Settings:</strong></td><td style="padding: 4px">
                         ${data.account.provider_settings && data.account.provider_settings.length > 0 ?
@@ -1187,6 +1200,44 @@ async function fetchAccountDetails(accountId) {
                         }
                     } catch (error) {
                         console.error("Failed to update language", error);
+                        if (statusEl) {
+                            statusEl.innerText = "Error!";
+                            statusEl.style.color = "#dc3545";
+                        }
+                    }
+                });
+            }
+
+            const presetSyncSelect = document.getElementById("account-preset-sync-select");
+            if (presetSyncSelect) {
+                presetSyncSelect.addEventListener("change", async (e) => {
+                    const statusEl = document.getElementById("preset-sync-update-status");
+                    const mode = e.target.value;
+                    if (statusEl) {
+                        statusEl.innerText = "Saving...";
+                        statusEl.style.display = "inline";
+                        statusEl.style.color = "#666";
+                    }
+                    try {
+                        const response = await fetch(`/api/mgmt/accounts/${encodeURIComponent(data.account.account_id)}/preset-sync`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({ preset_sync: mode }),
+                        });
+                        if (!response.ok) {
+                            throw new Error(await response.text());
+                        }
+                        if (statusEl) {
+                            statusEl.innerText = "Saved!";
+                            statusEl.style.color = "#28a745";
+                            setTimeout(() => {
+                                statusEl.style.display = "none";
+                            }, 2000);
+                        }
+                    } catch (error) {
+                        console.error("Failed to update preset sync", error);
                         if (statusEl) {
                             statusEl.innerText = "Error!";
                             statusEl.style.color = "#dc3545";
