@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const presets = await readFile(new URL('../static/js/components/Presets.js', import.meta.url), 'utf8');
+// The source display names live in their own module since the catalog picker
+// (issue 754) has to name a source exactly as the tiles do.
+const sourceLabels = await readFile(new URL('../static/js/sourceLabels.js', import.meta.url), 'utf8');
 const css = await readFile(new URL('../static/css/app.css', import.meta.url), 'utf8');
 
 // Regression guard for issue #646: the save-to-preset button used to be
@@ -18,8 +21,9 @@ test('the save button is disabled rather than hidden when nothing is playing', (
 // accent colour, leaving it the only tile rendered with the default border.
 // RADIO_BROWSER had the same label gap.
 test('library and radio-browser presets get a readable label', () => {
-    assert.match(presets, /STORED_MUSIC:\s*'Library'/);
-    assert.match(presets, /RADIO_BROWSER:\s*'Radio Browser'/);
+    assert.match(sourceLabels, /STORED_MUSIC:\s*'Library'/);
+    assert.match(sourceLabels, /RADIO_BROWSER:\s*'Radio Browser'/);
+    assert.match(presets, /sourceLabel\(item\.Source\)/);
 });
 
 test('a library preset tile has its own accent colour', () => {
