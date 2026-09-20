@@ -101,6 +101,10 @@ export const api = {
     setSourceName: (id, targetIdentity, source, sourceAccount, name) => settingsMutation(
         `/api/control/devices/${id}/settings/source-name`, 'PATCH', targetIdentity,
         { source, sourceAccount, name }),
+    // What this service has seen stored or played (issue 754). Service-wide,
+    // not device-scoped: the pick list exists so one speaker can be given
+    // what another one had.
+    catalog: () => req('/api/control/catalog'),
     discover: () => req('/api/control/discover', { method: 'POST' }),
     key: (id, key) => req(`/api/control/devices/${id}/key/${key}`, { method: 'POST' }),
     // Checked variants of the mutations the discrete-command hook issues. They
