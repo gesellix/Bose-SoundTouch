@@ -121,6 +121,34 @@ Setting it to `0` turns the catalog off and discards what is stored, which is
 worth knowing if you run AfterTouch on the speaker itself and want to keep the
 flash volume as quiet as possible. Leaving it out keeps the default of 30.
 
+### When AfterTouch and the speaker disagree
+
+Above the preset tiles, a warning appears if what AfterTouch has stored for a
+speaker does not match what the speaker reports, for example "AfterTouch stores
+8 presets for this speaker, 2 of which it can never play". On a healthy setup
+there is nothing there.
+
+Open it and you see the stored rows as stored, each saying why it cannot be
+played: no such button on this speaker, no button number at all, or nothing to
+play. Remove them one at a time, or use the button that removes all the rows
+the speaker cannot play.
+
+This matters beyond tidiness. A stored list with more rows than the speaker has
+buttons is why:
+
+- **"Sync Data" is refused as destructive.** Importing the speaker's six
+  presets would shrink the stored eight, and a shrinking import is refused
+  unless you confirm it.
+- **A preset you just saved comes back as the old one.** AfterTouch serves its
+  stored list to the speaker, so the extra rows keep winning.
+
+Removing a row does not lose the station: it stays in the list you pick from,
+so you can put it straight back into a slot.
+
+This is the one edit that goes to AfterTouch rather than to the speaker. The
+rows exist only in AfterTouch, and some of them name no button the speaker
+could be asked about.
+
 ## Presets on several speakers
 
 Speakers that share one AfterTouch account share their presets: saving or
