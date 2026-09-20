@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -1030,6 +1032,7 @@ func setupSyncCmd() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "service-url", Required: true, Usage: "AfterTouch base URL"},
 			&cli.StringFlag{Name: "auth", Usage: "Basic-auth credentials for AfterTouch as user:pass (omit to be prompted on 401)"},
+			&cli.BoolFlag{Name: "confirm", Usage: "Apply the sync even when it would shrink the stored presets or recents (the speaker's list wins; back up Presets.xml first)"},
 		},
 		Action: func(c *cli.Context) error {
 			cfg := GetClientConfig(c)
@@ -1061,8 +1064,20 @@ func setupSyncCmd() *cli.Command {
 
 			PrintDeviceHeader(fmt.Sprintf("Syncing %s into AfterTouch", deviceInfo.DeviceID), cfg.Host, cfg.Port)
 
-			if err := postSetupSync(serviceURL, deviceInfo.DeviceID, c.String("auth")); err != nil {
+			if err := postSetupSync(serviceURL, deviceInfo.DeviceID, c.String("auth"), c.Bool("confirm")); err != nil {
+				var refused *syncRefusedError
+				if errors.As(err, &refused) {
+					PrintWarning(refused.Error())
+
+					for _, line := range refused.Details() {
+						fmt.Println("  " + line)
+					}
+
+					return err
+				}
+
 				PrintError(err.Error())
+
 				return err
 			}
 
@@ -1073,10 +1088,55 @@ func setupSyncCmd() *cli.Command {
 	}
 }
 
+// syncResourceDiff mirrors setup.SyncResourceDiff, the per-resource diff the
+// service reports when a sync would shrink what is already stored.
+type syncResourceDiff struct {
+	Resource      string `json:"resource"`
+	CurrentCount  int    `json:"currentCount"`
+	IncomingCount int    `json:"incomingCount"`
+	Destructive   bool   `json:"destructive"`
+}
+
+// syncRefusedError is the 409 the service answers when applying the sync
+// would shrink the stored presets or recents. It is not a failure: nothing
+// was written, and the operator decides whether the speaker's shorter list
+// should win.
+type syncRefusedError struct {
+	Diffs []syncResourceDiff `json:"diffs"`
+}
+
+func (e *syncRefusedError) Error() string {
+	return "sync not applied: it would remove stored entries for this device"
+}
+
+// Details explains the refusal in the operator's terms, including how to
+// apply it anyway.
+func (e *syncRefusedError) Details() []string {
+	lines := make([]string, 0, len(e.Diffs)+2)
+
+	for _, diff := range e.Diffs {
+		if !diff.Destructive {
+			continue
+		}
+
+		lines = append(lines, fmt.Sprintf("%s: AfterTouch has %d, the speaker reported %d",
+			diff.Resource, diff.CurrentCount, diff.IncomingCount))
+	}
+
+	return append(lines,
+		"Nothing was written.",
+		"To let the speaker's list win, back up the device's Presets.xml, then re-run with --confirm.")
+}
+
 // postSetupSync POSTs to AfterTouch's /api/setup/sync/{deviceId}, prompting
-// for basic-auth credentials on 401 (matches fetchCACert's pattern).
-func postSetupSync(serviceURL, deviceID, authFlag string) error {
+// for basic-auth credentials on 401 (matches fetchCACert's pattern). With
+// confirmed, a sync that would shrink the stored presets or recents is
+// applied instead of refused.
+func postSetupSync(serviceURL, deviceID, authFlag string, confirmed bool) error {
 	endpoint := fmt.Sprintf("%s/api/setup/sync/%s", serviceURL, deviceID)
+	if confirmed {
+		endpoint += "?confirmed=true"
+	}
 
 	doRequest := func(user, pass string) (*http.Response, error) {
 		req, err := http.NewRequest(http.MethodPost, endpoint, nil)
@@ -1117,6 +1177,17 @@ func postSetupSync(serviceURL, deviceID, authFlag string) error {
 	}
 
 	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+
+		refused := &syncRefusedError{}
+		if err := json.Unmarshal(body, refused); err == nil && len(refused.Diffs) > 0 {
+			return refused
+		}
+
+		return fmt.Errorf("POST %s returned %d: %s", endpoint, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)

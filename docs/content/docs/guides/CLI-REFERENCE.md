@@ -1536,6 +1536,21 @@ soundtouch-cli --host <device> setup sync --service-url http://192.0.2.10:8000
 `--auth` (`user:pass`) supplies basic-auth credentials up front; omit it to
 be prompted interactively if the endpoint returns 401.
 
+A sync that would shrink what AfterTouch has stored (for example the speaker
+reports 6 presets where the datastore holds 8) is refused with `409` and
+nothing is written. The command then prints the per-resource counts. Re-run
+with `--confirm` to let the speaker's list win:
+
+```bash
+soundtouch-cli --host <device> setup sync --service-url http://192.0.2.10:8000 --confirm
+```
+
+Back up the device's `Presets.xml` first
+(`<data dir>/accounts/<account>/devices/<deviceID>/Presets.xml`): a sync is
+one-way from the speaker, so whatever it reports at that moment replaces the
+stored copy. This matches the confirmation dialog behind the web UI's
+"Sync Data" button.
+
 ## Common Usage Patterns
 
 ### Quick Device Setup
