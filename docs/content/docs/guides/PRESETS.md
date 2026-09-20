@@ -142,8 +142,9 @@ buttons is why:
 - **A preset you just saved comes back as the old one.** AfterTouch serves its
   stored list to the speaker, so the extra rows keep winning.
 
-Removing a row does not lose the station: it stays in the list you pick from,
-so you can put it straight back into a slot.
+**Remove** deletes the row from what AfterTouch stores. It presses nothing on
+the speaker, and it does not lose the station: that stays in the list you pick
+from, so you can put it straight back into a slot.
 
 This is the one edit that goes to AfterTouch rather than to the speaker. The
 rows exist only in AfterTouch, and some of them name no button the speaker
