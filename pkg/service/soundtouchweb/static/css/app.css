@@ -1218,6 +1218,13 @@ img.preset-source-icon { object-fit: contain; filter: var(--content-icon-filter)
    applied to the emoji span it washes the brand emoji out. */
 .catalog-entry-icon { width: 18px; height: 18px; font-size: 14px; line-height: 1; }
 img.catalog-entry-icon { object-fit: contain; filter: var(--content-icon-filter); opacity: .85; }
+/* Content this speaker has no source for. Dimmed and labelled rather than
+   disabled: the list the player holds can be minutes old, so the service
+   re-checks against the speaker and has the final word. */
+.catalog-entry.unavailable { border-style: dashed; }
+.catalog-entry.unavailable .catalog-entry-name { color: var(--text-dim); }
+.catalog-entry-warn { color: var(--warning); }
+
 .catalog-entry-text { display: flex; flex-direction: column; min-width: 0; gap: .1rem; }
 .catalog-entry-name { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .catalog-entry-meta { font-size: .7rem; color: var(--text-dim); }

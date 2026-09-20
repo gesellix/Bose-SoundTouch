@@ -4,6 +4,7 @@ import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
 import { sourceLabel } from '../sourceLabels.js';
+import { missingSourceFor } from '../sourceAvailability.mjs';
 
 const html = htm.bind(h);
 
@@ -18,7 +19,7 @@ const html = htm.bind(h);
 // It deliberately does not hide entries that already sit in a slot. Copying
 // one station into a second slot, or onto a second speaker, is a thing people
 // do on purpose; the list only says where an entry already is.
-export function CatalogPicker({ deviceId, slot, presets, current = null, onClose, onAssigned }) {
+export function CatalogPicker({ deviceId, slot, presets, sources = null, current = null, onClose, onAssigned }) {
     const [state, setState] = useState({ status: 'loading' });
     const [query, setQuery] = useState('');
     const [saving, setSaving] = useState(null);
@@ -294,11 +295,17 @@ export function CatalogPicker({ deviceId, slot, presets, current = null, onClose
                             Location: entry.location,
                         }));
 
+                        // Advisory: the source list the player holds can be
+                        // minutes old, so the entry stays clickable and the
+                        // service decides against a fresh one.
+                        const missing = missingSourceFor(sources, entry.source, entry.source_account);
+
                         return html`
                             <li key=${`${entry.source}:${entry.source_account || ''}:${entry.location}`}>
                                 <button
                                     type="button"
-                                    class="catalog-entry ${saving === entry.location ? 'saving' : ''}"
+                                    class="catalog-entry ${saving === entry.location ? 'saving' : ''} ${missing ? 'unavailable' : ''}"
+                                    title=${missing ? `${entry.name || entry.location} — ${missing}` : null}
                                     disabled=${saving !== null}
                                     onClick=${() => pick(entry)}
                                 >
@@ -312,6 +319,7 @@ export function CatalogPicker({ deviceId, slot, presets, current = null, onClose
                                         <span class="catalog-entry-meta">
                                             ${sourceLabel(entry.source)}
                                             ${occupies !== undefined ? html` · in preset ${occupies}` : null}
+                                            ${missing ? html` · <span class="catalog-entry-warn">${missing}</span>` : null}
                                         </span>
                                     </span>
                                 </button>
