@@ -114,6 +114,9 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				r.Route("/stored-presets", func(r chi.Router) {
 					r.Get("/", app.HandleStoredPresets)
 					r.Post("/repair", app.HandleRepairStoredPresets)
+					// Settle one slot by taking what the speaker has, rather
+					// than importing its whole list.
+					r.Post("/adopt", app.HandleAdoptSpeakerPreset)
 				})
 				// Generic key / preset / source / bass actions. Source selection is
 				// canonically POSTed as JSON; its GET form remains temporarily for

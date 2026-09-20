@@ -3,8 +3,10 @@ package soundtouchweb
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -46,9 +48,12 @@ func speakerWithPresetsOn(t *testing.T, filled int, margeAccount string) *WebApp
 		DeviceID: "DEVICEID01", Name: "Speaker", MargeAccountUUID: margeAccount,
 	})
 
+	// Realistic content, because the stored/speaker comparison is by content
+	// identity: a row that says only "slot 1, ok" cannot occur (a stored row
+	// with no source or location is classified empty-content, not ok).
 	presets := &models.Presets{}
 	for i := 1; i <= filled; i++ {
-		presets.Preset = append(presets.Preset, models.Preset{ID: i, ContentItem: &models.ContentItem{Source: "TUNEIN"}})
+		presets.Preset = append(presets.Preset, speakerPreset(i, "TUNEIN", "", speakerLocation(i), "Station"))
 	}
 
 	conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, Presets: presets})
@@ -110,8 +115,7 @@ func TestHandleStoredPresetsStaysQuietWhenTheListsAgree(t *testing.T) {
 	app := speakerWithPresets(t, 2)
 	app.StoredPresets = func(string, string) ([]models.StoredPresetRow, error) {
 		return []models.StoredPresetRow{
-			{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK},
-			{Index: 1, Button: "2", Slot: 2, Verdict: models.StoredPresetOK},
+			storedRowFor(0, 1), storedRowFor(1, 2),
 		}, nil
 	}
 
@@ -129,8 +133,7 @@ func TestHandleStoredPresetsFlagsASurplusOfValidRows(t *testing.T) {
 	app := speakerWithPresets(t, 1)
 	app.StoredPresets = func(string, string) ([]models.StoredPresetRow, error) {
 		return []models.StoredPresetRow{
-			{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK},
-			{Index: 1, Button: "2", Slot: 2, Verdict: models.StoredPresetOK},
+			storedRowFor(0, 1), storedRowFor(1, 2),
 		}, nil
 	}
 
@@ -166,7 +169,7 @@ func TestHandleStoredPresetsWithoutAServiceReportsUnavailable(t *testing.T) {
 func TestHandleRepairStoredPresetsPassesTheRowsAndTheGuard(t *testing.T) {
 	app := speakerWithPresets(t, 1)
 	app.StoredPresets = func(string, string) ([]models.StoredPresetRow, error) {
-		return []models.StoredPresetRow{{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK}}, nil
+		return []models.StoredPresetRow{storedRowFor(0, 1)}, nil
 	}
 
 	var gotDrop []int
@@ -175,7 +178,7 @@ func TestHandleRepairStoredPresetsPassesTheRowsAndTheGuard(t *testing.T) {
 	app.RepairStoredPresets = func(_, _ string, drop []int, expected int) ([]models.StoredPresetRow, error) {
 		gotDrop, gotExpected = drop, expected
 
-		return []models.StoredPresetRow{{Index: 0, Button: "1", Slot: 1, Verdict: models.StoredPresetOK}}, nil
+		return []models.StoredPresetRow{storedRowFor(0, 1)}, nil
 	}
 
 	w := httptest.NewRecorder()
@@ -297,5 +300,188 @@ func TestStoredPresetsFallBackWhenTheSpeakerNamesNoAccount(t *testing.T) {
 
 	if !asked {
 		t.Error("expected the service to be asked anyway")
+	}
+}
+
+// presetsXML is what a speaker answers on /presets.
+func presetsXML(slot int, source, account, location, name string) string {
+	return fmt.Sprintf(`<presets>
+	<preset id="%d">
+		<ContentItem source="%s" type="stationurl" location="%s" sourceAccount="%s" isPresetable="true">
+			<itemName>%s</itemName>
+		</ContentItem>
+	</preset>
+</presets>`, slot, source, location, account, name)
+}
+
+// The per-slot alternative to "Sync Data": settle one button by taking what
+// the speaker has, leaving the rest alone.
+func TestHandleAdoptSpeakerPresetTakesWhatTheSpeakerReports(t *testing.T) {
+	speaker, _ := setupSpeakerMock(t, map[string]string{
+		"/presets": presetsXML(3, "RADIO_BROWSER", "", "/stations/byuuid/fm4", "FM4"),
+	})
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	var adopted models.ServicePreset
+
+	app.AdoptSpeakerPreset = func(_, _ string, preset models.ServicePreset) ([]models.StoredPresetRow, error) {
+		adopted = preset
+
+		return []models.StoredPresetRow{{Index: 0, Button: "3", Slot: 3, Verdict: models.StoredPresetOK}}, nil
+	}
+
+	req := httptest.NewRequest("POST", "/stored-presets/adopt", strings.NewReader(`{"slot":3}`))
+	req = withChiParams(req, map[string]string{"id": "lib-device"})
+	w := httptest.NewRecorder()
+
+	app.HandleAdoptSpeakerPreset(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if adopted.ButtonNumber != "3" || adopted.Source != "RADIO_BROWSER" || adopted.Name != "FM4" {
+		t.Fatalf("adopted %+v, want the speaker's content for slot 3", adopted)
+	}
+}
+
+// Adopting means taking what the speaker has now, so an empty button is a
+// refusal rather than a silent clear: emptying the stored slot would be a
+// different decision from the one that was asked for.
+func TestHandleAdoptSpeakerPresetRefusesAnEmptyButton(t *testing.T) {
+	speaker, _ := setupSpeakerMock(t, map[string]string{"/presets": `<presets></presets>`})
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	var called bool
+
+	app.AdoptSpeakerPreset = func(string, string, models.ServicePreset) ([]models.StoredPresetRow, error) {
+		called = true
+
+		return nil, nil
+	}
+
+	req := httptest.NewRequest("POST", "/stored-presets/adopt", strings.NewReader(`{"slot":2}`))
+	req = withChiParams(req, map[string]string{"id": "lib-device"})
+	w := httptest.NewRecorder()
+
+	app.HandleAdoptSpeakerPreset(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if called {
+		t.Error("nothing to adopt must never reach the stored list")
+	}
+}
+
+func TestHandleAdoptSpeakerPresetRejectsASlotOutsideTheButtons(t *testing.T) {
+	speaker, _ := setupSpeakerMock(t, nil)
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+	app.AdoptSpeakerPreset = func(string, string, models.ServicePreset) ([]models.StoredPresetRow, error) {
+		t.Error("an invalid slot must never reach the stored list")
+
+		return nil, nil
+	}
+
+	for _, slot := range []string{"0", "7"} {
+		req := httptest.NewRequest("POST", "/stored-presets/adopt", strings.NewReader(`{"slot":`+slot+`}`))
+		req = withChiParams(req, map[string]string{"id": "lib-device"})
+		w := httptest.NewRecorder()
+
+		app.HandleAdoptSpeakerPreset(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("slot %s: expected 400, got %d", slot, w.Code)
+		}
+	}
+}
+
+// speakerPreset builds one entry of a speaker's reported preset list.
+func speakerPreset(slot int, source, account, location, name string) models.Preset {
+	return models.Preset{ID: slot, ContentItem: &models.ContentItem{
+		Source: source, SourceAccount: account, Location: location, ItemName: name,
+	}}
+}
+
+// The counts can match while the two lists still disagree, which is the case
+// "Sync Data" cannot help with: it is all or nothing, and here the owner needs
+// to settle one button at a time.
+func TestStoredPresetsPairsTheSlotsThatDiffer(t *testing.T) {
+	app := NewWebApp()
+	conn := webtypes.NewDeviceConnection(nil, &models.DeviceInfo{DeviceID: "DEVICEID01"})
+	conn.SetStatus(&webtypes.DeviceStatus{IsConnected: true, Presets: &models.Presets{Preset: []models.Preset{
+		speakerPreset(1, "TUNEIN", "TUNEIN", "s1", "MDR JUMP"),
+		speakerPreset(2, "SPOTIFY", "listener", "spotify:album:9", "Their album"),
+		speakerPreset(4, "TUNEIN", "", "s4", "Only on the speaker"),
+	}}})
+	app.AddDevice("speaker", conn)
+
+	app.StoredPresets = func(string, string) ([]models.StoredPresetRow, error) {
+		return []models.StoredPresetRow{
+			// Same content as the speaker: the account placeholder must not
+			// make it look like a difference.
+			{Index: 0, Button: "1", Slot: 1, Source: "TUNEIN", Location: "s1", Name: "MDR JUMP", Verdict: models.StoredPresetOK},
+			// Same button, different content.
+			{Index: 1, Button: "2", Slot: 2, Source: "SPOTIFY", SourceAccount: "listener", Location: "spotify:album:1", Name: "Our album", Verdict: models.StoredPresetOK},
+			// Stored only here.
+			{Index: 2, Button: "3", Slot: 3, Source: "TUNEIN", Location: "s3", Name: "Only stored", Verdict: models.StoredPresetOK},
+		}, nil
+	}
+
+	w := httptest.NewRecorder()
+	app.HandleStoredPresets(w, storedPresetsRequest("GET", "/stored-presets/", ""))
+
+	payload := decodeStoredPresets(t, w)
+
+	if len(payload.Slots) != 3 {
+		t.Fatalf("expected slots 2, 3 and 4 to differ, got %+v", payload.Slots)
+	}
+
+	bySlot := map[int]StoredPresetSlot{}
+	for _, slot := range payload.Slots {
+		bySlot[slot.Slot] = slot
+	}
+
+	if _, differs := bySlot[1]; differs {
+		t.Error("a slot both sides fill with the same content must not be listed")
+	}
+
+	if bySlot[2].Ours.ItemName != "Our album" || bySlot[2].Theirs.ItemName != "Their album" {
+		t.Errorf("slot 2 = %+v, want both sides", bySlot[2])
+	}
+
+	if !bySlot[3].Ours.Present || bySlot[3].Theirs.Present {
+		t.Errorf("slot 3 = %+v, want stored-only", bySlot[3])
+	}
+
+	if bySlot[4].Ours.Present || !bySlot[4].Theirs.Present {
+		t.Errorf("slot 4 = %+v, want speaker-only", bySlot[4])
+	}
+
+	// A per-slot difference is a disagreement even when nothing is
+	// unrecallable and the counts happen to match.
+	if !payload.Disagrees {
+		t.Error("expected the payload to report a disagreement")
+	}
+}
+
+// speakerLocation is the station location the speaker fixture reports for a
+// slot; storedRowFor stores the same content, so the two sides agree.
+func speakerLocation(slot int) string {
+	return fmt.Sprintf("/v1/playback/station/s%d", slot)
+}
+
+func storedRowFor(index, slot int) models.StoredPresetRow {
+	return models.StoredPresetRow{
+		Index: index, Button: strconv.Itoa(slot), Slot: slot,
+		Source: "TUNEIN", Location: speakerLocation(slot), Name: "Station",
+		Verdict: models.StoredPresetOK,
 	}
 }
