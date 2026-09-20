@@ -18,12 +18,17 @@ const html = htm.bind(h);
 // It deliberately does not hide entries that already sit in a slot. Copying
 // one station into a second slot, or onto a second speaker, is a thing people
 // do on purpose; the list only says where an entry already is.
-export function CatalogPicker({ deviceId, slot, presets, occupied = false, onClose, onAssigned }) {
+export function CatalogPicker({ deviceId, slot, presets, current = null, onClose, onAssigned }) {
     const [state, setState] = useState({ status: 'loading' });
     const [query, setQuery] = useState('');
     const [saving, setSaving] = useState(null);
     const [error, setError] = useState(null);
     const [confirmingClear, setConfirmingClear] = useState(false);
+    const [pendingMove, setPendingMove] = useState(null);
+    const [newName, setNewName] = useState(current?.ContentItem?.ItemName ?? '');
+
+    const item = current?.ContentItem ?? null;
+    const occupied = !!item;
 
     useEffect(() => {
         let cancelled = false;
@@ -63,6 +68,17 @@ export function CatalogPicker({ deviceId, slot, presets, occupied = false, onClo
         return map;
     }, [presets]);
 
+    // What each slot currently holds, so a move can say what it would replace.
+    const slotByNumber = useMemo(() => {
+        const map = new Map();
+
+        for (const preset of presets?.Preset ?? []) {
+            if (preset?.ContentItem) map.set(Number(preset.ID), preset.ContentItem);
+        }
+
+        return map;
+    }, [presets]);
+
     const entries = useMemo(() => {
         const needle = query.trim().toLowerCase();
 
@@ -74,32 +90,91 @@ export function CatalogPicker({ deviceId, slot, presets, occupied = false, onClo
     }, [state.entries, query]);
 
     function pick(entry) {
-        setSaving(entry.location);
-        setError(null);
-
-        api.storePresetContent(deviceId, slot, {
+        storeItem(slot, {
             source: entry.source,
             sourceAccount: entry.source_account || '',
             location: entry.location,
             type: entry.type || '',
             itemName: entry.name || '',
             containerArt: entry.container_art || '',
-        })
-            .then(res => {
+        }, entry.location)
+            .then(() => {
                 setSaving(null);
-
-                if (res?.success === false) {
-                    setError(res.error || 'The speaker refused this entry.');
-
-                    return;
-                }
-
                 onAssigned?.(entry);
             })
-            .catch(() => {
-                setSaving(null);
-                setError('The request did not complete; the slot may or may not have changed.');
+            .catch(failed('The request did not complete; the slot may or may not have changed.'));
+    }
+
+    // storeItem is the one write the editor makes: it names a ContentItem and
+    // the slot it goes into. Filling from the catalog, renaming and moving are
+    // all that write with a different item or a different slot, which is why
+    // none of them needs its own endpoint.
+    function storeItem(targetSlot, contentItem, key) {
+        setSaving(key);
+        setError(null);
+
+        return api.storePresetContent(deviceId, targetSlot, contentItem)
+            .then(res => {
+                if (res?.success === false) {
+                    throw new Error(res.error || 'The speaker refused this entry.');
+                }
+
+                return res;
             });
+    }
+
+    function failed(message) {
+        return err => {
+            setSaving(null);
+            setError(err?.message || message);
+        };
+    }
+
+    function itemPayload(overrides = {}) {
+        return {
+            source: item?.Source ?? '',
+            sourceAccount: item?.SourceAccount ?? '',
+            location: item?.Location ?? '',
+            type: item?.Type ?? '',
+            itemName: item?.ItemName ?? '',
+            containerArt: item?.ContainerArt ?? '',
+            ...overrides,
+        };
+    }
+
+    function rename(e) {
+        e.preventDefault();
+
+        const name = newName.trim();
+
+        if (!name || name === item?.ItemName) return;
+
+        storeItem(slot, itemPayload({ itemName: name }), 'rename')
+            .then(() => {
+                setSaving(null);
+                onAssigned?.(null);
+            })
+            .catch(failed('The request did not complete; the name may or may not have changed.'));
+    }
+
+    // A move is a store into the target followed by a clear of the source, in
+    // that order: if the clear fails, the station is in two slots, which is
+    // recoverable. The other order would risk losing it from both.
+    function move(target) {
+        if (slotByNumber.get(target) && pendingMove !== target) {
+            setPendingMove(target);
+
+            return;
+        }
+
+        storeItem(target, itemPayload(), `move:${target}`)
+            .then(() => api.removePreset(deviceId, slot))
+            .then(() => {
+                setSaving(null);
+                setPendingMove(null);
+                onAssigned?.(null);
+            })
+            .catch(failed('The request did not complete; check both slots.'));
     }
 
     function clear() {
@@ -131,6 +206,50 @@ export function CatalogPicker({ deviceId, slot, presets, occupied = false, onClo
                 <h4 class="catalog-picker-title">Fill preset ${slot}</h4>
                 <button type="button" class="catalog-picker-close" onClick=${onClose} aria-label="Close">✕</button>
             </header>
+
+            ${occupied && html`
+                <div class="catalog-current">
+                    <form class="catalog-rename" onSubmit=${rename}>
+                        <label class="catalog-field-label" for=${`rename-${slot}`}>Name</label>
+                        <input
+                            id=${`rename-${slot}`}
+                            class="catalog-rename-input"
+                            type="text"
+                            value=${newName}
+                            disabled=${saving !== null}
+                            onInput=${e => setNewName(e.target.value)}
+                        />
+                        <button
+                            type="submit"
+                            class="catalog-action-btn"
+                            disabled=${saving !== null || !newName.trim() || newName.trim() === item.ItemName}
+                        >Rename</button>
+                    </form>
+                    <div class="catalog-move">
+                        <span class="catalog-field-label">Move to</span>
+                        <span class="catalog-move-slots">
+                            ${[1, 2, 3, 4, 5, 6].filter(n => n !== slot).map(n => html`
+                                <button
+                                    key=${n}
+                                    type="button"
+                                    class="catalog-move-slot ${slotByNumber.get(n) ? 'occupied' : ''} ${pendingMove === n ? 'pending' : ''}"
+                                    disabled=${saving !== null}
+                                    title=${slotByNumber.get(n)
+                                        ? `Preset ${n} holds ${slotByNumber.get(n).ItemName || 'something'}`
+                                        : `Move to the empty preset ${n}`}
+                                    onClick=${() => move(n)}
+                                >${n}</button>
+                            `)}
+                        </span>
+                    </div>
+                    ${pendingMove !== null && html`
+                        <p class="catalog-picker-note" role="alert">
+                            Preset ${pendingMove} holds ${slotByNumber.get(pendingMove)?.ItemName || 'something'}.
+                            Press ${pendingMove} again to replace it; it stays on this list.
+                        </p>
+                    `}
+                </div>
+            `}
 
             ${state.status === 'loading' && html`<p class="catalog-picker-note">Loading…</p>`}
 

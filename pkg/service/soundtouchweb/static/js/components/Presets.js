@@ -179,7 +179,7 @@ export function Presets({ deviceId, status, command, commandBusy = false, onSele
                     deviceId=${deviceId}
                     slot=${editingSlot}
                     presets=${status?.presets}
-                    occupied=${!!byId[editingSlot]?.ContentItem}
+                    current=${byId[editingSlot] ?? null}
                     onClose=${() => setEditingSlot(null)}
                     onAssigned=${() => setEditingSlot(null)}
                 />
