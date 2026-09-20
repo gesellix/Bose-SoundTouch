@@ -1171,15 +1171,19 @@ img.sources-elsewhere-icon { object-fit: contain; filter: var(--content-icon-fil
 .stored-presets-note { margin: 0; font-size: .78rem; color: var(--text-dim); }
 .stored-presets-note.error { color: var(--danger); }
 .stored-presets-slots { display: flex; flex-direction: column; gap: .35rem; }
+/* One side per line, so a station name gets the full width instead of being
+   ellipsised down to "bigFM ...". The sides are display: contents, which drops
+   their children into the grid directly: labels, names and the two choose
+   buttons each land in one shared column and line up across both rows. */
 .stored-presets-slot {
-    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
-    padding: .35rem .4rem;
+    display: grid; align-items: center;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    column-gap: .5rem; row-gap: .3rem;
+    padding: .45rem .5rem;
     background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
 }
-.stored-presets-side {
-    display: flex; align-items: center; gap: .4rem;
-    flex: 1 1 14rem; min-width: 0;
-}
+.stored-presets-slot > .stored-presets-button { grid-row: 1 / span 2; width: 1.7rem; align-self: center; }
+.stored-presets-side { display: contents; }
 .stored-presets-side-label {
     font-size: .65rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: .06em; color: var(--text-dim);
@@ -1195,6 +1199,18 @@ img.sources-elsewhere-icon { object-fit: contain; filter: var(--content-icon-fil
 }
 .stored-presets-choose:hover:not(:disabled), .stored-presets-choose:focus-visible:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .stored-presets-choose:disabled { opacity: .5; cursor: default; }
+.stored-presets-choose { justify-self: end; }
+
+/* Too narrow for four columns: keep the number beside the pair and let each
+   side wrap within its own line. */
+@media (max-width: 40rem) {
+    .stored-presets-slot { grid-template-columns: auto minmax(0, 1fr); }
+    .stored-presets-side {
+        display: flex; align-items: center; gap: .4rem; flex-wrap: wrap;
+        grid-column: 2; min-width: 0;
+    }
+    .stored-presets-side-name { flex: 1 1 6rem; }
+}
 
 .stored-presets-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
 .stored-presets-row {
