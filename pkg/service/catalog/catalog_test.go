@@ -231,3 +231,69 @@ func TestNewMetadataCountsAsAChangeWithinTheGranularity(t *testing.T) {
 		t.Fatal("newly learned artwork must count as a change")
 	}
 }
+
+// Plain oldest-first eviction is wrong for a pick list. A preset carries the
+// speaker's own createdOn, so a station someone has kept for years looks older
+// than anything that merely played last week -- and the entry most worth
+// offering back would be the first to go. Measured on a real install: two
+// preset rows removed by a repair were already gone from a full catalog,
+// evicted by recents.
+func TestPresetsSurviveTheCapBeforeRecentsDo(t *testing.T) {
+	var c Catalog
+
+	// One long-kept preset, then enough fresh recents to overflow the cap.
+	c.Record(Entry{
+		Source: "TUNEIN", Location: "kept", Name: "Kept for years",
+		Origin: OriginPreset, FirstSeen: at(0), LastSeen: at(0),
+	}, 3)
+
+	for i := 1; i <= 5; i++ {
+		c.Record(Entry{
+			Source: "SPOTIFY", Location: "played-" + string(rune('a'+i)),
+			Origin: OriginRecent, LastSeen: at(10 + i),
+		}, 3)
+	}
+
+	if len(c.Entries) != 3 {
+		t.Fatalf("expected the cap to hold at 3, got %d", len(c.Entries))
+	}
+
+	var found bool
+
+	for _, e := range c.Entries {
+		if e.Name == "Kept for years" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Fatal("the oldest preset was evicted by newer recents")
+	}
+
+	// Display order is still newest sighting first.
+	if !c.List()[0].LastSeen.Equal(at(15)) {
+		t.Errorf("list is not newest-first: %v", c.List()[0].LastSeen)
+	}
+}
+
+// Presets alone can still overflow, and then the oldest of them goes.
+func TestPresetsBeyondTheCapEvictTheOldestPreset(t *testing.T) {
+	var c Catalog
+
+	for i := 1; i <= 4; i++ {
+		c.Record(Entry{
+			Source: "TUNEIN", Location: string(rune('a' + i)),
+			Origin: OriginPreset, LastSeen: at(i),
+		}, 2)
+	}
+
+	if len(c.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(c.Entries))
+	}
+
+	for _, e := range c.Entries {
+		if e.LastSeen.Equal(at(1)) {
+			t.Error("the oldest preset should have gone first")
+		}
+	}
+}

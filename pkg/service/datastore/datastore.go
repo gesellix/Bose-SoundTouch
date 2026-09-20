@@ -3103,7 +3103,8 @@ type Settings struct {
 
 	// CatalogSize caps the preset/source catalog (issue 754): the entries
 	// AfterTouch has seen, kept so an emptied slot can be picked again instead
-	// of being recovered from hand-edited XML. Unset means catalog.DefaultSize;
+	// of being recovered from hand-edited XML. Unset means catalog.DefaultSize
+	// (100 entries, roughly 45 KB);
 	// zero turns the catalog off and drops what is stored, which is the knob an
 	// on-device install on a tight flash volume needs. A pointer, because "never
 	// configured" and "deliberately disabled" have to be tellable apart.
