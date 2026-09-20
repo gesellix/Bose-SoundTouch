@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -56,7 +57,7 @@ func TestPostSetupSync_PostsToDeviceScopedURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := postSetupSync(srv.URL, "DEVICEID01", ""); err != nil {
+	if err := postSetupSync(srv.URL, "DEVICEID01", "", false); err != nil {
 		t.Fatalf("postSetupSync: %v", err)
 	}
 
@@ -75,7 +76,7 @@ func TestPostSetupSync_PropagatesServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := postSetupSync(srv.URL, "DEVICEID01", "")
+	err := postSetupSync(srv.URL, "DEVICEID01", "", false)
 	if err == nil {
 		t.Fatal("expected an error for a 404 response")
 	}
@@ -380,5 +381,50 @@ func TestBuildPlanSteps_ResetModeIncludesManualNetworkSwitches(t *testing.T) {
 
 	if !foundMatch {
 		t.Errorf("expected wait-online step to use --match=DE4803 from deviceID suffix")
+	}
+}
+
+func TestPostSetupSync_ConfirmAppliesShrinkingSync(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"applied": true}`))
+	}))
+	defer srv.Close()
+
+	if err := postSetupSync(srv.URL, "DEVICEID01", "", true); err != nil {
+		t.Fatalf("postSetupSync: %v", err)
+	}
+
+	if want := "confirmed=true"; gotQuery != want {
+		t.Errorf("query = %q, want %q", gotQuery, want)
+	}
+}
+
+func TestPostSetupSync_RefusedSyncExplainsTheDiff(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"applied":false,"destructive":true,"diffs":[` +
+			`{"resource":"presets","currentCount":8,"incomingCount":6,"destructive":true},` +
+			`{"resource":"recents","currentCount":3,"incomingCount":3,"destructive":false}]}`))
+	}))
+	defer srv.Close()
+
+	err := postSetupSync(srv.URL, "DEVICEID01", "", false)
+
+	var refused *syncRefusedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("error = %v, want a syncRefusedError", err)
+	}
+
+	details := strings.Join(refused.Details(), "\n")
+	if !strings.Contains(details, "presets: AfterTouch has 8, the speaker reported 6") {
+		t.Errorf("details missing the presets diff:\n%s", details)
+	}
+	if strings.Contains(details, "recents") {
+		t.Errorf("details mention a non-destructive resource:\n%s", details)
+	}
+	if !strings.Contains(details, "--confirm") {
+		t.Errorf("details do not say how to apply it anyway:\n%s", details)
 	}
 }
