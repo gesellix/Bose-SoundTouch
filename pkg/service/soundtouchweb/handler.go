@@ -852,6 +852,14 @@ func (app *WebApp) HandleStorePresetContent(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// A preset that names a source this speaker does not have stores fine and
+	// fails at play time, which is the failure the editor exists to prevent
+	// (issue 754). Refuse before writing, and say what is missing.
+	if missing := app.checkPresetSource(device, req.Source, req.SourceAccount); missing != "" {
+		app.sendError(w, missing, http.StatusConflict)
+		return
+	}
+
 	contentItem := &models.ContentItem{
 		Source:       req.Source,
 		Type:         req.Type,
