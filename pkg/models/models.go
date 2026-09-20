@@ -610,6 +610,53 @@ type ServiceDeviceInfo struct {
 	UpdatedOn string `json:"updated_on,omitempty" xml:"-"`
 }
 
+// StoredPresetRow is one row of what AfterTouch has stored for a device,
+// together with a verdict on whether it can occupy a button at all.
+//
+// It exists because the stored list and the speaker's list can disagree, and
+// the disagreement is the bug: a stored list with more rows than the speaker
+// has buttons makes every sync look destructive and keeps being served back to
+// the speaker (issue 697). Repairing that needs the rows shown as stored, not
+// as the speaker would report them.
+type StoredPresetRow struct {
+	// Index is the row's position in the stored list, which is how a repair
+	// addresses it. Rows that occupy no button cannot be told apart by their
+	// button number, since they have none.
+	Index int `json:"index"`
+	// Button is the id as stored, which may be empty or not a number.
+	Button string `json:"button"`
+	// Slot is the button this row occupies, or 0 when it occupies none.
+	Slot          int    `json:"slot"`
+	Source        string `json:"source,omitempty"`
+	SourceAccount string `json:"source_account,omitempty"`
+	Location      string `json:"location,omitempty"`
+	Name          string `json:"name,omitempty"`
+	ContainerArt  string `json:"container_art,omitempty"`
+	// Verdict is one of StoredPresetOK, StoredPresetNoSlot,
+	// StoredPresetOutOfRange or StoredPresetEmptyContent.
+	Verdict string `json:"verdict"`
+}
+
+// Verdicts for StoredPresetRow.
+const (
+	// StoredPresetOK: the row occupies a button the speaker has.
+	StoredPresetOK = "ok"
+	// StoredPresetNoSlot: no id at all, or one that is not a number. Nothing
+	// on the speaker can ever recall it, but it still counts towards the
+	// stored list's length.
+	StoredPresetNoSlot = "no-slot"
+	// StoredPresetOutOfRange: a numeric id outside 1-6. Every SoundTouch has
+	// six buttons.
+	StoredPresetOutOfRange = "out-of-range"
+	// StoredPresetEmptyContent: a valid button holding nothing playable.
+	StoredPresetEmptyContent = "empty-content"
+)
+
+// OccupiesAButton reports whether the row is one a speaker could recall.
+func (r StoredPresetRow) OccupiesAButton() bool {
+	return r.Verdict == StoredPresetOK
+}
+
 // ServiceComponent represents a hardware or software component of a device.
 type ServiceComponent struct {
 	Type            string `json:"type" xml:"type,attr"`
