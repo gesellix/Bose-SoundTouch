@@ -200,10 +200,15 @@ export function CatalogPicker({ deviceId, slot, presets, current = null, onClose
             });
     }
 
+    // A slot that holds something is being edited, not filled: renaming and
+    // moving are right there, and "Fill" would name the least likely of the
+    // three.
+    const heading = occupied ? `Preset ${slot}` : `Fill preset ${slot}`;
+
     return html`
-        <section class="catalog-picker" aria-label=${`Fill preset ${slot}`}>
+        <section class="catalog-picker" aria-label=${heading}>
             <header class="catalog-picker-head">
-                <h4 class="catalog-picker-title">Fill preset ${slot}</h4>
+                <h4 class="catalog-picker-title">${heading}</h4>
                 <button type="button" class="catalog-picker-close" onClick=${onClose} aria-label="Close">✕</button>
             </header>
 
