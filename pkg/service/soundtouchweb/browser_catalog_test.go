@@ -299,3 +299,100 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 		t.Errorf("a move must clear the source second, got %q", calls[2])
 	}
 }
+
+// TestCatalogMarksContentThisSpeakerCannotPlay covers the "say so before
+// writing" half of the copying check: the catalog is service-wide, so it
+// offers entries from speakers with media servers or linked services this one
+// does not have. Storing one leaves a slot that fails at play time.
+//
+// The marker is advisory and the entry stays clickable, because the source
+// list the player holds can be minutes old; the service re-checks against the
+// speaker and has the final word.
+func TestCatalogMarksContentThisSpeakerCannotPlay(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { Presets } from '/app/static/js/components/Presets.js';
+const status = {
+  revision: 1,
+  nowPlaying: { Source: 'STANDBY' },
+  presets: { Preset: [] },
+  sources: { SourceItem: [
+    { Source: 'TUNEIN', SourceAccount: '', Status: 'READY' },
+    { Source: 'STORED_MUSIC', SourceAccount: 'uuid:mine/0', Status: 'READY' },
+  ] },
+};
+render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status })), document.getElementById('fixture'));
+`
+
+	var mu sync.Mutex
+	var stored []string
+
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"available": true,
+				"entries": []any{
+					// A media server only the other speaker has.
+					map[string]any{
+						"source": "STORED_MUSIC", "source_account": "uuid:theirs/0",
+						"location": "1$7$0", "name": "Album next door", "origin": "preset",
+						"last_seen": "2026-09-20T12:05:00Z",
+					},
+					map[string]any{
+						"source": "TUNEIN", "location": "s12345", "name": "WDR 2",
+						"origin": "preset", "last_seen": "2026-09-20T12:00:00Z",
+					},
+				},
+			}})
+		})
+		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
+			body, _ := io.ReadAll(req.Body)
+			mu.Lock()
+			stored = append(stored, string(body))
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	var marked int
+	var markedName, warning string
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
+		chromedp.Click(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#presets .catalog-entry`, chromedp.ByQuery),
+
+		// Exactly the one entry whose account this speaker lacks.
+		chromedp.Evaluate(`document.querySelectorAll('#presets .catalog-entry.unavailable').length`, &marked),
+		chromedp.Text(`#presets .catalog-entry.unavailable .catalog-entry-name`, &markedName, chromedp.ByQuery),
+		chromedp.Text(`#presets .catalog-entry-warn`, &warning, chromedp.ByQuery),
+
+		// Still clickable: the service decides against a fresh source list.
+		chromedp.Click(`#presets .catalog-entry.unavailable`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('#presets .catalog-picker') === null`, nil),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if marked != 1 {
+		t.Errorf("expected exactly one marked entry, got %d", marked)
+	}
+
+	if markedName != "Album next door" {
+		t.Errorf("marked %q, want the entry from the other speaker's media server", markedName)
+	}
+
+	if !strings.Contains(warning, "Library") {
+		t.Errorf("the marker should name the source, got %q", warning)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(stored) != 1 {
+		t.Fatalf("a marked entry must still be clickable, got %v", stored)
+	}
+}
