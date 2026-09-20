@@ -233,3 +233,110 @@ func TestNoWarningWhenTheStoredListAgrees(t *testing.T) {
 		t.Error("a stored list that agrees with the speaker must not warn")
 	}
 }
+
+// TestPerSlotChoiceSettlesOneButton covers the alternative to the
+// all-or-nothing import: a button the two sides fill differently, settled
+// either way, with each choice going to the side that owns it -- taking the
+// speaker's writes the service, keeping ours writes the speaker.
+func TestPerSlotChoiceSettlesOneButton(t *testing.T) {
+	var mu sync.Mutex
+	var calls []string
+
+	slotPayload := func() map[string]any {
+		return map[string]any{
+			"available": true,
+			"rows": []any{
+				storedRow(0, "1", "Ours", "TUNEIN", "ok"),
+			},
+			"unrecallable": 0, "speaker_count": 1, "disagrees": true,
+			"slots": []any{
+				map[string]any{
+					"slot": 1,
+					"ours": map[string]any{
+						"present": true, "source": "TUNEIN", "location": "s1", "itemName": "Ours",
+					},
+					"theirs": map[string]any{
+						"present": true, "source": "RADIO_BROWSER", "location": "uuid-fm4", "itemName": "Theirs",
+					},
+				},
+			},
+		}
+	}
+
+	server := newPlayerFixtureServer(t, storedPresetsFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/devices/speaker/stored-presets/", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: slotPayload()})
+		})
+		r.Post("/api/control/devices/speaker/stored-presets/adopt", func(w http.ResponseWriter, req *http.Request) {
+			body, _ := io.ReadAll(req.Body)
+			mu.Lock()
+			calls = append(calls, "adopt "+string(body))
+			mu.Unlock()
+
+			settled := slotPayload()
+			settled["disagrees"] = false
+			settled["slots"] = []any{}
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: settled})
+		})
+		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
+			body, _ := io.ReadAll(req.Body)
+			mu.Lock()
+			calls = append(calls, "store "+chi.URLParam(req, "slot")+" "+string(body))
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	var headline, ourName, theirName string
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+		chromedp.WaitVisible(`#presets .stored-presets-summary`, chromedp.ByQuery),
+		chromedp.Text(`#presets .stored-presets-headline`, &headline, chromedp.ByQuery),
+		chromedp.Click(`#presets .stored-presets-summary`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#presets .stored-presets-slot`, chromedp.ByQuery),
+
+		chromedp.Text(`#presets .stored-presets-side:nth-child(2) .stored-presets-side-name`, &ourName, chromedp.ByQuery),
+		chromedp.Text(`#presets .stored-presets-side:nth-child(3) .stored-presets-side-name`, &theirName, chromedp.ByQuery),
+
+		// Keeping ours pushes the stored content to the speaker.
+		chromedp.Click(`#presets .stored-presets-side:nth-child(2) .stored-presets-choose`, chromedp.ByQuery),
+		// The panel stays: keeping ours changes the speaker, and the stored
+		// list it is compared against has not moved.
+		chromedp.Poll(`performance.getEntriesByType('resource').some(e => e.name.endsWith('/preset/1'))`, nil),
+
+		// Taking the speaker's writes the stored list, and the panel settles.
+		chromedp.Click(`#presets .stored-presets-side:nth-child(3) .stored-presets-choose`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('#presets .stored-presets') === null`, nil),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if !strings.Contains(headline, "different things") {
+		t.Errorf("headline = %q, want it to name the per-slot difference", headline)
+	}
+
+	if ourName != "Ours" || theirName != "Theirs" {
+		t.Errorf("sides read %q / %q, want both shown", ourName, theirName)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(calls) != 2 {
+		t.Fatalf("expected one store and one adopt, got %v", calls)
+	}
+
+	// Keeping ours goes to the speaker's preset store, with our content.
+	if !strings.HasPrefix(calls[0], "store 1 ") || !strings.Contains(calls[0], `"itemName":"Ours"`) {
+		t.Errorf("keep-ours call = %q", calls[0])
+	}
+
+	// Taking the speaker's goes to the service, naming only the slot: the
+	// content comes from asking the speaker again, not from this payload.
+	if calls[1] != `adopt {"slot":1}` {
+		t.Errorf("take-theirs call = %q", calls[1])
+	}
+}
