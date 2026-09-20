@@ -528,12 +528,19 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 }
 
 // sharePresetWrite mirrors a single-slot preset write to the account's other
-// speakers and nudges them to re-read (issue 495). Speakers poll their own
-// presets endpoint with an ETag, so without the nudge a sibling only picks the
-// change up on its next reboot or a manual "Refresh sources".
+// speakers (issue 495).
 //
-// Fire-and-forget: the write is already on disk, and a speaker that is
-// unreachable now reads the new bank on its next poll anyway.
+// The datastore write is the sync. Speakers fetch their own presets with an
+// ETag, so a sibling picks the new bank up by itself: on its next fetch, when
+// it reboots, or when someone presses "Refresh sources". Nothing here depends
+// on AfterTouch being able to reach a speaker, which matters for deployments
+// where it cannot: a service in a public cloud sees speakers only when they
+// call in.
+//
+// The <sourcesUpdated/> notification is therefore an accelerator, not the
+// mechanism: best effort, fire and forget, and skipped for speakers whose
+// address we do not have. It makes the change visible in seconds on a LAN
+// deployment; without it the same change arrives lazily.
 func (s *Server) sharePresetWrite(account, device string, presetNumber int,
 	before []models.ServicePreset, removal bool) {
 	var applied []models.ServiceDeviceInfo
@@ -560,7 +567,10 @@ func (s *Server) sharePresetWrite(account, device string, presetNumber int,
 		go func() {
 			c := client.NewClientFromHost(target.IPAddress)
 			if err := c.NotifySourcesUpdated(target.DeviceID); err != nil {
-				log.Printf("[PresetSync] notify %s: %s", sanitizeLog(target.DeviceID), sanitizeErr(err))
+				// Not a failure of the sync: the bank is stored, and the
+				// speaker reads it on its next fetch.
+				log.Printf("[PresetSync] notify %s (it will pick the change up on its next fetch): %s",
+					sanitizeLog(target.DeviceID), sanitizeErr(err))
 			}
 		}()
 	}
