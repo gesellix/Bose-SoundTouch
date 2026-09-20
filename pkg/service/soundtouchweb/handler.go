@@ -864,6 +864,43 @@ func (app *WebApp) HandleStorePresetContent(w http.ResponseWriter, r *http.Reque
 	app.sendControlResponse(w, err, fmt.Sprintf("Stored %s as preset %d", req.Source, slot))
 }
 
+// HandleRemovePreset empties a preset slot on the speaker (issue 754).
+//
+// It is the one editor action that destroys something, and the catalog is what
+// makes it safe to offer: the entry stays on the pick list, so an emptied slot
+// can be filled again with the same station rather than reconstructed from
+// hand-edited XML.
+//
+// The write goes to the speaker, not to the datastore, for the same reason the
+// store path does: the speaker then reports the change to AfterTouch itself,
+// which is the path that already exists and the one the preset sharing hangs
+// off (issue 495).
+func (app *WebApp) HandleRemovePreset(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	device, exists := app.GetDevice(deviceID)
+	if !exists {
+		app.sendError(w, "Device not found", http.StatusNotFound)
+		return
+	}
+
+	if device.Client == nil {
+		app.sendError(w, "Device client not available", http.StatusInternalServerError)
+		return
+	}
+
+	slot, err := strconv.Atoi(chi.URLParam(r, "slot"))
+	if err != nil || slot < 1 || slot > 6 {
+		app.sendError(w, "Preset slot must be between 1 and 6", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[preset] clear device=%q slot=%d", sanitizeLog(deviceID), slot)
+
+	err = device.Client.RemovePreset(slot)
+	app.sendControlResponse(w, err, fmt.Sprintf("Cleared preset %d", slot))
+}
+
 // handleBassControl processes bass control requests
 func (app *WebApp) handleBassControl(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection) {
 	if r.Method != http.MethodPost {

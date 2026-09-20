@@ -147,3 +147,72 @@ func TestCatalogPickerSaysWhenThereIsNoCatalog(t *testing.T) {
 		t.Errorf("expected the picker to say there is no catalog, got %q", note)
 	}
 }
+
+// TestPresetSlotClearsWithConfirmation covers the one editor action that
+// destroys something. It is offered only for a slot that holds something, it
+// asks first, and what it says while asking is the reason it is safe: the
+// station stays on the pick list.
+func TestPresetSlotClearsWithConfirmation(t *testing.T) {
+	var mu sync.Mutex
+	var cleared []string
+
+	server := newPlayerFixtureServer(t, catalogFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"available": true,
+				"entries": []any{map[string]any{
+					"source": "TUNEIN", "location": "s12345", "name": "WDR 2",
+					"origin": "preset", "last_seen": "2026-09-20T12:00:00Z",
+				}},
+			}})
+		})
+		r.Delete("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			cleared = append(cleared, chi.URLParam(req, "slot"))
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	var emptySlotOffersClear bool
+	var confirmText string
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/fixture"),
+
+		// Slot 2 is empty in the fixture: there is nothing to empty, so the
+		// action is not offered at all.
+		chromedp.WaitVisible(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
+		chromedp.Click(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#presets .catalog-entry`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector('#presets .catalog-clear-btn') !== null`, &emptySlotOffersClear),
+
+		// Slot 1 holds WDR 2.
+		chromedp.Click(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#presets .catalog-clear-btn`, chromedp.ByQuery),
+		chromedp.Click(`#presets .catalog-clear-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(`#presets .catalog-picker-confirm`, chromedp.ByQuery),
+		chromedp.Text(`#presets .catalog-picker-foot .catalog-picker-note`, &confirmText, chromedp.ByQuery),
+		chromedp.Click(`#presets .catalog-picker-confirm .catalog-clear-btn.danger`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelector('#presets .catalog-picker') === null`, nil),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if emptySlotOffersClear {
+		t.Error("an empty slot must not offer to be emptied")
+	}
+
+	if !strings.Contains(confirmText, "stays on this list") {
+		t.Errorf("the confirmation should say the station is kept, got %q", confirmText)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(cleared) != 1 || cleared[0] != "1" {
+		t.Fatalf("expected preset 1 to be cleared once, got %v", cleared)
+	}
+}
