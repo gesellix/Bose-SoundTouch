@@ -190,3 +190,57 @@ func TestDeviceDirExists(t *testing.T) {
 		}
 	}
 }
+
+// The promise the repair makes is "this does not lose the station", and a full
+// catalog is exactly when that is hardest to keep: on a real install the two
+// rows a repair removed had already been evicted by newer recents, because
+// their sighting carried the speaker's years-old createdOn.
+func TestARepairFilesWhatItRemovesAsAFreshSighting(t *testing.T) {
+	ds := NewDataStore(t.TempDir())
+
+	// A catalog already at its cap, full of recents newer than the preset.
+	size := 2
+	if err := ds.SaveSettings(Settings{CatalogSize: &size}); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	for i := 1; i <= 2; i++ {
+		recent := models.ServiceRecent{UtcTime: "1900000000"}
+		recent.Source = "SPOTIFY"
+		recent.Location = "spotify:album:" + string(rune('a'+i))
+		recent.Name = "Played recently " + string(rune('a'+i))
+		recent.ID = string(rune('0' + i))
+
+		if err := ds.SaveRecents("ACCOUNT01", "DEVICEID01", []models.ServiceRecent{recent}); err != nil {
+			t.Fatalf("SaveRecents: %v", err)
+		}
+	}
+
+	// A stored row with an old timestamp, as a long-kept preset has.
+	old := storedPreset("7", "TUNEIN", "s24941", "Leftover")
+	old.CreatedOn = "1600000000"
+	old.UpdatedOn = "1600000000"
+
+	if err := ds.SavePresets("ACCOUNT01", "DEVICEID01", []models.ServicePreset{
+		storedPreset("1", "TUNEIN", "s1", "MDR JUMP"),
+		old,
+	}); err != nil {
+		t.Fatalf("SavePresets: %v", err)
+	}
+
+	if _, err := ds.DropStoredPresetRows("ACCOUNT01", "DEVICEID01", []int{1}, 2); err != nil {
+		t.Fatalf("DropStoredPresetRows: %v", err)
+	}
+
+	var found bool
+
+	for _, e := range ds.GetCatalog() {
+		if e.Name == "Leftover" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Fatal("the removed row is not in the catalog, so it cannot be picked again")
+	}
+}

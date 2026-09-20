@@ -26,9 +26,21 @@ import (
 // speaker's flash volume, for no information gained.
 const SeenGranularity = time.Hour
 
-// DefaultSize is the entry cap when nothing is configured. Small enough to
-// keep on a speaker's flash volume, large enough to be a useful pick list.
-const DefaultSize = 30
+// DefaultSize is the entry cap when nothing is configured.
+//
+// Measured on a real install: 30 entries came to 13.5 KB of pretty-printed
+// JSON, about 450 bytes each, the largest field being a 214-character Spotify
+// location. So 100 entries costs roughly 45 KB -- nothing on a normal host,
+// and about a third of that on a speaker's UBIFS /mnt/nv, which compresses
+// this kind of text well.
+//
+// The first default of 30 was set before anything had been measured, and it
+// turned out to be too small to keep the promise the feature rests on: a
+// household with several speakers filled it with recents alone, so an emptied
+// slot's station could already be gone from the pick list. The cost of the
+// file is not what should decide that; write frequency is, and the
+// SeenGranularity debounce is what handles it.
+const DefaultSize = 100
 
 // Origin records which write the entry was learned from. It is informational:
 // a preset entry is content someone deliberately kept, a recent one is content
@@ -199,9 +211,47 @@ func (c *Catalog) indexOf(identity string) int {
 func (c *Catalog) sortAndTrim(size int) {
 	sortByLastSeen(c.Entries)
 
-	if len(c.Entries) > size {
-		c.Entries = c.Entries[:size]
+	if len(c.Entries) <= size {
+		return
 	}
+
+	// Evict recents before presets, oldest first within each.
+	//
+	// Plain oldest-first eviction is wrong for a pick list: a preset carries
+	// the speaker's own createdOn, which for a station someone has kept for
+	// years is older than anything that merely played last week. The entry
+	// most worth offering back would be the first to go, and a slot cleared
+	// afterwards could not be refilled from the list -- which is the promise
+	// the whole feature rests on.
+	//
+	// Display order is unaffected: the surviving entries are re-sorted by
+	// sighting afterwards.
+	kept := make([]Entry, 0, size)
+	presets := make([]Entry, 0, len(c.Entries))
+
+	for i := range c.Entries {
+		if c.Entries[i].Origin == OriginPreset {
+			presets = append(presets, c.Entries[i])
+		}
+	}
+
+	kept = append(kept, presets...)
+	if len(kept) > size {
+		kept = kept[:size]
+	}
+
+	for i := range c.Entries {
+		if len(kept) >= size {
+			break
+		}
+
+		if c.Entries[i].Origin != OriginPreset {
+			kept = append(kept, c.Entries[i])
+		}
+	}
+
+	sortByLastSeen(kept)
+	c.Entries = kept
 }
 
 func sortByLastSeen(entries []Entry) {

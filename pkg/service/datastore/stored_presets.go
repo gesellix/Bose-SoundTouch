@@ -3,6 +3,7 @@ package datastore
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
@@ -81,6 +82,13 @@ func (ds *DataStore) DropStoredPresetRows(account, device string, indexes []int,
 		return nil, fmt.Errorf("no rows to drop")
 	}
 
+	// File what is about to be deleted as a sighting of its own, before
+	// deleting it. The entries are in the catalog already, but a repair is the
+	// one moment where "this does not lose the station" is an explicit
+	// promise, and a fresh sighting is what keeps the entry out of reach of
+	// the cap for a while afterwards.
+	removed := make([]models.ServicePreset, 0, len(indexes))
+
 	kept, err := ds.MutatePresets(account, device, func(current []models.ServicePreset) ([]models.ServicePreset, error) {
 		if len(current) != expected {
 			return nil, fmt.Errorf("the stored list now holds %d rows, not %d; reload and try again", len(current), expected)
@@ -95,9 +103,13 @@ func (ds *DataStore) DropStoredPresetRows(account, device string, indexes []int,
 		next := make([]models.ServicePreset, 0, len(current))
 
 		for i := range current {
-			if !drop[i] {
-				next = append(next, current[i])
+			if drop[i] {
+				removed = append(removed, current[i])
+
+				continue
 			}
+
+			next = append(next, current[i])
 		}
 
 		return next, nil
@@ -105,6 +117,18 @@ func (ds *DataStore) DropStoredPresetRows(account, device string, indexes []int,
 	if err != nil {
 		return nil, err
 	}
+
+	// Recorded after the write, not inside the mutation: the catalog is
+	// best-effort state that must never be able to fail a repair, and
+	// RecordCatalogEntries takes its own lock.
+	entries := catalogEntriesFromPresets(device, removed)
+	for i := range entries {
+		// The sighting is now -- the moment someone decided this was worth
+		// keeping out of the stored list but not worth losing.
+		entries[i].LastSeen = time.Now().UTC()
+	}
+
+	ds.RecordCatalogEntries(entries)
 
 	return ClassifyStoredPresets(kept), nil
 }
