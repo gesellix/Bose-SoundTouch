@@ -158,6 +158,11 @@ type WebApp struct {
 	// from the service's own defaults, never from the speaker that has it.
 	AddCanonicalSource func(deviceID, account, sourceType string) (bool, error)
 
+	// AdoptSpeakerPreset, when set, writes one slot of the stored list from
+	// what the speaker reports, and returns the list as it now stands. The
+	// per-slot alternative to the whole-list import (issue 697).
+	AdoptSpeakerPreset func(deviceID, account string, preset models.ServicePreset) ([]models.StoredPresetRow, error)
+
 	// RemoveDeviceHook, when set, removes a device from the backing store by
 	// its device ID (MAC). The embedded build wires it to the service's
 	// datastore removal so a removal from the player UI also clears the
