@@ -407,12 +407,34 @@ func (app *WebApp) HandleAddLibraryServer(w http.ResponseWriter, r *http.Request
 
 	account := normalizeUDN(req.UDN) + "/0"
 
-	if err := device.Client.AddStoredMusicAccount(account, req.Name); err != nil {
-		// Error code 1024 means the account is already registered on the speaker.
-		// Treat it as success so callers can be idempotent.
+	refreshed, err := app.registerStoredMusicAccount(device, account, req.Name)
+	if err != nil {
+		app.sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
+		Success: true,
+		Data:    map[string]interface{}{"account": account, "refreshed": refreshed},
+	}); encErr != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// registerStoredMusicAccount registers a DLNA media server on the speaker and
+// nudges it to re-read its sources, reporting whether the nudge landed.
+//
+// Shared by the Library page and by adding a media server another speaker
+// already knows (issue 754): the speaker's own API is what registers it, so
+// both paths are the same call.
+func (app *WebApp) registerStoredMusicAccount(device *webtypes.DeviceConnection, account, name string) (refreshed bool, err error) {
+	if err := device.Client.AddStoredMusicAccount(account, name); err != nil {
+		// Error code 1024 means the account is already registered on the
+		// speaker. Treat it as success so callers can be idempotent.
 		if !strings.Contains(err.Error(), "1024") {
-			app.sendError(w, err.Error(), http.StatusInternalServerError)
-			return
+			return false, err
 		}
 	}
 
@@ -428,24 +450,15 @@ func (app *WebApp) HandleAddLibraryServer(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Send the sourcesUpdated nudge best-effort: the registration already
-	// succeeded, so an error here must never fail the request.
-	refreshed := false
-
+	// Best-effort: the registration already succeeded, so a failed nudge must
+	// never fail the request.
 	if boseDeviceID != "" {
 		if nudgeErr := device.Client.NotifySourcesUpdated(boseDeviceID); nudgeErr == nil {
 			refreshed = true
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	if encErr := json.NewEncoder(w).Encode(webtypes.APIResponse{
-		Success: true,
-		Data:    map[string]interface{}{"account": account, "refreshed": refreshed},
-	}); encErr != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
+	return refreshed, nil
 }
 
 // HandleRemoveLibraryServer unregisters a DLNA media server from a specific
