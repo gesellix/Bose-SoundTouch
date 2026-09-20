@@ -6,6 +6,7 @@ dns/
 interactions/
 parity_mismatches/
 stats/
+catalog.json
 patterns.json
 settings.json
 update-check.json
