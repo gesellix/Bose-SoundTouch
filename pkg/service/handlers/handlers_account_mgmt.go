@@ -10,6 +10,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
+	"github.com/gesellix/bose-soundtouch/pkg/service/marge"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -118,6 +119,55 @@ func (s *Server) HandleMgmtUpdateAccountLanguage(w http.ResponseWriter, r *http.
 	// 3. Save account info
 	if err := s.ds.SaveAccountInfo(accountID, accountInfo); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleMgmtUpdateAccountPresetSync sets how preset writes are shared with
+// the account's other speakers (issue 495): "auto", "on" or "off".
+func (s *Server) HandleMgmtUpdateAccountPresetSync(w http.ResponseWriter, r *http.Request) {
+	accountID := chi.URLParam(r, "accountId")
+	if !validatePathID(accountID) {
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+
+		return
+	}
+
+	var req struct {
+		PresetSync string `json:"preset_sync"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+
+		return
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(req.PresetSync))
+	switch mode {
+	case marge.PresetSyncAuto, marge.PresetSyncOn, marge.PresetSyncOff:
+	default:
+		http.Error(w, "preset_sync must be 'auto', 'on' or 'off'", http.StatusBadRequest)
+
+		return
+	}
+
+	accountInfo, err := s.ds.GetAccountInfo(accountID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		return
+	}
+
+	accountInfo.AccountID = accountID
+	accountInfo.PresetSync = mode
+	accountInfo.IsPlaceholder = false
+
+	if err := s.ds.SaveAccountInfo(accountID, accountInfo); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 

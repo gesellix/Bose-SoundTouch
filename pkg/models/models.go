@@ -625,6 +625,9 @@ type ServiceAccountInfo struct {
 	PreferredLanguage string            `json:"preferred_language"`
 	ProviderSettings  []ProviderSetting `json:"provider_settings"`
 	IsPlaceholder     bool              `json:"is_placeholder,omitempty"`
+	// PresetSync is how preset writes are shared with the account's other
+	// speakers: "auto" (default), "on" or "off". See pkg/service/marge.
+	PresetSync string `json:"preset_sync,omitempty"`
 }
 
 // CustomerSupportDevice represents device information for customer support purposes.
