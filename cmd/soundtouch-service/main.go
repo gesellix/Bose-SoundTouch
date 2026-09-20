@@ -1275,6 +1275,13 @@ func initDataStore(dataDir string) *datastore.DataStore {
 		log.Printf("Warning: Failed to initialize datastore: %v", err)
 	}
 
+	// File what is already stored into the catalog (issue 754). Without this
+	// an install that has been running for months offers an empty pick list
+	// next to six stored presets, because the catalog would only ever learn
+	// from writes. Idempotent, so it costs one pass over the preset and
+	// recents files per start and changes nothing on the next one.
+	ds.BackfillCatalog()
+
 	return ds
 }
 

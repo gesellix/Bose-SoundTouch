@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -122,6 +124,46 @@ func (ds *DataStore) RecordCatalogEntries(entries []catalog.Entry) {
 	}
 }
 
+// sightingTime reads the first of the given timestamps that parses, so a
+// sighting can carry the speaker's own idea of when the content was stored or
+// played rather than the moment we happened to write the file. It matters most
+// for the backfill: six presets filed in one pass would otherwise all share one
+// timestamp, and the pick list would be in arbitrary order.
+//
+// Two formats appear in the datastore's XML: epoch seconds (what a speaker
+// writes into createdOn/updatedOn) and ISO 8601 (what the service writes in
+// other records). Anything else yields the zero time, which callers replace
+// with now.
+func sightingTime(values ...string) time.Time {
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+
+		if epoch, err := strconv.ParseInt(v, 10, 64); err == nil && epoch > 0 {
+			return time.Unix(epoch, 0).UTC()
+		}
+
+		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05.000-07:00"} {
+			if parsed, err := time.Parse(layout, v); err == nil {
+				return parsed.UTC()
+			}
+		}
+	}
+
+	return time.Time{}
+}
+
+// orNow replaces a timestamp we could not read with the current time.
+func orNow(t, now time.Time) time.Time {
+	if t.IsZero() {
+		return now
+	}
+
+	return t
+}
+
 // catalogEntriesFromPresets turns a preset list into catalog sightings. A
 // preset is the strongest kind of sighting: content someone deliberately kept.
 func catalogEntriesFromPresets(device string, presets []models.ServicePreset) []catalog.Entry {
@@ -130,6 +172,7 @@ func catalogEntriesFromPresets(device string, presets []models.ServicePreset) []
 
 	for i := range presets {
 		p := &presets[i]
+		created := sightingTime(p.CreatedOn)
 		entries = append(entries, catalog.Entry{
 			Source:        p.Source,
 			SourceAccount: p.SourceAccount,
@@ -141,8 +184,8 @@ func catalogEntriesFromPresets(device string, presets []models.ServicePreset) []
 			SourceID:      p.SourceID,
 			Origin:        catalog.OriginPreset,
 			DeviceID:      device,
-			FirstSeen:     now,
-			LastSeen:      now,
+			FirstSeen:     orNow(created, now),
+			LastSeen:      orNow(sightingTime(p.UpdatedOn, p.CreatedOn), now),
 		})
 	}
 
@@ -165,6 +208,9 @@ func catalogEntriesFromRecents(device string, recents []models.ServiceRecent) []
 			deviceID = device
 		}
 
+		created := sightingTime(r.CreatedOn)
+		played := sightingTime(r.LastPlayedAt, r.UtcTime, r.UpdatedOn, r.CreatedOn)
+
 		entries = append(entries, catalog.Entry{
 			Source:        r.Source,
 			SourceAccount: r.SourceAccount,
@@ -176,10 +222,59 @@ func catalogEntriesFromRecents(device string, recents []models.ServiceRecent) []
 			SourceID:      r.SourceID,
 			Origin:        catalog.OriginRecent,
 			DeviceID:      deviceID,
-			FirstSeen:     now,
-			LastSeen:      now,
+			FirstSeen:     orNow(created, now),
+			LastSeen:      orNow(played, now),
 		})
 	}
 
 	return entries
+}
+
+// BackfillCatalog files what the datastore already holds.
+//
+// Without it the catalog only ever learns from writes, so an install that has
+// been running for months shows an empty pick list next to six stored presets
+// until something happens to rewrite them -- exactly the entries an owner
+// would reach for first. It runs at startup, and is idempotent: entries merge
+// on content identity, and sightings carry the speaker's own timestamps, so a
+// second pass changes nothing and writes nothing.
+func (ds *DataStore) BackfillCatalog() {
+	if ds == nil || ds.DataDir == "" {
+		return
+	}
+
+	accounts, err := ds.ListAccounts()
+	if err != nil {
+		log.Printf("[Datastore] BackfillCatalog: could not list accounts: %v", err)
+
+		return
+	}
+
+	// Collect first, record once: every read below takes ds.fileMutex, and
+	// gathering under it before touching catalogMu keeps the two locks in the
+	// same order the write paths take them.
+	var entries []catalog.Entry
+
+	for _, account := range accounts {
+		devices, dirErr := ds.ReadDirUnderBase(ds.AccountDevicesDir(account))
+		if dirErr != nil {
+			continue
+		}
+
+		for _, device := range devices {
+			if !device.IsDir() {
+				continue
+			}
+
+			if presets, presetErr := ds.GetPresetsReadOnly(account, device.Name()); presetErr == nil {
+				entries = append(entries, catalogEntriesFromPresets(device.Name(), presets)...)
+			}
+
+			if recents, recentErr := ds.GetRecents(account, device.Name()); recentErr == nil {
+				entries = append(entries, catalogEntriesFromRecents(device.Name(), recents)...)
+			}
+		}
+	}
+
+	ds.RecordCatalogEntries(entries)
 }
