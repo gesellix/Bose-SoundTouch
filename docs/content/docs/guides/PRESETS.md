@@ -206,6 +206,30 @@ curl -X POST http://192.0.2.10:8000/api/mgmt/accounts/<accountId>/preset-sync \
 (a speaker with no presets still adopts them, since nothing is lost that way),
 and `auto` is the default described above.
 
+### A shared preset needs a matching source on the other speaker
+
+Sharing writes the preset, not a guarantee that the other speaker can play it.
+Before AfterTouch copies the slot over, it checks whether that speaker has the
+source the preset needs:
+
+- **TuneIn, Radio Browser, Local Internet Radio**: if the speaker does not
+  have the source yet, AfterTouch adds its own canonical entry for it first,
+  the same one every speaker gets on pairing, then writes the preset. No
+  credential is copied from anywhere.
+- **A media server (STORED_MUSIC)**: AfterTouch does not add this from the
+  sharing path. Registering a media server account happens on the speaker
+  itself, and preset sharing has no way to reach a speaker for that; if the
+  target speaker has not already discovered the same server, the preset is
+  not shared to it.
+- **Spotify, Amazon, and other linked music services**: never added here.
+  Each speaker has to link its own credential, and nothing in AfterTouch may
+  copy one from another speaker. If the target does not already have the same
+  account linked, the preset is not shared to it.
+
+A preset that is not shared for this reason is logged (`[PresetSync]`) and
+leaves the target speaker's other presets untouched; nothing shows this in the
+UI yet.
+
 ### Sharing a preset is not the same as "Sync Data"
 
 The two move in opposite directions, which is easy to mix up:
