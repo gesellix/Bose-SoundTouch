@@ -297,8 +297,9 @@ func orionFinding(dev *models.ServiceDeviceInfo, hits []orionHit, service servic
 	}
 
 	if slots := byKind[orionOtherHost]; len(slots) > 0 {
-		severity = SeverityWarning
-
+		// Info, not a warning: another host can be deliberate (an
+		// Orion-compatible service elsewhere, discussion 487), and the check
+		// can't tell that apart from a stale AfterTouch address.
 		current := "this service's address"
 		if service.display != "" {
 			current += " (" + service.display + ")"

@@ -96,7 +96,9 @@ func runOrion(t *testing.T, ds *datastore.DataStore, deps OrionPathsDeps) CheckR
 	return results[0]
 }
 
-func TestOrionPaths_OtherHostIsAWarningWithQuickFix(t *testing.T) {
+// Another host is info, not a warning: it can be deliberate (discussion 487)
+// and can't be told apart from a stale AfterTouch address.
+func TestOrionPaths_OtherHostIsInfoWithQuickFix(t *testing.T) {
 	account, device := "1000001", "DEVICEID01"
 	ds := newOrionTestDS(t, account, device)
 	writePresetsXML(t, ds, account, device, presetsXML(
@@ -105,8 +107,8 @@ func TestOrionPaths_OtherHostIsAWarningWithQuickFix(t *testing.T) {
 	))
 
 	res := runOrion(t, ds, orionDeps(false, nil))
-	if res.Severity != SeverityWarning || len(res.Findings) != 1 {
-		t.Fatalf("expected one warning, got %+v", res)
+	if res.Severity != SeverityInfo || len(res.Findings) != 1 {
+		t.Fatalf("expected one info finding, got %+v", res)
 	}
 
 	f := res.Findings[0]
@@ -155,8 +157,8 @@ func TestOrionPaths_SameHostOtherPortIsAnotherAddress(t *testing.T) {
 		[2]string{"LOCAL_INTERNET_RADIO", "http://192.0.2.10:9000/core02/svc-bmx-adapter-orion/prod/orion/station?data=x"},
 	))
 
-	if res := runOrion(t, ds, orionDeps(false, nil)); res.Severity != SeverityWarning {
-		t.Fatalf("a location on another port is not this service, want warning, got %+v", res)
+	if res := runOrion(t, ds, orionDeps(false, nil)); len(res.Findings) != 1 || !strings.Contains(res.Findings[0].Message, "not at this service's address") {
+		t.Fatalf("a location on another port is not this service, want the other-host finding, got %+v", res)
 	}
 }
 

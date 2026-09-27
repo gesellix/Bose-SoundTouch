@@ -791,7 +791,7 @@ After this the radio sources activate normally. Note the factory reset rewrites 
   soundtouch-cli --host <speaker-ip> setup migrate --method resolv --service-url http://<aftertouch-host>:8000
   ```
 
-Switching between these repeatedly on the same speaker without rebooting in between is how a reporter on #728 ended up in a confusing mixed state (TuneIn playing but `recent_mismatch` warnings growing, and TuneIn stations misreported as `INTERNET_RADIO`), pick one and stick with it.
+Switching between these repeatedly on the same speaker without rebooting in between is how a reporter on #728 ended up in a confusing mixed state (TuneIn playing but `recent_mismatch` warnings growing, and TuneIn stations misreported as `INTERNET_RADIO`). Pick one and stick with it.
 
 **Reboot required:**
 
