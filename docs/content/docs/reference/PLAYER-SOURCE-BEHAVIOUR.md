@@ -330,8 +330,10 @@ DNS Discovery on) on 2026-09-27:
 
 Not verified yet: a speaker migrated by XML (registry pointing straight at
 AfterTouch, DNS Discovery off). From the speaker's side the mechanism is the
-same one TuneIn uses there, so it is expected to work. Whether a relative
-preset survives a speaker reboot was not checked in that run.
+same one TuneIn uses there, so it is expected to work.
+
+A relative preset survives a speaker reboot: after a restart the preset is
+still listed and starts playing (same speaker, same day).
 
 A relative location inherits the registry's correctness. On a speaker whose
 registry points at the shut-down Bose cloud without resolving through
