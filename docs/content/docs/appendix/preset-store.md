@@ -231,7 +231,9 @@ contentItem := &models.ContentItem{
 contentItem := &models.ContentItem{
     Source:       "LOCAL_INTERNET_RADIO",
     Type:         "stationurl", 
-    Location:     "https://content.api.bose.io/core02/svc-bmx-adapter-orion/prod/orion/station?data=eyJ...",
+    // Relative: the speaker prepends the Orion baseUrl from its BMX registry.
+    // Build it with bmx.BuildOrionLocation(name, imageURL, streamURL).
+    Location:     "/station?data=eyJ...",
     SourceAccount: "",
     IsPresetable: true,
     ItemName:     "Custom Radio Station",

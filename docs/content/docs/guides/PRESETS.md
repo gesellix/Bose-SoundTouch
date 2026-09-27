@@ -293,21 +293,29 @@ soundtouch-cli --host 192.0.2.100 preset store \
 
 ### Save a direct stream URL
 
-A raw `.mp3` or `.aac` stream needs one extra flag. The speaker's radio module
-fetches the preset's location and expects a station description in return, not
-audio, so AfterTouch has to serve that description. `--service-url` tells the
-CLI where your service lives, and the stream URL is wrapped for you:
+A raw `.mp3` or `.aac` stream works too. The speaker's radio module fetches the
+preset's location and expects a station description in return, not audio, so
+AfterTouch serves that description. The CLI wraps the stream URL for you:
 
 ```bash
 soundtouch-cli --host 192.0.2.100 preset store \
   --slot 4 \
   --source LOCAL_INTERNET_RADIO \
   --location "https://stream.example.com/jazz" \
-  --name "Jazz Stream" \
-  --service-url https://soundtouch.local
+  --name "Jazz Stream"
 ```
 
-Without `--service-url` the preset is stored but the speaker cannot play it.
+The stored location looks like `/station?data=...`, without a host. The
+speaker adds AfterTouch's address from its service registry, the same way it
+does for TuneIn and Radio Browser, so the preset keeps working when AfterTouch
+moves to another address ([issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769)).
+The player's **Play URL** stores the same form.
+
+`--service-url` used to be required here. It is still accepted, so existing
+scripts keep working, but it is ignored. A location that already is a station
+URL (`/station?data=...`, or a full
+`https://<host>/core02/svc-bmx-adapter-orion/prod/orion/station?data=...` when
+you want a fixed host on purpose) is stored as given.
 
 ### Recall and remove
 
@@ -323,8 +331,13 @@ and AirPlay never can; switch to a station or a library item first.
 
 **The button does nothing on the speaker.** Check the slot actually holds
 something (`preset list`, or look at the tiles). If it does, the stored location
-may have gone stale, so save it again. For a `LOCAL_INTERNET_RADIO` preset
-stored from the command line, check it was stored with `--service-url`.
+may have gone stale, so save it again. A `LOCAL_INTERNET_RADIO` preset saved
+before [issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769) was
+fixed stores AfterTouch's full address; the Health tab flags those and can
+store them again in the relative form (see
+[Play URL radio presets stop playing after moving AfterTouch](TROUBLESHOOTING.md#play-url-presets-after-move)).
+A raw stream URL stored by an older CLI without `--service-url` never played:
+store it again.
 
 **A slot emptied itself.** One cause was found and fixed in v0.132.0 (presets
 were addressed by list position rather than by button number, so one could

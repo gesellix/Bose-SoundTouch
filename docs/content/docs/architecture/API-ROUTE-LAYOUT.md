@@ -69,9 +69,11 @@ Two refinements that matter in practice:
   `/ced/*` mirrors `downloads.bose.com/ced/soundtouch/...`; `/bmx`, `/core02`,
   `/streaming`, `/accounts`, `/customer`, `/oauth`, `/v1` mirror the Bose cloud
   contract.
-- Persisted device data embeds absolute service URLs. Presets store
+- Persisted device data embeds absolute service URLs. Older presets store
   `LOCAL_INTERNET_RADIO`/Orion locations like
-  `https://.../core02/svc-bmx-adapter-orion/prod/orion/station?data=...`, and
+  `https://.../core02/svc-bmx-adapter-orion/prod/orion/station?data=...`
+  (new ones store the relative `/station?data=...`, which the speaker
+  resolves against the registry's Orion `baseUrl`, issue 769), and
   the BMX registry advertises `{MEDIA_SERVER}/media` and `/bmx-icons`. So
   `/media`, `/bmx-icons`, `/custom`, and `/core02` are effectively part of the
   firmware-facing contract: a speaker that stored a preset will replay that

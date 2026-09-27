@@ -667,19 +667,55 @@ This also applies to a freshly-fixed on-device default (see `DEPLOYMENT_MODE`, #
 - Presets created with the player's **Play URL** feature, or with
   `soundtouch-cli preset`, no longer play.
 
+- The Health tab warns that Internet Radio presets "point at `<old-host>`, not
+  at this service's address".
+
 **Cause:**
 
-Play URL presets store the full AfterTouch address inside the preset's
-location, for example
+Play URL presets saved by older versions store the full AfterTouch address
+inside the preset's location, for example
 `http://<old-host>:8000/core02/svc-bmx-adapter-orion/prod/orion/station?data=...`.
 When the service's address changes, those presets still point at the old
-address. TuneIn and Radio Browser presets only store the station's
-name/ID, so they're unaffected by an address change.
+address. TuneIn and Radio Browser presets store a relative location that the
+speaker completes with the address from its service registry, so they're
+unaffected by an address change.
+
+Since the fix for
+[issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769) (next
+release), Play URL and `soundtouch-cli preset` store Internet Radio stations
+the same way, as `/station?data=...`. The speaker resolves that against the
+Orion address in its service registry (verified on a SoundTouch 10, see
+[Player source behaviour](../reference/PLAYER-SOURCE-BEHAVIOUR.md#orion-station-locations)).
 
 **Fix:**
 
-Re-save each affected Play URL preset from the new address. There's no
-migration step that rewrites these automatically today.
+1. Make sure the speaker is re-migrated to the new address (see
+   [Changing Target Domain doesn't change what a speaker actually uses](TROUBLESHOOTING.md#settings-vs-migrate)),
+   so its service registry points at the new host.
+2. Open the **Health** tab. The check "Internet Radio presets use relative
+   station locations" lists each speaker with affected slots. Click **Store
+   as relative locations**: AfterTouch reads the slots from the speaker and
+   stores each one again with the relative location (same name, artwork and
+   slot). The speaker reports the change back to AfterTouch.
+3. If AfterTouch can't reach the speaker, nothing is changed. The finding
+   lists one `curl ... /storePreset` command per slot; run them from a
+   machine that reaches the speaker on port 8090.
+
+Re-saving a preset from the player's **Play URL** also works.
+
+The same check reports a few related cases:
+
+- **Presets that point at this service's current address** (info): they play
+  today, but would break on the next address change. The same fix applies.
+- **Presets that point at `content.api.bose.io`** (saved before the Bose
+  shutdown): they play only while the speaker resolves Bose hostnames through
+  AfterTouch's DNS. With DNS Discovery off that is a warning (they reach the
+  dead Bose cloud); with DNS Discovery on it is an info finding that says
+  whether the speaker has been seen using AfterTouch's DNS. See
+  [TuneIn fails with BMX_HTTP_ERROR 4501 while DNS Discovery is on](TROUBLESHOOTING.md#tunein-4501-dns)
+  if it doesn't.
+- A preset that points at another Orion-compatible service on purpose is
+  reported as well; leave it alone if that is what you want.
 
 ### ❌ Radio sources never activate after an in-place migration {#radio-sources-after-migration}
 

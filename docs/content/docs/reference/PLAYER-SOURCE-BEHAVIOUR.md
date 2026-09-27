@@ -296,6 +296,55 @@ overwrite a newer one. Failures are not ordered: a failure carries no
 inventory, so spending the generation on it would let a failed read discard a
 concurrent successful one.
 
+## Internet Radio station locations {#orion-station-locations}
+
+Play URL (and `soundtouch-cli preset store` with a raw stream URL) plays a
+stream through `LOCAL_INTERNET_RADIO` with an Orion station location. The
+speaker fetches that location and expects a station description (JSON) in
+return, which AfterTouch serves at
+`/core02/svc-bmx-adapter-orion/prod/orion/station?data=<base64 name/image/stream>`.
+
+Since [issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769) the
+location is stored **relative**: `/station?data=...`, without a host. Before,
+it carried AfterTouch's full address, so a preset broke when AfterTouch moved
+([discussion 708](https://github.com/gesellix/Bose-SoundTouch/discussions/708)).
+
+Verified on a SoundTouch 10 (firmware 27.0.6, migrated through DNS/resolv.conf,
+DNS Discovery on) on 2026-09-27:
+
+- The speaker resolves a relative location against the Orion `baseUrl` from
+  its BMX registry (`{BMX_SERVER}/core02/svc-bmx-adapter-orion/prod/orion`,
+  `LOCAL_INTERNET_RADIO` in `bmx_services.json`), exactly as it does for
+  TuneIn and Radio Browser. With DNS Discovery on, `{BMX_SERVER}` is
+  `https://content.api.bose.io`, so the log showed
+  `BMXAccountClient::Get(https://content.api.bose.io/core02/svc-bmx-adapter-orion/prod/orion/station?data=...)`,
+  resolved through AfterTouch's DNS.
+- It played through `/select` and as a stored preset: `/storePreset` accepted
+  the relative location, and recalling the slot played it.
+- `now_playing`, `/presets` and the recents event keep the relative location
+  verbatim; the preset's `itemName` is kept, while the now-playing track and
+  station name come from the station JSON.
+- An absolute location keeps working as given, on AfterTouch's address or on
+  any other host (also a foreign host, see
+  [discussion 487](https://github.com/gesellix/Bose-SoundTouch/discussions/487)).
+
+Not verified yet: a speaker migrated by XML (registry pointing straight at
+AfterTouch, DNS Discovery off). From the speaker's side the mechanism is the
+same one TuneIn uses there, so it is expected to work. Whether a relative
+preset survives a speaker reboot was not checked in that run.
+
+A relative location inherits the registry's correctness. On a speaker whose
+registry points at the shut-down Bose cloud without resolving through
+AfterTouch (the `dns_bypass_risk` situation), it fails like TuneIn does, where
+an absolute AfterTouch URL would still play.
+
+Existing presets with an absolute location are listed by the Health check
+"Internet Radio presets use relative station locations", which can store them
+again in the relative form. When comparing content (catalog, recents
+artwork, preset sharing, the cross-side preset check), AfterTouch and the
+player treat the absolute and the relative location of the same station as
+one station.
+
 ## Related
 
 - [Source Selection Guide](SOURCE-SELECTION.md) — the `/select` endpoint and

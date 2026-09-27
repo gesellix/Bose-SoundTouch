@@ -156,6 +156,16 @@ CLI looks up the station's name and logo at TuneIn, both for a
 `/v1/playback/...` location and for a `https://tunein.com/radio/...` URL. A
 failed lookup doesn't stop the preset from being stored.
 
+For `LOCAL_INTERNET_RADIO`, a raw stream URL (`http://` or `https://`) is
+wrapped in a relative Orion station location, `/station?data=<base64 name,
+artwork and stream URL>`. The speaker completes it with AfterTouch's address
+from its service registry, so the preset keeps working when AfterTouch moves
+to another address ([issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769)).
+A location that already is a station location, relative or absolute
+(`https://<host>/core02/svc-bmx-adapter-orion/prod/orion/station?data=...`,
+for a fixed host on purpose), is stored as given. `--service-url` is no
+longer needed for this; it is still accepted but ignored.
+
 **Selection and Management Examples:**
 ```bash
 # List all presets

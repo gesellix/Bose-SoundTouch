@@ -159,24 +159,35 @@ required, not optional, whenever the address changes.
 
 ---
 
-## The catch: Play URL radio presets store the old address
+## Play URL radio presets and an address change {#the-catch-play-url-radio-presets-store-the-old-address}
 
 Radio presets created with the player's **Play URL** feature, or with
-`soundtouch-cli preset`, store the full AfterTouch address inside the
-preset itself, for example:
+`soundtouch-cli preset`, used to store the full AfterTouch address inside
+the preset itself, for example:
 
 ```
 http://<old-host>:8000/core02/svc-bmx-adapter-orion/prod/orion/station?data=...
 ```
 
-If the address changed in Step 4, those presets still point at the old
-host and won't play until you save them again from the new address.
-**TuneIn** and **Radio Browser** presets don't have this problem: they
-only store the station's name/ID, not a service address, so they keep
-working unchanged. Making these Play URL locations relative instead of
-absolute is tracked in
-[issue #769](https://github.com/gesellix/Bose-SoundTouch/issues/769); until
-then, plan on re-saving Play URL presets after any address change.
+After an address change those presets still point at the old host and
+don't play.
+
+This is fixed in the next release
+([issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769)): new
+Play URL presets store a relative location, `/station?data=...`, and the
+speaker adds AfterTouch's address from its service registry, the same way
+it does for **TuneIn** and **Radio Browser** presets. They follow AfterTouch
+to its new address once the speaker has been re-migrated (Step 4).
+
+Presets saved by an older version still carry the old address. The
+**Health** tab lists them per speaker ("Internet Radio presets use relative
+station locations") and offers **Store as relative locations**, which
+stores the affected slots on the speaker again with the relative location,
+keeping their names, artwork and slots. Run it on the new host after the
+move (the old host doesn't need to be reachable), or on the old host before
+you move. It needs AfterTouch to reach the speaker; if it can't, the finding
+also lists a `curl` command per slot to run from a machine that can. See
+[Play URL radio presets stop playing after moving AfterTouch](TROUBLESHOOTING.md#play-url-presets-after-move).
 
 NAS/DLNA (stored-music) playback doesn't go through AfterTouch at all, so
 it's unaffected by any of this.
@@ -201,8 +212,9 @@ different one).
 - **Health tab** in the AfterTouch admin UI: confirm it's green and run any
   QuickFixes it suggests.
 - **A TuneIn station**: play one to confirm radio sources still resolve.
-- **A Play URL preset**: if the address changed, expect to re-save it (see
-  above) before it plays again.
+- **A Play URL preset**: if the address changed and the Health tab lists it
+  with an old address, run its **Store as relative locations** fix (see
+  above), then play it.
 
 ---
 
