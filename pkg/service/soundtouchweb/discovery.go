@@ -108,7 +108,10 @@ func (app *WebApp) addDeviceByHost(
 
 	app.retireStaleAliases(host, conn)
 
-	go app.UpdateDeviceStatus(host, conn)
+	// One status read now, shared with any REST request or watcher poll that
+	// arrives while it runs. Periodic refreshes happen only while a browser
+	// is watching (see status_poll.go, issue 766).
+	app.refreshDeviceStatusShared(host, conn, 0)
 
 	// Establish the stereo-pair balance reading. It lives here, not on the
 	// status poll, because /balance blocks rather than refusing on a sleeping
@@ -116,23 +119,6 @@ func (app *WebApp) addDeviceByHost(
 	// WebSocket, because that socket is created lazily and a paired speaker
 	// would then show no balance control until something was pressed.
 	go app.watchBalance(host, conn)
-
-	// Poll via HTTP every 30 s as a fallback for WebSocket events that the
-	// speaker does not emit (e.g. Spotify Connect track changes) and for the
-	// window between a WS disconnect and its reconnect.
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				app.UpdateDeviceStatus(host, conn)
-			case <-conn.Done():
-				return
-			}
-		}
-	}()
 
 	log.Printf("Added %s device %s (%s) at %s:%d", sanitizeLog(source), sanitizeLog(info.Name), sanitizeLog(info.Type), sanitizeLog(host), port)
 

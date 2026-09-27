@@ -93,6 +93,10 @@ func (app *WebApp) HandleStoredPresets(w http.ResponseWriter, r *http.Request) {
 		payload.Rows = rowsOrEmpty(rows)
 	}
 
+	// The speaker's side of the comparison comes from the status cache,
+	// which nothing polls while no browser is watching (issue 766).
+	app.refreshStaleDeviceStatus(chi.URLParam(r, "id"), device)
+
 	app.describeStoredPresets(&payload, device)
 	app.sendStoredPresets(w, payload)
 }

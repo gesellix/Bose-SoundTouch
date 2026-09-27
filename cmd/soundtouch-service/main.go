@@ -1707,9 +1707,9 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 // playerDevicesChangedHook re-syncs the embedded player's device registry
 // from the service's own device set (a discovery sweep or a manual add),
 // but only while the player is enabled (issue 762): re-seeding while it is
-// switched off would silently restart the background device polling
-// (status poll, balance watch, the 30s ticker) the operator just turned
-// off.
+// switched off would silently restart the background device work (initial
+// status read, balance watch, and the status poll while a page is open) the
+// operator just turned off.
 func playerDevicesChangedHook(server *handlers.Server, webApp *soundtouchweb.WebApp) func() {
 	return func() {
 		if !server.PlayerEnabled() {
