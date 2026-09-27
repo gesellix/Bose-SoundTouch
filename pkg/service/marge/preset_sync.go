@@ -1,11 +1,13 @@
 package marge
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/constants"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
@@ -203,25 +205,81 @@ func PresetSyncTargets(ds *datastore.DataStore, account, sourceDevice string,
 	return targets
 }
 
+// ensurePresetSource makes sure device can actually play preset before a
+// shared write lands on it: either it already has a matching source, or
+// AfterTouch adds one of the kinds it can mint on its own. It returns nil
+// once device is ready, or the reason it is not.
+//
+// Matching reuses findMatchingSourceForPreset / sourceAccountMatchesClaim
+// (marge.go) rather than a second set of rules, including the looser
+// display-name match those give STORED_MUSIC.
+//
+// What gets added, and what does not (issue 495, and the "credential
+// problem" section of the preset/source editor design):
+//
+//   - TUNEIN, RADIO_BROWSER, LOCAL_INTERNET_RADIO: AfterTouch mints the token
+//     itself, so the canonical entry (ds.AddCanonicalSource) is correct by
+//     construction and never copies another speaker's secret.
+//   - STORED_MUSIC / LOCAL_MUSIC: a media server account is registered on
+//     the speaker itself (setMusicServiceAccount), which is how the player's
+//     "add a source elsewhere" flow does it, over a live connection to that
+//     speaker. This sync path runs service-side off a stored IP address, with
+//     no such connection, and sharePresetWrite's own doc comment is explicit
+//     that nothing here should depend on reaching a speaker (a cloud
+//     deployment may not be able to). So a missing media server is treated
+//     like a source that cannot be added, not attempted.
+//   - Linked music services (SPOTIFY, AMAZON, DEEZER, ...) and anything else
+//     models.SourceAvailability does not call addable: never added here. The
+//     target speaker has to acquire its own credential; nothing here may
+//     carry one across.
+func ensurePresetSource(ds *datastore.DataStore, account, device string, preset models.ServicePreset) error {
+	sources, err := ds.GetConfiguredSources(account, device)
+	if err != nil {
+		return fmt.Errorf("could not read its sources: %w", err)
+	}
+
+	if findMatchingSourceForPreset(sources, preset) != nil {
+		return nil
+	}
+
+	sourceType := strings.ToUpper(strings.TrimSpace(preset.Source))
+
+	if sourceType == constants.ProviderStoredMusic || sourceType == constants.ProviderLocalMusic {
+		return fmt.Errorf("%s is registered on the speaker itself; preset sync cannot add it from here", sourceType)
+	}
+
+	if models.SourceAvailability(sourceType) != models.SourceAvailableToAdd {
+		return fmt.Errorf("%s has to be linked on that speaker", sourceType)
+	}
+
+	if _, addErr := ds.AddCanonicalSource(account, device, sourceType); addErr != nil {
+		return addErr
+	}
+
+	return nil
+}
+
 // PropagatePresetWrite copies the slot just written on sourceDevice to the
 // account's other devices, following PresetSyncTargets. It returns the
-// devices actually written, so the caller can nudge exactly those.
+// devices actually written, so the caller can nudge exactly those, and the
+// devices skipped because they lack the preset's source and AfterTouch could
+// not add it on their behalf (issue 495).
 //
 // Only single-slot writes travel this way. A whole-list harvest (setup sync)
 // stays per device: that list can be shorter or stale, which is what the
 // destructive-sync guard from issue 697 protects against.
 func PropagatePresetWrite(ds *datastore.DataStore, account, sourceDevice string, presetNumber int,
-	before []models.ServicePreset) []models.ServiceDeviceInfo {
+	before []models.ServicePreset) (applied, skipped []models.ServiceDeviceInfo) {
 	button := strconv.Itoa(presetNumber)
 
 	targets := PresetSyncTargets(ds, account, sourceDevice, before)
 	if len(targets) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	sourcePresets, err := ds.GetPresetsReadOnly(account, sourceDevice)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	var written models.ServicePreset
@@ -235,15 +293,24 @@ func PropagatePresetWrite(ds *datastore.DataStore, account, sourceDevice string,
 	}
 
 	if presetIsEmpty(written) {
-		return nil
+		return nil, nil
 	}
 
 	written.ButtonNumber = button
 	written.ID = button
 
-	applied := make([]models.ServiceDeviceInfo, 0, len(targets))
+	applied = make([]models.ServiceDeviceInfo, 0, len(targets))
 
 	for i := range targets {
+		if sourceErr := ensurePresetSource(ds, account, targets[i].DeviceID, written); sourceErr != nil {
+			log.Printf("[PresetSync] %s -> %s slot %s: skipped, %s",
+				sanitizeLog(sourceDevice), sanitizeLog(targets[i].DeviceID), button, sanitizeErr(sourceErr))
+
+			skipped = append(skipped, targets[i])
+
+			continue
+		}
+
 		if _, mutateErr := ds.MutatePresets(account, targets[i].DeviceID,
 			func(presets []models.ServicePreset) ([]models.ServicePreset, error) {
 				return upsertPresetByButton(presets, written), nil
@@ -257,7 +324,7 @@ func PropagatePresetWrite(ds *datastore.DataStore, account, sourceDevice string,
 		applied = append(applied, targets[i])
 	}
 
-	return applied
+	return applied, skipped
 }
 
 // PropagatePresetRemoval clears the same slot on the account's other

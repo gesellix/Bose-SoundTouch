@@ -543,12 +543,22 @@ func (s *Server) HandleMargeUpdatePreset(w http.ResponseWriter, r *http.Request)
 // deployment; without it the same change arrives lazily.
 func (s *Server) sharePresetWrite(account, device string, presetNumber int,
 	before []models.ServicePreset, removal bool) {
-	var applied []models.ServiceDeviceInfo
+	var applied, skipped []models.ServiceDeviceInfo
 
 	if removal {
 		applied = marge.PropagatePresetRemoval(s.ds, account, device, presetNumber, before)
 	} else {
-		applied = marge.PropagatePresetWrite(s.ds, account, device, presetNumber, before)
+		applied, skipped = marge.PropagatePresetWrite(s.ds, account, device, presetNumber, before)
+	}
+
+	if len(skipped) > 0 {
+		ids := make([]string, len(skipped))
+		for i := range skipped {
+			ids[i] = sanitizeLog(skipped[i].DeviceID)
+		}
+
+		log.Printf("[PresetSync] slot %d from %s not shared with %d device(s) missing the source: %v",
+			presetNumber, sanitizeLog(device), len(skipped), ids)
 	}
 
 	if len(applied) == 0 {

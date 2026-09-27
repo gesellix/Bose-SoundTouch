@@ -88,9 +88,13 @@ func TestPropagatePresetWriteSharesTheSlotWithAgreeingSpeakers(t *testing.T) {
 		t.Fatalf("write new preset: %v", err)
 	}
 
-	applied := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, before)
+	applied, skipped := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, before)
 	if len(applied) != 1 || applied[0].DeviceID != "SPEAKERB02" {
 		t.Fatalf("applied = %+v, want the sibling speaker", applied)
+	}
+
+	if len(skipped) != 0 {
+		t.Fatalf("skipped = %+v, want none", skipped)
 	}
 
 	if got := presetAt(t, ds, account, "SPEAKERB02", "1"); got.Location != "http://example.invalid/new" {
@@ -113,7 +117,7 @@ func TestPropagatePresetWriteAdoptsOntoAnEmptySpeakerEvenWhenOff(t *testing.T) {
 		t.Fatalf("save account info: %v", err)
 	}
 
-	applied := PropagatePresetWrite(ds, account, "SPEAKERA01", 2,
+	applied, _ := PropagatePresetWrite(ds, account, "SPEAKERA01", 2,
 		[]models.ServicePreset{radioPreset("2", "Station", "http://example.invalid/station")})
 	if len(applied) != 1 || applied[0].DeviceID != "SPEAKERNEW" {
 		t.Fatalf("applied = %+v, want the speaker without presets", applied)
@@ -133,7 +137,7 @@ func TestPropagatePresetWriteLeavesDivergingSpeakersAlone(t *testing.T) {
 		"SPEAKERB02": {radioPreset("1", "Bedroom station", "http://example.invalid/bedroom")},
 	})
 
-	if applied := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, kitchen); len(applied) != 0 {
+	if applied, _ := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, kitchen); len(applied) != 0 {
 		t.Fatalf("applied = %+v, want nothing while the banks disagree", applied)
 	}
 
@@ -149,7 +153,7 @@ func TestPropagatePresetWriteLeavesDivergingSpeakersAlone(t *testing.T) {
 		t.Fatalf("save account info: %v", err)
 	}
 
-	if applied := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, kitchen); len(applied) != 1 {
+	if applied, _ := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, kitchen); len(applied) != 1 {
 		t.Fatalf("applied = %+v, want the sibling once sync is on", applied)
 	}
 
@@ -195,8 +199,260 @@ func TestPresetSyncIgnoresOtherAccounts(t *testing.T) {
 		t.Fatalf("save foreign device: %v", saveErr)
 	}
 
-	if applied := PropagatePresetWrite(ds, account, "SPEAKERA01", 1,
+	if applied, _ := PropagatePresetWrite(ds, account, "SPEAKERA01", 1,
 		[]models.ServicePreset{radioPreset("1", "Station", "http://example.invalid/station")}); len(applied) != 0 {
 		t.Fatalf("applied = %+v, want nothing outside the account", applied)
+	}
+}
+
+// spotifyPreset builds a SPOTIFY preset claiming account, the shape a real
+// speaker reports for a linked music service.
+func spotifyPreset(button, name, location, account string) models.ServicePreset {
+	preset := models.ServicePreset{ButtonNumber: button, ID: button}
+	preset.Source = "SPOTIFY"
+	preset.SourceAccount = account
+	preset.Location = location
+	preset.Name = name
+
+	return preset
+}
+
+// spotifySource is a configured SPOTIFY source keyed by account, the shape
+// AddSource/learnSource persists for a linked music service.
+func spotifySource(account string) models.ConfiguredSource {
+	source := models.ConfiguredSource{
+		ID:            "20001",
+		Type:          "Audio",
+		SourceKeyType: "SPOTIFY",
+	}
+	source.SourceKeyAccount = account
+	source.SourceKey.Type = "SPOTIFY"
+	source.SourceKey.Account = account
+
+	return source
+}
+
+// TestPropagatePresetWriteSkipsSpotifyWithoutAMatchingSource is the
+// reproducer for issue 495: sharing a SPOTIFY preset must not write it
+// verbatim onto a sibling that has no SPOTIFY source at all -- that leaves
+// the sibling with a preset it answers INVALID_SOURCE for.
+func TestPropagatePresetWriteSkipsSpotifyWithoutAMatchingSource(t *testing.T) {
+	const account = "7000007"
+
+	original := radioPreset("1", "Old", "http://example.invalid/old")
+	ds := presetSyncFixture(t, account, map[string][]models.ServicePreset{
+		"SPEAKERA01": {original},
+		"SPEAKERB02": {original},
+	})
+
+	// SPEAKERB02 gets no Sources.xml at all, so it falls back to AfterTouch's
+	// managed defaults, which never include SPOTIFY (issue 495: neither did
+	// the reporter's second speaker).
+	if err := ds.SavePresets(account, "SPEAKERA01",
+		[]models.ServicePreset{spotifyPreset("1", "My Playlist", "spotify:playlist:abc", "listener@example.invalid")}); err != nil {
+		t.Fatalf("write spotify preset: %v", err)
+	}
+
+	applied, skipped := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, []models.ServicePreset{original})
+	if len(applied) != 0 {
+		t.Fatalf("applied = %+v, want nothing: the sibling has no SPOTIFY source", applied)
+	}
+
+	if len(skipped) != 1 || skipped[0].DeviceID != "SPEAKERB02" {
+		t.Fatalf("skipped = %+v, want SPEAKERB02 reported", skipped)
+	}
+
+	if got := presetAt(t, ds, account, "SPEAKERB02", "1"); got.Location != original.Location {
+		t.Fatalf("sibling preset = %+v, want it left untouched", got)
+	}
+}
+
+// TestPropagatePresetWriteSkipsSpotifyWithADifferentAccount covers a sibling
+// that does have Spotify, but linked to a different account than the preset
+// claims: that source cannot serve the preset either, so it must be skipped
+// rather than bound to the wrong account.
+func TestPropagatePresetWriteSkipsSpotifyWithADifferentAccount(t *testing.T) {
+	const account = "7000008"
+
+	original := radioPreset("1", "Old", "http://example.invalid/old")
+	ds := presetSyncFixture(t, account, map[string][]models.ServicePreset{
+		"SPEAKERA01": {original},
+		"SPEAKERB02": {original},
+	})
+
+	if err := ds.SaveConfiguredSources(account, "SPEAKERB02",
+		[]models.ConfiguredSource{spotifySource("someoneelse@example.invalid")}); err != nil {
+		t.Fatalf("save sibling sources: %v", err)
+	}
+
+	if err := ds.SavePresets(account, "SPEAKERA01",
+		[]models.ServicePreset{spotifyPreset("1", "My Playlist", "spotify:playlist:abc", "listener@example.invalid")}); err != nil {
+		t.Fatalf("write spotify preset: %v", err)
+	}
+
+	applied, skipped := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, []models.ServicePreset{original})
+	if len(applied) != 0 {
+		t.Fatalf("applied = %+v, want nothing: the sibling's SPOTIFY is a different account", applied)
+	}
+
+	if len(skipped) != 1 || skipped[0].DeviceID != "SPEAKERB02" {
+		t.Fatalf("skipped = %+v, want SPEAKERB02 reported", skipped)
+	}
+
+	if got := presetAt(t, ds, account, "SPEAKERB02", "1"); got.Location != original.Location {
+		t.Fatalf("sibling preset = %+v, want it left untouched", got)
+	}
+}
+
+// TestPropagatePresetWriteSharesSpotifyWithTheSameAccount is the control
+// case: once the sibling has SPOTIFY linked under the same account the
+// preset claims, sharing proceeds exactly as for a radio preset.
+func TestPropagatePresetWriteSharesSpotifyWithTheSameAccount(t *testing.T) {
+	const account = "7000009"
+
+	original := radioPreset("1", "Old", "http://example.invalid/old")
+	ds := presetSyncFixture(t, account, map[string][]models.ServicePreset{
+		"SPEAKERA01": {original},
+		"SPEAKERB02": {original},
+	})
+
+	if err := ds.SaveConfiguredSources(account, "SPEAKERB02",
+		[]models.ConfiguredSource{spotifySource("listener@example.invalid")}); err != nil {
+		t.Fatalf("save sibling sources: %v", err)
+	}
+
+	if err := ds.SavePresets(account, "SPEAKERA01",
+		[]models.ServicePreset{spotifyPreset("1", "My Playlist", "spotify:playlist:abc", "listener@example.invalid")}); err != nil {
+		t.Fatalf("write spotify preset: %v", err)
+	}
+
+	applied, skipped := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, []models.ServicePreset{original})
+	if len(skipped) != 0 {
+		t.Fatalf("skipped = %+v, want none: the sibling has the same SPOTIFY account", skipped)
+	}
+
+	if len(applied) != 1 || applied[0].DeviceID != "SPEAKERB02" {
+		t.Fatalf("applied = %+v, want the sibling speaker", applied)
+	}
+
+	if got := presetAt(t, ds, account, "SPEAKERB02", "1"); got.Location != "spotify:playlist:abc" {
+		t.Fatalf("sibling preset = %+v, want the shared spotify location", got)
+	}
+}
+
+// TestPropagatePresetWriteAddsMissingTuneInBeforeWriting covers the other
+// half of issue 495: TUNEIN (like RADIO_BROWSER and LOCAL_INTERNET_RADIO) is
+// a source AfterTouch mints itself, so a sibling that lacks it gets the
+// canonical entry added before the preset is written, rather than being
+// skipped like a linked music service.
+func TestPropagatePresetWriteAddsMissingTuneInBeforeWriting(t *testing.T) {
+	const account = "7000011"
+
+	original := radioPreset("1", "Old", "http://example.invalid/old")
+	ds := presetSyncFixture(t, account, map[string][]models.ServicePreset{
+		"SPEAKERA01": {original},
+		"SPEAKERB02": {original},
+	})
+
+	// Give SPEAKERB02 an explicit Sources.xml missing TUNEIN, so it does not
+	// fall back to AfterTouch's defaults (which already include TUNEIN and
+	// would make this test pass without exercising the add path).
+	withoutTuneIn := make([]models.ConfiguredSource, 0)
+
+	for _, s := range ds.GetDefaultSources() {
+		if s.SourceKeyType != "TUNEIN" {
+			withoutTuneIn = append(withoutTuneIn, s)
+		}
+	}
+
+	if err := ds.SaveConfiguredSources(account, "SPEAKERB02", withoutTuneIn); err != nil {
+		t.Fatalf("save sibling sources: %v", err)
+	}
+
+	if err := ds.SavePresets(account, "SPEAKERA01",
+		[]models.ServicePreset{{
+			ServiceContentItem: models.ServiceContentItem{
+				Source:   "TUNEIN",
+				Location: "/stations/byuuid/00000000-0000-0000-0000-000000000000",
+				Name:     "A Station",
+			},
+			ButtonNumber: "1",
+			ID:           "1",
+		}}); err != nil {
+		t.Fatalf("write tunein preset: %v", err)
+	}
+
+	applied, skipped := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, []models.ServicePreset{original})
+	if len(skipped) != 0 {
+		t.Fatalf("skipped = %+v, want none: TUNEIN can be added", skipped)
+	}
+
+	if len(applied) != 1 || applied[0].DeviceID != "SPEAKERB02" {
+		t.Fatalf("applied = %+v, want the sibling speaker", applied)
+	}
+
+	sources, err := ds.GetConfiguredSources(account, "SPEAKERB02")
+	if err != nil {
+		t.Fatalf("read sibling sources: %v", err)
+	}
+
+	found := false
+
+	for i := range sources {
+		if sources[i].SourceKeyType == "TUNEIN" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Fatalf("sources = %+v, want TUNEIN added", sources)
+	}
+
+	if got := presetAt(t, ds, account, "SPEAKERB02", "1"); got.Location != "/stations/byuuid/00000000-0000-0000-0000-000000000000" {
+		t.Fatalf("sibling preset = %+v, want the shared tunein location", got)
+	}
+}
+
+// TestPropagatePresetWriteSkipsStoredMusicEvenThoughItIsGenerallyAddable
+// documents the STORED_MUSIC decision for this code path: even though
+// models.SourceAvailability calls STORED_MUSIC addable (the player's "add a
+// source elsewhere" flow can add it by talking to the speaker directly),
+// preset sync has no established way to reach a sibling speaker for a write
+// like setMusicServiceAccount, so it is treated like a source that cannot be
+// added here and the sibling is skipped.
+func TestPropagatePresetWriteSkipsStoredMusicEvenThoughItIsGenerallyAddable(t *testing.T) {
+	const account = "7000012"
+
+	original := radioPreset("1", "Old", "http://example.invalid/old")
+	ds := presetSyncFixture(t, account, map[string][]models.ServicePreset{
+		"SPEAKERA01": {original},
+		"SPEAKERB02": {original},
+	})
+
+	if err := ds.SavePresets(account, "SPEAKERA01",
+		[]models.ServicePreset{{
+			ServiceContentItem: models.ServiceContentItem{
+				Source:        "STORED_MUSIC",
+				SourceAccount: "UUUUUUUU-UUUU-UUUU-UUUU-UUUUUUUUUUUU/0",
+				Location:      "4:cont2:615:part12:39",
+				Name:          "A Folder",
+			},
+			ButtonNumber: "1",
+			ID:           "1",
+		}}); err != nil {
+		t.Fatalf("write stored music preset: %v", err)
+	}
+
+	applied, skipped := PropagatePresetWrite(ds, account, "SPEAKERA01", 1, []models.ServicePreset{original})
+	if len(applied) != 0 {
+		t.Fatalf("applied = %+v, want nothing: STORED_MUSIC is registered on the speaker itself", applied)
+	}
+
+	if len(skipped) != 1 || skipped[0].DeviceID != "SPEAKERB02" {
+		t.Fatalf("skipped = %+v, want SPEAKERB02 reported", skipped)
+	}
+
+	if got := presetAt(t, ds, account, "SPEAKERB02", "1"); got.Location != original.Location {
+		t.Fatalf("sibling preset = %+v, want it left untouched", got)
 	}
 }
