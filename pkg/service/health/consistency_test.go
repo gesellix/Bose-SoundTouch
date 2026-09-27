@@ -186,6 +186,32 @@ func TestCheckCrossSide_PresetMissingOnOneSide(t *testing.T) {
 	}
 }
 
+// The speaker may still hold an Orion preset with its absolute location while
+// AfterTouch already has the relative one (or the other way round, issue 769).
+// That is the same station, not a cross-side disagreement.
+func TestCheckCrossSide_OrionAbsoluteAndRelativeAgree(t *testing.T) {
+	view := func(location string) ConsistencyView {
+		return ConsistencyView{
+			Presets: []ConsistencyPreset{
+				{Slot: "1", Source: "LOCAL_INTERNET_RADIO", Location: location},
+			},
+			Sources: []ConsistencySource{{Type: "LOCAL_INTERNET_RADIO"}},
+		}
+	}
+
+	got := CheckCrossSide(
+		view("http://192.0.2.10:8000/core02/svc-bmx-adapter-orion/prod/orion/station?data=eyJ9"),
+		view("/station?data=eyJ9"),
+	)
+	if len(got) != 0 {
+		t.Errorf("expected no cross-side issues, got %d: %+v", len(got), got)
+	}
+
+	if got := CheckCrossSide(view("/station?data=eyJ9"), view("/station?data=other")); len(got) == 0 {
+		t.Error("different Orion stations in one slot must still be reported")
+	}
+}
+
 func TestCheckCrossSide_AgreesWhenIdentical(t *testing.T) {
 	identical := func() ConsistencyView {
 		return ConsistencyView{

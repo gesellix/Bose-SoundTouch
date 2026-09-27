@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
 import { sourceLabel } from '../sourceLabels.js';
 import { missingSourceFor } from '../sourceAvailability.mjs';
+import { canonicalLocation } from '../contentLocation.mjs';
 
 const html = htm.bind(h);
 
@@ -361,10 +362,11 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
 // identityOf mirrors the service's catalog key: source, the normalised account
 // and location. The speaker echoes the source name back as sourceAccount in
 // recents while leaving it empty in presets, so the raw values differ for one
-// and the same station.
+// and the same station. The location is canonical too: an Orion station's
+// absolute and relative locations are one station (issue 769).
 function identityOf(item) {
     const source = item?.Source || '';
     const account = item?.SourceAccount && item.SourceAccount !== source ? item.SourceAccount : '';
 
-    return JSON.stringify([source, account, item?.Location || '']);
+    return JSON.stringify([source, account, canonicalLocation(source, item?.Location)]);
 }

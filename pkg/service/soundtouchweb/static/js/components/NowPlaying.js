@@ -4,6 +4,7 @@ import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
 import { PresetPicker } from './PresetPicker.js';
+import { sameContentLocation } from '../contentLocation.mjs';
 
 const html = htm.bind(h);
 
@@ -31,8 +32,8 @@ function NowPlayingPresetPicker({ deviceId, nowPlaying, presets }) {
     // the slot it landed in.
     const mappedPreset = currentLocation
         ? presetList.find(p =>
-            p.ContentItem?.Location === currentLocation &&
-            p.ContentItem?.Source === currentSource)
+            p.ContentItem?.Source === currentSource &&
+            sameContentLocation(currentSource, p.ContentItem?.Location, currentLocation))
         : undefined;
 
     function save(slotId) {

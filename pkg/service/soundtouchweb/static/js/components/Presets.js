@@ -6,6 +6,7 @@ import { SourceIcon } from '../sourceIcons.js';
 import { sourceLabel } from '../sourceLabels.js';
 import { CatalogPicker } from './CatalogPicker.js';
 import { StoredPresets } from './StoredPresets.js';
+import { sameContentLocation } from '../contentLocation.mjs';
 
 const html = htm.bind(h);
 
@@ -152,7 +153,8 @@ export function Presets({ deviceId, status, command, commandBusy = false, onSele
 
     function isActive(preset) {
         const item = preset.ContentItem;
-        return item && item.Source === currentSource && item.Location === currentLocation;
+        return item && item.Source === currentSource &&
+            sameContentLocation(currentSource, item.Location, currentLocation);
     }
 
     return html`

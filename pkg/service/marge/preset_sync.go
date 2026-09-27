@@ -67,11 +67,16 @@ func presetButton(p models.ServicePreset) string {
 	return strings.TrimSpace(p.ID)
 }
 
+// identityOf compares locations in their canonical form, so two speakers that
+// hold the same Orion station once with an absolute location (saved before
+// issue 769) and once with the relative one agree.
 func identityOf(p models.ServicePreset) presetIdentity {
+	source := strings.TrimSpace(p.Source)
+
 	return presetIdentity{
-		source:        strings.TrimSpace(p.Source),
+		source:        source,
 		sourceAccount: strings.TrimSpace(p.SourceAccount),
-		location:      strings.TrimSpace(p.Location),
+		location:      models.CanonicalContentLocation(source, strings.TrimSpace(p.Location)),
 		itemType:      strings.TrimSpace(p.ContentItemType),
 	}
 }

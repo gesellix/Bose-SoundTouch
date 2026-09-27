@@ -3,6 +3,8 @@ package health
 import (
 	"sort"
 	"strconv"
+
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
 // ConsistencyView is one side's snapshot of presets, recents, and sources
@@ -313,13 +315,21 @@ func indexRecentsByID(in []ConsistencyRecent) map[string]ConsistencyRecent {
 // presetFieldsCompatible is strict on Source attribute (GH-343 footprint
 // reproduces here as a cross-side mismatch). Location is compared only
 // when both sides provide it; the speaker's /presets always does, the
-// service's Presets.xml does too unless it was hand-edited.
+// service's Presets.xml does too unless it was hand-edited. Locations are
+// compared in their canonical form, so an Orion station's absolute and
+// relative locations (issue 769) don't count as a disagreement.
 func presetFieldsCompatible(a, b ConsistencyPreset) bool {
 	if a.Source != "" && b.Source != "" && a.Source != b.Source {
 		return false
 	}
 
-	if a.Location != "" && b.Location != "" && a.Location != b.Location {
+	source := a.Source
+	if source == "" {
+		source = b.Source
+	}
+
+	if a.Location != "" && b.Location != "" &&
+		models.CanonicalContentLocation(source, a.Location) != models.CanonicalContentLocation(source, b.Location) {
 		return false
 	}
 

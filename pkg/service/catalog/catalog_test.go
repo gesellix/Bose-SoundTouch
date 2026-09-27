@@ -39,6 +39,37 @@ func TestIdentityDistinguishesSourceAndLocation(t *testing.T) {
 	}
 }
 
+// An Orion station saved before issue 769 carries an absolute location, the
+// same station saved since a relative one. Both are one catalog entry, which
+// keeps the spelling seen last.
+func TestIdentityTreatsAbsoluteAndRelativeOrionLocationsAsOneStation(t *testing.T) {
+	const (
+		relative = "/station?data=eyJuYW1lIjoiRG9jIn0%3D"
+		absolute = "http://192.0.2.10:8000/core02/svc-bmx-adapter-orion/prod/orion/station?data=eyJuYW1lIjoiRG9jIn0%3D"
+	)
+
+	if Identity("LOCAL_INTERNET_RADIO", "", absolute) != Identity("LOCAL_INTERNET_RADIO", "", relative) {
+		t.Fatal("absolute and relative Orion locations of one station must share an identity")
+	}
+
+	if Identity("LOCAL_INTERNET_RADIO", "", relative) == Identity("LOCAL_INTERNET_RADIO", "", "/station?data=other") {
+		t.Fatal("different Orion stations must not collide")
+	}
+
+	var c Catalog
+
+	c.Record(Entry{Source: "LOCAL_INTERNET_RADIO", Location: absolute, Name: "Doc", LastSeen: at(1)}, 10)
+	c.Record(Entry{Source: "LOCAL_INTERNET_RADIO", Location: relative, Name: "Doc", LastSeen: at(2)}, 10)
+
+	if len(c.Entries) != 1 {
+		t.Fatalf("entries = %d, want 1: %+v", len(c.Entries), c.Entries)
+	}
+
+	if c.Entries[0].Location != relative {
+		t.Fatalf("location = %q, want the spelling seen last (%q)", c.Entries[0].Location, relative)
+	}
+}
+
 func TestRecordIgnoresEntriesThatCannotBePickedAgain(t *testing.T) {
 	var c Catalog
 

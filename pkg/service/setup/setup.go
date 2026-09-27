@@ -2889,17 +2889,23 @@ func diffPresets(current, incoming []models.ServicePreset) SyncResourceDiff {
 // ordered, time-sorted, size-capped list), so entries are matched by
 // content Location instead.
 func diffRecents(current, incoming []models.ServiceRecent) SyncResourceDiff {
+	// Canonical locations: an Orion station's absolute and relative
+	// locations (issue 769) are one entry, not a removal plus an addition.
+	canonical := func(r models.ServiceRecent) string {
+		return models.CanonicalContentLocation(r.Source, r.Location)
+	}
+
 	incomingLocations := make(map[string]bool, len(incoming))
 	for i := range incoming {
 		if incoming[i].Location != "" {
-			incomingLocations[incoming[i].Location] = true
+			incomingLocations[canonical(incoming[i])] = true
 		}
 	}
 
 	var removed []string
 
 	for i := range current {
-		if current[i].Location != "" && current[i].Name != "" && !incomingLocations[current[i].Location] {
+		if current[i].Location != "" && current[i].Name != "" && !incomingLocations[canonical(current[i])] {
 			removed = append(removed, current[i].Name)
 		}
 	}

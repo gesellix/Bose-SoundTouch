@@ -2160,7 +2160,11 @@ func updateOrCreateRecent(recents []models.ServiceRecent, name string, matchingS
 			sourceMatch = r.Source == matchingSrc.SourceKeyType && r.SourceAccount == matchingSrc.SourceKeyAccount
 		}
 
-		if sourceMatch && r.Location == location {
+		// Canonical locations, so an Orion station played once with an
+		// absolute location (before issue 769) and now with the relative one
+		// stays one recent. It takes the spelling the speaker just reported.
+		if sourceMatch && models.CanonicalContentLocation(r.Source, r.Location) == models.CanonicalContentLocation(r.Source, location) {
+			recents[i].Location = location
 			recents[i].UtcTime = strconv.FormatInt(utcTime, 10)
 			recents[i].UpdatedOn = FormatTime(time.Now())
 

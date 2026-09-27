@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
 // SeenGranularity is how much a sighting's timestamp has to move before it is
@@ -91,11 +93,15 @@ func normalizeAccount(source, account string) string {
 // containing the separator cannot collide with a different entry. The exact
 // format is internal: it is never persisted or sent anywhere, and the player
 // builds its own key for its own lookups.
+//
+// The location is compared in its canonical form: an Orion station saved with
+// an absolute location before issue 769 and with the relative one since is
+// one entry, not two. The entry keeps whichever spelling was seen last.
 func Identity(source, sourceAccount, location string) string {
 	return strings.Join([]string{
 		strconv.Quote(source),
 		strconv.Quote(normalizeAccount(source, sourceAccount)),
-		strconv.Quote(location),
+		strconv.Quote(models.CanonicalContentLocation(source, location)),
 	}, ":")
 }
 

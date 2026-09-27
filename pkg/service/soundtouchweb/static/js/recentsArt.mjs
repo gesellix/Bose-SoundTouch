@@ -10,6 +10,8 @@
 // It is best-effort by construction: an entry with no match keeps the source
 // icon it has today, and nothing here can fail in a way that costs the list.
 
+import { canonicalLocation } from './contentLocation.mjs';
+
 // identityOf keys a ContentItem by what actually identifies the content.
 //
 // The account needs normalising first: the speaker echoes the source name back
@@ -23,13 +25,17 @@
 // fallback: the same speaker had "WDR 2 Rheinland" as both a RADIO_BROWSER
 // preset and a TUNEIN recent, pointing at different stations. Borrowing art
 // across those would show the wrong logo.
+//
+// The location is compared in its canonical form, so an Orion station saved
+// with an absolute location and played since with the relative one (issue
+// 769) still matches. See contentLocation.mjs.
 export function identityOf(item) {
     const source = item?.Source || '';
     const account = item?.SourceAccount && item.SourceAccount !== source
         ? item.SourceAccount
         : '';
 
-    return JSON.stringify([source, account, item?.Location || '']);
+    return JSON.stringify([source, account, canonicalLocation(source, item?.Location)]);
 }
 
 // presetArtIndex maps content identity to artwork, for every preset that has
