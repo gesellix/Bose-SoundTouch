@@ -2,6 +2,7 @@ package setup
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/xml"
 	"errors"
@@ -22,7 +23,14 @@ const (
 	supportedURLsTimeout = 3 * time.Second
 	setMargeAccountConn  = 5 * time.Second
 	setMargeAccountTotal = 12 * time.Second
+	// wsEscalationStep bounds each WebSocket step of the escalation below.
+	wsEscalationStep = 8 * time.Second
 )
+
+// wsSettleDelay gives the firmware a moment to act on the WS pairing before
+// the state is re-read. runPairBare uses the same 2 s. A var so tests do not
+// have to sit through it.
+var wsSettleDelay = 2 * time.Second
 
 // PairAccountResult records what was attempted, so the UI can show a
 // breadcrumb of which path actually succeeded (or that both failed).
@@ -32,7 +40,17 @@ type PairAccountResult struct {
 	HTTPError                string `json:"http_error,omitempty"`
 	TelnetAttempted          bool   `json:"telnet_attempted"`
 	TelnetError              string `json:"telnet_error,omitempty"`
-	Method                   string `json:"method"` // "http" | "telnet" | ""
+
+	// StuckInSetup records that the account was written but the speaker was
+	// still reporting source="SETUP" afterwards, which is the condition the
+	// WebSocket escalation exists for. WSAttempted/WSError/LeftSetup describe
+	// that escalation. LeftSetup is only meaningful when WSAttempted is true.
+	StuckInSetup bool   `json:"stuck_in_setup"`
+	WSAttempted  bool   `json:"ws_attempted"`
+	WSError      string `json:"ws_error,omitempty"`
+	LeftSetup    bool   `json:"left_setup"`
+
+	Method string `json:"method"` // "http" | "telnet" | "ws" | ""
 }
 
 // PairAccount associates the speaker at deviceIP with accountID. It tries
@@ -41,7 +59,22 @@ type PairAccountResult struct {
 // `envswitch accountid set <id>` over the supplied client. If telnet is nil
 // or also fails, PairAccount returns a structured error explaining the next
 // step a user can take.
-func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairAccountResult, string, error) {
+//
+// Both of those paths write the account ID without going through the
+// firmware's own SETUP state machine, and there is reason to think that is
+// not always enough: a speaker can end up with a populated
+// margeAccountUUID while its firmware stays in source="SETUP", refusing to
+// play anything (issue #646). So on success PairAccount checks whether the
+// speaker actually left SETUP, and if it did not, escalates to the
+// WebSocket setMargeAccount that `soundtouch-cli setup pair --mode=bare`
+// uses, which is the path with positive precedent for moving a speaker out
+// of that state.
+//
+// The escalation is deliberately gated on the observed failure rather than
+// reordered ahead of the existing paths. Adding it as another fallback arm
+// would not have helped: the case being targeted is one where the HTTP call
+// *succeeds*, so a fallback chain never reaches it.
+func (m *Manager) PairAccount(ctx context.Context, deviceIP, accountID string, t TelnetClient) (PairAccountResult, string, error) {
 	var (
 		result PairAccountResult
 		logs   strings.Builder
@@ -74,6 +107,8 @@ func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairA
 			result.Method = "http"
 
 			logs.WriteString("HTTP /setMargeAccount succeeded\n")
+
+			m.escalateIfStuckInSetup(ctx, deviceIP, accountID, &result, &logs)
 
 			return result, logs.String(), nil
 		}
@@ -111,7 +146,126 @@ func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairA
 
 	result.Method = "telnet"
 
+	m.escalateIfStuckInSetup(ctx, deviceIP, accountID, &result, &logs)
+
 	return result, logs.String(), nil
+}
+
+// nowPlayingXML is the slice of /now_playing this package cares about: the
+// source attribute, which reads "SETUP" while the firmware is still in
+// onboarding.
+type nowPlayingXML struct {
+	XMLName xml.Name `xml:"nowPlaying"`
+	Source  string   `xml:"source,attr"`
+}
+
+// readNowPlayingSource returns the speaker's current source, e.g. "STANDBY",
+// "TUNEIN", or "SETUP".
+func (m *Manager) readNowPlayingSource(deviceIP string) (string, error) {
+	url := fmt.Sprintf("http://%s:8090/now_playing", deviceIP)
+	if _, _, err := net.SplitHostPort(deviceIP); err == nil {
+		url = fmt.Sprintf("http://%s/now_playing", deviceIP)
+	}
+
+	resp, err := m.httpGet(url)
+	if err != nil {
+		return "", fmt.Errorf("fetch now_playing from %s: %w", url, err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	var np nowPlayingXML
+	if err := xml.NewDecoder(resp.Body).Decode(&np); err != nil {
+		return "", fmt.Errorf("decode now_playing from %s: %w", url, err)
+	}
+
+	return np.Source, nil
+}
+
+// escalateIfStuckInSetup runs after the account ID has been written by one of
+// the paths above. If the speaker still reports source="SETUP" it drives the
+// WebSocket setMargeAccount, which goes through the firmware's own setup state
+// machine rather than around it.
+//
+// It never returns an error: the pairing itself already succeeded, and a
+// speaker that cannot be coaxed out of SETUP is not a reason to report the
+// pairing as failed. Everything observed lands in result and logs instead, so
+// a field report says which path ran and whether it helped.
+func (m *Manager) escalateIfStuckInSetup(ctx context.Context, deviceIP, accountID string, result *PairAccountResult, logs *strings.Builder) {
+	source, err := m.readNowPlayingSource(deviceIP)
+	if err != nil {
+		fmt.Fprintf(logs, "post-pair SETUP check failed (continuing): %v\n", err)
+		return
+	}
+
+	if !strings.EqualFold(source, "SETUP") {
+		fmt.Fprintf(logs, "post-pair source=%q — speaker is out of SETUP\n", source)
+		return
+	}
+
+	result.StuckInSetup = true
+
+	logs.WriteString("post-pair source=\"SETUP\" — account written but firmware still onboarding, " +
+		"escalating to the WebSocket setMargeAccount\n")
+
+	if err := m.pairOverWebSocket(ctx, deviceIP, accountID); err != nil {
+		result.WSAttempted = true
+		result.WSError = err.Error()
+
+		fmt.Fprintf(logs, "WebSocket setMargeAccount failed: %v\n", err)
+
+		return
+	}
+
+	result.WSAttempted = true
+	result.Method = "ws"
+
+	logs.WriteString("WebSocket setMargeAccount succeeded\n")
+
+	time.Sleep(wsSettleDelay)
+
+	switch after, err := m.readNowPlayingSource(deviceIP); {
+	case err != nil:
+		fmt.Fprintf(logs, "could not re-read source after escalation: %v\n", err)
+	case strings.EqualFold(after, "SETUP"):
+		logs.WriteString("speaker still reports SETUP after the escalation\n")
+	default:
+		result.LeftSetup = true
+
+		fmt.Fprintf(logs, "speaker left SETUP after the escalation (source=%q)\n", after)
+	}
+}
+
+// pairOverWebSocket sends setMargeAccount through the speaker's own setup
+// WebSocket. The payload is deliberately minimal (account ID plus the default
+// auth token, no boseServer extras): this is an escalation of the same request
+// the HTTP endpoint just took, not a migration, and it should not quietly
+// rewrite the speaker's configured server URLs as a side effect.
+func (m *Manager) pairOverWebSocket(ctx context.Context, deviceIP, accountID string) error {
+	info, err := m.GetLiveDeviceInfo(deviceIP)
+	if err != nil {
+		return fmt.Errorf("read /info for device ID: %w", err)
+	}
+
+	if info.DeviceID == "" {
+		return errors.New("device reported no deviceID, cannot route WebSocket messages")
+	}
+
+	session, err := m.NewSession(deviceIP, info.DeviceID, wsEscalationStep)
+	if err != nil {
+		return fmt.Errorf("dial setup WebSocket: %w", err)
+	}
+
+	defer func() { _ = session.Close() }()
+
+	stepCtx, cancel := context.WithTimeout(ctx, wsEscalationStep+2*time.Second)
+	defer cancel()
+
+	if err := session.SetMargeAccount(stepCtx, accountID, ""); err != nil {
+		return fmt.Errorf("setMargeAccount over WebSocket: %w", err)
+	}
+
+	return nil
 }
 
 // EnsureMargeAccountPaired reads the device's /info and, if margeAccountUUID
@@ -123,7 +277,7 @@ func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairA
 // one. accountID is empty when GetLiveDeviceInfo itself fails; otherwise it
 // is either the device's existing margeAccountUUID (alreadyPaired=true) or
 // the account ID just paired with.
-func (m *Manager) EnsureMargeAccountPaired(deviceIP, wantAccountID string, t TelnetClient) (accountID string, alreadyPaired bool, logs string, err error) {
+func (m *Manager) EnsureMargeAccountPaired(ctx context.Context, deviceIP, wantAccountID string, t TelnetClient) (accountID string, alreadyPaired bool, logs string, err error) {
 	info, infoErr := m.GetLiveDeviceInfo(deviceIP)
 	if infoErr != nil {
 		return "", false, "", fmt.Errorf("read /info: %w", infoErr)
@@ -145,7 +299,7 @@ func (m *Manager) EnsureMargeAccountPaired(deviceIP, wantAccountID string, t Tel
 		return "", false, "", fmt.Errorf("invalid account id %q: must be a non-empty, path-safe identifier", target)
 	}
 
-	_, pairLogs, pairErr := m.PairAccount(deviceIP, target, t)
+	_, pairLogs, pairErr := m.PairAccount(ctx, deviceIP, target, t)
 	if pairErr != nil {
 		return target, false, pairLogs, pairErr
 	}

@@ -260,6 +260,17 @@ type DeviceInfoXML struct {
 	SerialNumber string `xml:"-" json:"serialNumber"`
 }
 
+// httpGet performs a bounded GET, honouring the HTTPGet override when a
+// caller set one. HTTPGet is documented as optional, so a Manager built as a
+// plain struct literal (as tests do) must not panic here.
+func (m *Manager) httpGet(url string) (*http.Response, error) {
+	if m.HTTPGet != nil {
+		return m.HTTPGet(url)
+	}
+
+	return (&http.Client{Timeout: liveDeviceHTTPTimeout}).Get(url)
+}
+
 // GetLiveDeviceInfo fetches live information from the speaker's :8090/info endpoint.
 func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 	infoURL := fmt.Sprintf("http://%s:8090/info", deviceIP)
@@ -269,7 +280,7 @@ func (m *Manager) GetLiveDeviceInfo(deviceIP string) (*DeviceInfoXML, error) {
 		_ = host
 	}
 
-	resp, err := m.HTTPGet(infoURL)
+	resp, err := m.httpGet(infoURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch info from %s: %w", infoURL, err)
 	}
@@ -2921,7 +2932,7 @@ func (m *Manager) fetchLivePresets(deviceIP string) ([]models.ServicePreset, err
 		presetsURL = fmt.Sprintf("http://%s/presets", deviceIP)
 	}
 
-	resp, err := m.HTTPGet(presetsURL)
+	resp, err := m.httpGet(presetsURL)
 	if err != nil {
 		return nil, err
 	}
@@ -3005,7 +3016,7 @@ func (m *Manager) fetchLiveRecents(deviceIP string) ([]models.ServiceRecent, err
 		recentsURL = fmt.Sprintf("http://%s/recents", deviceIP)
 	}
 
-	resp, err := m.HTTPGet(recentsURL)
+	resp, err := m.httpGet(recentsURL)
 	if err != nil {
 		return nil, err
 	}
@@ -3097,7 +3108,7 @@ func (m *Manager) syncSources(deviceIP, accountID, deviceID string) int {
 		sourcesURL = fmt.Sprintf("http://%s/sources", deviceIP)
 	}
 
-	resp, err := m.HTTPGet(sourcesURL)
+	resp, err := m.httpGet(sourcesURL)
 	if err != nil {
 		return -1
 	}
