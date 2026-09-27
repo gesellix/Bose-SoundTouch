@@ -657,6 +657,30 @@ soundtouch-cli --host <speaker-ip> setup inspect --telnet
 
 This also applies to a freshly-fixed on-device default (see `DEPLOYMENT_MODE`, #546): the installer now gets the *default* right for new installs automatically, but an install that was already migrated before you updated still needs the explicit re-migrate above — the fix only stops a *new* bad value from being written, it doesn't retroactively correct an already-migrated speaker.
 
+### ❌ Play URL radio presets stop playing after moving AfterTouch to a new host {#play-url-presets-after-move}
+
+**Symptoms:**
+
+- AfterTouch was moved to a new machine (or its address otherwise changed),
+  following [Moving AfterTouch to Another Host](MOVING-HOSTS.md).
+- TuneIn and Radio Browser presets still work.
+- Presets created with the player's **Play URL** feature, or with
+  `soundtouch-cli preset`, no longer play.
+
+**Cause:**
+
+Play URL presets store the full AfterTouch address inside the preset's
+location, for example
+`http://<old-host>:8000/core02/svc-bmx-adapter-orion/prod/orion/station?data=...`.
+When the service's address changes, those presets still point at the old
+address. TuneIn and Radio Browser presets only store the station's
+name/ID, so they're unaffected by an address change.
+
+**Fix:**
+
+Re-save each affected Play URL preset from the new address. There's no
+migration step that rewrites these automatically today.
+
 ### ❌ Radio sources never activate after an in-place migration {#radio-sources-after-migration}
 
 **Symptoms:**

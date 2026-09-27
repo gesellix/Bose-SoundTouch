@@ -95,7 +95,7 @@ soundtouch-service
 
 See [Raspberry Pi Setup](RASPBERRY-PI.md) and the [SoundTouch Service Guide](SOUNDTOUCH-SERVICE.md) for more deployment options.
 
-> **Data directory**: all methods store device state, presets, and settings in a `data/` directory next to the binary (or mounted at `/app/data` in Docker). This directory is the single thing you need to back up — copying it is enough to restore a complete AfterTouch installation on a new machine.
+> **Data directory**: all methods store device state, presets, and settings in a `data/` directory next to the binary (or mounted at `/app/data` in Docker). This directory is the single thing you need to back up — copying it is enough to restore a complete AfterTouch installation on a new machine. See [Moving AfterTouch to Another Host](MOVING-HOSTS.md) for the full procedure, including the certificate authority your speakers already trust and what happens if the service's address changes.
 
 ---
 
