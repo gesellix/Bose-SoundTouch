@@ -410,3 +410,23 @@ func TestWatcherCountIsRaceFree(t *testing.T) {
 		t.Fatal("a status poll is still registered after every client left")
 	}
 }
+
+func TestStatusFailuresAreLoggedOncePerStreak(t *testing.T) {
+	conn := webtypes.NewDeviceConnection(nil, nil)
+
+	if !conn.ObserveStatusFailures("now_playing, volume") {
+		t.Fatal("first failure not reported as a change")
+	}
+
+	if conn.ObserveStatusFailures("now_playing, volume") {
+		t.Fatal("same failure reported again")
+	}
+
+	if !conn.ObserveStatusFailures("") {
+		t.Fatal("recovery not reported as a change")
+	}
+
+	if conn.ObserveStatusFailures("") {
+		t.Fatal("continued success reported as a change")
+	}
+}

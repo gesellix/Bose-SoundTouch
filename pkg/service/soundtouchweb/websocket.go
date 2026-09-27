@@ -1006,7 +1006,7 @@ func (app *WebApp) refreshDeviceStatusAfterStereoPairMutation(deviceID string, c
 	app.updateDeviceStatus(deviceID, conn, &groupBaseline)
 }
 
-func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection, groupBaseline *uint64) {
+func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConnection, groupBaseline *uint64) {
 	// Skip status update if client is not available (e.g., in tests)
 	if conn.Client == nil {
 		return
@@ -1054,6 +1054,17 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 	if stereoCapable {
 		group, groupErr = conn.Client.GetGroup()
 	}
+
+	logStatusFailures(deviceID, conn, []statusRequestResult{
+		{"now_playing", nowPlayingErr},
+		{"name", nameErr},
+		{"volume", volumeErr},
+		{"presets", presetsErr},
+		{"sources", sourcesErr},
+		{"bass", bassErr},
+		{"getZone", zoneErr},
+		{"getGroup", groupErr},
+	})
 
 	// Phase 2: fast, independently-ordered merges. Each field applies only
 	// if this round's fetch succeeded AND no newer poll or push event has
@@ -1145,6 +1156,49 @@ func (app *WebApp) updateDeviceStatus(_ string, conn *webtypes.DeviceConnection,
 		conn.ApplyPolledZone(zoneGeneration, conn.DeviceInfo.DeviceID, zone) {
 		app.BroadcastDeviceList()
 	}
+}
+
+// statusRequestResult is the outcome of one request of a status round.
+type statusRequestResult struct {
+	request string
+	err     error
+}
+
+// logStatusFailures logs the requests of a status round that failed, but
+// only when the set of failing requests changes: once when a speaker stops
+// answering (or one endpoint starts failing), once when it recovers. A
+// speaker that stays offline would otherwise add a line to the log on every
+// round.
+func logStatusFailures(deviceID string, conn *webtypes.DeviceConnection, results []statusRequestResult) {
+	var (
+		failed   []string
+		firstErr error
+	)
+
+	for _, result := range results {
+		if result.err == nil {
+			continue
+		}
+
+		failed = append(failed, result.request)
+		if firstErr == nil {
+			firstErr = result.err
+		}
+	}
+
+	failures := strings.Join(failed, ", ")
+	if !conn.ObserveStatusFailures(failures) {
+		return
+	}
+
+	if failures == "" {
+		log.Printf("Status requests to %s succeed again", sanitizeLog(deviceID))
+
+		return
+	}
+
+	log.Printf("Status requests to %s failed: %s (first error: %s); not logged again until this changes",
+		sanitizeLog(deviceID), failures, sanitizeLog(firstErr.Error()))
 }
 
 func (app *WebApp) applyGroupUpdatedEvent(

@@ -130,10 +130,13 @@ type DeviceConnection struct {
 
 	// statusRefreshMu guards the shared status refresh (issue 766): the one
 	// round in flight that other callers join instead of starting their own,
-	// and when the last round ended. See BeginSharedStatusRefresh.
+	// when the last round ended, and which requests of that round failed, so
+	// a failure is logged when it starts and when it ends rather than on
+	// every round. See BeginSharedStatusRefresh.
 	statusRefreshMu       sync.Mutex
 	statusRefreshInFlight chan struct{}
 	statusRefreshedAt     time.Time
+	statusFailures        string
 
 	// done is closed by Close when the device is removed from the
 	// registry, signalling its background goroutines (a status refresh
@@ -666,6 +669,24 @@ func (c *DeviceConnection) StatusRefreshedAt() time.Time {
 	defer c.statusRefreshMu.Unlock()
 
 	return c.statusRefreshedAt
+}
+
+// ObserveStatusFailures records which requests of a status round failed,
+// as a canonical description ("" when none did), and reports whether that
+// differs from the previous round. It lets the caller log a failure when it
+// starts and when it clears, not on every round of a speaker that stays
+// offline.
+func (c *DeviceConnection) ObserveStatusFailures(failures string) bool {
+	c.statusRefreshMu.Lock()
+	defer c.statusRefreshMu.Unlock()
+
+	if failures == c.statusFailures {
+		return false
+	}
+
+	c.statusFailures = failures
+
+	return true
 }
 
 // BeginHTTPPoll reserves an ordering generation for a status poll.
