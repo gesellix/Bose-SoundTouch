@@ -27,8 +27,8 @@ export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 
 # Optional settings written by install.sh (AFTERTOUCH_LAN_PORT, SERVICE_PORT),
 # or added by hand for anything the daemon reads from its environment
-# (SERVER_URL, MGMT_USERNAME, MGMT_PASSWORD, DEPLOYMENT_MODE, ...). `set -a`
-# auto-exports every assignment while the file is sourced, so any such
+# (SERVER_URL, MGMT_USERNAME, MGMT_PASSWORD, DEPLOYMENT_MODE, PLAYER_ENABLED, ...).
+# `set -a` auto-exports every assignment while the file is sourced, so any such
 # variable actually reaches the daemon -- it's forked from this same shell's
 # environment further down via `--startas "/bin/sh" -- -c "... \"$DAEMON\" ..."`.
 # Sourced before the defaults below so it can override either.
