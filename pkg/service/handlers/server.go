@@ -185,7 +185,18 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		serverURL, _ := s.GetSettings()
 		return serverURL
 	})
-	health.RegisterOrionPathsCheck(s.healthRegistry, ds)
+	health.RegisterOrionPathsCheck(s.healthRegistry, ds, health.OrionPathsDeps{
+		ServiceURLs:   s.GetSettings,
+		ExpectedHosts: s.ExpectedHosts,
+		DNSEnabled:    s.DNSHijackEnabled,
+		DNSClientIPs: func() map[string]time.Time {
+			if s.dnsDiscovery == nil {
+				return map[string]time.Time{}
+			}
+
+			return s.dnsDiscovery.InterceptClientIPs()
+		},
+	})
 	health.RegisterPresetsCountCheck(s.healthRegistry, ds)
 	health.RegisterPresetsConsistencyCheck(s.healthRegistry, ds)
 	health.RegisterRefreshSourcesCheck(s.healthRegistry, ds)
