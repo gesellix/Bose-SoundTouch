@@ -119,7 +119,9 @@ func TestSourcesDiff_FlagsMissingOnService(t *testing.T) {
 	ds := newSourcesDiffDS(t, account, device)
 	setServiceSources(t, ds, account, device, "AUX")
 
-	speakerURL := stubSpeakerSourcesServer(t, "AUX", "BLUETOOTH")
+	// SPOTIFY is a managed/linkable source type (not device-local), so it
+	// stays reportable after the local-only filter.
+	speakerURL := stubSpeakerSourcesServer(t, "AUX", "SPOTIFY")
 
 	got := diffSourcesForDeviceWithURL(ds, account, device, "192.0.2.10", speakerURL)
 
@@ -127,14 +129,67 @@ func TestSourcesDiff_FlagsMissingOnService(t *testing.T) {
 	for _, f := range got {
 		if strings.Contains(f.Message, "doesn't know about") && f.Severity == SeverityInfo {
 			foundExtra = true
-			if !strings.Contains(f.Message, "BLUETOOTH") {
-				t.Errorf("expected BLUETOOTH in message, got %q", f.Message)
+			if !strings.Contains(f.Message, "SPOTIFY") {
+				t.Errorf("expected SPOTIFY in message, got %q", f.Message)
 			}
 		}
 	}
 
 	if !foundExtra {
 		t.Errorf("expected an info finding for sources missing on service, got %+v", got)
+	}
+}
+
+// TestSourcesDiff_LocalOnlySourcesNotReportedAsMissingOnService verifies the
+// tone-down: device-local/built-in source types the speaker advertises but
+// AfterTouch never serves (AUX, BLUETOOTH, AIRPLAY, ...) must not trigger the
+// "doesn't know about" info finding, since every speaker has its own copy of
+// them and the service was never going to manage them either way.
+func TestSourcesDiff_LocalOnlySourcesNotReportedAsMissingOnService(t *testing.T) {
+	account, device := "1000001", "DEVICEID01"
+
+	ds := newSourcesDiffDS(t, account, device)
+	setServiceSources(t, ds, account, device, "AUX")
+
+	speakerURL := stubSpeakerSourcesServer(t, "AUX", "BLUETOOTH", "AIRPLAY", "ALEXA", "NOTIFICATION", "QPLAY", "UPNP", "STORED_MUSIC_MEDIA_RENDERER", "PRODUCT")
+
+	got := diffSourcesForDeviceWithURL(ds, account, device, "192.0.2.10", speakerURL)
+
+	for _, f := range got {
+		if strings.Contains(f.Message, "doesn't know about") {
+			t.Errorf("expected no 'doesn't know about' finding for local-only source types, got %+v", f)
+		}
+	}
+}
+
+// TestSourcesDiff_MixedLocalAndManagedOnlyReportsManaged verifies that when
+// the speaker advertises both a local-only type and a managed one the
+// service doesn't have, only the managed type is surfaced.
+func TestSourcesDiff_MixedLocalAndManagedOnlyReportsManaged(t *testing.T) {
+	account, device := "1000001", "DEVICEID01"
+
+	ds := newSourcesDiffDS(t, account, device)
+	setServiceSources(t, ds, account, device, "AUX")
+
+	speakerURL := stubSpeakerSourcesServer(t, "AUX", "BLUETOOTH", "SPOTIFY")
+
+	got := diffSourcesForDeviceWithURL(ds, account, device, "192.0.2.10", speakerURL)
+
+	var found bool
+	for _, f := range got {
+		if strings.Contains(f.Message, "doesn't know about") {
+			found = true
+			if strings.Contains(f.Message, "BLUETOOTH") {
+				t.Errorf("expected BLUETOOTH to be filtered out, got %q", f.Message)
+			}
+			if !strings.Contains(f.Message, "SPOTIFY") {
+				t.Errorf("expected SPOTIFY in message, got %q", f.Message)
+			}
+		}
+	}
+
+	if !found {
+		t.Errorf("expected an info finding for the managed missing type, got %+v", got)
 	}
 }
 

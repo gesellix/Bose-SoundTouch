@@ -71,6 +71,7 @@ func TestSourceAvailability(t *testing.T) {
 		"BLUETOOTH": SourceAvailableLocalOnly,
 		"PRODUCT":   SourceAvailableLocalOnly,
 		"airplay":   SourceAvailableLocalOnly,
+		"QPLAY":     SourceAvailableLocalOnly,
 	}
 
 	for sourceType, want := range tests {

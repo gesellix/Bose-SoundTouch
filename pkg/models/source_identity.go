@@ -54,6 +54,10 @@ var localOnlySources = map[string]bool{
 	"NOTIFICATION":                true,
 	"UPNP":                        true,
 	"STORED_MUSIC_MEDIA_RENDERER": true,
+	// QPLAY is a local I/O source in the same sense as AUX/BLUETOOTH (see the
+	// speaker-vs-service source list note in pkg/service/health/consistency.go);
+	// it was missing here even though it was already documented as local.
+	"QPLAY": true,
 }
 
 // mintedSources are the ones AfterTouch issues the token for itself, so it can

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
@@ -164,15 +165,22 @@ func diffSourcesForDeviceWithURL(ds *datastore.DataStore, account, deviceID, ipA
 		})
 	}
 
-	if len(missingOnService) > 0 {
+	// Speaker-local/built-in source types (AUX, BLUETOOTH, AIRPLAY, ...) are
+	// never served by AfterTouch and every speaker reports its own copy, so
+	// listing them here is just noise — see the speaker-vs-service source
+	// list note in consistency.go. Only report types the service could
+	// plausibly manage (e.g. a linkable streaming account like SPOTIFY).
+	reportable := filterManagedSourceTypes(missingOnService)
+
+	if len(reportable) > 0 {
 		findings = append(findings, Finding{
 			Severity: SeverityInfo,
 			Target:   target,
 			Message: fmt.Sprintf(
 				"Speaker advertises %d source type(s) the service doesn't know about: %s.",
-				len(missingOnService), strings.Join(missingOnService, ", "),
+				len(reportable), strings.Join(reportable, ", "),
 			),
-			Details: "Usually harmless — the speaker can keep AUX or other local sources without the service knowing. But if a managed source is in this list, check the service Sources.xml.",
+			Details: "These are managed/linkable source types (not device-local inputs like AUX or Bluetooth), so if one of them should be usable through AfterTouch, check the service's Sources.xml for that account.",
 		})
 	}
 
@@ -206,6 +214,30 @@ func setDifference(a, b map[string]bool) []string {
 	}
 
 	sort.Strings(out)
+
+	return out
+}
+
+// filterManagedSourceTypes drops speaker-local/built-in source types (AUX,
+// BLUETOOTH, AIRPLAY, ALEXA, NOTIFICATION, QPLAY, UPNP,
+// STORED_MUSIC_MEDIA_RENDERER, ...) from types, using the same
+// models.SourceAvailability classification the rest of the service already
+// relies on to decide what it could manage. Every speaker reports its own
+// local sources, and AfterTouch never serves them, so they are expected on
+// the speaker side and not worth surfacing. Anything else — a linkable
+// streaming account like SPOTIFY, or a type the model doesn't recognise at
+// all — is kept, since a managed-but-missing type is exactly what an
+// operator would want to see.
+func filterManagedSourceTypes(types []string) []string {
+	out := make([]string, 0, len(types))
+
+	for _, t := range types {
+		if models.SourceAvailability(t) == models.SourceAvailableLocalOnly {
+			continue
+		}
+
+		out = append(out, t)
+	}
 
 	return out
 }
