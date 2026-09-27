@@ -354,6 +354,9 @@ async function fetchSettings() {
         if (settings.discovery_enabled !== undefined) {
             document.getElementById("discovery-enabled").checked = settings.discovery_enabled;
         }
+        if (settings.player_enabled !== undefined) {
+            document.getElementById("player-enabled").checked = settings.player_enabled;
+        }
         if (settings.update_check_interval) {
             document.getElementById("update-check-interval").value = settings.update_check_interval;
         }
@@ -538,6 +541,7 @@ async function updateSettings() {
         admin_area_auth: document.getElementById("admin-area-auth").value,
         discovery_interval: document.getElementById("discovery-interval").value,
         discovery_enabled: document.getElementById("discovery-enabled").checked,
+        player_enabled: document.getElementById("player-enabled").checked,
         update_check_interval: document.getElementById("update-check-interval").value,
         update_check_enabled: document.getElementById("update-check-enabled").checked,
         dns_enabled: document.getElementById("dns-enabled").checked,
