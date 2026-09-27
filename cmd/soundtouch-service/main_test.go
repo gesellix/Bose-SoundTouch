@@ -19,10 +19,11 @@ import (
 func newTestServiceContext(t *testing.T, args ...string) *cli.Context {
 	t.Helper()
 
-	app := &cli.App{Flags: serviceFlags}
+	flags := copyFlags(t, serviceFlags)
+	app := &cli.App{Flags: flags}
 	set := flag.NewFlagSet("test", flag.ContinueOnError)
 
-	for _, f := range serviceFlags {
+	for _, f := range flags {
 		if err := f.Apply(set); err != nil {
 			t.Fatalf("apply flag %v: %v", f.Names(), err)
 		}
@@ -33,6 +34,38 @@ func newTestServiceContext(t *testing.T, args ...string) *cli.Context {
 	}
 
 	return cli.NewContext(app, set, nil)
+}
+
+// copyFlags returns shallow copies of flags. urfave/cli's Apply writes a
+// value found in the flag's environment variable back into the flag itself
+// (e.g. BoolFlag.Value), so applying the shared serviceFlags in a test that
+// sets PLAYER_ENABLED=false changed the default for every later test run
+// (visible with -count=2 and more).
+func copyFlags(t *testing.T, flags []cli.Flag) []cli.Flag {
+	t.Helper()
+
+	copied := make([]cli.Flag, 0, len(flags))
+
+	for _, f := range flags {
+		switch v := f.(type) {
+		case *cli.BoolFlag:
+			c := *v
+			copied = append(copied, &c)
+		case *cli.StringFlag:
+			c := *v
+			copied = append(copied, &c)
+		case *cli.IntFlag:
+			c := *v
+			copied = append(copied, &c)
+		case *cli.StringSliceFlag:
+			c := *v
+			copied = append(copied, &c)
+		default:
+			t.Fatalf("copyFlags: unhandled flag type %T for %v", f, f.Names())
+		}
+	}
+
+	return copied
 }
 
 func TestResolveFallbackHost(t *testing.T) {
