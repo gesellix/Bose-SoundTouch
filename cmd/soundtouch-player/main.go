@@ -108,7 +108,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:    "service-url",
-				Usage:   "AfterTouch service base URL (e.g. https://soundtouch.local). Required for custom stream URLs to work as presets via LOCAL_INTERNET_RADIO",
+				Usage:   "AfterTouch service base URL (e.g. https://soundtouch.local). Used for server-side calls such as TTS. Play URL no longer needs it: it stores a relative station location the speaker resolves through its BMX registry",
 				EnvVars: []string{"SERVICE_URL"},
 			},
 			&cli.StringFlag{

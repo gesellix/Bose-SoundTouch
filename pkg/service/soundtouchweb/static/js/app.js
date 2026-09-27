@@ -688,7 +688,6 @@ function App() {
                     <${PlayURL}
                         key="play-url"
                         devices=${devices}
-                        serverServiceUrl=${version?.service_url || ''}
                         onPlaybackRequest=${startContentPlayback}
                         playbackBusy=${contentPlaybackBusy}
                     />

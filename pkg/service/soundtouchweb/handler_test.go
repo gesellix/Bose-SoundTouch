@@ -867,8 +867,9 @@ func TestHandlePlayURLReturnsSelectedContentIdentity(t *testing.T) {
 	}))
 	defer speaker.Close()
 
+	// No ServiceURL: the Orion location is relative, so Play URL no longer
+	// needs to know AfterTouch's address (issue 769).
 	app := NewWebApp()
-	app.ServiceURL = "http://aftertouch.test"
 	conn := webtypes.NewDeviceConnection(
 		client.NewClient(&client.Config{Host: speaker.URL}),
 		&models.DeviceInfo{DeviceID: "DEVICE1", Name: "Speaker"},
@@ -885,11 +886,13 @@ func TestHandlePlayURLReturnsSelectedContentIdentity(t *testing.T) {
 		t.Fatalf("play URL status = %d: %s", w.Code, w.Body.String())
 	}
 	expectedLocation := bmxpkg.BuildOrionLocation(
-		app.ServiceURL,
 		"Fixture stream",
 		"http://stream.test/art.png",
 		"http://stream.test/audio",
 	)
+	if !strings.HasPrefix(expectedLocation, "/station?data=") {
+		t.Fatalf("expected a relative Orion location, got %q", expectedLocation)
+	}
 	var response struct {
 		Success bool              `json:"success"`
 		Data    map[string]string `json:"data"`

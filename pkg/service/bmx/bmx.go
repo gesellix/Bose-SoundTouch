@@ -12,11 +12,18 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
 
-// BuildOrionLocation wraps a raw stream URL in the AfterTouch Orion station
-// endpoint that the speaker's BMX module expects when playing LOCAL_INTERNET_RADIO
-// content. The speaker calls GET on the stored location expecting a
-// BmxPlaybackResponse JSON — not raw audio bytes.
-func BuildOrionLocation(serviceURL, name, imageURL, streamURL string) string {
+// BuildOrionLocation wraps a raw stream URL in the relative Orion station
+// location ("/station?data=<base64 JSON>") that the speaker's BMX module
+// expects when playing LOCAL_INTERNET_RADIO content. The speaker calls GET on
+// the location expecting a BmxPlaybackResponse JSON, not raw audio bytes.
+//
+// The location carries no host: the speaker prepends the Orion baseUrl it got
+// from the BMX registry ("{BMX_SERVER}/core02/svc-bmx-adapter-orion/prod/orion"),
+// exactly as it does for TuneIn and Radio Browser. So a preset saved from it
+// keeps working when AfterTouch moves to another address (issue 769). A
+// caller that deliberately wants a fixed host can still hand the speaker an
+// absolute Orion URL; the speaker honours those as given.
+func BuildOrionLocation(name, imageURL, streamURL string) string {
 	payload := struct {
 		Name      string `json:"name"`
 		ImageURL  string `json:"imageUrl"`
@@ -34,7 +41,7 @@ func BuildOrionLocation(serviceURL, name, imageURL, streamURL string) string {
 
 	encoded := url.QueryEscape(base64.StdEncoding.EncodeToString(data))
 
-	return serviceURL + "/core02/svc-bmx-adapter-orion/prod/orion/station?data=" + encoded
+	return models.OrionStationPath + "?data=" + encoded
 }
 
 // BuildCustomStreamResponseFromURLs wraps one or more candidate stream URLs

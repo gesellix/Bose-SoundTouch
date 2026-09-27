@@ -1533,8 +1533,7 @@ func runUpdateCheckTick(checker *updatecheck.Checker, lastLoggedVersion string) 
 
 // newEmbeddedWebApp builds the soundtouch-player application for embedding in the
 // service router: release metadata from the build vars, the service's public
-// ServiceURL (used by Play URL for speaker-fetched stream URLs and shown in the
-// UI), a loopback InternalServiceURL for the player's own server-side self-calls
+// ServiceURL (shown in the UI, for example on the TTS page), a loopback InternalServiceURL for the player's own server-side self-calls
 // (the TTS proxy) so they never depend on TLS or the service CA, and device
 // state sourced entirely from the service.
 //
@@ -1556,8 +1555,9 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 	// public ServiceURL. That avoids the "service doesn't trust its own CA"
 	// x509 failure entirely: loopback is plain HTTP, so it needs no CA and
 	// works on HTTP and HTTPS deployments alike — and before the CA is even
-	// generated. ServiceURL stays the public URL because Play URL bakes it into
-	// stream URLs the speaker fetches and the UI displays it.
+	// generated. ServiceURL stays the public URL because the UI displays it.
+	// (Play URL used to bake it into the station location; it builds a
+	// relative location now, issue 769.)
 	webApp.InternalServiceURL = internalURL
 
 	webApp.ExtraDeviceHosts = func() ([]string, error) {

@@ -2005,10 +2005,12 @@ func (app *WebApp) HandleDevicePlay(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandlePlayURL plays a custom stream URL on a device. When ServiceURL is
-// configured the stream is wrapped in the Orion location format so the
-// speaker's BMX module receives JSON instead of raw audio bytes. This also
-// ensures that the ★ preset save flow stores a working location.
+// HandlePlayURL plays a custom stream URL on a device. The stream is wrapped
+// in the relative Orion location format ("/station?data=...") so the
+// speaker's BMX module receives JSON instead of raw audio bytes. The speaker
+// resolves the location against the Orion baseUrl from its BMX registry, so
+// no service URL is needed here, and a preset saved from it (the ★ flow)
+// keeps working when AfterTouch changes its address (issue 769).
 func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
 
@@ -2023,11 +2025,12 @@ func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Older player pages also send "serviceUrl". It is no longer needed (the
+	// location is relative) and is ignored, like any other unknown field.
 	var req struct {
-		URL        string `json:"url"`
-		Name       string `json:"name"`
-		ImageURL   string `json:"imageUrl"`
-		ServiceURL string `json:"serviceUrl"`
+		URL      string `json:"url"`
+		Name     string `json:"name"`
+		ImageURL string `json:"imageUrl"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2040,22 +2043,7 @@ func (app *WebApp) HandlePlayURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Server-side --service-url wins; fall back to client-supplied value.
-	serviceURL := app.ServiceURL
-	if serviceURL == "" {
-		serviceURL = strings.TrimRight(req.ServiceURL, "/")
-	}
-
-	if serviceURL == "" {
-		app.sendError(w,
-			"AfterTouch service URL is required for LOCAL_INTERNET_RADIO playback. "+
-				"Start soundtouch-player with --service-url <https://your-aftertouch-host> or enter it in the Play URL settings.",
-			http.StatusBadRequest)
-
-		return
-	}
-
-	location := bmxpkg.BuildOrionLocation(serviceURL, req.Name, req.ImageURL, req.URL)
+	location := bmxpkg.BuildOrionLocation(req.Name, req.ImageURL, req.URL)
 
 	contentItem := &models.ContentItem{
 		Source:       "LOCAL_INTERNET_RADIO",

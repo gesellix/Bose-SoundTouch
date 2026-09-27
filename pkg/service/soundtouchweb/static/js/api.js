@@ -233,15 +233,15 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify(item),
     }),
-    playURL: (deviceId, url, name, imageUrl, serviceUrl) => req(`/api/control/devices/${deviceId}/providers/url/play`, {
+    playURL: (deviceId, url, name, imageUrl) => req(`/api/control/devices/${deviceId}/providers/url/play`, {
         method: 'POST',
         headers: JSON_HEADERS,
-        body: JSON.stringify({ url, name, imageUrl, serviceUrl }),
+        body: JSON.stringify({ url, name, imageUrl }),
     }),
-    playURLChecked: (deviceId, url, name, imageUrl, serviceUrl) => checkedReq(`/api/control/devices/${deviceId}/providers/url/play`, {
+    playURLChecked: (deviceId, url, name, imageUrl) => checkedReq(`/api/control/devices/${deviceId}/providers/url/play`, {
         method: 'POST',
         headers: JSON_HEADERS,
-        body: JSON.stringify({ url, name, imageUrl, serviceUrl }),
+        body: JSON.stringify({ url, name, imageUrl }),
     }),
     speak: (deviceId, text) => req(`/api/control/devices/${deviceId}/providers/tts/play`, {
         method: 'POST',

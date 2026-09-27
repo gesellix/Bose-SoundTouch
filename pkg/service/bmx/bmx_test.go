@@ -1,8 +1,62 @@
 package bmx
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"net/url"
+	"strings"
 	"testing"
 )
+
+func TestBuildOrionLocation_IsRelative(t *testing.T) {
+	// Relative, so the speaker resolves it against the Orion baseUrl from the
+	// BMX registry and a stored preset follows AfterTouch to a new address
+	// (issue 769).
+	loc := BuildOrionLocation("Doc Radio", "http://192.0.2.10/art.png", "http://192.0.2.10:8000/stream?a=1&b=2")
+
+	data, ok := strings.CutPrefix(loc, "/station?data=")
+	if !ok {
+		t.Fatalf("location = %q, want relative /station?data=...", loc)
+	}
+
+	if strings.ContainsAny(data, "+/=&") {
+		t.Fatalf("data parameter %q is not query-escaped", data)
+	}
+
+	unescaped, err := url.QueryUnescape(data)
+	if err != nil {
+		t.Fatalf("unescape: %v", err)
+	}
+
+	raw, err := base64.StdEncoding.DecodeString(unescaped)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	var payload struct {
+		Name      string `json:"name"`
+		ImageURL  string `json:"imageUrl"`
+		StreamURL string `json:"streamUrl"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if payload.Name != "Doc Radio" || payload.ImageURL != "http://192.0.2.10/art.png" ||
+		payload.StreamURL != "http://192.0.2.10:8000/stream?a=1&b=2" {
+		t.Fatalf("payload = %+v", payload)
+	}
+
+	// The station endpoint must decode what the builder encodes.
+	resp, err := PlayCustomStream(unescaped)
+	if err != nil {
+		t.Fatalf("PlayCustomStream: %v", err)
+	}
+
+	if resp.Audio.StreamUrl != payload.StreamURL || resp.Name != "Doc Radio" {
+		t.Fatalf("round trip = %+v", resp)
+	}
+}
 
 func TestPlayCustomStream(t *testing.T) {
 	// Test Standard Base64

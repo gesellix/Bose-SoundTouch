@@ -1697,7 +1697,7 @@ function Fixture() {
     request ? h(ContentPlaybackCommand, { key: request.key, request, devices, onStatusReadback, onStateChange, onClear }) : null,
     showTuneIn ? h('section', { id: 'tunein' }, h(TuneInBrowser, props)) : null,
     h('section', { id: 'radio' }, h(RadioBrowser, props)),
-    h('section', { id: 'url' }, h(PlayURL, { ...props, serverServiceUrl: 'http://aftertouch.test' })),
+    h('section', { id: 'url' }, h(PlayURL, props)),
     h('section', { id: 'library' }, h(Library, props)),
   ]);
 }
@@ -1773,7 +1773,7 @@ render(h(Fixture), document.getElementById('fixture'));
 			writes["url"]++
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]string{
-				"source": "LOCAL_INTERNET_RADIO", "location": "/orion/fixture", "itemName": "Fixture stream",
+				"source": "LOCAL_INTERNET_RADIO", "location": "/station?data=fixture", "itemName": "Fixture stream",
 			}})
 		})
 		r.Post("/api/control/devices/speaker/library/play", registerWrite("library"))
@@ -1793,7 +1793,7 @@ render(h(Fixture), document.getElementById('fixture'));
 			expected := map[string]expectedContent{
 				"tunein":       {source: "TUNEIN", location: "/tunein/station", name: "TuneIn station"},
 				"radiobrowser": {source: "RADIO_BROWSER", location: "/radiobrowser/station", name: "RadioBrowser station"},
-				"url":          {source: "LOCAL_INTERNET_RADIO", location: "/orion/fixture", name: "Fixture stream"},
+				"url":          {source: "LOCAL_INTERNET_RADIO", location: "/station?data=fixture", name: "Fixture stream"},
 				"library":      {source: "STORED_MUSIC", account: "uuid:library/0", location: "/library/track", name: "Library track"},
 			}[currentMode]
 			base := map[string]int{"tunein": 10, "radiobrowser": 20, "url": 30, "library": 40}[currentMode]

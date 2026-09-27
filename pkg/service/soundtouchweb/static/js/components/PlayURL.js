@@ -1,38 +1,23 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 
 const html = htm.bind(h);
 
-const LS_KEY = 'aftertouch_service_url';
-
+// The stream is played through a relative Orion location ("/station?data=..."),
+// which the speaker resolves against the service address in its BMX registry.
+// So Play URL needs no AfterTouch URL of its own, and a preset saved from it
+// keeps working when AfterTouch moves (issue 769).
 export function PlayURL({
     devices,
-    serverServiceUrl,
     onPlaybackRequest,
     playbackBusy = false,
     commandReadbackDelays,
 }) {
     const [url, setUrl] = useState('');
     const [name, setName] = useState('');
-    const [serviceUrl, setServiceUrl] = useState(() => localStorage.getItem(LS_KEY) || '');
     const [pendingPlay, setPendingPlay] = useState(null);
-
-    useEffect(() => {
-        if (serverServiceUrl && !localStorage.getItem(LS_KEY)) {
-            setServiceUrl(serverServiceUrl);
-        }
-    }, [serverServiceUrl]);
-
-    function onServiceUrlChange(val) {
-        setServiceUrl(val);
-        if (val) {
-            localStorage.setItem(LS_KEY, val);
-        } else {
-            localStorage.removeItem(LS_KEY);
-        }
-    }
 
     function startPlay() {
         const trimmedUrl = url.trim();
@@ -43,14 +28,11 @@ export function PlayURL({
     function playOn(deviceId) {
         const item = pendingPlay;
         if (!item) return;
-        // When configured server-side, that value wins; send it so a stale
-        // localStorage override never matters.
-        const effectiveServiceUrl = serverServiceUrl || serviceUrl.trim();
         const accepted = onPlaybackRequest?.({
             deviceId,
             action: 'url',
             readbackDelays: commandReadbackDelays,
-            invoke: () => api.playURLChecked(deviceId, item.url, item.name, '', effectiveServiceUrl),
+            invoke: () => api.playURLChecked(deviceId, item.url, item.name, ''),
             expected: {
                 source: 'LOCAL_INTERNET_RADIO',
                 itemName: item.name,
@@ -92,20 +74,6 @@ export function PlayURL({
                 />
                 <button class="btn-primary" onClick=${startPlay} disabled=${!url.trim() || playbackBusy}>▶ Play</button>
             </div>
-            <div class="tunein-toolbar" style="margin-top:.4rem">
-                <input
-                    type="url"
-                    class="tunein-search-input"
-                    placeholder="AfterTouch URL (https://…)"
-                    value=${serverServiceUrl || serviceUrl}
-                    onInput=${(e) => onServiceUrlChange(e.target.value)}
-                    readonly=${!!serverServiceUrl}
-                    title="AfterTouch service base URL — required for LOCAL_INTERNET_RADIO playback and preset save"
-                />
-            </div>
-            ${serverServiceUrl
-                ? html`<div class="track-meta" style="margin-top:.2rem; opacity:.85">Configured server-side (soundtouch-player --service-url); edits here would be ignored.</div>`
-                : null}
             ${pendingPlay ? html`
                 <div class="overlay" onClick=${() => setPendingPlay(null)}>
                     <div class="device-picker" onClick=${(e) => e.stopPropagation()}>

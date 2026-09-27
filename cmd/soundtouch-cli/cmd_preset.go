@@ -104,10 +104,12 @@ func extractPresetParams(c *cli.Context) *presetParams {
 	}
 }
 
-// isOrionLocation reports whether location is already an Orion station URL so
-// we don't double-wrap it.
+// isOrionLocation reports whether location is already an Orion station
+// location, relative ("/station?data=...") or absolute
+// ("<host>/core02/svc-bmx-adapter-orion/prod/orion/station?data=..."), so we
+// don't double-wrap it.
 func isOrionLocation(location string) bool {
-	return strings.Contains(location, "/core02/svc-bmx-adapter-orion/")
+	return models.IsOrionStationLocation(location)
 }
 
 // resolveLocationAndMetadata resolves location and fetches metadata if needed
@@ -122,18 +124,23 @@ func resolveLocationAndMetadata(params *presetParams) error {
 	// location expecting a BmxPlaybackResponse JSON (the Orion station format).
 	// A direct stream URL returns raw audio, which BMX cannot parse, so playback
 	// silently stays on the previous source.
+	//
+	// The wrapped location is relative ("/station?data=..."): the speaker
+	// resolves it against the Orion baseUrl from its BMX registry, so the
+	// preset keeps working when AfterTouch changes its address (issue 769).
+	// An Orion location passed in as --location (relative or absolute) is
+	// stored as given; an absolute one is the way to pin a fixed host on
+	// purpose.
 	if params.source == "LOCAL_INTERNET_RADIO" &&
 		!isOrionLocation(params.location) &&
 		(strings.HasPrefix(params.location, "http://") || strings.HasPrefix(params.location, "https://")) {
-		if params.serviceURL != "" {
-			params.location = bmxpkg.BuildOrionLocation(params.serviceURL, params.name, params.artwork, resolvedLocation)
+		params.location = bmxpkg.BuildOrionLocation(params.name, params.artwork, resolvedLocation)
 
-			fmt.Printf("  Wrapped stream URL in Orion location for LOCAL_INTERNET_RADIO\n")
-		} else {
-			fmt.Printf("  ⚠️  --service-url not set: storing raw stream URL as location.\n")
-			fmt.Printf("     The speaker's BMX module expects an Orion station URL, not raw audio.\n")
-			fmt.Printf("     Re-run with --service-url <https://your-aftertouch-host> to fix this.\n")
-		}
+		fmt.Printf("  Wrapped stream URL in a relative Orion location for LOCAL_INTERNET_RADIO\n")
+	}
+
+	if params.source == "LOCAL_INTERNET_RADIO" && params.serviceURL != "" {
+		fmt.Printf("  Note: --service-url is no longer needed and is ignored; Orion locations are stored relative.\n")
 	}
 
 	// If metadata (name or artwork) is missing, try to fetch it
