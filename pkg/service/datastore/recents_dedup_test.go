@@ -20,7 +20,7 @@ func TestSaveRecents_DeduplicatesByID(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	ds := NewDataStore(tmp)
-	account, device := "6919733", "A81B6A536A98"
+	account, device := "1000001", "DEVICEID01"
 
 	mk := func(id, name string) models.ServiceRecent {
 		var r models.ServiceRecent

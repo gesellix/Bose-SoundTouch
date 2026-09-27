@@ -724,7 +724,7 @@ func TestNowSelectionUpdatedAccessorsTolerateEmptyFrames(t *testing.T) {
 // TestParseWebSocketEvent_KnownEventNoUnknowns confirms a modeled event is not
 // also captured as an unknown element.
 func TestParseWebSocketEvent_KnownEventNoUnknowns(t *testing.T) {
-	raw := []byte(`<updates deviceID="A81B6A536A98"><nowPlayingUpdated><nowPlaying deviceID="A81B6A536A98" source="TUNEIN"></nowPlaying></nowPlayingUpdated></updates>`)
+	raw := []byte(`<updates deviceID="DEVICEID01"><nowPlayingUpdated><nowPlaying deviceID="DEVICEID01" source="TUNEIN"></nowPlaying></nowPlayingUpdated></updates>`)
 
 	event, err := ParseWebSocketEvent(raw)
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 // in-place slice shuffle at the match branch could (a) return the wrong recent
 // (a list neighbor) and (b) drop or duplicate entries in the saved list.
 //
-// Live evidence (account 6919733 / device A81B6A536A98, 2026-06-14): re-playing
+// Live evidence (account 1000001 / device DEVICEID01, 2026-06-14): re-playing
 // the Spotify album "White Water" returned the neighboring "Sand Castle Tapes"
 // recent, and both Spotify recents subsequently vanished from a list that was
 // well under the 10-item cap.

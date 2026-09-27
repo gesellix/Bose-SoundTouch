@@ -104,15 +104,15 @@ func TestEnrichTargets_FillsNameAndIPForDeviceFindings(t *testing.T) {
 	results := []CheckResult{{
 		ID: "c1",
 		Findings: []Finding{
-			{Target: Target{Account: "3230304", Device: "08DF1F0BA325"}}, // per-device: enriched
-			{Target: Target{Account: "3230304"}},                         // account-only: untouched
-			{Target: Target{}},                                           // service-wide: untouched
-			{Target: Target{Device: "UNKNOWNDEV"}},                       // not in resolver: left as-is
+			{Target: Target{Account: "1000002", Device: "DEVICEID02"}}, // per-device: enriched
+			{Target: Target{Account: "1000002"}},                       // account-only: untouched
+			{Target: Target{}},                                         // service-wide: untouched
+			{Target: Target{Device: "UNKNOWNDEV"}},                     // not in resolver: left as-is
 		},
 	}}
 
 	resolve := func(deviceID string) (string, string) {
-		if deviceID == "08DF1F0BA325" {
+		if deviceID == "DEVICEID02" {
 			return "Cantina", "192.0.2.9"
 		}
 		return "", ""

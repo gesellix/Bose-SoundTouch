@@ -30,8 +30,8 @@ func TestRecent_StoredMusicKeepsAccount(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	ds := datastore.NewDataStore(tmp)
-	account := "6919733"
-	device := "A81B6A536A98"
+	account := "1000001"
+	device := "DEVICEID01"
 
 	if mkErr := os.MkdirAll(ds.AccountDeviceDir(account, device), 0o755); mkErr != nil {
 		t.Fatalf("mkdir: %v", mkErr)

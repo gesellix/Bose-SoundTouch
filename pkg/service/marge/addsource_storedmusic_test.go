@@ -27,8 +27,8 @@ func TestAddSource_MultipleStoredMusicServersCoexist(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	ds := datastore.NewDataStore(tempDir)
-	account := "6919733"
-	device := "A81B6A536A98"
+	account := "1000001"
+	device := "DEVICEID01"
 
 	if mkErr := os.MkdirAll(ds.AccountDeviceDir(account, device), 0o755); mkErr != nil {
 		t.Fatalf("mkdir device dir: %v", mkErr)
