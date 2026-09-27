@@ -293,44 +293,72 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		},
 	)
 
-	// QuickFix executor for the dns_speaker_usage per-device info findings.
-	// Lives here (not in the health package) because it needs runDNSPathProbe,
-	// which is part of the handlers layer. The health package deliberately
-	// avoids importing handlers to keep its transitive dep surface small.
+	health.RegisterDNSBypassRiskCheck(
+		s.healthRegistry,
+		s.ds,
+		s.DNSHijackEnabled,
+		func() string {
+			serverURL, _ := s.GetSettings()
+
+			ip, err := s.ResolveServerURLIPForPreflight(serverURL)
+			if err != nil {
+				return ""
+			}
+
+			return ip
+		},
+		func() map[string]time.Time {
+			if s.dnsDiscovery == nil {
+				return map[string]time.Time{}
+			}
+
+			return s.dnsDiscovery.InterceptClientIPs()
+		},
+		s.readSpeakerDNSResolution,
+	)
+
+	// QuickFix executor for the dns_speaker_usage / dns_bypass_risk per-device
+	// info findings. Lives here (not in the health package) because it needs
+	// runDNSPathProbe, which is part of the handlers layer. The health package
+	// deliberately avoids importing handlers to keep its transitive dep
+	// surface small.
 	//
 	// Registered without refresh: this probe is a diagnostic whose value is the
 	// result message ("DNS path OK" / "no callback ..."). A refresh would re-fetch
 	// the whole health list and wipe that message from the UI before the operator
 	// can read it. The operator can refresh manually to see a now-confirmed
 	// speaker drop its finding.
-	s.healthRegistry.RegisterFixNoRefresh(
-		health.CheckIDDNSSpeakerUsage,
-		"probe_dns_path",
-		func(target health.Target) (string, error) {
-			res, err := s.runDNSPathProbe(target.Device, "")
-			if err != nil {
-				return "", err
-			}
-
-			if res.Success {
-				return fmt.Sprintf(
-					"Speaker resolved a Bose hostname through AfterTouch in %.0fms. DNS path OK.",
-					res.LatencyMs,
-				), nil
-			}
-
-			msg := "No /v1/auth callback within the timeout; this speaker likely resolves Bose hostnames via a different DNS resolver."
-			if res.Remediation != "" {
-				msg += " " + res.Remediation
-			}
-
-			return msg, nil
-		},
-	)
+	s.healthRegistry.RegisterFixNoRefresh(health.CheckIDDNSSpeakerUsage, "probe_dns_path", s.probeDNSPathFix)
+	s.healthRegistry.RegisterFixNoRefresh(health.CheckIDDNSBypassRisk, "probe_dns_path", s.probeDNSPathFix)
 
 	s.dismissedAnnouncements = loadDismissedAnnouncements(ds)
 
 	return s
+}
+
+// probeDNSPathFix is the shared probe_dns_path QuickFix executor for both
+// dns_speaker_usage and dns_bypass_risk: it runs an active DNS-path probe on
+// the target device and reports whether the speaker resolved a Bose
+// hostname through AfterTouch.
+func (s *Server) probeDNSPathFix(target health.Target) (string, error) {
+	res, err := s.runDNSPathProbe(target.Device, "")
+	if err != nil {
+		return "", err
+	}
+
+	if res.Success {
+		return fmt.Sprintf(
+			"Speaker resolved a Bose hostname through AfterTouch in %.0fms. DNS path OK.",
+			res.LatencyMs,
+		), nil
+	}
+
+	msg := "No /v1/auth callback within the timeout; this speaker likely resolves Bose hostnames via a different DNS resolver."
+	if res.Remediation != "" {
+		msg += " " + res.Remediation
+	}
+
+	return msg, nil
 }
 
 // clockSetTolerance is how close the speaker's clock must be to the target

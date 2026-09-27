@@ -631,6 +631,79 @@ func (s *Server) readSpeakerBmxRegistryURL(ip string) (string, bool) {
 	return "", false
 }
 
+// dnsResolvHookPaths are the AfterTouch DNS-migration hook file locations
+// checked by readSpeakerDNSResolution: the current path under
+// /mnt/nv/soundtouch-service/ and the legacy /mnt/nv/ path from before that
+// consolidation. See migrateViaResolvConf in pkg/service/setup/setup.go.
+const (
+	dnsResolvHookPathCurrent = "/mnt/nv/soundtouch-service/aftertouch.resolv.conf"
+	dnsResolvHookPathLegacy  = "/mnt/nv/aftertouch.resolv.conf"
+)
+
+// dnsResolvEndMarker separates the /etc/resolv.conf dump from the hook-file
+// exists check in the single combined SSH command readSpeakerDNSResolution
+// runs, so both results come back from one round trip (each SSH handshake
+// against this firmware costs ~500ms-1s, per the batching rationale in
+// pkg/service/setup/ssh_probe.go).
+const dnsResolvEndMarker = "@RESOLV_END@"
+
+// readSpeakerDNSResolution is the SSH probe backing the dns_bypass_risk
+// health check (health.SpeakerDNSResolutionFunc). It reads the speaker's
+// /etc/resolv.conf and checks for either AfterTouch DNS-migration hook file
+// in one SSH round-trip.
+//
+// usesAfterTouch reports whether expectedIP appears as a nameserver line in
+// /etc/resolv.conf. hookInstalled reports whether either hook file exists.
+// sshOK is false when SSH is unreachable or unauthenticated; the caller must
+// then ignore the other two return values rather than treat them as "false"
+// evidence of a bypass.
+func (s *Server) readSpeakerDNSResolution(ip, expectedIP string) (usesAfterTouch, hookInstalled, sshOK bool) {
+	if ip == "" {
+		return false, false, false
+	}
+
+	sc := speakerssh.NewClient(ip)
+
+	cmd := fmt.Sprintf(
+		"cat /etc/resolv.conf 2>/dev/null; echo '%s'; { [ -f %s ] || [ -f %s ]; } && echo HOOK_PRESENT || echo HOOK_ABSENT",
+		dnsResolvEndMarker, dnsResolvHookPathCurrent, dnsResolvHookPathLegacy,
+	)
+
+	out, err := sc.Run(cmd)
+	if err != nil {
+		return false, false, false
+	}
+
+	idx := strings.Index(out, dnsResolvEndMarker)
+	if idx < 0 {
+		// Unexpected output shape (e.g. a shell that doesn't support the
+		// script above) — treat as "couldn't determine", not as a bypass.
+		return false, false, false
+	}
+
+	resolvConf := out[:idx]
+	rest := out[idx+len(dnsResolvEndMarker):]
+
+	hookInstalled = strings.Contains(rest, "HOOK_PRESENT")
+	usesAfterTouch = expectedIP != "" && resolvConfHasNameserver(resolvConf, expectedIP)
+
+	return usesAfterTouch, hookInstalled, true
+}
+
+// resolvConfHasNameserver reports whether any "nameserver <ip>" line in
+// resolv.conf's content names ip, tolerating leading/trailing whitespace and
+// the extra columns BusyBox sometimes appends.
+func resolvConfHasNameserver(resolvConf, ip string) bool {
+	for _, line := range strings.Split(resolvConf, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "nameserver" && fields[1] == ip {
+			return true
+		}
+	}
+
+	return false
+}
+
 // addServiceLog appends the in-memory service log buffer as logs/service.txt.
 // Each entry is formatted as "2006-01-02T15:04:05Z <message>".
 func (s *Server) addServiceLog(tw *tar.Writer) {
