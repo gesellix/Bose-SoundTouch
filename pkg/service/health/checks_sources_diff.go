@@ -167,8 +167,8 @@ func diffSourcesForDeviceWithURL(ds *datastore.DataStore, account, deviceID, ipA
 
 	// Speaker-local/built-in source types (AUX, BLUETOOTH, AIRPLAY, ...) are
 	// never served by AfterTouch and every speaker reports its own copy, so
-	// listing them here is just noise — see the speaker-vs-service source
-	// list note in consistency.go. Only report types the service could
+	// listing them here is just noise (see the speaker-vs-service source
+	// list note in consistency.go). Only report types the service could
 	// plausibly manage (e.g. a linkable streaming account like SPOTIFY).
 	reportable := filterManagedSourceTypes(missingOnService)
 
@@ -224,9 +224,9 @@ func setDifference(a, b map[string]bool) []string {
 // models.SourceAvailability classification the rest of the service already
 // relies on to decide what it could manage. Every speaker reports its own
 // local sources, and AfterTouch never serves them, so they are expected on
-// the speaker side and not worth surfacing. Anything else — a linkable
+// the speaker side and not worth surfacing. Anything else, a linkable
 // streaming account like SPOTIFY, or a type the model doesn't recognise at
-// all — is kept, since a managed-but-missing type is exactly what an
+// all, is kept, since a managed-but-missing type is exactly what an
 // operator would want to see.
 func filterManagedSourceTypes(types []string) []string {
 	out := make([]string, 0, len(types))

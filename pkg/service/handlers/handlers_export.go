@@ -677,7 +677,7 @@ func (s *Server) readSpeakerDNSResolution(ip, expectedIP string) (usesAfterTouch
 	idx := strings.Index(out, dnsResolvEndMarker)
 	if idx < 0 {
 		// Unexpected output shape (e.g. a shell that doesn't support the
-		// script above) — treat as "couldn't determine", not as a bypass.
+		// script above), treat as "couldn't determine", not as a bypass.
 		return false, false, false
 	}
 

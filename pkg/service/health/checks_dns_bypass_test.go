@@ -43,7 +43,7 @@ func TestDNSBypassRisk_DNSOff(t *testing.T) {
 	dnsEnabledFn := func() bool { return false }
 	expectedIPFn := func() string { return "192.0.2.1" }
 	clientIPsFn := func() map[string]time.Time { return map[string]time.Time{} }
-	// If this were consulted while DNS is off, it would report a bypass —
+	// If this were consulted while DNS is off, it would report a bypass,
 	// proving the short-circuit, not just an empty result by chance.
 	resolutionFn := func(_, _ string) (bool, bool, bool) { return false, false, true }
 

@@ -18,7 +18,7 @@ import (
 // a speaker that was never DNS-migrated (no aftertouch.resolv.conf hook, no
 // AfterTouch nameserver in /etc/resolv.conf) still gets handed
 // "https://content.api.bose.io" for TuneIn and the other BMX-delivered
-// services — the shut-down Bose cloud. That is exactly what happened in
+// services, the shut-down Bose cloud. That is exactly what happened in
 // issue #728: a SoundTouch 30 with DNS Discovery on, but never migrated,
 // hit BMX_HTTP_ERROR 4501 (Apigee "ApplicationNotFound") on every TuneIn
 // request, and nothing in the Health tab flagged it at the time.
@@ -33,7 +33,7 @@ const dnsBypassTroubleshootingURL = "https://gesellix.github.io/Bose-SoundTouch/
 // DNSStatusFunc (whether the DNS listener actually bound to a port):
 // HandleBMXRegistry reads the persisted *setting*, not the listener's
 // runtime state, when deciding whether to hand out the Bose-cloud BMX base
-// URL — so the setting, not the listener state, is what actually gates the
+// URL, so the setting, not the listener state, is what actually gates the
 // risk this check reports on.
 type DNSEnabledFunc func() bool
 
@@ -42,14 +42,14 @@ type DNSEnabledFunc func() bool
 // AfterTouch.
 //
 // sshOK is false when SSH is unreachable or unauthenticated; callers must
-// then treat usesAfterTouch and hookInstalled as undefined, not as "false" —
+// then treat usesAfterTouch and hookInstalled as undefined, not as "false",
 // SSH being unavailable is not evidence of a bypass.
 //
 // usesAfterTouch means the speaker's /etc/resolv.conf currently lists
 // expectedIP as a nameserver. hookInstalled means the AfterTouch
 // DNS-migration hook file is present on the speaker (either the current
 // /mnt/nv/soundtouch-service/aftertouch.resolv.conf or the legacy
-// /mnt/nv/aftertouch.resolv.conf — see migrateViaResolvConf in
+// /mnt/nv/aftertouch.resolv.conf, see migrateViaResolvConf in
 // pkg/service/setup/setup.go). The hook file is checked in addition to the
 // live resolv.conf because the udhcpc hook only re-applies the AfterTouch
 // nameserver on DHCP renewal; a speaker that hasn't renewed its lease since
@@ -164,7 +164,7 @@ func assessDNSBypassRisk(
 			if usesAfterTouch || hookInstalled {
 				// Confirmed: this speaker resolves through us (or has the
 				// migration hook installed and will on its next DHCP
-				// renewal). SSH is authoritative here, so we stop —
+				// renewal). SSH is authoritative here, so we stop:
 				// no need to fall back to the weaker query signal.
 				return nil
 			}
@@ -179,10 +179,10 @@ func assessDNSBypassRisk(
 				Details: "Its /etc/resolv.conf has no AfterTouch nameserver and no AfterTouch DNS-migration hook " +
 					"file was found. Because DNS Discovery is on, HandleBMXRegistry still hands this speaker " +
 					"\"https://content.api.bose.io\" as the base URL for TuneIn and the other BMX-delivered " +
-					"services — the shut-down Bose cloud — so those requests fail (BMX_HTTP_ERROR 4501, " +
+					"services, the shut-down Bose cloud, so those requests fail (BMX_HTTP_ERROR 4501, " +
 					"Apigee \"ApplicationNotFound\"). Pick ONE way out: turn off \"Enable DNS Discovery Server\" " +
 					"in Settings, or run the DNS (resolv.conf) migration for this speaker. Either way, reboot " +
-					"the speaker afterward — it keeps its old service list until then. See " +
+					"the speaker afterward: it keeps its old service list until then. See " +
 					dnsBypassTroubleshootingURL + ".",
 				ManualCommands: []ManualCommand{{
 					Label: "Migrate this speaker via DNS (resolv.conf) instead of toggling Settings:",
@@ -191,7 +191,7 @@ func assessDNSBypassRisk(
 						ipAddress,
 					),
 					Hint: "Replace <aftertouch-host> with a LAN-resolvable name or IP of this service. " +
-						"Don't also toggle DNS Discovery off if you run this — pick one remedy, not both, " +
+						"Don't also toggle DNS Discovery off if you run this. Pick one remedy, not both, " +
 						"then reboot the speaker.",
 				}},
 			}}
@@ -216,7 +216,7 @@ func assessDNSBypassRisk(
 		Details: "This device's IP has not appeared as a querier for intercepted Bose hostnames, and no SSH " +
 			"probe of its /etc/resolv.conf was possible (SSH unreachable, or not attempted). It may simply " +
 			"not have played a TuneIn stream since the last restart, or it may be resolving Bose hostnames " +
-			"through a different resolver — in which case TuneIn and the other BMX-delivered services fail " +
+			"through a different resolver, in which case TuneIn and the other BMX-delivered services fail " +
 			"with BMX_HTTP_ERROR 4501 against the shut-down Bose cloud. Use 'Test DNS path' to check now, " +
 			"or see " + dnsBypassTroubleshootingURL + " if TuneIn is actually failing.",
 		QuickFixes: []QuickFix{probeDNSPathQuickFix},

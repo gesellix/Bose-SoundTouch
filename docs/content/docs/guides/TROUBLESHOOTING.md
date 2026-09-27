@@ -684,7 +684,7 @@ Then reboot the speaker (or use "Refresh sources"). Afterwards the Migration tab
 Notes:
 
 - This needs the speaker's telnet diagnostic port (`17000`) to be reachable. Most SoundTouch models expose it; some hardened firmware builds do not, in which case use the factory-reset fallback below.
-- It writes AfterTouch's address (`http://<aftertouch-host>:8000`) **straight onto the speaker**, so there is no `bose:8000` hostname for the speaker to resolve. That is why pointing the service at `http://bose:8000` and adding a `bose` entry to your server's `/etc/hosts` does **not** help: the speaker is a separate device and never reads that file. If you prefer to redirect in the network instead of writing on the device, enable AfterTouch's built-in DNS (Settings) and have the speaker use AfterTouch as its resolver — see the FRITZ!Box + AdGuard guide. If you go this route, make sure the speaker actually resolves through AfterTouch afterward — see [TuneIn fails with BMX_HTTP_ERROR 4501 while DNS Discovery is on](#tunein-4501-dns) for the failure mode when it doesn't.
+- It writes AfterTouch's address (`http://<aftertouch-host>:8000`) **straight onto the speaker**, so there is no `bose:8000` hostname for the speaker to resolve. That is why pointing the service at `http://bose:8000` and adding a `bose` entry to your server's `/etc/hosts` does **not** help: the speaker is a separate device and never reads that file. If you prefer to redirect in the network instead of writing on the device, enable AfterTouch's built-in DNS (Settings) and have the speaker use AfterTouch as its resolver, see the FRITZ!Box + AdGuard guide. If you go this route, make sure the speaker actually resolves through AfterTouch afterward, see [TuneIn fails with BMX_HTTP_ERROR 4501 while DNS Discovery is on](#tunein-4501-dns) for the failure mode when it doesn't.
 - Get `soundtouch-cli` from the [Downloads page](../downloads/_index.md) if you don't already have it.
 
 **Workaround (fallback — factory reset):**
@@ -703,17 +703,17 @@ After this the radio sources activate normally. Note the factory reset rewrites 
 **Symptoms:**
 
 - TuneIn (or Internet Radio in general) fails to play; the speaker's own log (`logread` over SSH/telnet) shows `BMX_HTTP_ERROR 4501` for the failing request.
-- The response body behind that error, if you capture it, is an Apigee `ApplicationNotFound` 404 — this means the speaker reached the real Bose cloud (Apigee), which was shut down, not AfterTouch.
+- The response body behind that error, if you capture it, is an Apigee `ApplicationNotFound` 404. This means the speaker reached the real Bose cloud (Apigee), which was shut down, not AfterTouch.
 - Settings shows **"Enable DNS Discovery Server"** turned on.
 
 **Cause:**
 
-`HandleBMXRegistry` hands out `https://content.api.bose.io` as the base URL for TuneIn and the other BMX-delivered services whenever DNS Discovery is enabled — it assumes every speaker resolves Bose hostnames through AfterTouch's own DNS server. A speaker that was never actually DNS-migrated (no AfterTouch nameserver in its `/etc/resolv.conf`, no `aftertouch.resolv.conf` hook installed) still gets handed that cloud URL, reaches the dead Apigee endpoint, and fails with 4501. This is exactly what happened in [issue #728](https://github.com/gesellix/Bose-SoundTouch/issues/728).
+`HandleBMXRegistry` hands out `https://content.api.bose.io` as the base URL for TuneIn and the other BMX-delivered services whenever DNS Discovery is enabled. It assumes every speaker resolves Bose hostnames through AfterTouch's own DNS server. A speaker that was never actually DNS-migrated (no AfterTouch nameserver in its `/etc/resolv.conf`, no `aftertouch.resolv.conf` hook installed) still gets handed that cloud URL, reaches the dead Apigee endpoint, and fails with 4501. This is exactly what happened in [issue #728](https://github.com/gesellix/Bose-SoundTouch/issues/728).
 
 **Diagnose:**
 
 1. Check Settings → is **"Enable DNS Discovery Server"** on?
-2. Check the Health tab for the **dns_bypass_risk** check. A warning there means AfterTouch has positive SSH evidence (via the speaker's own `/etc/resolv.conf`) that this speaker isn't resolving through it. An info-level finding (or the related **dns_speaker_usage** check) means it's unconfirmed either way — the speaker may simply not have queried an intercepted hostname yet, not necessarily be bypassing DNS.
+2. Check the Health tab for the **dns_bypass_risk** check. A warning there means AfterTouch has positive SSH evidence (via the speaker's own `/etc/resolv.conf`) that this speaker isn't resolving through it. An info-level finding (or the related **dns_speaker_usage** check) means it's unconfirmed either way, the speaker may simply not have queried an intercepted hostname yet, not necessarily be bypassing DNS.
 3. If you have SSH access to the speaker, confirm directly:
    ```bash
    ssh root@<speaker-ip>
@@ -723,7 +723,7 @@ After this the radio sources activate normally. Note the factory reset rewrites 
    No AfterTouch nameserver and no hook file present means this speaker is not DNS-migrated.
 4. `logread` on the speaker (or a diagnostic export) confirms the 4501 / Apigee signature described above.
 
-**Fix — pick ONE way out, don't toggle back and forth:**
+**Fix: pick ONE way out, don't toggle back and forth:**
 
 - **Turn DNS Discovery off** in Settings, if you don't actually want DNS-based redirection for this speaker (or any speaker on this network). This is the simplest fix when you only migrated via telnet/XML/hosts and never intended to rely on DNS.
 - **Or** DNS-migrate this speaker, so it actually gets the AfterTouch nameserver and hook file:
@@ -731,17 +731,17 @@ After this the radio sources activate normally. Note the factory reset rewrites 
   soundtouch-cli --host <speaker-ip> setup migrate --method resolv --service-url http://<aftertouch-host>:8000
   ```
 
-Switching between these repeatedly on the same speaker without rebooting in between is how a reporter on #728 ended up in a confusing mixed state (TuneIn playing but `recent_mismatch` warnings growing, and TuneIn stations misreported as `INTERNET_RADIO`) — pick one and stick with it.
+Switching between these repeatedly on the same speaker without rebooting in between is how a reporter on #728 ended up in a confusing mixed state (TuneIn playing but `recent_mismatch` warnings growing, and TuneIn stations misreported as `INTERNET_RADIO`), pick one and stick with it.
 
 **Reboot required:**
 
-Whichever fix you pick, reboot the speaker afterward. It keeps its old BMX service list — including whatever base URL it already fetched — until it restarts and re-fetches the registry.
+Whichever fix you pick, reboot the speaker afterward. It keeps its old BMX service list, including whatever base URL it already fetched, until it restarts and re-fetches the registry.
 
 **Verify:**
 
 1. Play a TuneIn station.
 2. Check the Health tab. `dns_bypass_risk` / `dns_speaker_usage` should drop their finding for this device once it's confirmed using AfterTouch's DNS (or once DNS Discovery is off, `dns_bypass_risk` has nothing to say at all).
-3. A `recent_mismatch` warning can show up briefly right after the fix, while the service catches up on the speaker's latest `/recents` notification — this is not itself evidence the DNS fix failed. Give it a little time (and a manual health refresh) rather than immediately changing more settings.
+3. A `recent_mismatch` warning can show up briefly right after the fix, while the service catches up on the speaker's latest `/recents` notification. This is not itself evidence the DNS fix failed. Give it a little time (and a manual health refresh) rather than immediately changing more settings.
 
 See also [Radio sources never activate after an in-place migration](#radio-sources-after-migration) for the non-DNS variant of the same underlying mechanism (a stale `bmxRegistryUrl`), and [Changing Target Domain in Settings doesn't change what a speaker actually uses](#settings-vs-migrate) for why a Settings change alone never reaches an already-migrated speaker.
 
