@@ -1148,9 +1148,9 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 	// nil means "never configured" (e.g. an install that predates issue 762),
 	// which keeps the CLI/env value (default: enabled) rather than silently
 	// switching the player off. Once the Settings page saves this at least
-	// once, the persisted value always wins on later restarts -- same rule as
-	// every other Settings-page field, and the fix for the "env override
-	// silently reverts a UI save" shape of issue #744.
+	// once, the persisted value always wins on later restarts, the same rule
+	// as every other Settings-page field. From then on PLAYER_ENABLED has no
+	// effect (issue 744 is about how that precedence is presented).
 	if persisted.PlayerEnabled != nil {
 		config.playerEnabled = *persisted.PlayerEnabled
 	}
