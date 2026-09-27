@@ -174,8 +174,9 @@ host and won't play until you save them again from the new address.
 **TuneIn** and **Radio Browser** presets don't have this problem: they
 only store the station's name/ID, not a service address, so they keep
 working unchanged. Making these Play URL locations relative instead of
-absolute is a known improvement worth making; there's no fix in place yet,
-so for now, plan on re-saving Play URL presets after any address change.
+absolute is tracked in
+[issue #769](https://github.com/gesellix/Bose-SoundTouch/issues/769); until
+then, plan on re-saving Play URL presets after any address change.
 
 NAS/DLNA (stored-music) playback doesn't go through AfterTouch at all, so
 it's unaffected by any of this.
