@@ -325,48 +325,42 @@ the speaker time to buffer and confirm the stream before storing.
 # Preset 1 — Hitradio OE3
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 source custom-radio \
   --url "http://orf-live.ors-shoutcast.at/oe3-q2a" \
-  --name "Hitradio OE3" \
-  --service-url "http://localhost:8000"
+  --name "Hitradio OE3"
 sleep 5
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 preset store-current --slot 1
 
 # Preset 2 — Lounge FM
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 source custom-radio \
   --url "http://188.138.9.183/digital.mp3" \
-  --name "Lounge FM" \
-  --service-url "http://localhost:8000"
+  --name "Lounge FM"
 sleep 5
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 preset store-current --slot 2
 
 # Preset 3 — Country Nonstop
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 source custom-radio \
   --url "https://stream.laut.fm/country-nonstop" \
-  --name "Country Nonstop" \
-  --service-url "http://localhost:8000"
+  --name "Country Nonstop"
 sleep 5
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 preset store-current --slot 3
 
 # Preset 4 — Radio Piterpan
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 source custom-radio \
   --url "https://klasse1.fluidstream.eu/piterpan.mp3?FLID=8" \
-  --name "Radio Piterpan" \
-  --service-url "http://localhost:8000"
+  --name "Radio Piterpan"
 sleep 5
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 preset store-current --slot 4
 
 # Preset 5 — kronehit
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 source custom-radio \
   --url "https://secureonair.krone.at/kronehit-hp.mp3" \
-  --name "kronehit" \
-  --service-url "http://localhost:8000"
+  --name "kronehit"
 sleep 5
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 preset store-current --slot 5
 
 # Preset 6 — Radio Niederösterreich
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 source custom-radio \
   --url "http://orf-live.ors-shoutcast.at/noe-q2a" \
-  --name "Radio Niederoesterreich" \
-  --service-url "http://localhost:8000"
+  --name "Radio Niederoesterreich"
 sleep 5
 /mnt/nv/aftertouch/soundtouch-cli --host 127.0.0.1 preset store-current --slot 6
 ```

@@ -1034,7 +1034,7 @@ func main() {
 					},
 					{
 						Name:   "custom-radio",
-						Usage:  "Select custom radio stream via soundtouch-service",
+						Usage:  "Select a radio stream through AfterTouch (relative Orion station location)",
 						Action: selectCustomRadio,
 						Before: RequireHost,
 						Flags: []cli.Flag{
@@ -1055,8 +1055,7 @@ func main() {
 							},
 							&cli.StringFlag{
 								Name:  "service-url",
-								Usage: "URL of the soundtouch-service (default: http://localhost:8080)",
-								Value: "http://localhost:8080",
+								Usage: "Ignored (kept for compatibility): the station location is relative and follows the speaker's AfterTouch address",
 							},
 						},
 					},

@@ -27,9 +27,9 @@ All content selection features from the [SoundTouch WebServices API Wiki](https:
 - **Use Cases**: Internet radio streams, proxy-based radio services
 
 #### `SelectLocalInternetRadio(location, ...)` via `soundtouch-service`
-- **Purpose**: Select custom radio stream via local `soundtouch-service` proxy
+- **Purpose**: Select a radio stream through AfterTouch's Orion station adapter
 - **Features**:
-  - Flexible stream URL encoding (Base64 or URL-escaped)
+  - Relative station location (`/station?data=...`), resolved by the speaker against the Orion address in its BMX registry, so presets keep working when AfterTouch's address changes (issue 769)
   - Dynamic generation of Bose-compatible playback JSON
   - Seamless integration with existing `LOCAL_INTERNET_RADIO` source
 - **Use Case**: Playing any internet radio URL without external proxy dependencies
@@ -63,8 +63,7 @@ soundtouch-cli --host <device> source internet-radio \
 soundtouch-cli --host <device> source custom-radio \
   --url "https://stream.example.com/radio" \
   --name "My Station" \
-  --artwork "https://example.com/art.png" \
-  --service-url "http://localhost:8080"
+  --artwork "https://example.com/art.png"
 ```
 
 #### `soundtouch-cli source local-music`

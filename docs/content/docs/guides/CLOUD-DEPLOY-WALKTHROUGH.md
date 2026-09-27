@@ -341,8 +341,7 @@ soundtouch-cli --host 192.0.2.1 preset store-current --slot 1
 ```bash
 soundtouch-cli --host 192.0.2.1 source custom-radio \
   --url "https://stream.laut.fm/country-nonstop" \
-  --name "Country Nonstop" \
-  --service-url "https://soundtouch.example.com"
+  --name "Country Nonstop"
 sleep 5
 soundtouch-cli --host 192.0.2.1 preset store-current --slot 1
 ```

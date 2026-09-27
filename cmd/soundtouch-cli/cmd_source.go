@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/urfave/cli/v2"
 )
 
@@ -255,6 +254,12 @@ func selectLocalInternetRadio(c *cli.Context) error {
 	return nil
 }
 
+// customRadioLocation wraps a raw stream URL in a relative Orion station
+// location (/station?data=...).
+func customRadioLocation(name, artwork, streamURL string) string {
+	return bmxpkg.BuildOrionLocation(name, artwork, streamURL)
+}
+
 // selectCustomRadio handles selecting custom radio stream via soundtouch-service
 func selectCustomRadio(c *cli.Context) error {
 	clientConfig := GetClientConfig(c)
@@ -267,22 +272,14 @@ func selectCustomRadio(c *cli.Context) error {
 	streamURL := c.String("url")
 	itemName := c.String("name")
 	containerArt := c.String("artwork")
-	serviceURL := c.String("service-url")
 
-	encodedURL := base64.URLEncoding.EncodeToString([]byte(streamURL))
-	location := fmt.Sprintf("%s/custom/v1/playback/%s", serviceURL, encodedURL)
+	// Relative Orion station location (issue 769): the speaker resolves it
+	// against the Orion baseUrl from its BMX registry, so a preset saved from
+	// this stream keeps working when AfterTouch changes its address.
+	location := customRadioLocation(itemName, containerArt, streamURL)
 
-	params := url.Values{}
-	if itemName != "" {
-		params.Add("name", itemName)
-	}
-
-	if containerArt != "" {
-		params.Add("imageUrl", containerArt)
-	}
-
-	if len(params) > 0 {
-		location += "?" + params.Encode()
+	if c.IsSet("service-url") {
+		fmt.Printf("  Note: --service-url is no longer needed and is ignored; the station location is relative.\n")
 	}
 
 	// Check LOCAL_INTERNET_RADIO availability
@@ -298,7 +295,7 @@ func selectCustomRadio(c *cli.Context) error {
 	}
 
 	fmt.Printf("  URL: %s\n", streamURL)
-	fmt.Printf("  Proxy: %s\n", location)
+	fmt.Printf("  Location: %s\n", location)
 
 	err = client.SelectLocalInternetRadio(location, "", itemName, containerArt)
 	if err != nil {

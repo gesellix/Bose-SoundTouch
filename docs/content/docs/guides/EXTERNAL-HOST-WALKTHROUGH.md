@@ -245,8 +245,7 @@ Download the CLI for your machine from the
 # Play a custom radio stream on the speaker
 soundtouch-cli --host 192.0.2.1 source custom-radio \
   --url "https://stream.laut.fm/country-nonstop" \
-  --name "Country Nonstop" \
-  --service-url "http://<host-ip>:8000"
+  --name "Country Nonstop"
 sleep 5
 
 # Store it to preset slot 1
