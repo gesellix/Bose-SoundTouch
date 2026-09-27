@@ -151,3 +151,40 @@ func TestHandleAdminServesConsole(t *testing.T) {
 		t.Error("admin body did not contain the console markup")
 	}
 }
+
+// TestHandleRootChooserMutesPlayerWhenDisabled: with the player off
+// (issue 762) the chooser keeps the Player entry, so the page layout stays
+// familiar, but muted and without a link into the refused /app route.
+func TestHandleRootChooserMutesPlayerWhenDisabled(t *testing.T) {
+	server := newLandingServer(t, "")
+
+	rec := httptest.NewRecorder()
+	server.HandleRoot(rec, htmlGet("/"))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `href="/app"`) || strings.Contains(body, `<a class="dest dest--player dest--off"`) {
+		t.Fatal("player enabled: expected the ordinary Player link")
+	}
+
+	server.SetPlayerEnabled(false)
+
+	rec = httptest.NewRecorder()
+	server.HandleRoot(rec, htmlGet("/"))
+
+	body = rec.Body.String()
+	if strings.Contains(body, `href="/app"`) {
+		t.Error("player disabled: the chooser still links to /app")
+	}
+
+	if !strings.Contains(body, `<a class="dest dest--player dest--off" aria-disabled="true"`) {
+		t.Error("player disabled: expected a muted Player entry")
+	}
+
+	if !strings.Contains(body, "Turned off in the admin console's Settings.") {
+		t.Error("player disabled: expected the entry to say why it is muted")
+	}
+
+	if !strings.Contains(body, `href="/admin"`) {
+		t.Error("player disabled: the admin entry must stay")
+	}
+}

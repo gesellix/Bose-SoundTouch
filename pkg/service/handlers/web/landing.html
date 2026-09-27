@@ -125,6 +125,11 @@
         /* The player is the everyday surface: its arrow carries the live
            accent so the eye lands there first. */
         .dest--player:hover .arrow { color: var(--live); }
+        /* Player turned off in Settings (issue 762): the entry stays so the
+           page keeps its shape, but muted and inert. */
+        .dest--off { opacity: 0.5; cursor: default; }
+        .dest--off:hover { background: none; }
+        .dest--off:hover .arrow { transform: none; color: var(--text-dim); }
 
         /* The console is the privileged surface: a key glyph and a quiet
            tag mark it as setup / diagnostics rather than daily use. */
