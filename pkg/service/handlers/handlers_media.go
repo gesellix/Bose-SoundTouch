@@ -125,8 +125,13 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	if !r.URL.Query().Has("chooser") {
 		switch s.defaultLanding() {
 		case "app":
-			http.Redirect(w, r, "/app", http.StatusFound)
-			return
+			// Falls through to the chooser when the player is disabled
+			// (issue 762) instead of redirecting into a route that would
+			// just 404 with the disabled message.
+			if s.PlayerEnabled() {
+				http.Redirect(w, r, "/app", http.StatusFound)
+				return
+			}
 		case "admin":
 			http.Redirect(w, r, "/admin", http.StatusFound)
 			return

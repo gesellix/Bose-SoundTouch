@@ -142,6 +142,26 @@ func (s *Server) persistedCatalogSize() *int {
 	return persisted.CatalogSize
 }
 
+// applyPlayerEnabledLocked updates the live player-enabled flag and the
+// persisted setting from the request's optional field, following the same
+// "nil means preserve, only an explicit value changes it" rule as
+// applyCatalogSize/TLSExtraHosts (issue #589's shape) -- important here
+// because flipping this off has a real side effect: it stops the player's
+// background device polling. Must be called with s.mu held (it reads and
+// writes s.playerEnabled directly). Returns the value before and after, so
+// the caller can fire notifyPlayerEnabledChanged only on an actual change,
+// once the lock is released.
+func (s *Server) applyPlayerEnabledLocked(persisted *datastore.Settings, sent *bool) (previous, current bool) {
+	previous = s.playerEnabled
+
+	if sent != nil {
+		s.playerEnabled = *sent
+		persisted.PlayerEnabled = sent
+	}
+
+	return previous, s.playerEnabled
+}
+
 // applyCatalogSize sets the preset catalog's cap from what the form sent.
 //
 // A nil value means the caller did not send the field at all, and then nothing
@@ -227,6 +247,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	httpsOverride := s.httpsOverride
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
+	playerEnabled := s.playerEnabled
 	// Read the update-check fields directly rather than via
 	// GetUpdateCheckSettings(): that getter takes s.mu.RLock itself, and Go's
 	// sync.RWMutex is not reentrant-safe against a concurrent writer.
@@ -313,6 +334,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"https_443_lan_host":            probe443.LANHost,
 		"discovery_interval":            discoveryInterval,
 		"discovery_enabled":             discoveryEnabled,
+		"player_enabled":                playerEnabled,
 		"update_check_interval":         updateCheckInterval,
 		"update_check_enabled":          updateCheckEnabled,
 		"dns_enabled":                   dnsEnabled,
@@ -408,32 +430,38 @@ func resolvePeriodicSetting(
 // HandleUpdateSettings updates the service settings.
 func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var settings struct {
-		ServerURL              string         `json:"server_url"`
-		HTTPSServerURLOverride *string        `json:"https_server_url_override"`
-		DiscoveryInterval      string         `json:"discovery_interval"`
-		DiscoveryEnabled       bool           `json:"discovery_enabled"`
-		UpdateCheckInterval    string         `json:"update_check_interval"`
-		UpdateCheckEnabled     bool           `json:"update_check_enabled"`
-		DNSEnabled             bool           `json:"dns_enabled"`
-		DNSUpstream            string         `json:"dns_upstream"`
-		DNSBindAddr            string         `json:"dns_bind_addr"`
-		InternalPaths          []string       `json:"internal_paths"`
-		Shortcuts              map[string]int `json:"shortcuts"`
-		SpotifyClientID        string         `json:"spotify_client_id"`
-		SpotifyClientSecret    string         `json:"spotify_client_secret"`
-		SpotifyRedirectURI     string         `json:"spotify_redirect_uri"`
-		AmazonClientID         string         `json:"amazon_client_id"`
-		AmazonClientSecret     string         `json:"amazon_client_secret"`
-		AmazonRedirectURI      string         `json:"amazon_redirect_uri"`
-		TTSProvider            string         `json:"tts_provider"`
-		TTSGoogleAPIKey        string         `json:"tts_google_api_key"`
-		TTSAppKey              string         `json:"tts_app_key"`
-		TTSLanguage            string         `json:"tts_language"`
-		TTSVoice               string         `json:"tts_voice"`
-		TTSVolume              int            `json:"tts_volume"`
-		TLSExtraHosts          *[]string      `json:"tls_extra_hosts"`
-		DefaultLanding         string         `json:"default_landing"`
-		AdminAreaAuth          string         `json:"admin_area_auth"`
+		ServerURL              string  `json:"server_url"`
+		HTTPSServerURLOverride *string `json:"https_server_url_override"`
+		DiscoveryInterval      string  `json:"discovery_interval"`
+		DiscoveryEnabled       bool    `json:"discovery_enabled"`
+		// nil means "field omitted, preserve"; a caller must explicitly send
+		// true or false to change it. Protects partial-form saves the same
+		// way TLSExtraHosts/CatalogSize do (issue #589's shape) -- important
+		// here because flipping this off has a real side effect (it stops
+		// the player's background device polling).
+		PlayerEnabled       *bool          `json:"player_enabled"`
+		UpdateCheckInterval string         `json:"update_check_interval"`
+		UpdateCheckEnabled  bool           `json:"update_check_enabled"`
+		DNSEnabled          bool           `json:"dns_enabled"`
+		DNSUpstream         string         `json:"dns_upstream"`
+		DNSBindAddr         string         `json:"dns_bind_addr"`
+		InternalPaths       []string       `json:"internal_paths"`
+		Shortcuts           map[string]int `json:"shortcuts"`
+		SpotifyClientID     string         `json:"spotify_client_id"`
+		SpotifyClientSecret string         `json:"spotify_client_secret"`
+		SpotifyRedirectURI  string         `json:"spotify_redirect_uri"`
+		AmazonClientID      string         `json:"amazon_client_id"`
+		AmazonClientSecret  string         `json:"amazon_client_secret"`
+		AmazonRedirectURI   string         `json:"amazon_redirect_uri"`
+		TTSProvider         string         `json:"tts_provider"`
+		TTSGoogleAPIKey     string         `json:"tts_google_api_key"`
+		TTSAppKey           string         `json:"tts_app_key"`
+		TTSLanguage         string         `json:"tts_language"`
+		TTSVoice            string         `json:"tts_voice"`
+		TTSVolume           int            `json:"tts_volume"`
+		TLSExtraHosts       *[]string      `json:"tls_extra_hosts"`
+		DefaultLanding      string         `json:"default_landing"`
+		AdminAreaAuth       string         `json:"admin_area_auth"`
 		// Sent as a string so all three states fit on the wire, following the
 		// same rule as tls_extra_hosts: omitted (nil) means "preserve what is
 		// stored", "" means "unset, use the default", and a number sets the
@@ -607,6 +635,8 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	persisted.DefaultLanding = defaultLanding
 	persisted.AdminAreaAuth = s.adminAreaAuth
 
+	previousPlayerEnabled, newPlayerEnabled := s.applyPlayerEnabledLocked(&persisted, settings.PlayerEnabled)
+
 	if sizeErr := applyCatalogSize(&persisted, settings.CatalogSize); sizeErr != nil {
 		s.mu.Unlock()
 		http.Error(w, sizeErr.Error(), http.StatusBadRequest)
@@ -623,6 +653,13 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	reinitAmazon := s.amazonClientID != ""
 
 	s.mu.Unlock()
+
+	// Fired only on a real change, so a settings save that leaves
+	// player_enabled untouched never disturbs the player's already-running
+	// device polling.
+	if newPlayerEnabled != previousPlayerEnabled {
+		s.notifyPlayerEnabledChanged(newPlayerEnabled)
+	}
 
 	s.SetDNSSettings(dnsEnabled, dnsUpstreamStr, dnsBindAddr)
 

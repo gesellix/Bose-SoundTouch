@@ -76,6 +76,26 @@ func TestHandleRootRedirects(t *testing.T) {
 	}
 }
 
+// TestHandleRootAppLandingFallsBackToChooserWhenPlayerDisabled: default_landing
+// "app" normally redirects to /app, but that route is refused with the
+// disabled message while the player is off (issue 762), so redirecting there
+// would just confuse the operator. Falls back to serving the chooser instead.
+func TestHandleRootAppLandingFallsBackToChooserWhenPlayerDisabled(t *testing.T) {
+	server := newLandingServer(t, "app")
+	server.SetPlayerEnabled(false)
+
+	rec := httptest.NewRecorder()
+	server.HandleRoot(rec, htmlGet("/"))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; want 200 (chooser, not a redirect into a disabled route)", rec.Code)
+	}
+
+	if !strings.Contains(rec.Body.String(), `href="/admin"`) {
+		t.Error("expected the chooser body")
+	}
+}
+
 // TestHandleRootChooserOverride: "?chooser" forces the chooser even when a
 // default redirect is configured, so the hub stays reachable.
 func TestHandleRootChooserOverride(t *testing.T) {

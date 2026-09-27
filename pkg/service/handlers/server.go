@@ -52,6 +52,8 @@ type Server struct {
 	recordEnabled            bool
 	discoveryInterval        time.Duration
 	discoveryEnabled         bool
+	playerEnabled            bool // live embedded-player opt-out; defaults on (issue 762)
+	playerEnabledChangedHook func(enabled bool)
 	updateCheckInterval      time.Duration // live update-check interval; see SetUpdateCheckSettings
 	updateCheckEnabled       bool          // live update-check opt-in; defaults off (#591)
 	dnsEnabled               bool
@@ -143,6 +145,9 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		recordEnabled:     recordEnabled,
 		discoveryInterval: 5 * time.Minute,
 		discoveryEnabled:  true,
+		// The embedded player is on by default (issue 762): existing installs
+		// must see no change unless an operator explicitly opts out.
+		playerEnabled: true,
 		// The update check is opt-in (#591): only the interval gets a default,
 		// updateCheckEnabled stays false so no install starts making outbound
 		// GitHub calls without an explicit yes.
@@ -609,6 +614,52 @@ func (s *Server) GetUpdateCheckSettings() (time.Duration, bool) {
 	defer s.mu.RUnlock()
 
 	return s.updateCheckInterval, s.updateCheckEnabled
+}
+
+// PlayerEnabled reports whether the embedded player (soundtouch-player at
+// /app and its /api/control API) is currently enabled. Live-readable so the
+// router's PlayerGateMiddleware and the embedded build's background device
+// polling can react to a Settings-page toggle without a restart (issue 762).
+func (s *Server) PlayerEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.playerEnabled
+}
+
+// SetPlayerEnabled sets the live player-enabled flag. Called once at startup
+// from the persisted/CLI-derived config; HandleUpdateSettings calls it again
+// whenever the Settings-page toggle changes. Does not itself fire
+// playerEnabledChangedHook -- see notifyPlayerEnabledChanged.
+func (s *Server) SetPlayerEnabled(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.playerEnabled = enabled
+}
+
+// SetPlayerEnabledChangedHook registers a callback fired when the live
+// player-enabled flag actually changes value (not on every settings save).
+// The embedded build uses this to start or stop the player's background
+// device polling -- status poll, balance watch, discovery seeding -- without
+// restarting the process (issue 762). Nil-safe.
+func (s *Server) SetPlayerEnabledChangedHook(hook func(enabled bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.playerEnabledChangedHook = hook
+}
+
+// notifyPlayerEnabledChanged fires the player-enabled-changed hook, if one is
+// registered.
+func (s *Server) notifyPlayerEnabledChanged(enabled bool) {
+	s.mu.RLock()
+	hook := s.playerEnabledChangedHook
+	s.mu.RUnlock()
+
+	if hook != nil {
+		hook(enabled)
+	}
 }
 
 // SetDevicesChangedHook registers a callback fired after the known device set

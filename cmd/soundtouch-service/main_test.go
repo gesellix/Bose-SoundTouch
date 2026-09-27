@@ -276,6 +276,88 @@ func TestApplyPersistedSettings(t *testing.T) {
 			t.Errorf("Expected redact to be true, got false")
 		}
 	})
+
+	// issue 762: an install that predates this setting has no player_enabled
+	// key in settings.json at all, which must not silently disable the
+	// player. Only an explicit persisted value (true or false) should ever
+	// override the CLI/env-derived config.playerEnabled.
+	t.Run("player_enabled: nil (never configured) keeps the CLI/env value", func(t *testing.T) {
+		if err := ds.SaveSettings(datastore.Settings{}); err != nil {
+			t.Fatalf("Failed to save settings: %v", err)
+		}
+
+		config := &serviceConfig{playerEnabled: true}
+		applyPersistedSettings(ds, config)
+
+		if !config.playerEnabled {
+			t.Errorf("nil persisted PlayerEnabled must not disable an install that defaults to enabled")
+		}
+	})
+
+	t.Run("player_enabled: explicit false overrides the CLI/env value", func(t *testing.T) {
+		disabled := false
+		if err := ds.SaveSettings(datastore.Settings{PlayerEnabled: &disabled}); err != nil {
+			t.Fatalf("Failed to save settings: %v", err)
+		}
+
+		config := &serviceConfig{playerEnabled: true}
+		applyPersistedSettings(ds, config)
+
+		if config.playerEnabled {
+			t.Errorf("persisted PlayerEnabled=false must win over the CLI/env default")
+		}
+	})
+
+	t.Run("player_enabled: explicit true overrides the CLI/env value", func(t *testing.T) {
+		enabled := true
+		if err := ds.SaveSettings(datastore.Settings{PlayerEnabled: &enabled}); err != nil {
+			t.Fatalf("Failed to save settings: %v", err)
+		}
+
+		config := &serviceConfig{playerEnabled: false}
+		applyPersistedSettings(ds, config)
+
+		if !config.playerEnabled {
+			t.Errorf("persisted PlayerEnabled=true must win over a CLI/env override")
+		}
+	})
+}
+
+func TestLoadConfigPlayerEnabled(t *testing.T) {
+	t.Run("defaults to enabled", func(t *testing.T) {
+		config, err := loadConfig(newTestServiceContext(t))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		if !config.playerEnabled {
+			t.Errorf("playerEnabled: got false, want true (default)")
+		}
+	})
+
+	t.Run("--player-enabled=false disables it", func(t *testing.T) {
+		config, err := loadConfig(newTestServiceContext(t, "--player-enabled=false"))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		if config.playerEnabled {
+			t.Errorf("playerEnabled: got true, want false")
+		}
+	})
+
+	t.Run("PLAYER_ENABLED=false env var disables it", func(t *testing.T) {
+		t.Setenv("PLAYER_ENABLED", "false")
+
+		config, err := loadConfig(newTestServiceContext(t))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		if config.playerEnabled {
+			t.Errorf("playerEnabled: got true, want false")
+		}
+	})
 }
 
 func TestMergeTLSExtraHosts(t *testing.T) {

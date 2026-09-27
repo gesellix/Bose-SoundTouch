@@ -3109,6 +3109,17 @@ type Settings struct {
 	// on-device install on a tight flash volume needs. A pointer, because "never
 	// configured" and "deliberately disabled" have to be tellable apart.
 	CatalogSize *int `json:"catalog_size,omitempty"`
+
+	// PlayerEnabled toggles the embedded player (soundtouch-player mounted at
+	// /app, plus its /api/control/* API) and the background device polling it
+	// runs (status poll, balance watch, discovery seeding) -- issue 762, for
+	// operators who run AfterTouch on the speaker itself alongside a separate
+	// player and don't want the extra resource cost. nil means "never
+	// configured", which defaults to enabled: the historical behaviour, so
+	// upgraded installs are unaffected. A pointer, for the same reason as
+	// CatalogSize: "never configured" and "deliberately disabled" have to be
+	// tellable apart.
+	PlayerEnabled *bool `json:"player_enabled,omitempty"`
 }
 
 // GetSettings retrieves the global service settings.
