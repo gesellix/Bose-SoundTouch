@@ -157,8 +157,42 @@ func TestOrionPaths_SameHostOtherPortIsAnotherAddress(t *testing.T) {
 		[2]string{"LOCAL_INTERNET_RADIO", "http://192.0.2.10:9000/core02/svc-bmx-adapter-orion/prod/orion/station?data=x"},
 	))
 
-	if res := runOrion(t, ds, orionDeps(false, nil)); len(res.Findings) != 1 || !strings.Contains(res.Findings[0].Message, "not at this service's address") {
+	res := runOrion(t, ds, orionDeps(false, nil))
+	if len(res.Findings) != 1 || !strings.Contains(res.Findings[0].Message, "not at this service's address") {
 		t.Fatalf("a location on another port is not this service, want the other-host finding, got %+v", res)
+	}
+
+	// Without the scheme and the hint, "192.0.2.10:9000, not at
+	// http://192.0.2.10:8000" reads like the same address.
+	msg := res.Findings[0].Message
+	if !strings.Contains(msg, "slot 1 points at http://192.0.2.10:9000 (this service's host, but a port it doesn't serve)") {
+		t.Errorf("message should show the scheme and say only the port differs, got %q", msg)
+	}
+}
+
+// SERVER_URL names only the HTTPS side, while the service also listens for
+// plain HTTP on port 80. A location http://<host>/... reaches this service
+// and must not be reported as another host (issue 769 hardware run).
+func TestOrionPaths_HTTPListenPortCountsAsThisService(t *testing.T) {
+	account, device := "1000001", "DEVICEID01"
+	ds := newOrionTestDS(t, account, device)
+	writePresetsXML(t, ds, account, device, presetsXML(
+		[2]string{"LOCAL_INTERNET_RADIO", "http://aftertouch.example/core02/svc-bmx-adapter-orion/prod/orion/station?data=x"},
+		[2]string{"LOCAL_INTERNET_RADIO", "https://aftertouch.example/core02/svc-bmx-adapter-orion/prod/orion/station?data=y"},
+	))
+
+	deps := orionDeps(false, nil)
+	deps.ServiceURLs = func() (string, string) { return "https://aftertouch.example", "https://aftertouch.example" }
+	deps.ListenPorts = func() []string { return []string{"80", "443"} }
+
+	res := runOrion(t, ds, deps)
+	if len(res.Findings) != 1 {
+		t.Fatalf("expected one finding, got %+v", res)
+	}
+
+	msg := res.Findings[0].Message
+	if !strings.Contains(msg, "slots 1, 2 point at this service's current address") || strings.Contains(msg, "not at this service's address") {
+		t.Errorf("both locations reach this service, got %q", msg)
 	}
 }
 

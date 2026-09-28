@@ -579,6 +579,7 @@ func main() {
 			server := handlers.NewServer(ds, sm, config.serverURL, config.redact, config.logBody, config.record)
 			sm.GetDNSRunning = server.GetDNSRunning
 			server.SetLogBuffer(logBuf)
+			server.SetHTTPListenAddr(config.addr)
 			server.SetHTTPSListenAddr(config.httpsAddr)
 			server.SetHTTPSSettings(config.httpsOverride, config.httpsPort, config.httpsDefaultURL)
 			server.SetExpectedHosts(config.domains)

@@ -37,6 +37,11 @@ type OrionPathsDeps struct {
 	// ServiceURLs returns this service's configured SERVER_URL and HTTPS URL.
 	// Their ports decide whether an absolute location still points here.
 	ServiceURLs func() (serverURL, httpsURL string)
+	// ListenPorts returns the ports the HTTP and HTTPS listeners are bound
+	// to. A location on one of this service's names and one of these ports
+	// reaches this service even when SERVER_URL names only the other scheme
+	// (SERVER_URL https://host, location http://host on the HTTP port).
+	ListenPorts func() []string
 	// ExpectedHosts returns the host names this service answers to
 	// (SERVER_URL host, HTTPS host, TLS extra hosts), as the speaker_marge_url
 	// check uses them.
@@ -100,9 +105,14 @@ const (
 
 // orionHit is one preset slot with an absolute Orion station location.
 type orionHit struct {
-	slot     string
-	label    string
-	host     string
+	slot  string
+	label string
+	// host is the location's scheme and host as shown to the user, e.g.
+	// "http://soundtouch.example" (a default port stays implicit).
+	host string
+	// sameHost marks an orionOtherHost location on one of this service's
+	// names, but on a port it doesn't serve.
+	sameHost bool
 	kind     orionKind
 	relative string
 	preset   models.ServicePreset
@@ -172,6 +182,14 @@ func currentServiceAddress(deps OrionPathsDeps) serviceAddress {
 		addr.hosts = normaliseHosts(deps.ExpectedHosts())
 	}
 
+	if deps.ListenPorts != nil {
+		for _, p := range deps.ListenPorts() {
+			if p = strings.TrimSpace(p); p != "" {
+				addr.ports[p] = true
+			}
+		}
+	}
+
 	if deps.ServiceURLs == nil {
 		return addr
 	}
@@ -194,6 +212,14 @@ func currentServiceAddress(deps OrionPathsDeps) serviceAddress {
 
 func (a serviceAddress) matches(u *url.URL) bool {
 	return a.hosts[strings.ToLower(u.Hostname())] && a.ports[effectivePort(u)]
+}
+
+// hasHost reports whether location's host is one of this service's names,
+// whatever its port.
+func (a serviceAddress) hasHost(location string) bool {
+	u, err := url.Parse(strings.TrimSpace(location))
+
+	return err == nil && a.hosts[strings.ToLower(u.Hostname())]
 }
 
 // effectivePort returns u's port, filling in the scheme default.
@@ -223,7 +249,7 @@ func classifyOrionLocation(location string, service serviceAddress) (kind orionK
 		return orionRelative, "", relative, true
 	}
 
-	host = u.Host
+	host = u.Scheme + "://" + u.Host
 
 	switch {
 	case strings.EqualFold(u.Hostname(), boseOrionHost):
@@ -263,7 +289,9 @@ func findOrionHits(presets []models.ServicePreset, service serviceAddress) []ori
 			label = "(unnamed)"
 		}
 
-		hits = append(hits, orionHit{slot: slot, label: label, host: host, kind: kind, relative: relative, preset: p})
+		sameHost := kind == orionOtherHost && service.hasHost(p.Location)
+
+		hits = append(hits, orionHit{slot: slot, label: label, host: host, sameHost: sameHost, kind: kind, relative: relative, preset: p})
 	}
 
 	return hits
@@ -287,13 +315,18 @@ func orionFinding(dev *models.ServiceDeviceInfo, hits []orionHit, service servic
 
 	for i := range hits {
 		h := &hits[i]
-		byKind[h.kind] = append(byKind[h.kind], "slot "+h.label)
+		byKind[h.kind] = append(byKind[h.kind], h.label)
 
 		if hostsByKind[h.kind] == nil {
 			hostsByKind[h.kind] = map[string]bool{}
 		}
 
-		hostsByKind[h.kind][h.host] = true
+		host := h.host
+		if h.sameHost {
+			host += " (this service's host, but a port it doesn't serve)"
+		}
+
+		hostsByKind[h.kind][host] = true
 	}
 
 	if slots := byKind[orionOtherHost]; len(slots) > 0 {
@@ -305,7 +338,7 @@ func orionFinding(dev *models.ServiceDeviceInfo, hits []orionHit, service servic
 			current += " (" + service.display + ")"
 		}
 
-		parts = append(parts, fmt.Sprintf("%s point at %s, not at %s", strings.Join(slots, ", "), sortedKeys(hostsByKind[orionOtherHost]), current))
+		parts = append(parts, fmt.Sprintf("%s at %s, not at %s", slotsPoint(slots), sortedKeys(hostsByKind[orionOtherHost]), current))
 		details = append(details, "A location with another host stops playing once that host is gone, for example after AfterTouch moved to a new address (discussion 708). If it points at another Orion-compatible service on purpose, leave it as it is.")
 	}
 
@@ -314,19 +347,19 @@ func orionFinding(dev *models.ServiceDeviceInfo, hits []orionHit, service servic
 		case !dnsEnabled:
 			severity = SeverityWarning
 
-			parts = append(parts, fmt.Sprintf("%s point at the shut-down Bose cloud (%s)", strings.Join(slots, ", "), boseOrionHost))
+			parts = append(parts, fmt.Sprintf("%s at the shut-down Bose cloud (%s)", slotsPoint(slots), boseOrionHost))
 			details = append(details, "DNS Discovery is off, so the speaker resolves "+boseOrionHost+" through its own resolver and reaches the dead Bose cloud: these presets don't play.")
 		case dnsConfirmed:
-			parts = append(parts, fmt.Sprintf("%s point at %s, which this speaker resolves through AfterTouch", strings.Join(slots, ", "), boseOrionHost))
+			parts = append(parts, fmt.Sprintf("%s at %s, which this speaker resolves through AfterTouch", slotsPoint(slots), boseOrionHost))
 			details = append(details, "They play today because the speaker asks AfterTouch's DNS for "+boseOrionHost+". They stop playing if the speaker ever resolves Bose hostnames elsewhere, for example after its DNS migration is undone.")
 		default:
-			parts = append(parts, fmt.Sprintf("%s point at %s; not yet confirmed that this speaker resolves it through AfterTouch", strings.Join(slots, ", "), boseOrionHost))
+			parts = append(parts, fmt.Sprintf("%s at %s; not yet confirmed that this speaker resolves it through AfterTouch", slotsPoint(slots), boseOrionHost))
 			details = append(details, "They play only while the speaker resolves "+boseOrionHost+" through AfterTouch's DNS. The dns_bypass_risk check (\"Test DNS path\") tells whether it does.")
 		}
 	}
 
 	if slots := byKind[orionCurrentHost]; len(slots) > 0 {
-		parts = append(parts, fmt.Sprintf("%s point at this service's current address", strings.Join(slots, ", ")))
+		parts = append(parts, fmt.Sprintf("%s at this service's current address", slotsPoint(slots)))
 		details = append(details, "They play today, but stop when AfterTouch's address changes.")
 	}
 
@@ -351,6 +384,15 @@ func orionFinding(dev *models.ServiceDeviceInfo, hits []orionHit, service servic
 		}},
 		ManualCommands: orionManualCommands(dev.IPAddress, hits),
 	}
+}
+
+// slotsPoint renders "slot 1 points" or "slots 1, 4 point".
+func slotsPoint(labels []string) string {
+	if len(labels) == 1 {
+		return "slot " + labels[0] + " points"
+	}
+
+	return "slots " + strings.Join(labels, ", ") + " point"
 }
 
 func sortedKeys(m map[string]bool) string {

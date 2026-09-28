@@ -46,6 +46,7 @@ type Server struct {
 	httpsPort                string // configured HTTPS port, used when deriving
 	httpsDefaultURL          string // startup hostname-based fallback when serverURL has no host
 	httpsListenAddr          string
+	httpListenAddr           string
 	discovering              bool
 	redactLogs               bool
 	logBodies                bool
@@ -187,6 +188,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 	})
 	health.RegisterOrionPathsCheck(s.healthRegistry, ds, health.OrionPathsDeps{
 		ServiceURLs:   s.GetSettings,
+		ListenPorts:   s.listenPorts,
 		ExpectedHosts: s.ExpectedHosts,
 		DNSEnabled:    s.DNSHijackEnabled,
 		DNSClientIPs: func() map[string]time.Time {
@@ -1009,6 +1011,16 @@ func (s *Server) SetHTTPSListenAddr(addr string) {
 	s.httpsListenAddr = addr
 }
 
+// SetHTTPListenAddr records the address the plain HTTP listener is bound
+// to, so checks can recognise a URL on that port as this service even when
+// SERVER_URL names only the HTTPS side.
+func (s *Server) SetHTTPListenAddr(addr string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.httpListenAddr = addr
+}
+
 // actualHTTPSPort returns the port the HTTPS listener is bound to, or
 // "" if unknown/unparseable.
 func (s *Server) actualHTTPSPort() string {
@@ -1016,6 +1028,33 @@ func (s *Server) actualHTTPSPort() string {
 	addr := s.httpsListenAddr
 	s.mu.RUnlock()
 
+	return listenPort(addr)
+}
+
+// actualHTTPPort returns the port the plain HTTP listener is bound to, or
+// "" if unknown/unparseable.
+func (s *Server) actualHTTPPort() string {
+	s.mu.RLock()
+	addr := s.httpListenAddr
+	s.mu.RUnlock()
+
+	return listenPort(addr)
+}
+
+// listenPorts returns the known ports of the HTTP and HTTPS listeners.
+func (s *Server) listenPorts() []string {
+	var ports []string
+
+	for _, p := range []string{s.actualHTTPPort(), s.actualHTTPSPort()} {
+		if p != "" {
+			ports = append(ports, p)
+		}
+	}
+
+	return ports
+}
+
+func listenPort(addr string) string {
 	if addr == "" {
 		return ""
 	}
