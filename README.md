@@ -114,6 +114,7 @@ See the [API Reference](https://gesellix.github.io/Bose-SoundTouch/docs/referenc
 - **[ÜberBöse API](https://github.com/julius-d/ueberboese-api)** (Julius) — API research and advanced endpoint discovery
 - **[Bose SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook)** (Adrian Böckenkamp) — `LD_PRELOAD` hooking for reverse engineering device internals
 - **[STR, SoundTouch Reborn](https://github.com/JRpersonal/streborn)** ([st-reborn.de](https://st-reborn.de)) — on-device agent plus desktop app; its published `iptables` REDIRECT technique is what makes AfterTouch's on-device install reachable over the LAN on co-processor chassis (see [Model Support Matrix](https://gesellix.github.io/Bose-SoundTouch/docs/reference/MODEL-SUPPORT-MATRIX/))
+- **[soundtouch-decloud](https://github.com/bitranox/soundtouch-decloud)** (bitranox): a Claude Code skill that walks a non-technical owner through moving their speakers to AfterTouch, recovering each preset's own stream, and checking that every preset plays
 
 ---
 
