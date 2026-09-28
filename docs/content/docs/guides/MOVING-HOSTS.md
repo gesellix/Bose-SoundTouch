@@ -135,7 +135,12 @@ your own DNS server.
 ## Step 4: If the address changes
 
 If the new host's address (hostname or IP) is different from the old one,
-each speaker has to be told about it explicitly:
+each speaker has to be told about it explicitly.
+
+The ports count as part of the address. If the new host already runs other
+web services on the default ports and you move AfterTouch to different ones
+(`PORT` and `HTTPS_PORT` in the env file), the speakers still use the old
+ports, so they need the same re-migration even when the hostname stays:
 
 1. Set `SERVER_URL` (or **Settings → Target Domain**) on the new host to
    its new address.
@@ -172,14 +177,14 @@ http://<old-host>:8000/core02/svc-bmx-adapter-orion/prod/orion/station?data=...
 After an address change those presets still point at the old host and
 don't play.
 
-This is fixed in the next release
-([issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769)): new
+Since v0.138.0
+([issue 769](https://github.com/gesellix/Bose-SoundTouch/issues/769)), new
 Play URL presets store a relative location, `/station?data=...`, and the
 speaker adds AfterTouch's address from its service registry, the same way
 it does for **TuneIn** and **Radio Browser** presets. They follow AfterTouch
 to its new address once the speaker has been re-migrated (Step 4).
 
-Presets saved by an older version still carry the old address. The
+Presets saved before v0.138.0 still carry the old address. The
 **Health** tab lists them per speaker ("Internet Radio presets use relative
 station locations") and offers **Store as relative locations**, which
 stores the affected slots on the speaker again with the relative location,
