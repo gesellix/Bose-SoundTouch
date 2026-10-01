@@ -32,6 +32,18 @@ Based on captured WebSocket interactions and device API capabilities, this web U
   exact persisted group generation
 
 ### Playback Control
+
+Zone add, remove, leave, and dissolve commands verify the resulting topology
+with fresh speaker reads before reporting success. An accepted HTTP command
+alone is insufficient; unavailable, conflicting, or incomplete readback is
+reported as unverified. A lost command response can still be confirmed when
+the requested topology is read back. Commands are never automatically replayed.
+
+Only one zone change runs at a time within a player instance. Refresh before
+retrying a conflicting request. Other controllers can still change the speakers
+independently: the player rechecks its baseline before writing and verifies the
+result afterward. SoundTouch does not provide an atomic conditional zone write.
+
 - **Play/Pause/Stop/Next/Previous** controls
 - **Now playing information** with artwork, track details, and progress
 - **Real-time updates** of playback state changes

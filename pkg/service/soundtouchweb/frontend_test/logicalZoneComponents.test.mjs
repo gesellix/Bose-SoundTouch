@@ -16,6 +16,8 @@ test('logical zone components contain only the volume-free presentation surface'
     assert.match(zone, /<details class="zone-member-details">/);
     assert.match(zone, /member\.physicalMembers/);
     assert.match(zone, /zone-physical-role/);
+    assert.match(zone, /zoneTopologyFingerprint\(projection\)/);
+    assert.match(zone, /isCurrentZoneRefresh\(context, refreshContext\.current, generation\)/);
 
     for (const source of [deviceList, zone]) {
         assert.doesNotMatch(source, /ZoneMemberVolumeControl|zoneVolume|MemberSettings|balance/i);

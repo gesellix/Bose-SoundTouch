@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
     effectiveZoneDetail,
+    isCurrentZoneRefresh,
+    zoneRefreshContext,
     physicalMemberMetadata,
     zoneCardPresentation,
     zoneMembershipPresentation,
@@ -278,4 +280,49 @@ test('zone member cards name the group they belong to', () => {
 
     assert.equal(zoneMembershipPresentation(null), null);
     assert.equal(zoneMembershipPresentation({ masterName: ' ', masterControlId: '' }), null);
+});
+
+test('newer WebSocket topology fences an older REST response', () => {
+    const firstTopology = zoneTopologyFingerprint({
+        masterControlId: '192.0.2.10',
+        masterDeviceId: 'MASTER',
+        members: [
+            { controlId: '192.0.2.10', kind: 'speaker', deviceIds: ['MASTER'] },
+            { controlId: '192.0.2.20', kind: 'speaker', deviceIds: ['SLAVE'] },
+        ],
+    });
+    const firstContext = zoneRefreshContext(null, '192.0.2.10', firstTopology);
+    const firstGeneration = ++firstContext.generation;
+
+    const newerTopology = zoneTopologyFingerprint({
+        masterControlId: '192.0.2.10',
+        masterDeviceId: 'MASTER',
+        members: [
+            { controlId: '192.0.2.10', kind: 'speaker', deviceIds: ['MASTER'] },
+        ],
+    });
+    const currentContext = zoneRefreshContext(firstContext, '192.0.2.10', newerTopology);
+
+    assert.notEqual(currentContext, firstContext);
+    assert.equal(isCurrentZoneRefresh(firstContext, currentContext, firstGeneration), false);
+});
+
+test('connectivity-only updates do not invalidate an in-flight zone read', () => {
+    const base = {
+        masterControlId: '192.0.2.10',
+        masterDeviceId: 'MASTER',
+        members: [{
+            controlId: '192.0.2.10',
+            kind: 'speaker',
+            deviceIds: ['MASTER'],
+            connectivity: 'online',
+        }],
+    };
+    const context = zoneRefreshContext(null, '192.0.2.10', zoneTopologyFingerprint(base));
+    const current = zoneRefreshContext(context, '192.0.2.10', zoneTopologyFingerprint({
+        ...base,
+        members: [{ ...base.members[0], connectivity: 'stale' }],
+    }));
+
+    assert.equal(current, context);
 });

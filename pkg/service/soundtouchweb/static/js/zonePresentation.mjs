@@ -68,6 +68,15 @@ export function zoneTopologyFingerprint(zone) {
     ]);
 }
 
+export function zoneRefreshContext(current, deviceId, topologyVersion) {
+    if (current?.deviceId === deviceId && current?.topologyVersion === topologyVersion) return current;
+    return { deviceId, topologyVersion, generation: 0 };
+}
+
+export function isCurrentZoneRefresh(context, current, generation) {
+    return context === current && generation === context.generation;
+}
+
 export function effectiveZoneDetail(restZone, projection, topLevelDevice, deviceId) {
     if (projection) {
         const members = projection.members || [];

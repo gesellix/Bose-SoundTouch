@@ -5,6 +5,8 @@ import { api } from '../api.js';
 import { resolvedZoneMember } from '../devicePresentation.js';
 import {
     effectiveZoneDetail,
+    isCurrentZoneRefresh,
+    zoneRefreshContext,
     physicalMemberMetadata,
     zoneMemberCountSummary,
     zoneMemberIdentifiers,
@@ -45,58 +47,78 @@ export function Zone({ deviceId, devices, onSelectMember }) {
     const [candidates, setCandidates] = useState({});
     const [loading, setLoading] = useState(true);
     const [showPicker, setShowPicker] = useState(false);
+    const [mutationError, setMutationError] = useState('');
     const canGroup = currentSourceAllowsMultiroom(devices?.[deviceId]);
     const projection = devices?.[zone?.masterIp || deviceId]?.zone || devices?.[deviceId]?.zone;
     const topologyFingerprint = zoneTopologyFingerprint(projection);
-    const observedTopology = useRef({ deviceId, fingerprint: topologyFingerprint });
-    const refreshGeneration = useRef(0);
+    const refreshContext = useRef(null);
+    refreshContext.current = zoneRefreshContext(refreshContext.current, deviceId, topologyFingerprint);
+    const mutationContext = useRef(null);
+    if (mutationContext.current?.deviceId !== deviceId) {
+        mutationContext.current = { deviceId, generation: 0 };
+    }
 
     function refresh() {
-        const generation = ++refreshGeneration.current;
+        const context = refreshContext.current;
+        const generation = ++context.generation;
         Promise.all([api.zone(deviceId), api.zoneCandidates(deviceId)])
             .then(([zoneResp, candidatesResp]) => {
-                if (generation !== refreshGeneration.current) return;
+                if (!isCurrentZoneRefresh(context, refreshContext.current, generation)) return;
                 if (zoneResp.success) setZone(zoneResp.data);
                 if (candidatesResp.success) setCandidates(candidatesResp.data || {});
             })
             .finally(() => {
-                if (generation === refreshGeneration.current) setLoading(false);
+                if (isCurrentZoneRefresh(context, refreshContext.current, generation)) setLoading(false);
             });
     }
 
-    useEffect(() => { refresh(); }, [deviceId]);
-    useEffect(() => {
-        const previous = observedTopology.current;
-        observedTopology.current = { deviceId, fingerprint: topologyFingerprint };
-        if (previous.deviceId !== deviceId || previous.fingerprint === topologyFingerprint) return;
-
-        setLoading(true);
-        refresh();
-    }, [deviceId, topologyFingerprint]);
+    useEffect(() => { refresh(); }, [deviceId, topologyFingerprint]);
+    useEffect(() => () => {
+        refreshContext.current = null;
+        mutationContext.current = null;
+    }, []);
+    useEffect(() => { setMutationError(''); }, [deviceId]);
     useEffect(() => {
         if (!canGroup) setShowPicker(false);
     }, [canGroup]);
 
+    async function mutate(action) {
+        // A mutation's own broadcast must not hide its eventual readback error.
+        const context = mutationContext.current;
+        const generation = ++context.generation;
+        const isCurrent = () => context === mutationContext.current && generation === context.generation;
+        setMutationError('');
+        try {
+            const response = await action();
+            if (!isCurrent()) return;
+            if (!response?.success) {
+                setMutationError(response?.error || 'Zone operation failed');
+                return;
+            }
+            refresh();
+        } catch (error) {
+            if (isCurrent()) {
+                setMutationError(error?.message || 'Zone operation failed');
+            }
+        }
+    }
+
     async function addDevice(slaveId) {
         if (!canGroup) return;
         setShowPicker(false);
-        await api.zoneAdd(deviceId, slaveId);
-        refresh();
+        await mutate(() => api.zoneAdd(deviceId, slaveId));
     }
 
     async function removeDevice(slaveId) {
-        await api.zoneRemove(deviceId, slaveId);
-        refresh();
+        await mutate(() => api.zoneRemove(deviceId, slaveId));
     }
 
     async function dissolve() {
-        await api.zoneDissolve(deviceId);
-        refresh();
+        await mutate(() => api.zoneDissolve(deviceId));
     }
 
     async function leave() {
-        await api.zoneLeave(deviceId);
-        refresh();
+        await mutate(() => api.zoneLeave(deviceId));
     }
 
     if (loading) return html`
@@ -217,6 +239,7 @@ export function Zone({ deviceId, devices, onSelectMember }) {
     return html`
         <div class="zone-section">
             <div class="section-title">Zone</div>
+            ${mutationError ? html`<div class="settings-error" role="alert">${mutationError}</div>` : null}
 
             ${currentZone.isStandalone && html`
                 <div class="zone-row">

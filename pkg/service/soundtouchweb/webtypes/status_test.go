@@ -762,6 +762,58 @@ func TestZoneEventBarrierSurvivesLaterRoutineRefreshStart(t *testing.T) {
 	}
 }
 
+func TestZoneMemberReadbackRequiresQueriedMembership(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "former master"})
+	initialZone := &models.ZoneInfo{
+		Master:  "FORMER",
+		Members: []models.Member{{DeviceID: "REMOVED"}},
+	}
+	conn.SetStatus(&DeviceStatus{Zone: initialZone})
+
+	refresh := conn.BeginZoneRefresh()
+	accepted, changed := conn.ApplyZoneMemberReadback(refresh, "FORMER", &models.ZoneInfo{
+		Master:  "OTHER",
+		Members: []models.Member{{DeviceID: "THIRD"}},
+	})
+	if accepted || changed {
+		t.Fatalf("unrelated readback accepted=%t changed=%t", accepted, changed)
+	}
+	if got := conn.Status().Zone; got == nil || got.Master != "FORMER" {
+		t.Fatalf("unrelated readback cleared topology: %+v", got)
+	}
+
+	refresh = conn.BeginZoneRefresh()
+	accepted, changed = conn.ApplyZoneMemberReadback(refresh, "FORMER", &models.ZoneInfo{
+		Members: []models.Member{{DeviceID: "FORMER"}},
+	})
+	if accepted || changed {
+		t.Fatalf("masterless member readback accepted=%t changed=%t", accepted, changed)
+	}
+	if got := conn.Status().Zone; got == nil || got.Master != "FORMER" {
+		t.Fatalf("masterless readback cleared topology: %+v", got)
+	}
+}
+
+func TestZoneMemberReadbackClearsFormerMasterCache(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "former master"})
+	conn.SetStatus(&DeviceStatus{Zone: &models.ZoneInfo{
+		Master:  "FORMER",
+		Members: []models.Member{{DeviceID: "MEMBER"}},
+	}})
+
+	refresh := conn.BeginZoneRefresh()
+	accepted, changed := conn.ApplyZoneMemberReadback(refresh, "FORMER", &models.ZoneInfo{
+		Master:  "NEW",
+		Members: []models.Member{{DeviceID: "FORMER"}},
+	})
+	if !accepted || !changed {
+		t.Fatalf("valid member readback accepted=%t changed=%t", accepted, changed)
+	}
+	if got := conn.Status().Zone; got != nil {
+		t.Fatalf("former master topology remained cached: %+v", got)
+	}
+}
+
 func TestStatusSnapshotIsolation(t *testing.T) {
 	// A snapshot returned by Status() must NOT change when a later
 	// UpdateStatus replaces a pointer field. This proves the atomic

@@ -1087,16 +1087,22 @@ func (c *DeviceConnection) BeginZoneEventRefresh() uint64 {
 // response that places the queried device under another master also clears
 // that device's former-master claim without caching non-authoritative topology.
 // Malformed and unrelated responses are ignored.
-func (c *DeviceConnection) ApplyPolledZone(
+func (c *DeviceConnection) ApplyPolledZone(generation uint64, queriedDeviceID string, zone *models.ZoneInfo) bool {
+	_, changed := c.ApplyPolledZoneChanged(generation, queriedDeviceID, zone)
+	return changed
+}
+
+// ApplyPolledZoneChanged reports acceptance separately from a projection change.
+func (c *DeviceConnection) ApplyPolledZoneChanged(
 	generation uint64,
 	queriedDeviceID string,
 	zone *models.ZoneInfo,
-) bool {
+) (bool, bool) {
 	c.zoneMu.Lock()
 	defer c.zoneMu.Unlock()
 
 	if generation < c.zoneAppliedGeneration || zone == nil {
-		return false
+		return false, false
 	}
 
 	master := strings.TrimSpace(zone.Master)
@@ -1104,7 +1110,7 @@ func (c *DeviceConnection) ApplyPolledZone(
 	queriedDeviceID = strings.TrimSpace(queriedDeviceID)
 	if queriedDeviceID == "" ||
 		(master == "" && len(zone.Members) != 0) {
-		return false
+		return false, false
 	}
 
 	if master != "" && master != queriedDeviceID {
@@ -1119,17 +1125,28 @@ func (c *DeviceConnection) ApplyPolledZone(
 		}
 
 		if !queriedDeviceIsMember {
-			return false
+			return false, false
 		}
 
 		c.zoneAppliedGeneration = generation
 
-		return c.replaceZone(nil)
+		return true, c.replaceZone(nil)
 	}
 
 	c.zoneAppliedGeneration = generation
 
-	return c.replaceZone(normalizeZone(zone))
+	return true, c.replaceZone(normalizeZone(zone))
+}
+
+// ApplyZoneMemberReadback clears a former master's cache only after a valid
+// member observation. Generation ordering is shared with ordinary readbacks.
+func (c *DeviceConnection) ApplyZoneMemberReadback(generation uint64, queriedDeviceID string, zone *models.ZoneInfo) (bool, bool) {
+	if zone == nil || strings.TrimSpace(zone.Master) == "" ||
+		strings.TrimSpace(zone.Master) == strings.TrimSpace(queriedDeviceID) {
+		return false, false
+	}
+
+	return c.ApplyPolledZoneChanged(generation, queriedDeviceID, zone)
 }
 
 func (c *DeviceConnection) replaceZone(zone *models.ZoneInfo) bool {
