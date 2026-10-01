@@ -4,10 +4,11 @@ import test from 'node:test';
 
 const components = new URL('../static/js/components/', import.meta.url);
 
-test('logical zone components contain only the volume-free presentation surface', async () => {
-    const [deviceList, zone] = await Promise.all([
+test('logical zones render one volume control per logical member, outside physical rows', async () => {
+    const [deviceList, zone, memberVolume] = await Promise.all([
         readFile(new URL('DeviceList.js', components), 'utf8'),
         readFile(new URL('Zone.js', components), 'utf8'),
+        readFile(new URL('ZoneMemberVolumeControl.js', components), 'utf8'),
     ]);
 
     assert.match(deviceList, /zone-card/);
@@ -16,9 +17,11 @@ test('logical zone components contain only the volume-free presentation surface'
     assert.match(zone, /<details class="zone-member-details">/);
     assert.match(zone, /member\.physicalMembers/);
     assert.match(zone, /zone-physical-role/);
+    assert.equal((zone.match(/<\$\{ZoneMemberVolumeControl\}/g) || []).length, 1);
+    assert.equal((memberVolume.match(/type="range"/g) || []).length, 1);
+    assert.match(memberVolume, /api\.zoneMemberVolume/);
 
-    for (const source of [deviceList, zone]) {
-        assert.doesNotMatch(source, /ZoneMemberVolumeControl|zoneVolume|MemberSettings|balance/i);
-        assert.doesNotMatch(source, /type="range"/);
+    for (const source of [zone, memberVolume]) {
+        assert.doesNotMatch(source, /balance|MemberSettings/i);
     }
 });

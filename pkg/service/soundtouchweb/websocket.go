@@ -264,13 +264,7 @@ func (app *WebApp) applyVolumeEvent(
 	conn *webtypes.DeviceConnection,
 	volume *models.Volume,
 ) bool {
-	return app.applySpeakerStatusEvent(conn, webtypes.FieldVolume, func(status *webtypes.DeviceStatus) bool {
-		changed := !reflect.DeepEqual(status.Volume, volume)
-		status.Volume = volume
-		status.LastActivity = time.Now()
-
-		return changed
-	})
+	return app.queueBroadcastIfChanged(conn.ApplyVolumeEvent(volume, time.Now()))
 }
 
 func (app *WebApp) applyConnectionStateEvent(
@@ -1015,7 +1009,7 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 	defer func() { conn.MarkStatusRefreshed(time.Now()) }()
 
 	nowPlayingGen := conn.BeginFieldPoll(webtypes.FieldNowPlaying)
-	volumeGen := conn.BeginFieldPoll(webtypes.FieldVolume)
+	volumeGen := conn.BeginVolumeRefresh()
 	presetsGen := conn.BeginFieldPoll(webtypes.FieldPresets)
 	sourcesGen := conn.BeginFieldPoll(webtypes.FieldSources)
 	bassGen := conn.BeginFieldPoll(webtypes.FieldBass)
@@ -1083,10 +1077,7 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 	if volumeErr == nil {
 		anyFetchSucceeded = true
 
-		conn.CompleteFieldPoll(webtypes.FieldVolume, volumeGen, func(s *webtypes.DeviceStatus) {
-			s.Volume = volume
-			s.LastActivity = time.Now()
-		})
+		conn.ApplyPolledVolume(volumeGen, volume)
 	}
 
 	if presetsErr == nil {

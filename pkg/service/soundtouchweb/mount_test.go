@@ -86,6 +86,8 @@ func TestMountWebControlAPIShape(t *testing.T) {
 		"/api/control/devices/{id}/preset/{slot}",
 		// Re-read a speaker's media servers (issue 580).
 		"/api/control/devices/{id}/library/servers/refresh",
+		"/api/control/devices/{id}/zone/volume/{volume}",
+		"/api/control/devices/{id}/zone/member/{memberId}/volume/{volume}",
 	}
 	for _, want := range mustExist {
 		if !registered[want] {

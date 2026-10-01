@@ -5,6 +5,7 @@ package webtypes
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -627,6 +628,62 @@ func TestTransportStateObservationDoesNotFenceFieldConnectivityPoll(t *testing.T
 	}
 }
 
+func TestVolumeEventCannotInterleaveAfterAcceptedReadbackGeneration(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "test"})
+	conn.SetStatus(&DeviceStatus{Volume: &models.Volume{TargetVolume: 10, ActualVolume: 10}})
+	poll := conn.BeginVolumeRefresh()
+	pollMergeStarted := make(chan struct{})
+	releasePollMerge := make(chan struct{})
+	pollDone := make(chan bool, 1)
+
+	go func() {
+		pollDone <- conn.completeVolumePoll(poll, func(status *DeviceStatus) {
+			close(pollMergeStarted)
+			<-releasePollMerge
+			status.Volume = &models.Volume{TargetVolume: 15, ActualVolume: 15}
+		})
+	}()
+
+	<-pollMergeStarted
+	eventDone := make(chan bool, 1)
+	go func() {
+		eventDone <- conn.ApplyVolumeEvent(
+			&models.Volume{TargetVolume: 25, ActualVolume: 25},
+			time.Now(),
+		)
+	}()
+
+	select {
+	case <-eventDone:
+		t.Fatal("volume event crossed an accepted readback before its status merge")
+	case <-time.After(10 * time.Millisecond):
+	}
+
+	close(releasePollMerge)
+	if !<-pollDone {
+		t.Fatal("readback generation was unexpectedly rejected")
+	}
+	if !<-eventDone {
+		t.Fatal("newer volume event was not reported as changed")
+	}
+	if got := conn.Status().Volume; got == nil || got.ActualVolume != 25 {
+		t.Fatalf("newer event was overwritten by accepted readback: %+v", got)
+	}
+}
+
+func TestVolumeEventRejectsOlderReadback(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "test"})
+	poll := conn.BeginVolumeRefresh()
+
+	conn.ApplyVolumeEvent(&models.Volume{TargetVolume: 25, ActualVolume: 25}, time.Now())
+	if conn.ApplyPolledVolume(poll, &models.Volume{TargetVolume: 15, ActualVolume: 15}) {
+		t.Fatal("volume readback that preceded the event was applied")
+	}
+	if got := conn.Status().Volume; got == nil || got.ActualVolume != 25 {
+		t.Fatalf("volume event was overwritten: %+v", got)
+	}
+}
+
 func TestZoneCacheDoesNotStoreMemberResponse(t *testing.T) {
 	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "member"})
 	zone := &models.ZoneInfo{
@@ -694,6 +751,10 @@ func TestZoneCacheIgnoresUnrelatedForeignMasterResponse(t *testing.T) {
 	if !conn.ApplyPolledZone(initial, "MASTER", zone) {
 		t.Fatal("initial master zone was not stored")
 	}
+	topology, current := conn.SnapshotZoneTopology()
+	if !current {
+		t.Fatal("initial master zone was not confirmed")
+	}
 
 	unrelated := conn.BeginZoneRefresh()
 	if conn.ApplyPolledZone(unrelated, "MASTER", &models.ZoneInfo{
@@ -702,8 +763,84 @@ func TestZoneCacheIgnoresUnrelatedForeignMasterResponse(t *testing.T) {
 	}) {
 		t.Fatal("unrelated foreign-master response changed the cache")
 	}
+	if !conn.ZoneTopologyCurrent(topology) {
+		t.Fatal("rejected routine response invalidated the last confirmed topology")
+	}
 	if conn.Status().Zone == nil || conn.Status().Zone.Master != "MASTER" {
 		t.Fatalf("unrelated response cleared authoritative topology: %+v", conn.Status().Zone)
+	}
+}
+
+func TestTopologySnapshotsPreserveCompletedStateAndFenceZoneEvents(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{DeviceID: "MASTER"})
+	zone := &models.ZoneInfo{
+		Master: "MASTER",
+		Members: []models.Member{
+			{DeviceID: "MASTER", IP: "192.0.2.10"},
+			{DeviceID: "MEMBER", IP: "192.0.2.20"},
+		},
+	}
+
+	groupRefresh := conn.BeginGroupRefresh()
+	conn.ApplyPolledGroup(groupRefresh, nil)
+	groupTopology, current := conn.SnapshotGroupTopology()
+	if !current {
+		t.Fatal("completed standalone group state was not writable")
+	}
+	_ = conn.BeginGroupRefresh()
+	if !conn.GroupTopologyCurrent(groupTopology) {
+		t.Fatal("a merely started group poll revoked completed topology")
+	}
+
+	zoneRefresh := conn.BeginZoneRefresh()
+	conn.ApplyPolledZone(zoneRefresh, "MASTER", zone)
+	zoneTopology, current := conn.SnapshotZoneTopology()
+	if !current {
+		t.Fatal("completed zone state was not writable")
+	}
+	_ = conn.BeginZoneRefresh()
+	if !conn.ZoneTopologyCurrent(zoneTopology) {
+		t.Fatal("a merely started zone poll revoked completed topology")
+	}
+
+	eventRefresh := conn.BeginZoneEventRefresh()
+	if _, current := conn.SnapshotZoneTopology(); current || conn.ZoneTopologyCurrent(zoneTopology) {
+		t.Fatal("zone event barrier left older topology writable")
+	}
+	conn.ApplyPolledZone(eventRefresh, "MASTER", zone)
+	if _, current := conn.SnapshotZoneTopology(); !current {
+		t.Fatal("event readback did not restore confirmed topology")
+	}
+}
+
+func TestUnchangedTopologyRefreshConfirmsWithoutReportingChange(t *testing.T) {
+	conn := NewDeviceConnection(nil, &models.DeviceInfo{DeviceID: "MASTER"})
+	zone := &models.ZoneInfo{
+		Master: "MASTER",
+		Members: []models.Member{
+			{DeviceID: "MASTER", IP: "192.0.2.10"},
+			{DeviceID: "MEMBER", IP: "192.0.2.20"},
+		},
+	}
+
+	firstZone := conn.BeginZoneRefresh()
+	if !conn.ApplyPolledZone(firstZone, "MASTER", zone) {
+		t.Fatal("initial zone refresh did not report the topology change")
+	}
+	unchangedZone := conn.BeginZoneRefresh()
+	if conn.ApplyPolledZone(unchangedZone, "MASTER", zone) {
+		t.Fatal("unchanged zone refresh reported a dashboard-visible change")
+	}
+	if topology, current := conn.SnapshotZoneTopology(); !current || !reflect.DeepEqual(topology.Zone, zone) {
+		t.Fatalf("unchanged zone was not confirmed: topology=%+v current=%v", topology, current)
+	}
+
+	groupRefresh := conn.BeginGroupRefresh()
+	if conn.ApplyPolledGroup(groupRefresh, nil) {
+		t.Fatal("confirmed standalone group state reported a dashboard-visible change")
+	}
+	if topology, current := conn.SnapshotGroupTopology(); !current || topology.Group != nil {
+		t.Fatalf("standalone group state was not confirmed: topology=%+v current=%v", topology, current)
 	}
 }
 

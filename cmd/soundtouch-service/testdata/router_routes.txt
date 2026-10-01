@@ -222,7 +222,9 @@ POST     /api/control/devices/{id}/volume/{volume}                    soundtouch
 POST     /api/control/devices/{id}/zone/add/{slaveId}                 soundtouchweb.(*WebApp).HandleZoneAdd-fm
 POST     /api/control/devices/{id}/zone/dissolve                      soundtouchweb.(*WebApp).HandleZoneDissolve-fm
 POST     /api/control/devices/{id}/zone/leave                         soundtouchweb.(*WebApp).HandleZoneLeave-fm
+POST     /api/control/devices/{id}/zone/member/{memberId}/volume/{volume} soundtouchweb.(*WebApp).HandleZoneMemberVolume-fm
 POST     /api/control/devices/{id}/zone/remove/{slaveId}              soundtouchweb.(*WebApp).HandleZoneRemove-fm
+POST     /api/control/devices/{id}/zone/volume/{volume}               soundtouchweb.(*WebApp).HandleZoneVolume-fm
 POST     /api/control/discover                                        soundtouchweb.(*WebApp).MountWeb
 POST     /api/mgmt/accounts/{accountId}/language                      handlers.(*Server).HandleMgmtUpdateAccountLanguage-fm
 POST     /api/mgmt/accounts/{accountId}/preset-sync                   handlers.(*Server).HandleMgmtUpdateAccountPresetSync-fm

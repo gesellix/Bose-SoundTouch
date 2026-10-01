@@ -15,6 +15,27 @@ Zone management allows you to:
 
 All SoundTouch devices that support multiroom functionality can participate in zones, with one device acting as the master and others as members.
 
+## Player volume controls
+
+The embedded player's zone-detail slider moves every logical member by the
+same absolute delta, clamped to `0..100`. Expanded members have individual
+sliders. A stereo pair contributes one logical volume and receives one write
+through its confirmed firmware master.
+
+The player control API exposes these POST routes:
+
+- `/api/control/devices/{id}/zone/volume/{volume}` changes the logical group.
+- `/api/control/devices/{id}/zone/member/{memberId}/volume/{volume}` changes
+  one logical member.
+
+Each response includes `data.partial` and a `data.members` result list with
+the requested target, accepted readback, and any member error. Check these
+fields even when the enclosing API response has `success: true`: a partial
+operation keeps successful members at their new volumes. Missing or stale
+readback is not confirmation. Writes are performed once; only readback is
+retried, at most three times, while the original target and topology remain
+current.
+
 ## Quick Start
 
 ### Basic Zone Operations

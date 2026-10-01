@@ -606,14 +606,19 @@ func (c *Client) SelectPreset(presetNumber int) error {
 
 // GetVolume retrieves the current volume level from the /volume endpoint
 func (c *Client) GetVolume() (*models.Volume, error) {
-	var volume models.Volume
+	var readback volumeReadback
 
-	err := c.get("/volume", &volume)
+	err := c.get("/volume", &readback)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get volume: %w", err)
 	}
 
-	return &volume, nil
+	volume, err := readback.volume()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get volume: %w", err)
+	}
+
+	return volume, nil
 }
 
 // SetVolume sets the volume level using the /volume endpoint

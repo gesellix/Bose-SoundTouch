@@ -1,8 +1,16 @@
 import { h } from 'preact';
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect, useMemo, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { throttleTrailing, SLIDER_WRITE_INTERVAL_MS } from '../throttle.mjs';
+import { createLatestWinsScheduler, shouldSurfaceLatestFinal } from '../latestWinsScheduler.mjs';
+import {
+    clampVolume,
+    directVolumeReadback,
+    fenceVolumeReadback,
+    maxReadbackActual,
+    partialFailureMessage,
+} from '../zoneVolumeResult.mjs';
 
 const html = htm.bind(h);
 
@@ -80,7 +88,8 @@ function balanceLabel(level) {
 
 export function Controls({
     deviceId,
-    status,
+    status: providedStatus,
+    device,
     command,
     commandBusy = false,
     commandStatus = '',
@@ -90,10 +99,22 @@ export function Controls({
     onCycleRepeat,
     onPreviousTrack,
     onNextTrack,
+    onZoneVolumeStart = () => {},
+    onZoneVolumePreview = () => {},
+    onZoneVolumeReadback = () => {},
+    onZoneVolumeFailure = () => {},
 }) {
+    const status = device?.status || providedStatus;
+    const zone = device?.zone;
+    const controlsLogicalZone = Boolean(zone && !zone.isStandalone &&
+        zone.masterControlId === deviceId);
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
-    const actualVolume = status?.volume?.ActualVolume ?? 0;
+    const projectedVolume = clampVolume(
+        controlsLogicalZone && Number.isFinite(zone?.volume)
+            ? zone.volume
+            : (status?.volume?.ActualVolume ?? 0),
+    );
     const isMuted = status?.volume?.MuteEnabled ?? false;
     const shuffle = np?.ShuffleSetting ?? 'SHUFFLE_OFF';
     const repeat = np?.RepeatSetting ?? 'REPEAT_OFF';
@@ -109,11 +130,181 @@ export function Controls({
     const balanceMin = balance?.Min ?? 0;
     const balanceMax = balance?.Max ?? 0;
 
-    const [localVolume, setLocalVolume] = useState(actualVolume);
+    const projectedVolumeRef = useRef(projectedVolume);
+    const projectionKey = JSON.stringify([
+        status?.epoch ?? null,
+        status?.revision ?? null,
+        projectedVolume,
+        (zone?.members || []).map(member => [
+            member?.controlId || '',
+            Number.isFinite(member?.actualVolume) ? member.actualVolume : null,
+            member?.available !== false,
+        ]),
+    ]);
+    const projectionKeyRef = useRef(projectionKey);
+    const controlTargetKey = JSON.stringify([
+        deviceId,
+        controlsLogicalZone,
+        status?.epoch ?? null,
+        zone?.masterControlId || '',
+        (zone?.members || []).map(member => [
+            member?.controlId || '',
+            member?.hwId || '',
+            ...(member?.deviceIds || []),
+        ]),
+    ]);
+    const controlTargetRef = useRef({
+        deviceId,
+        group: controlsLogicalZone,
+        key: controlTargetKey,
+    });
+    const zoneCallbacksRef = useRef({
+        onReadback: onZoneVolumeReadback,
+        onFailure: onZoneVolumeFailure,
+    });
+    const interactionActiveRef = useRef(false);
+    const interactionGenerationRef = useRef(0);
+    const interactionDirtyRef = useRef(false);
+    const acceptedSequenceRef = useRef(0);
+    const schedulerRef = useRef(null);
+    const [localVolume, setLocalVolume] = useState(projectedVolume);
+    const localVolumeRef = useRef(projectedVolume);
     const [localBass, setLocalBass] = useState(actualBass);
     const [localBalance, setLocalBalance] = useState(actualBalance);
+    const [volumeBusy, setVolumeBusy] = useState(false);
+    const [volumeFailure, setVolumeFailure] = useState('');
 
-    useEffect(() => { setLocalVolume(actualVolume); }, [actualVolume]);
+    projectedVolumeRef.current = projectedVolume;
+    projectionKeyRef.current = projectionKey;
+    localVolumeRef.current = localVolume;
+    controlTargetRef.current = {
+        deviceId,
+        group: controlsLogicalZone,
+        key: controlTargetKey,
+    };
+    zoneCallbacksRef.current = {
+        onReadback: onZoneVolumeReadback,
+        onFailure: onZoneVolumeFailure,
+    };
+
+    if (schedulerRef.current === null) {
+        schedulerRef.current = createLatestWinsScheduler({
+            send(level, request) {
+                const target = controlTargetRef.current;
+                if (request.targetKey !== target.key) return { skippedStaleTarget: true };
+                request.group = target.group;
+                return target.group
+                    ? api.zoneVolume(target.deviceId, level)
+                    : api.volume(target.deviceId, level);
+            },
+            onResult(response, metadata) {
+                if (response?.skippedStaleTarget ||
+                    metadata.targetKey !== controlTargetRef.current.key || !metadata.isLatest ||
+                    metadata.interactionGeneration !== interactionGenerationRef.current) return;
+
+                if (!response?.success) {
+                    if (metadata.group) {
+                        zoneCallbacksRef.current.onFailure(metadata.interactionGeneration);
+                    }
+                    if (shouldSurfaceLatestFinal(metadata)) {
+                        setVolumeFailure(response?.error || 'Volume update failed.');
+                    }
+                    return;
+                }
+
+                if (metadata.group) {
+                    const data = response.data;
+                    if (data?.requested !== metadata.value) {
+                        zoneCallbacksRef.current.onFailure(metadata.interactionGeneration);
+                        if (shouldSurfaceLatestFinal(metadata)) {
+                            setVolumeFailure('Group volume update failed.');
+                        }
+                        return;
+                    }
+
+                    const confirmed = maxReadbackActual(data);
+                    const reconciliation = fenceVolumeReadback(
+                        metadata.projectionKey,
+                        projectionKeyRef.current,
+                        projectedVolumeRef.current,
+                        confirmed,
+                    );
+                    if (!reconciliation.accepted) {
+                        acceptedSequenceRef.current = metadata.sequence;
+                        setLocalVolume(reconciliation.volume);
+                        localVolumeRef.current = reconciliation.volume;
+                        zoneCallbacksRef.current.onFailure(metadata.interactionGeneration);
+                        if (shouldSurfaceLatestFinal(metadata)) {
+                            setVolumeFailure(partialFailureMessage(data));
+                        }
+                        return;
+                    }
+                    if (metadata.final) {
+                        zoneCallbacksRef.current.onReadback(data, metadata.interactionGeneration);
+                    }
+                    if (confirmed !== null &&
+                        (metadata.final || !interactionActiveRef.current)) {
+                        acceptedSequenceRef.current = metadata.sequence;
+                        setLocalVolume(confirmed);
+                        localVolumeRef.current = confirmed;
+                    }
+                    if (shouldSurfaceLatestFinal(metadata)) {
+                        setVolumeFailure(partialFailureMessage(data));
+                    }
+                    return;
+                }
+
+                const confirmed = directVolumeReadback(response.data, metadata.value);
+                if (confirmed === null) {
+                    if (shouldSurfaceLatestFinal(metadata)) {
+                        setVolumeFailure('Volume readback did not confirm the requested value.');
+                    }
+                    return;
+                }
+                acceptedSequenceRef.current = metadata.sequence;
+                const reconciliation = fenceVolumeReadback(
+                    metadata.projectionKey,
+                    projectionKeyRef.current,
+                    projectedVolumeRef.current,
+                    confirmed,
+                );
+                setLocalVolume(reconciliation.volume);
+                localVolumeRef.current = reconciliation.volume;
+                if (shouldSurfaceLatestFinal(metadata)) setVolumeFailure('');
+            },
+            onError(_error, metadata) {
+                if (metadata.targetKey !== controlTargetRef.current.key ||
+                    metadata.interactionGeneration !== interactionGenerationRef.current) return;
+                if (metadata.isLatest && metadata.group) {
+                    zoneCallbacksRef.current.onFailure(metadata.interactionGeneration);
+                }
+                if (shouldSurfaceLatestFinal(metadata)) {
+                    setVolumeFailure(metadata.group
+                        ? 'Group volume update failed.'
+                        : 'Volume update failed.');
+                }
+            },
+            onStateChange(next) {
+                setVolumeBusy(next.active);
+                if (!next.active && !interactionActiveRef.current &&
+                    acceptedSequenceRef.current !== next.latestSequence) {
+                    setLocalVolume(projectedVolumeRef.current);
+                    localVolumeRef.current = projectedVolumeRef.current;
+                    if (controlTargetRef.current.group) {
+                        zoneCallbacksRef.current.onFailure(interactionGenerationRef.current);
+                    }
+                }
+            },
+        });
+    }
+
+    useEffect(() => () => schedulerRef.current.dispose(), []);
+    useEffect(() => {
+        if (!interactionActiveRef.current && !schedulerRef.current.isActive()) {
+            setLocalVolume(projectedVolume);
+            localVolumeRef.current = projectedVolume;
+        }
+    }, [projectedVolume]);
     useEffect(() => { setLocalBass(actualBass); }, [actualBass]);
     useEffect(() => { setLocalBalance(actualBalance); }, [actualBalance]);
 
@@ -129,17 +320,50 @@ export function Controls({
     // One throttle per slider per mount. The local state still updates on every
     // input, so the handle keeps up with the pointer; only the network write is
     // rate-limited.
-    const writeVolume = useMemo(() => throttleTrailing(
-        (id, val) => api.volume(id, val), SLIDER_WRITE_INTERVAL_MS), []);
     const writeBass = useMemo(() => throttleTrailing(
         (id, val) => api.bass(id, val), SLIDER_WRITE_INTERVAL_MS), []);
     const writeBalance = useMemo(() => throttleTrailing(
         (id, val) => api.balance(id, val), SLIDER_WRITE_INTERVAL_MS), []);
 
-    function onVolumeChange(e) {
-        const val = parseInt(e.target.value, 10);
-        setLocalVolume(val);
-        writeVolume(deviceId, val);
+    function beginVolumeInteraction() {
+        if (interactionActiveRef.current) return;
+        interactionGenerationRef.current += 1;
+        interactionActiveRef.current = true;
+        interactionDirtyRef.current = false;
+        if (controlsLogicalZone) {
+            onZoneVolumeStart(localVolume, interactionGenerationRef.current);
+        }
+    }
+
+    function queueVolume(event, force) {
+        const level = clampVolume(parseInt(event.currentTarget.value, 10));
+        if (!force) {
+            beginVolumeInteraction();
+            if (level === localVolumeRef.current) return;
+            interactionDirtyRef.current = true;
+            setVolumeFailure('');
+        }
+        setLocalVolume(level);
+        localVolumeRef.current = level;
+        if (controlsLogicalZone) {
+            onZoneVolumePreview(level, interactionGenerationRef.current);
+        }
+        schedulerRef.current.queue(level, {
+            force,
+            interactionGeneration: interactionGenerationRef.current,
+            targetKey: controlTargetRef.current.key,
+            projectionKey: projectionKeyRef.current,
+        });
+    }
+
+    function finishVolumeInteraction(event) {
+        if (!interactionDirtyRef.current) {
+            interactionActiveRef.current = false;
+            return;
+        }
+        interactionDirtyRef.current = false;
+        interactionActiveRef.current = false;
+        queueVolume(event, true);
     }
 
     function onBassChange(e) {
@@ -228,12 +452,19 @@ export function Controls({
             <div class="discrete-command-status" role="status" aria-live="polite">
                 ${commandStatus}
             </div>
-            <div class="volume-row">
+            <div class="volume-row" aria-busy=${volumeBusy ? 'true' : 'false'}>
                 <span class="volume-icon">${IconVolume({ size: 16 })}</span>
                 <input type="range" class="volume-slider" min="0" max="100"
-                    value=${localVolume} onInput=${onVolumeChange} />
+                    value=${localVolume} aria-label=${controlsLogicalZone ? 'Group volume' : 'Volume'}
+                    onPointerDown=${beginVolumeInteraction}
+                    onInput=${event => queueVolume(event, false)}
+                    onPointerUp=${finishVolumeInteraction}
+                    onPointerCancel=${finishVolumeInteraction}
+                    onChange=${finishVolumeInteraction}
+                    onBlur=${finishVolumeInteraction} />
                 <span class="volume-value">${localVolume}</span>
             </div>
+            ${volumeFailure ? html`<div class="volume-control-failure" role="status">${volumeFailure}</div>` : null}
             ${hasBass && html`
                 <div class="bass-row">
                     <span class="bass-label">Bass</span>

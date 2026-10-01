@@ -11,6 +11,7 @@ import {
     zoneMemberMetadata,
     zoneTopologyFingerprint,
 } from '../zonePresentation.mjs';
+import { ZoneMemberVolumeControl } from './ZoneMemberVolumeControl.js';
 
 const html = htm.bind(h);
 
@@ -40,7 +41,7 @@ function inferredPhysicalCount(members) {
         total + Math.max(1, member?.physicalMembers?.length || 0), 0);
 }
 
-export function Zone({ deviceId, devices, onSelectMember }) {
+export function Zone({ deviceId, devices, onSelectMember, volumePreview = null }) {
     const [zone, setZone] = useState(null);
     const [candidates, setCandidates] = useState({});
     const [loading, setLoading] = useState(true);
@@ -129,6 +130,8 @@ export function Zone({ deviceId, devices, onSelectMember }) {
         : (Number.isInteger(projection?.physicalMemberCount)
             ? projection.physicalMemberCount
             : inferredPhysicalCount(logicalMembers));
+    const zoneMasterId = projection?.masterControlId || resolvedMaster.controlId ||
+        zone?.masterIp || deviceId;
 
     // Source candidates independently from Group projection while recognizing
     // the logical IDs already represented by the current zone.
@@ -166,6 +169,23 @@ export function Zone({ deviceId, devices, onSelectMember }) {
                 </div>
             </div>
         `;
+        const previewVolume = volumePreview?.[resolved.controlId];
+        const volumeTopologyKey = JSON.stringify([
+            topologyFingerprint,
+            devices?.[zoneMasterId]?.status?.epoch ?? null,
+            devices?.[resolved.controlId]?.status?.epoch ?? null,
+            (member?.physicalMembers || []).map(physical => [
+                physical?.deviceId || '',
+                physical?.role || '',
+            ]),
+        ]);
+        const volumeProjectionKey = JSON.stringify([
+            devices?.[zoneMasterId]?.status?.epoch ?? null,
+            devices?.[zoneMasterId]?.status?.revision ?? null,
+            devices?.[resolved.controlId]?.status?.epoch ?? null,
+            devices?.[resolved.controlId]?.status?.revision ?? null,
+            Number.isFinite(member?.actualVolume) ? member.actualVolume : null,
+        ]);
 
         return html`
             <div class="zone-logical-member" key=${resolved.controlId}>
@@ -185,6 +205,17 @@ export function Zone({ deviceId, devices, onSelectMember }) {
                         ${identity}
                     </div>
                 `}
+
+                <${ZoneMemberVolumeControl}
+                    zoneMasterId=${zoneMasterId}
+                    memberId=${resolved.controlId}
+                    topologyKey=${volumeTopologyKey}
+                    projectionKey=${volumeProjectionKey}
+                    ariaLabel=${`${metadata.name} volume`}
+                    available=${member?.available !== false}
+                    volume=${member?.actualVolume}
+                    previewVolume=${previewVolume}
+                />
 
                 ${isStereoPair ? html`
                     <div class="zone-physical-members">

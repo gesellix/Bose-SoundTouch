@@ -86,3 +86,42 @@ func TestLogNowPlayingError(t *testing.T) {
 		}
 	}
 }
+
+func TestLogZoneVolumePartial(t *testing.T) {
+	out := captureLog(t, func() {
+		logZoneVolumePartial(zoneVolumeResult{
+			MasterDeviceID: "MASTER",
+			Requested:      42,
+			Partial:        true,
+			Members: []zoneVolumeMemberResult{
+				{ControlID: "192.0.2.10", Error: "readback volume: timeout"},
+				{ControlID: "192.0.2.20", Error: "read volume: failed\nINJECTED"},
+			},
+		})
+	})
+
+	for _, want := range []string{
+		`[zone-volume] partial`,
+		`master="MASTER"`,
+		`requested=42`,
+		`192.0.2.10=readback volume: timeout`,
+		`192.0.2.20=read volume: failed\\nINJECTED`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log output %q missing %q", out, want)
+		}
+	}
+	if strings.Contains(out, "failed\nINJECTED") {
+		t.Errorf("log output not sanitized against newline injection: %q", out)
+	}
+}
+
+func TestLogZoneVolumeSuccessIsQuiet(t *testing.T) {
+	out := captureLog(t, func() {
+		logZoneVolumePartial(zoneVolumeResult{MasterDeviceID: "MASTER", Requested: 42})
+	})
+
+	if out != "" {
+		t.Fatalf("successful group-volume update logged: %q", out)
+	}
+}

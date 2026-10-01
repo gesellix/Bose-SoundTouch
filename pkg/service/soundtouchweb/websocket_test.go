@@ -371,6 +371,69 @@ func TestRefreshZonesAfterEventClearsCachedMasterClaim(t *testing.T) {
 	}
 }
 
+func TestUpdateDeviceStatusCannotOverwriteNewerVolumeReadback(t *testing.T) {
+	presetsRequestStarted := make(chan struct{})
+	releasePresetsResponse := make(chan struct{})
+	responses := map[string]string{
+		"/now_playing": `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
+		"/name":        `<name>Living Room</name>`,
+		"/volume":      `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
+		"/presets":     `<presets/>`,
+		"/sources":     `<sources/>`,
+		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+		"/getZone":     `<zone master="device-1"><member>device-1</member></zone>`,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		if r.URL.Path == "/presets" {
+			close(presetsRequestStarted)
+			<-releasePresetsResponse
+		}
+
+		body, ok := responses[r.URL.Path]
+		if !ok {
+			t.Errorf("unexpected status endpoint %q", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	conn := webtypes.NewDeviceConnection(
+		client.NewClientFromHost(server.URL),
+		&models.DeviceInfo{Name: "Living Room", DeviceID: "device-1", Type: "SoundTouch 20"},
+	)
+	refreshDone := make(chan struct{})
+	go func() {
+		NewWebApp().UpdateDeviceStatus("device-1", conn)
+		close(refreshDone)
+	}()
+
+	select {
+	case <-presetsRequestStarted:
+	case <-time.After(time.Second):
+		close(releasePresetsResponse)
+		t.Fatal("status poll did not read volume before blocking")
+	}
+
+	newerReadback := conn.BeginVolumeRefresh()
+	if !conn.ApplyPolledVolume(newerReadback, &models.Volume{ActualVolume: 40, TargetVolume: 40}) {
+		t.Fatal("newer volume readback was rejected")
+	}
+	close(releasePresetsResponse)
+
+	select {
+	case <-refreshDone:
+	case <-time.After(time.Second):
+		t.Fatal("status refresh did not finish")
+	}
+
+	if got := conn.Status().Volume; got == nil || got.ActualVolume != 40 {
+		t.Fatalf("volume = %+v, want newer readback 40", got)
+	}
+}
+
 func TestReserveZoneRefreshesAfterEventFencesOlderPollBeforeIO(t *testing.T) {
 	app := NewWebApp()
 	master := webtypes.NewDeviceConnection(client.NewClientFromHost("http://127.0.0.1"), &models.DeviceInfo{

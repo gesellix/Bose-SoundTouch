@@ -201,6 +201,13 @@ type WebApp struct {
 	mediaServersMu sync.Mutex
 	mediaServers   map[string]cachedMediaServer
 
+	// zoneVolumeLocks serialize equal-delta volume batches per authoritative
+	// zone master while allowing unrelated zones to move independently.
+	zoneVolumeLocks sync.Map
+	// volumeReadbackRetryWait is overridden by focused tests; production uses
+	// the bounded real delay.
+	volumeReadbackRetryWait func(time.Duration)
+
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
 }
 
@@ -781,8 +788,54 @@ func (app *WebApp) handleVolumeControl(w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
-	err := device.Client.SetVolume(volumeReq.Level)
-	app.sendControlResponse(w, err, fmt.Sprintf("Volume set to %d", volumeReq.Level))
+	app.handleVerifiedVolumeControl(w, chi.URLParam(r, "id"), device, volumeReq.Level)
+}
+
+func (app *WebApp) handleVerifiedVolumeControl(
+	w http.ResponseWriter,
+	controlID string,
+	device *webtypes.DeviceConnection,
+	level int,
+) {
+	topology, confirmed := device.SnapshotGroupTopology()
+	if !volumeTopologyWritable(device, topology, confirmed) {
+		app.sendError(w, "Volume control topology is unverified", http.StatusConflict)
+		return
+	}
+
+	member := zoneVolumeMemberResult{
+		ControlID: controlID,
+		Target:    intPointer(level),
+	}
+
+	atTarget, confirmed := app.applyVolumeTarget(&member, controlID, device, topology, nil, level)
+	if confirmed {
+		app.BroadcastDeviceList()
+	}
+
+	if !atTarget {
+		status := http.StatusBadGateway
+		if strings.Contains(member.Error, "topology") || strings.Contains(member.Error, "state changed") {
+			status = http.StatusConflict
+		}
+
+		app.sendError(w, member.Error, status)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(webtypes.APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"requested": level,
+			"actual":    *member.Actual,
+			"message":   fmt.Sprintf("Volume set to %d", level),
+		},
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 // handlePresetControl processes preset control requests
@@ -1218,8 +1271,7 @@ func (app *WebApp) HandleDirectVolumeControl(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 
-	err = device.Client.SetVolume(volumeLevel)
-	app.sendControlResponse(w, err, fmt.Sprintf("Volume set to %d", volumeLevel))
+	app.handleVerifiedVolumeControl(w, deviceID, device, volumeLevel)
 }
 
 // HandleDevicePower handles power toggle commands for devices
