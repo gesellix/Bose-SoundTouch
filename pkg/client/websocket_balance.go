@@ -71,17 +71,27 @@ func (ws *WebSocketClient) SetBalanceWithBounds(ctx context.Context, level int, 
 	// The response echoes the full balance document, so the write is
 	// self-verifying: no read-back round trip, and no risk of reading the
 	// stale value the HTTP endpoint briefly reports after a write.
-	return parseBalanceBody(responseBody)
+	balance, err := parseBalanceBody(responseBody)
+	if err != nil {
+		return nil, fmt.Errorf("balance write may have applied; parse echoed response: %w", err)
+	}
+
+	return balance, nil
 }
 
 // parseBalanceBody unmarshals the <balance> document out of a response body.
 func parseBalanceBody(body []byte) (*models.Balance, error) {
-	var balance models.Balance
-	if err := xml.Unmarshal(body, &balance); err != nil {
+	var readback balanceReadback
+	if err := xml.Unmarshal(body, &readback); err != nil {
 		return nil, fmt.Errorf("parse balance response: %w", err)
 	}
 
-	return &balance, nil
+	balance, err := readback.balance()
+	if err != nil {
+		return nil, fmt.Errorf("parse balance response: %w", err)
+	}
+
+	return balance, nil
 }
 
 // OnBalanceUpdated sets a handler for stereo-pair balance changes.
