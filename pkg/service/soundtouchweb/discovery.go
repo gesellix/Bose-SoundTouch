@@ -113,13 +113,6 @@ func (app *WebApp) addDeviceByHost(
 	// is watching (see status_poll.go, issue 766).
 	app.refreshDeviceStatusShared(host, conn, 0)
 
-	// Establish the stereo-pair balance reading. It lives here, not on the
-	// status poll, because /balance blocks rather than refusing on a sleeping
-	// speaker and must never hold up the other fields; and not on the
-	// WebSocket, because that socket is created lazily and a paired speaker
-	// would then show no balance control until something was pressed.
-	go app.watchBalance(host, conn)
-
 	log.Printf("Added %s device %s (%s) at %s:%d", sanitizeLog(source), sanitizeLog(info.Name), sanitizeLog(info.Type), sanitizeLog(host), port)
 
 	return conn

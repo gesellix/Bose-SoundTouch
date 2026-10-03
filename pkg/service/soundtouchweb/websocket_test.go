@@ -159,13 +159,14 @@ func TestUpdateDeviceStatusDoesNotOverwriteNewerNameEvent(t *testing.T) {
 	nameRequestStarted := make(chan struct{})
 	releaseNameResponse := make(chan struct{})
 	responses := map[string]string{
-		"/now_playing": `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
-		"/volume":      `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
-		"/presets":     `<presets/>`,
-		"/sources":     `<sources/>`,
-		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
-		"/getGroup":    `<group/>`,
-		"/getZone":     `<zone master="device-1"/>`,
+		"/now_playing":      `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
+		"/volume":           `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
+		"/presets":          `<presets/>`,
+		"/sources":          `<sources/>`,
+		"/bass":             `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+		"/bassCapabilities": `<bassCapabilities><bassAvailable>false</bassAvailable></bassCapabilities>`,
+		"/getGroup":         `<group/>`,
+		"/getZone":          `<zone master="device-1"/>`,
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -231,13 +232,14 @@ func TestUpdateDeviceStatusSkipsGroupForNonStereoModel(t *testing.T) {
 		}
 
 		responses := map[string]string{
-			"/now_playing": `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
-			"/name":        `<name>Living Room Left</name>`,
-			"/volume":      `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
-			"/presets":     `<presets/>`,
-			"/sources":     `<sources/>`,
-			"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
-			"/getZone":     `<zone master="device-1"/>`,
+			"/now_playing":      `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
+			"/name":             `<name>Living Room Left</name>`,
+			"/volume":           `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
+			"/presets":          `<presets/>`,
+			"/sources":          `<sources/>`,
+			"/bass":             `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+			"/bassCapabilities": `<bassCapabilities><bassAvailable>false</bassAvailable></bassCapabilities>`,
+			"/getZone":          `<zone master="device-1"/>`,
 		}
 		body, ok := responses[r.URL.Path]
 		if !ok {
@@ -497,13 +499,14 @@ func newStatusTestServer(t *testing.T, groupStatus int, groupBody string) *httpt
 	t.Helper()
 
 	responses := map[string]string{
-		"/now_playing": `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
-		"/name":        `<name>Living Room Left</name>`,
-		"/volume":      `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
-		"/presets":     `<presets/>`,
-		"/sources":     `<sources/>`,
-		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
-		"/getZone":     `<zone master="master-1"><member ipaddress="192.0.2.20">member-2</member></zone>`,
+		"/now_playing":      `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
+		"/name":             `<name>Living Room Left</name>`,
+		"/volume":           `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
+		"/presets":          `<presets/>`,
+		"/sources":          `<sources/>`,
+		"/bass":             `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+		"/bassCapabilities": `<bassCapabilities><bassAvailable>false</bassAvailable></bassCapabilities>`,
+		"/getZone":          `<zone master="master-1"><member ipaddress="192.0.2.20">member-2</member></zone>`,
 	}
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1034,14 +1037,6 @@ func TestSpeakerEventHelpersPublishOnlyChangedPayloads(t *testing.T) {
 	}
 	if app.applyPresetEvent(conn, presets) {
 		t.Fatal("duplicate presets payload was reported as changed")
-	}
-
-	bass := &models.Bass{ActualBass: -2}
-	if !app.applyBassEvent(conn, bass) {
-		t.Fatal("new bass payload was not reported as changed")
-	}
-	if app.applyBassEvent(conn, bass) {
-		t.Fatal("duplicate bass payload was reported as changed")
 	}
 }
 

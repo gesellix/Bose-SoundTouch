@@ -671,14 +671,18 @@ func (c *Client) DecreaseVolume(amount int) (*models.Volume, error) {
 
 // GetBass retrieves the current bass level from the /bass endpoint
 func (c *Client) GetBass() (*models.Bass, error) {
-	var bass models.Bass
+	var readback bassReadback
 
-	err := c.get("/bass", &bass)
+	if err := c.get("/bass", &readback); err != nil {
+		return nil, fmt.Errorf("failed to get bass: %w", err)
+	}
+
+	bass, err := readback.bass()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bass: %w", err)
 	}
 
-	return &bass, nil
+	return bass, nil
 }
 
 // SetBass sets the bass level using the /bass endpoint
@@ -754,15 +758,20 @@ const BalanceReadTimeout = 3 * time.Second
 //
 // Uses BalanceReadTimeout rather than the client's default: see that constant.
 func (c *Client) GetBalance() (*models.Balance, error) {
-	var balance models.Balance
+	var readback balanceReadback
 
 	shortBudget := &http.Client{Timeout: BalanceReadTimeout}
 
-	if err := c.getWithHTTPClient(shortBudget, "/balance", &balance); err != nil {
+	if err := c.getWithHTTPClient(shortBudget, "/balance", &readback); err != nil {
 		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
 
-	return &balance, nil
+	balance, err := readback.balance()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get balance: %w", err)
+	}
+
+	return balance, nil
 }
 
 // SetBalance is not available over HTTP.
@@ -1796,11 +1805,18 @@ func (c *Client) SetName(name string) error {
 
 // GetBassCapabilities retrieves the bass capabilities for the device
 func (c *Client) GetBassCapabilities() (*models.BassCapabilities, error) {
-	var bassCapabilities models.BassCapabilities
+	var readback bassCapabilitiesReadback
 
-	err := c.get("/bassCapabilities", &bassCapabilities)
+	if err := c.get("/bassCapabilities", &readback); err != nil {
+		return nil, fmt.Errorf("failed to get bass capabilities: %w", err)
+	}
 
-	return &bassCapabilities, err
+	capabilities, err := readback.bassCapabilities()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bass capabilities: %w", err)
+	}
+
+	return capabilities, nil
 }
 
 // GetTrackInfo retrieves track information (duplicate of GetNowPlaying per official API)

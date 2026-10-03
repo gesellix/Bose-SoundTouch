@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gorilla/websocket"
 )
 
 // The speaker's WebSocket is not only an event stream. It is a full
@@ -161,6 +162,12 @@ type RequestOptions struct {
 	Timeout time.Duration
 }
 
+// SendFence runs send while the caller's target identity is still valid.
+// Implementations may hold application registry and topology read locks for
+// the duration of send; send returns after the frame write and before Request
+// waits for the correlated reply.
+type SendFence func(send func() error) error
+
 // Request sends a <msg> envelope and returns the body of the matching
 // response.
 //
@@ -171,9 +178,40 @@ type RequestOptions struct {
 // A device-reported error in the reply becomes a Go error naming the code and
 // severity rather than being returned as a payload.
 func (ws *WebSocketClient) Request(ctx context.Context, route, method, body string, opts RequestOptions) ([]byte, error) {
+	return ws.requestForTarget(ctx, route, method, body, opts, "", nil)
+}
+
+// requestForTarget is Request with an optional physical-device check and a
+// fence around the single frame write. The device identity is resolved before
+// queueing for the socket writer, while the transport itself is selected only
+// after the queue wait and inside sendFence.
+func (ws *WebSocketClient) requestForTarget(
+	ctx context.Context,
+	route, method, body string,
+	opts RequestOptions,
+	expectedDeviceID string,
+	sendFence SendFence,
+) ([]byte, error) {
+	var admittedTransport *webSocketConnection
+
+	if sendFence != nil {
+		ws.mu.RLock()
+		admittedTransport = ws.connection
+		ws.mu.RUnlock()
+	}
+
 	deviceID, err := ws.deviceIDForEnvelope()
 	if err != nil {
 		return nil, err
+	}
+
+	expectedDeviceID = strings.TrimSpace(expectedDeviceID)
+	if expectedDeviceID != "" && strings.TrimSpace(deviceID) != expectedDeviceID {
+		return nil, fmt.Errorf(
+			"websocket request: resolved device ID %q does not match target %q",
+			deviceID,
+			expectedDeviceID,
+		)
 	}
 
 	timeout := opts.Timeout
@@ -194,7 +232,7 @@ func (ws *WebSocketClient) Request(ctx context.Context, route, method, body stri
 		xmlAttrEscape(deviceID), xmlAttrEscape(route), xmlAttrEscape(method), id, info, body,
 	)
 
-	if err := ws.SendMessage([]byte(envelope)); err != nil {
+	if err := ws.sendRequestMessage(ctx, []byte(envelope), sendFence, admittedTransport); err != nil {
 		return nil, fmt.Errorf("send %s: %w", route, err)
 	}
 
@@ -213,6 +251,70 @@ func (ws *WebSocketClient) Request(ctx context.Context, route, method, body stri
 	case <-ctx.Done():
 		return nil, fmt.Errorf("await response for %s: %w", route, ctx.Err())
 	}
+}
+
+// sendRequestMessage writes one request after waiting for all earlier socket
+// writers. A guarded write acquires writeMu before entering the application
+// fence, then selects and holds the current transport through the frame write.
+func (ws *WebSocketClient) sendRequestMessage(
+	ctx context.Context, message []byte, sendFence SendFence, admittedTransport *webSocketConnection,
+) error {
+	if sendFence == nil {
+		return ws.SendMessage(message)
+	}
+
+	ws.writeMu.Lock()
+	defer ws.writeMu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	called := false
+	write := func() error {
+		if called {
+			return fmt.Errorf("send fence invoked the frame write more than once")
+		}
+
+		called = true
+
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		ws.mu.RLock()
+		defer ws.mu.RUnlock()
+
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		connection := ws.connection
+		if !ws.connected || connection == nil || connection != admittedTransport || connection.ctx.Err() != nil {
+			return fmt.Errorf("not connected")
+		}
+
+		deadline := time.Now().Add(10 * time.Second)
+		if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+			deadline = contextDeadline
+		}
+
+		if err := connection.conn.SetWriteDeadline(deadline); err != nil {
+			return err
+		}
+
+		return connection.conn.WriteMessage(websocket.TextMessage, message)
+	}
+
+	if err := sendFence(write); err != nil {
+		return err
+	}
+
+	if !called {
+		return fmt.Errorf("send fence rejected the frame write")
+	}
+
+	return nil
 }
 
 // responseBody extracts the body of a reply, turning a device error into a Go

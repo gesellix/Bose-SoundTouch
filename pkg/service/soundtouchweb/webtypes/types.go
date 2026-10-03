@@ -82,6 +82,7 @@ type DeviceConnection struct {
 	// and each one used to start its own HTTP read of an endpoint that
 	// blocks on a sleeping speaker.
 	balanceRefresh atomic.Int32
+	bassRefresh    atomic.Int32
 
 	// balanceUnavailableLogged remembers that this speaker's balance has
 	// already been reported as unavailable, so that line is logged when the
@@ -108,6 +109,9 @@ type DeviceConnection struct {
 	fieldGenMu sync.Mutex
 	fieldGen   [numStatusFields]struct{ issued, applied uint64 }
 
+	bassOperationMu    sync.Mutex
+	balanceOperationMu sync.Mutex
+
 	// groupMu orders polled /getGroup responses against real-time
 	// groupUpdated events. groupGeneration is the highest generation
 	// issued (by BeginGroupRefresh or ApplyGroupEvent);
@@ -120,6 +124,8 @@ type DeviceConnection struct {
 	groupMu                sync.Mutex
 	groupGeneration        uint64
 	groupAppliedGeneration uint64
+	acousticGroupToken     uint64
+	acousticGroupCertified uint64
 
 	// zoneMu orders master-authoritative /getZone responses. A routine poll
 	// supersedes older reads only after it succeeds; an event refresh reserves
@@ -148,21 +154,24 @@ type DeviceConnection struct {
 
 // DeviceStatus represents the current device state
 type DeviceStatus struct {
-	NowPlaying             *models.NowPlaying      `json:"nowPlaying,omitempty"`
-	Volume                 *models.Volume          `json:"volume,omitempty"`
-	Presets                *models.Presets         `json:"presets,omitempty"`
-	Sources                *models.Sources         `json:"sources,omitempty"`
-	SourcesStale           bool                    `json:"sourcesStale,omitempty"`
-	Bass                   *models.Bass            `json:"bass,omitempty"`
-	Balance                *models.Balance         `json:"balance,omitempty"`
-	Group                  *models.Group           `json:"group,omitempty"`
-	Zone                   *models.ZoneInfo        `json:"zone,omitempty"`
-	Connectivity           Connectivity            `json:"connectivity"`
-	HTTPReachable          bool                    `json:"httpReachable"`
-	WebSocketConnected     bool                    `json:"webSocketConnected"`
-	SpeakerConnectionState *SpeakerConnectionState `json:"speakerConnectionState,omitempty"`
-	IsConnected            bool                    `json:"isConnected"`
-	LastActivity           time.Time               `json:"lastActivity"`
+	NowPlaying             *models.NowPlaying       `json:"nowPlaying,omitempty"`
+	Volume                 *models.Volume           `json:"volume,omitempty"`
+	Presets                *models.Presets          `json:"presets,omitempty"`
+	Sources                *models.Sources          `json:"sources,omitempty"`
+	SourcesStale           bool                     `json:"sourcesStale,omitempty"`
+	Bass                   *models.Bass             `json:"bass,omitempty"`
+	BassCapabilities       *models.BassCapabilities `json:"bassCapabilities,omitempty"`
+	BassRevision           uint64                   `json:"bassRevision"`
+	Balance                *models.Balance          `json:"balance,omitempty"`
+	BalanceRevision        uint64                   `json:"balanceRevision"`
+	Group                  *models.Group            `json:"group,omitempty"`
+	Zone                   *models.ZoneInfo         `json:"zone,omitempty"`
+	Connectivity           Connectivity             `json:"connectivity"`
+	HTTPReachable          bool                     `json:"httpReachable"`
+	WebSocketConnected     bool                     `json:"webSocketConnected"`
+	SpeakerConnectionState *SpeakerConnectionState  `json:"speakerConnectionState,omitempty"`
+	IsConnected            bool                     `json:"isConnected"`
+	LastActivity           time.Time                `json:"lastActivity"`
 
 	// Epoch identifies the DeviceConnection that produced this status.
 	// Revision restarts at 0 for every new connection, so revisions from
@@ -445,7 +454,18 @@ func (c *DeviceConnection) FinishWebSocketLoop() {
 // every field, so each StatusField generation is advanced past any poll
 // still in flight.
 func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
-	nowPlayingGeneration := c.supersedeAllFields()
+	c.groupMu.Lock()
+	defer c.groupMu.Unlock()
+
+	c.fieldGenMu.Lock()
+	defer c.fieldGenMu.Unlock()
+
+	c.groupGeneration++
+	c.groupAppliedGeneration = c.groupGeneration
+	c.acousticGroupToken++
+	c.acousticGroupCertified = 0
+
+	nowPlayingGeneration := c.supersedeAllFieldsLocked()
 
 	for {
 		old := c.status.Load()
@@ -453,6 +473,8 @@ func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
 		next.Epoch = c.epoch
 		next.Revision = old.Revision + 1
 		next.NowPlayingRevision = nowPlayingGeneration
+		next.BassRevision = c.fieldGen[FieldBass].applied
+		next.BalanceRevision = c.fieldGen[FieldBalance].applied
 
 		if c.status.CompareAndSwap(old, &next) {
 			return
@@ -462,10 +484,7 @@ func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
 
 // supersedeAllFields advances every StatusField generation past whatever is
 // currently in flight and returns FieldNowPlaying's new generation.
-func (c *DeviceConnection) supersedeAllFields() uint64 {
-	c.fieldGenMu.Lock()
-	defer c.fieldGenMu.Unlock()
-
+func (c *DeviceConnection) supersedeAllFieldsLocked() uint64 {
 	for field := range c.fieldGen {
 		c.fieldGen[field].issued++
 		c.fieldGen[field].applied = c.fieldGen[field].issued
@@ -486,6 +505,19 @@ func (c *DeviceConnection) BeginFieldPoll(field StatusField) uint64 {
 	return c.fieldGen[field].issued
 }
 
+// InvalidateField rejects reads already in flight without replacing the last
+// verified value or its published revision. The next authoritative read must
+// reserve a fresh generation with BeginFieldPoll.
+func (c *DeviceConnection) InvalidateField(field StatusField) uint64 {
+	c.fieldGenMu.Lock()
+	defer c.fieldGenMu.Unlock()
+
+	c.fieldGen[field].issued++
+	c.fieldGen[field].applied = c.fieldGen[field].issued
+
+	return c.fieldGen[field].issued
+}
+
 // CompleteFieldPoll applies mut only if generation is strictly newer than
 // whatever last actually applied -- poll or event -- for field. A poll for
 // one field losing this race never affects any other field: an unrelated
@@ -493,20 +525,17 @@ func (c *DeviceConnection) BeginFieldPoll(field StatusField) uint64 {
 // discard this field's fresh, successful data.
 func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint64, mut func(*DeviceStatus)) bool {
 	c.fieldGenMu.Lock()
+	defer c.fieldGenMu.Unlock()
 
 	if generation <= c.fieldGen[field].applied {
-		c.fieldGenMu.Unlock()
-
 		return false
 	}
 
-	c.fieldGen[field].applied = generation
-	c.fieldGenMu.Unlock()
-
-	c.UpdateStatus(func(status *DeviceStatus) {
+	c.updateStatusLocked(func(status *DeviceStatus) {
 		mut(status)
 		recordFieldRevision(status, field, generation)
 	})
+	c.fieldGen[field].applied = generation
 
 	return true
 }
@@ -516,15 +545,15 @@ func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint6
 // that began before it, without touching any other field's ordering.
 func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceStatus)) {
 	c.fieldGenMu.Lock()
+	defer c.fieldGenMu.Unlock()
+
 	c.fieldGen[field].issued++
 	generation := c.fieldGen[field].issued
-	c.fieldGen[field].applied = generation
-	c.fieldGenMu.Unlock()
-
-	c.UpdateStatus(func(status *DeviceStatus) {
+	c.updateStatusLocked(func(status *DeviceStatus) {
 		mut(status)
 		recordFieldRevision(status, field, generation)
 	})
+	c.fieldGen[field].applied = generation
 }
 
 // recordFieldRevision publishes the generation that just wrote field, for the
@@ -534,8 +563,13 @@ func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceSt
 // aggregate Revision cannot express that, because any other field's merge
 // advances it too.
 func recordFieldRevision(status *DeviceStatus, field StatusField, generation uint64) {
-	if field == FieldNowPlaying {
+	switch field {
+	case FieldNowPlaying:
 		status.NowPlayingRevision = generation
+	case FieldBass:
+		status.BassRevision = generation
+	case FieldBalance:
+		status.BalanceRevision = generation
 	}
 }
 
@@ -595,6 +629,10 @@ func (c *DeviceConnection) ApplySourcesRead(generation uint64, sources *models.S
 //
 // Every successful store advances Revision exactly once.
 func (c *DeviceConnection) UpdateStatus(mut func(*DeviceStatus)) {
+	c.updateStatusLocked(mut)
+}
+
+func (c *DeviceConnection) updateStatusLocked(mut func(*DeviceStatus)) {
 	for {
 		old := c.status.Load()
 		next := *old
@@ -969,6 +1007,8 @@ func (c *DeviceConnection) BeginGroupRefresh() uint64 {
 	defer c.groupMu.Unlock()
 
 	c.groupGeneration++
+	c.acousticGroupToken++
+	c.acousticGroupCertified = 0
 
 	return c.groupGeneration
 }
@@ -977,16 +1017,24 @@ func (c *DeviceConnection) BeginGroupRefresh() uint64 {
 // result (poll or event) has already applied. Empty groups clear the
 // current claim.
 func (c *DeviceConnection) ApplyPolledGroup(generation uint64, group *models.Group) bool {
+	_, changed := c.ApplyPolledGroupResult(generation, group)
+
+	return changed
+}
+
+// ApplyPolledGroupResult is ApplyPolledGroup with a separate acceptance bit,
+// allowing unchanged authoritative evidence to trigger acoustic convergence.
+func (c *DeviceConnection) ApplyPolledGroupResult(generation uint64, group *models.Group) (bool, bool) {
 	c.groupMu.Lock()
 	defer c.groupMu.Unlock()
 
 	if generation <= c.groupAppliedGeneration {
-		return false
+		return false, false
 	}
 
 	c.groupAppliedGeneration = generation
 
-	return c.replaceGroup(normalizeGroup(group), time.Time{})
+	return true, c.applyConfirmedGroupLocked(generation, normalizeGroup(group), time.Time{})
 }
 
 // GroupGeneration reports the generation of the most recently applied group
@@ -1009,17 +1057,38 @@ func (c *DeviceConnection) GroupGeneration() uint64 {
 // baseline captured earlier, even when the read itself raced a fresher
 // event or poll to completion first.
 func (c *DeviceConnection) ApplyPolledGroupIfBaseline(baseline uint64, group *models.Group) bool {
+	_, changed := c.ApplyPolledGroupIfBaselineResult(baseline, group)
+
+	return changed
+}
+
+// ApplyPolledGroupIfBaselineResult is ApplyPolledGroupIfBaseline with a
+// separate acceptance result.
+func (c *DeviceConnection) ApplyPolledGroupIfBaselineResult(
+	baseline uint64,
+	group *models.Group,
+) (bool, bool) {
 	c.groupMu.Lock()
 	defer c.groupMu.Unlock()
 
 	if c.groupAppliedGeneration != baseline {
-		return false
+		return false, false
 	}
 
+	// A baseline-only caller did not reserve a read token. It may still
+	// preserve completion ordering, but cannot certify over a newer pending
+	// or failed refresh.
+	canCertify := c.groupGeneration == c.groupAppliedGeneration
 	c.groupGeneration++
+	c.acousticGroupToken++
+	c.acousticGroupCertified = 0
 	c.groupAppliedGeneration = c.groupGeneration
 
-	return c.replaceGroup(normalizeGroup(group), time.Time{})
+	if canCertify {
+		return true, c.applyConfirmedGroupLocked(c.groupGeneration, normalizeGroup(group), time.Time{})
+	}
+
+	return true, c.replaceGroup(normalizeGroup(group), time.Time{})
 }
 
 // ApplyGroupEvent stores the newest groupUpdated event and invalidates all
@@ -1030,13 +1099,47 @@ func (c *DeviceConnection) ApplyGroupEvent(group *models.Group, activity time.Ti
 	defer c.groupMu.Unlock()
 
 	c.groupGeneration++
+	c.acousticGroupToken++
+	c.acousticGroupCertified = 0
 	c.groupAppliedGeneration = c.groupGeneration
 
-	return c.replaceGroup(normalizeGroup(group), activity)
+	return c.applyConfirmedGroupLocked(c.groupGeneration, normalizeGroup(group), activity)
+}
+
+func (c *DeviceConnection) applyConfirmedGroupLocked(
+	generation uint64,
+	group *models.Group,
+	activity time.Time,
+) bool {
+	changed := c.replaceGroup(group, activity)
+	if generation == c.groupGeneration && validStereoPair(group) {
+		c.acousticGroupCertified = c.acousticGroupToken
+	}
+
+	return changed
 }
 
 func (c *DeviceConnection) replaceGroup(group *models.Group, activity time.Time) bool {
 	changed := !models.SameGroup(c.Status().Group, group)
+	if changed {
+		c.fieldGenMu.Lock()
+		c.fieldGen[FieldBalance].issued++
+		generation := c.fieldGen[FieldBalance].issued
+		c.fieldGen[FieldBalance].applied = generation
+		c.updateStatusLocked(func(s *DeviceStatus) {
+			s.Group = group
+			s.Balance = nil
+			recordFieldRevision(s, FieldBalance, generation)
+
+			if !activity.IsZero() {
+				s.LastActivity = activity
+			}
+		})
+		c.fieldGenMu.Unlock()
+
+		return true
+	}
+
 	c.UpdateStatus(func(s *DeviceStatus) {
 		s.Group = group
 		if !activity.IsZero() {
@@ -1045,6 +1148,40 @@ func (c *DeviceConnection) replaceGroup(group *models.Group, activity time.Time)
 	})
 
 	return changed
+}
+
+func validStereoPair(group *models.Group) bool {
+	if group == nil || strings.TrimSpace(group.ID) == "" ||
+		strings.TrimSpace(group.MasterDeviceID) == "" || len(group.Roles.Roles) != 2 {
+		return false
+	}
+
+	devices := make(map[string]struct{}, 2)
+	roles := make(map[string]struct{}, 2)
+
+	for _, member := range group.Roles.Roles {
+		deviceID := strings.TrimSpace(member.DeviceID)
+
+		role := strings.ToUpper(strings.TrimSpace(member.Role))
+		if deviceID == "" || (role != "LEFT" && role != "RIGHT") {
+			return false
+		}
+
+		if _, exists := devices[deviceID]; exists {
+			return false
+		}
+
+		if _, exists := roles[role]; exists {
+			return false
+		}
+
+		devices[deviceID] = struct{}{}
+		roles[role] = struct{}{}
+	}
+
+	_, masterPresent := devices[strings.TrimSpace(group.MasterDeviceID)]
+
+	return masterPresent
 }
 
 func normalizeGroup(group *models.Group) *models.Group {

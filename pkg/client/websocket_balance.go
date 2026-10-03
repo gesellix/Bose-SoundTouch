@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"strings"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 )
@@ -56,6 +57,38 @@ func (ws *WebSocketClient) SetBalance(ctx context.Context, level int) (*models.B
 // SetBalanceWithBounds writes level, validated against an already-fetched
 // reading. A nil bounds skips validation and lets the device judge.
 func (ws *WebSocketClient) SetBalanceWithBounds(ctx context.Context, level int, bounds *models.Balance) (*models.Balance, error) {
+	return ws.setBalanceWithBoundsForTarget(ctx, level, bounds, "", nil)
+}
+
+// SetBalanceWithBoundsForTarget writes balance only while expectedDeviceID and
+// the caller's application-level send fence remain current. It is intended for
+// registries where a queued request can outlive a WebSocket replacement or a
+// stereo-pair topology generation.
+func (ws *WebSocketClient) SetBalanceWithBoundsForTarget(
+	ctx context.Context,
+	level int,
+	bounds *models.Balance,
+	expectedDeviceID string,
+	sendFence SendFence,
+) (*models.Balance, error) {
+	if strings.TrimSpace(expectedDeviceID) == "" {
+		return nil, fmt.Errorf("balance target device ID is empty")
+	}
+
+	if sendFence == nil {
+		return nil, fmt.Errorf("balance target send fence is nil")
+	}
+
+	return ws.setBalanceWithBoundsForTarget(ctx, level, bounds, expectedDeviceID, sendFence)
+}
+
+func (ws *WebSocketClient) setBalanceWithBoundsForTarget(
+	ctx context.Context,
+	level int,
+	bounds *models.Balance,
+	expectedDeviceID string,
+	sendFence SendFence,
+) (*models.Balance, error) {
 	request, err := models.NewBalanceRequest(level, bounds)
 	if err != nil {
 		return nil, err
@@ -63,7 +96,15 @@ func (ws *WebSocketClient) SetBalanceWithBounds(ctx context.Context, level int, 
 
 	body := fmt.Sprintf(`<balance><targetBalance>%d</targetBalance></balance>`, request.Target)
 
-	responseBody, err := ws.Request(ctx, "balance", "POST", body, RequestOptions{MainNode: balanceMainNode})
+	responseBody, err := ws.requestForTarget(
+		ctx,
+		"balance",
+		"POST",
+		body,
+		RequestOptions{MainNode: balanceMainNode},
+		expectedDeviceID,
+		sendFence,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -71,17 +112,27 @@ func (ws *WebSocketClient) SetBalanceWithBounds(ctx context.Context, level int, 
 	// The response echoes the full balance document, so the write is
 	// self-verifying: no read-back round trip, and no risk of reading the
 	// stale value the HTTP endpoint briefly reports after a write.
-	return parseBalanceBody(responseBody)
+	balance, err := parseBalanceBody(responseBody)
+	if err != nil {
+		return nil, fmt.Errorf("balance write may have applied; parse echoed response: %w", err)
+	}
+
+	return balance, nil
 }
 
 // parseBalanceBody unmarshals the <balance> document out of a response body.
 func parseBalanceBody(body []byte) (*models.Balance, error) {
-	var balance models.Balance
-	if err := xml.Unmarshal(body, &balance); err != nil {
+	var readback balanceReadback
+	if err := xml.Unmarshal(body, &readback); err != nil {
 		return nil, fmt.Errorf("parse balance response: %w", err)
 	}
 
-	return &balance, nil
+	balance, err := readback.balance()
+	if err != nil {
+		return nil, fmt.Errorf("parse balance response: %w", err)
+	}
+
+	return balance, nil
 }
 
 // OnBalanceUpdated sets a handler for stereo-pair balance changes.

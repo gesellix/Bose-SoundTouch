@@ -4,6 +4,7 @@ package soundtouchweb
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -299,149 +300,56 @@ func (app *WebApp) applyPresetEvent(
 	})
 }
 
-func (app *WebApp) applyBassEvent(
-	conn *webtypes.DeviceConnection,
-	bass *models.Bass,
-) bool {
-	return app.applySpeakerStatusEvent(conn, webtypes.FieldBass, func(status *webtypes.DeviceStatus) bool {
-		changed := !reflect.DeepEqual(status.Bass, bass)
-		status.Bass = bass
-		status.LastActivity = time.Now()
-
-		return changed
-	})
-}
-
-// balanceWatchSchedule is the wait before each retry after a connection comes
-// up. It starts short because the common case resolves almost immediately —
-// the /getGroup poll only needs a moment — and a flat interval left a visible
-// gap where the pair was on screen but the slider was not. It then stretches
-// out, so a speaker that genuinely has no balance stops being asked.
-var balanceWatchSchedule = []time.Duration{
-	2 * time.Second,
-	3 * time.Second,
-	5 * time.Second,
-	10 * time.Second,
-	15 * time.Second,
-	30 * time.Second,
-}
-
-// watchBalance establishes the balance reading for a device, retrying briefly
-// until the speaker answers.
-//
-// It reads over HTTP, deliberately. Reads do not need the WebSocket — only
-// writes do — and that socket is created lazily, on the first control request
-// that needs one. Hanging the read off it meant a paired speaker showed no
-// slider until something was pressed: the pair was on screen, the speaker
-// answered balanceAvailable=true to anyone who asked, and nobody asked.
-//
-// Retrying rather than reading once covers the other case: a pair that already
-// existed at startup is discovered by the /getGroup poll running concurrently,
-// and groupUpdated only fires when the pairing CHANGES.
-//
-// The loop stops as soon as a balance is known or the device goes away, so a
-// speaker that genuinely has none costs a handful of cheap requests and then
-// nothing. GetBalance carries its own short timeout, so a sleeping speaker
-// cannot stall this either.
-func (app *WebApp) watchBalance(deviceID string, conn *webtypes.DeviceConnection) {
-	for attempt, wait := range balanceWatchSchedule {
-		app.refreshBalance(deviceID, conn)
-
-		if conn.Status().Balance != nil {
-			if attempt > 0 {
-				log.Printf("Speaker %s: balance became readable on attempt %d",
-					sanitizeLog(deviceID), attempt+1)
-			}
-
-			return
-		}
-
-		select {
-		case <-time.After(wait):
-		case <-conn.Done():
-			return
-		}
-	}
-
-	// One last attempt after the final wait, so the longest interval is not
-	// spent only to give up without using it.
-	app.refreshBalance(deviceID, conn)
-}
-
-// refreshBalance reads the balance and stores it on the device status.
-//
-// The only gate is the model: balance exists on SoundTouch 10s, and asking
-// anything else is pointless. Whether it currently APPLIES is the speaker's
-// call, reported as balanceAvailable, and that is the single authority here —
-// an unavailable answer clears the reading so the UI drops the control.
-//
-// It deliberately does NOT pre-check status.Group. That looks like a free
-// optimisation and is actually a race: on startup this runs alongside the
-// first /getGroup poll, so the group is usually still nil, and gating on it
-// meant the reading was skipped exactly when it was first needed.
+// refreshBalance reserves an ordering barrier synchronously, then starts one
+// authoritative read worker. Bursts coalesce into one active and one trailing
+// read; every hint still invalidates an older in-flight result.
 func (app *WebApp) refreshBalance(deviceID string, conn *webtypes.DeviceConnection) {
-	if conn.Client == nil || !stereoPairCapable(conn.DeviceInfo) {
+	if conn.Client == nil {
 		return
 	}
 
-	// Coalesce. Dragging the slider emits a burst of balanceUpdated frames —
-	// four inside one second, measured — and reading once per frame would
-	// pile concurrent requests onto an endpoint that blocks on a sleeping
-	// speaker. Whoever is already reading will read once more on our behalf,
-	// so the final value still lands.
+	conn.InvalidateField(webtypes.FieldBalance)
+
+	target, generation, valid := conn.BeginBalanceRead()
+	if !valid {
+		return
+	}
+
 	if !conn.BeginBalanceRefresh() {
 		return
 	}
 
+	go app.completeBalanceRefresh(deviceID, conn, target, generation)
+}
+
+func (app *WebApp) completeBalanceRefresh(
+	deviceID string,
+	conn *webtypes.DeviceConnection,
+	target webtypes.BalanceTarget,
+	generation uint64,
+) {
+	valid := true
 	for {
-		app.readBalanceOnce(deviceID, conn)
+		if valid {
+			balance, err := conn.Client.GetBalance()
+			if err != nil {
+				log.Printf("Speaker %s: balance read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
+			} else if err = validBalanceReadback(balance, target.HardwareID); err != nil {
+				log.Printf("Speaker %s: balance readback rejected: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
+			} else if app.applyAcousticRead(deviceID, conn, target.HardwareID, func() bool {
+				_, applied := conn.ApplyBalanceRead(target, generation, balance)
+				return applied
+			}) {
+				app.QueueDeviceListBroadcast()
+			}
+		}
 
 		if !conn.EndBalanceRefresh() {
 			return
 		}
+
+		target, generation, valid = conn.BeginBalanceRead()
 	}
-}
-
-// readBalanceOnce performs a single balance read and stores the result.
-func (app *WebApp) readBalanceOnce(deviceID string, conn *webtypes.DeviceConnection) {
-	balance, err := conn.Client.GetBalance()
-	if err != nil {
-		log.Printf("Speaker %s: balance read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
-
-		return
-	}
-
-	if !balance.Available {
-		// Log the whole answer, not just the fact of it: the range and target
-		// reported alongside are the evidence for why it is unavailable.
-		//
-		// Only when the state changes. This read runs on every balanceUpdated
-		// frame and every status poll, so a speaker that reports no usable
-		// balance — a standalone unit, most of them — emitted one identical
-		// line per poll, per speaker, and buried everything else in the log.
-		if conn.MarkBalanceUnavailable() {
-			log.Printf("Speaker %s: balance reported unavailable (range %d..%d, default %d, target %d, actual %d)",
-				sanitizeLog(deviceID), balance.Min, balance.Max, balance.Default, balance.Target, balance.Actual)
-		}
-
-		app.clearBalance(conn)
-
-		return
-	}
-
-	conn.MarkBalanceAvailable()
-
-	app.applyBalanceEvent(conn, balance)
-}
-
-// clearBalance drops any stored reading, which is how the UI learns the
-// control no longer applies — the pair was torn down.
-func (app *WebApp) clearBalance(conn *webtypes.DeviceConnection) {
-	if conn.Status().Balance == nil {
-		return
-	}
-
-	app.applyBalanceEvent(conn, nil)
 }
 
 // isStandbySource reports whether a now-playing source means the speaker is
@@ -455,20 +363,64 @@ func isStandbySource(source string) bool {
 	}
 }
 
-// refreshBass re-reads /bass after a payload-free bassUpdated signal.
+// refreshBass treats every bassUpdated frame as an invalidation hint and
+// reserves its barrier before launching asynchronous I/O.
 func (app *WebApp) refreshBass(deviceID string, conn *webtypes.DeviceConnection) {
 	if conn.Client == nil {
 		return
 	}
 
-	bass, err := conn.Client.GetBass()
-	if err != nil {
-		log.Printf("Speaker %s: bass re-read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
+	conn.InvalidateField(webtypes.FieldBass)
 
+	if !conn.BeginBassRefresh() {
 		return
 	}
 
-	app.applyBassEvent(conn, bass)
+	go app.completeBassRefresh(deviceID, conn, conn.BeginFieldPoll(webtypes.FieldBass))
+}
+
+func (app *WebApp) completeBassRefresh(
+	deviceID string,
+	conn *webtypes.DeviceConnection,
+	generation uint64,
+) {
+	for {
+		capabilities, capabilityErr := conn.Client.GetBassCapabilities()
+
+		bass, bassErr := conn.Client.GetBass()
+		if capabilityErr == nil {
+			capabilityErr = validBassCapabilityProjection(capabilities, acousticDeviceID(conn))
+		}
+
+		unavailable := capabilityErr == nil && !capabilities.BassAvailable
+		if unavailable {
+			bassErr = nil
+		}
+
+		if capabilityErr != nil || bassErr != nil {
+			log.Printf("Speaker %s: bass re-read failed: capabilities=%v bass=%v",
+				sanitizeLog(deviceID), sanitizeLog(fmt.Sprint(capabilityErr)), sanitizeLog(fmt.Sprint(bassErr)))
+		} else if err := validBassReadback(bass, capabilities, acousticDeviceID(conn)); !unavailable && err != nil {
+			log.Printf("Speaker %s: bass readback rejected: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
+		} else if app.applyAcousticRead(deviceID, conn, acousticDeviceID(conn), func() bool {
+			return conn.CompleteFieldPoll(webtypes.FieldBass, generation, func(status *webtypes.DeviceStatus) {
+				status.BassCapabilities = capabilities
+				if !unavailable {
+					status.Bass = bass
+				}
+
+				status.LastActivity = time.Now()
+			})
+		}) {
+			app.QueueDeviceListBroadcast()
+		}
+
+		if !conn.EndBassRefresh() {
+			return
+		}
+
+		generation = conn.BeginFieldPoll(webtypes.FieldBass)
+	}
 }
 
 // refreshPresets re-reads /presets after a payload-free presetsUpdated signal.
@@ -485,20 +437,6 @@ func (app *WebApp) refreshPresets(deviceID string, conn *webtypes.DeviceConnecti
 	}
 
 	app.applyPresetEvent(conn, presets)
-}
-
-// applyBalanceEvent stores a fresh balance reading on the device status.
-func (app *WebApp) applyBalanceEvent(
-	conn *webtypes.DeviceConnection,
-	balance *models.Balance,
-) {
-	app.applySpeakerStatusEvent(conn, webtypes.FieldBalance, func(status *webtypes.DeviceStatus) bool {
-		changed := !reflect.DeepEqual(status.Balance, balance)
-		status.Balance = balance
-		status.LastActivity = time.Now()
-
-		return changed
-	})
 }
 
 // registerDeviceWebSocketClient gives conn its own write-serialization lock,
@@ -777,7 +715,8 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		// balanceUpdated carries no payload — it is a signal to re-read, not
 		// a value.
 		wsClient.OnBalanceUpdated(func(_ *models.BalanceUpdatedEvent) {
-			go app.refreshBalance(deviceID, conn)
+			conn.MarkEventStreamActivity(time.Now())
+			app.refreshBalance(deviceID, conn)
 		})
 
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
@@ -797,22 +736,12 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			app.applyPresetEvent(conn, event.Presets)
 		})
 
-		wsClient.OnBassUpdated(func(event *models.BassUpdatedEvent) {
+		wsClient.OnBassUpdated(func(_ *models.BassUpdatedEvent) {
 			activity := time.Now()
 
 			conn.MarkEventStreamActivity(activity)
 
-			// Every captured bassUpdated frame is empty; it is a re-read
-			// signal, not a value. Taking the zero value out of one and
-			// storing it is what made the Player's bass slider snap to 0 on
-			// every change.
-			if !event.HasPayload() {
-				go app.refreshBass(deviceID, conn)
-
-				return
-			}
-
-			app.applyBassEvent(conn, event.Bass)
+			app.refreshBass(deviceID, conn)
 		})
 
 		wsClient.OnGroupUpdated(func(event *models.GroupUpdatedEvent) {
@@ -820,7 +749,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 			// Creating or tearing down a pair flips whether balance exists
 			// here at all, so the reading has to follow the group.
-			go app.refreshBalance(deviceID, conn)
+			app.refreshBalance(deviceID, conn)
 		})
 
 		wsClient.OnZoneUpdated(func(event *models.ZoneUpdatedEvent) {
@@ -920,7 +849,7 @@ func (app *WebApp) handleNowPlayingUpdatedEvent(
 	if nowPlaying.Source != previousSource &&
 		isStandbySource(previousSource) &&
 		!isStandbySource(nowPlaying.Source) {
-		go app.refreshBalance(deviceID, conn)
+		app.refreshBalance(deviceID, conn)
 	}
 
 	app.applyNowPlayingEvent(conn, nowPlaying)
@@ -1027,10 +956,7 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 	// hanging until the client's timeout instead of returning quickly).
 	stereoCapable := stereoPairCapable(conn.DeviceInfo)
 
-	var groupGeneration uint64
-	if stereoCapable && groupBaseline == nil {
-		groupGeneration = conn.BeginGroupRefresh()
-	}
+	groupGeneration, groupReserved := reserveAcousticGroupPoll(conn, stereoCapable, groupBaseline)
 
 	nameGeneration := conn.BeginNameRefresh()
 
@@ -1042,6 +968,7 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 	volume, volumeErr := conn.Client.GetVolume()
 	presets, presetsErr := conn.Client.GetPresets()
 	sources, sourcesErr := conn.Client.GetSources()
+	bassCapabilities, bassCapabilitiesErr := conn.Client.GetBassCapabilities()
 	bass, bassErr := conn.Client.GetBass()
 	zoneGeneration := conn.BeginZoneRefresh()
 	zone, zoneErr := conn.Client.GetZone()
@@ -1051,9 +978,11 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 		groupErr error
 	)
 
-	if stereoCapable {
+	if stereoCapable && groupReserved {
 		group, groupErr = conn.Client.GetGroup()
 	}
+
+	bassCapabilitiesErr, bassErr = validatePolledBass(conn, bassCapabilities, bass, bassCapabilitiesErr, bassErr)
 
 	logStatusFailures(deviceID, conn, []statusRequestResult{
 		{"now_playing", nowPlayingErr},
@@ -1061,6 +990,7 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 		{"volume", volumeErr},
 		{"presets", presetsErr},
 		{"sources", sourcesErr},
+		{"bassCapabilities", bassCapabilitiesErr},
 		{"bass", bassErr},
 		{"getZone", zoneErr},
 		{"getGroup", groupErr},
@@ -1108,13 +1038,8 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 	// ApplySourcesRead for why a failure is counted rather than fenced.
 	conn.ApplySourcesRead(sourcesGen, sources, sourcesErr)
 
-	if bassErr == nil {
+	if app.applyPolledBass(deviceID, conn, bassGen, bassCapabilities, bass, bassCapabilitiesErr, bassErr) {
 		anyFetchSucceeded = true
-
-		conn.CompleteFieldPoll(webtypes.FieldBass, bassGen, func(s *webtypes.DeviceStatus) {
-			s.Bass = bass
-			s.LastActivity = time.Now()
-		})
 	}
 
 	if nameErr == nil {
@@ -1144,11 +1069,20 @@ func (app *WebApp) updateDeviceStatus(deviceID string, conn *webtypes.DeviceConn
 	// cause this call to silently discard part of the merge above.
 	conn.CompleteHTTPPoll(pollGeneration, anyFetchSucceeded, time.Now(), nil)
 
-	if stereoCapable && groupErr == nil {
+	if stereoCapable && groupReserved && groupErr == nil {
+		var accepted, changed bool
 		if groupBaseline != nil {
-			conn.ApplyPolledGroupIfBaseline(*groupBaseline, group)
+			accepted, changed = conn.ApplyPolledGroupForBaseline(*groupBaseline, groupGeneration, group)
 		} else {
-			conn.ApplyPolledGroup(groupGeneration, group)
+			accepted, changed = conn.ApplyPolledGroupResult(groupGeneration, group)
+		}
+
+		if changed {
+			app.QueueDeviceListBroadcast()
+		}
+
+		if accepted {
+			app.refreshBalance(deviceID, conn)
 		}
 	}
 
@@ -1429,4 +1363,54 @@ func (app *WebApp) writeDeviceWebSocketUpdate(
 			},
 		})
 	})
+}
+
+func reserveAcousticGroupPoll(conn *webtypes.DeviceConnection, stereoCapable bool, baseline *uint64) (uint64, bool) {
+	if !stereoCapable {
+		return 0, false
+	}
+
+	if baseline != nil {
+		return conn.BeginGroupRefreshIfBaseline(*baseline)
+	}
+
+	return conn.BeginGroupRefresh(), true
+}
+
+func validatePolledBass(conn *webtypes.DeviceConnection, bassCapabilities *models.BassCapabilities, bass *models.Bass, bassCapabilitiesErr, bassErr error) (error, error) {
+	if bassCapabilitiesErr == nil {
+		bassCapabilitiesErr = validBassCapabilityProjection(bassCapabilities, acousticDeviceID(conn))
+	}
+
+	if bassErr == nil {
+		if bassCapabilitiesErr != nil {
+			bassErr = bassCapabilitiesErr
+		} else {
+			bassErr = validBassReadback(bass, bassCapabilities, acousticDeviceID(conn))
+		}
+	}
+
+	return bassCapabilitiesErr, bassErr
+}
+
+func (app *WebApp) applyPolledBass(deviceID string, conn *webtypes.DeviceConnection, bassGen uint64, bassCapabilities *models.BassCapabilities, bass *models.Bass, bassCapabilitiesErr, bassErr error) bool {
+	if bassCapabilitiesErr == nil || bassErr == nil {
+		app.applyAcousticRead(deviceID, conn, acousticDeviceID(conn), func() bool {
+			return conn.CompleteFieldPoll(webtypes.FieldBass, bassGen, func(s *webtypes.DeviceStatus) {
+				if bassCapabilitiesErr == nil {
+					s.BassCapabilities = bassCapabilities
+				}
+
+				if bassErr == nil {
+					s.Bass = bass
+				}
+
+				s.LastActivity = time.Now()
+			})
+		})
+
+		return true
+	}
+
+	return false
 }
