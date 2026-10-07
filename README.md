@@ -115,6 +115,7 @@ See the [API Reference](https://gesellix.github.io/Bose-SoundTouch/docs/referenc
 - **[Bose SoundTouch Hook](https://github.com/CodeFinder2/bose-soundtouch-hook)** (Adrian Böckenkamp) — `LD_PRELOAD` hooking for reverse engineering device internals
 - **[STR, SoundTouch Reborn](https://github.com/JRpersonal/streborn)** ([st-reborn.de](https://st-reborn.de)) — on-device agent plus desktop app; its published `iptables` REDIRECT technique is what makes AfterTouch's on-device install reachable over the LAN on co-processor chassis (see [Model Support Matrix](https://gesellix.github.io/Bose-SoundTouch/docs/reference/MODEL-SUPPORT-MATRIX/))
 - **[soundtouch-decloud](https://github.com/bitranox/soundtouch-decloud)** (bitranox): a Claude Code skill that walks a non-technical owner through moving their speakers to AfterTouch, recovering each preset's own stream, and checking that every preset plays
+- **[Air Drift for SoundTouch](https://github.com/Air-Drift/Sound-Touch)** — a Docker container for internet radio on the preset buttons. It either hears the button over the speaker's websocket and starts the station by UPnP, leaving the speaker unchanged, or answers the speaker as the cloud did, using the endpoints documented here. Stations the speaker cannot decode (HTTPS, HLS, Ogg, FLAC) are converted on the way through
 
 ---
 
