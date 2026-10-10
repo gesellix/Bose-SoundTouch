@@ -9,11 +9,13 @@ echo "Installing static frontend dependencies from package-lock.json..."
 npm ci --ignore-scripts
 
 # Copy files from node_modules
+# Preact 11 ships its ESM builds as .mjs. Keep the vendored names stable so
+# the import map in index.html and the browser tests need no change.
 echo "Copying Preact..."
-cp node_modules/preact/dist/preact.module.js "$LIB_DIR/preact.module.js"
+cp node_modules/preact/dist/preact.mjs "$LIB_DIR/preact.module.js"
 
 echo "Copying Preact Hooks..."
-cp node_modules/preact/hooks/dist/hooks.module.js "$LIB_DIR/preact-hooks.module.js"
+cp node_modules/preact/hooks/dist/hooks.mjs "$LIB_DIR/preact-hooks.module.js"
 
 echo "Copying HTM..."
 cp node_modules/htm/dist/htm.module.js "$LIB_DIR/htm.module.js"
