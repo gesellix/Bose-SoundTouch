@@ -39,7 +39,7 @@ you agree to uphold it. Please report unacceptable behavior to the maintainer.
 
 ### Prerequisites
 
-- **Go** (version per [`go.mod`](go.mod), currently the 1.26.x series)
+- **Go** (version per [`go.mod`](go.mod), currently the 1.27.x series)
 - **Git**
 - **Make** (recommended; drives builds and the quality gate)
 - **Docker** (only needed for the HTTP-client integration tests)
