@@ -332,6 +332,32 @@ func TestMigrationDataReadinessExplainsPresetsDroppedByFull(t *testing.T) {
 	}
 }
 
+// TestMigrationDataReadinessNamesDuplicateLiveButton: a speaker reported three
+// presets on two buttons (discussion 708). Data Sync stores one per button, so
+// the old count mismatch ("3 preset(s), but ... 2") pointed at a missing
+// source and could not be fixed by syncing. The refusal must name the button.
+func TestMigrationDataReadinessNamesDuplicateLiveButton(t *testing.T) {
+	first := readinessPreset("1", "First Station", "http://radio.example/first")
+	older := readinessPreset("2", "Older Station", "http://radio.example/older")
+	newer := readinessPreset("2", "Newer Station", "http://radio.example/newer")
+
+	m, ds, deviceIP := newMigrationReadinessFixture(t, livePresetsXML(first, older, newer))
+	// What Data Sync persists for that live list: one preset per button.
+	if err := ds.SavePresets(readinessAccount, readinessDevice, []models.ServicePreset{first, older, newer}); err != nil {
+		t.Fatalf("SavePresets: %v", err)
+	}
+
+	_, err := m.checkMigrationDataReady(deviceIP)
+	notReady := requireMigrationNotReady(t, err)
+
+	if !strings.Contains(notReady.Reason, "button 2") {
+		t.Errorf("reason = %q, want it to name button 2", notReady.Reason)
+	}
+	if !strings.Contains(notReady.Action, "preset 2 on the speaker") {
+		t.Errorf("action = %q, want it to send the user to the speaker's preset 2", notReady.Action)
+	}
+}
+
 // TestMigrationSummaryReportsDataReadiness: the pre-flight panel must show a
 // refusal before the user commits, rather than showing all-green and failing
 // with a 409 at Apply.

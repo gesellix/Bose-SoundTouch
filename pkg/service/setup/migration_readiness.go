@@ -134,6 +134,16 @@ func (m *Manager) checkMigrationDataReady(deviceIP string) ([]string, error) {
 		return nil, mismatch.err()
 	}
 
+	// A speaker can report two presets on one button. Data Sync keeps one per
+	// button, so the live list stays one longer than /full and re-syncing can
+	// never close the gap. Only the speaker can resolve it (discussion 708).
+	if slot := firstDuplicateMigrationSlot(live); slot != "" {
+		return nil, &MigrationDataNotReadyError{
+			Reason: fmt.Sprintf("the speaker reports more than one preset on button %s", slot),
+			Action: fmt.Sprintf("Store or clear preset %s on the speaker, run Data Sync, then retry migration.", slot),
+		}
+	}
+
 	if mismatch := compareMigrationPresets("live /presets", live, "rendered /full", fullPresets); mismatch != nil {
 		return nil, mismatch.err()
 	}
@@ -172,6 +182,21 @@ func migrationPresetIdentities(presets []models.ServicePreset) []migrationPreset
 	}
 
 	return result
+}
+
+// firstDuplicateMigrationSlot returns the first slot that occurs more than
+// once, or "" when every slot is unique.
+func firstDuplicateMigrationSlot(presets []migrationPresetIdentity) string {
+	seen := make(map[string]bool, len(presets))
+	for _, preset := range presets {
+		if seen[preset.Slot] {
+			return preset.Slot
+		}
+
+		seen[preset.Slot] = true
+	}
+
+	return ""
 }
 
 func migrationFullPresets(fullXML []byte, deviceID string) ([]migrationPresetIdentity, int, error) {
