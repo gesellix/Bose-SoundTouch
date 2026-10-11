@@ -270,9 +270,18 @@ func sortByLastSeen(entries []Entry) {
 // sighting leaves empty keep their old value: recents arrive without artwork
 // (the speaker never puts any there), and losing the art a preset sighting
 // contributed would make the pick list worse the moment a station plays.
+//
+// The location is the one exception to "newest wins": one Internet Radio
+// station has several spellings (see models.CanonicalContentLocation), and the
+// entry keeps the most portable one, so picking it never puts a host-bound
+// location back into a slot (issue 784).
 func merge(old, seen Entry) Entry {
 	merged := seen
 	merged.FirstSeen = earliest(old.FirstSeen, seen.FirstSeen)
+
+	if locationRank(seen.Source, old.Location) < locationRank(seen.Source, seen.Location) {
+		merged.Location = old.Location
+	}
 
 	if merged.LastSeen.Before(old.LastSeen) {
 		merged.LastSeen = old.LastSeen
@@ -293,6 +302,63 @@ func merge(old, seen Entry) Entry {
 	}
 
 	return merged
+}
+
+// locationRank orders the spellings of one station, most portable first: the
+// relative Orion location follows AfterTouch to a new address, an absolute one
+// and the playback adapter carry a host. Other sources have one spelling.
+func locationRank(source, location string) int {
+	if !strings.EqualFold(source, models.OrionLocalInternetRadioSource) {
+		return 0
+	}
+
+	relative, ok := models.RelativeOrionLocation(location)
+
+	switch {
+	case ok && relative == strings.TrimSpace(location):
+		return 0
+	case ok:
+		return 1
+	default:
+		return 2
+	}
+}
+
+// Compact merges entries that share an identity. Entries filed before two
+// spellings were known to be one station (issue 784) are separate in an older
+// catalog.json; folding them oldest sighting first leaves the same entry a
+// sequence of Record calls would have built. It reports whether anything
+// merged.
+func (c *Catalog) Compact() bool {
+	ordered := make([]Entry, len(c.Entries))
+	copy(ordered, c.Entries)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ordered[i].LastSeen.Before(ordered[j].LastSeen)
+	})
+
+	at := make(map[string]int, len(ordered))
+	compacted := make([]Entry, 0, len(ordered))
+
+	for i := range ordered {
+		identity := ordered[i].Identity()
+		if existing, seen := at[identity]; seen {
+			compacted[existing] = merge(compacted[existing], ordered[i])
+
+			continue
+		}
+
+		at[identity] = len(compacted)
+		compacted = append(compacted, ordered[i])
+	}
+
+	if len(compacted) == len(c.Entries) {
+		return false
+	}
+
+	sortByLastSeen(compacted)
+	c.Entries = compacted
+
+	return true
 }
 
 // earliest returns the older of two timestamps, ignoring zero values.

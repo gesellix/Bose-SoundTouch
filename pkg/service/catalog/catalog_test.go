@@ -328,3 +328,82 @@ func TestPresetsBeyondTheCapEvictTheOldestPreset(t *testing.T) {
 		}
 	}
 }
+
+// Issue 784: a station seen as relative Orion and as the older, host-bound
+// playback adapter is one entry, and it keeps the relative spelling whichever
+// was seen last, so picking it never stores a host-bound location again. The
+// artwork one sighting carried is kept.
+func TestRecordKeepsThePortableSpellingOfAStation(t *testing.T) {
+	const (
+		stream   = "https://stream.example.org/technikum.mp3"
+		relative = "/station?data=eyJuYW1lIjoiVGVjaG5pa3VtQ2l0eSIsImltYWdlVXJsIjoiIiwic3RyZWFtVXJsIjoiaHR0cHM6Ly9zdHJlYW0uZXhhbXBsZS5vcmcvdGVjaG5pa3VtLm1wMyJ9"
+		adapter  = "http://192.0.2.10:8000/custom/v1/playback/aHR0cHM6Ly9zdHJlYW0uZXhhbXBsZS5vcmcvdGVjaG5pa3VtLm1wMw==?name=TechnikumCity"
+	)
+
+	for name, order := range map[string][]Entry{
+		"adapter seen last": {
+			{Source: "LOCAL_INTERNET_RADIO", Location: relative, Name: "TechnikumCity", ContainerArt: "https://img.example.org/logo.png", LastSeen: at(1)},
+			{Source: "LOCAL_INTERNET_RADIO", Location: adapter, Name: "TechnikumCity", LastSeen: at(2)},
+		},
+		"adapter seen first": {
+			{Source: "LOCAL_INTERNET_RADIO", Location: adapter, Name: "TechnikumCity", ContainerArt: "https://img.example.org/logo.png", LastSeen: at(1)},
+			{Source: "LOCAL_INTERNET_RADIO", Location: relative, Name: "TechnikumCity", LastSeen: at(2)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var c Catalog
+			for _, e := range order {
+				c.Record(e, 10)
+			}
+
+			if len(c.Entries) != 1 {
+				t.Fatalf("entries = %d, want 1: %+v", len(c.Entries), c.Entries)
+			}
+
+			got := c.Entries[0]
+			if got.Location != relative {
+				t.Errorf("location = %q, want the relative spelling", got.Location)
+			}
+			if got.ContainerArt != "https://img.example.org/logo.png" {
+				t.Errorf("artwork = %q, want the logo one sighting carried", got.ContainerArt)
+			}
+			// LastSeen is debounced by SeenGranularity, so only FirstSeen is
+			// a reliable check here.
+			if !got.FirstSeen.Equal(at(1)) {
+				t.Errorf("first seen = %v, want %v", got.FirstSeen, at(1))
+			}
+		})
+	}
+}
+
+// An older catalog.json holds the spellings as separate entries. Compact folds
+// them into the entry Record would have built.
+func TestCompactMergesSpellingsFiledSeparately(t *testing.T) {
+	const (
+		relative = "/station?data=eyJuYW1lIjoiVGVjaG5pa3VtQ2l0eSIsImltYWdlVXJsIjoiIiwic3RyZWFtVXJsIjoiaHR0cHM6Ly9zdHJlYW0uZXhhbXBsZS5vcmcvdGVjaG5pa3VtLm1wMyJ9"
+		adapter  = "http://192.0.2.10:8000/custom/v1/playback/aHR0cHM6Ly9zdHJlYW0uZXhhbXBsZS5vcmcvdGVjaG5pa3VtLm1wMw==?name=TechnikumCity"
+	)
+
+	c := Catalog{Entries: []Entry{
+		{Source: "LOCAL_INTERNET_RADIO", Location: adapter, Name: "TechnikumCity", Origin: OriginPreset, ContainerArt: "https://img.example.org/logo.png", FirstSeen: at(1), LastSeen: at(3)},
+		{Source: "TUNEIN", Location: "s1", Name: "Other", FirstSeen: at(2), LastSeen: at(2)},
+		{Source: "LOCAL_INTERNET_RADIO", Location: relative, Name: "TechnikumCity", Origin: OriginPreset, FirstSeen: at(4), LastSeen: at(5)},
+	}}
+
+	if !c.Compact() {
+		t.Fatal("Compact reported no change")
+	}
+
+	if len(c.Entries) != 2 {
+		t.Fatalf("entries = %d, want 2: %+v", len(c.Entries), c.Entries)
+	}
+
+	station := c.Entries[0]
+	if station.Location != relative || station.ContainerArt == "" || !station.FirstSeen.Equal(at(1)) || !station.LastSeen.Equal(at(5)) {
+		t.Errorf("merged station = %+v", station)
+	}
+
+	if c.Compact() {
+		t.Error("a second Compact changed something")
+	}
+}

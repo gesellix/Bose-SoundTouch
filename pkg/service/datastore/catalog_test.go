@@ -3,6 +3,7 @@ package datastore
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,5 +278,39 @@ func TestSightingTimeReadsBothStoredFormats(t *testing.T) {
 		if got := sightingTime(value); !got.IsZero() {
 			t.Errorf("sightingTime(%q) = %v, want the zero time so the caller falls back to now", value, got)
 		}
+	}
+}
+
+// An install upgraded from before issue 784 has a station filed twice. The
+// pick list shows it once right away, and the next write persists the merge.
+func TestCatalogFromAnOlderVersionMergesSpellings(t *testing.T) {
+	ds := NewDataStore(t.TempDir())
+
+	if err := os.MkdirAll(ds.DataDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	older := `{"entries": [
+  {"source": "LOCAL_INTERNET_RADIO", "location": "/station?data=eyJuYW1lIjoiVGVjaG5pa3VtQ2l0eSIsImltYWdlVXJsIjoiIiwic3RyZWFtVXJsIjoiaHR0cHM6Ly9zdHJlYW0uZXhhbXBsZS5vcmcvdGVjaG5pa3VtLm1wMyJ9", "name": "TechnikumCity", "origin": "preset", "first_seen": "2026-09-30T10:00:00Z", "last_seen": "2026-10-01T10:00:00Z"},
+  {"source": "LOCAL_INTERNET_RADIO", "location": "http://192.0.2.10:8000/custom/v1/playback/aHR0cHM6Ly9zdHJlYW0uZXhhbXBsZS5vcmcvdGVjaG5pa3VtLm1wMw==?name=TechnikumCity", "name": "TechnikumCity", "origin": "preset", "first_seen": "2026-06-01T10:00:00Z", "last_seen": "2026-09-01T10:00:00Z"}
+]}`
+	if err := os.WriteFile(filepath.Join(ds.DataDir, CatalogFile), []byte(older), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	entries := ds.GetCatalog()
+	if len(entries) != 1 || !strings.HasPrefix(entries[0].Location, "/station?") {
+		t.Fatalf("pick list = %+v, want one relative entry", entries)
+	}
+
+	ds.RecordCatalogEntries([]catalog.Entry{{Source: "TUNEIN", Location: "s1", LastSeen: seen(0)}})
+
+	data, err := os.ReadFile(filepath.Join(ds.DataDir, CatalogFile))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	if strings.Contains(string(data), "/custom/v1/playback/") {
+		t.Fatalf("persisted catalog still holds the host-bound copy:\n%s", data)
 	}
 }

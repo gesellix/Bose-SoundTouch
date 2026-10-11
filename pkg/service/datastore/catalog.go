@@ -85,6 +85,8 @@ func (ds *DataStore) GetCatalog() []catalog.Entry {
 	defer catalogMu.Unlock()
 
 	c := ds.readCatalogNoLock()
+	// Merged in memory only: the next write persists it.
+	c.Compact()
 
 	return c.List()
 }
@@ -105,9 +107,13 @@ func (ds *DataStore) RecordCatalogEntries(entries []catalog.Entry) {
 
 	c := ds.readCatalogNoLock()
 
-	// Apply the cap first, so lowering it in settings.json takes effect on the
-	// next write rather than only once the catalog overflows again.
-	changed := c.Trim(size)
+	// Merge entries an older version filed separately, then apply the cap,
+	// so lowering it in settings.json takes effect on the next write rather
+	// than only once the catalog overflows again.
+	changed := c.Compact()
+	if c.Trim(size) {
+		changed = true
+	}
 
 	for i := range entries {
 		if c.Record(entries[i], size) {
