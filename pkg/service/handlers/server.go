@@ -10,11 +10,13 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
@@ -47,7 +49,9 @@ type Server struct {
 	httpsDefaultURL          string // startup hostname-based fallback when serverURL has no host
 	httpsListenAddr          string
 	httpListenAddr           string
-	discovering              bool
+	discoveryRunning         atomic.Bool
+	discoverySubnets         []netip.Prefix // explicit DISCOVERY_SUBNETS scan targets
+	discoveryDeps            discoveryDeps
 	redactLogs               bool
 	logBodies                bool
 	recordEnabled            bool
@@ -158,6 +162,9 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		authProbes:          newAuthProbeRegistry(defaultAuthProbeTTL),
 		deprecatedRoutes:    newDeprecatedRouteTracker(),
 	}
+
+	s.discoveryDeps = s.defaultDiscoveryDeps()
+	s.SetDiscoverySubnets(os.Getenv("DISCOVERY_SUBNETS"))
 
 	health.RegisterSourcesXMLPresent(s.healthRegistry, ds)
 	health.RegisterSpeakerInfoReachable(s.healthRegistry, ds)
@@ -1510,13 +1517,30 @@ func (s *Server) GetLoggingSettings() (bool, bool, bool) {
 	return s.redactLogs, s.logBodies, s.recordEnabled
 }
 
-// DiscoverDevices starts a background device discovery process.
+// DiscoverDevices runs one device discovery sweep: SSDP first, then a bounded
+// subnet scan as a multicast-independent fallback when SSDP finds nothing
+// (typically a bridge-networked container). A sweep already in progress wins;
+// an overlapping call returns immediately.
+func (s *Server) DiscoverDevices(ctx context.Context) {
+	if !s.beginDiscovery() {
+		return
+	}
+
+	s.runDiscovery(ctx, netip.Addr{}, false)
+}
+
+// beginDiscovery claims the single discovery slot; false means one is running.
+func (s *Server) beginDiscovery() bool {
+	return s.discoveryRunning.CompareAndSwap(false, true)
+}
+
+// runDiscovery performs a sweep for a caller that already holds the slot from
+// beginDiscovery and releases it on return. remote is an optional admin
+// client address used as a scan hint; forceScan scans even when SSDP succeeds.
 //
 //nolint:contextcheck
-func (s *Server) DiscoverDevices(ctx context.Context) {
-	s.discovering = true
-
-	defer func() { s.discovering = false }()
+func (s *Server) runDiscovery(ctx context.Context, remote netip.Addr, forceScan bool) {
+	defer s.discoveryRunning.Store(false)
 
 	log.Println("Scanning for Bose devices...")
 
@@ -1525,20 +1549,31 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 		ctx = context.Background()
 	}
 
+	deps := s.discoveryDeps
+
 	// Always wrap in a timeout to prevent hanging forever
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	devices, err := deps.ssdp(discoveryCtx)
 
-	svc := discovery.NewService(10 * time.Second)
+	cancel()
 
-	devices, err := svc.DiscoverDevices(discoveryCtx)
 	if err != nil {
-		log.Printf("Discovery error: %v", err)
+		log.Printf("Discovery error: %s", sanitizeErr(err))
+	}
+
+	if len(devices) == 0 || forceScan {
+		scanCtx, scanCancel := context.WithTimeout(ctx, subnetScanTimeout)
+		devices = mergeDiscovered(devices, s.scanSubnets(scanCtx, remote))
+
+		scanCancel()
+	}
+
+	if err != nil && len(devices) == 0 {
 		return
 	}
 
 	for _, d := range devices {
-		s.handleDiscoveredDevice(*d)
+		deps.handle(*d)
 	}
 
 	// Post-discovery cleanup: merge overlapping IP/Serial entries
@@ -1546,6 +1581,162 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 
 	// Let any observer (e.g. the embedded web UI) re-sync from the datastore.
 	s.notifyDevicesChanged()
+}
+
+// subnetScanTimeout bounds one whole subnet-scan fallback pass.
+const subnetScanTimeout = 60 * time.Second
+
+// discoveryDeps are the discovery side effects a sweep uses, injectable so
+// tests never touch the network.
+type discoveryDeps struct {
+	ssdp           func(ctx context.Context) ([]*models.DiscoveredDevice, error)
+	scan           func(ctx context.Context, prefixes []netip.Prefix, opts discovery.SubnetScanOptions) ([]*models.DiscoveredDevice, error)
+	lookupHost     func(ctx context.Context, host string) ([]netip.Addr, error)
+	interfaceAddrs func() []netip.Addr
+	handle         func(d models.DiscoveredDevice)
+}
+
+func (s *Server) defaultDiscoveryDeps() discoveryDeps {
+	return discoveryDeps{
+		ssdp: func(ctx context.Context) ([]*models.DiscoveredDevice, error) {
+			return discovery.NewService(10 * time.Second).DiscoverDevices(ctx)
+		},
+		scan: discovery.ScanSubnets,
+		lookupHost: func(ctx context.Context, host string) ([]netip.Addr, error) {
+			return net.DefaultResolver.LookupNetIP(ctx, "ip4", host)
+		},
+		interfaceAddrs: activeIPv4Addrs,
+		handle:         s.handleDiscoveredDevice,
+	}
+}
+
+// activeIPv4Addrs lists the IPv4 addresses of up, non-loopback interfaces.
+func activeIPv4Addrs() []netip.Addr {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	var out []netip.Addr
+
+	for _, ifc := range ifaces {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, err := ifc.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok {
+				if ip, ok := netip.AddrFromSlice(ipn.IP.To4()); ok {
+					out = append(out, ip)
+				}
+			}
+		}
+	}
+
+	return out
+}
+
+// SetDiscoverySubnets sets the explicit subnet-scan targets from a
+// comma-separated CIDR list (DISCOVERY_SUBNETS). Invalid entries are skipped
+// with a warning. Explicit targets take precedence over derived hints.
+func (s *Server) SetDiscoverySubnets(list string) {
+	prefixes, invalid := discovery.ParseSubnets(list)
+	for _, bad := range invalid {
+		log.Printf("Warning: ignoring invalid DISCOVERY_SUBNETS entry %q", sanitizeLog(bad))
+	}
+
+	s.mu.Lock()
+	s.discoverySubnets = prefixes
+	s.mu.Unlock()
+}
+
+// discoveryHints collects addresses that reveal the speakers' LAN, in
+// priority order: the server URL host, stored device IPs, the admin's socket
+// address (remote, may be invalid), then this host's own interfaces.
+func (s *Server) discoveryHints(ctx context.Context, remote netip.Addr) []netip.Addr {
+	deps := s.discoveryDeps
+
+	s.mu.RLock()
+	serverURL := s.serverURL
+	s.mu.RUnlock()
+
+	var hints []netip.Addr
+
+	if u, err := url.Parse(serverURL); err == nil && u.Hostname() != "" {
+		if ip, err := netip.ParseAddr(u.Hostname()); err == nil {
+			hints = append(hints, ip)
+		} else {
+			lctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			if ips, err := deps.lookupHost(lctx, u.Hostname()); err == nil {
+				hints = append(hints, ips...)
+			}
+
+			cancel()
+		}
+	}
+
+	if devices, err := s.ds.ListAllDevices(); err == nil {
+		for i := range devices {
+			if ip, err := netip.ParseAddr(devices[i].IPAddress); err == nil {
+				hints = append(hints, ip)
+			}
+		}
+	}
+
+	if remote.IsValid() {
+		hints = append(hints, remote)
+	}
+
+	return append(hints, deps.interfaceAddrs()...)
+}
+
+// scanSubnets runs the multicast-independent fallback and returns what it found.
+func (s *Server) scanSubnets(ctx context.Context, remote netip.Addr) []*models.DiscoveredDevice {
+	s.mu.RLock()
+	explicit := s.discoverySubnets
+	s.mu.RUnlock()
+
+	var hints []netip.Addr
+	if len(explicit) == 0 {
+		hints = s.discoveryHints(ctx, remote)
+	}
+
+	prefixes := discovery.CandidatePrefixes(explicit, hints)
+	if len(prefixes) == 0 {
+		log.Println("Subnet scan skipped: no candidate subnets (set DISCOVERY_SUBNETS)")
+		return nil
+	}
+
+	found, err := s.discoveryDeps.scan(ctx, prefixes, discovery.SubnetScanOptions{})
+	if err != nil {
+		log.Printf("Subnet scan ended early: %s", sanitizeErr(err))
+	}
+
+	log.Printf("Subnet scan over %d subnet(s) found %d device(s)", len(prefixes), len(found))
+
+	return found
+}
+
+// mergeDiscovered appends extra devices whose host is not already present.
+func mergeDiscovered(base, extra []*models.DiscoveredDevice) []*models.DiscoveredDevice {
+	seen := make(map[string]struct{}, len(base))
+	for _, d := range base {
+		seen[d.Host] = struct{}{}
+	}
+
+	for _, d := range extra {
+		if _, dup := seen[d.Host]; !dup {
+			seen[d.Host] = struct{}{}
+			base = append(base, d)
+		}
+	}
+
+	return base
 }
 
 // findExistingDeviceInfoByDeviceID looks for existing device info by deviceID

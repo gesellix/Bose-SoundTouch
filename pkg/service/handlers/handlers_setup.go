@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sort"
@@ -86,9 +87,22 @@ func (s *Server) HandleAddManualDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleTriggerDiscovery triggers a new device discovery scan.
-func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, _ *http.Request) {
-	//nolint:contextcheck
-	go s.DiscoverDevices(context.Background())
+//
+// With ?scan=subnet the sweep also scans the candidate subnets even if SSDP
+// finds speakers, using the request's socket address (never X-Forwarded-For)
+// as one of the scan hints.
+func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
+	if s.beginDiscovery() {
+		var remote netip.Addr
+		if ap, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+			remote = ap.Addr()
+		}
+
+		force := r.URL.Query().Get("scan") == "subnet"
+
+		//nolint:contextcheck
+		go s.runDiscovery(context.Background(), remote, force)
+	}
 
 	w.WriteHeader(http.StatusAccepted)
 }
@@ -97,7 +111,7 @@ func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, _ *http.Request) 
 func (s *Server) HandleGetDiscoveryStatus(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(map[string]bool{"discovering": s.discovering}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]bool{"discovering": s.discoveryRunning.Load()}); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

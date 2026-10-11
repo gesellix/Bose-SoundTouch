@@ -143,10 +143,10 @@ func TestScanSubnets_SkipsNetworkAndBroadcast(t *testing.T) {
 	}
 }
 
-func hostsOf(t *testing.T, p []netip.Prefix, max int) []netip.Addr {
+func hostsOf(t *testing.T, p []netip.Prefix, limit int) []netip.Addr {
 	t.Helper()
 
-	h, _ := scanHosts(p, max)
+	h, _ := scanHosts(p, limit)
 
 	return h
 }

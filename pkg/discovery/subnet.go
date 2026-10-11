@@ -199,7 +199,7 @@ func probeInfo(ctx context.Context, client *http.Client, host netip.Addr, opts S
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil
