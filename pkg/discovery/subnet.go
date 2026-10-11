@@ -255,3 +255,71 @@ func parseInfo(body []byte) (*models.DeviceInfo, error) {
 
 	return &info, nil
 }
+
+// ParseSubnets parses a comma-separated list of IPv4 CIDRs (the
+// DISCOVERY_SUBNETS format). Entries that are not IPv4 CIDRs are returned in
+// invalid so the caller can warn; blanks are skipped silently.
+func ParseSubnets(s string) (prefixes []netip.Prefix, invalid []string) {
+	for _, entry := range strings.Split(s, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		p, err := netip.ParsePrefix(entry)
+		if err != nil || !p.Addr().Is4() {
+			invalid = append(invalid, entry)
+			continue
+		}
+
+		prefixes = append(prefixes, p.Masked())
+	}
+
+	return dedupePrefixes(prefixes), invalid
+}
+
+// CandidatePrefixes picks what to scan. Explicit IPv4 prefixes win outright,
+// even public or loopback ones. Without them, only RFC1918 hint addresses
+// qualify, each widened to its /24. Order is preserved and duplicates dropped.
+func CandidatePrefixes(explicit []netip.Prefix, hints []netip.Addr) []netip.Prefix {
+	var out []netip.Prefix
+
+	for _, p := range explicit {
+		if p.IsValid() && p.Addr().Is4() {
+			out = append(out, p.Masked())
+		}
+	}
+
+	if len(out) > 0 {
+		return dedupePrefixes(out)
+	}
+
+	for _, h := range hints {
+		h = h.Unmap()
+		if !h.IsValid() || !h.Is4() || !h.IsPrivate() {
+			continue
+		}
+
+		out = append(out, netip.PrefixFrom(h, 24).Masked())
+	}
+
+	return dedupePrefixes(out)
+}
+
+func dedupePrefixes(in []netip.Prefix) []netip.Prefix {
+	seen := make(map[netip.Prefix]struct{}, len(in))
+
+	var out []netip.Prefix
+
+	for _, p := range in {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+
+		seen[p] = struct{}{}
+
+		out = append(out, p)
+	}
+
+	return out
+}

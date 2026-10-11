@@ -248,3 +248,66 @@ func TestScanSubnets_Defaults(t *testing.T) {
 
 	_ = strconv.Itoa
 }
+
+func TestCandidatePrefixes(t *testing.T) {
+	p := netip.MustParsePrefix
+	a := netip.MustParseAddr
+
+	t.Run("explicit wins even when public or loopback", func(t *testing.T) {
+		got := CandidatePrefixes([]netip.Prefix{p("203.0.113.0/24"), p("127.0.0.0/30"), p("203.0.113.9/24")},
+			[]netip.Addr{a("192.168.1.5")})
+		want := []netip.Prefix{p("203.0.113.0/24"), p("127.0.0.0/30")}
+
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("got %v want %v", got, want)
+		}
+	})
+
+	t.Run("hints become deduped /24 in order", func(t *testing.T) {
+		got := CandidatePrefixes(nil, []netip.Addr{a("192.168.1.5"), a("10.1.2.3"), a("192.168.1.77")})
+		want := []netip.Prefix{p("192.168.1.0/24"), p("10.1.2.0/24")}
+
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("got %v want %v", got, want)
+		}
+	})
+
+	t.Run("non-private hints filtered", func(t *testing.T) {
+		got := CandidatePrefixes(nil, []netip.Addr{
+			a("8.8.8.8"), a("127.0.0.1"), a("169.254.1.1"), a("224.0.0.1"), a("0.0.0.0"),
+			a("::1"), a("fe80::1"), a("fd00::1"), {}, a("172.16.5.5"), a("::ffff:172.31.0.9"),
+		})
+		want := []netip.Prefix{p("172.16.5.0/24"), p("172.31.0.0/24")}
+
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("got %v want %v", got, want)
+		}
+	})
+
+	t.Run("invalid and ipv6 explicit ignored", func(t *testing.T) {
+		got := CandidatePrefixes([]netip.Prefix{{}, p("2001:db8::/64")}, []netip.Addr{a("192.168.7.7")})
+		if fmt.Sprint(got) != fmt.Sprint([]netip.Prefix{p("192.168.7.0/24")}) {
+			t.Errorf("got %v", got)
+		}
+	})
+
+	if got := CandidatePrefixes(nil, nil); len(got) != 0 {
+		t.Errorf("got %v", got)
+	}
+}
+
+func TestParseSubnets(t *testing.T) {
+	got, invalid := ParseSubnets(" 192.168.1.0/24, bogus,10.0.0.0/8,,2001:db8::/32, 192.168.1.9 ,192.168.1.0/24")
+
+	if fmt.Sprint(got) != "[192.168.1.0/24 10.0.0.0/8]" {
+		t.Errorf("got %v", got)
+	}
+
+	if fmt.Sprint(invalid) != "[bogus 2001:db8::/32 192.168.1.9]" {
+		t.Errorf("invalid %v", invalid)
+	}
+
+	if g, i := ParseSubnets(""); len(g) != 0 || len(i) != 0 {
+		t.Errorf("empty: %v %v", g, i)
+	}
+}
