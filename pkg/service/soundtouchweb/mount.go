@@ -10,9 +10,12 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// discoverTimeout bounds one UI-triggered discovery: the 10 s SSDP phase plus
-// the service's subnet scan (up to 60 s) and the follow-up device re-sync.
-const discoverTimeout = 90 * time.Second
+// defaultDiscoverTimeout budgets the search phases of one UI-triggered
+// discovery: the 10 s SSDP phase plus the service's subnet scan (up to 60 s)
+// and the follow-up device re-sync. It is not a hard end-to-end limit: a device
+// lookup already in flight when it expires may still finish afterwards, but no
+// further device is handled and the UI is told "failed".
+const defaultDiscoverTimeout = 90 * time.Second
 
 // MountWeb registers the portable soundtouch-player surface on r: the embedded
 // assets (/app/static/*), the control API (/api/control/*), and the SPA
@@ -56,12 +59,20 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 			// Trigger discovery
 			//nolint:contextcheck // Context is created within goroutine
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
+				timeout := app.discoverTimeout
+				if timeout <= 0 {
+					timeout = defaultDiscoverTimeout
+				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), timeout)
 				defer cancel()
 
-				app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
-
+				// Busy: the active sweep owns the status; publish nothing.
 				if !app.DiscoverDevicesFrom(ctx, discoveryService, remoteAddr) {
+					return
+				}
+
+				if ctx.Err() != nil {
 					app.BroadcastDiscoveryStatus("failed", app.DeviceCount())
 
 					return

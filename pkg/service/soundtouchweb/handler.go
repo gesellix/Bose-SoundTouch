@@ -134,7 +134,9 @@ type WebApp struct {
 	// soundtouch-player leaves it nil and runs its own sweep. remoteAddr is the
 	// requesting client's socket address, a scan hint; the result reports
 	// whether a sweep actually ran (false: one was already in progress).
-	TriggerDiscovery func(ctx context.Context, remoteAddr string) bool
+	// onStarted is called once the sweep owns the host's discovery slot, so the
+	// UI only shows "discovering" for a sweep that really runs.
+	TriggerDiscovery func(ctx context.Context, remoteAddr string, onStarted func()) bool
 
 	// CatalogEntries, when set, returns the service's catalog of preset and
 	// source entries seen so far (issue 754), newest sighting first. The
@@ -204,6 +206,10 @@ type WebApp struct {
 	mediaServers   map[string]cachedMediaServer
 
 	discoveryStatus atomic.Value // stores *webtypes.DiscoveryStatus
+
+	// discoverTimeout overrides defaultDiscoverTimeout for UI-triggered
+	// discovery (tests); zero means the default.
+	discoverTimeout time.Duration
 }
 
 // serviceHTTPClient returns the client used for outbound calls to the

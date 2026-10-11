@@ -335,7 +335,7 @@ func TestDiscoverDevicesManual_ForcesScanWithPartialSSDPAndPeer(t *testing.T) {
 	f.ssdpDevs = []*models.DiscoveredDevice{dev("198.51.100.50")}
 	f.scanDevs = []*models.DiscoveredDevice{dev("10.0.5.8")}
 
-	if !s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555") {
+	if !s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555", nil) {
 		t.Fatal("manual discovery did not run")
 	}
 
@@ -356,7 +356,43 @@ func TestDiscoverDevicesManual_BusyReturnsFalse(t *testing.T) {
 		t.Fatal("slot not free")
 	}
 
-	if s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555") || f.scanCalls != 0 {
+	if s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555", nil) || f.scanCalls != 0 {
 		t.Errorf("busy manual run must not scan (scan=%d)", f.scanCalls)
+	}
+}
+
+func TestDiscoverDevicesManual_OnStartedOnlyWhenClaimed(t *testing.T) {
+	s, _ := newDiscoveryFake(t, "")
+
+	started := 0
+	if !s.DiscoverDevicesManual(context.Background(), "", func() { started++ }) || started != 1 {
+		t.Errorf("claimed run: started=%d", started)
+	}
+
+	s.beginDiscovery()
+
+	started = 0
+	if s.DiscoverDevicesManual(context.Background(), "", func() { started++ }) || started != 0 {
+		t.Errorf("busy run called onStarted (%d)", started)
+	}
+}
+
+func TestDiscoverDevicesManual_CanceledContextHandlesNothing(t *testing.T) {
+	s, f := newDiscoveryFake(t, "")
+	f.ssdpDevs = []*models.DiscoveredDevice{dev("198.51.100.50"), dev("198.51.100.51")}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if !s.DiscoverDevicesManual(ctx, "", nil) {
+		t.Fatal("slot should have been claimed")
+	}
+
+	if len(f.handled) != 0 {
+		t.Errorf("handled %v after cancel", f.handled)
+	}
+
+	if s.discoveryRunning.Load() {
+		t.Error("slot not released")
 	}
 }

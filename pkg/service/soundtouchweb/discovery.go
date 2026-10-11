@@ -373,19 +373,26 @@ func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discov
 
 // DiscoverDevicesFrom is DiscoverDevices for a user-triggered sweep: remoteAddr
 // (the requester's socket address, may be empty) is handed to TriggerDiscovery
-// as a scan hint. It returns false when the host service skipped the sweep
-// because one was already running.
+// as a scan hint. It publishes "starting" once the sweep is really running and
+// returns false, publishing nothing, when the host service skipped it because
+// another sweep owns the slot.
 func (app *WebApp) DiscoverDevicesFrom(
 	ctx context.Context,
 	discoveryService *discovery.UnifiedDiscoveryService,
 	remoteAddr string,
 ) bool {
 	ran := true
+	starting := func() { app.BroadcastDiscoveryStatus("starting", app.DeviceCount()) }
 
 	// External discovery (embedded build): run the host service's sweep so the
 	// shared datastore is refreshed.
 	if app.TriggerDiscovery != nil {
-		ran = app.TriggerDiscovery(ctx, remoteAddr)
+		ran = app.TriggerDiscovery(ctx, remoteAddr, starting)
+		if !ran {
+			return false
+		}
+	} else {
+		starting()
 	}
 
 	// Re-sync from the external device source (embedded: the service datastore).

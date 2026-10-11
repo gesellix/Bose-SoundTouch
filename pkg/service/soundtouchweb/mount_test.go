@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 )
 
 // walkRoutes returns the set of route patterns registered on r.
@@ -169,7 +171,9 @@ func TestMountWebDiscoverTriggersManualScan(t *testing.T) {
 
 	calls := make(chan call, 1)
 	app := NewWebApp()
-	app.TriggerDiscovery = func(ctx context.Context, remoteAddr string) bool {
+	app.TriggerDiscovery = func(ctx context.Context, remoteAddr string, onStarted func()) bool {
+		onStarted()
+
 		dl, ok := ctx.Deadline()
 		if !ok {
 			t.Error("trigger context has no deadline")
@@ -200,5 +204,102 @@ func TestMountWebDiscoverTriggersManualScan(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("TriggerDiscovery was not called")
+	}
+}
+
+func lastDiscoveryStatus(app *WebApp) string {
+	if st, ok := app.discoveryStatus.Load().(*webtypes.DiscoveryStatus); ok && st != nil {
+		return st.Status
+	}
+
+	return ""
+}
+
+func postDiscover(t *testing.T, app *WebApp) {
+	t.Helper()
+
+	r := chi.NewRouter()
+	app.MountWeb(r, nil)
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/control/discover", nil))
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+
+	for i := 0; i < 200; i++ {
+		if cond() {
+			return
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+// A click rejected because another sweep owns the slot must not touch the
+// global status the active sweep published.
+func TestMountWebDiscoverBusyLeavesActiveStatus(t *testing.T) {
+	app := NewWebApp()
+	app.BroadcastDiscoveryStatus("starting", 0)
+
+	done := make(chan struct{})
+	app.TriggerDiscovery = func(context.Context, string, func()) bool {
+		defer close(done)
+
+		return false
+	}
+
+	postDiscover(t, app)
+	<-done
+	time.Sleep(50 * time.Millisecond)
+
+	if got := lastDiscoveryStatus(app); got != "starting" {
+		t.Errorf("busy click changed status to %q, want starting", got)
+	}
+}
+
+// "starting" is published only once the sweep claimed its slot.
+func TestMountWebDiscoverStartsOnlyAfterClaim(t *testing.T) {
+	app := NewWebApp()
+	release := make(chan struct{})
+	app.TriggerDiscovery = func(context.Context, string, func()) bool {
+		<-release
+
+		return false
+	}
+
+	postDiscover(t, app)
+	time.Sleep(50 * time.Millisecond)
+
+	if got := lastDiscoveryStatus(app); got != "" {
+		t.Errorf("status %q published before slot claimed", got)
+	}
+
+	close(release)
+}
+
+// A sweep whose context ended is reported failed, never completed.
+func TestMountWebDiscoverCanceledIsNotCompleted(t *testing.T) {
+	app := NewWebApp()
+	app.TriggerDiscovery = func(ctx context.Context, _ string, onStarted func()) bool {
+		onStarted()
+
+		// Simulate the deadline expiring mid-sweep.
+		<-ctx.Done()
+
+		return true
+	}
+	app.discoverTimeout = 20 * time.Millisecond
+
+	postDiscover(t, app)
+	waitFor(t, "terminal status", func() bool {
+		s := lastDiscoveryStatus(app)
+
+		return s == "failed" || s == "completed"
+	})
+
+	if got := lastDiscoveryStatus(app); got != "failed" {
+		t.Errorf("status = %q, want failed", got)
 	}
 }
