@@ -675,8 +675,11 @@ This also applies to a freshly-fixed on-device default (see `DEPLOYMENT_MODE`, #
 Play URL presets saved by older versions store the full AfterTouch address
 inside the preset's location, for example
 `http://<old-host>:8000/core02/svc-bmx-adapter-orion/prod/orion/station?data=...`.
-When the service's address changes, those presets still point at the old
-address. TuneIn and Radio Browser presets store a relative location that the
+Even older presets use the playback adapter form,
+`http://<old-host>:8000/custom/v1/playback/<encoded stream URL>?name=...`,
+which carries the address the same way. When the service's address changes,
+those presets still point at the old address. TuneIn and Radio Browser presets
+store a relative location that the
 speaker completes with the address from its service registry, so they're
 unaffected by an address change.
 
@@ -696,7 +699,8 @@ Orion address in its service registry (verified on a SoundTouch 10, see
    station locations" lists each speaker with affected slots. Click **Store
    as relative locations**: AfterTouch reads the slots from the speaker and
    stores each one again with the relative location (same name, artwork and
-   slot). The speaker reports the change back to AfterTouch.
+   slot). A playback adapter preset is stored as the relative station location
+   for the same stream. The speaker reports the change back to AfterTouch.
 3. If AfterTouch can't reach the speaker, nothing is changed. The finding
    lists one `curl ... /storePreset` command per slot; run them from a
    machine that reaches the speaker on port 8090.
