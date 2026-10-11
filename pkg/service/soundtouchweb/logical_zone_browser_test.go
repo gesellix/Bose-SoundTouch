@@ -55,18 +55,18 @@ func TestOpenZoneDetailTracksExternalTopologyChanges(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(".zone-card", chromedp.ByQuery),
-		chromedp.Poll(`Array.from(document.querySelectorAll('.device-card')).some(card =>
+		chromedp.WaitVisible(chromedp.CSS(".zone-card")),
+		chromedp.Poll[chromedp.Void](`Array.from(document.querySelectorAll('.device-card')).some(card =>
 			card.querySelector('.device-name')?.textContent.trim() === 'Breakfast Room' &&
 			card.querySelector('.zone-member-badge')?.textContent.trim() === 'In group · Atrium') &&
-			!document.querySelector('.zone-card .zone-member-badge')`, nil),
-		chromedp.Click(".zone-card", chromedp.ByQuery),
-		chromedp.WaitVisible(".zone-member-details > summary", chromedp.ByQuery),
-		chromedp.Click(".zone-member-details > summary", chromedp.ByQuery),
-		chromedp.Poll(`document.querySelectorAll('.zone-logical-member').length === 2 &&
-			document.querySelectorAll('.zone-logical-member [role="status"][aria-label]').length === 2`, nil),
+			!document.querySelector('.zone-card .zone-member-badge')`),
+		chromedp.Click(chromedp.CSS(".zone-card")),
+		chromedp.WaitVisible(chromedp.CSS(".zone-member-details > summary")),
+		chromedp.Click(chromedp.CSS(".zone-member-details > summary")),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.zone-logical-member').length === 2 &&
+			document.querySelectorAll('.zone-logical-member [role="status"][aria-label]').length === 2`),
 	); err != nil {
 		t.Fatalf("open logical zone detail: %v", err)
 	}
@@ -82,11 +82,11 @@ func TestOpenZoneDetailTracksExternalTopologyChanges(t *testing.T) {
 	app.BroadcastDeviceList()
 
 	dissolveStarted := time.Now()
-	if err := chromedp.Run(ctx, chromedp.Poll(`
+	if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`
 		document.querySelector('.zone-status-label')?.textContent.trim() === 'Standalone' &&
 		!document.querySelector('.zone-member-details') &&
 		!Array.from(document.querySelectorAll('button')).some(button =>
-			button.textContent.trim() === 'Dissolve zone')`, nil)); err != nil {
+			button.textContent.trim() === 'Dissolve zone')`)); err != nil {
 		t.Fatalf("external dissolution did not update open detail: %v", err)
 	}
 	if elapsed := time.Since(dissolveStarted); elapsed > 5*time.Second {
@@ -100,10 +100,10 @@ func TestOpenZoneDetailTracksExternalTopologyChanges(t *testing.T) {
 	app.BroadcastDeviceList()
 
 	createStarted := time.Now()
-	if err := chromedp.Run(ctx, chromedp.Poll(`
+	if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`
 		document.querySelector('.zone-member-details > summary') &&
 		Array.from(document.querySelectorAll('button')).some(button =>
-			button.textContent.trim() === 'Dissolve zone')`, nil)); err != nil {
+			button.textContent.trim() === 'Dissolve zone')`)); err != nil {
 		t.Fatalf("external creation did not update open detail: %v", err)
 	}
 	if elapsed := time.Since(createStarted); elapsed > 5*time.Second {

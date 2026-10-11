@@ -87,26 +87,26 @@ func TestStoredPresetProblemsAreShownAndRepaired(t *testing.T) {
 	var removeTitle string
 	var bodyText string
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#presets .stored-presets-summary`, chromedp.ByQuery),
-		chromedp.Text(`#presets .stored-presets-headline`, &headline, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-summary`)),
+		textInto(chromedp.CSS(`#presets .stored-presets-headline`), &headline),
 
 		// The problem announces itself; the detail waits to be asked for.
-		chromedp.Evaluate(`document.querySelectorAll('#presets .stored-presets-row').length`, &rowsShownBeforeOpening),
+		evalInto(`document.querySelectorAll('#presets .stored-presets-row').length`, &rowsShownBeforeOpening),
 
-		chromedp.Click(`#presets .stored-presets-summary`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .stored-presets-fix`, chromedp.ByQuery),
+		chromedp.Click(chromedp.CSS(`#presets .stored-presets-summary`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-fix`)),
 
 		// Where a removal lands has to be legible without hovering: a touch
 		// device has no hover, so the tooltip cannot be the only carrier.
-		chromedp.Evaluate(`document.querySelector('#presets .stored-presets-remove').title`, &removeTitle),
-		chromedp.Text(`#presets .stored-presets-body`, &bodyText, chromedp.ByQuery),
+		evalInto(`document.querySelector('#presets .stored-presets-remove').title`, &removeTitle),
+		textInto(chromedp.CSS(`#presets .stored-presets-body`), &bodyText),
 
-		chromedp.Click(`#presets .stored-presets-fix`, chromedp.ByQuery),
+		chromedp.Click(chromedp.CSS(`#presets .stored-presets-fix`)),
 
 		// A repaired list stops warning at all.
-		chromedp.Poll(`document.querySelector('#presets .stored-presets') === null`, nil),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .stored-presets') === null`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -177,17 +177,17 @@ func TestASingleStoredRowCanBeRemoved(t *testing.T) {
 
 	var offersBulkFix bool
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#presets .stored-presets-summary`, chromedp.ByQuery),
-		chromedp.Click(`#presets .stored-presets-summary`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .stored-presets-row`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-summary`)),
+		chromedp.Click(chromedp.CSS(`#presets .stored-presets-summary`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-row`)),
 
 		// Nothing here is unplayable, so there is no bulk fix to offer.
-		chromedp.Evaluate(`document.querySelector('#presets .stored-presets-fix') !== null`, &offersBulkFix),
+		evalInto(`document.querySelector('#presets .stored-presets-fix') !== null`, &offersBulkFix),
 
-		chromedp.Click(`#presets .stored-presets-row:nth-child(2) .stored-presets-remove`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#presets .stored-presets') === null`, nil),
+		chromedp.Click(chromedp.CSS(`#presets .stored-presets-row:nth-child(2) .stored-presets-remove`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .stored-presets') === null`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -218,13 +218,13 @@ func TestNoWarningWhenTheStoredListAgrees(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 
 	var warned bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#presets .preset-grid`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-grid`)),
 		// Wait for the request itself to have happened, so "nothing rendered"
 		// is a verdict on the answer rather than on the timing.
-		chromedp.Poll(`performance.getEntriesByType('resource').some(e => e.name.includes('stored-presets'))`, nil),
-		chromedp.Evaluate(`document.querySelector('#presets .stored-presets') !== null`, &warned),
+		chromedp.Poll[chromedp.Void](`performance.getEntriesByType('resource').some(e => e.name.includes('stored-presets'))`),
+		evalInto(`document.querySelector('#presets .stored-presets') !== null`, &warned),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -291,25 +291,25 @@ func TestPerSlotChoiceSettlesOneButton(t *testing.T) {
 
 	var headline, ourName, theirName string
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#presets .stored-presets-summary`, chromedp.ByQuery),
-		chromedp.Text(`#presets .stored-presets-headline`, &headline, chromedp.ByQuery),
-		chromedp.Click(`#presets .stored-presets-summary`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .stored-presets-slot`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-summary`)),
+		textInto(chromedp.CSS(`#presets .stored-presets-headline`), &headline),
+		chromedp.Click(chromedp.CSS(`#presets .stored-presets-summary`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-slot`)),
 
-		chromedp.Text(`#presets .stored-presets-side:nth-child(2) .stored-presets-side-name`, &ourName, chromedp.ByQuery),
-		chromedp.Text(`#presets .stored-presets-side:nth-child(3) .stored-presets-side-name`, &theirName, chromedp.ByQuery),
+		textInto(chromedp.CSS(`#presets .stored-presets-side:nth-child(2) .stored-presets-side-name`), &ourName),
+		textInto(chromedp.CSS(`#presets .stored-presets-side:nth-child(3) .stored-presets-side-name`), &theirName),
 
 		// Keeping ours pushes the stored content to the speaker.
-		chromedp.Click(`#presets .stored-presets-side:nth-child(2) .stored-presets-choose`, chromedp.ByQuery),
+		chromedp.Click(chromedp.CSS(`#presets .stored-presets-side:nth-child(2) .stored-presets-choose`)),
 		// The panel stays: keeping ours changes the speaker, and the stored
 		// list it is compared against has not moved.
-		chromedp.Poll(`performance.getEntriesByType('resource').some(e => e.name.endsWith('/preset/1'))`, nil),
+		chromedp.Poll[chromedp.Void](`performance.getEntriesByType('resource').some(e => e.name.endsWith('/preset/1'))`),
 
 		// Taking the speaker's writes the stored list, and the panel settles.
-		chromedp.Click(`#presets .stored-presets-side:nth-child(3) .stored-presets-choose`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#presets .stored-presets') === null`, nil),
+		chromedp.Click(chromedp.CSS(`#presets .stored-presets-side:nth-child(3) .stored-presets-choose`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .stored-presets') === null`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}

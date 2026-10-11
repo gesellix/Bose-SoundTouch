@@ -3,22 +3,12 @@
 package soundtouchweb
 
 import (
-	"context"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/chromedp/cdproto/input"
-	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/go-chi/chi/v5"
 )
-
-// awaitPromise makes chromedp.Evaluate wait for an async script and fail on
-// its rejection. Without it, Evaluate returns as soon as the script starts,
-// and nothing past its first await is checked.
-func awaitPromise(p *runtime.EvaluateParams) *runtime.EvaluateParams {
-	return p.WithAwaitPromise(true)
-}
 
 // TestSettingsOwnershipAndMutationStates exercises the settings component in
 // the shipped browser module graph without importing a broader player harness.
@@ -31,10 +21,10 @@ func TestSettingsOwnershipAndMutationStates(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
-		chromedp.Evaluate(`(async () => {
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		chromedp.Evaluate[chromedp.Void](`(async () => {
             const [{ Settings }, { api }, { h, render }] = await Promise.all([
                 import('/app/static/js/components/Settings.js'),
                 import('/app/static/js/api.js'),
@@ -277,7 +267,7 @@ func TestSettingsOwnershipAndMutationStates(t *testing.T) {
                 window.confirm = original.confirm;
                 window.fetch = original.fetch;
             }
-        })()`, nil, awaitPromise),
+        })()`, chromedp.EvalAwaitPromise),
 	); err != nil {
 		t.Fatalf("settings browser contract: %v", err)
 	}
@@ -295,10 +285,10 @@ func TestSettingsStandbyAndWiFiOnboardingBrowserContract(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
-		chromedp.Evaluate(`(async () => {
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		chromedp.Evaluate[chromedp.Void](`(async () => {
             const [{ Settings }, { api }, { h, render }] = await Promise.all([
                 import('/app/static/js/components/Settings.js'),
                 import('/app/static/js/api.js'),
@@ -364,7 +354,7 @@ func TestSettingsStandbyAndWiFiOnboardingBrowserContract(t *testing.T) {
                 api.settings = original.settings;
                 api.setSystemTimeout = original.setSystemTimeout;
             }
-        })()`, nil, awaitPromise),
+        })()`, chromedp.EvalAwaitPromise),
 	); err != nil {
 		t.Fatalf("settings standby/onboarding browser contract: %v", err)
 	}
@@ -384,11 +374,11 @@ func TestSettingsNarrowTouchAndKeyboardContract(t *testing.T) {
 	const toggle = `#settings-input-contract .settings-toggle input`
 	const toggleLabel = `#settings-input-contract .settings-toggle`
 	const summary = `#settings-input-contract .settings-summary`
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.EmulateViewport(390, 844, chromedp.EmulateMobile, chromedp.EmulateTouch),
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
-		chromedp.Evaluate(`(async () => {
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		chromedp.Evaluate[chromedp.Void](`(async () => {
             const [{ Settings }, { api }, { h, render }] = await Promise.all([
                 import('/app/static/js/components/Settings.js'),
                 import('/app/static/js/api.js'),
@@ -443,14 +433,14 @@ func TestSettingsNarrowTouchAndKeyboardContract(t *testing.T) {
             details.open = true;
             details.dispatchEvent(new Event('toggle'));
             window.__settingsInputContract = { calls, original, root, api, render };
-		})()`, nil, awaitPromise),
-		chromedp.WaitVisible(toggle, chromedp.ByQuery),
+		})()`, chromedp.EvalAwaitPromise),
+		chromedp.WaitVisible(chromedp.CSS(toggle)),
 	); err != nil {
 		t.Fatalf("settings narrow setup: %v", err)
 	}
 
 	var overflow []string
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(() => {
+	if err := chromedp.Do(ctx, evalInto(`(() => {
         const root = document.getElementById('settings-input-contract');
         const nodes = [root, ...root.querySelectorAll(
             '.settings-content, .settings-group, .settings-field, .settings-segmented, .settings-source-row')];
@@ -464,12 +454,12 @@ func TestSettingsNarrowTouchAndKeyboardContract(t *testing.T) {
 	}
 
 	var focusVisible bool
-	if err := chromedp.Run(ctx,
-		chromedp.Focus(summary, chromedp.ByQuery),
+	if err := chromedp.Do(ctx,
+		chromedp.Focus(chromedp.CSS(summary)),
 		chromedp.KeyEvent("\t"),
-		chromedp.Poll(`document.activeElement ===
-            document.querySelector('#settings-input-contract .settings-toggle input')`, nil),
-		chromedp.Evaluate(`(() => {
+		chromedp.Poll[chromedp.Void](`document.activeElement ===
+            document.querySelector('#settings-input-contract .settings-toggle input')`),
+		evalInto(`(() => {
             const target = document.querySelector('#settings-input-contract .settings-toggle input');
             const track = target?.nextElementSibling;
             const style = track ? getComputedStyle(track) : null;
@@ -483,43 +473,37 @@ func TestSettingsNarrowTouchAndKeyboardContract(t *testing.T) {
 		t.Fatal("settings keyboard focus ring is not visible")
 	}
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.KeyEvent(" "),
-		chromedp.Poll(`window.__settingsInputContract.calls.length === 1 &&
+		chromedp.Poll[chromedp.Void](`window.__settingsInputContract.calls.length === 1 &&
             window.__settingsInputContract.calls[0].enabled === false &&
-            document.querySelector('#settings-input-contract .settings-toggle input')?.checked === false`, nil),
-		chromedp.ScrollIntoView(toggleLabel, chromedp.ByQuery),
+            document.querySelector('#settings-input-contract .settings-toggle input')?.checked === false`),
+		chromedp.ScrollIntoView(chromedp.CSS(toggleLabel)),
 	); err != nil {
 		t.Fatalf("settings keyboard activation: %v", err)
 	}
 
 	var point [2]float64
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`(() => {
+	if err := chromedp.Do(ctx, evalInto(`(() => {
         const rect = document.querySelector('#settings-input-contract .settings-toggle').getBoundingClientRect();
         return [rect.left + rect.width / 2, rect.top + rect.height / 2];
     })()`, &point)); err != nil {
 		t.Fatalf("settings touch target: %v", err)
 	}
 
-	touch := []*input.TouchPoint{{X: point[0], Y: point[1], ID: 1}}
-	if err := chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return input.DispatchTouchEvent(input.TouchStart, touch).Do(ctx)
-		}),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			return input.DispatchTouchEvent(input.TouchEnd, nil).Do(ctx)
-		}),
-		chromedp.Poll(`window.__settingsInputContract.calls.length === 2 &&
+	if err := chromedp.Do(ctx,
+		chromedp.TapXY(point[0], point[1]),
+		chromedp.Poll[chromedp.Void](`window.__settingsInputContract.calls.length === 2 &&
             window.__settingsInputContract.calls[1].enabled === true &&
-            document.querySelector('#settings-input-contract .settings-toggle input')?.checked === true`, nil),
-		chromedp.Evaluate(`(() => {
+            document.querySelector('#settings-input-contract .settings-toggle input')?.checked === true`),
+		chromedp.Evaluate[chromedp.Void](`(() => {
             const fixture = window.__settingsInputContract;
             fixture.render(null, fixture.root);
             fixture.root.remove();
             fixture.api.settings = fixture.original.settings;
             fixture.api.setSystemTimeout = fixture.original.setSystemTimeout;
             delete window.__settingsInputContract;
-        })()`, nil),
+        })()`),
 	); err != nil {
 		t.Fatalf("settings narrow touch contract: %v", err)
 	}
@@ -534,10 +518,10 @@ func TestSettingsNetworkDiagnosticsBrowserContract(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
-		chromedp.Evaluate(`(async () => {
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		chromedp.Evaluate[chromedp.Void](`(async () => {
             const [{ Settings }, { api }, { h, render }] = await Promise.all([
                 import('/app/static/js/components/Settings.js'),
                 import('/app/static/js/api.js'),
@@ -605,7 +589,7 @@ func TestSettingsNetworkDiagnosticsBrowserContract(t *testing.T) {
                 root.remove();
                 api.settings = originalSettings;
             }
-        })()`, nil, awaitPromise),
+        })()`, chromedp.EvalAwaitPromise),
 	); err != nil {
 		t.Fatalf("settings network browser contract: %v", err)
 	}
@@ -620,10 +604,10 @@ func TestSettingsReloadRereadsTheSpeaker(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
-		chromedp.Evaluate(`(async () => {
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		chromedp.Evaluate[chromedp.Void](`(async () => {
             const [{ Settings }, { api }, { h, render }] = await Promise.all([
                 import('/app/static/js/components/Settings.js'),
                 import('/app/static/js/api.js'),
@@ -675,7 +659,7 @@ func TestSettingsReloadRereadsTheSpeaker(t *testing.T) {
                 root.remove();
                 api.settings = original;
             }
-        })()`, nil, awaitPromise),
+        })()`, chromedp.EvalAwaitPromise),
 	); err != nil {
 		t.Fatalf("settings reload: %v", err)
 	}

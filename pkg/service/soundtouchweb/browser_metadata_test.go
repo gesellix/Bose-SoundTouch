@@ -79,28 +79,28 @@ window.expectedOrdinaryMetadata = [ordinaryTrack, ordinaryArtist, ordinaryAlbum]
 		t.Run(viewport.name, func(t *testing.T) {
 			var overflow []string
 			var titlesComplete, detailsComplete, ordinaryDetailsComplete bool
-			if err := chromedp.Run(ctx,
+			if err := chromedp.Do(ctx,
 				chromedp.EmulateViewport(viewport.width, viewport.height),
 				chromedp.Navigate(server.URL+"/fixture"),
-				chromedp.WaitVisible(`.track-title`, chromedp.ByQuery),
-				chromedp.Evaluate(`[
+				chromedp.WaitVisible(chromedp.CSS(`.track-title`)),
+				evalInto(`[
   ...[...document.querySelectorAll('.app, .device-detail, .now-playing, .track-info, .device-grid, .device-card')]
     .filter(el => el.scrollWidth > el.clientWidth + 1)
     .map(el => el.className),
   ...(document.documentElement.scrollWidth > window.innerWidth + 1 ? ['document'] : [])
 ]`, &overflow),
-				chromedp.Evaluate(`document.querySelector('.track-title').title === window.expectedTrack &&
+				evalInto(`document.querySelector('.track-title').title === window.expectedTrack &&
 	 document.querySelector('.track-artist').title === window.expectedArtist &&
 	 document.querySelector('.track-album').title === window.expectedAlbum &&
 	 document.querySelector('.device-name').title === window.expectedDeviceName &&
   document.querySelector('.now-playing-mini').title.startsWith(window.expectedTrack)`, &titlesComplete),
-				chromedp.Click(`.track-details summary`, chromedp.ByQuery),
-				chromedp.Evaluate(`document.querySelector('.track-details').open &&
+				chromedp.Click(chromedp.CSS(`.track-details summary`)),
+				evalInto(`document.querySelector('.track-details').open &&
   document.querySelector('.track-details').textContent.includes(window.expectedTrack) &&
   document.querySelector('.track-details').textContent.includes(window.expectedArtist) &&
   document.querySelector('.track-details').textContent.includes(window.expectedAlbum)`, &detailsComplete),
-				chromedp.Click(`.ordinary-raop .track-details summary`, chromedp.ByQuery),
-				chromedp.Evaluate(`document.querySelector('.ordinary-raop .track-details').open &&
+				chromedp.Click(chromedp.CSS(`.ordinary-raop .track-details summary`)),
+				evalInto(`document.querySelector('.ordinary-raop .track-details').open &&
   window.expectedOrdinaryMetadata.every(value => document.querySelector('.ordinary-raop .track-details').textContent.includes(value))`, &ordinaryDetailsComplete),
 			); err != nil {
 				t.Fatalf("measure now-playing layout: %v", err)

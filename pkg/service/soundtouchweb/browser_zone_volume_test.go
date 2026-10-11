@@ -121,16 +121,16 @@ render(h(DeviceDetail, { deviceId: 'speaker', devices, onBack: () => {} }),
 		})
 	})
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.volume-slider[aria-label="Group volume"]`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.zone-member-volume-slider[aria-label="Living Room volume"]`, chromedp.ByQuery),
-		chromedp.Evaluate(`(() => {
+		chromedp.WaitVisible(chromedp.CSS(`.volume-slider[aria-label="Group volume"]`)),
+		chromedp.WaitVisible(chromedp.CSS(`.zone-member-volume-slider[aria-label="Living Room volume"]`)),
+		chromedp.Evaluate[chromedp.Void](`(() => {
 			const slider = document.querySelector('.volume-slider[aria-label="Group volume"]');
 			slider.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
 			slider.value = '100';
 			slider.dispatchEvent(new Event('input', { bubbles: true }));
-		})()`, nil),
+		})()`),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -139,19 +139,19 @@ render(h(DeviceDetail, { deviceId: 'speaker', devices, onBack: () => {} }),
 	case <-time.After(5 * time.Second):
 		t.Fatal("group write did not start")
 	}
-	if err := chromedp.Run(ctx,
-		chromedp.Poll(`document.querySelector('.volume-slider[aria-label="Group volume"]').value === '100' &&
+	if err := chromedp.Do(ctx,
+		chromedp.Poll[chromedp.Void](`document.querySelector('.volume-slider[aria-label="Group volume"]').value === '100' &&
 			document.querySelector('.zone-member-volume-slider[aria-label="Kitchen volume"]').value === '100' &&
 			document.querySelector('.zone-member-volume-slider[aria-label="Living Room volume"]').value === '75' &&
-			document.querySelectorAll('.zone-member-volume-slider').length === 2`, nil),
+			document.querySelectorAll('.zone-member-volume-slider').length === 2`),
 	); err != nil {
 		t.Fatalf("optimistic logical member delta before HTTP response: %v", err)
 	}
 	releaseOnce.Do(func() { close(release) })
-	if err := chromedp.Run(ctx,
-		chromedp.Poll(`document.querySelector('.volume-row[aria-busy="true"]') === null`, nil),
-		chromedp.Evaluate(`document.querySelector('.volume-slider[aria-label="Group volume"]')
-			.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))`, nil),
+	if err := chromedp.Do(ctx,
+		chromedp.Poll[chromedp.Void](`document.querySelector('.volume-row[aria-busy="true"]') === null`),
+		chromedp.Evaluate[chromedp.Void](`document.querySelector('.volume-slider[aria-label="Group volume"]')
+			.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))`),
 		chromedp.Sleep(250*time.Millisecond),
 	); err != nil {
 		t.Fatal(err)
@@ -188,14 +188,14 @@ render(h(Fixture), document.getElementById('fixture'));
 		})
 	})
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(".volume-slider", chromedp.ByQuery),
-		chromedp.Evaluate(`(() => {
+		chromedp.WaitVisible(chromedp.CSS(".volume-slider")),
+		chromedp.Evaluate[chromedp.Void](`(() => {
 			const slider = document.querySelector('.volume-slider');
 			slider.value = '40';
 			slider.dispatchEvent(new Event('input', { bubbles: true }));
-		})()`, nil),
+		})()`),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -204,27 +204,27 @@ render(h(Fixture), document.getElementById('fixture'));
 	case <-time.After(5 * time.Second):
 		t.Fatal("direct volume write did not start")
 	}
-	if err := chromedp.Run(ctx,
-		chromedp.Poll(`document.querySelector('.volume-slider').value === '40'`, nil),
-		chromedp.Evaluate("window.publishVolume(22)", nil),
-		chromedp.Poll(`document.querySelector('.volume-slider').value === '22'`, nil),
+	if err := chromedp.Do(ctx,
+		chromedp.Poll[chromedp.Void](`document.querySelector('.volume-slider').value === '40'`),
+		chromedp.Evaluate[chromedp.Void]("window.publishVolume(22)"),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.volume-slider').value === '22'`),
 	); err != nil {
 		t.Fatalf("direct slider no longer follows main's optimistic/event behavior: %v", err)
 	}
 	releaseOnce.Do(func() { close(release) })
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`(() => {
+	if err := chromedp.Do(ctx,
+		chromedp.Evaluate[chromedp.Void](`(() => {
 			const slider = document.querySelector('.volume-slider');
 			slider.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
 			slider.dispatchEvent(new Event('change', { bubbles: true }));
 			slider.dispatchEvent(new Event('blur', { bubbles: true }));
-		})()`, nil),
+		})()`),
 		chromedp.Sleep(250*time.Millisecond),
 	); err != nil {
 		t.Fatal(err)
 	}
 	var unchanged bool
-	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.querySelector('.volume-slider').value === '22' &&
+	if err := chromedp.Do(ctx, evalInto(`document.querySelector('.volume-slider').value === '22' &&
 		document.querySelector('.volume-control-failure') === null &&
 		document.querySelector('.volume-row').getAttribute('aria-busy') === null`, &unchanged)); err != nil {
 		t.Fatal(err)
@@ -280,15 +280,15 @@ func TestZoneVolumeDelayedResultCannotOverwriteNewerProjection(t *testing.T) {
 			})
 
 			ctx := newHeadlessChromeContext(t)
-			if err := chromedp.Run(ctx,
+			if err := chromedp.Do(ctx,
 				chromedp.Navigate(server.URL+"/fixture"),
-				chromedp.WaitVisible(test.selector, chromedp.ByQuery),
-				chromedp.Evaluate(fmt.Sprintf(`(() => {
+				chromedp.WaitVisible(chromedp.CSS(test.selector)),
+				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
 					const slider = document.querySelector(%q);
 					slider.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
 					slider.value = '30';
 					slider.dispatchEvent(new Event('input', { bubbles: true }));
-				})()`, test.selector), nil),
+				})()`, test.selector)),
 			); err != nil {
 				t.Fatalf("start intermediate volume request: %v", err)
 			}
@@ -299,21 +299,21 @@ func TestZoneVolumeDelayedResultCannotOverwriteNewerProjection(t *testing.T) {
 				t.Fatal("intermediate volume request did not start")
 			}
 
-			if err := chromedp.Run(ctx,
-				chromedp.Poll(fmt.Sprintf(`document.querySelector(%q).value === '30'`, test.selector), nil),
-				chromedp.Evaluate(`window.publishProjection(2, 50)`, nil),
-				chromedp.Poll(`document.querySelector('#projection-revision').textContent === '2'`, nil),
-				chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q).dispatchEvent(
-					new PointerEvent('pointerup', { bubbles: true }))`, test.selector), nil),
+			if err := chromedp.Do(ctx,
+				chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector(%q).value === '30'`, test.selector)),
+				chromedp.Evaluate[chromedp.Void](`window.publishProjection(2, 50)`),
+				chromedp.Poll[chromedp.Void](`document.querySelector('#projection-revision').textContent === '2'`),
+				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`document.querySelector(%q).dispatchEvent(
+					new PointerEvent('pointerup', { bubbles: true }))`, test.selector)),
 			); err != nil {
 				t.Fatalf("publish newer projection and finish drag: %v", err)
 			}
 
 			releaseOnce.Do(func() { close(release) })
-			if err := chromedp.Run(ctx,
-				chromedp.Poll(`document.querySelector('.volume-row[aria-busy="true"], .zone-member-volume-control[aria-busy="true"]') === null`, nil),
-				chromedp.Poll(fmt.Sprintf(`document.querySelector(%q).value === %q`,
-					test.selector, test.finalValue), nil),
+			if err := chromedp.Do(ctx,
+				chromedp.Poll[chromedp.Void](`document.querySelector('.volume-row[aria-busy="true"], .zone-member-volume-control[aria-busy="true"]') === null`),
+				chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector(%q).value === %q`,
+					test.selector, test.finalValue)),
 			); err != nil {
 				t.Fatalf("wait for optimistic preview and stale response fencing: %v", err)
 			}
@@ -369,11 +369,11 @@ func TestZoneVolumeUntouchedBlurDoesNotWriteAndFinalFailureSurvivesBlur(t *testi
 			})
 
 			ctx := newHeadlessChromeContext(t)
-			if err := chromedp.Run(ctx,
+			if err := chromedp.Do(ctx,
 				chromedp.Navigate(server.URL+"/fixture"),
-				chromedp.WaitVisible(test.selector, chromedp.ByQuery),
-				chromedp.Focus(test.selector, chromedp.ByQuery),
-				chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q).blur()`, test.selector), nil),
+				chromedp.WaitVisible(chromedp.CSS(test.selector)),
+				chromedp.Focus(chromedp.CSS(test.selector)),
+				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`document.querySelector(%q).blur()`, test.selector)),
 				chromedp.Sleep(250*time.Millisecond),
 			); err != nil {
 				t.Fatalf("focus and blur untouched slider: %v", err)
@@ -382,13 +382,13 @@ func TestZoneVolumeUntouchedBlurDoesNotWriteAndFinalFailureSurvivesBlur(t *testi
 				t.Fatalf("untouched focus/blur wrote volume %d times, want zero", got)
 			}
 
-			if err := chromedp.Run(ctx,
-				chromedp.Evaluate(fmt.Sprintf(`(() => {
+			if err := chromedp.Do(ctx,
+				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
 					const slider = document.querySelector(%q);
 					slider.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
 					slider.value = '30';
 					slider.dispatchEvent(new Event('input', { bubbles: true }));
-				})()`, test.selector), nil),
+				})()`, test.selector)),
 			); err != nil {
 				t.Fatalf("start failed volume request: %v", err)
 			}
@@ -398,31 +398,30 @@ func TestZoneVolumeUntouchedBlurDoesNotWriteAndFinalFailureSurvivesBlur(t *testi
 			case <-time.After(5 * time.Second):
 				t.Fatal("failed volume request did not start")
 			}
-			if err := chromedp.Run(ctx, chromedp.Poll(
+			if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](
 				`document.querySelector('.volume-row[aria-busy="true"], .zone-member-volume-control[aria-busy="true"]') !== null`,
-				nil,
 			)); err != nil {
 				t.Fatalf("wait for failed request to become active: %v", err)
 			}
 			releaseOnce.Do(func() { close(release) })
 
-			if err := chromedp.Run(ctx,
-				chromedp.Poll(`document.querySelector('.volume-row[aria-busy="true"], .zone-member-volume-control[aria-busy="true"]') === null`, nil),
-				chromedp.Evaluate(fmt.Sprintf(`document.querySelector(%q).dispatchEvent(
-					new PointerEvent('pointerup', { bubbles: true }))`, test.selector), nil),
-				chromedp.Poll(fmt.Sprintf(`document.body.textContent.includes(%q)`, test.failureText), nil),
-				chromedp.Evaluate(fmt.Sprintf(`(() => {
+			if err := chromedp.Do(ctx,
+				chromedp.Poll[chromedp.Void](`document.querySelector('.volume-row[aria-busy="true"], .zone-member-volume-control[aria-busy="true"]') === null`),
+				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`document.querySelector(%q).dispatchEvent(
+					new PointerEvent('pointerup', { bubbles: true }))`, test.selector)),
+				chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.body.textContent.includes(%q)`, test.failureText)),
+				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
 					const slider = document.querySelector(%q);
 					slider.focus();
 					slider.blur();
-				})()`, test.selector), nil),
+				})()`, test.selector)),
 				chromedp.Sleep(250*time.Millisecond),
 			); err != nil {
 				t.Fatalf("surface and retain final failure: %v", err)
 			}
 
 			var failureVisible bool
-			if err := chromedp.Run(ctx, chromedp.Evaluate(
+			if err := chromedp.Do(ctx, evalInto(
 				fmt.Sprintf(`document.body.textContent.includes(%q)`, test.failureText),
 				&failureVisible,
 			)); err != nil {
@@ -461,10 +460,10 @@ render(h('div', {},
 	ctx := newHeadlessChromeContext(t)
 
 	var presentation map[string]bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.zone-member-volume-control`, chromedp.ByQuery),
-		chromedp.Evaluate(`({
+		chromedp.WaitVisible(chromedp.CSS(`.zone-member-volume-control`)),
+		evalInto(`({
 			unavailableIsRange: document.querySelector('[aria-label="Unavailable member volume"]')?.matches('input[type="range"]') === true,
 			unavailableDisabled: document.querySelector('[aria-label="Unavailable member volume"]')?.disabled === true,
 			unavailableExplained: document.body.textContent.includes('Volume unavailable.'),
@@ -521,17 +520,17 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 	ctx := newHeadlessChromeContext(t)
 	var after string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.zone-member-volume-slider[aria-label="Office volume"]`, chromedp.ByQuery),
-		chromedp.Evaluate(`(() => {
+		chromedp.WaitVisible(chromedp.CSS(`.zone-member-volume-slider[aria-label="Office volume"]`)),
+		chromedp.Evaluate[chromedp.Void](`(() => {
 			const slider = document.querySelector('.volume-slider[aria-label="Group volume"]');
 			slider.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
 			slider.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-		})()`, nil),
-		chromedp.Evaluate(`window.publishOther(10, 2)`, nil),
+		})()`),
+		chromedp.Evaluate[chromedp.Void](`window.publishOther(10, 2)`),
 		chromedp.Sleep(1500*time.Millisecond),
-		chromedp.Evaluate(`document.querySelector('.zone-member-volume-slider[aria-label="Office volume"]').value`, &after),
+		evalInto(`document.querySelector('.zone-member-volume-slider[aria-label="Office volume"]').value`, &after),
 	); err != nil {
 		t.Fatal(err)
 	}

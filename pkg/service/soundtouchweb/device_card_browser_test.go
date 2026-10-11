@@ -40,10 +40,10 @@ func TestDeviceCardMarksNowPlayingOfOfflineSpeakerAsLastKnown(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(".device-card", chromedp.ByQuery),
-		chromedp.Poll(`(() => {
+		chromedp.WaitVisible(chromedp.CSS(".device-card")),
+		chromedp.Poll[chromedp.Void](`(() => {
 			const card = name => Array.from(document.querySelectorAll('.device-card')).find(c =>
 				c.querySelector('.device-name')?.textContent.trim() === name);
 			const online = card('Online Room')?.querySelector('.now-playing-mini');
@@ -55,7 +55,7 @@ func TestDeviceCardMarksNowPlayingOfOfflineSpeakerAsLastKnown(t *testing.T) {
 				offline.querySelector('.play-status').textContent.trim() === 'Last known:' &&
 				offline.title.includes('went offline') &&
 				offline.textContent.includes('Frozen Track');
-		})()`, nil),
+		})()`),
 	); err != nil {
 		t.Fatalf("offline speaker's now playing was presented as live: %v", err)
 	}

@@ -114,12 +114,6 @@ func newHeadlessChromeContext(t *testing.T) context.Context {
 			// permissions Chrome's sandbox needs; harmless to also set
 			// locally.
 			chromedp.Flag("no-sandbox", true),
-			// chromedp's default is 20s; a loaded shared CI runner can be
-			// slower than that to fork/exec Chrome and print its DevTools
-			// websocket URL, which otherwise surfaces as a flaky "websocket
-			// url timeout reached" test failure unrelated to the page under
-			// test.
-			chromedp.WSURLReadTimeout(45*time.Second),
 		)...,
 	)
 	t.Cleanup(cancelAlloc)
@@ -148,10 +142,10 @@ func TestPlayerRendersNatively(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 
 	var shimInjected bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll('script[src*="es-module-shims"]').length > 0`, &shimInjected),
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		evalInto(`document.querySelectorAll('script[src*="es-module-shims"]').length > 0`, &shimInjected),
 	); err != nil {
 		t.Fatalf("chromedp run: %v", err)
 	}
@@ -284,11 +278,11 @@ func TestPlayerSurvivesAServiceOutage(t *testing.T) {
 	proxy := newOutageProxy(t, backendURL.Host)
 	ctx := newHeadlessChromeContext(t)
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(proxy.url()+"/app"),
-		chromedp.WaitVisible(`#app`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#app`)),
 		// The socket must be up before taking it away.
-		chromedp.Poll(`document.querySelector('.connection-banner') === null`, nil),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.connection-banner') === null`),
 	); err != nil {
 		t.Fatalf("connect before the outage: %v", err)
 	}
@@ -296,11 +290,11 @@ func TestPlayerSurvivesAServiceOutage(t *testing.T) {
 	proxy.setUp(false)
 
 	var bannerAfterOutage, stillLoaded string
-	if err := chromedp.Run(ctx,
-		chromedp.Poll(`document.querySelector('.connection-banner') !== null`, nil),
-		chromedp.Text(`.connection-banner`, &bannerAfterOutage, chromedp.ByQuery),
+	if err := chromedp.Do(ctx,
+		chromedp.Poll[chromedp.Void](`document.querySelector('.connection-banner') !== null`),
+		textInto(chromedp.CSS(`.connection-banner`), &bannerAfterOutage),
 		// The page is still the player, not the browser's error page.
-		chromedp.Evaluate(`document.querySelector('#app') !== null ? 'loaded' : 'gone'`, &stillLoaded),
+		evalInto(`document.querySelector('#app') !== null ? 'loaded' : 'gone'`, &stillLoaded),
 	); err != nil {
 		t.Fatalf("detect the outage: %v", err)
 	}
@@ -315,10 +309,10 @@ func TestPlayerSurvivesAServiceOutage(t *testing.T) {
 	proxy.setUp(true)
 
 	var navigations int
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		// Recovers on its own, with no interaction.
-		chromedp.Poll(`document.querySelector('.connection-banner') === null`, nil),
-		chromedp.Evaluate(`performance.getEntriesByType('navigation').length`, &navigations),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.connection-banner') === null`),
+		evalInto(`performance.getEntriesByType('navigation').length`, &navigations),
 	); err != nil {
 		t.Fatalf("recover after the outage: %v", err)
 	}
@@ -368,10 +362,10 @@ func TestPlayerRendersUnderForcedShimMode(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 
 	var rendered bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/test-shim-mode"),
-		chromedp.WaitVisible(`.nav-discover-icon`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.getElementById('app').children.length > 0`, &rendered),
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		evalInto(`document.getElementById('app').children.length > 0`, &rendered),
 	); err != nil {
 		t.Fatalf("chromedp run (forced shim mode): %v", err)
 	}
@@ -493,10 +487,10 @@ window.revisionChecks = {
 	ctx := newHeadlessChromeContext(t)
 
 	var checks map[string]bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.Poll(`window.revisionChecks !== undefined`, nil),
-		chromedp.Evaluate(`window.revisionChecks`, &checks),
+		chromedp.Poll[chromedp.Void](`window.revisionChecks !== undefined`),
+		evalInto(`window.revisionChecks`, &checks),
 	); err != nil {
 		t.Fatalf("exercise frontend revision state owner: %v", err)
 	}
@@ -658,40 +652,40 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var powerPending, pausePending, mutePending, shufflePending, repeatPending bool
 	var nextFreedTransport bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.page-header .command-btn`, chromedp.ByQuery),
-		chromedp.Click(`.page-header .command-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.page-header .command-btn').getAttribute('aria-busy') === 'true'`, &powerPending),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Device powered off'`, nil),
-		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: false}})`, nil),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === ''`, nil),
-		chromedp.Click(`.play-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.play-btn').getAttribute('aria-busy') === 'true'`, &pausePending),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`, nil),
-		chromedp.Evaluate(`window.publishStatus({revision: 200, nowPlayingRevision: 200, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: false}})`, nil),
-		chromedp.Click(`.mute-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.mute-btn').getAttribute('aria-busy') === 'true'`, &mutePending),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Audio muted'`, nil),
-		chromedp.Evaluate(`window.publishStatus({revision: 300, nowPlayingRevision: 300, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
-		chromedp.Click(`.shuffle-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.shuffle-btn').getAttribute('aria-busy') === 'true'`, &shufflePending),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Shuffle enabled'`, nil),
-		chromedp.Evaluate(`window.publishStatus({revision: 400, nowPlayingRevision: 400, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
-		chromedp.Click(`.repeat-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.repeat-btn').getAttribute('aria-busy') === 'true'`, &repeatPending),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Repeat all enabled'`, nil),
-		chromedp.Evaluate(`window.publishStatus({revision: 500, nowPlayingRevision: 500, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'First track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
-		chromedp.Poll(`document.querySelector('.track-title').textContent === 'First track'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.page-header .command-btn`)),
+		chromedp.Click(chromedp.CSS(`.page-header .command-btn`)),
+		evalInto(`document.querySelector('.page-header .command-btn').getAttribute('aria-busy') === 'true'`, &powerPending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Device powered off'`),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: false}})`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === ''`),
+		chromedp.Click(chromedp.CSS(`.play-btn`)),
+		evalInto(`document.querySelector('.play-btn').getAttribute('aria-busy') === 'true'`, &pausePending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 200, nowPlayingRevision: 200, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: false}})`),
+		chromedp.Click(chromedp.CSS(`.mute-btn`)),
+		evalInto(`document.querySelector('.mute-btn').getAttribute('aria-busy') === 'true'`, &mutePending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Audio muted'`),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 300, nowPlayingRevision: 300, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_OFF', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: true}})`),
+		chromedp.Click(chromedp.CSS(`.shuffle-btn`)),
+		evalInto(`document.querySelector('.shuffle-btn').getAttribute('aria-busy') === 'true'`, &shufflePending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Shuffle enabled'`),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 400, nowPlayingRevision: 400, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_OFF'}, volume: {ActualVolume: 20, MuteEnabled: true}})`),
+		chromedp.Click(chromedp.CSS(`.repeat-btn`)),
+		evalInto(`document.querySelector('.repeat-btn').getAttribute('aria-busy') === 'true'`, &repeatPending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Repeat all enabled'`),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 500, nowPlayingRevision: 500, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'First track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.track-title').textContent === 'First track'`),
 		// Track skips settle on their write, so they confirm without a
 		// readback and free the transport again immediately.
-		chromedp.Click(`.next-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
-		chromedp.Evaluate(`document.querySelector('.next-btn').disabled === false`, &nextFreedTransport),
-		chromedp.Evaluate(`window.publishStatus({revision: 600, nowPlayingRevision: 600, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'Second track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`, nil),
-		chromedp.Poll(`document.querySelector('.track-title').textContent === 'Second track'`, nil),
-		chromedp.Click(`.previous-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`, nil),
+		chromedp.Click(chromedp.CSS(`.next-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next track started'`),
+		evalInto(`document.querySelector('.next-btn').disabled === false`, &nextFreedTransport),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 600, nowPlayingRevision: 600, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE', ShuffleSetting: 'SHUFFLE_ON', RepeatSetting: 'REPEAT_ALL', Track: 'Second track'}, volume: {ActualVolume: 20, MuteEnabled: true}})`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.track-title').textContent === 'Second track'`),
+		chromedp.Click(chromedp.CSS(`.previous-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`),
 	); err != nil {
 		t.Fatalf("exercise bounded discrete commands: %v", err)
 	}
@@ -742,10 +736,10 @@ window.pauseConfirmationChecks = {
 	ctx := newHeadlessChromeContext(t)
 
 	var checks map[string]bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.Poll(`window.pauseConfirmationChecks !== undefined`, nil),
-		chromedp.Evaluate(`window.pauseConfirmationChecks`, &checks),
+		chromedp.Poll[chromedp.Void](`window.pauseConfirmationChecks !== undefined`),
+		evalInto(`window.pauseConfirmationChecks`, &checks),
 	); err != nil {
 		t.Fatalf("exercise pause confirmation matrix: %v", err)
 	}
@@ -825,12 +819,12 @@ func TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var transportEnabled bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.play-btn`, chromedp.ByQuery),
-		chromedp.Click(`.play-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`, nil),
-		chromedp.Evaluate(`document.querySelector('.play-btn').disabled === false`, &transportEnabled),
+		chromedp.WaitVisible(chromedp.CSS(`.play-btn`)),
+		chromedp.Click(chromedp.CSS(`.play-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`),
+		evalInto(`document.querySelector('.play-btn').disabled === false`, &transportEnabled),
 		// Outlast the remaining readback deadlines (250ms and 500ms here).
 		chromedp.Sleep(900*time.Millisecond),
 	); err != nil {
@@ -914,11 +908,11 @@ func TestTrackSkipConfirmsByTrackID(t *testing.T) {
 	server := trackSkipServer(t, &reads, &mu, "track-2", false)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
-		chromedp.Click(`.next-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
+		chromedp.Click(chromedp.CSS(`.next-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next track started'`),
 	); err != nil {
 		t.Fatalf("exercise a verifiable track skip: %v", err)
 	}
@@ -940,11 +934,11 @@ func TestTrackSkipIsNotConfirmedByRollingStreamMetadata(t *testing.T) {
 	server := trackSkipServer(t, &reads, &mu, "track-1", true)
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
-		chromedp.Click(`.next-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next-track command unverified'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
+		chromedp.Click(chromedp.CSS(`.next-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next-track command unverified'`),
 	); err != nil {
 		t.Fatalf("exercise a skip against rolling stream metadata: %v", err)
 	}
@@ -1019,11 +1013,11 @@ func TestTrackSkipConfirmsByMetadataWhereTheSourceClaimsSkip(t *testing.T) {
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
-		chromedp.Click(`.next-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
+		chromedp.Click(chromedp.CSS(`.next-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next track started'`),
 	); err != nil {
 		t.Fatalf("exercise a library skip confirmed by metadata: %v", err)
 	}
@@ -1092,11 +1086,11 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.next-btn`, chromedp.ByQuery),
-		chromedp.Click(`.next-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Next track started'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
+		chromedp.Click(chromedp.CSS(`.next-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next track started'`),
 		// Outlast every readback deadline in the fixture.
 		chromedp.Sleep(900*time.Millisecond),
 	); err != nil {
@@ -1166,11 +1160,11 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.previous-btn`, chromedp.ByQuery),
-		chromedp.Click(`.previous-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.previous-btn`)),
+		chromedp.Click(chromedp.CSS(`.previous-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`),
 	); err != nil {
 		t.Fatalf("exercise a previous-track restart: %v", err)
 	}
@@ -1235,12 +1229,12 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	var fallbacks int
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.recent-item`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.recent-item img.recent-art')?.getAttribute('src') || ''`, &borrowed),
+		chromedp.WaitVisible(chromedp.CSS(`.recent-item`)),
+		evalInto(`document.querySelector('.recent-item img.recent-art')?.getAttribute('src') || ''`, &borrowed),
 		// The entry with no matching preset keeps the source-icon placeholder.
-		chromedp.Evaluate(`document.querySelectorAll('.recent-art-empty').length`, &fallbacks),
+		evalInto(`document.querySelectorAll('.recent-art-empty').length`, &fallbacks),
 	); err != nil {
 		t.Fatalf("exercise recents artwork borrowing: %v", err)
 	}
@@ -1309,13 +1303,13 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var savableEnabled bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.preset-slot.savable`, chromedp.ByQuery),
-		chromedp.Click(`.preset-slot:not(.empty)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Starting preset'`, nil),
-		chromedp.Evaluate(`document.querySelector('.preset-slot.savable').disabled === false`, &savableEnabled),
-		chromedp.Click(`.preset-slot.savable`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`.preset-slot.savable`)),
+		chromedp.Click(chromedp.CSS(`.preset-slot:not(.empty)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Starting preset'`),
+		evalInto(`document.querySelector('.preset-slot.savable').disabled === false`, &savableEnabled),
+		chromedp.Click(chromedp.CSS(`.preset-slot.savable`)),
 		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
 		t.Fatalf("exercise empty preset slot during a pending command: %v", err)
@@ -1376,13 +1370,13 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var powerEnabled, transportEnabled bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.page-header .command-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.page-header .command-btn').disabled === false`, &powerEnabled),
-		chromedp.Evaluate(`document.querySelector('.play-btn').disabled === false`, &transportEnabled),
-		chromedp.Click(`.page-header .command-btn`, chromedp.ByQuery),
-		chromedp.Click(`.play-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`.page-header .command-btn`)),
+		evalInto(`document.querySelector('.page-header .command-btn').disabled === false`, &powerEnabled),
+		evalInto(`document.querySelector('.play-btn').disabled === false`, &transportEnabled),
+		chromedp.Click(chromedp.CSS(`.page-header .command-btn`)),
+		chromedp.Click(chromedp.CSS(`.play-btn`)),
 		// Both writes are fire-and-forget, so give them a moment to land.
 		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
@@ -1448,11 +1442,11 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.play-btn`, chromedp.ByQuery),
-		chromedp.Click(`.play-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.play-btn`)),
+		chromedp.Click(chromedp.CSS(`.play-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`),
 	); err != nil {
 		t.Fatalf("exercise command confirmation across a reconnect: %v", err)
 	}
@@ -1477,16 +1471,16 @@ func TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.play-btn`, chromedp.ByQuery),
-		chromedp.Click(`.play-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`.play-btn`)),
+		chromedp.Click(chromedp.CSS(`.play-btn`)),
 		// The speaker reports the pause before the first readback deadline.
-		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE'}, volume: {ActualVolume: 20, MuteEnabled: false}})`, nil),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Playback paused, confirming'`, nil),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PAUSE_STATE'}, volume: {ActualVolume: 20, MuteEnabled: false}})`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Playback paused, confirming'`),
 		// Outlast the last readback deadline (500ms in this fixture).
 		chromedp.Sleep(900*time.Millisecond),
-		chromedp.Text(`.discrete-command-status`, &statusText, chromedp.ByQuery),
+		textInto(chromedp.CSS(`.discrete-command-status`), &statusText),
 	); err != nil {
 		t.Fatalf("exercise push-confirmed command with failing readbacks: %v", err)
 	}
@@ -1517,10 +1511,10 @@ window.playConfirmationChecks = {
 	ctx := newHeadlessChromeContext(t)
 
 	var checks map[string]bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.Poll(`window.playConfirmationChecks !== undefined`, nil),
-		chromedp.Evaluate(`window.playConfirmationChecks`, &checks),
+		chromedp.Poll[chromedp.Void](`window.playConfirmationChecks !== undefined`),
+		evalInto(`window.playConfirmationChecks`, &checks),
 	); err != nil {
 		t.Fatalf("exercise play confirmation matrix: %v", err)
 	}
@@ -1622,17 +1616,17 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var presetPending, recentPending bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.preset-slot:not(.empty)`, chromedp.ByQuery),
-		chromedp.Click(`.preset-slot:not(.empty)`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.preset-slot:not(.empty)').getAttribute('aria-busy') === 'true'`, &presetPending),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Preset started'`, nil),
-		chromedp.Evaluate(`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE'}, volume: {ActualVolume: 20, MuteEnabled: false}, presets: {Preset: [{ID: 1, ContentItem: {Source: 'TUNEIN', Location: '/station/preset', ItemName: 'Preset station'}}]}})`, nil),
-		chromedp.WaitVisible(`.recent-item`, chromedp.ByQuery),
-		chromedp.Click(`.recent-item`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.recent-item').getAttribute('aria-busy') === 'true'`, &recentPending),
-		chromedp.Poll(`document.querySelector('.discrete-command-status').textContent === 'Recent item started'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.preset-slot:not(.empty)`)),
+		chromedp.Click(chromedp.CSS(`.preset-slot:not(.empty)`)),
+		evalInto(`document.querySelector('.preset-slot:not(.empty)').getAttribute('aria-busy') === 'true'`, &presetPending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Preset started'`),
+		chromedp.Evaluate[chromedp.Void](`window.publishStatus({revision: 100, nowPlayingRevision: 100, nowPlaying: {Source: 'PRODUCT', PlayStatus: 'PLAY_STATE'}, volume: {ActualVolume: 20, MuteEnabled: false}, presets: {Preset: [{ID: 1, ContentItem: {Source: 'TUNEIN', Location: '/station/preset', ItemName: 'Preset station'}}]}})`),
+		chromedp.WaitVisible(chromedp.CSS(`.recent-item`)),
+		chromedp.Click(chromedp.CSS(`.recent-item`)),
+		evalInto(`document.querySelector('.recent-item').getAttribute('aria-busy') === 'true'`, &recentPending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Recent item started'`),
 	); err != nil {
 		t.Fatalf("exercise preset and recent command state: %v", err)
 	}
@@ -1820,34 +1814,34 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var radioDisabledWhilePending bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#tunein .tunein-play-btn`, chromedp.ByQuery),
-		chromedp.SetValue(`#radio .tunein-search-input`, "station", chromedp.ByQuery),
-		chromedp.Click(`#radio .btn-primary`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#radio .tunein-play-btn`, chromedp.ByQuery),
-		chromedp.Click(`#tunein .tunein-play-btn`, chromedp.ByQuery),
-		chromedp.Click(`#tunein .picker-device-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#radio .tunein-play-btn')?.disabled === true`, nil),
-		chromedp.Evaluate(`document.querySelector('#radio .tunein-play-btn').disabled`, &radioDisabledWhilePending),
-		chromedp.Evaluate(`window.hideTuneIn()`, nil),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`#tunein .tunein-play-btn`)),
+		chromedp.SetValue(chromedp.CSS(`#radio .tunein-search-input`), "station"),
+		chromedp.Click(chromedp.CSS(`#radio .btn-primary`)),
+		chromedp.WaitVisible(chromedp.CSS(`#radio .tunein-play-btn`)),
+		chromedp.Click(chromedp.CSS(`#tunein .tunein-play-btn`)),
+		chromedp.Click(chromedp.CSS(`#tunein .picker-device-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#radio .tunein-play-btn')?.disabled === true`),
+		evalInto(`document.querySelector('#radio .tunein-play-btn').disabled`, &radioDisabledWhilePending),
+		chromedp.Evaluate[chromedp.Void](`window.hideTuneIn()`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`),
 
-		chromedp.Click(`#radio .tunein-play-btn`, chromedp.ByQuery),
-		chromedp.Click(`#radio .picker-device-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+		chromedp.Click(chromedp.CSS(`#radio .tunein-play-btn`)),
+		chromedp.Click(chromedp.CSS(`#radio .picker-device-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`),
 
-		chromedp.SetValue(`#url input[type="url"]`, "http://stream.test/audio", chromedp.ByQuery),
-		chromedp.SetValue(`#url input[type="text"]`, "Fixture stream", chromedp.ByQuery),
-		chromedp.Click(`#url .tunein-toolbar .btn-primary`, chromedp.ByQuery),
-		chromedp.Click(`#url .picker-device-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+		chromedp.SetValue(chromedp.CSS(`#url input[type="url"]`), "http://stream.test/audio"),
+		chromedp.SetValue(chromedp.CSS(`#url input[type="text"]`), "Fixture stream"),
+		chromedp.Click(chromedp.CSS(`#url .tunein-toolbar .btn-primary`)),
+		chromedp.Click(chromedp.CSS(`#url .picker-device-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`),
 
-		chromedp.WaitVisible(`#library .tunein-item`, chromedp.ByQuery),
-		chromedp.Click(`#library .tunein-item`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#library .tunein-play-btn`, chromedp.ByQuery),
-		chromedp.Click(`#library .tunein-play-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-item`)),
+		chromedp.Click(chromedp.CSS(`#library .tunein-item`)),
+		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-play-btn`)),
+		chromedp.Click(chromedp.CSS(`#library .tunein-play-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`),
 	); err != nil {
 		t.Fatalf("exercise provider and library playback command state: %v", err)
 	}
@@ -1994,41 +1988,41 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.Click(`#reject`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('failed')`, nil),
-		chromedp.Poll(`document.querySelector('.content-command-error')?.textContent === 'catalog rejected'`, nil),
-		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
+		chromedp.Click(chromedp.CSS(`#reject`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('failed')`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-error')?.textContent === 'catalog rejected'`),
+		chromedp.Click(chromedp.CSS(`.content-command-status button`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status') === null`),
 
-		chromedp.Click(`#target`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.content-command-status.pending`, chromedp.ByQuery),
-		chromedp.Evaluate(`window.replaceTarget()`, nil),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('failed')`, nil),
-		chromedp.Poll(`document.querySelector('.content-command-error')?.textContent === 'Playback target changed'`, nil),
-		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
-		chromedp.Evaluate(`window.restoreTarget()`, nil),
+		chromedp.Click(chromedp.CSS(`#target`)),
+		chromedp.WaitVisible(chromedp.CSS(`.content-command-status.pending`)),
+		chromedp.Evaluate[chromedp.Void](`window.replaceTarget()`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('failed')`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-error')?.textContent === 'Playback target changed'`),
+		chromedp.Click(chromedp.CSS(`.content-command-status button`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status') === null`),
+		chromedp.Evaluate[chromedp.Void](`window.restoreTarget()`),
 
-		chromedp.Click(`#pretarget`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('failed')`, nil),
-		chromedp.Poll(`document.querySelector('.content-command-error')?.textContent === 'Playback target changed'`, nil),
-		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
-		chromedp.Evaluate(`window.restoreTarget()`, nil),
+		chromedp.Click(chromedp.CSS(`#pretarget`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('failed')`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-error')?.textContent === 'Playback target changed'`),
+		chromedp.Click(chromedp.CSS(`.content-command-status button`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status') === null`),
+		chromedp.Evaluate[chromedp.Void](`window.restoreTarget()`),
 
 		// A 5xx says nothing about whether the speaker acted, so the readbacks
 		// must keep verifying and can still confirm the command.
-		chromedp.Click(`#indefinite`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`, nil),
-		chromedp.Click(`.content-command-status button`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.content-command-status') === null`, nil),
+		chromedp.Click(chromedp.CSS(`#indefinite`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('final-confirmed')`),
+		chromedp.Click(chromedp.CSS(`.content-command-status button`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status') === null`),
 
-		chromedp.Click(`#stale`, chromedp.ByQuery),
-		chromedp.WaitVisible(`.content-command-status.pending`, chromedp.ByQuery),
-		chromedp.Evaluate(`window.publishNewer()`, nil),
-		chromedp.Poll(`document.querySelector('.content-command-status')?.classList.contains('unverified')`, nil),
+		chromedp.Click(chromedp.CSS(`#stale`)),
+		chromedp.WaitVisible(chromedp.CSS(`.content-command-status.pending`)),
+		chromedp.Evaluate[chromedp.Void](`window.publishNewer()`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('unverified')`),
 	); err != nil {
 		t.Fatalf("exercise negative content playback outcomes: %v", err)
 	}
@@ -2105,14 +2099,14 @@ redraw();
 
 	ctx := newHeadlessChromeContext(t)
 	var trackSource string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`window.expireSources()`, nil),
-		chromedp.Poll(`document.querySelector('.source-btn')?.disabled === true`, nil),
-		chromedp.Evaluate(`document.querySelector('.source-btn').click()`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Evaluate[chromedp.Void](`window.expireSources()`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn')?.disabled === true`),
+		chromedp.Evaluate[chromedp.Void](`document.querySelector('.source-btn').click()`),
 		chromedp.Sleep(50*time.Millisecond),
-		chromedp.Evaluate(`document.querySelector('.source-btn').classList.contains('active') ? 'AUX' : 'STANDBY'`, &trackSource),
+		evalInto(`document.querySelector('.source-btn').classList.contains('active') ? 'AUX' : 'STANDBY'`, &trackSource),
 	); err != nil {
 		t.Fatalf("apply derived source expiry: %v", err)
 	}
@@ -2177,17 +2171,17 @@ func TestSourceSelectionUsesOneWriteAndAbsoluteReadbacks(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var immediatelyPending bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.source-btn:nth-child(1)').getAttribute('aria-busy') === 'true'`, &immediatelyPending),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
-		chromedp.Click(`.source-btn:nth-child(2)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`, nil),
-		chromedp.Click(`.source-btn:nth-child(3)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-btn:nth-child(3)').classList.contains('unverified')`, nil),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection unverified: source rejected'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		evalInto(`document.querySelector('.source-btn:nth-child(1)').getAttribute('aria-busy') === 'true'`, &immediatelyPending),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(2)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(3)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn:nth-child(3)').classList.contains('unverified')`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection unverified: source rejected'`),
 	); err != nil {
 		t.Fatalf("exercise source commands: %v", err)
 	}
@@ -2278,12 +2272,12 @@ func TestProviderSourceResumesMostRecentStation(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
-		chromedp.Evaluate(`window.navigated`, &navigated),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
+		evalInto(`window.navigated`, &navigated),
 	); err != nil {
 		t.Fatalf("exercise provider source with a recent station: %v", err)
 	}
@@ -2329,12 +2323,12 @@ func TestProviderSourceWithoutRecentsNavigatesInstead(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`window.navigated.length === 1`, nil),
-		chromedp.Evaluate(`window.navigated`, &navigated),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
+		evalInto(`window.navigated`, &navigated),
 	); err != nil {
 		t.Fatalf("exercise provider source without recents: %v", err)
 	}
@@ -2345,11 +2339,11 @@ func TestProviderSourceWithoutRecentsNavigatesInstead(t *testing.T) {
 
 	// LOCAL_INTERNET_RADIO never resumes, so it goes straight to Play URL.
 	var localRadioNav []string
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`window.navigated = []`, nil),
-		chromedp.Click(`.source-btn:nth-child(2)`, chromedp.ByQuery),
-		chromedp.Poll(`window.navigated.length === 1`, nil),
-		chromedp.Evaluate(`window.navigated`, &localRadioNav),
+	if err := chromedp.Do(ctx,
+		chromedp.Evaluate[chromedp.Void](`window.navigated = []`),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(2)`)),
+		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
+		evalInto(`window.navigated`, &localRadioNav),
 	); err != nil {
 		t.Fatalf("exercise LOCAL_INTERNET_RADIO without recents: %v", err)
 	}
@@ -2387,12 +2381,12 @@ func TestProviderSourceNavigatesWhenRecentsFail(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`window.navigated.length === 1`, nil),
-		chromedp.Evaluate(`window.navigated`, &navigated),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
+		evalInto(`window.navigated`, &navigated),
 	); err != nil {
 		t.Fatalf("exercise provider source with failing recents: %v", err)
 	}
@@ -2429,12 +2423,12 @@ func TestStubNowPlayingIsNotReportedAsSuccess(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-btn:nth-child(1)').classList.contains('failed')`, nil),
-		chromedp.Text(`.source-command-status`, &statusText, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn:nth-child(1)').classList.contains('failed')`),
+		textInto(chromedp.CSS(`.source-command-status`), &statusText),
 	); err != nil {
 		t.Fatalf("exercise stub now-playing readback: %v", err)
 	}
@@ -2463,11 +2457,11 @@ func TestPlayingSourceWithoutLocationStillConfirms(t *testing.T) {
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
 	); err != nil {
 		t.Fatalf("exercise playing source with no location: %v", err)
 	}
@@ -2508,12 +2502,12 @@ func TestLocalInternetRadioNeverResumes(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(2)`, chromedp.ByQuery),
-		chromedp.Poll(`window.navigated.length === 1`, nil),
-		chromedp.Evaluate(`window.navigated`, &navigated),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(2)`)),
+		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
+		evalInto(`window.navigated`, &navigated),
 	); err != nil {
 		t.Fatalf("exercise LOCAL_INTERNET_RADIO with a resumable recent: %v", err)
 	}
@@ -2563,12 +2557,12 @@ func TestStoredMusicOpensTheLibrary(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(3)`, chromedp.ByQuery),
-		chromedp.Poll(`window.navigated.length === 1`, nil),
-		chromedp.Evaluate(`window.navigated`, &navigated),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(3)`)),
+		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
+		evalInto(`window.navigated`, &navigated),
 	); err != nil {
 		t.Fatalf("exercise STORED_MUSIC source: %v", err)
 	}
@@ -2604,11 +2598,11 @@ func TestSourceSelectionStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
 		// Outlast the remaining readback deadlines (250ms and 500ms here).
 		chromedp.Sleep(900*time.Millisecond),
 	); err != nil {
@@ -2646,11 +2640,11 @@ func TestSourceSelectionKeepsReadbacksWithoutAnEventStream(t *testing.T) {
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
 		chromedp.Sleep(300*time.Millisecond),
 	); err != nil {
 		t.Fatalf("exercise selection without an event stream: %v", err)
@@ -2700,12 +2694,12 @@ render(h(Sources, {
 
 	ctx := newHeadlessChromeContext(t)
 	var active bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
-		chromedp.Evaluate(`document.querySelector('.source-btn').classList.contains('active')`, &active),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
+		evalInto(`document.querySelector('.source-btn').classList.contains('active')`, &active),
 	); err != nil {
 		t.Fatalf("select source whose self-account is omitted by now_playing: %v", err)
 	}
@@ -2744,11 +2738,11 @@ func TestSourceSelectionReadbacksDoNotWaitForSlowWriteResponse(t *testing.T) {
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`),
 	); err != nil {
 		t.Fatalf("exercise slow source response: %v", err)
 	}
@@ -2789,12 +2783,12 @@ func TestSourceSelectionDefinitiveRefusalFailsImmediately(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-btn').classList.contains('failed')`, nil),
-		chromedp.Text(`.source-command-status`, &statusText, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn').classList.contains('failed')`),
+		textInto(chromedp.CSS(`.source-command-status`), &statusText),
 		// Well past every readback deadline in this fixture (100/250/500ms), so
 		// a zero read count means the failure came from the write itself.
 		chromedp.Sleep(700*time.Millisecond),
@@ -2841,13 +2835,13 @@ func TestSourceSelectionLaterFirmwareErrorOverridesProvisionalConfirmation(t *te
 
 	ctx := newHeadlessChromeContext(t)
 	var provisional bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected, confirming'`, nil),
-		chromedp.Evaluate(`document.querySelector('.source-btn:nth-child(1)').classList.contains('provisional-confirmed')`, &provisional),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection failed: INVALID_SOURCE'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected, confirming'`),
+		evalInto(`document.querySelector('.source-btn:nth-child(1)').classList.contains('provisional-confirmed')`, &provisional),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection failed: INVALID_SOURCE'`),
 	); err != nil {
 		t.Fatalf("exercise provisional source rejection: %v", err)
 	}
@@ -2880,16 +2874,16 @@ func TestSourceSelectionKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		// The speaker reports the switch before the first readback deadline.
-		chromedp.Evaluate(`window.renderStatus('AUX', 'AUX1')`, nil),
-		chromedp.Poll(`document.querySelector('.source-btn').classList.contains('provisional-confirmed')`, nil),
+		chromedp.Evaluate[chromedp.Void](`window.renderStatus('AUX', 'AUX1')`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn').classList.contains('provisional-confirmed')`),
 		// Outlast the last readback deadline (500ms in this fixture).
 		chromedp.Sleep(900*time.Millisecond),
-		chromedp.Text(`.source-command-status`, &statusText, chromedp.ByQuery),
+		textInto(chromedp.CSS(`.source-command-status`), &statusText),
 	); err != nil {
 		t.Fatalf("exercise push-confirmed selection with failing readbacks: %v", err)
 	}
@@ -2917,11 +2911,11 @@ func TestSourceSelectionRejectsReadbackWithOnlyNewerAggregateRevision(t *testing
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`),
 	); err != nil {
 		t.Fatalf("exercise stale source readback: %v", err)
 	}
@@ -2952,11 +2946,11 @@ func TestSourceSelectionTreatsFirmwareErrorSourceAsFailed(t *testing.T) {
 	})
 
 	ctx := newHeadlessChromeContext(t)
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection failed: INVALID_SOURCE'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection failed: INVALID_SOURCE'`),
 	); err != nil {
 		t.Fatalf("exercise firmware source rejection: %v", err)
 	}
@@ -3001,16 +2995,16 @@ func TestSourceSelectionLaterAuthoritativeSourceClearsFinalProjection(t *testing
 			ctx := newHeadlessChromeContext(t)
 			var commandCleared, auxInactive bool
 			var activeButtons int
-			if err := chromedp.Run(ctx,
+			if err := chromedp.Do(ctx,
 				chromedp.Navigate(server.URL+"/fixture"),
-				chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-				chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-				chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
-				chromedp.Evaluate(fmt.Sprintf(`window.renderStatus(%q, %q, false, 'speaker', 100)`, transition.source, transition.account), nil),
-				chromedp.Poll(`document.querySelector('.source-command-status').textContent === ''`, nil),
-				chromedp.Evaluate(`document.querySelector('.source-command-status').textContent === ''`, &commandCleared),
-				chromedp.Evaluate(`!document.querySelector('.source-btn:nth-child(1)').classList.contains('active')`, &auxInactive),
-				chromedp.Evaluate(`document.querySelectorAll('.source-btn.active').length`, &activeButtons),
+				chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+				chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+				chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
+				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`window.renderStatus(%q, %q, false, 'speaker', 100)`, transition.source, transition.account)),
+				chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === ''`),
+				evalInto(`document.querySelector('.source-command-status').textContent === ''`, &commandCleared),
+				evalInto(`!document.querySelector('.source-btn:nth-child(1)').classList.contains('active')`, &auxInactive),
+				evalInto(`document.querySelectorAll('.source-btn.active').length`, &activeButtons),
 			); err != nil {
 				t.Fatalf("apply later authoritative source: %v", err)
 			}
@@ -3081,13 +3075,13 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var title string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.track-title')?.textContent === 'Confirmed track'`, nil),
-		chromedp.Text(`.track-title`, &title, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selected'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.track-title')?.textContent === 'Confirmed track'`),
+		textInto(chromedp.CSS(`.track-title`), &title),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
 	); err != nil {
 		t.Fatalf("publish source readback through app state: %v", err)
 	}
@@ -3115,13 +3109,13 @@ func TestSourceSelectionResetsWhenDeviceChanges(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Evaluate(`window.renderStatus('STANDBY', '', false, 'other-speaker')`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
+		chromedp.Evaluate[chromedp.Void](`window.renderStatus('STANDBY', '', false, 'other-speaker')`),
 		chromedp.Sleep(600*time.Millisecond),
-		chromedp.Text(`.source-command-status`, &statusText, chromedp.ByQuery),
+		textInto(chromedp.CSS(`.source-command-status`), &statusText),
 	); err != nil {
 		t.Fatalf("switch source component device: %v", err)
 	}
@@ -3179,16 +3173,16 @@ func TestSourceSelectionFencesOlderReadbackAndStatus(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	var outcome, productClass string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Click(`.source-btn:nth-child(1)`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Sleep(140*time.Millisecond),
-		chromedp.Click(`.source-btn:nth-child(2)`, chromedp.ByQuery),
-		chromedp.Evaluate(`window.renderStatus('AUX', 'AUX1')`, nil),
-		chromedp.Poll(`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`, nil),
-		chromedp.Text(`.source-command-status`, &outcome, chromedp.ByQuery),
-		chromedp.AttributeValue(`.source-btn:nth-child(2)`, "class", &productClass, nil, chromedp.ByQuery),
+		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(2)`)),
+		chromedp.Evaluate[chromedp.Void](`window.renderStatus('AUX', 'AUX1')`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`),
+		textInto(chromedp.CSS(`.source-command-status`), &outcome),
+		attrInto(chromedp.CSS(`.source-btn:nth-child(2)`), "class", &productClass),
 	); err != nil {
 		t.Fatalf("exercise source generation fence: %v", err)
 	}
@@ -3220,17 +3214,17 @@ func TestStaleSourcesRemainVisibleButCannotBeSelected(t *testing.T) {
 	var sourceCount, disabledCount int
 	var staleText, staleRole string
 	var described bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.source-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`window.renderStatus('STANDBY', '', true)`, nil),
-		chromedp.WaitVisible(`#source-stale-status`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll('.source-btn').length`, &sourceCount),
-		chromedp.Evaluate(`document.querySelectorAll('.source-btn:disabled').length`, &disabledCount),
-		chromedp.Text(`#source-stale-status`, &staleText, chromedp.ByQuery),
-		chromedp.AttributeValue(`#source-stale-status`, "role", &staleRole, nil, chromedp.ByQuery),
-		chromedp.Evaluate(`[...document.querySelectorAll('.source-btn')].every(button => button.getAttribute('aria-describedby') === 'source-stale-status')`, &described),
-		chromedp.Evaluate(`document.querySelector('.source-btn').click()`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
+		chromedp.Evaluate[chromedp.Void](`window.renderStatus('STANDBY', '', true)`),
+		chromedp.WaitVisible(chromedp.CSS(`#source-stale-status`)),
+		evalInto(`document.querySelectorAll('.source-btn').length`, &sourceCount),
+		evalInto(`document.querySelectorAll('.source-btn:disabled').length`, &disabledCount),
+		textInto(chromedp.CSS(`#source-stale-status`), &staleText),
+		attrInto(chromedp.CSS(`#source-stale-status`), "role", &staleRole),
+		evalInto(`[...document.querySelectorAll('.source-btn')].every(button => button.getAttribute('aria-describedby') === 'source-stale-status')`, &described),
+		chromedp.Evaluate[chromedp.Void](`document.querySelector('.source-btn').click()`),
 		chromedp.Sleep(50*time.Millisecond),
 	); err != nil {
 		t.Fatalf("render stale source cache: %v", err)
@@ -3251,11 +3245,11 @@ func TestStaleSourcesRemainVisibleButCannotBeSelected(t *testing.T) {
 
 	var enabledCount int
 	var staleIndicatorMissing bool
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`window.renderStatus('STANDBY', '', false)`, nil),
-		chromedp.Poll(`document.querySelectorAll('.source-btn:disabled').length === 0`, nil),
-		chromedp.Evaluate(`document.querySelectorAll('.source-btn:not(:disabled)').length`, &enabledCount),
-		chromedp.Evaluate(`document.querySelector('#source-stale-status') === null`, &staleIndicatorMissing),
+	if err := chromedp.Do(ctx,
+		chromedp.Evaluate[chromedp.Void](`window.renderStatus('STANDBY', '', false)`),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.source-btn:disabled').length === 0`),
+		evalInto(`document.querySelectorAll('.source-btn:not(:disabled)').length`, &enabledCount),
+		evalInto(`document.querySelector('#source-stale-status') === null`, &staleIndicatorMissing),
 	); err != nil {
 		t.Fatalf("render refreshed source cache: %v", err)
 	}
@@ -3264,15 +3258,15 @@ func TestStaleSourcesRemainVisibleButCannotBeSelected(t *testing.T) {
 	}
 
 	var emptyInventoryHidden, staleEmptyAnnounced bool
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`window.renderStatus('STANDBY', '', false, 'speaker', null, [])`, nil),
-		chromedp.Poll(`document.querySelector('.sources-section') === null`, nil),
-		chromedp.Evaluate(`document.querySelector('.sources-section') === null`, &emptyInventoryHidden),
+	if err := chromedp.Do(ctx,
+		chromedp.Evaluate[chromedp.Void](`window.renderStatus('STANDBY', '', false, 'speaker', null, [])`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.sources-section') === null`),
+		evalInto(`document.querySelector('.sources-section') === null`, &emptyInventoryHidden),
 		// A stale empty inventory still has something to say: we know the list
 		// is untrustworthy, as opposed to simply not having read one yet.
-		chromedp.Evaluate(`window.renderStatus('STANDBY', '', true, 'speaker', null, [])`, nil),
-		chromedp.WaitVisible(`#source-stale-status`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('#source-stale-status').textContent.trim() === 'Source list out of date'`, &staleEmptyAnnounced),
+		chromedp.Evaluate[chromedp.Void](`window.renderStatus('STANDBY', '', true, 'speaker', null, [])`),
+		chromedp.WaitVisible(chromedp.CSS(`#source-stale-status`)),
+		evalInto(`document.querySelector('#source-stale-status').textContent.trim() === 'Source list out of date'`, &staleEmptyAnnounced),
 	); err != nil {
 		t.Fatalf("render missing source inventory: %v", err)
 	}
@@ -3329,31 +3323,31 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var trackStarTitle string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#library .tunein-item`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-item`)),
 		// The first list is the registered servers; open it to get the rows.
-		chromedp.Click(`#library .tunein-item`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#library .library-preset-btn`, chromedp.ByQuery),
+		chromedp.Click(chromedp.CSS(`#library .tunein-item`)),
+		chromedp.WaitVisible(chromedp.CSS(`#library .library-preset-btn`)),
 
 		// Row 1 is the folder: save it to slot 4 and wait for the ✓.
-		chromedp.Click(`#library .tunein-item:nth-child(1) .library-preset-btn`, chromedp.ByQuery),
-		chromedp.Click(`#library .tunein-item:nth-child(1) .preset-picker-slot:nth-child(4)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#library .tunein-item:nth-child(1) .preset-picker-slot.saved')?.textContent === '✓'`, nil),
+		chromedp.Click(chromedp.CSS(`#library .tunein-item:nth-child(1) .library-preset-btn`)),
+		chromedp.Click(chromedp.CSS(`#library .tunein-item:nth-child(1) .preset-picker-slot:nth-child(4)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#library .tunein-item:nth-child(1) .preset-picker-slot.saved')?.textContent === '✓'`),
 
 		// Row 2 is a single track, and it already occupies slot 3, so its star
 		// is marked and says which slot without the popover being opened.
-		chromedp.Evaluate(`document.querySelector('#library .tunein-item:nth-child(2) .library-preset-btn').title`, &trackStarTitle),
-		chromedp.Click(`#library .tunein-item:nth-child(2) .library-preset-btn`, chromedp.ByQuery),
-		chromedp.Click(`#library .tunein-item:nth-child(2) .preset-picker-slot:nth-child(1)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#library .tunein-item:nth-child(2) .preset-picker-slot.saved') !== null`, nil),
+		evalInto(`document.querySelector('#library .tunein-item:nth-child(2) .library-preset-btn').title`, &trackStarTitle),
+		chromedp.Click(chromedp.CSS(`#library .tunein-item:nth-child(2) .library-preset-btn`)),
+		chromedp.Click(chromedp.CSS(`#library .tunein-item:nth-child(2) .preset-picker-slot:nth-child(1)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#library .tunein-item:nth-child(2) .preset-picker-slot.saved') !== null`),
 	); err != nil {
 		t.Fatalf("save library rows as presets: %v", err)
 	}
 
 	var mappedClass bool
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`document.querySelector('#library .tunein-item:nth-child(2) .library-preset-btn').classList.contains('mapped')`, &mappedClass),
+	if err := chromedp.Do(ctx,
+		evalInto(`document.querySelector('#library .tunein-item:nth-child(2) .library-preset-btn').classList.contains('mapped')`, &mappedClass),
 	); err != nil {
 		t.Fatalf("read mapped star: %v", err)
 	}
@@ -3415,14 +3409,14 @@ render(h(NowPlaying, { nowPlaying, deviceId: 'speaker', presets }), document.get
 	ctx := newHeadlessChromeContext(t)
 	var starTitle string
 	var mapped bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`.now-playing-fav-btn`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('.now-playing-fav-btn').title`, &starTitle),
-		chromedp.Evaluate(`document.querySelector('.now-playing-fav-btn').classList.contains('mapped')`, &mapped),
-		chromedp.Click(`.now-playing-fav-btn`, chromedp.ByQuery),
-		chromedp.Click(`.preset-picker-slot:nth-child(5)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.preset-picker-slot.saved')?.textContent === '✓'`, nil),
+		chromedp.WaitVisible(chromedp.CSS(`.now-playing-fav-btn`)),
+		evalInto(`document.querySelector('.now-playing-fav-btn').title`, &starTitle),
+		evalInto(`document.querySelector('.now-playing-fav-btn').classList.contains('mapped')`, &mapped),
+		chromedp.Click(chromedp.CSS(`.now-playing-fav-btn`)),
+		chromedp.Click(chromedp.CSS(`.preset-picker-slot:nth-child(5)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.preset-picker-slot.saved')?.textContent === '✓'`),
 	); err != nil {
 		t.Fatalf("save the now-playing content as a preset: %v", err)
 	}
@@ -3497,13 +3491,13 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var firstCount int
 	var firstLabel string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#library .tunein-item`, chromedp.ByQuery),
-		chromedp.Click(`#library .tunein-item`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#library .library-more`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &firstCount),
-		chromedp.Text(`#library .library-more .tunein-item-desc`, &firstLabel, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-item`)),
+		chromedp.Click(chromedp.CSS(`#library .tunein-item`)),
+		chromedp.WaitVisible(chromedp.CSS(`#library .library-more`)),
+		evalInto(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &firstCount),
+		textInto(chromedp.CSS(`#library .library-more .tunein-item-desc`), &firstLabel),
 	); err != nil {
 		t.Fatalf("browse the first page: %v", err)
 	}
@@ -3514,14 +3508,14 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	var total int
 	var moreGone bool
-	if err := chromedp.Run(ctx,
-		chromedp.Click(`#library .library-more button`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelectorAll('#library .tunein-list .tunein-item').length === 6`, nil),
-		chromedp.Click(`#library .library-more button`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelectorAll('#library .tunein-list .tunein-item').length === 7`, nil),
-		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &total),
+	if err := chromedp.Do(ctx,
+		chromedp.Click(chromedp.CSS(`#library .library-more button`)),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('#library .tunein-list .tunein-item').length === 6`),
+		chromedp.Click(chromedp.CSS(`#library .library-more button`)),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('#library .tunein-list .tunein-item').length === 7`),
+		evalInto(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &total),
 		// Everything is listed, so the row that offers more is gone.
-		chromedp.Evaluate(`document.querySelector('#library .library-more') === null`, &moreGone),
+		evalInto(`document.querySelector('#library .library-more') === null`, &moreGone),
 	); err != nil {
 		t.Fatalf("page through the folder: %v", err)
 	}
@@ -3533,10 +3527,10 @@ render(h(Fixture), document.getElementById('fixture'));
 	// Browsing into a row must start a fresh listing rather than appending to
 	// the folder we were in.
 	var afterDescend int
-	if err := chromedp.Run(ctx,
-		chromedp.Click(`#library .tunein-list .tunein-item`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelectorAll('#library .tunein-list .tunein-item').length === 3`, nil),
-		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &afterDescend),
+	if err := chromedp.Do(ctx,
+		chromedp.Click(chromedp.CSS(`#library .tunein-list .tunein-item`)),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('#library .tunein-list .tunein-item').length === 3`),
+		evalInto(`document.querySelectorAll('#library .tunein-list .tunein-item').length`, &afterDescend),
 	); err != nil {
 		t.Fatalf("browse into a row after paging: %v", err)
 	}
@@ -3606,13 +3600,13 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	var emptyNote string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#library .tunein-toolbar`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-toolbar`)),
 		// First refresh: still nothing, and the UI says where to go next.
-		chromedp.Evaluate(`[...document.querySelectorAll('#library .tunein-toolbar button')].find(b => b.textContent.trim() === 'Refresh').click()`, nil),
-		chromedp.WaitVisible(`#library .library-refresh-note`, chromedp.ByQuery),
-		chromedp.Text(`#library .library-refresh-note`, &emptyNote, chromedp.ByQuery),
+		chromedp.Evaluate[chromedp.Void](`[...document.querySelectorAll('#library .tunein-toolbar button')].find(b => b.textContent.trim() === 'Refresh').click()`),
+		chromedp.WaitVisible(chromedp.CSS(`#library .library-refresh-note`)),
+		textInto(chromedp.CSS(`#library .library-refresh-note`), &emptyNote),
 	); err != nil {
 		t.Fatalf("refresh with nothing registered: %v", err)
 	}
@@ -3623,12 +3617,12 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	var foundNote string
 	var serverRows int
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		// Second refresh: the speaker has it again, so it is listed.
-		chromedp.Evaluate(`[...document.querySelectorAll('#library .tunein-toolbar button')].find(b => b.textContent.trim() === 'Refresh').click()`, nil),
-		chromedp.Poll(`document.querySelectorAll('#library .tunein-item').length === 1`, nil),
-		chromedp.Evaluate(`document.querySelectorAll('#library .tunein-item').length`, &serverRows),
-		chromedp.Text(`#library .library-refresh-note`, &foundNote, chromedp.ByQuery),
+		chromedp.Evaluate[chromedp.Void](`[...document.querySelectorAll('#library .tunein-toolbar button')].find(b => b.textContent.trim() === 'Refresh').click()`),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('#library .tunein-item').length === 1`),
+		evalInto(`document.querySelectorAll('#library .tunein-item').length`, &serverRows),
+		textInto(chromedp.CSS(`#library .library-refresh-note`), &foundNote),
 	); err != nil {
 		t.Fatalf("refresh that finds the server: %v", err)
 	}

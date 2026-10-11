@@ -83,7 +83,7 @@ func main() {
 	browserCtx, cancelBrowser := chromedp.NewContext(allocCtx)
 	defer cancelBrowser()
 
-	if err := chromedp.Run(browserCtx); err != nil {
+	if err := chromedp.Do(browserCtx); err != nil {
 		log.Fatalf("launch browser: %v", err)
 	}
 
@@ -150,39 +150,40 @@ func capture(parent context.Context, baseURL, outDir string, sh shot, timeout ti
 
 	url := baseURL + sh.Path
 
-	actions := []chromedp.Action{
+	actions := []chromedp.Action[chromedp.Void]{
 		chromedp.EmulateViewport(int64(w), int64(h), chromedp.EmulateScale(scale)),
 		chromedp.Navigate(url),
-		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.WaitReady(chromedp.CSS("body")),
 	}
 
 	if sh.ClickSelector != "" {
 		actions = append(actions,
-			chromedp.WaitVisible(sh.ClickSelector, chromedp.ByQuery),
-			chromedp.Click(sh.ClickSelector, chromedp.ByQuery),
+			chromedp.WaitVisible(chromedp.CSS(sh.ClickSelector)),
+			chromedp.Click(chromedp.CSS(sh.ClickSelector)),
 		)
 	}
 
 	if sh.WaitSelector != "" {
-		actions = append(actions, chromedp.WaitVisible(sh.WaitSelector, chromedp.ByQuery))
+		actions = append(actions, chromedp.WaitVisible(chromedp.CSS(sh.WaitSelector)))
 	}
 
 	if sh.Evaluate != "" {
-		actions = append(actions, chromedp.Evaluate(sh.Evaluate, nil))
+		actions = append(actions, chromedp.Evaluate[chromedp.Void](sh.Evaluate))
 	}
 
 	if sh.WaitAfterEval != "" {
-		actions = append(actions, chromedp.WaitVisible(sh.WaitAfterEval, chromedp.ByQuery))
+		actions = append(actions, chromedp.WaitVisible(chromedp.CSS(sh.WaitAfterEval)))
 	}
 
 	actions = append(actions, chromedp.Sleep(settle))
 
-	var buf []byte
-
-	actions = append(actions, chromedp.FullScreenshot(&buf, 100))
-
-	if err := chromedp.Run(tabCtx, actions...); err != nil {
+	if err := chromedp.Do(tabCtx, actions...); err != nil {
 		return fmt.Errorf("chromedp: %w", err)
+	}
+
+	buf, err := chromedp.Run(tabCtx, chromedp.FullScreenshot(100))
+	if err != nil {
+		return fmt.Errorf("screenshot: %w", err)
 	}
 
 	outPath := filepath.Join(outDir, sh.Name+".png")

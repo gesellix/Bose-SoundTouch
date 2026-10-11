@@ -33,12 +33,12 @@ func TestZoneMembersOpenFullDeviceDetailWithoutTopologyMutation(t *testing.T) {
 	server, zoneMutations := newZoneMemberNavigationServer(t, app)
 	ctx := newHeadlessChromeContext(t)
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(".zone-card", chromedp.ByQuery),
-		chromedp.Click(".zone-card", chromedp.ByQuery),
-		chromedp.WaitVisible(".zone-member-details > summary", chromedp.ByQuery),
-		chromedp.Click(".zone-member-details > summary", chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(".zone-card")),
+		chromedp.Click(chromedp.CSS(".zone-card")),
+		chromedp.WaitVisible(chromedp.CSS(".zone-member-details > summary")),
+		chromedp.Click(chromedp.CSS(".zone-member-details > summary")),
 	); err != nil {
 		t.Fatalf("open zone detail: %v", err)
 	}
@@ -63,22 +63,22 @@ func TestZoneMemberNavigationFollowsSiblingsAndRetracesBack(t *testing.T) {
 	server, zoneMutations := newZoneMemberNavigationServer(t, app)
 	ctx := newHeadlessChromeContext(t)
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(".zone-card", chromedp.ByQuery),
-		chromedp.Click(".zone-card", chromedp.ByQuery),
-		chromedp.WaitVisible(".zone-member-details > summary", chromedp.ByQuery),
-		chromedp.Click(".zone-member-details > summary", chromedp.ByQuery),
-		chromedp.Poll(`!document.querySelector('button.zone-member-open[aria-label="Open details for Atrium"]')`, nil),
+		chromedp.WaitVisible(chromedp.CSS(".zone-card")),
+		chromedp.Click(chromedp.CSS(".zone-card")),
+		chromedp.WaitVisible(chromedp.CSS(".zone-member-details > summary")),
+		chromedp.Click(chromedp.CSS(".zone-member-details > summary")),
+		chromedp.Poll[chromedp.Void](`!document.querySelector('button.zone-member-open[aria-label="Open details for Atrium"]')`),
 	); err != nil {
 		t.Fatalf("open zone detail without a self row button: %v", err)
 	}
 
 	openZoneMemberAndWait(t, ctx, "Breakfast Room", `document.querySelector('.zone-member-details > summary') !== null`)
-	if err := chromedp.Run(ctx,
-		chromedp.Click(".zone-member-details > summary", chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('button.zone-member-open[aria-label="Open details for Living Pair"]') &&
-			!document.querySelector('button.zone-member-open[aria-label="Open details for Breakfast Room"]')`, nil),
+	if err := chromedp.Do(ctx,
+		chromedp.Click(chromedp.CSS(".zone-member-details > summary")),
+		chromedp.Poll[chromedp.Void](`document.querySelector('button.zone-member-open[aria-label="Open details for Living Pair"]') &&
+			!document.querySelector('button.zone-member-open[aria-label="Open details for Breakfast Room"]')`),
 	); err != nil {
 		t.Fatalf("member page did not offer its siblings: %v", err)
 	}
@@ -91,17 +91,17 @@ func TestZoneMemberNavigationFollowsSiblingsAndRetracesBack(t *testing.T) {
 			button.textContent.includes('Remove from AfterTouch'))`)
 
 	for _, want := range []string{"Breakfast Room", "Atrium"} {
-		if err := chromedp.Run(ctx,
-			chromedp.Click(".device-detail .back-btn", chromedp.ByQuery),
-			chromedp.Poll(fmt.Sprintf(`document.querySelector('.page-title')?.textContent.includes(%q)`, want), nil),
+		if err := chromedp.Do(ctx,
+			chromedp.Click(chromedp.CSS(".device-detail .back-btn")),
+			chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector('.page-title')?.textContent.includes(%q)`, want)),
 		); err != nil {
 			t.Fatalf("back did not return to %q: %v", want, err)
 		}
 	}
 
-	if err := chromedp.Run(ctx,
-		chromedp.Click(".device-detail .back-btn", chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('.page-title')?.textContent.trim() === 'Devices'`, nil),
+	if err := chromedp.Do(ctx,
+		chromedp.Click(chromedp.CSS(".device-detail .back-btn")),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.page-title')?.textContent.trim() === 'Devices'`),
 	); err != nil {
 		t.Fatalf("back from the first detail page did not return to the device list: %v", err)
 	}
@@ -121,20 +121,20 @@ func TestZoneMemberLeaveShowsErrorAfterTopologyEventWithoutDoubleWrite(t *testin
 	mutations.beforeLeave = func() { close(started); <-release }
 	ctx := newHeadlessChromeContext(t)
 	var sameDocument bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
-		chromedp.WaitVisible(".zone-card", chromedp.ByQuery),
-		chromedp.Click(".zone-card", chromedp.ByQuery),
-		chromedp.WaitVisible(".zone-member-details > summary", chromedp.ByQuery),
-		chromedp.Click(".zone-member-details > summary", chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(".zone-card")),
+		chromedp.Click(chromedp.CSS(".zone-card")),
+		chromedp.WaitVisible(chromedp.CSS(".zone-member-details > summary")),
+		chromedp.Click(chromedp.CSS(".zone-member-details > summary")),
 	); err != nil {
 		t.Fatalf("open zone: %v", err)
 	}
 	openZoneMemberAndWait(t, ctx, "Breakfast Room", `Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === 'Leave zone')`)
-	if err := chromedp.Run(ctx,
-		chromedp.Evaluate(`window.__zoneDocument = true; const b = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Leave zone'); b.click(); b.click();`, nil),
-		chromedp.Poll(`Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === 'Leave zone' && b.disabled)`, nil),
-		chromedp.ActionFunc(func(ctx context.Context) error {
+	if err := chromedp.Do(ctx,
+		chromedp.Evaluate[chromedp.Void](`window.__zoneDocument = true; const b = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Leave zone'); b.click(); b.click();`),
+		chromedp.Poll[chromedp.Void](`Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === 'Leave zone' && b.disabled)`),
+		chromedp.Func(func(ctx context.Context, _ *chromedp.Target) error {
 			select {
 			case <-started:
 			case <-ctx.Done():
@@ -149,10 +149,10 @@ func TestZoneMemberLeaveShowsErrorAfterTopologyEventWithoutDoubleWrite(t *testin
 			app.BroadcastDeviceList()
 			return nil
 		}),
-		chromedp.Poll(`!!document.querySelector('.zone-section button[aria-label="Open details for Library"]')`, nil),
-		chromedp.ActionFunc(func(context.Context) error { releaseOnce.Do(func() { close(release) }); return nil }),
-		chromedp.Poll(`document.querySelector('[role="alert"]')?.textContent.includes('leave rejected')`, nil),
-		chromedp.Evaluate(`window.__zoneDocument === true`, &sameDocument),
+		chromedp.Poll[chromedp.Void](`!!document.querySelector('.zone-section button[aria-label="Open details for Library"]')`),
+		chromedp.Func(func(context.Context, *chromedp.Target) error { releaseOnce.Do(func() { close(release) }); return nil }),
+		chromedp.Poll[chromedp.Void](`document.querySelector('[role="alert"]')?.textContent.includes('leave rejected')`),
+		evalInto(`window.__zoneDocument === true`, &sameDocument),
 	); err != nil {
 		t.Fatalf("leave zone: %v", err)
 	}
@@ -165,10 +165,10 @@ func openZoneMemberAndWait(t *testing.T, ctx context.Context, name, condition st
 	t.Helper()
 
 	selector := fmt.Sprintf(`button.zone-member-open[aria-label=%q]`, "Open details for "+name)
-	if err := chromedp.Run(ctx,
-		chromedp.Click(selector, chromedp.ByQuery),
-		chromedp.Poll(fmt.Sprintf(`document.querySelector('.page-title')?.textContent.includes(%q) && (%s)`,
-			name, condition), nil),
+	if err := chromedp.Do(ctx,
+		chromedp.Click(chromedp.CSS(selector)),
+		chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector('.page-title')?.textContent.includes(%q) && (%s)`,
+			name, condition)),
 	); err != nil {
 		t.Fatalf("open %q device detail: %v", name, err)
 	}
@@ -177,11 +177,11 @@ func openZoneMemberAndWait(t *testing.T, ctx context.Context, name, condition st
 func returnToZone(t *testing.T, ctx context.Context, zoneName string) {
 	t.Helper()
 
-	if err := chromedp.Run(ctx,
-		chromedp.Click(".device-detail .back-btn", chromedp.ByQuery),
-		chromedp.Poll(fmt.Sprintf(`document.querySelector('.page-title')?.textContent.includes(%q) &&
-			document.querySelector('.zone-member-details > summary') !== null`, zoneName), nil),
-		chromedp.Click(".zone-member-details > summary", chromedp.ByQuery),
+	if err := chromedp.Do(ctx,
+		chromedp.Click(chromedp.CSS(".device-detail .back-btn")),
+		chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector('.page-title')?.textContent.includes(%q) &&
+			document.querySelector('.zone-member-details > summary') !== null`, zoneName)),
+		chromedp.Click(chromedp.CSS(".zone-member-details > summary")),
 	); err != nil {
 		t.Fatalf("return to %q zone detail: %v", zoneName, err)
 	}

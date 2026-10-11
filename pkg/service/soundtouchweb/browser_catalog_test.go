@@ -69,29 +69,29 @@ func TestPresetSlotFillsFromTheCatalog(t *testing.T) {
 	var occupiedMeta string
 	var filtered int
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.Click(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
 
 		// Wait for the list itself, not just the panel: the entries arrive
 		// with the catalog fetch, and clicking before they render would hit a
 		// node that is about to be replaced.
-		chromedp.WaitVisible(`#presets .catalog-entry`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-entry`)),
 
 		// The entry that already occupies slot 1 is listed, and says so.
-		chromedp.Evaluate(`Array.from(document.querySelectorAll('#presets .catalog-entry-meta'))
+		evalInto(`Array.from(document.querySelectorAll('#presets .catalog-entry-meta'))
 			.map(e => e.textContent).find(t => t.includes('WDR 2') || t.includes('TuneIn')) || ''`, &occupiedMeta),
 
 		// The filter narrows the list rather than reloading it.
-		chromedp.SendKeys(`#presets .catalog-picker-filter`, "FM4", chromedp.ByQuery),
-		chromedp.Poll(`document.querySelectorAll('#presets .catalog-entry').length === 1`, nil),
-		chromedp.Evaluate(`document.querySelectorAll('#presets .catalog-entry').length`, &filtered),
+		chromedp.SendKeys(chromedp.CSS(`#presets .catalog-picker-filter`), "FM4"),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('#presets .catalog-entry').length === 1`),
+		evalInto(`document.querySelectorAll('#presets .catalog-entry').length`, &filtered),
 
-		chromedp.Click(`#presets .catalog-entry`, chromedp.ByQuery),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-entry`)),
 
 		// A filled slot closes the picker.
-		chromedp.Poll(`document.querySelector('#presets .catalog-picker') === null`, nil),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .catalog-picker') === null`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -133,15 +133,15 @@ func TestCatalogPickerSaysWhenThereIsNoCatalog(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 
 	var note string
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.Click(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
 		// Poll for the settled note rather than the first one: the panel shows
 		// "Loading…" in the same element while the catalog request is in
 		// flight, so reading it straight away races the fetch.
-		chromedp.Poll(`!document.querySelector('#presets .catalog-picker-note')?.textContent.includes('Loading')`, nil),
-		chromedp.Text(`#presets .catalog-picker-note`, &note, chromedp.ByQuery),
+		chromedp.Poll[chromedp.Void](`!document.querySelector('#presets .catalog-picker-note')?.textContent.includes('Loading')`),
+		textInto(chromedp.CSS(`#presets .catalog-picker-note`), &note),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -182,24 +182,24 @@ func TestPresetSlotClearsWithConfirmation(t *testing.T) {
 	var emptySlotOffersClear bool
 	var confirmText string
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 
 		// Slot 2 is empty in the fixture: there is nothing to empty, so the
 		// action is not offered at all.
-		chromedp.WaitVisible(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.Click(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .catalog-entry`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelector('#presets .catalog-clear-btn') !== null`, &emptySlotOffersClear),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-entry`)),
+		evalInto(`document.querySelector('#presets .catalog-clear-btn') !== null`, &emptySlotOffersClear),
 
 		// Slot 1 holds WDR 2.
-		chromedp.Click(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .catalog-clear-btn`, chromedp.ByQuery),
-		chromedp.Click(`#presets .catalog-clear-btn`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .catalog-picker-confirm`, chromedp.ByQuery),
-		chromedp.Text(`#presets .catalog-picker-foot .catalog-picker-note`, &confirmText, chromedp.ByQuery),
-		chromedp.Click(`#presets .catalog-picker-confirm .catalog-clear-btn.danger`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#presets .catalog-picker') === null`, nil),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-clear-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-clear-btn`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-picker-confirm`)),
+		textInto(chromedp.CSS(`#presets .catalog-picker-foot .catalog-picker-note`), &confirmText),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-picker-confirm .catalog-clear-btn.danger`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .catalog-picker') === null`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -252,30 +252,30 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
 
 		// Slot 1 holds WDR 2. Rename it.
-		chromedp.WaitVisible(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.Click(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .catalog-rename-input`, chromedp.ByQuery),
-		chromedp.Evaluate(`(() => {
+		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-rename-input`)),
+		chromedp.Evaluate[chromedp.Void](`(() => {
 			const input = document.querySelector('#presets .catalog-rename-input');
 			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
 			setter.call(input, 'WDR 2 Rheinland');
 			input.dispatchEvent(new Event('input', { bubbles: true }));
 			return true;
-		})()`, nil),
-		chromedp.Poll(`!document.querySelector('#presets .catalog-action-btn').disabled`, nil),
-		chromedp.Click(`#presets .catalog-action-btn`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#presets .catalog-picker') === null`, nil),
+		})()`),
+		chromedp.Poll[chromedp.Void](`!document.querySelector('#presets .catalog-action-btn').disabled`),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-action-btn`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .catalog-picker') === null`),
 
 		// Move slot 1 to the empty slot 3: no confirmation, since nothing
 		// would be replaced.
-		chromedp.Click(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .catalog-move-slots`, chromedp.ByQuery),
-		chromedp.Click(`#presets .catalog-move-slot:nth-child(2)`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#presets .catalog-picker') === null`, nil),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-move-slots`)),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-move-slot:nth-child(2)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .catalog-picker') === null`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -359,20 +359,20 @@ render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status 
 	var marked int
 	var markedName, warning string
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.Click(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`, chromedp.ByQuery),
-		chromedp.WaitVisible(`#presets .catalog-entry`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-entry`)),
 
 		// Exactly the one entry whose account this speaker lacks.
-		chromedp.Evaluate(`document.querySelectorAll('#presets .catalog-entry.unavailable').length`, &marked),
-		chromedp.Text(`#presets .catalog-entry.unavailable .catalog-entry-name`, &markedName, chromedp.ByQuery),
-		chromedp.Text(`#presets .catalog-entry-warn`, &warning, chromedp.ByQuery),
+		evalInto(`document.querySelectorAll('#presets .catalog-entry.unavailable').length`, &marked),
+		textInto(chromedp.CSS(`#presets .catalog-entry.unavailable .catalog-entry-name`), &markedName),
+		textInto(chromedp.CSS(`#presets .catalog-entry-warn`), &warning),
 
 		// Still clickable: the service decides against a fresh source list.
-		chromedp.Click(`#presets .catalog-entry.unavailable`, chromedp.ByQuery),
-		chromedp.Poll(`document.querySelector('#presets .catalog-picker') === null`, nil),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-entry.unavailable`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .catalog-picker') === null`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -439,12 +439,12 @@ render(h('section', { id: 'sources' }, h(Sources, {
 	var rows int
 	var first, second string
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#sources .sources-elsewhere-row`, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll('#sources .sources-elsewhere-row').length`, &rows),
-		chromedp.Text(`#sources .sources-elsewhere-row:nth-child(1)`, &first, chromedp.ByQuery),
-		chromedp.Text(`#sources .sources-elsewhere-row:nth-child(2)`, &second, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#sources .sources-elsewhere-row`)),
+		evalInto(`document.querySelectorAll('#sources .sources-elsewhere-row').length`, &rows),
+		textInto(chromedp.CSS(`#sources .sources-elsewhere-row:nth-child(1)`), &first),
+		textInto(chromedp.CSS(`#sources .sources-elsewhere-row:nth-child(2)`), &second),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -490,11 +490,11 @@ render(h('section', { id: 'sources' }, h(Sources, {
 	ctx := newHeadlessChromeContext(t)
 
 	var shown bool
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#sources .source-btn`, chromedp.ByQuery),
-		chromedp.Poll(`performance.getEntriesByType('resource').some(e => e.name.includes('sources-elsewhere'))`, nil),
-		chromedp.Evaluate(`document.querySelector('#sources .sources-elsewhere') !== null`, &shown),
+		chromedp.WaitVisible(chromedp.CSS(`#sources .source-btn`)),
+		chromedp.Poll[chromedp.Void](`performance.getEntriesByType('resource').some(e => e.name.includes('sources-elsewhere'))`),
+		evalInto(`document.querySelector('#sources .sources-elsewhere') !== null`, &shown),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
@@ -564,18 +564,18 @@ render(h('section', { id: 'sources' }, h(Sources, {
 
 	var buttons int
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/fixture"),
-		chromedp.WaitVisible(`#sources .sources-elsewhere-add`, chromedp.ByQuery),
+		chromedp.WaitVisible(chromedp.CSS(`#sources .sources-elsewhere-add`)),
 
 		// Only the media server offers to be added; a music service cannot be
 		// given to a speaker, so offering a button would be a lie.
-		chromedp.Evaluate(`document.querySelectorAll('#sources .sources-elsewhere-add').length`, &buttons),
+		evalInto(`document.querySelectorAll('#sources .sources-elsewhere-add').length`, &buttons),
 
-		chromedp.Click(`#sources .sources-elsewhere-add`, chromedp.ByQuery),
+		chromedp.Click(chromedp.CSS(`#sources .sources-elsewhere-add`)),
 
 		// The list is re-read, so what was added is no longer "elsewhere".
-		chromedp.Poll(`document.querySelectorAll('#sources .sources-elsewhere-row').length === 1`, nil),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('#sources .sources-elsewhere-row').length === 1`),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}
