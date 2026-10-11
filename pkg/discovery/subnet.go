@@ -142,6 +142,10 @@ func ScanSubnets(ctx context.Context, prefixes []netip.Prefix, opts SubnetScanOp
 			defer wg.Done()
 
 			for h := range jobs {
+				if ctx.Err() != nil {
+					continue
+				}
+
 				probed.Add(1)
 
 				if d := probeInfo(ctx, client, h, opts); d != nil {
@@ -244,7 +248,10 @@ func probeInfo(ctx context.Context, client *http.Client, host netip.Addr, opts S
 func parseInfo(body []byte) (*models.DeviceInfo, error) {
 	dec := xml.NewDecoder(bytes.NewReader(body))
 
-	var info models.DeviceInfo
+	var (
+		info   models.DeviceInfo
+		offset int64
+	)
 
 	for first := true; ; first = false {
 		tok, err := dec.Token()
@@ -252,17 +259,23 @@ func parseInfo(body []byte) (*models.DeviceInfo, error) {
 			return nil, err
 		}
 
+		next := dec.InputOffset()
+
 		if start, ok := tok.(xml.StartElement); ok {
 			if err := dec.DecodeElement(&info, &start); err != nil {
 				return nil, err
 			}
 
+			offset = dec.InputOffset()
+
 			break
 		}
 
-		if err := checkOutsideRoot(tok, first); err != nil {
+		if err := checkOutsideRoot(tok, body[offset:next], first); err != nil {
 			return nil, err
 		}
+
+		offset = next
 	}
 
 	for {
@@ -275,9 +288,13 @@ func parseInfo(body []byte) (*models.DeviceInfo, error) {
 			return nil, err
 		}
 
-		if err := checkOutsideRoot(tok, false); err != nil {
+		next := dec.InputOffset()
+
+		if err := checkOutsideRoot(tok, body[offset:next], false); err != nil {
 			return nil, err
 		}
+
+		offset = next
 	}
 
 	info.DeviceID = strings.TrimSpace(info.DeviceID)
@@ -358,7 +375,7 @@ func dedupePrefixes(in []netip.Prefix) []netip.Prefix {
 
 // checkOutsideRoot rejects anything but whitespace, comments and, as the very
 // first token, the XML declaration.
-func checkOutsideRoot(tok xml.Token, first bool) error {
+func checkOutsideRoot(tok xml.Token, raw []byte, first bool) error {
 	switch t := tok.(type) {
 	case xml.Comment:
 		return nil
@@ -369,8 +386,12 @@ func checkOutsideRoot(tok xml.Token, first bool) error {
 
 		return errors.New("unexpected processing instruction")
 	case xml.CharData:
-		if len(bytes.TrimSpace(t)) > 0 {
-			return errors.New("unexpected text outside root element")
+		_ = t // Decoder presents CDATA as CharData; validate the raw bytes instead.
+
+		for _, c := range raw {
+			if c != ' ' && c != '	' && c != '\r' && c != '\n' {
+				return errors.New("unexpected text outside root element")
+			}
 		}
 
 		return nil

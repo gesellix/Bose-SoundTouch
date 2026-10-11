@@ -350,22 +350,25 @@ func TestParseInfo_SingleDocument(t *testing.T) {
 	const root = `<info deviceID="DEVICEID01"/>`
 
 	bad := map[string]string{
-		"second root":        root + `<other/>`,
-		"second info":        root + root,
-		"trailing text":      root + "garbage",
-		"trailing text ws":   root + "\n garbage \n",
-		"trailing cdata":     root + "<![CDATA[x]]>",
-		"trailing close tag": root + "</info>",
-		"trailing pi":        root + "<?pi x?>",
-		"leading text":       "garbage" + root,
-		"leading text ws":    " garbage \n" + root,
-		"leading cdata":      "<![CDATA[x]]>" + root,
-		"leading close tag":  "</info>" + root,
-		"decl after comment": "<!-- c -->" + `<?xml version="1.0"?>` + root,
-		"decl after ws":      "\n" + `<?xml version="1.0"?>` + root,
-		"decl after root":    root + `<?xml version="1.0"?>`,
-		"second decl":        `<?xml version="1.0"?><?xml version="1.0"?>` + root,
-		"other pi before":    `<?pi x?>` + root,
+		"second root":          root + `<other/>`,
+		"second info":          root + root,
+		"trailing text":        root + "garbage",
+		"trailing text ws":     root + "\n garbage \n",
+		"trailing cdata":       root + "<![CDATA[x]]>",
+		"trailing close tag":   root + "</info>",
+		"trailing pi":          root + "<?pi x?>",
+		"leading text":         "garbage" + root,
+		"leading text ws":      " garbage \n" + root,
+		"leading cdata":        "<![CDATA[x]]>" + root,
+		"leading blank cdata":  "<![CDATA[ ]]>" + root,
+		"trailing blank cdata": root + "<![CDATA[ ]]>",
+		"non-XML whitespace":   root + "\u00a0",
+		"leading close tag":    "</info>" + root,
+		"decl after comment":   "<!-- c -->" + `<?xml version="1.0"?>` + root,
+		"decl after ws":        "\n" + `<?xml version="1.0"?>` + root,
+		"decl after root":      root + `<?xml version="1.0"?>`,
+		"second decl":          `<?xml version="1.0"?><?xml version="1.0"?>` + root,
+		"other pi before":      `<?pi x?>` + root,
 	}
 	for name, body := range bad {
 		if _, err := parseInfo([]byte(body)); err == nil {
@@ -565,9 +568,9 @@ func TestScanSubnets_CancelLogsAttemptedProbes(t *testing.T) {
 		t.Fatalf("no hosts in %q", line)
 	}
 
-	n, _ := strconv.Atoi(m[1])
-	if n < 3 || n > 10 {
-		t.Errorf("hosts=%d, want about the 3 attempted probes", n)
+	n, err := strconv.Atoi(m[1])
+	if err != nil || n != int(calls.Load()) || !strings.Contains(line, "candidates=254") {
+		t.Errorf("logged hosts=%d, requests=%d, want equal; log=%q", n, calls.Load(), line)
 	}
 }
 
