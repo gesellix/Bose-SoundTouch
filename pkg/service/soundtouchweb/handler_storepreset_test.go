@@ -1,6 +1,9 @@
 package soundtouchweb
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gesellix/bose-soundtouch/pkg/dlna/dlnatest"
+	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 )
 
 // The /storePreset body shape below is not invented: it was measured against a
@@ -414,5 +418,52 @@ func TestStoredMusicArtLookupResolvesTheServerOnce(t *testing.T) {
 
 	if listings != 1 {
 		t.Errorf("listMediaServers calls = %d, want 1 (the resolved server is cached)", listings)
+	}
+}
+
+// TestHandleStorePresetContent_StoresPlaybackAdapterAsRelativeOrion: a catalog
+// pick in the older, host-bound playback adapter form goes to the speaker as a
+// relative Orion location, so the preset survives AfterTouch moving (issue
+// 784). The stream, name and artwork are kept.
+func TestHandleStorePresetContent_StoresPlaybackAdapterAsRelativeOrion(t *testing.T) {
+	speaker, captured := setupSpeakerMock(t, nil)
+	defer speaker.Close()
+
+	app := newLibraryTestApp(speaker.URL)
+
+	const stream = "https://stream.example.org/technikum.mp3"
+	adapter := "http://192.0.2.10:8000/custom/v1/playback/" + base64.StdEncoding.EncodeToString([]byte(stream)) + "?name=TechnikumCity"
+
+	body, err := json.Marshal(map[string]string{
+		"source":       "LOCAL_INTERNET_RADIO",
+		"type":         "stationurl",
+		"location":     adapter,
+		"itemName":     "TechnikumCity",
+		"containerArt": "https://img.example.org/logo.png",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/control/devices/lib-device/preset/6", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req = withChiParams(req, map[string]string{"id": "lib-device", "slot": "6"})
+	w := httptest.NewRecorder()
+
+	app.HandleStorePresetContent(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	storeXML := captured["/storePreset"]
+	want := bmxpkg.BuildOrionLocation("TechnikumCity", "https://img.example.org/logo.png", stream)
+
+	if !strings.Contains(storeXML, `location="`+html.EscapeString(want)+`"`) {
+		t.Errorf("storePreset XML should carry the relative Orion location %q, got:\n%s", want, storeXML)
+	}
+
+	if strings.Contains(storeXML, "/custom/v1/playback/") {
+		t.Errorf("storePreset XML still carries the host-bound location:\n%s", storeXML)
 	}
 }

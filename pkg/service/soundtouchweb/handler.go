@@ -922,6 +922,15 @@ func (app *WebApp) HandleStorePresetContent(w http.ResponseWriter, r *http.Reque
 		contentItem.ContainerArt = app.storedMusicArtURL(r.Context(), device, contentItem.SourceAccount, contentItem.Location)
 	}
 
+	// The older playback adapter location carries the service's address, so
+	// the preset would stop playing when AfterTouch moves. Store the station
+	// the way Play URL does, as a relative Orion location (issue 784).
+	if contentItem.Source == models.OrionLocalInternetRadioSource && !models.IsOrionStationLocation(contentItem.Location) {
+		if stream, ok := models.StationStreamURL(contentItem.Location); ok {
+			contentItem.Location = bmxpkg.BuildOrionLocation(contentItem.ItemName, contentItem.ContainerArt, stream)
+		}
+	}
+
 	logPlaybackRequest("store-preset", deviceID, contentItem.Source, contentItem.SourceAccount, contentItem.Location, contentItem.ItemName)
 
 	err = device.Client.StorePreset(slot, contentItem)
