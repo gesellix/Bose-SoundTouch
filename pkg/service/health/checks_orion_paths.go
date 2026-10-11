@@ -11,6 +11,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
@@ -235,11 +236,29 @@ func effectivePort(u *url.URL) string {
 	return "80"
 }
 
-// classifyOrionLocation reports the kind of an Orion station location, its
-// host (for absolute ones) and its relative form. ok is false for anything
-// that is not an Orion station location.
-func classifyOrionLocation(location string, service serviceAddress) (kind orionKind, host, relative string, ok bool) {
-	relative, ok = models.RelativeOrionLocation(location)
+// portableStationLocation returns the relative Orion location a station
+// should be stored with. An Orion location gives its relative form; the older
+// playback adapter ("<host>/custom/v1/playback/<base64 stream>") is wrapped
+// the way Play URL does it, keeping name and artwork (issue 784). ok is false
+// for anything else.
+func portableStationLocation(location, name, art string) (string, bool) {
+	if relative, ok := models.RelativeOrionLocation(location); ok {
+		return relative, true
+	}
+
+	if stream, ok := models.StationStreamURL(location); ok {
+		return bmx.BuildOrionLocation(name, art, stream), true
+	}
+
+	return "", false
+}
+
+// classifyOrionLocation reports the kind of an Internet Radio station
+// location, its host (for absolute ones and the playback adapter) and the
+// relative Orion location to store instead. ok is false for anything that is
+// not a station location.
+func classifyOrionLocation(location, name, art string, service serviceAddress) (kind orionKind, host, relative string, ok bool) {
+	relative, ok = portableStationLocation(location, name, art)
 	if !ok {
 		return orionRelative, "", "", false
 	}
@@ -273,7 +292,7 @@ func findOrionHits(presets []models.ServicePreset, service serviceAddress) []ori
 			continue
 		}
 
-		kind, host, relative, ok := classifyOrionLocation(p.Location, service)
+		kind, host, relative, ok := classifyOrionLocation(p.Location, p.Name, p.ContainerArt, service)
 		if !ok || kind == orionRelative {
 			continue
 		}
@@ -571,7 +590,7 @@ func rewriteOrionOnSpeaker(c *client.Client, onSpeaker *models.Presets) (nowRela
 			continue
 		}
 
-		relative, ok := models.RelativeOrionLocation(p.ContentItem.Location)
+		relative, ok := portableStationLocation(p.ContentItem.Location, p.ContentItem.ItemName, p.ContentItem.ContainerArt)
 		if !ok {
 			continue
 		}

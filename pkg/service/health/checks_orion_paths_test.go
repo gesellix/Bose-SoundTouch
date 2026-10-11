@@ -1,6 +1,7 @@
 package health
 
 import (
+	"encoding/base64"
 	"encoding/xml"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
 
@@ -392,5 +394,66 @@ func TestOrionPaths_QuickFixChangesNothingWhenSpeakerUnreachable(t *testing.T) {
 	presets, _ := ds.GetPresets(account, device)
 	if presets[0].Location != orionLocOldHost {
 		t.Errorf("datastore changed without a speaker write: %q", presets[0].Location)
+	}
+}
+
+// Issue 784: the older playback adapter carries the service's address like an
+// absolute Orion location does. The check lists it, and the fix stores the
+// station as the relative Orion location Play URL builds, keeping name and
+// artwork, on the speaker and in the datastore.
+func TestOrionPaths_PlaybackAdapterIsHostBoundAndRewritten(t *testing.T) {
+	const stream = "https://stream.example.org/technikum.mp3"
+
+	adapter := "http://192.0.2.5:8000/custom/v1/playback/" + base64.StdEncoding.EncodeToString([]byte(stream)) + "?name=TechnikumCity"
+
+	account, device := "1000001", "DEVICEID01"
+	ds := newOrionTestDS(t, account, device)
+	writePresetsXML(t, ds, account, device, presetsXML(
+		[2]string{"LOCAL_INTERNET_RADIO", adapter},
+	))
+
+	res := runOrion(t, ds, orionDeps(false, nil))
+	if len(res.Findings) != 1 || !strings.Contains(res.Findings[0].Message, "192.0.2.5:8000") {
+		t.Fatalf("expected one finding naming the old host, got %+v", res)
+	}
+
+	wantFromStore := bmx.BuildOrionLocation("Station 1", "http://192.0.2.10/art.png", stream)
+	if cmds := res.Findings[0].ManualCommands; len(cmds) != 1 || !strings.Contains(cmds[0].Command, `location="`+wantFromStore+`"`) {
+		t.Errorf("manual command should store the relative Orion location %q, got %+v", wantFromStore, cmds)
+	}
+
+	speakerXML := `<?xml version="1.0" encoding="UTF-8" ?>
+<presets>
+  <preset id="1" createdOn="1" updatedOn="1"><ContentItem source="LOCAL_INTERNET_RADIO" type="stationurl" location="` +
+		strings.ReplaceAll(adapter, "&", "&amp;") + `" sourceAccount="" isPresetable="true"><itemName>TechnikumCity</itemName><containerArt>http://192.0.2.10/logo.png</containerArt></ContentItem></preset>
+</presets>`
+
+	speaker := &fakeOrionSpeaker{}
+	srv := speaker.server(t, speakerXML)
+
+	deps := orionDeps(false, nil)
+	deps.NewSpeakerClient = func(string) *client.Client {
+		return client.NewClient(&client.Config{Host: srv.URL, Timeout: 2 * time.Second})
+	}
+
+	r := NewRegistry()
+	RegisterOrionPathsCheck(r, ds, deps)
+
+	if _, _, err := r.RunFix(CheckIDOrionPaths, FixIDRewriteOrionRelative, Target{Account: account, Device: device}); err != nil {
+		t.Fatalf("RunFix: %v", err)
+	}
+
+	want := bmx.BuildOrionLocation("TechnikumCity", "http://192.0.2.10/logo.png", stream)
+	if len(speaker.stored) != 1 || speaker.stored[0].ContentItem == nil || speaker.stored[0].ContentItem.Location != want {
+		t.Fatalf("speaker stores = %+v, want slot 1 with %q", speaker.stored, want)
+	}
+
+	presets, err := ds.GetPresets(account, device)
+	if err != nil {
+		t.Fatalf("GetPresets: %v", err)
+	}
+
+	if presets[0].Location != want {
+		t.Errorf("datastore slot 1 = %q, want %q", presets[0].Location, want)
 	}
 }
