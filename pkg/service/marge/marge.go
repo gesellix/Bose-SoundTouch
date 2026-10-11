@@ -1594,16 +1594,13 @@ func accountFullToXML(ds *datastore.DataStore, account string, readPresets func(
 }
 
 // RemovePreset clears a preset for the specified account and device.
+//
+// The row for that button is removed, not blanked. A blank row has no button
+// number, so the next PUT for the slot added a second row next to it instead
+// of replacing it (issue 784).
 func RemovePreset(ds *datastore.DataStore, account, device string, presetNumber int) error {
 	_, err := ds.MutatePresets(account, device, func(presets []models.ServicePreset) ([]models.ServicePreset, error) {
-		if presetNumber < 1 || presetNumber > len(presets) {
-			// Preset doesn't exist or index out of range, nothing to do
-			return presets, nil
-		}
-
-		presets[presetNumber-1] = models.ServicePreset{}
-
-		return presets, nil
+		return withoutPresetButton(presets, strconv.Itoa(presetNumber)), nil
 	})
 
 	return err

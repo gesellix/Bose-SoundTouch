@@ -67,6 +67,19 @@ func presetButton(p models.ServicePreset) string {
 	return strings.TrimSpace(p.ID)
 }
 
+// withoutPresetButton returns presets without the rows stored on button.
+func withoutPresetButton(presets []models.ServicePreset, button string) []models.ServicePreset {
+	kept := presets[:0]
+
+	for i := range presets {
+		if presetButton(presets[i]) != button {
+			kept = append(kept, presets[i])
+		}
+	}
+
+	return kept
+}
+
 // identityOf compares locations in their canonical form, so two speakers that
 // hold the same Orion station once with an absolute location (saved before
 // issue 769) and once with the relative one agree.
@@ -347,18 +360,11 @@ func PropagatePresetRemoval(ds *datastore.DataStore, account, sourceDevice strin
 	applied := make([]models.ServiceDeviceInfo, 0, len(targets))
 
 	for i := range targets {
-		// Clear by button, not by list position: RemovePreset indexes the
-		// stored slice, and a sibling's bank can hold the same slot at a
-		// different position.
+		// Clear by button, not by list position: a sibling's bank can hold
+		// the same slot at a different position.
 		if _, err := ds.MutatePresets(account, targets[i].DeviceID,
 			func(presets []models.ServicePreset) ([]models.ServicePreset, error) {
-				for j := range presets {
-					if presetButton(presets[j]) == button {
-						presets[j] = models.ServicePreset{ButtonNumber: button, ID: button}
-					}
-				}
-
-				return presets, nil
+				return withoutPresetButton(presets, button), nil
 			}); err != nil {
 			log.Printf("[PresetSync] clear %s slot %s: %s", sanitizeLog(targets[i].DeviceID), button, sanitizeErr(err))
 

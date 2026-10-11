@@ -1193,8 +1193,20 @@ func (ds *DataStore) readPresetsNoLock(account, device string) ([]models.Service
 
 	presets := []models.ServicePreset{}
 
+	blank := 0
+
 	for i := range presetsWrap.Presets {
 		p := &presetsWrap.Presets[i]
+
+		// A row without source, location and name is a cleared slot that
+		// older versions left behind (issue 784). It cannot be played or
+		// recalled, and the next PUT for that slot would add a row next to it.
+		if strings.TrimSpace(p.ContentItem.Source) == "" && strings.TrimSpace(p.ContentItem.Location) == "" &&
+			strings.TrimSpace(p.ContentItem.ItemName) == "" {
+			blank++
+
+			continue
+		}
 
 		presets = append(presets, models.ServicePreset{
 			ServiceContentItem: models.ServiceContentItem{
@@ -1213,6 +1225,13 @@ func (ds *DataStore) readPresetsNoLock(account, device string) ([]models.Service
 			CreatedOn:    p.CreatedOn,
 			UpdatedOn:    p.UpdatedOn,
 		})
+	}
+
+	if blank > 0 {
+		log.Printf("[Datastore] readPresetsNoLock: Presets.xml for device %s carries %d cleared row(s); dropping them",
+			sanitizeLog(device), blank)
+
+		needsRewrite = true
 	}
 
 	// Collapse duplicate button numbers, and let the caller rewrite the file

@@ -45,7 +45,7 @@ func TestDataStore_MacAddressMapping(t *testing.T) {
 	}
 
 	// Create Presets.xml so we can verify access
-	presetsXML := `<presets><preset id="1">test</preset></presets>`
+	presetsXML := `<presets><preset id="1"><contentItem source="TUNEIN" location="/v1/playback/station/s00000"><itemName>test</itemName></contentItem></preset></presets>`
 	if err := os.WriteFile(filepath.Join(deviceDir, constants.PresetsFile), []byte(presetsXML), 0644); err != nil {
 		t.Fatalf("failed to write Presets.xml: %v", err)
 	}
