@@ -569,3 +569,29 @@ func TestFirstRunSeed_WritesDefaultsWhenAbsent(t *testing.T) {
 		t.Errorf("expected defaults to be written with server_url, got %q", got.ServerURL)
 	}
 }
+
+// A fresh install must stay idle until someone clicks Scan Again; periodic
+// discovery is an explicit opt-in.
+func TestLoadConfigDiscoveryEnabled(t *testing.T) {
+	t.Run("defaults to disabled", func(t *testing.T) {
+		config, err := loadConfig(newTestServiceContext(t))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		if config.discoveryEnabled {
+			t.Errorf("discoveryEnabled: got true, want false (default)")
+		}
+	})
+
+	t.Run("--discovery-enabled opts in", func(t *testing.T) {
+		config, err := loadConfig(newTestServiceContext(t, "--discovery-enabled=true"))
+		if err != nil {
+			t.Fatalf("loadConfig: unexpected error: %v", err)
+		}
+
+		if !config.discoveryEnabled {
+			t.Errorf("discoveryEnabled: got false, want true")
+		}
+	})
+}

@@ -11,14 +11,17 @@ nothing and users must add each speaker manually.
 
 ## Decision
 
-When periodic SSDP returns zero devices (or errors), or an admin triggers
-`POST /api/setup/discover` (the Admin UI "Scan Again" button, which always
-scans, even when SSDP finds speakers), run `discovery.ScanSubnets`: a bounded
+Discovery is manual by default: a fresh install does nothing until someone
+clicks "Scan Again" in the Admin UI (`POST /api/setup/discover`) or in the
+embedded Player (`POST /api/control/discover`). Both run one SSDP search and
+then always scan, even when SSDP finds speakers. Opt-in periodic discovery
+(`DISCOVERY_ENABLED=true`) scans only when SSDP returns zero devices (or
+errors). The scan is `discovery.ScanSubnets`: `discovery.ScanSubnets`: a bounded
 unicast `GET http://<ip>:8090/info` over candidate IPv4 subnets.
 The smallest option was chosen: no new dependencies, no ARP/ICMP tricks, no
 new daemon. Accepted devices reuse `handleDiscoveredDevice`,
-`mergeOverlappingDevices` and `notifyDevicesChanged`. Periodic discovery that
-SSDP satisfies never scans.
+`mergeOverlappingDevices` and `notifyDevicesChanged`. Opt-in periodic
+discovery that SSDP satisfies never scans.
 
 ## Security and safety
 

@@ -329,3 +329,34 @@ func waitIdle(t *testing.T, s *Server) {
 
 	t.Fatal("discovery did not finish")
 }
+
+func TestDiscoverDevicesManual_ForcesScanWithPartialSSDPAndPeer(t *testing.T) {
+	s, f := newDiscoveryFake(t, "")
+	f.ssdpDevs = []*models.DiscoveredDevice{dev("198.51.100.50")}
+	f.scanDevs = []*models.DiscoveredDevice{dev("10.0.5.8")}
+
+	if !s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555") {
+		t.Fatal("manual discovery did not run")
+	}
+
+	// Synchronous: results are already persisted when it returns.
+	if f.scanCalls != 1 || fmt.Sprint(f.scanPrefix) != "[10.0.5.0/24]" {
+		t.Errorf("scan=%d prefixes=%v", f.scanCalls, f.scanPrefix)
+	}
+
+	if fmt.Sprint(f.handled) != "[198.51.100.50 10.0.5.8]" {
+		t.Errorf("handled %v", f.handled)
+	}
+}
+
+func TestDiscoverDevicesManual_BusyReturnsFalse(t *testing.T) {
+	s, f := newDiscoveryFake(t, "")
+
+	if !s.beginDiscovery() {
+		t.Fatal("slot not free")
+	}
+
+	if s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555") || f.scanCalls != 0 {
+		t.Errorf("busy manual run must not scan (scan=%d)", f.scanCalls)
+	}
+}

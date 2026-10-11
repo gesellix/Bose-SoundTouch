@@ -368,10 +368,24 @@ func retryUntilReady(ctx context.Context, retryInterval time.Duration, attempt f
 // Used by the startup goroutine in main and by the /api/control/discover route
 // inside MountWeb.
 func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discovery.UnifiedDiscoveryService) {
+	app.DiscoverDevicesFrom(ctx, discoveryService, "")
+}
+
+// DiscoverDevicesFrom is DiscoverDevices for a user-triggered sweep: remoteAddr
+// (the requester's socket address, may be empty) is handed to TriggerDiscovery
+// as a scan hint. It returns false when the host service skipped the sweep
+// because one was already running.
+func (app *WebApp) DiscoverDevicesFrom(
+	ctx context.Context,
+	discoveryService *discovery.UnifiedDiscoveryService,
+	remoteAddr string,
+) bool {
+	ran := true
+
 	// External discovery (embedded build): run the host service's sweep so the
 	// shared datastore is refreshed.
 	if app.TriggerDiscovery != nil {
-		app.TriggerDiscovery(ctx)
+		ran = app.TriggerDiscovery(ctx, remoteAddr)
 	}
 
 	// Re-sync from the external device source (embedded: the service datastore).
@@ -383,7 +397,7 @@ func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discov
 	// Own mDNS/UPnP sweep — standalone only. The embedded build passes a nil
 	// discovery service and relies entirely on the host service's discovery.
 	if discoveryService == nil {
-		return
+		return ran
 	}
 
 	log.Println("Starting device discovery...")
@@ -393,7 +407,7 @@ func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discov
 		log.Printf("Discovery failed: %v", err)
 		app.BroadcastDiscoveryStatus("failed", app.DeviceCount())
 
-		return
+		return false
 	}
 
 	log.Printf("Found %d devices", len(devices))
@@ -401,6 +415,8 @@ func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discov
 	for _, device := range devices {
 		app.addDeviceByHost(ctx, device.Host, device.Port, classifySource(device.DiscoveryMethod))
 	}
+
+	return ran
 }
 
 // classifySource labels a discovered device "manual" if it came from (at

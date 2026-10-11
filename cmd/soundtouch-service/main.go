@@ -294,8 +294,8 @@ var serviceFlags = []cli.Flag{
 	},
 	&cli.BoolFlag{
 		Name:    "discovery-enabled",
-		Usage:   "Enable periodic device discovery",
-		Value:   true,
+		Usage:   "Enable periodic device discovery (off by default; the Scan Again buttons always work)",
+		Value:   false,
 		EnvVars: []string{"DISCOVERY_ENABLED"},
 	},
 	&cli.StringFlag{
@@ -1578,7 +1578,7 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 	}
 
 	// UI "discover" runs the service's sweep, not a second mDNS stack.
-	webApp.TriggerDiscovery = server.DiscoverDevices
+	webApp.TriggerDiscovery = server.DiscoverDevicesManual
 
 	// The catalog of what this service has seen stored or played, which the
 	// player's preset editor picks from (issue 754). Standalone

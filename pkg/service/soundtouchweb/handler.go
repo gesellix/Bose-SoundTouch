@@ -131,8 +131,10 @@ type WebApp struct {
 	// this app's own mDNS/UPnP. The embedded build wires it to the host
 	// service's discovery (the single source of truth, which updates the shared
 	// datastore); DiscoverDevices then re-syncs from ExtraDeviceHosts. Standalone
-	// soundtouch-player leaves it nil and runs its own sweep.
-	TriggerDiscovery func(ctx context.Context)
+	// soundtouch-player leaves it nil and runs its own sweep. remoteAddr is the
+	// requesting client's socket address, a scan hint; the result reports
+	// whether a sweep actually ran (false: one was already in progress).
+	TriggerDiscovery func(ctx context.Context, remoteAddr string) bool
 
 	// CatalogEntries, when set, returns the service's catalog of preset and
 	// source entries seen so far (issue 754), newest sighting first. The

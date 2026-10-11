@@ -10,6 +10,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// discoverTimeout bounds one UI-triggered discovery: the 10 s SSDP phase plus
+// the service's subnet scan (up to 60 s) and the follow-up device re-sync.
+const discoverTimeout = 90 * time.Second
+
 // MountWeb registers the portable soundtouch-player surface on r: the embedded
 // assets (/app/static/*), the control API (/api/control/*), and the SPA
 // (/app/*). It is self-contained under /api/control and /app, registering
@@ -46,15 +50,22 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 		r.Post("/discover", func(w http.ResponseWriter, r *http.Request) {
 			app.HandleAPIDiscover(w, r)
 
+			// The peer is the socket address, never X-Forwarded-For.
+			remoteAddr := r.RemoteAddr
+
 			// Trigger discovery
 			//nolint:contextcheck // Context is created within goroutine
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
 				defer cancel()
 
 				app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
 
-				app.DiscoverDevices(ctx, discoveryService)
+				if !app.DiscoverDevicesFrom(ctx, discoveryService, remoteAddr) {
+					app.BroadcastDiscoveryStatus("failed", app.DeviceCount())
+
+					return
+				}
 
 				app.BroadcastDiscoveryStatus("completed", app.DeviceCount())
 				app.BroadcastDeviceList()

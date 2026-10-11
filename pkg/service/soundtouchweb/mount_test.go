@@ -1,9 +1,12 @@
 package soundtouchweb
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -155,5 +158,47 @@ func TestMountStandalone(t *testing.T) {
 		if !routes[want] {
 			t.Errorf("expected standalone Mount to register %q", want)
 		}
+	}
+}
+
+func TestMountWebDiscoverTriggersManualScan(t *testing.T) {
+	type call struct {
+		remote   string
+		deadline time.Duration
+	}
+
+	calls := make(chan call, 1)
+	app := NewWebApp()
+	app.TriggerDiscovery = func(ctx context.Context, remoteAddr string) bool {
+		dl, ok := ctx.Deadline()
+		if !ok {
+			t.Error("trigger context has no deadline")
+		}
+
+		calls <- call{remote: remoteAddr, deadline: time.Until(dl)}
+
+		return true
+	}
+
+	r := chi.NewRouter()
+	app.MountWeb(r, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/control/discover", nil)
+	req.RemoteAddr = "10.0.5.200:5555"
+	req.Header.Set("X-Forwarded-For", "10.99.99.99")
+	r.ServeHTTP(httptest.NewRecorder(), req)
+
+	select {
+	case c := <-calls:
+		if c.remote != "10.0.5.200:5555" {
+			t.Errorf("remote = %q, want socket peer", c.remote)
+		}
+
+		// Must outlast the 10s SSDP phase plus the subnet scan.
+		if c.deadline <= 60*time.Second {
+			t.Errorf("deadline %v too short for SSDP + subnet scan", c.deadline)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("TriggerDiscovery was not called")
 	}
 }
