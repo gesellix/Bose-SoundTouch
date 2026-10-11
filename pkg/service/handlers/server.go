@@ -1717,7 +1717,7 @@ func (s *Server) scanSubnets(ctx context.Context, remote netip.Addr) []*models.D
 		log.Printf("Subnet scan ended early: %s", sanitizeErr(err))
 	}
 
-	log.Printf("Subnet scan over %d subnet(s) found %d device(s)", len(prefixes), len(found))
+	log.Printf("Subnet scan over %v found %d device(s)", prefixes, len(found))
 
 	return found
 }

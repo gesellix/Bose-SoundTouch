@@ -3,12 +3,14 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -255,7 +257,7 @@ func TestCandidatePrefixes(t *testing.T) {
 
 	t.Run("explicit wins even when public or loopback", func(t *testing.T) {
 		got := CandidatePrefixes([]netip.Prefix{p("203.0.113.0/24"), p("127.0.0.0/30"), p("203.0.113.9/24")},
-			[]netip.Addr{a("192.168.1.5")})
+			[]netip.Addr{a("10.0.0.5")})
 		want := []netip.Prefix{p("203.0.113.0/24"), p("127.0.0.0/30")}
 
 		if fmt.Sprint(got) != fmt.Sprint(want) {
@@ -264,8 +266,8 @@ func TestCandidatePrefixes(t *testing.T) {
 	})
 
 	t.Run("hints become deduped /24 in order", func(t *testing.T) {
-		got := CandidatePrefixes(nil, []netip.Addr{a("192.168.1.5"), a("10.1.2.3"), a("192.168.1.77")})
-		want := []netip.Prefix{p("192.168.1.0/24"), p("10.1.2.0/24")}
+		got := CandidatePrefixes(nil, []netip.Addr{a("10.0.0.5"), a("10.0.1.5"), a("10.0.0.77")})
+		want := []netip.Prefix{p("10.0.0.0/24"), p("10.0.1.0/24")}
 
 		if fmt.Sprint(got) != fmt.Sprint(want) {
 			t.Errorf("got %v want %v", got, want)
@@ -275,9 +277,9 @@ func TestCandidatePrefixes(t *testing.T) {
 	t.Run("non-private hints filtered", func(t *testing.T) {
 		got := CandidatePrefixes(nil, []netip.Addr{
 			a("8.8.8.8"), a("127.0.0.1"), a("169.254.1.1"), a("224.0.0.1"), a("0.0.0.0"),
-			a("::1"), a("fe80::1"), a("fd00::1"), {}, a("172.16.5.5"), a("::ffff:172.31.0.9"),
+			a("::1"), a("fe80::1"), a("fd00::1"), {}, a("10.0.0.5"), a("::ffff:10.0.1.5"),
 		})
-		want := []netip.Prefix{p("172.16.5.0/24"), p("172.31.0.0/24")}
+		want := []netip.Prefix{p("10.0.0.0/24"), p("10.0.1.0/24")}
 
 		if fmt.Sprint(got) != fmt.Sprint(want) {
 			t.Errorf("got %v want %v", got, want)
@@ -285,8 +287,8 @@ func TestCandidatePrefixes(t *testing.T) {
 	})
 
 	t.Run("invalid and ipv6 explicit ignored", func(t *testing.T) {
-		got := CandidatePrefixes([]netip.Prefix{{}, p("2001:db8::/64")}, []netip.Addr{a("192.168.7.7")})
-		if fmt.Sprint(got) != fmt.Sprint([]netip.Prefix{p("192.168.7.0/24")}) {
+		got := CandidatePrefixes([]netip.Prefix{{}, p("2001:db8::/64")}, []netip.Addr{a("10.0.0.5")})
+		if fmt.Sprint(got) != fmt.Sprint([]netip.Prefix{p("10.0.0.0/24")}) {
 			t.Errorf("got %v", got)
 		}
 	})
@@ -297,17 +299,213 @@ func TestCandidatePrefixes(t *testing.T) {
 }
 
 func TestParseSubnets(t *testing.T) {
-	got, invalid := ParseSubnets(" 192.168.1.0/24, bogus,10.0.0.0/8,,2001:db8::/32, 192.168.1.9 ,192.168.1.0/24")
+	got, invalid := ParseSubnets(" 203.0.113.0/24, bogus,10.0.0.0/8,,2001:db8::/32, 203.0.113.9 ,203.0.113.0/24")
 
-	if fmt.Sprint(got) != "[192.168.1.0/24 10.0.0.0/8]" {
+	if fmt.Sprint(got) != "[203.0.113.0/24 10.0.0.0/8]" {
 		t.Errorf("got %v", got)
 	}
 
-	if fmt.Sprint(invalid) != "[bogus 2001:db8::/32 192.168.1.9]" {
+	if fmt.Sprint(invalid) != "[bogus 2001:db8::/32 203.0.113.9]" {
 		t.Errorf("invalid %v", invalid)
 	}
 
 	if g, i := ParseSubnets(""); len(g) != 0 || len(i) != 0 {
 		t.Errorf("empty: %v %v", g, i)
+	}
+}
+
+func TestScanOptions_HardCaps(t *testing.T) {
+	o := SubnetScanOptions{Concurrency: 1 << 20, MaxHosts: 1 << 30, Port: 70000}.withDefaults()
+	if o.Concurrency != 64 || o.MaxHosts != 1024 || o.Port != 8090 {
+		t.Errorf("%+v", o)
+	}
+
+	// Values below the caps are respected.
+	o = SubnetScanOptions{Concurrency: 8, MaxHosts: 10, Port: 65535}.withDefaults()
+	if o.Concurrency != 8 || o.MaxHosts != 10 || o.Port != 65535 {
+		t.Errorf("%+v", o)
+	}
+}
+
+func TestScanSubnets_ExcessiveMaxHostsClamped(t *testing.T) {
+	ct := &countingTransport{}
+
+	_, err := ScanSubnets(context.Background(), []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+		SubnetScanOptions{Concurrency: 100000, MaxHosts: 1 << 30, HTTPClient: &http.Client{Transport: ct}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := ct.calls.Load(); got != 1024 {
+		t.Errorf("calls=%d want 1024", got)
+	}
+
+	if m := ct.max.Load(); m > 64 {
+		t.Errorf("max concurrency %d", m)
+	}
+}
+
+func TestParseInfo_SingleDocument(t *testing.T) {
+	const root = `<info deviceID="DEVICEID01"/>`
+
+	bad := map[string]string{
+		"second root":        root + `<other/>`,
+		"second info":        root + root,
+		"trailing text":      root + "garbage",
+		"trailing text ws":   root + "\n garbage \n",
+		"trailing cdata":     root + "<![CDATA[x]]>",
+		"trailing close tag": root + "</info>",
+	}
+	for name, body := range bad {
+		if _, err := parseInfo([]byte(body)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+
+	good := map[string]string{
+		"plain":            root,
+		"whitespace":       "\n  " + root + " \r\n\t",
+		"comment after":    root + "<!-- ok -->\n",
+		"comment before":   "<!-- hi -->" + root,
+		"decl and comment": `<?xml version="1.0"?>` + "\n<!-- c -->" + root + "\n<!-- d -->\n",
+	}
+	for name, body := range good {
+		if _, err := parseInfo([]byte(body)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestScanSubnets_SlowInfoHitsDeadline(t *testing.T) {
+	release := make(chan struct{})
+
+	_, port := loopbackServer(t, func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+	})
+	t.Cleanup(func() { close(release) })
+
+	start := time.Now()
+	found, err := ScanSubnets(context.Background(), []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
+		SubnetScanOptions{Port: port, InfoTimeout: 150 * time.Millisecond})
+
+	if err != nil || len(found) != 0 {
+		t.Errorf("found=%v err=%v", found, err)
+	}
+
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("deadline not enforced: %v", d)
+	}
+}
+
+func TestScanSubnets_CancelDuringProbe(t *testing.T) {
+	arrived := make(chan struct{}, 1)
+	release := make(chan struct{})
+
+	_, port := loopbackServer(t, func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case arrived <- struct{}{}:
+		default:
+		}
+
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		case <-time.After(10 * time.Second):
+		}
+	})
+	t.Cleanup(func() { close(release) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type result struct {
+		found int
+		err   error
+	}
+
+	done := make(chan result, 1)
+
+	go func() {
+		found, err := ScanSubnets(ctx, []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
+			SubnetScanOptions{Port: port, InfoTimeout: 30 * time.Second})
+		done <- result{len(found), err}
+	}()
+
+	select {
+	case <-arrived:
+	case <-time.After(5 * time.Second):
+		t.Fatal("probe never reached server")
+	}
+
+	cancel()
+
+	select {
+	case r := <-done:
+		if r.err == nil || r.found != 0 {
+			t.Errorf("found=%d err=%v", r.found, r.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("scan did not stop after cancel")
+	}
+}
+
+type recordingHandler struct {
+	mu   sync.Mutex
+	logs []string
+}
+
+func (h *recordingHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *recordingHandler) WithAttrs([]slog.Attr) slog.Handler       { return h }
+func (h *recordingHandler) WithGroup(string) slog.Handler            { return h }
+func (h *recordingHandler) Handle(_ context.Context, r slog.Record) error {
+	var b strings.Builder
+	b.WriteString(r.Message)
+	r.Attrs(func(a slog.Attr) bool {
+		fmt.Fprintf(&b, " %s=%v", a.Key, a.Value)
+		return true
+	})
+
+	h.mu.Lock()
+	h.logs = append(h.logs, b.String())
+	h.mu.Unlock()
+
+	return nil
+}
+
+func TestScanSubnets_LogsDurationHostsAndPrefixes(t *testing.T) {
+	rec := &recordingHandler{}
+	old := slog.Default()
+
+	slog.SetDefault(slog.New(rec))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	_, port := loopbackServer(t, infoHandler(validInfoXML))
+
+	_, err := ScanSubnets(context.Background(), []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")},
+		SubnetScanOptions{Port: port})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+
+	if len(rec.logs) != 1 {
+		t.Fatalf("logs %v", rec.logs)
+	}
+
+	line := rec.logs[0]
+	for _, want := range []string{"duration=", "hosts=1", "prefixes=[127.0.0.1/32]", "found=1"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("log %q lacks %q", line, want)
+		}
+	}
+
+	if strings.Contains(line, "Test Speaker") || strings.Contains(line, "AABBCCDDEEFF") {
+		t.Errorf("log leaks response content: %q", line)
 	}
 }

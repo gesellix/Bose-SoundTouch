@@ -23,20 +23,25 @@ import (
 // SubnetScanMethod is the DiscoveryMethod reported for devices found by ScanSubnets.
 const SubnetScanMethod = "subnet-scan"
 
-const maxInfoBodyBytes = 1 << 20
+const (
+	maxInfoBodyBytes = 1 << 20
+	maxConcurrency   = 64
+	maxScanHosts     = 1024
+	maxPort          = 65535
+)
 
 // SubnetScanOptions bounds a ScanSubnets run. Zero values select defaults.
 type SubnetScanOptions struct {
-	Port        int           // SoundTouch API port (default 8090)
+	Port        int           // SoundTouch API port (default 8090; out of range selects the default)
 	DialTimeout time.Duration // TCP connect timeout (default 400ms)
 	InfoTimeout time.Duration // whole GET /info deadline (default 2s)
-	Concurrency int           // parallel probes (default 64)
-	MaxHosts    int           // cap on unique hosts probed (default 1024)
+	Concurrency int           // parallel probes (default and hard cap 64)
+	MaxHosts    int           // cap on unique hosts probed (default and hard cap 1024)
 	HTTPClient  *http.Client  // injectable; redirects are always refused
 }
 
 func (o SubnetScanOptions) withDefaults() SubnetScanOptions {
-	if o.Port <= 0 {
+	if o.Port <= 0 || o.Port > maxPort {
 		o.Port = 8090
 	}
 
@@ -48,12 +53,12 @@ func (o SubnetScanOptions) withDefaults() SubnetScanOptions {
 		o.InfoTimeout = 2 * time.Second
 	}
 
-	if o.Concurrency <= 0 {
-		o.Concurrency = 64
+	if o.Concurrency <= 0 || o.Concurrency > maxConcurrency {
+		o.Concurrency = maxConcurrency
 	}
 
-	if o.MaxHosts <= 0 {
-		o.MaxHosts = 1024
+	if o.MaxHosts <= 0 || o.MaxHosts > maxScanHosts {
+		o.MaxHosts = maxScanHosts
 	}
 
 	return o
@@ -111,6 +116,7 @@ func lastAddr(p netip.Prefix) netip.Addr {
 // multicast, so it works from bridge-networked containers.
 func ScanSubnets(ctx context.Context, prefixes []netip.Prefix, opts SubnetScanOptions) ([]*models.DiscoveredDevice, error) {
 	opts = opts.withDefaults()
+	started := time.Now()
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -159,8 +165,8 @@ feed:
 
 	sort.Slice(found, func(i, j int) bool { return found[i].Host < found[j].Host })
 
-	slog.Info("subnet scan finished", "prefixes", len(prefixes), "hosts", len(hosts),
-		"truncated", truncated, "found", len(found))
+	slog.Info("subnet scan finished", "duration", time.Since(started).Round(time.Millisecond),
+		"prefixes", prefixes, "hosts", len(hosts), "truncated", truncated, "found", len(found))
 
 	return found, ctx.Err()
 }
@@ -237,14 +243,26 @@ func parseInfo(body []byte) (*models.DeviceInfo, error) {
 		return nil, err
 	}
 
+	// Only whitespace, comments and processing instructions may follow the
+	// root element; a second element or any other text is rejected.
 	for {
-		_, err := dec.Token()
+		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 
 		if err != nil {
 			return nil, err
+		}
+
+		switch t := tok.(type) {
+		case xml.Comment, xml.ProcInst:
+		case xml.CharData:
+			if len(bytes.TrimSpace(t)) > 0 {
+				return nil, errors.New("unexpected text after root element")
+			}
+		default:
+			return nil, errors.New("unexpected content after root element")
 		}
 	}
 
