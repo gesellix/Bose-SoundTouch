@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -355,6 +356,16 @@ func TestParseInfo_SingleDocument(t *testing.T) {
 		"trailing text ws":   root + "\n garbage \n",
 		"trailing cdata":     root + "<![CDATA[x]]>",
 		"trailing close tag": root + "</info>",
+		"trailing pi":        root + "<?pi x?>",
+		"leading text":       "garbage" + root,
+		"leading text ws":    " garbage \n" + root,
+		"leading cdata":      "<![CDATA[x]]>" + root,
+		"leading close tag":  "</info>" + root,
+		"decl after comment": "<!-- c -->" + `<?xml version="1.0"?>` + root,
+		"decl after ws":      "\n" + `<?xml version="1.0"?>` + root,
+		"decl after root":    root + `<?xml version="1.0"?>`,
+		"second decl":        `<?xml version="1.0"?><?xml version="1.0"?>` + root,
+		"other pi before":    `<?pi x?>` + root,
 	}
 	for name, body := range bad {
 		if _, err := parseInfo([]byte(body)); err == nil {
@@ -368,6 +379,7 @@ func TestParseInfo_SingleDocument(t *testing.T) {
 		"comment after":    root + "<!-- ok -->\n",
 		"comment before":   "<!-- hi -->" + root,
 		"decl and comment": `<?xml version="1.0"?>` + "\n<!-- c -->" + root + "\n<!-- d -->\n",
+		"decl then ws":     `<?xml version="1.0" encoding="UTF-8"?>` + "\n" + root,
 	}
 	for name, body := range good {
 		if _, err := parseInfo([]byte(body)); err != nil {
@@ -509,3 +521,56 @@ func TestScanSubnets_LogsDurationHostsAndPrefixes(t *testing.T) {
 		t.Errorf("log leaks response content: %q", line)
 	}
 }
+
+func TestScanSubnets_CancelLogsAttemptedProbes(t *testing.T) {
+	rec := &recordingHandler{}
+	old := slog.Default()
+
+	slog.SetDefault(slog.New(rec))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var calls atomic.Int32
+
+	rt := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		if calls.Add(1) == 3 {
+			cancel()
+		}
+
+		return nil, fmt.Errorf("refused")
+	})
+
+	_, err := ScanSubnets(ctx, []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")},
+		SubnetScanOptions{Concurrency: 1, HTTPClient: &http.Client{Transport: rt}})
+	if err == nil {
+		t.Fatal("want ctx error")
+	}
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+
+	if len(rec.logs) != 1 {
+		t.Fatalf("logs %v", rec.logs)
+	}
+
+	line := rec.logs[0]
+	if strings.Contains(line, "hosts=254") {
+		t.Errorf("log counts unprobed hosts: %q", line)
+	}
+
+	m := regexp.MustCompile(`hosts=(\d+)`).FindStringSubmatch(line)
+	if m == nil {
+		t.Fatalf("no hosts in %q", line)
+	}
+
+	n, _ := strconv.Atoi(m[1])
+	if n < 3 || n > 10 {
+		t.Errorf("hosts=%d, want about the 3 attempted probes", n)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

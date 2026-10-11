@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -126,9 +127,10 @@ func ScanSubnets(ctx context.Context, prefixes []netip.Prefix, opts SubnetScanOp
 	client := scanClient(opts)
 
 	var (
-		mu    sync.Mutex
-		found []*models.DiscoveredDevice
-		wg    sync.WaitGroup
+		mu     sync.Mutex
+		found  []*models.DiscoveredDevice
+		probed atomic.Int64
+		wg     sync.WaitGroup
 	)
 
 	jobs := make(chan netip.Addr)
@@ -140,6 +142,8 @@ func ScanSubnets(ctx context.Context, prefixes []netip.Prefix, opts SubnetScanOp
 			defer wg.Done()
 
 			for h := range jobs {
+				probed.Add(1)
+
 				if d := probeInfo(ctx, client, h, opts); d != nil {
 					mu.Lock()
 
@@ -166,7 +170,7 @@ feed:
 	sort.Slice(found, func(i, j int) bool { return found[i].Host < found[j].Host })
 
 	slog.Info("subnet scan finished", "duration", time.Since(started).Round(time.Millisecond),
-		"prefixes", prefixes, "hosts", len(hosts), "truncated", truncated, "found", len(found))
+		"prefixes", prefixes, "hosts", probed.Load(), "candidates", len(hosts), "truncated", truncated, "found", len(found))
 
 	return found, ctx.Err()
 }
@@ -235,16 +239,32 @@ func probeInfo(ctx context.Context, client *http.Client, host netip.Addr, opts S
 }
 
 // parseInfo accepts only a single well-formed <info deviceID="..."> document.
+// Before the root only whitespace, comments and one XML declaration at the very
+// start are allowed; after it only whitespace and comments.
 func parseInfo(body []byte) (*models.DeviceInfo, error) {
 	dec := xml.NewDecoder(bytes.NewReader(body))
 
 	var info models.DeviceInfo
-	if err := dec.Decode(&info); err != nil {
-		return nil, err
+
+	for first := true; ; first = false {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+
+		if start, ok := tok.(xml.StartElement); ok {
+			if err := dec.DecodeElement(&info, &start); err != nil {
+				return nil, err
+			}
+
+			break
+		}
+
+		if err := checkOutsideRoot(tok, first); err != nil {
+			return nil, err
+		}
 	}
 
-	// Only whitespace, comments and processing instructions may follow the
-	// root element; a second element or any other text is rejected.
 	for {
 		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
@@ -255,14 +275,8 @@ func parseInfo(body []byte) (*models.DeviceInfo, error) {
 			return nil, err
 		}
 
-		switch t := tok.(type) {
-		case xml.Comment, xml.ProcInst:
-		case xml.CharData:
-			if len(bytes.TrimSpace(t)) > 0 {
-				return nil, errors.New("unexpected text after root element")
-			}
-		default:
-			return nil, errors.New("unexpected content after root element")
+		if err := checkOutsideRoot(tok, false); err != nil {
+			return nil, err
 		}
 	}
 
@@ -340,4 +354,27 @@ func dedupePrefixes(in []netip.Prefix) []netip.Prefix {
 	}
 
 	return out
+}
+
+// checkOutsideRoot rejects anything but whitespace, comments and, as the very
+// first token, the XML declaration.
+func checkOutsideRoot(tok xml.Token, first bool) error {
+	switch t := tok.(type) {
+	case xml.Comment:
+		return nil
+	case xml.ProcInst:
+		if first && t.Target == "xml" {
+			return nil
+		}
+
+		return errors.New("unexpected processing instruction")
+	case xml.CharData:
+		if len(bytes.TrimSpace(t)) > 0 {
+			return errors.New("unexpected text outside root element")
+		}
+
+		return nil
+	default:
+		return errors.New("unexpected content outside root element")
+	}
 }

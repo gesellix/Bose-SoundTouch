@@ -38,7 +38,8 @@ SSDP satisfies never scans.
   (`GetLiveDeviceInfo`) follows redirects, honours environment proxies, and
   has no body limit or caller context.
 - One sweep at a time (atomic slot); no lock is held during network I/O.
-- Only `/api/setup/discover` can trigger a forced scan. It is admin-gated only
+- Only `POST /api/setup/discover` and its alias `POST /setup/discover` (same
+  handler) can trigger a forced scan. It is admin-gated only
   when admin authentication is enabled (`BasicAuthAdmin` lets requests through
   otherwise).
 
