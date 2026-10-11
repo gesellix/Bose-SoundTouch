@@ -1,6 +1,11 @@
 package models
 
-import "testing"
+import (
+	"encoding/base64"
+	"encoding/json"
+	"net/url"
+	"testing"
+)
 
 const testOrionData = "eyJuYW1lIjoiRG9jIFJhZGlvIn0%3D"
 
@@ -73,5 +78,80 @@ func TestCanonicalContentLocation(t *testing.T) {
 	raw := "http://stream.example.org/live.mp3"
 	if got := CanonicalContentLocation("LOCAL_INTERNET_RADIO", raw); got != raw {
 		t.Errorf("raw stream location changed to %q", got)
+	}
+}
+
+// orionLocation builds a relative Orion location the way bmx.BuildOrionLocation
+// does (that package imports this one, so it can't be used here).
+func orionLocation(t *testing.T, name, imageURL, streamURL string) string {
+	t.Helper()
+
+	data, err := json.Marshal(map[string]string{"name": name, "imageUrl": imageURL, "streamUrl": streamURL})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return OrionStationPath + "?data=" + url.QueryEscape(base64.StdEncoding.EncodeToString(data))
+}
+
+// TestCanonicalContentLocationKeysStationsByStream: the relative and absolute
+// Orion spellings and the older playback adapter all play one stream, and
+// count as one station (issue 784), whatever name or artwork they carry.
+func TestCanonicalContentLocationKeysStationsByStream(t *testing.T) {
+	const stream = "https://stream.example.org/technikum.mp3"
+
+	relative := orionLocation(t, "TechnikumCity", "", stream)
+	withArt := orionLocation(t, "Technikum City", "https://img.example.org/logo.png", stream)
+	absolute := "http://192.0.2.10:8000" + OrionBasePath + relative
+	adapterStd := "http://192.0.2.10:8000/custom/v1/playback/" + base64.StdEncoding.EncodeToString([]byte(stream)) + "?name=TechnikumCity"
+	adapterURLSafe := "http://192.0.2.10:8000/custom/v1/playback/" + base64.URLEncoding.EncodeToString([]byte(stream))
+	adapterPlain := "http://192.0.2.10:8000/custom/v1/playback/" + url.PathEscape(stream)
+
+	want := CanonicalContentLocation("LOCAL_INTERNET_RADIO", relative)
+	if want == relative {
+		t.Fatalf("canonical key for %q is the location itself, want the stream key", relative)
+	}
+
+	for name, location := range map[string]string{
+		"other name and artwork": withArt,
+		"absolute Orion":         absolute,
+		"playback adapter":       adapterStd,
+		"URL-safe base64":        adapterURLSafe,
+		"plain escaped URL":      adapterPlain,
+	} {
+		if got := CanonicalContentLocation("LOCAL_INTERNET_RADIO", location); got != want {
+			t.Errorf("%s: canonical %q, want %q", name, got, want)
+		}
+	}
+
+	other := orionLocation(t, "TechnikumCity", "", "https://stream.example.org/other.mp3")
+	if CanonicalContentLocation("LOCAL_INTERNET_RADIO", other) == want {
+		t.Error("a different stream got the same key")
+	}
+
+	// A raw stream URL as location does not play (the speaker wants a station
+	// description), so it stays its own entry rather than matching the
+	// station that wraps it.
+	if CanonicalContentLocation("LOCAL_INTERNET_RADIO", stream) == want {
+		t.Error("a raw stream location matched the wrapped station")
+	}
+
+	if got := CanonicalContentLocation("TUNEIN", adapterStd); got != adapterStd {
+		t.Errorf("TUNEIN location changed to %q", got)
+	}
+}
+
+func TestStationStreamURLRejectsOtherLocations(t *testing.T) {
+	for _, location := range []string{
+		"",
+		"http://stream.example.org/live.mp3",
+		"/v1/playback/station/s12345",
+		"http://192.0.2.10:8000/custom/v1/playback/",
+		"http://192.0.2.10:8000/custom/v1/playback/bm90LWEtdXJs", // "not-a-url"
+		"/station?data=" + testOrionData,                         // no streamUrl
+	} {
+		if stream, ok := StationStreamURL(location); ok {
+			t.Errorf("StationStreamURL(%q) = %q, want none", location, stream)
+		}
 	}
 }

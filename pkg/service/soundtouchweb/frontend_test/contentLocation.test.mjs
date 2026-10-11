@@ -44,3 +44,34 @@ test('a relative recent borrows art from an absolute preset of the same station'
 
     assert.equal(artworkFor(recent, index), 'http://example.invalid/doc.png');
 });
+
+function orion(name, imageUrl, streamUrl) {
+    const data = Buffer.from(JSON.stringify({ name, imageUrl, streamUrl })).toString('base64');
+    return '/station?data=' + encodeURIComponent(data);
+}
+
+test('all spellings of one stream are one station (issue 784)', () => {
+    const stream = 'https://stream.example.org/technikum.mp3';
+    const rel = orion('TechnikumCity', '', stream);
+    const spellings = [
+        orion('Technikum City', 'https://img.example.org/logo.png', stream),
+        'http://192.0.2.10:8000/core02/svc-bmx-adapter-orion/prod/orion' + rel,
+        'http://192.0.2.10:8000/custom/v1/playback/' + Buffer.from(stream).toString('base64') + '?name=TechnikumCity',
+        'http://192.0.2.10:8000/custom/v1/playback/' + Buffer.from(stream).toString('base64url'),
+        'http://192.0.2.10:8000/custom/v1/playback/' + encodeURIComponent(stream),
+    ];
+    for (const location of spellings) {
+        assert.ok(sameContentLocation('LOCAL_INTERNET_RADIO', rel, location), location);
+    }
+    assert.equal(canonicalLocation('LOCAL_INTERNET_RADIO', rel), 'stream:' + stream);
+    assert.ok(!sameContentLocation('LOCAL_INTERNET_RADIO', rel, orion('TechnikumCity', '', 'https://stream.example.org/other.mp3')));
+    assert.ok(!sameContentLocation('LOCAL_INTERNET_RADIO', rel, stream));
+});
+
+test('the service and the player agree on the stream key', () => {
+    // Same input as TestCanonicalContentLocationKeysStationsByStream's
+    // playback adapter case on the Go side.
+    const stream = 'https://stream.example.org/technikum.mp3';
+    const adapter = 'http://192.0.2.10:8000/custom/v1/playback/' + Buffer.from(stream).toString('base64') + '?name=TechnikumCity';
+    assert.equal(canonicalLocation('LOCAL_INTERNET_RADIO', adapter), 'stream:' + stream);
+});

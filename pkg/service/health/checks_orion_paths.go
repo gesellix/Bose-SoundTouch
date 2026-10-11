@@ -616,7 +616,8 @@ func syncOrionDatastore(ds *datastore.DataStore, target Target, nowRelative map[
 				continue
 			}
 
-			if models.CanonicalContentLocation(current[i].Source, current[i].Location) == relative {
+			if models.CanonicalContentLocation(current[i].Source, current[i].Location) ==
+				models.CanonicalContentLocation(current[i].Source, relative) {
 				current[i].Location = relative
 			}
 		}

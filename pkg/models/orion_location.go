@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/url"
 	"strings"
 )
@@ -81,14 +83,24 @@ func OrionLocationHost(location string) string {
 	return u.Host
 }
 
-// CanonicalContentLocation returns the location to compare when deciding
-// whether two ContentItems play the same content. For LOCAL_INTERNET_RADIO
-// Orion stations that is the relative form, so an absolute location saved
-// before issue 769 and the relative one saved since count as one station.
-// Every other location is returned as it is.
+// CanonicalContentLocation returns the key to compare when deciding whether
+// two ContentItems play the same content. It is a comparison key, never a
+// location to store or send to a speaker.
+//
+// A LOCAL_INTERNET_RADIO station has several spellings that all play one
+// stream: the relative Orion location ("/station?data=..."), the absolute one
+// saved before issue 769, and the older playback adapter
+// ("<host>/custom/v1/playback/<base64 stream>?name=..."). They are keyed by
+// the stream URL they wrap (issue 784), so a list mixing them holds one
+// station, not three. An Orion location whose data cannot be decoded falls
+// back to its relative form. Every other location is returned as it is.
 func CanonicalContentLocation(source, location string) string {
 	if !strings.EqualFold(strings.TrimSpace(source), OrionLocalInternetRadioSource) {
 		return location
+	}
+
+	if stream, ok := StationStreamURL(location); ok {
+		return stationStreamKeyPrefix + stream
 	}
 
 	if relative, ok := RelativeOrionLocation(location); ok {
@@ -96,6 +108,107 @@ func CanonicalContentLocation(source, location string) string {
 	}
 
 	return location
+}
+
+// stationStreamKeyPrefix marks a canonical key built from a stream URL, so it
+// can never equal a real location.
+const stationStreamKeyPrefix = "stream:"
+
+// PlaybackAdapterPath is the path of the older LOCAL_INTERNET_RADIO playback
+// adapter: "<host>/custom/v1/playback/<base64 stream URL>?name=...". Its
+// locations carry the service's address, like the absolute Orion form.
+const PlaybackAdapterPath = "/custom/v1/playback/"
+
+// StationStreamURL returns the stream URL a LOCAL_INTERNET_RADIO station
+// location wraps: the "streamUrl" in an Orion location's data (relative or
+// absolute), or the path segment of a playback adapter location. It reports
+// false for anything else, including a raw stream URL used as a location.
+func StationStreamURL(location string) (string, bool) {
+	location = strings.TrimSpace(location)
+
+	if relative, ok := RelativeOrionLocation(location); ok {
+		return orionDataStreamURL(relative)
+	}
+
+	return playbackAdapterStreamURL(location)
+}
+
+func orionDataStreamURL(relative string) (string, bool) {
+	_, query, _ := strings.Cut(relative, "?")
+
+	values, err := url.ParseQuery(query)
+	if err != nil {
+		return "", false
+	}
+
+	decoded, ok := decodeLenientBase64(values.Get("data"))
+	if !ok {
+		return "", false
+	}
+
+	var payload struct {
+		StreamURL string `json:"streamUrl"`
+	}
+	if json.Unmarshal(decoded, &payload) != nil {
+		return "", false
+	}
+
+	stream := strings.TrimSpace(payload.StreamURL)
+
+	return stream, stream != ""
+}
+
+func playbackAdapterStreamURL(location string) (string, bool) {
+	path := location
+	if u, err := url.Parse(location); err == nil {
+		path = u.EscapedPath()
+	}
+
+	_, encoded, found := strings.Cut(path, PlaybackAdapterPath)
+	if !found || encoded == "" || strings.Contains(encoded, "/") {
+		return "", false
+	}
+
+	if unescaped, err := url.PathUnescape(encoded); err == nil {
+		encoded = unescaped
+	}
+
+	// The adapter accepts a base64-encoded URL and, failing that, a plain
+	// (URL-escaped) one; see HandleCustomPlayback.
+	stream := encoded
+	if decoded, ok := decodeLenientBase64(encoded); ok && looksLikeStreamURL(string(decoded)) {
+		stream = string(decoded)
+	}
+
+	if !looksLikeStreamURL(stream) {
+		return "", false
+	}
+
+	return stream, true
+}
+
+func looksLikeStreamURL(s string) bool {
+	u, err := url.Parse(s)
+
+	return err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https")
+}
+
+// decodeLenientBase64 accepts standard and URL-safe base64, padded or not.
+func decodeLenientBase64(s string) ([]byte, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, false
+	}
+
+	for _, enc := range []*base64.Encoding{
+		base64.StdEncoding, base64.URLEncoding, base64.RawStdEncoding, base64.RawURLEncoding,
+	} {
+		if decoded, err := enc.DecodeString(s); err == nil {
+			return decoded, true
+		}
+	}
+
+	return nil, false
 }
 
 func isRelativeOrionStation(location string) bool {
