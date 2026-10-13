@@ -122,10 +122,16 @@ export const api = {
         headers: JSON_HEADERS,
         body: JSON.stringify({ level }),
     }),
+    bassChecked: (id, level) => checkedReq(`/api/control/devices/${id}/action/bass`, {
+        method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ level }),
+    }),
     balance: (id, level) => req(`/api/control/devices/${id}/action/balance`, {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify({ level }),
+    }),
+    balanceChecked: (id, level) => checkedReq(`/api/control/devices/${id}/action/balance`, {
+        method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ level }),
     }),
     power: (id) => req(`/api/control/devices/${id}/power`, { method: 'POST' }),
     powerChecked: (id) => checkedReq(`/api/control/devices/${id}/power`, { method: 'POST' }),

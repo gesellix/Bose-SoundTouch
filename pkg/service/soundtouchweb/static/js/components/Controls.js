@@ -80,13 +80,6 @@ function IconRepeat({ one = false }) {
     </svg>`;
 }
 
-// balanceLabel renders a level as a side rather than a bare signed number:
-// "L3" reads better than "-3" on a control whose whole point is left/right.
-function balanceLabel(level) {
-    if (level === 0) return 'C';
-    return level < 0 ? `L${-level}` : `R${level}`;
-}
-
 export function Controls({
     deviceId,
     status: providedStatus,
@@ -118,18 +111,6 @@ export function Controls({
     const isMuted = status?.volume?.MuteEnabled ?? false;
     const shuffle = np?.ShuffleSetting ?? 'SHUFFLE_OFF';
     const repeat = np?.RepeatSetting ?? 'REPEAT_OFF';
-    const actualBass = status?.bass?.TargetBass ?? 0;
-    const hasBass = status?.bass != null;
-
-    // Balance belongs to a stereo pair and lives on its master, so the server
-    // only reports it when it actually applies here. The bounds come from the
-    // speaker (a SoundTouch 10 pair reports -7..7) rather than being assumed.
-    const balance = status?.balance;
-    const hasBalance = balance != null && balance.Available;
-    const actualBalance = balance?.Target ?? 0;
-    const balanceMin = balance?.Min ?? 0;
-    const balanceMax = balance?.Max ?? 0;
-
     const projectedVolumeRef = useRef(projectedVolume);
     const memberStatuses = controlsLogicalZone ? (zone?.members || []).map(member => [
         member.controlId, member.controlId === deviceId ? status : devices[member.controlId]?.status,
@@ -172,8 +153,6 @@ export function Controls({
     const schedulerRef = useRef(null);
     const [localVolume, setLocalVolume] = useState(projectedVolume);
     const localVolumeRef = useRef(projectedVolume);
-    const [localBass, setLocalBass] = useState(actualBass);
-    const [localBalance, setLocalBalance] = useState(actualBalance);
     const [volumeBusy, setVolumeBusy] = useState(false);
     const [volumeFailure, setVolumeFailure] = useState('');
 
@@ -326,8 +305,6 @@ export function Controls({
             localVolumeRef.current = projectedVolume;
         }
     }, [projectedVolume]);
-    useEffect(() => { setLocalBass(actualBass); }, [actualBass]);
-    useEffect(() => { setLocalBalance(actualBalance); }, [actualBalance]);
 
     const send = (key) => api.key(deviceId, key);
     const transportCommand = command?.action === 'play' || command?.action === 'pause'
@@ -341,10 +318,7 @@ export function Controls({
     // One throttle per slider per mount. The local state still updates on every
     // input, so the handle keeps up with the pointer; only the network write is
     // rate-limited.
-    const writeBass = useMemo(() => throttleTrailing(
-        (id, val) => api.bass(id, val), SLIDER_WRITE_INTERVAL_MS), []);
-    const writeBalance = useMemo(() => throttleTrailing(
-        (id, val) => api.balance(id, val), SLIDER_WRITE_INTERVAL_MS), []);
+
 
     function beginVolumeInteraction() {
         if (interactionActiveRef.current) return;
@@ -398,18 +372,6 @@ export function Controls({
         interactionDirtyRef.current = false;
         interactionActiveRef.current = false;
         queueVolume(event, true);
-    }
-
-    function onBassChange(e) {
-        const val = parseInt(e.target.value, 10);
-        setLocalBass(val);
-        writeBass(deviceId, val);
-    }
-
-    function onBalanceChange(e) {
-        const val = parseInt(e.target.value, 10);
-        setLocalBalance(val);
-        writeBalance(deviceId, val);
     }
 
     return html`
@@ -512,23 +474,6 @@ export function Controls({
                 </div>
             `}
             ${volumeFailure ? html`<div class="volume-control-failure" role="status">${volumeFailure}</div>` : null}
-            ${hasBass && html`
-                <div class="bass-row">
-                    <span class="bass-label">Bass</span>
-                    <input type="range" class="volume-slider" min="-9" max="9"
-                        value=${localBass} onInput=${onBassChange} />
-                    <span class="volume-value">${localBass > 0 ? '+' : ''}${localBass}</span>
-                </div>
-            `}
-            ${hasBalance && html`
-                <div class="bass-row">
-                    <span class="bass-label" title="Left / right balance for this stereo pair">L/R</span>
-                    <input type="range" class="volume-slider"
-                        min=${balanceMin} max=${balanceMax}
-                        value=${localBalance} onInput=${onBalanceChange} />
-                    <span class="volume-value">${balanceLabel(localBalance)}</span>
-                </div>
-            `}
         </div>
     `;
 }

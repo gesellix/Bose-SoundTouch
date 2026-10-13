@@ -124,3 +124,24 @@ test('logical zone volume methods use only volume routes', async () => {
     ]);
     assert.equal(calls.some(call => call.url.includes('balance')), false);
 });
+
+
+test('checked sound mutations preserve wire routes and distinguish rejection from uncertainty', async () => {
+    const previous = globalThis.fetch;
+    try {
+        for (const kind of ['bass', 'balance']) {
+            for (const code of [400, 500]) {
+                const calls = [];
+                globalThis.fetch = async (url, options) => {
+                    calls.push({ url, options });
+                    return new Response(JSON.stringify({ success: false, error: 'Sound request failed' }), { status: code });
+                };
+                await assert.rejects(api[`${kind}Checked`]('speaker.local', -1), error => error.definitive === (code === 400));
+                assert.equal(calls.length, 1);
+                assert.equal(calls[0].url, `/api/control/devices/speaker.local/action/${kind}`);
+                assert.equal(calls[0].options.method, 'POST');
+                assert.deepEqual(JSON.parse(calls[0].options.body), { level: -1 });
+            }
+        }
+    } finally { globalThis.fetch = previous; }
+});
