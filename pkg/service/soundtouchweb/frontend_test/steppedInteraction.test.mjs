@@ -86,7 +86,8 @@ test('queued clicks are checked against current availability and bounds before d
         assert.deepEqual(writes, [-1]);
         if (unavailable) {
             assert.equal(state.view().failure, '');
-            assert.equal(state.view().value, 0);
+            assert.equal(state.view().value, -1);
+            assert.equal(state.view().confirmedValue, -1);
         } else assert.match(state.view().failure, /range changed/);
         state.dispose();
     }
@@ -295,10 +296,122 @@ test('disable and reconnect discard queued choices without replaying them on the
     await flush();
     await flush();
     assert.deepEqual(writes, [-1]);
-    assert.equal(state.view().value, 0);
+    assert.equal(state.view().value, -1);
+    assert.equal(state.view().confirmedValue, -1);
     assert.equal(state.view().busy, false);
     assert.equal(state.view().failure, '');
     state.dispose();
+});
+
+test('cancelled pending admission retains the last sent failure, unverified warning or confirmation', async () => {
+    for (const response of [
+        { success: false, error: 'Speaker rejected sent write' },
+        { success: false, outcome: 'unverified', error: 'Sent write could not be verified' },
+        { success: true, confirmedValue: -1 },
+        new Error('Sent write transport failed'),
+    ]) {
+        for (const reconnect of [false, true]) {
+            const first = deferred();
+            const writes = [];
+            const state = createSteppedInteraction({ send: (_, value) => {
+                writes.push(value);
+                return first.promise;
+            } });
+            state.update(target());
+            state.choose(-1);
+            state.choose(-2);
+            state.update(target({ disabled: true }));
+            if (reconnect) state.update(target());
+            if (response instanceof Error) first.reject(response);
+            else first.resolve(response);
+            await flush();
+            await flush();
+            assert.deepEqual(writes, [-1]);
+            assert.equal(state.view().failure, response instanceof Error ? response.message : response.error || '');
+            assert.equal(state.view().confirmedValue, response.success ? -1 : null);
+            assert.equal(state.view().value, response.success ? -1 : 0);
+            assert.equal(state.view().busy, false);
+            state.update(target({ revision: 2, volume: 30, disabled: !reconnect }));
+            assert.equal(state.view().failure, response instanceof Error ? response.message : response.error || '');
+            assert.equal(state.view().confirmedValue, response.success ? -1 : null);
+            assert.deepEqual(writes, [-1]);
+            if (response.outcome === 'unverified' && reconnect) {
+                state.update(target({ value: -2, projection: '["bass",-2]' }));
+                assert.equal(state.view().failure, response.error);
+                state.update(target({ value: -1, projection: '["bass",-1]' }));
+                assert.equal(state.view().failure, '');
+                assert.equal(state.view().confirmedValue, -1);
+            }
+            state.dispose();
+        }
+    }
+});
+
+test('cancelled pending admission never inherits a sent outcome from a previous owner or epoch', async () => {
+    for (const replacement of [target({ key: 'physical-B' }), target({ key: '["physical-A",2]', epoch: 2 })]) {
+        for (const response of [
+            { success: false, error: 'Old owner failed' },
+            { success: false, outcome: 'unverified', error: 'Old owner unverified' },
+            { success: true, confirmedValue: -1 },
+            new Error('Old owner transport failed'),
+        ]) {
+            const first = deferred();
+            const writes = [];
+            const state = createSteppedInteraction({ send: (_, value) => {
+                writes.push(value);
+                return first.promise;
+            } });
+            state.update(target());
+            state.choose(-1);
+            state.choose(-2);
+            state.update(replacement);
+            state.choose(-3);
+            state.update({ ...replacement, disabled: true });
+            if (response instanceof Error) first.reject(response);
+            else first.resolve(response);
+            await flush();
+            await flush();
+            assert.deepEqual(writes, [-1]);
+            assert.equal(state.view().failure, '');
+            assert.equal(state.view().confirmedValue, null);
+            assert.equal(state.view().value, 0);
+            assert.equal(state.view().busy, false);
+            state.dispose();
+        }
+    }
+});
+
+test('an owner change after the sent outcome is remembered cannot restore it when the skipped choice settles', async () => {
+    for (const response of [
+        { success: false, error: 'Remembered old A failure' },
+        { success: false, outcome: 'unverified', error: 'Remembered old A warning' },
+        { success: true, confirmedValue: -1 },
+    ]) {
+        const first = deferred();
+        const writes = [];
+        const state = createSteppedInteraction({ send: (_, value) => {
+            writes.push(value);
+            return first.promise;
+        } });
+        state.update(target());
+        state.choose(-1);
+        state.choose(-2);
+        state.update(target({ disabled: true }));
+        first.resolve(response);
+        // Let the sent result settle and the skipped request start, but change
+        // ownership before the skipped request's completion microtask runs.
+        await Promise.resolve();
+        assert.equal(state.view().busy, true);
+        state.update(target({ key: 'physical-B' }));
+        state.update(target());
+        await flush();
+        assert.deepEqual(writes, [-1]);
+        assert.equal(state.view().failure, '');
+        assert.equal(state.view().confirmedValue, null);
+        assert.equal(state.view().value, 0);
+        assert.equal(state.view().busy, false);
+        state.dispose();
+    }
 });
 
 test('true identity replacement resets state and rejects delayed outcomes across A to B to A', async () => {

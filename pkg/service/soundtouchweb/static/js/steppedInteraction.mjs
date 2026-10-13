@@ -23,6 +23,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
     let unverifiedValue = null;
     let busy = false;
     let confirmedValue = null;
+    let lastCompletedWrite = null;
     const scheduler = createLatestWinsScheduler({
         interval: 0,
         ...timing,
@@ -32,52 +33,71 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
             if (!Number.isInteger(value) || value < target.min || value > target.max) {
                 return { success: false, error: 'The reported sound range changed. Refresh settings before retrying.' };
             }
+            request.dispatched = true;
             return send(target, value);
         },
         onResult(response, request) {
-            if (request.owner !== owner || !shouldSurfaceLatestFinal(request)) return;
+            if (request.owner !== owner) return;
+            if (request.dispatched) lastCompletedWrite = { response, request };
+            if (!shouldSurfaceLatestFinal(request)) return;
             if (response?.skipped) {
-                local = target.value;
-                confirmedValue = null;
-                onChange();
+                // A cancelled pending choice was never written. Its completion
+                // must retain the last sent outcome rather than replace it.
+                if (lastCompletedWrite?.request.owner === owner) {
+                    if ('error' in lastCompletedWrite) surfaceError(lastCompletedWrite.error);
+                    else surfaceResult(lastCompletedWrite.response, lastCompletedWrite.request);
+                } else {
+                    local = target.value;
+                    confirmedValue = null;
+                    onChange();
+                }
                 return;
             }
-            if (response?.outcome === 'unverified' && !target.disabled && request.projection !== target.projection &&
-                target.value === request.value && target.value >= target.min && target.value <= target.max) {
-                failure = '';
-                failureFloor = null;
-                unverifiedValue = null;
-                confirmedValue = target.value;
-                local = target.value;
-                onChange();
-                return;
-            }
-            failure = response?.success ? '' : response?.error || 'Sound setting update failed.';
-            failureFloor = failure ? target.projection : null;
-            unverifiedValue = failure && response?.outcome === 'unverified' ? request.value : null;
-            if (request.projection === target.projection && response?.success && Number.isInteger(response.confirmedValue)) {
-                confirmedValue = response.confirmedValue;
-                local = confirmedValue;
-            } else {
-                confirmedValue = null;
-                local = target.value;
-            }
-            onChange();
+            surfaceResult(response, request);
         },
         onError(error, request) {
-            if (request.owner !== owner || !shouldSurfaceLatestFinal(request)) return;
-            failure = error?.message || 'Sound setting update failed.';
-            failureFloor = target.projection;
-            unverifiedValue = null;
-            local = target.value;
-            confirmedValue = null;
-            onChange();
+            if (request.owner !== owner) return;
+            if (request.dispatched) lastCompletedWrite = { error, request };
+            if (shouldSurfaceLatestFinal(request)) surfaceError(error);
         },
         onStateChange(state) {
             busy = state.active;
             onChange();
         },
     });
+
+    function surfaceResult(response, request) {
+        if (response?.outcome === 'unverified' && !target.disabled && request.projection !== target.projection &&
+            target.value === request.value && target.value >= target.min && target.value <= target.max) {
+            failure = '';
+            failureFloor = null;
+            unverifiedValue = null;
+            confirmedValue = target.value;
+            local = target.value;
+            onChange();
+            return;
+        }
+        failure = response?.success ? '' : response?.error || 'Sound setting update failed.';
+        failureFloor = failure ? target.projection : null;
+        unverifiedValue = failure && response?.outcome === 'unverified' ? request.value : null;
+        if (request.projection === target.projection && response?.success && Number.isInteger(response.confirmedValue)) {
+            confirmedValue = response.confirmedValue;
+            local = confirmedValue;
+        } else {
+            confirmedValue = null;
+            local = target.value;
+        }
+        onChange();
+    }
+
+    function surfaceError(error) {
+        failure = error?.message || 'Sound setting update failed.';
+        failureFloor = target.projection;
+        unverifiedValue = null;
+        local = target.value;
+        confirmedValue = null;
+        onChange();
+    }
 
     function update(next) {
         if (target && next.disabled !== target.disabled) {
@@ -86,6 +106,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         }
         if (!target || next.key !== target.key) {
             owner += 1;
+            lastCompletedWrite = null;
             tap = null;
             local = next.value;
             failure = '';
@@ -160,6 +181,6 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         update, choose, step, keyDown, beginTap, moveTap, endTap,
         cancelTap: () => { tap = null; },
         view: () => ({ value: local, failure, busy, confirmedValue }),
-        dispose() { tap = null; scheduler.dispose(); },
+        dispose() { tap = null; lastCompletedWrite = null; scheduler.dispose(); },
     };
 }
