@@ -21,7 +21,6 @@ test('logical zones render one volume control per logical member, outside physic
     assert.equal((memberVolume.match(/type="range"/g) || []).length, 1);
     assert.match(memberVolume, /api\.zoneMemberVolume/);
 
-    for (const source of [zone, memberVolume]) {
-        assert.doesNotMatch(source, /balance|MemberSettings/i);
-    }
+    assert.doesNotMatch(memberVolume, /balance|MemberSettings/i);
+    assert.doesNotMatch(zone, /api\.balance/);
 });

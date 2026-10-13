@@ -2002,3 +2002,103 @@ img.recent-source-icon { width: 20px; height: 20px; object-fit: contain; filter:
 .announcement-dismiss:hover {
     color: var(--text);
 }
+.member-settings-content {
+    padding: 0 12px 12px;
+}
+
+.member-settings-content > .settings-section {
+    margin-top: 12px;
+}
+
+.sound-settings-content {
+    display: grid;
+    gap: 16px;
+}
+
+.sound-control-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.sound-control-scale {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    touch-action: pan-y;
+    user-select: none;
+    border-radius: var(--radius);
+}
+
+.sound-control-scale:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.sound-control-scale[aria-disabled="true"] { opacity: .5; cursor: default; }
+
+.sound-control-scale-track {
+    position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+}
+
+.sound-control-scale-track::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 9px;
+    height: 2px;
+    background: var(--border);
+}
+
+.sound-control-tick { position: relative; width: 0; text-align: center; }
+.sound-control-tick-mark {
+    display: block;
+    position: relative;
+    left: -2px;
+    width: 4px;
+    height: 18px;
+    border-radius: 2px;
+    background: var(--text-dim);
+}
+.sound-control-tick.default .sound-control-tick-mark { background: var(--text); }
+.sound-control-tick.selected .sound-control-tick-mark {
+    left: -6px;
+    width: 12px;
+    background: var(--accent);
+}
+.sound-control-tick-label {
+    display: block;
+    width: 3ch;
+    margin-left: -1.5ch;
+    font-size: .75rem;
+    color: var(--text-dim);
+}
+.sound-control-scale-hint { color: var(--text-dim); font-size: .75rem; margin: 0 0 8px; }
+
+.sound-control-steps {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.sound-control-steps button {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+.sound-control-steps output {
+    min-width: 54px;
+    text-align: center;
+}
+
+.sound-control-readback {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    margin-top: 8px;
+}
