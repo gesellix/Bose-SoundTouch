@@ -73,27 +73,30 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 check(!root.querySelector('.sound-settings > summary'), 'Nested Sound must be subordinate');
                 check([...root.querySelectorAll('.settings-section')].slice(1).every(node => !node.open), 'Physical device groups must start collapsed');
                 const controls = [...root.querySelectorAll('.sound-control')];
+                const settled = (node, value) => node.querySelector('output').textContent === value
+                    && node.getAttribute('aria-busy') === 'false' && !node.querySelector('.sound-control-readback');
                 check(controls[0].textContent.includes('left speaker') && controls[1].textContent.includes('right speaker'), 'Bass scope order must be LEFT then RIGHT');
                 for (const button of root.querySelectorAll('button')) { button.focus(); button.blur(); }
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await new Promise(resolve => setTimeout(resolve, 20));
                 check(writes.length === 0, 'Focus, blur or rerender synthesized a sound write');
                 controls[0].querySelector('button').click();
-                await waitFor(() => controls[0].textContent.includes('Speaker: -1'), 'Bass write was not confirmed');
+                await waitFor(() => settled(controls[0], '-1'), 'Bass write was not confirmed');
                 check(writes.length === 1 && writes[0].join('|') === 'bass|left.local|-1', 'A discrete bass click must write exactly once to its physical registry key');
-                controls[0].querySelectorAll('button')[2].click();
-                await waitFor(() => writes.length === 2 && controls[0].textContent.includes('Speaker: 0'), 'Bass reset was not confirmed');
-                controls[2].querySelectorAll('button')[1].click();
-                await waitFor(() => writes.length === 3 && controls[2].textContent.includes('Speaker: Right 1'), 'Pair balance was not confirmed');
+                controls[0].querySelector('[data-action="reset"]').click();
+                await waitFor(() => writes.length === 2 && settled(controls[0], '0'), 'Bass reset was not confirmed');
+                controls[2].querySelector('[data-action="increase"]').click();
+                await waitFor(() => writes.length === 3 && settled(controls[2], 'Right 1'), 'Pair balance was not confirmed');
                 check(writes[2].join('|') === 'balance|right.local|1', 'Balance must follow the confirmed RIGHT master');
                 api.bass = async () => ({ success: false, error: 'Final bass write failed' });
                 controls[0].querySelector('button').click();
                 await waitFor(() => controls[0].textContent.includes('Final bass write failed'), 'Final failure disappeared');
+                check(controls[0].textContent.includes('Speaker: 0'), 'Failure must retain the actual speaker readback');
                 for (const button of controls[0].querySelectorAll('button')) { button.focus(); button.blur(); }
                 check(controls[0].textContent.includes('Final bass write failed'), 'Blur cleared a final failure');
                 pair.settingsTargets = [right, { ...left, status: { ...left.status, revision: 2, bass: { ActualBass: -4 } } }];
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
-                await waitFor(() => controls[0].textContent.includes('Speaker: -4') && !controls[0].textContent.includes('Final bass write failed'), 'External child readback did not converge');
+                await waitFor(() => settled(controls[0], '-4') && !controls[0].textContent.includes('Final bass write failed'), 'External child readback did not converge');
                 let settleBass;
                 let bassStarted = false;
                 api.bass = () => {
@@ -225,7 +228,7 @@ func TestScopedSoundSettingsConnectionEpochOwnership(t *testing.T) {
                 await waitFor(() => root.querySelector('.sound-control').getAttribute('aria-busy') === 'false',
                     'Old connection request did not settle');
                 check(writes.length === 1, 'Queued old epoch value was sent to the new connection');
-                check(root.querySelector('output').textContent === '0' && root.textContent.includes('Speaker: 0'),
+                check(root.querySelector('output').textContent === '0' && !root.querySelector('.sound-control-readback'),
                     'Old successful readback overwrote new connection state');
 
                 render(null, root);
@@ -247,9 +250,11 @@ func TestScopedSoundSettingsConnectionEpochOwnership(t *testing.T) {
                     'New connection did not reload reported acoustic capabilities');
                 settleOldSettings(snapshot(1, 9, -1));
                 await new Promise(resolve => setTimeout(resolve, 30));
-                check(root.textContent.includes('Range -9…0') && !root.textContent.includes('Range -9…9'),
+                const scale = root.querySelector('.sound-control-scale');
+                check(scale.getAttribute('aria-valuemin') === '-9' && scale.getAttribute('aria-valuemax') === '0',
                     'Old connection settings capabilities replaced new readback');
-                check(root.textContent.includes('Speaker: 0'), 'Old settings value settled into new connection');
+                check(scale.getAttribute('aria-valuenow') === '0' && root.querySelector('output').textContent === '0',
+                    'Old settings value settled into new connection');
             } finally {
                 render(null, root);
                 root.remove();
@@ -303,9 +308,11 @@ func TestScopedSoundSettingsTapAndRapidSteps(t *testing.T) {
                 decrease.click(); decrease.click(); decrease.click();
                 check(writes.length === 1 && writes[0] === -1, 'First step must send immediately, with one active write');
                 await wait(() => root.querySelector('output').textContent === '-3', 'Synchronous clicks lost their accumulated steps');
+                check(root.textContent.includes('Speaker: 0'), 'Pending preview must show the actual speaker readback');
                 releaseFirst();
                 await wait(() => writes.length === 2 && root.querySelector('.sound-control').getAttribute('aria-busy') === 'false', 'Latest waiting step did not settle');
                 check(writes.join(',') === '-1,-3' && maxActive === 1 && actual === -3, 'Rapid steps must preserve latest absolute value and serialize writes');
+                check(!root.querySelector('.sound-control-readback'), 'Confirmed value must not repeat speaker readback');
                 const scale = root.querySelector('.sound-control-scale');
                 check(scale && scale.getAttribute('role') === 'slider' && scale.tabIndex === 0, 'Scale must be keyboard accessible');
                 // Synthetic PointerEvents do not enter Chromium's native active-pointer registry.
@@ -339,5 +346,75 @@ func TestScopedSoundSettingsTapAndRapidSteps(t *testing.T) {
         })()`, chromedp.EvalAwaitPromise),
 	); err != nil {
 		t.Fatalf("tap and rapid sound steps: %v", err)
+	}
+}
+
+func TestScopedSoundSettingsCompactGeometry(t *testing.T) {
+	for _, viewport := range []struct {
+		name          string
+		width, height int64
+	}{
+		{"desktop", 1280, 800},
+		{"iPad", 768, 1024},
+	} {
+		t.Run(viewport.name, func(t *testing.T) {
+			app := NewWebApp()
+			router := chi.NewRouter()
+			app.Mount(router, nil)
+			server := httptest.NewServer(router)
+			t.Cleanup(server.Close)
+			ctx := newHeadlessChromeContext(t)
+			if err := chromedp.Do(ctx,
+				chromedp.EmulateViewport(viewport.width, viewport.height),
+				chromedp.Navigate(server.URL+"/app"),
+				chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+				chromedp.Evaluate[chromedp.Void](`(async () => {
+                    const [{ SteppedSoundControl }, { h, render }] = await Promise.all([
+                        import('/app/static/js/components/SteppedSoundControl.js'),
+                        import('/app/static/lib/preact.module.js'),
+                    ]);
+                    const root = document.createElement('div');
+                    root.style.maxWidth = '320px'; document.body.append(root);
+                    const check = (ok, why) => { if (!ok) throw new Error(why); };
+                    const target = { controlId: 'speaker.local', physicalId: 'speaker', name: 'Room speaker',
+                        status: { epoch: 1, revision: 1, connectivity: 'online' } };
+                    try {
+                        for (const kind of ['bass', 'balance']) {
+                            const control = { min: kind === 'bass' ? -9 : -7, max: kind === 'bass' ? 0 : 7,
+                                value: -3, defaultValue: 0 };
+                            render(h(SteppedSoundControl, { kind, target, control, ownerKey: kind }), root);
+                            const sound = root.querySelector('.sound-control');
+                            const scale = sound.querySelector('.sound-control-scale');
+                            const decrease = sound.querySelector('[data-action="decrease"]').getBoundingClientRect();
+                            const increase = sound.querySelector('[data-action="increase"]').getBoundingClientRect();
+                            const area = scale.getBoundingClientRect();
+                            check(decrease.width >= 44 && decrease.height >= 44 && increase.width >= 44 && increase.height >= 44,
+                                kind + ': side buttons lost their touch area');
+                            check(area.width >= 44 && area.height >= 44 && Math.abs(decrease.top - area.top) < 1
+                                && Math.abs(increase.top - area.top) < 1 && decrease.right < area.left && area.right < increase.left,
+                                kind + ': scale must remain between side buttons in one 44px row');
+                            check(sound.getBoundingClientRect().height <= 180, kind + ': settled control is no longer compact');
+                            const output = sound.querySelector('output');
+                            check(output.getAttribute('aria-live') === 'polite'
+                                && output.getBoundingClientRect().top < area.top, 'Current value must remain in the heading');
+                            check(sound.querySelector('.sound-control-scope').textContent === target.name, 'Scope label disappeared');
+                            check(scale.getAttribute('role') === 'slider' && scale.getAttribute('aria-valuemin') === String(control.min)
+                                && scale.getAttribute('aria-valuemax') === String(control.max), 'Compact scale lost its accessible range');
+                            const selected = sound.querySelector('.sound-control-tick.selected');
+                            const ordinary = sound.querySelector('.sound-control-tick:not(.selected):not(.default)');
+                            check(selected.getBoundingClientRect().height > ordinary.getBoundingClientRect().height
+                                && ordinary.getBoundingClientRect().width > ordinary.getBoundingClientRect().height,
+                                'Selected step must stand above short horizontal segments');
+                            check(sound.querySelector('.sound-control-footer').textContent.includes(kind === 'balance' ? 'Default Centered' : 'Default 0'),
+                                'Footer must format the reported default');
+                            check(!sound.querySelector('.sound-control-readback') && !sound.textContent.includes('Range')
+                                && !sound.textContent.includes('Tap the scale'), 'Settled control repeats routine guidance or readback');
+                        }
+                    } finally { render(null, root); root.remove(); }
+                })()`, chromedp.EvalAwaitPromise),
+			); err != nil {
+				t.Fatalf("compact sound geometry: %v", err)
+			}
+		})
 	}
 }
