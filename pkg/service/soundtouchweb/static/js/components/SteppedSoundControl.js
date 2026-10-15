@@ -21,7 +21,7 @@ export function SteppedSoundControl({ kind, target, control, ownerKey, available
         key: JSON.stringify([ownerKey, target.controlId, target.physicalId, status?.epoch, target.pairId || '', kind]),
         // Aggregate status revisions include volume and transport updates.
         // Only this acoustic value can recover this control's outcome.
-        projection: JSON.stringify([kind, control.value]),
+        projection: JSON.stringify([kind, control.value, control.pairValues]),
         disabled,
     });
     useEffect(() => () => interaction.current.dispose(), []);
