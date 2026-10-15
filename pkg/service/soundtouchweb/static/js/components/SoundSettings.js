@@ -2,7 +2,7 @@ import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
-import { bassControl, balanceControl, physicalSettingsTargets, settingsBassReadback } from '../soundSettingsPresentation.mjs';
+import { bassControl, pairBassControl, balanceControl, physicalSettingsTargets, settingsBassReadback } from '../soundSettingsPresentation.mjs';
 import { SteppedSoundControl } from './SteppedSoundControl.js';
 
 const html = htm.bind(h);
@@ -13,7 +13,7 @@ export function SoundSettings({ deviceId, device, nested = false, active = false
     const [loadError, setLoadError] = useState('');
     const [retry, setRetry] = useState(0);
     const ownership = useRef({ key: '', generation: 0 });
-    const lastPresentation = useRef({ key: '', bass: {}, balance: null });
+    const lastPresentation = useRef({ key: '', bass: {}, pairBass: null, balance: null });
     const targets = physicalSettingsTargets(deviceId, device);
     const ownerKey = JSON.stringify([deviceId, device?.stereoPair?.id || '', device?.stereoPair?.masterDeviceId || '',
         targets.map(target => [target.controlId, target.physicalId, target.role, target.status?.epoch])]);
@@ -21,7 +21,7 @@ export function SoundSettings({ deviceId, device, nested = false, active = false
         key: ownerKey, generation: ownership.current.generation + 1,
     };
     const generation = ownership.current.generation;
-    if (lastPresentation.current.key !== ownerKey) lastPresentation.current = { key: ownerKey, bass: {}, balance: null };
+    if (lastPresentation.current.key !== ownerKey) lastPresentation.current = { key: ownerKey, bass: {}, pairBass: null, balance: null };
     useEffect(() => {
         if (!(nested ? active : open)) return;
         let disposed = false;
@@ -54,13 +54,25 @@ export function SoundSettings({ deviceId, device, nested = false, active = false
     const currentBalance = balanceControl(deviceId, device);
     if (currentBalance) lastPresentation.current.balance = currentBalance;
     const balance = currentBalance || lastPresentation.current.balance;
+    const paired = Boolean(device?.stereoPair);
+    const currentPairBass = paired && bassTargets.every(entry => entry.valid)
+        ? pairBassControl(deviceId, { ...device, settingsTargets: bassTargets.map(entry => entry.target) }) : null;
+    if (currentPairBass) lastPresentation.current.pairBass = currentPairBass;
+    const pairBass = currentPairBass || lastPresentation.current.pairBass;
     const content = html`
         <div class="settings-content sound-settings-content">
             ${loadError ? html`<div class="settings-error" role="alert">${loadError}
                 <button type="button" class="btn-secondary" onClick=${() => setRetry(value => value + 1)}>Retry</button></div>` : null}
-            ${bassTargets.filter(entry => entry.control).map(({ target, control, valid }) => html`<${SteppedSoundControl}
+            ${!paired ? bassTargets.filter(entry => entry.control).map(({ target, control, valid }) => html`<${SteppedSoundControl}
                 key=${`bass:${target.controlId}:${target.physicalId}`} kind="bass"
-                target=${target} control=${control} ownerKey=${ownerKey} available=${valid} />`)}
+                target=${target} control=${control} ownerKey=${ownerKey} available=${valid} />`) : null}
+            ${paired && pairBass ? html`<${SteppedSoundControl}
+                key=${`pair-bass:${pairBass.controlId}:${pairBass.pairId}`} kind="bass"
+                target=${pairBass} control=${pairBass} ownerKey=${ownerKey} available=${Boolean(currentPairBass)} />` : null}
+            ${paired && !currentPairBass && (pairBass || bassTargets.some(entry => entry.control))
+                ? html`<div class="sound-control-readback">Pair bass requires both speakers to report matching settings and a confirmed stereo pair.</div>` : null}
+            ${currentPairBass?.observationConfirmed === false
+                ? html`<div class="sound-control-readback">The speakers currently report different bass values.</div>` : null}
             ${balance ? html`<${SteppedSoundControl} key=${`balance:${balance.controlId}:${balance.pairId}`}
                 kind="balance" target=${{ ...balance, status: device.status }} control=${balance} ownerKey=${ownerKey}
                 available=${Boolean(currentBalance)} />` : null}

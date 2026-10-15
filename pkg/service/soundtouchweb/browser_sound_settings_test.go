@@ -58,7 +58,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
             api.settings = async id => ({ success: true, data: { targetIdentity: id.split('.')[0], support: {},
                 bassCapabilities: { BassAvailable: true, BassMin: -9, BassMax: 0, BassDefault: 0 },
                 statusEpoch: 1, statusRevision: 1, bass: { ActualBass: bass[id] } } });
-            api.bass = async (id, value) => { writes.push(['bass', id, value]); bass[id] = value; return { success: true }; };
+            api.bass = async (id, value) => { writes.push(['bass', id, value]); bass['left.local'] = value; bass['right.local'] = value; return { success: true }; };
             api.balance = async (id, value) => { writes.push(['balance', id, value]); balance = value; return { success: true }; };
             api.device = async () => ({ success: true, data: { ...pair,
                 status: { ...pair.status, balance: { ...pair.status.balance, Actual: balance } } } });
@@ -67,7 +67,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 const disclosure = root.querySelector('.member-settings');
                 check(disclosure && !disclosure.open, 'Member Settings must start collapsed');
                 disclosure.open = true;
-                await waitFor(() => root.querySelectorAll('.sound-control').length === 3, 'Reported scoped controls did not load');
+                await waitFor(() => root.querySelectorAll('.sound-control').length === 2, 'Reported scoped controls did not load');
                 const summaries = [...root.querySelectorAll('.settings-section > summary')].map(node => node.textContent.trim());
                 check(summaries.length === 3 && summaries[0].includes('Settings') && summaries[1].includes('LEFT') && summaries[2].includes('RIGHT'), 'One Settings must contain deterministic device groups');
                 check(!root.querySelector('.sound-settings > summary'), 'Nested Sound must be subordinate');
@@ -75,18 +75,28 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 const controls = [...root.querySelectorAll('.sound-control')];
                 const settled = (node, value) => node.querySelector('output').textContent === value
                     && node.getAttribute('aria-busy') === 'false' && !node.querySelector('.sound-control-readback');
-                check(controls[0].textContent.includes('left speaker') && controls[1].textContent.includes('right speaker'), 'Bass scope order must be LEFT then RIGHT');
+                check(controls[0].textContent.includes('Room pair') && controls[1].textContent.includes('Room pair'), 'Bass and balance must each identify the logical pair');
+                const groups = [...root.querySelectorAll('.member-settings-content > .settings-section')];
+                const rotation = node => getComputedStyle(node.querySelector(':scope > summary > .settings-chevron')).transform;
+                await new Promise(resolve => setTimeout(resolve, 180));
+                check(rotation(groups[0]) !== rotation(disclosure), 'Open Settings rotated the collapsed child chevron');
+                groups[0].open = true;
+                await new Promise(resolve => setTimeout(resolve, 180));
+                check(rotation(groups[0]) === rotation(disclosure) && rotation(groups[1]) !== rotation(disclosure), 'Each chevron must follow only its own disclosure');
+                groups[0].open = false;
+                await new Promise(resolve => setTimeout(resolve, 180));
+                check(rotation(groups[0]) !== rotation(disclosure), 'Collapsed child chevron stayed open');
                 for (const button of root.querySelectorAll('button')) { button.focus(); button.blur(); }
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await new Promise(resolve => setTimeout(resolve, 20));
                 check(writes.length === 0, 'Focus, blur or rerender synthesized a sound write');
                 controls[0].querySelector('button').click();
                 await waitFor(() => settled(controls[0], '-1'), 'Bass write was not confirmed');
-                check(writes.length === 1 && writes[0].join('|') === 'bass|left.local|-1', 'A discrete bass click must write exactly once to its physical registry key');
+                check(writes.length === 1 && writes[0].join('|') === 'bass|right.local|-1', 'Pair bass must write once to the confirmed RIGHT master');
                 controls[0].querySelector('[data-action="reset"]').click();
                 await waitFor(() => writes.length === 2 && settled(controls[0], '0'), 'Bass reset was not confirmed');
-                controls[2].querySelector('[data-action="increase"]').click();
-                await waitFor(() => writes.length === 3 && settled(controls[2], 'Right 1'), 'Pair balance was not confirmed');
+                controls[1].querySelector('[data-action="increase"]').click();
+                await waitFor(() => writes.length === 3 && settled(controls[1], 'Right 1'), 'Pair balance was not confirmed');
                 check(writes[2].join('|') === 'balance|right.local|1', 'Balance must follow the confirmed RIGHT master');
                 api.bass = async () => ({ success: false, error: 'Final bass write failed' });
                 controls[0].querySelector('button').click();
@@ -95,6 +105,12 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 for (const button of controls[0].querySelectorAll('button')) { button.focus(); button.blur(); }
                 check(controls[0].textContent.includes('Final bass write failed'), 'Blur cleared a final failure');
                 pair.settingsTargets = [right, { ...left, status: { ...left.status, revision: 2, bass: { ActualBass: -4 } } }];
+                render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
+                await waitFor(() => root.textContent.includes('different bass values'), 'Pair disagreement was not explained');
+                check(!controls[0].querySelector('button').disabled, 'Transient pair disagreement discarded rapid choices');
+                check(controls[0].textContent.includes('Final bass write failed'), 'One physical bass update cleared pair failure');
+                right.status = { ...right.status, revision: 2, bass: { ActualBass: -4 } };
+                bass['left.local'] = -4; bass['right.local'] = -4;
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await waitFor(() => settled(controls[0], '-4') && !controls[0].textContent.includes('Final bass write failed'), 'External child readback did not converge');
                 let settleBass;
@@ -109,7 +125,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                     connectivity: 'offline', bass: null, volume: { ActualVolume: 30 } } }];
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await waitFor(() => controls[0].querySelector('button').disabled, 'Unavailable bass did not disable writes');
-                check(controls[0].isConnected && root.querySelectorAll('.sound-control').length === 3,
+                check(controls[0].isConnected && root.querySelectorAll('.sound-control').length === 2,
                     'Same physical target lost its mounted sound control');
                 settleBass({ success: false, error: 'Delayed unavailable bass failure' });
                 await waitFor(() => controls[0].textContent.includes('Delayed unavailable bass failure'), 'Availability loss discarded pending bass outcome');
@@ -129,19 +145,19 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                     balanceStarted = true;
                     return new Promise(resolve => { settleBalance = resolve; });
                 };
-                controls[2].querySelector('button').click();
+                controls[1].querySelector('button').click();
                 await waitFor(() => balanceStarted, 'Balance interaction was not dispatched');
                 pair.status = { ...pair.status, revision: 2, connectivity: 'offline', group: null,
                     balance: { ...pair.status.balance, Available: false }, volume: { ActualVolume: 30 } };
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
-                await waitFor(() => controls[2].querySelector('button').disabled, 'Unavailable balance did not disable writes');
-                check(controls[2].isConnected, 'Availability loss unmounted pair balance');
+                await waitFor(() => controls[1].querySelector('button').disabled, 'Unavailable balance did not disable writes');
+                check(controls[1].isConnected, 'Availability loss unmounted pair balance');
                 settleBalance({ success: false, error: 'Delayed unavailable balance failure' });
-                await waitFor(() => controls[2].textContent.includes('Delayed unavailable balance failure'), 'Unavailable pair discarded pending final error');
+                await waitFor(() => controls[1].textContent.includes('Delayed unavailable balance failure'), 'Unavailable pair discarded pending final error');
                 pair.status = { ...pair.status, revision: 3, volume: { ActualVolume: 40 } };
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await new Promise(resolve => setTimeout(resolve, 20));
-                check(controls[2].textContent.includes('Delayed unavailable balance failure'), 'Unrelated master volume projection cleared balance error');
+                check(controls[1].textContent.includes('Delayed unavailable balance failure'), 'Unrelated master volume projection cleared balance error');
                 window.__scopedSoundSettingsResult = { ok: true };
             } catch (error) {
                 window.__scopedSoundSettingsResult = { ok: false, error: error.stack || String(error) };

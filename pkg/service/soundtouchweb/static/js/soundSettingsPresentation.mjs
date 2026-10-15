@@ -22,17 +22,39 @@ export function settingsBassReadback(status, snapshot) {
 }
 
 export function balanceControl(deviceId, device) {
-    const pair = device?.stereoPair;
-    const targets = physicalSettingsTargets(deviceId, device);
-    const master = targets.find(target => target.physicalId === pair?.masterDeviceId);
+    const coherent = coherentPair(deviceId, device);
     const balance = device?.status?.balance;
     const range = reportedRange(balance?.Available, balance?.Min, balance?.Max,
         balance?.Default, balance?.Actual);
-    if (!range || !pair?.id || !samePairGroup(pair, device?.status?.group) || targets.length !== 2 || !master ||
+    return range && coherent ? { ...range, ...coherent.master, ...coherent.identity } : null;
+}
+
+function coherentPair(deviceId, device) {
+    const pair = device?.stereoPair;
+    const targets = physicalSettingsTargets(deviceId, device);
+    const master = targets.find(target => target.physicalId === pair?.masterDeviceId);
+    if (!pair?.id || !samePairGroup(pair, device?.status?.group) || targets.length !== 2 || !master ||
         !targets.every(target => samePairGroup(pair, target.status?.group)) ||
         !targets.some(target => target.role === 'LEFT') || !targets.some(target => target.role === 'RIGHT')) return null;
-    return { ...range, ...master, name: pair.name || device?.info?.name || 'Stereo pair', pairId: pair.id,
-        pairMembers: pair.members.map(member => [member.deviceId, member.role]).sort() };
+    return { master, targets, identity: {
+        name: pair.name || device?.info?.name || 'Stereo pair', pairId: pair.id,
+        pairMembers: pair.members.map(member => [member.deviceId, member.role]).sort(),
+    } };
+}
+
+export function pairBassControl(deviceId, device) {
+    const coherent = coherentPair(deviceId, device);
+    if (!coherent || !coherent.targets.every(target => target.status?.connectivity === 'online' &&
+        Number.isSafeInteger(target.status?.epoch))) return null;
+    const ranges = coherent.targets.map(bassControl);
+    if (ranges.some(range => !range) || ['min', 'max', 'defaultValue'].some(key => ranges[0][key] !== ranges[1][key])) return null;
+    const range = bassControl(coherent.master);
+    return { ...range, ...coherent.master, ...coherent.identity,
+        observationConfirmed: ranges.every(member => member.value === range.value),
+        pairValues: ranges.map(member => member.value),
+        bassMembers: coherent.targets.map(target => ({ controlId: target.controlId, physicalId: target.physicalId,
+            epoch: target.status?.epoch })),
+    };
 }
 
 function samePairGroup(pair, group) {
@@ -76,19 +98,46 @@ export async function writeSoundSetting(api, target, value) {
     }
     if (response?.success === false && response.outcome !== 'unverified') return response;
     try {
-        const readback = target.kind === 'bass'
-            ? await api.settings(target.controlId) : await api.device(target.controlId);
-        const data = readback?.data;
-        const epoch = target.kind === 'bass' ? data?.statusEpoch : data?.status?.epoch;
-        const sameConnection = Number.isSafeInteger(target.status?.epoch) && epoch === target.status.epoch;
-        const confirmation = target.kind === 'bass' ? bassControl({ controlId: target.controlId,
-            physicalId: data?.targetIdentity, bassCapabilities: data?.bassCapabilities, status: { bass: data?.bass } })
-            : balanceControl(target.controlId, data);
-        const sameTarget = target.kind === 'bass' ? data?.targetIdentity === target.physicalId
-            : confirmation?.physicalId === target.physicalId && confirmation?.pairId === target.pairId &&
-                JSON.stringify(confirmation.pairMembers) === JSON.stringify(target.pairMembers);
-        if (readback?.success && !data?.errors?.bass && sameConnection && sameTarget && confirmation?.value === value) {
-            return { success: true, confirmedValue: confirmation.value };
+        if (target.kind === 'bass' && target.pairId) {
+            // The firmware mirrors pair bass. Write the master once, then verify
+            // both physical values and the current pair; never fan out/replay.
+            const snapshots = await Promise.all(target.bassMembers.map(async member => {
+                const result = await api.settings(member.controlId);
+                const data = result?.data;
+                if (!result?.success || data?.errors?.bass || data?.targetIdentity !== member.physicalId ||
+                    data.statusEpoch !== member.epoch) throw new Error('Pair member readback changed.');
+                return [member.physicalId, data];
+            }));
+            const result = await api.device(target.controlId);
+            const data = result?.data;
+            const values = new Map(snapshots);
+            const confirmation = pairBassControl(target.controlId, { ...data,
+                settingsTargets: (data?.settingsTargets || []).map(member => {
+                    const snapshot = values.get(member.physicalId);
+                    return { ...member, bassCapabilities: snapshot?.bassCapabilities,
+                        status: { ...member.status, bass: settingsBassReadback(member.status, snapshot) } };
+                }),
+            });
+            if (result?.success && confirmation?.observationConfirmed && confirmation.value === value && confirmation.physicalId === target.physicalId &&
+                confirmation.pairId === target.pairId && JSON.stringify(confirmation.pairMembers) === JSON.stringify(target.pairMembers) &&
+                JSON.stringify(confirmation.bassMembers) === JSON.stringify(target.bassMembers)) {
+                return { success: true, confirmedValue: value };
+            }
+        } else {
+            const readback = target.kind === 'bass'
+                ? await api.settings(target.controlId) : await api.device(target.controlId);
+            const data = readback?.data;
+            const epoch = target.kind === 'bass' ? data?.statusEpoch : data?.status?.epoch;
+            const sameConnection = Number.isSafeInteger(target.status?.epoch) && epoch === target.status.epoch;
+            const confirmation = target.kind === 'bass' ? bassControl({ controlId: target.controlId,
+                physicalId: data?.targetIdentity, bassCapabilities: data?.bassCapabilities, status: { bass: data?.bass } })
+                : balanceControl(target.controlId, data);
+            const sameTarget = target.kind === 'bass' ? data?.targetIdentity === target.physicalId
+                : confirmation?.physicalId === target.physicalId && confirmation?.pairId === target.pairId &&
+                    JSON.stringify(confirmation.pairMembers) === JSON.stringify(target.pairMembers);
+            if (readback?.success && !data?.errors?.bass && sameConnection && sameTarget && confirmation?.value === value) {
+                return { success: true, confirmedValue: confirmation.value };
+            }
         }
     } catch (_) {
         // An accepted POST is not retried when the confirmation read fails.

@@ -67,7 +67,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
     });
 
     function surfaceResult(response, request) {
-        if (response?.outcome === 'unverified' && !target.disabled && request.projection !== target.projection &&
+        if (response?.outcome === 'unverified' && !target.disabled && target.observationConfirmed !== false && request.projection !== target.projection &&
             target.value === request.value && target.value >= target.min && target.value <= target.max) {
             failure = '';
             failureFloor = null;
@@ -116,7 +116,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         } else if (next.projection !== target.projection) {
             confirmedValue = null;
             if (!scheduler.isActive()) local = next.value;
-            if (failure && !next.disabled && next.projection !== failureFloor &&
+            if (failure && !next.disabled && next.observationConfirmed !== false && next.projection !== failureFloor &&
                 Number.isInteger(next.value) && next.value >= next.min && next.value <= next.max &&
                 (unverifiedValue === null || next.value === unverifiedValue)) {
                 if (unverifiedValue !== null) confirmedValue = next.value;
