@@ -573,7 +573,7 @@ img { display: block; max-width: 100%; }
     transform: rotate(45deg);
     transition: transform .15s ease;
 }
-.settings-section[open] .settings-chevron { transform: rotate(225deg); }
+.settings-section[open] > .settings-summary > .settings-chevron { transform: rotate(225deg); }
 .settings-content { padding-top: .25rem; }
 .settings-loading, .settings-empty, .settings-value {
     color: var(--text-dim);
