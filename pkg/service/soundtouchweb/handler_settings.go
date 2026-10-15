@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -113,6 +114,7 @@ func enterBluetoothPairingAndConfirm(
 }
 
 type settingsSupport struct {
+	Bass           bool `json:"bass"`
 	ClockDisplay   bool `json:"clockDisplay"`
 	ClockTime      bool `json:"clockTime"`
 	SystemTimeout  bool `json:"systemTimeout"`
@@ -182,18 +184,22 @@ type settingsNetwork struct {
 }
 
 type deviceSettingsSnapshot struct {
-	TargetIdentity string                 `json:"targetIdentity"`
-	Support        settingsSupport        `json:"support"`
-	ClockDisplay   *settingsClockDisplay  `json:"clockDisplay,omitempty"`
-	ClockTime      *settingsClockTime     `json:"clockTime,omitempty"`
-	SystemTimeout  *settingsSystemTimeout `json:"systemTimeout,omitempty"`
-	Language       *settingsLanguage      `json:"language,omitempty"`
-	Sync           *settingsSync          `json:"sync,omitempty"`
-	Bluetooth      *settingsBluetooth     `json:"bluetooth,omitempty"`
-	Sources        []settingsSource       `json:"sources,omitempty"`
-	Network        *settingsNetwork       `json:"network,omitempty"`
-	OnboardingURL  string                 `json:"onboardingUrl,omitempty"`
-	Errors         map[string]string      `json:"errors,omitempty"`
+	StatusEpoch      int64                    `json:"statusEpoch,omitempty"`
+	StatusRevision   uint64                   `json:"statusRevision"`
+	BassCapabilities *models.BassCapabilities `json:"bassCapabilities,omitempty"`
+	Bass             *models.Bass             `json:"bass,omitempty"`
+	TargetIdentity   string                   `json:"targetIdentity"`
+	Support          settingsSupport          `json:"support"`
+	ClockDisplay     *settingsClockDisplay    `json:"clockDisplay,omitempty"`
+	ClockTime        *settingsClockTime       `json:"clockTime,omitempty"`
+	SystemTimeout    *settingsSystemTimeout   `json:"systemTimeout,omitempty"`
+	Language         *settingsLanguage        `json:"language,omitempty"`
+	Sync             *settingsSync            `json:"sync,omitempty"`
+	Bluetooth        *settingsBluetooth       `json:"bluetooth,omitempty"`
+	Sources          []settingsSource         `json:"sources,omitempty"`
+	Network          *settingsNetwork         `json:"network,omitempty"`
+	OnboardingURL    string                   `json:"onboardingUrl,omitempty"`
+	Errors           map[string]string        `json:"errors,omitempty"`
 }
 
 var systemLanguageCodes = []models.LanguageCode{
@@ -641,6 +647,7 @@ func (app *WebApp) readDeviceSettings(
 	snapshot.Sources = renameableSources
 
 	snapshot.Support = settingsSupport{
+		Bass:           supportedURLs.HasURL("/bassCapabilities") && supportedURLs.HasURL("/bass"),
 		ClockDisplay:   capabilities.HasClockDisplay() && supportedURLs.HasURL("/clockDisplay"),
 		ClockTime:      capabilities.HasClockDisplay() && supportedURLs.HasURL("/clockTime"),
 		SystemTimeout:  capabilities.HasCapability("systemtimeout") && supportedURLs.HasURL("/systemtimeout"),
@@ -827,7 +834,78 @@ func (app *WebApp) refreshDeviceSettings(
 		return
 	}
 
+	if err := app.readBassDeviceSetting(device, targetIdentity, snapshot); err != nil {
+		app.sendError(w, err.Error(), settingsReadErrorStatus(err))
+
+		return
+	}
+
 	app.writeDeviceSettings(w, snapshot)
+}
+
+// Read acoustic metadata only for GET settings. The write APIs retain their
+// existing behavior, and a failed capability read never becomes a UI range.
+func (app *WebApp) readBassDeviceSetting(
+	device *webtypes.DeviceConnection,
+	targetIdentity string,
+	snapshot *deviceSettingsSnapshot,
+) error {
+	if !snapshot.Support.Bass {
+		return nil
+	}
+
+	if snapshot.Errors == nil {
+		snapshot.Errors = make(map[string]string)
+	}
+
+	caps, err := device.LoadBassCapabilities()
+	if err != nil {
+		snapshot.Errors["bass"] = err.Error()
+
+		return liveSettingsTargetError(device, targetIdentity)
+	}
+
+	if err := validateReportedSettingsIdentity(targetIdentity, caps.DeviceID); err != nil {
+		return err
+	}
+
+	snapshot.BassCapabilities = caps
+	if caps.BassAvailable {
+		generation := device.BeginFieldPoll(webtypes.FieldBass)
+
+		bass, readErr := device.Client.GetBass()
+		if readErr != nil {
+			snapshot.Errors["bass"] = readErr.Error()
+		} else {
+			if err := validateReportedSettingsIdentity(targetIdentity, bass.DeviceID); err != nil {
+				return err
+			}
+
+			if err := liveSettingsTargetError(device, targetIdentity); err != nil {
+				return err
+			}
+
+			changed := false
+			applied := device.CompleteFieldPoll(webtypes.FieldBass, generation, func(status *webtypes.DeviceStatus) {
+				changed = !reflect.DeepEqual(status.Bass, bass)
+				status.Bass = bass
+				status.LastActivity = time.Now()
+			})
+			app.queueBroadcastIfChanged(applied && changed)
+			// Return one normal status snapshot. A GET overtaken by a newer
+			// bass event must not relabel its rejected result as current data.
+			status := device.Status()
+			snapshot.Bass = status.Bass
+			snapshot.StatusEpoch = status.Epoch
+			snapshot.StatusRevision = status.Revision
+		}
+	}
+
+	if len(snapshot.Errors) == 0 {
+		snapshot.Errors = nil
+	}
+
+	return liveSettingsTargetError(device, targetIdentity)
 }
 
 func settingsReadErrorStatus(err error) int {

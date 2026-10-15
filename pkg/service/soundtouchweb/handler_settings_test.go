@@ -52,6 +52,14 @@ type settingsSpeakerFixture struct {
 	sourcesReadFail       bool
 	networkXML            string
 	networkReadFail       bool
+	bassAdvertised        bool
+	bassCapabilityFail    bool
+	bassReadFail          bool
+	bassUnavailable       bool
+	bassMax               int
+	bassStarted           chan struct{}
+	bassRelease           chan struct{}
+	bassReads             atomic.Int32
 	infoStarted           chan struct{}
 	infoRelease           chan struct{}
 
@@ -133,6 +141,9 @@ func newSettingsSpeakerFixture(t *testing.T, advertiseSettings bool) *settingsSp
 			}
 		case "/supportedURLs":
 			locations := []string{"/sources"}
+			if fixture.bassAdvertised {
+				locations = append(locations, "/bass", "/bassCapabilities")
+			}
 			if fixture.networkXML != "" || fixture.networkReadFail {
 				locations = append(locations, "/networkInfo", "/netStats")
 			}
@@ -153,6 +164,27 @@ func newSettingsSpeakerFixture(t *testing.T, advertiseSettings bool) *settingsSp
 				_, _ = fmt.Fprintf(w, `<URL location="%s"/>`, location)
 			}
 			_, _ = io.WriteString(w, `</supportedURLs>`)
+		case "/bassCapabilities":
+			if fixture.bassCapabilityFail {
+				http.Error(w, "bass capabilities unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = fmt.Fprintf(w, `<bassCapabilities deviceID="%s"><bassAvailable>%t</bassAvailable>`+
+				`<bassMin>-9</bassMin><bassMax>%d</bassMax><bassDefault>0</bassDefault></bassCapabilities>`,
+				fixture.liveDeviceID, !fixture.bassUnavailable, fixture.bassMax)
+		case "/bass":
+			fixture.bassReads.Add(1)
+			if fixture.bassStarted != nil {
+				fixture.bassStarted <- struct{}{}
+			}
+			if fixture.bassRelease != nil {
+				<-fixture.bassRelease
+			}
+			if fixture.bassReadFail {
+				http.Error(w, "bass unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = fmt.Fprintf(w, `<bass deviceID="%s"><targetbass>-2</targetbass><actualbass>-2</actualbass></bass>`, fixture.liveDeviceID)
 		case "/networkInfo":
 			if fixture.networkReadFail {
 				http.Error(w, "network unavailable", http.StatusServiceUnavailable)
@@ -452,6 +484,139 @@ func TestHandleGetDeviceSettingsProjectsOnlyAdvertisedControls(t *testing.T) {
 	}
 	if strings.Contains(responseBody, `"network"`) {
 		t.Fatalf("excluded network diagnostics were projected: %s", responseBody)
+	}
+}
+
+func TestHandleGetDeviceSettingsReportedBassMetadata(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		advertised     bool
+		capabilityFail bool
+		readFail       bool
+		unavailable    bool
+		max            int
+	}{
+		{name: "reported reduction", advertised: true},
+		{name: "reported positive range", advertised: true, max: 3},
+		{name: "missing endpoints"},
+		{name: "capability failure has no fallback", advertised: true, capabilityFail: true},
+		{name: "bass read failure", advertised: true, readFail: true},
+		{name: "unsupported", advertised: true, unavailable: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newSettingsSpeakerFixture(t, false)
+			fixture.bassAdvertised = test.advertised
+			fixture.bassCapabilityFail = test.capabilityFail
+			fixture.bassReadFail = test.readFail
+			fixture.bassUnavailable = test.unavailable
+			fixture.bassMax = test.max
+			app := settingsTestApp(fixture)
+			recorder := httptest.NewRecorder()
+			app.HandleGetDeviceSettings(recorder, settingsRequest(http.MethodGet, "/api/control/devices/speaker/settings", ""))
+			response := decodeSettingsResponse(t, recorder)
+			if !response.Success {
+				t.Fatalf("GET settings failed: %s", response.Error)
+			}
+			caps := response.Data.BassCapabilities
+			if !test.advertised || test.capabilityFail {
+				if caps != nil || response.Data.Bass != nil {
+					t.Fatalf("invented bass metadata: %+v", response.Data)
+				}
+			} else if caps == nil || caps.BassMin != -9 || caps.BassMax != test.max || caps.BassAvailable == test.unavailable {
+				t.Fatalf("reported capabilities changed: %+v", caps)
+			}
+			if test.capabilityFail || test.readFail {
+				if response.Data.Errors["bass"] == "" {
+					t.Fatal("missing targeted bass error")
+				}
+			} else if test.advertised && !test.unavailable && (response.Data.Bass == nil || response.Data.Bass.ActualBass != -2) {
+				t.Fatalf("missing current bass: %+v", response.Data.Bass)
+			}
+		})
+	}
+}
+
+func TestSettingsBassReadUsesExistingFieldOrdering(t *testing.T) {
+	for _, mode := range []string{"volume update", "newer bass event", "read failure", "identity mismatch"} {
+		t.Run(mode, func(t *testing.T) {
+			fixture := newSettingsSpeakerFixture(t, false)
+			fixture.bassAdvertised = true
+			fixture.bassReadFail = mode == "read failure"
+			fixture.bassStarted = make(chan struct{}, 1)
+			fixture.bassRelease = make(chan struct{})
+			var releaseOnce sync.Once
+			release := func() { releaseOnce.Do(func() { close(fixture.bassRelease) }) }
+			defer release()
+			app := settingsTestApp(fixture)
+			device, _ := app.GetDevice("speaker")
+			device.ApplyFieldEvent(webtypes.FieldBass, func(status *webtypes.DeviceStatus) {
+				status.Bass = &models.Bass{DeviceID: fixture.liveDeviceID, ActualBass: 0}
+			})
+			snapshot := &deviceSettingsSnapshot{Support: settingsSupport{Bass: true}}
+			done := make(chan error, 1)
+			identity := fixture.liveDeviceID
+			if mode == "identity mismatch" {
+				identity = "replacement"
+			}
+			go func() { done <- app.readBassDeviceSetting(device, identity, snapshot) }()
+			if mode != "identity mismatch" {
+				select {
+				case <-fixture.bassStarted:
+				case <-time.After(2 * time.Second):
+					t.Fatal("bass GET did not begin")
+				}
+				if mode == "newer bass event" {
+					device.ApplyFieldEvent(webtypes.FieldBass, func(status *webtypes.DeviceStatus) {
+						status.Bass = &models.Bass{DeviceID: fixture.liveDeviceID, ActualBass: -5}
+					})
+				} else {
+					device.ApplyFieldEvent(webtypes.FieldVolume, func(status *webtypes.DeviceStatus) {
+						status.Volume = &models.Volume{ActualVolume: 22}
+					})
+				}
+			}
+			release()
+			select {
+			case err := <-done:
+				if (err != nil) != (mode == "identity mismatch") {
+					t.Fatalf("read error = %v", err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("bass GET did not finish")
+			}
+			want := -2
+			switch mode {
+			case "newer bass event":
+				want = -5
+			case "read failure", "identity mismatch":
+				want = 0
+			}
+			if got := device.Status().Bass.ActualBass; got != want {
+				t.Fatalf("cached bass = %d, want %d", got, want)
+			}
+			if mode == "read failure" || mode == "identity mismatch" {
+				if snapshot.Bass != nil {
+					t.Fatal("failed read exposed bass")
+				}
+				return
+			}
+			status := device.Status()
+			if snapshot.Bass != status.Bass || snapshot.StatusEpoch != status.Epoch || snapshot.StatusRevision != status.Revision {
+				t.Fatal("settings readback did not use one post-merge status snapshot")
+			}
+			device.ApplyFieldEvent(webtypes.FieldVolume, func(status *webtypes.DeviceStatus) {
+				status.Volume = &models.Volume{ActualVolume: 23}
+			})
+			if device.Status().Bass.ActualBass != want {
+				t.Fatal("volume update restored old cached bass")
+			}
+			device.ApplyFieldEvent(webtypes.FieldBass, func(status *webtypes.DeviceStatus) {
+				status.Bass = &models.Bass{DeviceID: fixture.liveDeviceID, ActualBass: 0}
+			})
+			if device.Status().Bass.ActualBass != 0 || device.Status().Revision <= snapshot.StatusRevision || fixture.bassReads.Load() != 1 {
+				t.Fatal("later bass reset was lost or GET was replayed")
+			}
+		})
 	}
 }
 
