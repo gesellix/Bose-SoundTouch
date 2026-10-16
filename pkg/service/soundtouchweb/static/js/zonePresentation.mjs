@@ -32,6 +32,72 @@ function addIdentifier(ids, value) {
     if (typeof value === 'string' && value.trim()) ids.add(value.trim());
 }
 
+// Keep the inventory intact for member detail routes. Suppress only dashboard
+// duplicates whose whole emitted zone has an unambiguous, usable master card.
+export function filterGroupedDeviceEntries(entries) {
+    const devices = new Map(entries);
+    const controlClaims = new Map();
+    const hardwareClaims = new Map();
+    const inventoryClaims = new Map();
+    const claim = (claims, id) => claims.set(id, (claims.get(id) || 0) + 1);
+    const identifier = id => typeof id === 'string' && id.trim() === id && id !== '';
+
+    for (const [, device] of entries) {
+        claim(inventoryClaims, device?.info?.device_id);
+        if (!Array.isArray(device?.zone?.members)) continue;
+        for (const member of device.zone.members) {
+            claim(controlClaims, member?.controlId);
+            for (const id of Array.isArray(member?.deviceIds) ? member.deviceIds : []) {
+                claim(hardwareClaims, id);
+            }
+        }
+    }
+
+    const hidden = new Set();
+    for (const [masterID, master] of entries) {
+        const zone = master?.zone;
+        if (!zone || zone.masterControlId !== masterID || master.zoneMembership ||
+            !Array.isArray(zone.members) || zone.members.length < 2 ||
+            zone.memberCount !== zone.members.length || !identifier(zone.masterDeviceId) ||
+            zone.masterDeviceId !== master.info?.device_id) continue;
+
+        const representedMaster = zone.members.find(member => member?.controlId === masterID);
+        if (!representedMaster || representedMaster.hwId !== zone.masterDeviceId) continue;
+
+        const coherent = zone.members.every(member => {
+            const id = member?.controlId;
+            const device = devices.get(id);
+            if (!identifier(id) || controlClaims.get(id) !== 1 ||
+                !device?.info || !identifier(member.hwId) ||
+                device.info.device_id !== member.hwId ||
+                inventoryClaims.get(member.hwId) !== 1 ||
+                !Array.isArray(member.deviceIds) || !member.deviceIds.includes(member.hwId) ||
+                !member.deviceIds.every(hwID => identifier(hwID) && hardwareClaims.get(hwID) === 1)) {
+                return false;
+            }
+
+            const pair = device.stereoPair;
+            const deviceIDs = pair
+                ? (Array.isArray(pair.members) ? pair.members.map(physical => physical?.deviceId) : [])
+                : [device.info.device_id];
+            if ((pair && pair.masterDeviceId !== member.hwId) ||
+                new Set(deviceIDs).size !== deviceIDs.length ||
+                deviceIDs.length !== member.deviceIds.length ||
+                !deviceIDs.every(hwID => member.deviceIds.includes(hwID))) return false;
+
+            return id === masterID || (!device.zone &&
+                device.zoneMembership?.masterControlId === masterID);
+        });
+        if (!coherent) continue;
+
+        for (const member of zone.members) {
+            if (member.controlId !== masterID) hidden.add(member.controlId);
+        }
+    }
+
+    return entries.filter(([id]) => !hidden.has(id));
+}
+
 export function zoneMemberIdentifiers(...members) {
     const ids = new Set();
 
