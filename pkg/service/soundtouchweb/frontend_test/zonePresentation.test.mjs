@@ -101,6 +101,18 @@ test('a stereo master retains its group and degraded physical member identities'
     assert.deepEqual(cardIDs(devices), ['192.0.2.10', '192.0.2.2']);
 });
 
+test('a stereo peer can lead the physical zone under its logical pair representative', () => {
+    const devices = groupedDevices();
+    const master = devices['192.0.2.10'];
+    master.zone.masterDeviceId = 'master-right';
+    master.zone.members[0].deviceIds.push('master-right');
+    master.stereoPair = {
+        masterDeviceId: 'master-id',
+        members: [{ deviceId: 'master-id' }, { deviceId: 'master-right' }],
+    };
+    assert.deepEqual(cardIDs(devices), ['192.0.2.10', '192.0.2.2']);
+});
+
 test('incomplete or conflicting projections keep independent card access', async t => {
     const cases = {
         'missing master': devices => { delete devices['192.0.2.10']; },

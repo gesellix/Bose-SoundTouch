@@ -58,11 +58,12 @@ export function filterGroupedDeviceEntries(entries) {
         const zone = master?.zone;
         if (!zone || zone.masterControlId !== masterID || master.zoneMembership ||
             !Array.isArray(zone.members) || zone.members.length < 2 ||
-            zone.memberCount !== zone.members.length || !identifier(zone.masterDeviceId) ||
-            zone.masterDeviceId !== master.info?.device_id) continue;
+            zone.memberCount !== zone.members.length || !identifier(zone.masterDeviceId)) continue;
 
         const representedMaster = zone.members.find(member => member?.controlId === masterID);
-        if (!representedMaster || representedMaster.hwId !== zone.masterDeviceId) continue;
+        if (!representedMaster || representedMaster.hwId !== master.info?.device_id ||
+            !Array.isArray(representedMaster.deviceIds) ||
+            !representedMaster.deviceIds.includes(zone.masterDeviceId)) continue;
 
         const coherent = zone.members.every(member => {
             const id = member?.controlId;
