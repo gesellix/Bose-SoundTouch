@@ -28,6 +28,7 @@ type discoveryFake struct {
 	scanDevs    []*models.DiscoveredDevice
 	scanCalls   int
 	scanPrefix  []netip.Prefix
+	scanOpts    discovery.SubnetScanOptions
 	handled     []string
 	ssdpCalls   int
 	ssdpBlock   chan struct{}
@@ -53,11 +54,12 @@ func newDiscoveryFake(t *testing.T, serverURL string) (*Server, *discoveryFake) 
 
 			return f.ssdpDevs, f.ssdpErr
 		},
-		scan: func(_ context.Context, p []netip.Prefix, _ discovery.SubnetScanOptions) ([]*models.DiscoveredDevice, error) {
+		scan: func(_ context.Context, p []netip.Prefix, opts discovery.SubnetScanOptions) ([]*models.DiscoveredDevice, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			f.scanCalls++
 			f.scanPrefix = p
+			f.scanOpts = opts
 
 			return f.scanDevs, nil
 		},
@@ -408,5 +410,41 @@ func TestDiscoverDevicesManual_CanceledContextHandlesNothing(t *testing.T) {
 
 	if s.discoveryRunning.Load() {
 		t.Error("slot not released")
+	}
+}
+
+// On a public network the interface-derived /24 is the hosting provider's
+// network: probing it looks like a port scan. Only explicit subnets count.
+func TestDiscoverDevicesManual_PublicNetworkScansOnlyExplicitSubnets(t *testing.T) {
+	s, f := newDiscoveryFake(t, "http://10.0.0.2:8000")
+	s.SetDeploymentMode(deploymentModePublicNetwork)
+	f.ifaceAddrs = []netip.Addr{netip.MustParseAddr("10.0.7.7")}
+
+	s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555", nil)
+
+	if f.scanCalls != 0 {
+		t.Errorf("public-network without DISCOVERY_SUBNETS scanned %v", f.scanPrefix)
+	}
+
+	s.SetDiscoverySubnets("203.0.113.0/24")
+	s.DiscoverDevicesManual(context.Background(), "10.0.5.200:5555", nil)
+
+	if f.scanCalls != 1 || fmt.Sprint(f.scanPrefix) != "[203.0.113.0/24]" {
+		t.Errorf("explicit subnets: scan=%d prefixes=%v", f.scanCalls, f.scanPrefix)
+	}
+}
+
+func TestDiscoverDevicesManual_OnDeviceLimitsConcurrency(t *testing.T) {
+	for mode, want := range map[string]int{"": 0, "private-network": 0, deploymentModeOnDevice: onDeviceScanConcurrency} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			s, f := newDiscoveryFake(t, "http://10.0.0.2:8000")
+			s.SetDeploymentMode(mode)
+
+			s.DiscoverDevicesManual(context.Background(), "", nil)
+
+			if f.scanCalls != 1 || f.scanOpts.Concurrency != want {
+				t.Errorf("scan=%d concurrency=%d, want %d", f.scanCalls, f.scanOpts.Concurrency, want)
+			}
+		})
 	}
 }

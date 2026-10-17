@@ -585,6 +585,7 @@ func main() {
 			server.SetExpectedHosts(config.domains)
 			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
+			server.SetDeploymentMode(config.deploymentMode)
 			server.SetPlayerEnabled(config.playerEnabled)
 			server.SetUpdateCheckSettings(config.updateCheckInterval, config.updateCheckEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
@@ -772,6 +773,7 @@ type serviceConfig struct {
 	tlsExtraHosts           []string
 	discoveryEnabled        bool
 	discoveryInterval       time.Duration
+	deploymentMode          string
 	playerEnabled           bool
 	deviceSeedRetryInterval time.Duration
 	deviceSeedRetryWindow   time.Duration
@@ -978,6 +980,7 @@ func loadConfig(c *cli.Context) (serviceConfig, error) {
 		tlsExtraHosts:           tlsExtraHosts,
 		discoveryEnabled:        discoveryEnabled,
 		discoveryInterval:       discoveryInterval,
+		deploymentMode:          deploymentMode,
 		playerEnabled:           playerEnabled,
 		deviceSeedRetryInterval: deviceSeedRetryInterval,
 		deviceSeedRetryWindow:   deviceSeedRetryWindow,

@@ -51,6 +51,7 @@ type Server struct {
 	httpListenAddr           string
 	discoveryRunning         atomic.Bool
 	discoverySubnets         []netip.Prefix // explicit DISCOVERY_SUBNETS scan targets
+	deploymentMode           string         // --deployment-mode; tunes or limits the subnet scan
 	discoveryDeps            discoveryDeps
 	redactLogs               bool
 	logBodies                bool
@@ -1688,6 +1689,27 @@ func (s *Server) SetDiscoverySubnets(list string) {
 	s.mu.Unlock()
 }
 
+// Deployment modes (--deployment-mode) that change how the subnet scan runs.
+const (
+	deploymentModeOnDevice      = "on-device"
+	deploymentModePublicNetwork = "public-network"
+)
+
+// onDeviceScanConcurrency caps parallel subnet probes when the service runs on
+// the speaker itself, whose CPU also serves the speaker's own BMX and marge
+// traffic. A /24 then takes a few seconds longer, which is fine for a click.
+const onDeviceScanConcurrency = 8
+
+// SetDeploymentMode records --deployment-mode. On a public network the subnet
+// scan only runs against explicit DISCOVERY_SUBNETS (the interface-derived
+// /24 there is the hosting provider's network, not the user's LAN); on-device
+// it runs with fewer parallel probes.
+func (s *Server) SetDeploymentMode(mode string) {
+	s.mu.Lock()
+	s.deploymentMode = mode
+	s.mu.Unlock()
+}
+
 // discoveryHints collects addresses that reveal the speakers' LAN, in
 // priority order: the server URL host, stored device IPs, the admin's socket
 // address (remote, may be invalid), then this host's own interfaces.
@@ -1732,7 +1754,18 @@ func (s *Server) discoveryHints(ctx context.Context, remote netip.Addr) []netip.
 func (s *Server) scanSubnets(ctx context.Context, remote netip.Addr) []*models.DiscoveredDevice {
 	s.mu.RLock()
 	explicit := s.discoverySubnets
+	mode := s.deploymentMode
 	s.mu.RUnlock()
+
+	if mode == deploymentModePublicNetwork && len(explicit) == 0 {
+		log.Println("Subnet scan skipped: with --deployment-mode=public-network only DISCOVERY_SUBNETS are scanned")
+		return nil
+	}
+
+	var opts discovery.SubnetScanOptions
+	if mode == deploymentModeOnDevice {
+		opts.Concurrency = onDeviceScanConcurrency
+	}
 
 	var hints []netip.Addr
 	if len(explicit) == 0 {
@@ -1745,7 +1778,7 @@ func (s *Server) scanSubnets(ctx context.Context, remote netip.Addr) []*models.D
 		return nil
 	}
 
-	found, err := s.discoveryDeps.scan(ctx, prefixes, discovery.SubnetScanOptions{})
+	found, err := s.discoveryDeps.scan(ctx, prefixes, opts)
 	if err != nil {
 		log.Printf("Subnet scan ended early: %s", sanitizeErr(err))
 	}
