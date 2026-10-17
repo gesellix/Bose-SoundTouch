@@ -70,9 +70,14 @@ func (o SubnetScanOptions) withDefaults() SubnetScanOptions {
 
 // scanHosts expands IPv4 prefixes into unique usable host addresses (network
 // and broadcast excluded for prefixes shorter than /31), stopping at max.
-// truncated reports that the cap cut the list short.
+// Prefixes take turns, one host each per round, so a large prefix cannot use
+// up the whole budget and starve the ones after it: with 10.0.0.0/16 listed
+// before 192.0.2.0/24, the /24 is still scanned in full. truncated reports
+// that the cap cut the list short.
 func scanHosts(prefixes []netip.Prefix, maxHosts int) (hosts []netip.Addr, truncated bool) {
-	seen := make(map[netip.Addr]struct{})
+	type cursor struct{ next, last netip.Addr }
+
+	var cursors []*cursor
 
 	for _, p := range prefixes {
 		if !p.IsValid() || !p.Addr().Is4() {
@@ -80,25 +85,47 @@ func scanHosts(prefixes []netip.Prefix, maxHosts int) (hosts []netip.Addr, trunc
 		}
 
 		p = p.Masked()
-		last := lastAddr(p)
+		c := &cursor{next: p.Addr(), last: lastAddr(p)}
 
-		for a := p.Addr(); a.IsValid() && a.Compare(last) <= 0; a = a.Next() {
-			if p.Bits() < 31 && (a == p.Addr() || a == last) {
-				continue
-			}
-
-			if _, dup := seen[a]; dup {
-				continue
-			}
-
-			if len(hosts) >= maxHosts {
-				return hosts, true
-			}
-
-			seen[a] = struct{}{}
-
-			hosts = append(hosts, a)
+		if p.Bits() < 31 {
+			c.next, c.last = c.next.Next(), c.last.Prev()
 		}
+
+		cursors = append(cursors, c)
+	}
+
+	pending := func(c *cursor) bool { return c.next.IsValid() && c.next.Compare(c.last) <= 0 }
+	seen := make(map[netip.Addr]struct{})
+
+	for len(cursors) > 0 {
+		active := cursors[:0]
+
+		for _, c := range cursors {
+			for pending(c) {
+				a := c.next
+				c.next = a.Next()
+
+				if _, dup := seen[a]; dup {
+					continue
+				}
+
+				if len(hosts) >= maxHosts {
+					return hosts, true
+				}
+
+				seen[a] = struct{}{}
+
+				hosts = append(hosts, a)
+
+				break
+			}
+
+			if pending(c) {
+				active = append(active, c)
+			}
+		}
+
+		cursors = active
 	}
 
 	return hosts, false
@@ -176,7 +203,14 @@ feed:
 
 	sort.Slice(found, func(i, j int) bool { return found[i].Host < found[j].Host })
 
-	slog.Info("subnet scan finished", "duration", time.Since(started).Round(time.Millisecond),
+	// A truncated scan skipped part of what the operator asked for: say so at
+	// Warn, not buried in an Info line.
+	level := slog.LevelInfo
+	if truncated {
+		level = slog.LevelWarn
+	}
+
+	slog.Log(context.WithoutCancel(ctx), level, "subnet scan finished", "duration", time.Since(started).Round(time.Millisecond),
 		"prefixes", prefixes, "hosts", probed.Load(), "candidates", len(hosts), "truncated", truncated, "found", len(found))
 
 	return found, ctx.Err()

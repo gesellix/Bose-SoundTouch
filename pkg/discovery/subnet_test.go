@@ -184,6 +184,37 @@ func TestScanHosts_CapsAndDedups(t *testing.T) {
 	}
 }
 
+// A large prefix listed first must not use up the budget meant for the ones
+// after it.
+func TestScanHosts_LargePrefixDoesNotStarveLaterOnes(t *testing.T) {
+	hosts, truncated := scanHosts([]netip.Prefix{
+		netip.MustParsePrefix("10.0.0.0/16"),
+		netip.MustParsePrefix("192.0.2.0/24"),
+	}, 1024)
+
+	if len(hosts) != 1024 || !truncated {
+		t.Fatalf("len=%d truncated=%v", len(hosts), truncated)
+	}
+
+	small := 0
+
+	for _, h := range hosts {
+		if netip.MustParsePrefix("192.0.2.0/24").Contains(h) {
+			small++
+		}
+	}
+
+	if small != 254 {
+		t.Errorf("192.0.2.0/24: %d of 254 hosts scheduled", small)
+	}
+}
+
+func TestScanHosts_NotTruncatedWhenEverythingFits(t *testing.T) {
+	if _, truncated := scanHosts([]netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}, 254); truncated {
+		t.Error("an exact fit must not report truncation")
+	}
+}
+
 func TestScanSubnets_ContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -483,7 +514,7 @@ func (h *recordingHandler) WithAttrs([]slog.Attr) slog.Handler       { return h 
 func (h *recordingHandler) WithGroup(string) slog.Handler            { return h }
 func (h *recordingHandler) Handle(_ context.Context, r slog.Record) error {
 	var b strings.Builder
-	b.WriteString(r.Message)
+	b.WriteString(r.Level.String() + " " + r.Message)
 	r.Attrs(func(a slog.Attr) bool {
 		fmt.Fprintf(&b, " %s=%v", a.Key, a.Value)
 		return true
@@ -582,3 +613,24 @@ func TestScanSubnets_CancelLogsAttemptedProbes(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestScanSubnets_TruncationLogsAtWarn(t *testing.T) {
+	rec := &recordingHandler{}
+	old := slog.Default()
+
+	slog.SetDefault(slog.New(rec))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	_, err := ScanSubnets(context.Background(), []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")},
+		SubnetScanOptions{MaxHosts: 2, HTTPClient: &http.Client{Transport: &countingTransport{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+
+	if len(rec.logs) != 1 || !strings.HasPrefix(rec.logs[0], "WARN ") || !strings.Contains(rec.logs[0], "truncated=true") {
+		t.Errorf("logs %v", rec.logs)
+	}
+}
