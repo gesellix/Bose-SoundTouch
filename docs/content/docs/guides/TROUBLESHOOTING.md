@@ -40,11 +40,13 @@ ping 192.0.2.100
 
 #### 0. **Running in Docker bridge networking**
 SSDP multicast does not leave a bridge network, so `soundtouch-service` in a
-default Docker setup cannot see speakers by multicast. It falls back to a
-unicast `/info` scan of your subnet. Set `DISCOVERY_SUBNETS=203.0.113.0/24`
-(an RFC 5737 placeholder: use your own LAN CIDR) or `SERVER_URL` to the host's LAN address, or use
+default Docker setup cannot see speakers by multicast. Click "Scan Again" in
+the Admin UI or the Player: that adds a unicast `/info` scan of your subnet
+(the periodic background sweep does not scan). If the scan picks the wrong
+subnet, set `DISCOVERY_SUBNETS=203.0.113.0/24` (an RFC 5737 placeholder: use
+your own LAN CIDR) or `SERVER_URL` to the host's LAN address, or use
 `network_mode: host` (then allow 8000/8443 in `ufw` yourself). See
-[Subnet discovery fallback](SOUNDTOUCH-SERVICE.md#subnet-discovery-fallback).
+[Subnet discovery](SOUNDTOUCH-SERVICE.md#subnet-discovery).
 
 #### 1. **Network Configuration**
 ```bash

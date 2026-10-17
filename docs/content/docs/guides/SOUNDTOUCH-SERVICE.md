@@ -171,7 +171,7 @@ The service supports multiple ways to configure its behavior. When multiple sour
 | `RECORD_INTERACTIONS`              | `--record-interactions`        | Record HTTP interactions to disk                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `true`                                      |
 | `DISCOVERY_ENABLED`                | `--discovery-enabled`          | Enable periodic device discovery                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `true`                                      |
 | `DISCOVERY_INTERVAL`               | `--discovery-interval`         | Device discovery interval                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `5m`                                        |
-| `DISCOVERY_SUBNETS` | | Comma-separated IPv4 CIDRs (e.g. `203.0.113.0/24,198.51.100.0/24`, RFC 5737 documentation ranges: use your own LAN CIDR) the service scans with `GET :8090/info` when SSDP finds no speakers, for bridge-networked containers where multicast cannot reach the LAN. Explicit entries take precedence over derived hints; invalid entries are skipped with a warning. See [Subnet discovery](#subnet-discovery-fallback). | *(derived)* |
+| `DISCOVERY_SUBNETS` | | Comma-separated IPv4 CIDRs (e.g. `203.0.113.0/24,198.51.100.0/24`, RFC 5737 documentation ranges: use your own LAN CIDR) that "Scan Again" probes with `GET :8090/info`, for bridge-networked containers where multicast cannot reach the LAN. Explicit entries take precedence over derived hints; invalid entries are skipped with a warning. Required for any scan with `DEPLOYMENT_MODE=public-network`. See [Subnet discovery](#subnet-discovery). | *(derived)* |
 | `DEVICE_SEED_RETRY_INTERVAL`       | `--device-seed-retry-interval` | Interval between embedded-player startup retries for persisted devices that failed their first probe (e.g. LAN not yet routable on a cold boot)                                                                                                                                                                                                                                                                                                                                                                                                      | `30s`                                       |
 | `DEVICE_SEED_RETRY_WINDOW`         | `--device-seed-retry-window`   | Bounded window during which the embedded player retries those unreachable persisted devices at startup                                                                                                                                                                                                                                                                                                                                                                                                                                               | `10m`                                       |
 | `PLAYER_ENABLED`                   | `--player-enabled`             | Enable the embedded player (soundtouch-player at `/app`, plus its `/api/control/*` API) and the background device work it runs (status poll while a page is open, balance watch, discovery seeding). Disable this on installs that run AfterTouch on the speaker itself alongside a separate player, to avoid the extra resource cost (issue 762). The admin console is unaffected either way. Also available as a Settings-page toggle, which applies without a restart. The env var/flag applies as long as the setting has never been saved on the Settings page; once it has, the saved value wins and the env var/flag is ignored.   | `true`                                      |
@@ -189,37 +189,43 @@ The service supports multiple ways to configure its behavior. When multiple sour
 | `MARGE_ACCOUNT_ID`                 |                                | Pre-seeds the Stockholm `margeAccountID` state (used to filter device-discovery results by account)                                                                                                                                                                                                                                                                                                                                                                                                                                                  | *(empty)*                                   |
 | `AFTERTOUCH_ACCEPT_FALLBACK`       |                                | Overrides detection of the missing `accept4()` system call on Linux kernels older than 2.6.36 (32-bit ARM only; see [Self-Hosting](SELF-HOSTING.md#very-old-nas-boxes-and-kernels)). `1` forces the `accept()` fallback on, `0` forces it off, `auto` probes the kernel at startup. Has no effect on any other platform.                                                                                                                                                                                                                             | `auto`                                      |
 
-### Subnet discovery fallback
+### Subnet discovery
 
 SSDP/mDNS discovery uses multicast, which does not cross Docker's default
-bridge network, so a containerised service on a bridge finds no speakers.
-Discovery runs only when you click "Scan Again" (Admin UI or the embedded
-Player) unless you opt in with `DISCOVERY_ENABLED=true`. A click always runs
-SSDP and then a bounded unicast scan, even if SSDP found speakers; an opt-in
-periodic sweep scans only when it finds zero speakers or SSDP fails. The scan is: `GET /info` on
-port 8090 of each usable host (at most 1024 hosts, 64 in parallel, 400 ms
-connect / 2 s response timeouts). A reply is accepted only if it is HTTP 200,
-under 1 MiB, and well-formed XML with an `<info>` root and a non-blank
-`deviceID`; redirects and proxies are never followed. Accepted speakers go
-through the normal discovery handling.
+bridge network, so a containerised service on a bridge finds no speakers by
+multicast. Clicking "Scan Again" (Admin UI or the embedded Player) therefore
+runs SSDP and then a bounded unicast scan, even if SSDP found speakers. The
+periodic background sweep (`DISCOVERY_ENABLED`, `DISCOVERY_INTERVAL`) stays
+SSDP-only and never scans.
+
+The scan is `GET /info` on port 8090 of each usable host: at most 1024 hosts
+per click, shared fairly across all scanned subnets, 64 in parallel (8 with
+`DEPLOYMENT_MODE=on-device`), 400 ms connect and 2 s response timeouts. A
+reply is accepted only if it is HTTP 200, at most 64 KiB, and well-formed XML
+with an `<info>` root and a non-blank `deviceID`; redirects and proxies are
+never followed. Accepted speakers go through the normal discovery handling.
 
 Which subnets are scanned:
 
 1. `DISCOVERY_SUBNETS`, if set (any valid IPv4 CIDR, even public or loopback).
 2. Otherwise `/24` networks derived from RFC1918 addresses only, in order: the
    `SERVER_URL` host (literal or resolved), IPs of already-known speakers, the
-   admin's own connection address on a manual scan (the socket peer, never
-   `X-Forwarded-For`), and this host's active IPv4 interfaces. In a bridge
-   container the interface hint is the Docker network, not your LAN, so set
-   `SERVER_URL` to the host's LAN address or `DISCOVERY_SUBNETS` explicitly.
+   address of the client who clicked (`X-Forwarded-For` only from a proxy
+   trusted via `trust_forwarded_headers`/`trusted_proxy_cidrs` in
+   `settings.json`; otherwise the connection's own address),
+   and this host's active IPv4 interfaces. In a bridge container the
+   interface hint is the Docker network, not your LAN, so set `SERVER_URL` to
+   the host's LAN address or `DISCOVERY_SUBNETS` explicitly.
 
-The Admin UI "Scan Again" (`POST /api/setup/discover`) always scans, even when
-SSDP finds speakers. Example CIDRs here are illustrative; supply your own LAN.
-After the scan probe, accepted speakers are re-fetched by the normal discovery
-handling, which has its own `/info` client (not covered by the scan limits).
-Only one sweep runs at a time. Alternatively use `network_mode: host`; note
-that host networking bypasses Docker's published-port rules, so on hosts
-running `ufw` you must open ports 8000/8443 yourself.
+With `DEPLOYMENT_MODE=public-network` only `DISCOVERY_SUBNETS` are scanned:
+the derived `/24` there is the hosting provider's network, not yours.
+
+Example CIDRs here are illustrative; supply your own LAN. After the scan
+probe, accepted speakers are re-fetched by the normal discovery handling,
+which has its own `/info` client (not covered by the scan limits). Only one
+sweep runs at a time. Alternatively use `network_mode: host`; note that host
+networking bypasses Docker's published-port rules, so on hosts running `ufw`
+you must open ports 8000/8443 yourself.
 
 ### Configuration Examples
 

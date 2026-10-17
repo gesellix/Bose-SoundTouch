@@ -1,5 +1,5 @@
 ---
-title: "Decision: Subnet-Scan Discovery Fallback"
+title: "Decision: Subnet-Scan Discovery"
 ---
 **Status:** accepted (implemented, awaiting reporter confirmation on real bridge-networked hardware)
 
@@ -11,37 +11,61 @@ nothing and users must add each speaker manually.
 
 ## Decision
 
-Discovery is manual by default: a fresh install does nothing until someone
-clicks "Scan Again" in the Admin UI (`POST /api/setup/discover`) or in the
-embedded Player (`POST /api/control/discover`). Both run one SSDP search and
-then always scan, even when SSDP finds speakers. Opt-in periodic discovery
-(`DISCOVERY_ENABLED=true`) scans only when SSDP returns zero devices (or
-errors). The scan is `discovery.ScanSubnets`: a bounded
-unicast `GET http://<ip>:8090/info` over candidate IPv4 subnets.
-The smallest option was chosen: no new dependencies, no ARP/ICMP tricks, no
-new daemon. Accepted devices reuse `handleDiscoveredDevice`,
-`mergeOverlappingDevices` and `notifyDevicesChanged`. Opt-in periodic
-discovery that SSDP satisfies never scans.
+Clicking "Scan Again" in the Admin UI (`POST /api/setup/discover`) or in the
+embedded Player (`POST /api/control/discover`) runs one SSDP search and then
+always a subnet scan, even when SSDP finds speakers. The periodic background
+sweep (`DISCOVERY_ENABLED`, `DISCOVERY_INTERVAL`) stays SSDP-only and never
+scans: a scan probes up to 1024 hosts, and nobody should get that on a timer
+without asking for it.
+
+The scan is `discovery.ScanSubnets`: a bounded unicast
+`GET http://<ip>:8090/info` over candidate IPv4 subnets. The smallest option
+was chosen: no new dependencies, no ARP/ICMP tricks, no new daemon. Accepted
+devices reuse `handleDiscoveredDevice`, `mergeOverlappingDevices` and
+`notifyDevicesChanged`.
+
+### Existing installs
+
+Existing installs keep `discovery_enabled` from `settings.json`, and their
+periodic sweep behaves exactly as before (SSDP only). The scan is new and only
+runs on a click, so no migration is needed. A scheduled scan, if it comes, is
+a separate opt-in setting that defaults to off.
+
+### Deployment modes
+
+- `public-network`: only explicit `DISCOVERY_SUBNETS` are scanned. The
+  interface-derived `/24` there is the hosting provider's network, and probing
+  it looks like a port scan.
+- `on-device`: the scan runs with 8 parallel probes instead of 64, because the
+  speaker's CPU also serves its own BMX and marge traffic. A click-triggered
+  scan keeps no state, so it does not fall under the on-device opt-in rule for
+  caches and persisted data.
 
 ## Security and safety
 
-- Targets come from `DISCOVERY_SUBNETS` or from RFC1918 hints only. The admin
-  request hint uses `RemoteAddr`, never forwarded headers, so a client cannot
-  steer the scan at arbitrary networks. Explicit config may name any IPv4 CIDR. CIDRs in docs and tests (such as
+- Targets come from `DISCOVERY_SUBNETS` or from RFC1918 hints only. The
+  clicking client's hint is the address resolved by the client-IP middleware:
+  `X-Forwarded-For` only from a trusted proxy, otherwise the socket peer, so a
+  client cannot steer the scan at arbitrary networks with a forged header.
+  Explicit config may name any IPv4 CIDR. CIDRs in docs and tests (such as
   `203.0.113.0/24`, RFC 5737) are illustrative; supply your own real LAN CIDR.
 - Hard caps, enforced even for oversized caller options: 1024 unique hosts
   before scheduling, 64 workers, 400 ms dial default, 2 s per probe default,
   60 s per pass, context cancellation throughout.
-- Responses are untrusted: HTTP 200 only, 1 MiB body limit, strict XML root
-  `info` with non-blank `deviceID`, no redirects, no proxy, and nothing after the
-  root element except whitespace and comments. Logs carry duration, number of
-  hosts checked and the prefixes scanned, not raw response content.
+- The host budget is shared round-robin across prefixes, so a large first
+  prefix cannot crowd out a smaller one listed after it. A truncated scan logs
+  at Warn.
+- Responses are untrusted: HTTP 200 only, 64 KiB body limit (a real `/info` is
+  under 2 KB), strict XML root `info` with non-blank `deviceID`, no redirects,
+  no proxy, and nothing after the root element except whitespace and
+  comments. Logs carry duration, number of hosts checked and the prefixes
+  scanned, not raw response content.
 - These guarantees cover the initial scan probe only. Accepted speakers then go
   through `handleDiscoveredDevice`, whose inherited second `/info` fetch
   (`GetLiveDeviceInfo`) follows redirects, honours environment proxies, and
   has no body limit or caller context.
 - One sweep at a time (atomic slot); no lock is held during network I/O.
-- Two manual triggers force a scan: `POST /api/setup/discover` (and its alias
+- Two manual triggers scan: `POST /api/setup/discover` (and its alias
   `POST /setup/discover`), admin-gated only when admin authentication is
   enabled (`BasicAuthAdmin` lets requests through otherwise), and the embedded
   Player's `POST /api/control/discover`, behind the existing Player gate.
@@ -54,7 +78,7 @@ discovery that SSDP satisfies never scans.
 
 ## Consequences
 
-A /24 costs up to 254 short connections per sweep that finds no speakers.
-Speakers on non-RFC1918 or unrelated subnets need `DISCOVERY_SUBNETS`. Not
-verified against real bridge-networked hardware. Health diagnostics for this
-feature are deliberately out of scope.
+A /24 costs up to 254 short connections per click. Speakers on non-RFC1918 or
+unrelated subnets need `DISCOVERY_SUBNETS`. Not verified against real
+bridge-networked hardware. Health diagnostics for this feature are
+deliberately out of scope.

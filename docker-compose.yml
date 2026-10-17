@@ -18,7 +18,7 @@ services:
       - REDACT_PROXY_LOGS=true
       - RECORD_INTERACTIONS=true
       - DISCOVERY_INTERVAL=5m
-      # Bridge networking cannot receive SSDP multicast; scan these CIDRs instead.
+      # Bridge networking cannot receive SSDP multicast; "Scan Again" probes these CIDRs.
       # 203.0.113.0/24 is an RFC 5737 documentation range: replace it with your own LAN CIDR.
       # - DISCOVERY_SUBNETS=203.0.113.0/24
       - SERVER_URL=http://${SOUNDTOUCH_HOSTNAME:-soundtouch.local}:8000
