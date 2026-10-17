@@ -25,7 +25,10 @@ import (
 const SubnetScanMethod = "subnet-scan"
 
 const (
-	maxInfoBodyBytes = 1 << 20
+	// maxInfoBodyBytes bounds one /info reply. A real speaker answers with
+	// under 2 KB; 64 workers at 64 KiB keep the worst case at 4 MiB of buffers,
+	// which matters when the service runs on the speaker itself.
+	maxInfoBodyBytes = 64 << 10
 	maxConcurrency   = 64
 	maxScanHosts     = 1024
 	maxPort          = 65535

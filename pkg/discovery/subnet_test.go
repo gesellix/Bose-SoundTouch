@@ -114,13 +114,18 @@ func TestScanSubnets_RejectsNon200AndRedirects(t *testing.T) {
 }
 
 func TestScanSubnets_BoundedBody(t *testing.T) {
-	huge := `<info deviceID="AA"><name>` + strings.Repeat("a", 2<<20) + `</name></info>`
+	infoOfSize := func(n int) string {
+		frame := `<info deviceID="AA"><name></name></info>`
+		return `<info deviceID="AA"><name>` + strings.Repeat("a", n-len(frame)) + `</name></info>`
+	}
 
-	_, port := loopbackServer(t, infoHandler(huge))
+	for size, accept := range map[int]bool{maxInfoBodyBytes: true, maxInfoBodyBytes + 1: false} {
+		_, port := loopbackServer(t, infoHandler(infoOfSize(size)))
 
-	found, _ := ScanSubnets(context.Background(), []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, SubnetScanOptions{Port: port})
-	if len(found) != 0 {
-		t.Errorf("oversized body must be rejected")
+		found, _ := ScanSubnets(context.Background(), []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}, SubnetScanOptions{Port: port})
+		if got := len(found) == 1; got != accept {
+			t.Errorf("body of %d bytes: accepted=%v, want %v", size, got, accept)
+		}
 	}
 }
 
