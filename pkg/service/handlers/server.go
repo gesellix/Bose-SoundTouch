@@ -1532,8 +1532,8 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 }
 
 // DiscoverDevicesManual runs one user-triggered sweep synchronously: SSDP, then
-// the subnet scan, even when SSDP found speakers. remoteAddr is the requester's
-// socket address ("ip:port"), used as a scan hint. It returns false without
+// the subnet scan, even when SSDP found speakers. remoteAddr is the requesting
+// client's address ("ip" or "ip:port"), used as a scan hint. It returns false without
 // scanning when another sweep already holds the slot; otherwise onStarted (may
 // be nil) is called right after the slot is claimed. ctx is checked before each
 // device is handled; a lookup already in flight may still finish afterwards.
@@ -1549,6 +1549,8 @@ func (s *Server) DiscoverDevicesManual(ctx context.Context, remoteAddr string, o
 	var remote netip.Addr
 	if ap, err := netip.ParseAddrPort(remoteAddr); err == nil {
 		remote = ap.Addr()
+	} else if ip, err := netip.ParseAddr(remoteAddr); err == nil {
+		remote = ip
 	}
 
 	s.runDiscovery(ctx, remote, true)

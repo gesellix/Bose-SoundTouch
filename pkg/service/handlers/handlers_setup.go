@@ -21,6 +21,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/health"
 	"github.com/gesellix/bose-soundtouch/pkg/service/setup"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // HandleListDiscoveredDevices returns a list of all discovered devices.
@@ -89,20 +90,34 @@ func (s *Server) HandleAddManualDevice(w http.ResponseWriter, r *http.Request) {
 // HandleTriggerDiscovery triggers a new device discovery scan.
 //
 // An admin trigger always scans the candidate subnets, even if SSDP finds
-// speakers (periodic discovery never scans). The request's socket address
-// (never X-Forwarded-For) is one of the scan hints.
+// speakers (periodic discovery never scans). The requesting client's address
+// is one of the scan hints (see discoveryHintAddr).
 func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
 	if s.beginDiscovery() {
-		var remote netip.Addr
-		if ap, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
-			remote = ap.Addr()
-		}
+		remote := discoveryHintAddr(r)
 
 		//nolint:contextcheck
 		go s.runDiscovery(context.Background(), remote, true)
 	}
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// discoveryHintAddr is the requesting client's address as resolved by
+// ClientIPMiddleware: behind a trusted reverse proxy that is the
+// X-Forwarded-For client, otherwise the socket peer, so an untrusted client
+// still cannot steer the scan with a forged header. Without the middleware
+// (direct handler calls) it falls back to the socket peer.
+func discoveryHintAddr(r *http.Request) netip.Addr {
+	if ip := middleware.GetClientIPAddr(r.Context()); ip.IsValid() {
+		return ip.Unmap()
+	}
+
+	if ap, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return ap.Addr().Unmap()
+	}
+
+	return netip.Addr{}
 }
 
 // HandleGetDiscoveryStatus returns the current discovery status.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gesellix/bose-soundtouch/pkg/discovery"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // defaultDiscoverTimeout budgets the search phases of one UI-triggered
@@ -53,8 +54,12 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 		r.Post("/discover", func(w http.ResponseWriter, r *http.Request) {
 			app.HandleAPIDiscover(w, r)
 
-			// The peer is the socket address, never X-Forwarded-For.
-			remoteAddr := r.RemoteAddr
+			// The client IP resolved by the host's client-IP middleware
+			// (X-Forwarded-For only from a trusted proxy), else the socket peer.
+			remoteAddr := middleware.GetClientIP(r.Context())
+			if remoteAddr == "" {
+				remoteAddr = r.RemoteAddr
+			}
 
 			// Trigger discovery
 			//nolint:contextcheck // Context is created within goroutine

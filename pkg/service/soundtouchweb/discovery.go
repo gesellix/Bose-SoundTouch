@@ -372,7 +372,7 @@ func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discov
 }
 
 // DiscoverDevicesFrom is DiscoverDevices for a user-triggered sweep: remoteAddr
-// (the requester's socket address, may be empty) is handed to TriggerDiscovery
+// (the requesting client's address, may be empty) is handed to TriggerDiscovery
 // as a scan hint. It publishes "starting" once the sweep is really running and
 // returns false, publishing nothing, when the host service skipped it because
 // another sweep owns the slot.

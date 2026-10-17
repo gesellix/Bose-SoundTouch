@@ -132,7 +132,7 @@ type WebApp struct {
 	// service's discovery (the single source of truth, which updates the shared
 	// datastore); DiscoverDevices then re-syncs from ExtraDeviceHosts. Standalone
 	// soundtouch-player leaves it nil and runs its own sweep. remoteAddr is the
-	// requesting client's socket address, a scan hint; the result reports
+	// requesting client's address ("ip" or "ip:port"), a scan hint; the result reports
 	// whether a sweep actually ran (false: one was already in progress).
 	// onStarted is called once the sweep owns the host's discovery slot, so the
 	// UI only shows "discovering" for a sweep that really runs.

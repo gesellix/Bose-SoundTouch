@@ -448,3 +448,40 @@ func TestDiscoverDevicesManual_OnDeviceLimitsConcurrency(t *testing.T) {
 		})
 	}
 }
+
+// Behind a trusted reverse proxy the scan hint is the forwarded client, not
+// the proxy's own network; an untrusted peer's forged header is ignored.
+func TestHandleTriggerDiscovery_HintUsesResolvedClientIP(t *testing.T) {
+	cases := map[string]struct{ peer, xff, want string }{
+		"trusted proxy":   {"127.0.0.1:4444", "10.0.6.9", "[10.0.6.0/24]"},
+		"untrusted forge": {"10.0.5.200:5555", "10.0.6.9", "[10.0.5.0/24]"},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			s, f := newDiscoveryFake(t, "")
+
+			req := httptest.NewRequest(http.MethodPost, "/api/setup/discover", nil)
+			req.RemoteAddr = tc.peer
+			req.Header.Set("X-Forwarded-For", tc.xff)
+
+			buildClientIPMiddleware(true, []string{"127.0.0.0/8"})(http.HandlerFunc(s.HandleTriggerDiscovery)).
+				ServeHTTP(httptest.NewRecorder(), req)
+			waitIdle(t, s)
+
+			if fmt.Sprint(f.scanPrefix) != tc.want {
+				t.Errorf("prefixes %v, want %s", f.scanPrefix, tc.want)
+			}
+		})
+	}
+}
+
+func TestDiscoverDevicesManual_AcceptsBareIP(t *testing.T) {
+	s, f := newDiscoveryFake(t, "")
+
+	s.DiscoverDevicesManual(context.Background(), "10.0.5.200", nil)
+
+	if fmt.Sprint(f.scanPrefix) != "[10.0.5.0/24]" {
+		t.Errorf("prefixes %v", f.scanPrefix)
+	}
+}
