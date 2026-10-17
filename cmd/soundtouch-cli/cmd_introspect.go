@@ -263,13 +263,13 @@ func printIntrospectCapabilities(response *models.IntrospectResponse) {
 		{response.SupportsResume(), "Resume playback", "▶️"},
 	}
 
-	for _, cap := range capabilities {
+	for _, feature := range capabilities {
 		status := "❌"
-		if cap.supported {
+		if feature.supported {
 			status = "✅"
 		}
 
-		fmt.Printf("%s %s %s\n", status, cap.icon, cap.feature)
+		fmt.Printf("%s %s %s\n", status, feature.icon, feature.feature)
 	}
 
 	// Data collection status

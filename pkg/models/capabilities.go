@@ -129,9 +129,9 @@ func (c *Capabilities) HasDSPMonoStereo() bool {
 
 // GetCapabilityByName returns a capability by name
 func (c *Capabilities) GetCapabilityByName(name string) *Capability {
-	for _, cap := range c.Capability {
-		if cap.Name == name {
-			return &cap
+	for _, capability := range c.Capability {
+		if capability.Name == name {
+			return &capability
 		}
 	}
 
@@ -146,8 +146,8 @@ func (c *Capabilities) HasCapability(name string) bool {
 // GetCapabilityNames returns a list of all capability names
 func (c *Capabilities) GetCapabilityNames() []string {
 	names := make([]string, len(c.Capability))
-	for i, cap := range c.Capability {
-		names[i] = cap.Name
+	for i, capability := range c.Capability {
+		names[i] = capability.Name
 	}
 
 	return names

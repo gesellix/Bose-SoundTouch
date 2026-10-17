@@ -134,8 +134,8 @@ func getCapabilities(c *cli.Context) error {
 	if len(networkCaps) > 0 {
 		fmt.Printf("  Network Capabilities:\n")
 
-		for _, cap := range networkCaps {
-			fmt.Printf("    - %s\n", cap)
+		for _, networkCap := range networkCaps {
+			fmt.Printf("    - %s\n", networkCap)
 		}
 	}
 
