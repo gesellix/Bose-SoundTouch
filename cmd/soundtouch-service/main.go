@@ -294,8 +294,8 @@ var serviceFlags = []cli.Flag{
 	},
 	&cli.BoolFlag{
 		Name:    "discovery-enabled",
-		Usage:   "Enable periodic device discovery",
-		Value:   true,
+		Usage:   "Enable periodic device discovery (off by default; Scan Again always works)",
+		Value:   false,
 		EnvVars: []string{"DISCOVERY_ENABLED"},
 	},
 	&cli.StringFlag{

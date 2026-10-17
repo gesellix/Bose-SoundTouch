@@ -150,7 +150,10 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		logBodies:         logBodies,
 		recordEnabled:     recordEnabled,
 		discoveryInterval: 5 * time.Minute,
-		discoveryEnabled:  true,
+		// Periodic discovery is opt-in: a fresh install stays idle until
+		// someone clicks Scan Again. Existing installs keep the value saved in
+		// settings.json, which the old default seeded as true.
+		discoveryEnabled: false,
 		// The embedded player is on by default (issue 762): existing installs
 		// must see no change unless an operator explicitly opts out.
 		playerEnabled: true,

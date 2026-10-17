@@ -17,6 +17,8 @@ services:
       - LOG_PROXY_BODY=false
       - REDACT_PROXY_LOGS=true
       - RECORD_INTERACTIONS=true
+      # Periodic background discovery is off by default; "Scan Again" always works.
+      # - DISCOVERY_ENABLED=true
       - DISCOVERY_INTERVAL=5m
       # Bridge networking cannot receive SSDP multicast; "Scan Again" probes these CIDRs.
       # 203.0.113.0/24 is an RFC 5737 documentation range: replace it with your own LAN CIDR.
