@@ -303,3 +303,21 @@ func TestMountWebDiscoverCanceledIsNotCompleted(t *testing.T) {
 		t.Errorf("status = %q, want failed", got)
 	}
 }
+
+// The standalone player's startup goroutine publishes its own "starting";
+// DiscoverDevices must not publish a second one.
+func TestDiscoverDevicesDoesNotAnnounce(t *testing.T) {
+	app := NewWebApp()
+
+	if !app.DiscoverDevices(context.Background(), nil) {
+		t.Fatal("sweep without a discovery service must report success")
+	}
+
+	if got := lastDiscoveryStatus(app); got != "" {
+		t.Errorf("DiscoverDevices published %q", got)
+	}
+
+	if !app.DiscoverDevicesFrom(context.Background(), nil, "") || lastDiscoveryStatus(app) != "starting" {
+		t.Errorf("DiscoverDevicesFrom must publish starting, got %q", lastDiscoveryStatus(app))
+	}
+}

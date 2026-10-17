@@ -365,24 +365,42 @@ func retryUntilReady(ctx context.Context, retryInterval time.Duration, attempt f
 // mDNS/UPnP, so the embedded build never duplicates the service's discovery.
 // When discoveryService is non-nil (standalone soundtouch-player), it runs an
 // mDNS/UPnP sweep and registers any found devices via AddDeviceByHost.
-// Used by the startup goroutine in main and by the /api/control/discover route
-// inside MountWeb.
-func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discovery.UnifiedDiscoveryService) {
-	app.DiscoverDevicesFrom(ctx, discoveryService, "")
+// Used by the standalone player's startup goroutine, which publishes its own
+// "starting" (before registering configured hosts), so this publishes none.
+// It reports false when the sweep was skipped (busy) or failed; a failure has
+// already been published as "failed".
+func (app *WebApp) DiscoverDevices(ctx context.Context, discoveryService *discovery.UnifiedDiscoveryService) bool {
+	return app.discover(ctx, discoveryService, "", false)
 }
 
-// DiscoverDevicesFrom is DiscoverDevices for a user-triggered sweep: remoteAddr
-// (the requesting client's address, may be empty) is handed to TriggerDiscovery
-// as a scan hint. It publishes "starting" once the sweep is really running and
-// returns false, publishing nothing, when the host service skipped it because
-// another sweep owns the slot.
+// DiscoverDevicesFrom is DiscoverDevices for a user-triggered sweep (the
+// /api/control/discover route inside MountWeb): remoteAddr (the requesting
+// client's address, may be empty) is handed to TriggerDiscovery as a scan
+// hint, and "starting" is published once the sweep is really running.
+//
+// It returns false when the caller must publish nothing more: either the host
+// service skipped the sweep because another one owns the slot (nothing was
+// published), or the standalone sweep failed ("failed" was published).
 func (app *WebApp) DiscoverDevicesFrom(
 	ctx context.Context,
 	discoveryService *discovery.UnifiedDiscoveryService,
 	remoteAddr string,
 ) bool {
+	return app.discover(ctx, discoveryService, remoteAddr, true)
+}
+
+func (app *WebApp) discover(
+	ctx context.Context,
+	discoveryService *discovery.UnifiedDiscoveryService,
+	remoteAddr string,
+	announce bool,
+) bool {
 	ran := true
-	starting := func() { app.BroadcastDiscoveryStatus("starting", app.DeviceCount()) }
+	starting := func() {
+		if announce {
+			app.BroadcastDiscoveryStatus("starting", app.DeviceCount())
+		}
+	}
 
 	// External discovery (embedded build): run the host service's sweep so the
 	// shared datastore is refreshed.

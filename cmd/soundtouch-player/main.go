@@ -180,7 +180,10 @@ func main() {
 					webApp.AddDeviceByHost(host, 8090, "manual")
 				}
 
-				webApp.DiscoverDevices(ctx, discoveryService)
+				// false: the sweep failed and "failed" is already published.
+				if !webApp.DiscoverDevices(ctx, discoveryService) {
+					return
+				}
 
 				webApp.BroadcastDiscoveryStatus("completed", webApp.DeviceCount())
 				webApp.BroadcastDeviceList()
