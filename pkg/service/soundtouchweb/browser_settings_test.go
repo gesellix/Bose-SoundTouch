@@ -546,6 +546,7 @@ func TestSettingsNetworkDiagnosticsBrowserContract(t *testing.T) {
                           state: 'NETWORK_WIFI_DISCONNECTED' },
                         { type: 'ETHERNET_INTERFACE', name: 'eth1',
                           state: 'NETWORK_ETHERNET_DISCONNECTED' },
+                        { type: 'WIFI_INTERFACE', name: 'wlan2', state: 'NETWORK_WIFI_UNKNOWN' },
                     ] },
                 } });
                 render(h(Settings, { deviceId: 'network-target', targetIdentity: 'network-physical' }), root);
@@ -571,12 +572,15 @@ func TestSettingsNetworkDiagnosticsBrowserContract(t *testing.T) {
                 }
                 const technical = root.querySelector('.settings-network-technical');
                 if (!technical || technical.open || technical.querySelector('summary').textContent !== 'Technical details' ||
-                    technical.querySelectorAll('.settings-network-row').length !== 2 ||
-                    !technical.textContent.includes('wlan1') || !technical.textContent.includes('eth1')) {
+                    technical.querySelectorAll('.settings-network-row').length !== 3 ||
+                    !technical.textContent.includes('wlan1') || !technical.textContent.includes('eth1') ||
+                    !technical.textContent.includes('wlan2') ||
+                    technical.querySelector('p') !== null) {
                     throw new Error('disconnected adapters are not hidden in technical detail');
                 }
                 technical.open = true;
-                if (!technical.querySelector('.settings-network-row').textContent.includes('Disconnected')) {
+                if (!technical.querySelector('.settings-network-row').textContent.includes('Not connected') ||
+                    !technical.textContent.includes('Connection state not reported')) {
                     throw new Error('technical details lost the adapter state');
                 }
                 const setup = root.querySelector('a.settings-command-link');

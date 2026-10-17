@@ -131,7 +131,7 @@ export function networkInterfaceName(item, technical = false) {
 
 export function networkInterfaceSummary(item, technical = false) {
     if (technical) {
-        return [item.state?.endsWith('_DISCONNECTED') ? 'Disconnected' : 'Not connected',
+        return [item.state?.endsWith('_DISCONNECTED') ? 'Not connected' : 'Connection state not reported',
             item.ipAddress, item.band].filter(Boolean).join(' · ');
     }
     return [item.ipAddress || 'IP not reported', item.band].filter(Boolean).join(' · ');

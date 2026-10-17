@@ -62,8 +62,8 @@ test('connected network paths stay separate from disconnected adapters', () => {
     assert.equal(networkInterfaceName(ethernet), 'Ethernet');
     assert.equal(networkInterfaceSummary(ethernet), '192.0.2.12');
     assert.equal(networkInterfaceName(disconnected, true), 'Wi-Fi interface · wlan1');
-    assert.equal(networkInterfaceSummary(disconnected, true), 'Disconnected');
-    assert.equal(networkInterfaceSummary(unknown, true), 'Not connected');
+    assert.equal(networkInterfaceSummary(disconnected, true), 'Not connected');
+    assert.equal(networkInterfaceSummary(unknown, true), 'Connection state not reported');
     assert.equal(networkInterfaceSummary({}), 'IP not reported');
     assert.deepEqual(networkInterfaceGroups(null), { connected: [], disconnected: [] });
 });
