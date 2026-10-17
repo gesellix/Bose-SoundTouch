@@ -95,26 +95,40 @@ func TestDiscover_SSDPFindsDevices_NoScan(t *testing.T) {
 	}
 }
 
-func TestDiscover_SSDPEmptyOrError_FallsBackToScan(t *testing.T) {
+// The periodic sweep never scans, not even when SSDP finds nothing: a
+// bridge-networked install would otherwise probe its subnets on every tick
+// without anyone having asked for it.
+func TestDiscover_PeriodicNeverScans(t *testing.T) {
 	for name, err := range map[string]error{"empty": nil, "error": errors.New("multicast unavailable")} {
 		t.Run(name, func(t *testing.T) {
 			s, f := newDiscoveryFake(t, "http://10.0.0.2:8000")
 			f.ssdpErr = err
 			f.scanDevs = []*models.DiscoveredDevice{dev("198.51.100.99")}
 
-			notified := 0
-			s.SetDevicesChangedHook(func() { notified++ })
-
 			s.DiscoverDevices(context.Background())
 
-			if f.scanCalls != 1 || fmt.Sprint(f.handled) != "[198.51.100.99]" || notified != 1 {
-				t.Errorf("scan=%d handled=%v notified=%d", f.scanCalls, f.handled, notified)
-			}
-
-			if fmt.Sprint(f.scanPrefix) != "[10.0.0.0/24]" {
-				t.Errorf("prefixes %v", f.scanPrefix)
+			if f.scanCalls != 0 || len(f.handled) != 0 {
+				t.Errorf("scan=%d handled=%v", f.scanCalls, f.handled)
 			}
 		})
+	}
+}
+
+func TestDiscoverDevicesManual_ScansDerivedSubnetAndNotifies(t *testing.T) {
+	s, f := newDiscoveryFake(t, "http://10.0.0.2:8000")
+	f.scanDevs = []*models.DiscoveredDevice{dev("198.51.100.99")}
+
+	notified := 0
+	s.SetDevicesChangedHook(func() { notified++ })
+
+	s.DiscoverDevicesManual(context.Background(), "", nil)
+
+	if f.scanCalls != 1 || fmt.Sprint(f.handled) != "[198.51.100.99]" || notified != 1 {
+		t.Errorf("scan=%d handled=%v notified=%d", f.scanCalls, f.handled, notified)
+	}
+
+	if fmt.Sprint(f.scanPrefix) != "[10.0.0.0/24]" {
+		t.Errorf("prefixes %v", f.scanPrefix)
 	}
 }
 
@@ -122,7 +136,7 @@ func TestDiscover_ExplicitSubnetsTakePrecedence(t *testing.T) {
 	s, f := newDiscoveryFake(t, "http://10.0.0.2:8000")
 	s.SetDiscoverySubnets("203.0.113.0/24,junk")
 
-	s.DiscoverDevices(context.Background())
+	s.DiscoverDevicesManual(context.Background(), "", nil)
 
 	if fmt.Sprint(f.scanPrefix) != "[203.0.113.0/24]" {
 		t.Errorf("prefixes %v", f.scanPrefix)
@@ -235,7 +249,7 @@ func TestSubnetScan_LogsPrefixesWithoutResponseContent(t *testing.T) {
 	s.SetDiscoverySubnets("203.0.113.0/24")
 	f.scanDevs = []*models.DiscoveredDevice{{Host: "203.0.113.7", Name: "SECRET-NAME"}}
 
-	s.DiscoverDevices(context.Background())
+	s.DiscoverDevicesManual(context.Background(), "", nil)
 
 	out := buf.String()
 	if !strings.Contains(out, "203.0.113.0/24") {
@@ -280,7 +294,7 @@ func TestDiscover_ScanResultIsPersisted(t *testing.T) {
 	}
 	s.SetDiscoverySubnets("203.0.113.0/24")
 
-	s.DiscoverDevices(context.Background())
+	s.DiscoverDevicesManual(context.Background(), "", nil)
 
 	devices, err := ds.ListAllDevices()
 	if err != nil {

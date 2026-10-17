@@ -89,8 +89,8 @@ func (s *Server) HandleAddManualDevice(w http.ResponseWriter, r *http.Request) {
 // HandleTriggerDiscovery triggers a new device discovery scan.
 //
 // An admin trigger always scans the candidate subnets, even if SSDP finds
-// speakers (periodic discovery only scans when SSDP finds none). The
-// request's socket address (never X-Forwarded-For) is one of the scan hints.
+// speakers (periodic discovery never scans). The request's socket address
+// (never X-Forwarded-For) is one of the scan hints.
 func (s *Server) HandleTriggerDiscovery(w http.ResponseWriter, r *http.Request) {
 	if s.beginDiscovery() {
 		var remote netip.Addr

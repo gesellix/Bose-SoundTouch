@@ -1517,10 +1517,11 @@ func (s *Server) GetLoggingSettings() (bool, bool, bool) {
 	return s.redactLogs, s.logBodies, s.recordEnabled
 }
 
-// DiscoverDevices runs one device discovery sweep: SSDP first, then a bounded
-// subnet scan as a multicast-independent fallback when SSDP finds nothing
-// (typically a bridge-networked container). A sweep already in progress wins;
-// an overlapping call returns immediately.
+// DiscoverDevices runs one periodic device discovery sweep. It uses SSDP only:
+// the subnet scan probes up to 1024 hosts and runs only on a user's click
+// (DiscoverDevicesManual, HandleTriggerDiscovery), never as a side effect of
+// the background schedule. A sweep already in progress wins; an overlapping
+// call returns immediately.
 func (s *Server) DiscoverDevices(ctx context.Context) {
 	if !s.beginDiscovery() {
 		return
@@ -1530,7 +1531,7 @@ func (s *Server) DiscoverDevices(ctx context.Context) {
 }
 
 // DiscoverDevicesManual runs one user-triggered sweep synchronously: SSDP, then
-// the subnet scan even when SSDP found speakers. remoteAddr is the requester's
+// the subnet scan, even when SSDP found speakers. remoteAddr is the requester's
 // socket address ("ip:port"), used as a scan hint. It returns false without
 // scanning when another sweep already holds the slot; otherwise onStarted (may
 // be nil) is called right after the slot is claimed. ctx is checked before each
@@ -1560,11 +1561,12 @@ func (s *Server) beginDiscovery() bool {
 }
 
 // runDiscovery performs a sweep for a caller that already holds the slot from
-// beginDiscovery and releases it on return. remote is an optional admin
-// client address used as a scan hint; forceScan scans even when SSDP succeeds.
+// beginDiscovery and releases it on return. scan adds the subnet scan after
+// SSDP (user-triggered sweeps only); remote is an optional client address used
+// as a scan hint.
 //
 //nolint:contextcheck
-func (s *Server) runDiscovery(ctx context.Context, remote netip.Addr, forceScan bool) {
+func (s *Server) runDiscovery(ctx context.Context, remote netip.Addr, scan bool) {
 	defer s.discoveryRunning.Store(false)
 
 	log.Println("Scanning for Bose devices...")
@@ -1586,7 +1588,7 @@ func (s *Server) runDiscovery(ctx context.Context, remote netip.Addr, forceScan 
 		log.Printf("Discovery error: %s", sanitizeErr(err))
 	}
 
-	if len(devices) == 0 || forceScan {
+	if scan {
 		scanCtx, scanCancel := context.WithTimeout(ctx, subnetScanTimeout)
 		devices = mergeDiscovered(devices, s.scanSubnets(scanCtx, remote))
 
@@ -1614,7 +1616,7 @@ func (s *Server) runDiscovery(ctx context.Context, remote netip.Addr, forceScan 
 	s.notifyDevicesChanged()
 }
 
-// subnetScanTimeout bounds one whole subnet-scan fallback pass.
+// subnetScanTimeout bounds one whole subnet-scan pass.
 const subnetScanTimeout = 60 * time.Second
 
 // discoveryDeps are the discovery side effects a sweep uses, injectable so
@@ -1726,7 +1728,7 @@ func (s *Server) discoveryHints(ctx context.Context, remote netip.Addr) []netip.
 	return append(hints, deps.interfaceAddrs()...)
 }
 
-// scanSubnets runs the multicast-independent fallback and returns what it found.
+// scanSubnets runs the multicast-independent scan and returns what it found.
 func (s *Server) scanSubnets(ctx context.Context, remote netip.Addr) []*models.DiscoveredDevice {
 	s.mu.RLock()
 	explicit := s.discoverySubnets
