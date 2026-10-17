@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/client"
-	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 )
 
 func TestZoneVolumeResponseStatuses(t *testing.T) {
@@ -28,10 +27,10 @@ func TestZoneVolumeResponseStatuses(t *testing.T) {
 			wantGets    int
 		}{
 			{name: "confirmed", wantCode: 200, wantStatus: volumeConfirmed, wantGets: 1},
-			{name: "mismatch", mismatch: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 1},
-			{name: "newer event", stale: true, wantCode: 200, wantStatus: volumeConfirmed, wantGets: 1},
-			{name: "uncertain transport", uncertain: true, mismatch: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 1},
-			{name: "unknown HTTP outcome", unknownHTTP: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 1},
+			{name: "mismatch", mismatch: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 3},
+			{name: "newer event", stale: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 3},
+			{name: "uncertain transport", uncertain: true, mismatch: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 3},
+			{name: "unknown HTTP outcome", unknownHTTP: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 3},
 			{name: "read failed", readFailure: true, wantCode: 200, wantStatus: volumeUnverified, wantGets: 1},
 			{name: "definitive rejection", reject: true, wantCode: 502, wantStatus: volumeFailed},
 			{name: "prewrite unavailable", unavailable: true, wantCode: 502, wantStatus: volumeFailed},
@@ -41,12 +40,17 @@ func TestZoneVolumeResponseStatuses(t *testing.T) {
 				master := newVolumeTestSpeaker(t, 20, zoneXML)
 				member := newVolumeTestSpeaker(t, 20, "")
 				app := NewWebApp()
+				app.volumeReadbackRetryWait = func(time.Duration) {}
 				masterConn := addVolumeTestDevice(app, "192.0.2.10", "MASTER", "Kitchen", "SoundTouch 30", master, 20, nil, zone)
 				memberConn := addVolumeTestDevice(app, "192.0.2.20", "MEMBER", "Dining", "SoundTouch 20", member, 20, nil, nil)
 				member.ignoreWrites = test.mismatch
 				member.uncertainWrite = test.uncertain
 				if test.readFailure {
-					member.volumeResponse = "<volume"
+					member.onVolumePost = func() {
+						member.mu.Lock()
+						member.volumeResponse = "<volume"
+						member.mu.Unlock()
+					}
 				}
 				if test.reject {
 					member.writeStatus = http.StatusBadRequest
@@ -65,7 +69,11 @@ func TestZoneVolumeResponseStatuses(t *testing.T) {
 					master.ignoreWrites = test.mismatch
 					master.uncertainWrite = test.uncertain
 					if test.readFailure {
-						master.volumeResponse = "<volume"
+						master.onVolumePost = func() {
+							master.mu.Lock()
+							master.volumeResponse = "<volume"
+							master.mu.Unlock()
+						}
 					}
 					if test.reject {
 						master.writeStatus = http.StatusBadRequest
@@ -75,7 +83,7 @@ func TestZoneVolumeResponseStatuses(t *testing.T) {
 						master.writeBody = "unknown outcome"
 					}
 					if test.unavailable {
-						masterConn.UpdateStatus(func(s *webtypes.DeviceStatus) { s.Volume = nil })
+						master.volumeResponse = "<volume"
 					}
 					if test.stale {
 						master.onVolumeGet = func(int) { app.applyVolumeEvent(masterConn, memberConn.Status().Volume) }
@@ -108,7 +116,11 @@ func TestZoneVolumeResponseStatuses(t *testing.T) {
 						t.Fatalf("result = %+v", result)
 					}
 				}
-				if _, posts, gets := member.operations(); gets != test.wantGets ||
+				wantGets := test.wantGets
+				if !memberOnly && !test.unavailable {
+					wantGets++ // fresh batch baseline precedes write reconciliation
+				}
+				if _, posts, gets := member.operations(); gets != wantGets ||
 					(!test.unavailable && fmt.Sprint(posts) != "[40]") ||
 					(test.unavailable && len(posts) != 0) {
 					t.Fatalf("member operations = posts %v gets %d", posts, gets)

@@ -9,6 +9,8 @@ import {
     fenceVolumeReadback,
     maxReadbackActual,
     partialFailureMessage,
+    reconcileVolumeResult,
+    volumeProjectionKey,
 } from '../zoneVolumeResult.mjs';
 
 const html = htm.bind(h);
@@ -89,6 +91,7 @@ export function Controls({
     deviceId,
     status: providedStatus,
     device,
+    devices = {},
     command,
     commandBusy = false,
     commandStatus = '',
@@ -128,21 +131,23 @@ export function Controls({
     const balanceMax = balance?.Max ?? 0;
 
     const projectedVolumeRef = useRef(projectedVolume);
-    const projectionKey = JSON.stringify([
-        status?.epoch ?? null,
-        status?.revision ?? null,
-        projectedVolume,
-        (zone?.members || []).map(member => [
-            member?.controlId || '',
-            Number.isFinite(member?.actualVolume) ? member.actualVolume : null,
-            member?.available !== false,
-        ]),
-    ]);
+    const memberStatuses = controlsLogicalZone ? (zone?.members || []).map(member => [
+        member.controlId, member.controlId === deviceId ? status : devices[member.controlId]?.status,
+    ]) : [];
+    const projectionEpoch = JSON.stringify(Object.fromEntries([[deviceId, status?.epoch ?? null],
+        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.epoch ?? null])]));
+    const projectionRevision = JSON.stringify(Object.fromEntries([[deviceId, status?.revision ?? null],
+        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.revision ?? null])]));
+    const projectionKey = volumeProjectionKey(projectionEpoch,
+        projectionRevision, controlsLogicalZone
+            ? Object.fromEntries((zone?.members || []).map(member => [
+                member.controlId, Number.isFinite(member.actualVolume) ? member.actualVolume : null,
+            ])) : { [deviceId]: projectedVolume });
     const projectionKeyRef = useRef(projectionKey);
     const controlTargetKey = JSON.stringify([
         deviceId,
         controlsLogicalZone,
-        status?.epoch ?? null,
+        projectionEpoch,
         zone?.masterControlId || '',
         (zone?.members || []).map(member => [
             member?.controlId || '',
@@ -163,6 +168,7 @@ export function Controls({
     const interactionGenerationRef = useRef(0);
     const interactionDirtyRef = useRef(false);
     const acceptedSequenceRef = useRef(0);
+    const finalResultRef = useRef(null);
     const schedulerRef = useRef(null);
     const [localVolume, setLocalVolume] = useState(projectedVolume);
     const localVolumeRef = useRef(projectedVolume);
@@ -210,7 +216,8 @@ export function Controls({
                 }
 
                 if (metadata.group) {
-                    const data = response.data;
+                    const data = reconcileVolumeResult(response.data, projectionKeyRef.current,
+                        metadata.projectionKey);
                     if (data?.requested !== metadata.value) {
                         zoneCallbacksRef.current.onFailure(metadata.interactionGeneration);
                         if (shouldSurfaceLatestFinal(metadata)) {
@@ -219,13 +226,19 @@ export function Controls({
                         return;
                     }
 
-                    const confirmed = maxReadbackActual(data);
+                    const confirmed = maxReadbackActual(data, projectionKeyRef.current);
                     const reconciliation = fenceVolumeReadback(
                         metadata.projectionKey,
                         projectionKeyRef.current,
                         projectedVolumeRef.current,
                         confirmed,
+                        data,
                     );
+                    if (shouldSurfaceLatestFinal(metadata)) {
+                        finalResultRef.current = {
+                            data, targetKey: metadata.targetKey, projectionKey: projectionKeyRef.current,
+                        };
+                    }
                     if (!reconciliation.accepted) {
                         acceptedSequenceRef.current = metadata.sequence;
                         setLocalVolume(reconciliation.volume);
@@ -236,7 +249,7 @@ export function Controls({
                         }
                         return;
                     }
-                    if (metadata.final) {
+                    if (metadata.final || !interactionActiveRef.current) {
                         zoneCallbacksRef.current.onReadback(data, metadata.interactionGeneration);
                     }
                     if (confirmed !== null &&
@@ -253,6 +266,15 @@ export function Controls({
 
                 // Direct volume keeps main's write-only response contract.
                 acceptedSequenceRef.current = metadata.sequence;
+                if (!interactionActiveRef.current) {
+                    const reconciliation = fenceVolumeReadback(metadata.projectionKey,
+                        projectionKeyRef.current, projectedVolumeRef.current, metadata.value, {
+                            members: [{ controlId: controlTargetRef.current.deviceId,
+                                actual: metadata.value, target: metadata.value }],
+                        });
+                    setLocalVolume(reconciliation.volume);
+                    localVolumeRef.current = reconciliation.volume;
+                }
                 if (shouldSurfaceLatestFinal(metadata)) setVolumeFailure('');
             },
             onError(_error, metadata) {
@@ -283,8 +305,23 @@ export function Controls({
 
     useEffect(() => () => schedulerRef.current.dispose(), []);
     useEffect(() => {
-        if (!controlsLogicalZone ||
-            (!interactionActiveRef.current && !schedulerRef.current.isActive())) {
+        const final = finalResultRef.current;
+        if (!final || final.targetKey !== controlTargetKey) return;
+        const data = reconcileVolumeResult(final.data, projectionKey, final.projectionKey);
+        if (data === final.data) return;
+        finalResultRef.current = { ...final, data };
+        setVolumeFailure(partialFailureMessage(data));
+    }, [projectionKey, controlTargetKey]);
+    useEffect(() => {
+        interactionActiveRef.current = false;
+        interactionDirtyRef.current = false;
+        finalResultRef.current = null;
+        setVolumeFailure('');
+        setLocalVolume(projectedVolumeRef.current);
+        localVolumeRef.current = projectedVolumeRef.current;
+    }, [controlTargetKey]);
+    useEffect(() => {
+        if (!interactionActiveRef.current && !schedulerRef.current.isActive()) {
             setLocalVolume(projectedVolume);
             localVolumeRef.current = projectedVolume;
         }
@@ -304,18 +341,10 @@ export function Controls({
     // One throttle per slider per mount. The local state still updates on every
     // input, so the handle keeps up with the pointer; only the network write is
     // rate-limited.
-    const writeVolume = useMemo(() => throttleTrailing(
-        (id, val) => api.volume(id, val), SLIDER_WRITE_INTERVAL_MS), []);
     const writeBass = useMemo(() => throttleTrailing(
         (id, val) => api.bass(id, val), SLIDER_WRITE_INTERVAL_MS), []);
     const writeBalance = useMemo(() => throttleTrailing(
         (id, val) => api.balance(id, val), SLIDER_WRITE_INTERVAL_MS), []);
-
-    function onVolumeChange(e) {
-        const val = parseInt(e.target.value, 10);
-        setLocalVolume(val);
-        writeVolume(deviceId, val);
-    }
 
     function beginVolumeInteraction() {
         if (interactionActiveRef.current) return;
@@ -333,6 +362,7 @@ export function Controls({
             beginVolumeInteraction();
             if (level === localVolumeRef.current) return;
             interactionDirtyRef.current = true;
+            finalResultRef.current = null;
             setVolumeFailure('');
         }
         setLocalVolume(level);
@@ -355,8 +385,13 @@ export function Controls({
             // member sliders keep showing it over their live volumes.
             const wasActive = interactionActiveRef.current;
             interactionActiveRef.current = false;
-            if (wasActive && controlsLogicalZone && !schedulerRef.current.isActive()) {
-                onZoneVolumeFailure(interactionGenerationRef.current);
+            if (wasActive && !schedulerRef.current.isActive()) {
+                if (controlsLogicalZone) {
+                    onZoneVolumeFailure(interactionGenerationRef.current);
+                } else {
+                    setLocalVolume(projectedVolumeRef.current);
+                    localVolumeRef.current = projectedVolumeRef.current;
+                }
             }
             return;
         }
@@ -466,11 +501,17 @@ export function Controls({
                 <div class="volume-row">
                     <span class="volume-icon">${IconVolume({ size: 16 })}</span>
                     <input type="range" class="volume-slider" min="0" max="100"
-                        value=${localVolume} onInput=${onVolumeChange} />
+                        value=${localVolume} aria-label="Volume"
+                        onPointerDown=${beginVolumeInteraction}
+                        onInput=${event => queueVolume(event, false)}
+                        onPointerUp=${finishVolumeInteraction}
+                        onPointerCancel=${finishVolumeInteraction}
+                        onChange=${finishVolumeInteraction}
+                        onBlur=${finishVolumeInteraction} />
                     <span class="volume-value">${localVolume}</span>
                 </div>
             `}
-            ${controlsLogicalZone && volumeFailure ? html`<div class="volume-control-failure" role="status">${volumeFailure}</div>` : null}
+            ${volumeFailure ? html`<div class="volume-control-failure" role="status">${volumeFailure}</div>` : null}
             ${hasBass && html`
                 <div class="bass-row">
                     <span class="bass-label">Bass</span>

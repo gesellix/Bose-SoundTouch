@@ -48,6 +48,9 @@ func (app *WebApp) HandleZoneMemberVolume(w http.ResponseWriter, r *http.Request
 	}
 
 	masterDeviceID := strings.TrimSpace(initialMaster.Zone.MasterDeviceID)
+	lock := app.zoneVolumeLock(masterDeviceID)
+	lock.Lock()
+	defer lock.Unlock()
 
 	zoneTopology, err := app.revalidateZone(masterDeviceID)
 	if err != nil {

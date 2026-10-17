@@ -76,7 +76,7 @@ function acceptsNewerStatus(current, incoming) {
 }
 
 export function mergeDevicesSnapshot(previous, snapshot) {
-    return Object.fromEntries(Object.entries(snapshot || {}).map(([deviceId, incoming]) => {
+    const devices = Object.fromEntries(Object.entries(snapshot || {}).map(([deviceId, incoming]) => {
         const current = Object.prototype.hasOwnProperty.call(previous, deviceId)
             ? previous[deviceId] : null;
         if (!current || acceptsNewerStatus(current.status, incoming?.status)) {
@@ -92,6 +92,52 @@ export function mergeDevicesSnapshot(previous, snapshot) {
         // device-list broadcast).
         return [deviceId, current];
     }));
+    return refreshAcceptedZoneVolumes(devices);
+}
+
+// Zone volume depends on every member's accepted status, not just the master's
+// revision. Keep accepted topology intact and update only the matching logical
+// members' volume values; a stale master snapshot cannot revive old membership.
+function refreshAcceptedZoneVolumes(devices) {
+    return Object.fromEntries(Object.entries(devices).map(([id, device]) => {
+        if (!Array.isArray(device?.zone?.members)) return [id, device];
+        let changed = false;
+        const members = device.zone.members.map(member => {
+            const current = devices[member.controlId];
+            const identity = current?.info?.device_id;
+            if (current?.volumeIdentityPending || !identity || identity !== member.hwId ||
+                !member.deviceIds?.includes(identity)) return member;
+            const expectedPair = member.stereoPair;
+            const currentPair = current.stereoPair;
+            if (Boolean(expectedPair) !== Boolean(currentPair)) return member;
+            if (expectedPair && JSON.stringify(volumePairIdentity(expectedPair)) !==
+                JSON.stringify(volumePairIdentity(currentPair))) return member;
+            const group = current.status?.group;
+            if (expectedPair) {
+                const reportedPair = { id: String(group?.ID || '').trim(),
+                    masterDeviceId: String(group?.MasterDeviceID || '').trim(),
+                    members: (group?.Roles?.Roles || []).map(role => ({
+                        deviceId: String(role.DeviceID || '').trim(), role: String(role.Role || '').trim().toUpperCase(),
+                    })) };
+                if (JSON.stringify(volumePairIdentity(expectedPair)) !==
+                    JSON.stringify(volumePairIdentity(reportedPair))) return member;
+            } else if (group?.ID || group?.MasterDeviceID || group?.Roles?.Roles?.length) return member;
+            const volume = current.status?.volume?.ActualVolume;
+            if (!Number.isSafeInteger(volume) || volume < 0 || volume > 100 ||
+                member.actualVolume === volume) return member;
+            changed = true;
+            return { ...member, actualVolume: volume };
+        });
+        if (!changed) return [id, device];
+        const volumes = members.map(member => member.actualVolume).filter(Number.isFinite);
+        return [id, { ...device, zone: { ...device.zone, members,
+            volume: volumes.length ? Math.max(...volumes) : device.zone.volume } }];
+    }));
+}
+
+function volumePairIdentity(pair) {
+    return [pair?.id, pair?.masterDeviceId,
+        (pair?.members || []).map(member => [member.deviceId, member.role]).sort()];
 }
 
 function replaceDevice(previous, deviceId, device) {
@@ -110,10 +156,15 @@ export function mergeStatusUpdate(previous, deviceId, status) {
         !acceptsNewerStatus(previous[deviceId]?.status, status)) {
         return previous;
     }
-    return replaceDevice(previous, deviceId, {
+    return refreshAcceptedZoneVolumes(replaceDevice(previous, deviceId, {
         ...previous[deviceId],
         status,
-    });
+        // A status delta carries no fresh info identity. After a connection
+        // replacement, wait for a full accepted inventory before deriving its
+        // contribution to a retained logical group.
+        volumeIdentityPending: previous[deviceId].volumeIdentityPending ||
+            statusEpoch(previous[deviceId].status) !== statusEpoch(status),
+    }));
 }
 
 export function DeviceDetail({
@@ -133,7 +184,9 @@ export function DeviceDetail({
     const controlsMode = device?.zone && !device.zone.isStandalone &&
         device.zone.masterControlId === deviceId ? 'zone' : 'device';
     const topologyFingerprint = zoneTopologyFingerprint(device?.zone);
-    const controlsTargetKey = `${deviceId}:${controlsMode}:${statusEpoch(status) ?? ''}:${topologyFingerprint}`;
+    const memberEpochs = controlsMode === 'zone' ? (device.zone.members || []).map(member =>
+        [member.controlId, statusEpoch(devices[member.controlId]?.status)]) : [];
+    const controlsTargetKey = `${deviceId}:${controlsMode}:${statusEpoch(status) ?? ''}:${topologyFingerprint}:${JSON.stringify(memberEpochs)}`;
     const [zoneVolumePreview, setZoneVolumePreview] = useState(null);
     const previewExpiryRef = useRef(null);
 
@@ -372,6 +425,7 @@ export function DeviceDetail({
                 key=${controlsMode === 'zone' ? controlsTargetKey : deviceId}
                 deviceId=${deviceId}
                 device=${device}
+                devices=${devices}
                 status=${device.status}
                 command=${command}
                 commandBusy=${commandBusy}
