@@ -344,6 +344,19 @@
                         Units: <code>h</code> (hours), <code>m</code> (minutes), <code>s</code> (seconds).
                     </div>
                 </div>
+                <div style="margin-top: 8px">
+                    <label for="discovery-scan-interval">Subnet Scan Interval:</label>
+                    <input type="text" id="discovery-scan-interval" placeholder="0 (off)" style="width: 100px"/>
+                    <span class="info-toggle" onclick="toggleInfo('discovery-scan-interval-info')">ⓘ</span>
+                    <div id="discovery-scan-interval-info" class="info-details">
+                        Runs the subnet scan that "Scan Again" adds (<code>GET /info</code> on up to 1024 hosts)
+                        on a timer, for setups where multicast discovery cannot see the speakers (e.g. Docker
+                        bridge networking). Independent of the periodic discovery above.<br/>
+                        <code>0</code> or empty turns it off (the default). At least <code>1h</code> is
+                        recommended: known speakers are re-checked anyway, so a frequent scan only finds new
+                        speakers sooner, and frequent sweeps can trip a router's intrusion detection.
+                    </div>
+                </div>
             </div>
         </div>
         <div style="margin-bottom: 20px">

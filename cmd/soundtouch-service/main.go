@@ -304,6 +304,13 @@ var serviceFlags = []cli.Flag{
 		Value:   "5m",
 		EnvVars: []string{"DISCOVERY_INTERVAL"},
 	},
+	&cli.StringFlag{
+		Name: "discovery-scan-interval",
+		Usage: "Run the subnet scan (as \"Scan Again\" does) on this interval; 0 disables it. " +
+			"At least 1h is recommended: each scan probes up to 1024 hosts",
+		Value:   "0",
+		EnvVars: []string{"DISCOVERY_SCAN_INTERVAL"},
+	},
 	&cli.BoolFlag{
 		Name: "player-enabled",
 		Usage: "Enable the embedded player (soundtouch-player at /app, plus its /api/control API) and the " +
@@ -586,6 +593,7 @@ func main() {
 			server.SetVersionInfo(version, commit, date, repoURL)
 			server.SetDiscoverySettings(config.discoveryInterval, config.discoveryEnabled)
 			server.SetDeploymentMode(config.deploymentMode)
+			server.SetDiscoveryScanInterval(config.discoveryScanInterval)
 			server.SetPlayerEnabled(config.playerEnabled)
 			server.SetUpdateCheckSettings(config.updateCheckInterval, config.updateCheckEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
@@ -664,6 +672,7 @@ func main() {
 			initializeDefaultSources(ds)
 
 			startDeviceDiscovery(server)
+			startScheduledSubnetScan(server)
 
 			updateChecker := updatecheck.NewChecker(ds, "gesellix/Bose-SoundTouch", version)
 			server.SetUpdateChecker(updateChecker)
@@ -773,6 +782,7 @@ type serviceConfig struct {
 	tlsExtraHosts           []string
 	discoveryEnabled        bool
 	discoveryInterval       time.Duration
+	discoveryScanInterval   time.Duration
 	deploymentMode          string
 	playerEnabled           bool
 	deviceSeedRetryInterval time.Duration
@@ -901,6 +911,8 @@ func loadConfig(c *cli.Context) (serviceConfig, error) {
 		discoveryInterval = 5 * time.Minute
 	}
 
+	discoveryScanInterval := parseScanInterval(c.String("discovery-scan-interval"))
+
 	playerEnabled := c.Bool("player-enabled")
 
 	deviceSeedRetryIntervalStr := c.String("device-seed-retry-interval")
@@ -980,6 +992,7 @@ func loadConfig(c *cli.Context) (serviceConfig, error) {
 		tlsExtraHosts:           tlsExtraHosts,
 		discoveryEnabled:        discoveryEnabled,
 		discoveryInterval:       discoveryInterval,
+		discoveryScanInterval:   discoveryScanInterval,
 		deploymentMode:          deploymentMode,
 		playerEnabled:           playerEnabled,
 		deviceSeedRetryInterval: deviceSeedRetryInterval,
@@ -1133,6 +1146,13 @@ func applyPersistedSettings(ds *datastore.DataStore, config *serviceConfig) data
 		}
 	}
 
+	// No key: the setting was never saved (an install from before it existed,
+	// or one that never touched it), so the flag/env value stands. Its default
+	// is 0, so such installs keep not scanning on a schedule.
+	if persisted.DiscoveryScanInterval != "" {
+		config.discoveryScanInterval = parseScanInterval(persisted.DiscoveryScanInterval)
+	}
+
 	// Installs upgraded from a build that predates the Settings-page toggle
 	// have no update_check_* keys at all, and an absent JSON bool decodes as
 	// false — taking it at face value would silently switch the check off for
@@ -1269,13 +1289,14 @@ func applyPersistedMusicServiceCredentials(config *serviceConfig, persisted data
 
 func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datastore.Settings {
 	settings := datastore.Settings{
-		ServerURL:          config.serverURL,
-		HTTPServerURL:      config.httpsOverride,
-		RedactLogs:         config.redact,
-		LogBodies:          config.logBody,
-		RecordInteractions: config.record,
-		DiscoveryEnabled:   config.discoveryEnabled,
-		DiscoveryInterval:  config.discoveryInterval.String(),
+		ServerURL:             config.serverURL,
+		HTTPServerURL:         config.httpsOverride,
+		RedactLogs:            config.redact,
+		LogBodies:             config.logBody,
+		RecordInteractions:    config.record,
+		DiscoveryEnabled:      config.discoveryEnabled,
+		DiscoveryInterval:     config.discoveryInterval.String(),
+		DiscoveryScanInterval: config.discoveryScanInterval.String(),
 		// Seed from the CLI/env flag so a fresh install's settings.json
 		// matches what the operator asked for and the Settings page shows it
 		// (issue 762).
@@ -1414,6 +1435,68 @@ func startDeviceDiscovery(server *handlers.Server) {
 			}
 
 			time.Sleep(currentInterval)
+		}
+	}()
+}
+
+// scheduledScanPollTick is how often the scheduled-scan goroutine re-reads the
+// live interval, so a Settings-page change applies within a minute instead of
+// after the previous (possibly 24h) interval.
+const scheduledScanPollTick = time.Minute
+
+// parseScanInterval parses a DISCOVERY_SCAN_INTERVAL value. Empty, invalid or
+// negative values mean off, with a warning for the latter two.
+func parseScanInterval(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+
+	d, err := time.ParseDuration(value)
+	if err != nil || d < 0 {
+		log.Printf("Warning: invalid discovery scan interval %q, scheduled subnet scan stays off", sanitizeLog(value))
+
+		return 0
+	}
+
+	return d
+}
+
+// scheduledScanDue reports whether the scheduled subnet scan should run on
+// this tick: an interval is set and has elapsed since lastRun. The caller
+// restarts lastRun at service start, after each scan and whenever the
+// interval changes, so turning the setting on never fires a scan right away.
+// Pure/testable.
+func scheduledScanDue(interval time.Duration, lastRun, now time.Time) bool {
+	return interval > 0 && now.Sub(lastRun) >= interval
+}
+
+// startScheduledSubnetScan runs the opt-in scheduled subnet scan. Like
+// startUpdateCheck it always runs and re-reads the live interval on every
+// tick, but only scans when an interval is set and has elapsed. A tick that
+// finds another sweep running retries on the next tick.
+func startScheduledSubnetScan(server *handlers.Server) {
+	go func() {
+		lastRun := time.Now()
+		lastInterval := server.GetDiscoveryScanInterval()
+
+		for {
+			time.Sleep(scheduledScanPollTick)
+
+			interval := server.GetDiscoveryScanInterval()
+			if interval != lastInterval {
+				lastInterval, lastRun = interval, time.Now()
+
+				continue
+			}
+
+			if !scheduledScanDue(interval, lastRun, time.Now()) {
+				continue
+			}
+
+			if server.ScanDevicesScheduled(context.Background()) {
+				lastRun = time.Now()
+			}
 		}
 	}()
 }

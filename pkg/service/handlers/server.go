@@ -57,6 +57,7 @@ type Server struct {
 	logBodies                bool
 	recordEnabled            bool
 	discoveryInterval        time.Duration
+	discoveryScanInterval    time.Duration // scheduled subnet scan; 0 = off
 	discoveryEnabled         bool
 	playerEnabled            bool // live embedded-player opt-out; defaults on (issue 762)
 	playerEnabledChangedHook func(enabled bool)
@@ -950,6 +951,51 @@ func (s *Server) GetShortcuts() map[string]int {
 	defer s.mu.RUnlock()
 
 	return s.shortcuts
+}
+
+// RecommendedMinScanInterval is the shortest scheduled subnet-scan interval
+// the docs recommend. It is not enforced: a shorter value only logs a hint.
+// Known speakers are re-checked at their stored IPs anyway, so a frequent
+// scan only finds brand-new speakers sooner, and a /24 sweep every few
+// minutes is what router intrusion detection tends to flag.
+const RecommendedMinScanInterval = time.Hour
+
+// SetDiscoveryScanInterval sets how often the subnet scan runs on its own
+// (0 = never; "Scan Again" always works).
+func (s *Server) SetDiscoveryScanInterval(interval time.Duration) {
+	s.mu.Lock()
+	s.discoveryScanInterval = interval
+	s.mu.Unlock()
+
+	logScanIntervalHint(interval)
+}
+
+// GetDiscoveryScanInterval returns the scheduled subnet-scan interval (0 = off).
+func (s *Server) GetDiscoveryScanInterval() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.discoveryScanInterval
+}
+
+func logScanIntervalHint(interval time.Duration) {
+	if interval > 0 && interval < RecommendedMinScanInterval {
+		log.Printf("Scheduled subnet scan every %s; at least %s is recommended (each scan probes up to 1024 hosts)",
+			interval, RecommendedMinScanInterval)
+	}
+}
+
+// ScanDevicesScheduled runs one scheduled sweep: SSDP plus the subnet scan,
+// like a click without a client hint. It returns false without scanning when
+// another sweep holds the slot, so the scheduler can retry on its next tick.
+func (s *Server) ScanDevicesScheduled(ctx context.Context) bool {
+	if !s.beginDiscovery() {
+		return false
+	}
+
+	s.runDiscovery(ctx, netip.Addr{}, true)
+
+	return true
 }
 
 // GetDiscoverySettings returns the current discovery settings.

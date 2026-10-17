@@ -28,8 +28,22 @@ devices reuse `handleDiscoveredDevice`, `mergeOverlappingDevices` and
 
 Existing installs keep `discovery_enabled` from `settings.json`, and their
 periodic sweep behaves exactly as before (SSDP only). The scan is new and only
-runs on a click, so no migration is needed. A scheduled scan, if it comes, is
-a separate opt-in setting that defaults to off.
+runs on a click, so no migration is needed.
+
+### Scheduled scan
+
+`DISCOVERY_SCAN_INTERVAL` (also on the Settings page) runs the same scan on a
+timer, independent of the periodic SSDP sweep. It defaults to `0` (off).
+At least `1h` is recommended but not enforced; a shorter value logs a hint.
+Known speakers are re-checked at their stored IPs anyway, so a frequent scan
+only finds new speakers sooner, and a /24 sweep every few minutes is what
+router intrusion detection tends to flag. The timer restarts at service
+start, after each scan and whenever the interval changes, so enabling it
+never fires a scan right away.
+
+Existing installs have no `discovery_scan_interval` key in `settings.json`
+and read it as off (or as the env value, if one is set), so they need no
+migration either.
 
 ### Deployment modes
 

@@ -354,6 +354,10 @@ async function fetchSettings() {
         if (settings.discovery_enabled !== undefined) {
             document.getElementById("discovery-enabled").checked = settings.discovery_enabled;
         }
+        if (settings.discovery_scan_interval !== undefined) {
+            document.getElementById("discovery-scan-interval").value =
+                settings.discovery_scan_interval === "0s" ? "0" : settings.discovery_scan_interval;
+        }
         if (settings.player_enabled !== undefined) {
             document.getElementById("player-enabled").checked = settings.player_enabled;
         }
@@ -541,6 +545,7 @@ async function updateSettings() {
         admin_area_auth: document.getElementById("admin-area-auth").value,
         discovery_interval: document.getElementById("discovery-interval").value,
         discovery_enabled: document.getElementById("discovery-enabled").checked,
+        discovery_scan_interval: document.getElementById("discovery-scan-interval").value.trim(),
         player_enabled: document.getElementById("player-enabled").checked,
         update_check_interval: document.getElementById("update-check-interval").value,
         update_check_enabled: document.getElementById("update-check-enabled").checked,

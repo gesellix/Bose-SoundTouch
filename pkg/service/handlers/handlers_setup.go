@@ -274,6 +274,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	httpsOverride := s.httpsOverride
 	discoveryInterval := s.discoveryInterval.String()
 	discoveryEnabled := s.discoveryEnabled
+	discoveryScanInterval := s.discoveryScanInterval.String()
 	playerEnabled := s.playerEnabled
 	// Read the update-check fields directly rather than via
 	// GetUpdateCheckSettings(): that getter takes s.mu.RLock itself, and Go's
@@ -361,6 +362,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"https_443_lan_host":            probe443.LANHost,
 		"discovery_interval":            discoveryInterval,
 		"discovery_enabled":             discoveryEnabled,
+		"discovery_scan_interval":       discoveryScanInterval,
 		"player_enabled":                playerEnabled,
 		"update_check_interval":         updateCheckInterval,
 		"update_check_enabled":          updateCheckEnabled,
@@ -432,6 +434,62 @@ func parseOptionalDuration(value string) (time.Duration, error) {
 	return time.ParseDuration(value)
 }
 
+// settingsIntervals are the durations a settings save carries.
+type settingsIntervals struct {
+	discovery, updateCheck, scan time.Duration
+	scanProvided                 bool
+}
+
+// parseSettingsIntervals parses the interval fields of a settings save. The
+// error names the offending field.
+func parseSettingsIntervals(discovery, updateCheck string, scan *string) (settingsIntervals, error) {
+	var (
+		out settingsIntervals
+		err error
+	)
+
+	if out.discovery, err = parseOptionalDuration(discovery); err != nil {
+		return out, fmt.Errorf("discovery interval: %w", err)
+	}
+
+	if out.scan, out.scanProvided, err = parseScanIntervalField(scan); err != nil {
+		return out, fmt.Errorf("discovery scan interval: %w", err)
+	}
+
+	if out.updateCheck, err = parseOptionalDuration(updateCheck); err != nil {
+		return out, fmt.Errorf("update check interval: %w", err)
+	}
+
+	return out, nil
+}
+
+// parseScanIntervalField parses the optional discovery_scan_interval settings
+// field. provided is false when the field was omitted ("preserve"); "" means
+// off.
+func parseScanIntervalField(raw *string) (interval time.Duration, provided bool, err error) {
+	if raw == nil {
+		return 0, false, nil
+	}
+
+	interval, err = parseOptionalDuration(strings.TrimSpace(*raw))
+	if err == nil && interval < 0 {
+		err = errors.New("must not be negative")
+	}
+
+	return interval, true, err
+}
+
+// applyScanIntervalLocked sets the scheduled subnet-scan interval from a
+// settings save (s.mu held) and logs the recommendation hint on a change.
+func (s *Server) applyScanIntervalLocked(interval time.Duration, provided bool) {
+	if !provided || interval == s.discoveryScanInterval {
+		return
+	}
+
+	s.discoveryScanInterval = interval
+	logScanIntervalHint(interval)
+}
+
 // resolvePeriodicSetting computes the new (interval, enabled) pair for one of
 // the background pollers (device discovery, update check) from a settings
 // request. When the request omitted the interval, the current one is kept. A
@@ -461,6 +519,9 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		HTTPSServerURLOverride *string `json:"https_server_url_override"`
 		DiscoveryInterval      string  `json:"discovery_interval"`
 		DiscoveryEnabled       bool    `json:"discovery_enabled"`
+		// nil means "field omitted, preserve"; "" or "0s" turns the
+		// scheduled subnet scan off.
+		DiscoveryScanInterval *string `json:"discovery_scan_interval"`
 		// nil means "field omitted, preserve"; a caller must explicitly send
 		// true or false to change it. Protects partial-form saves the same
 		// way TLSExtraHosts/CatalogSize do (issue #589's shape) -- important
@@ -537,17 +598,13 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	interval, err := parseOptionalDuration(settings.DiscoveryInterval)
+	intervals, err := parseSettingsIntervals(settings.DiscoveryInterval, settings.UpdateCheckInterval, settings.DiscoveryScanInterval)
 	if err != nil {
-		http.Error(w, "Invalid discovery interval: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	updateCheckInterval, err := parseOptionalDuration(settings.UpdateCheckInterval)
-	if err != nil {
-		http.Error(w, "Invalid update check interval: "+err.Error(), http.StatusBadRequest)
-		return
-	}
+	interval, updateCheckInterval := intervals.discovery, intervals.updateCheck
 
 	s.mu.Lock()
 
@@ -571,6 +628,8 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	s.discoveryInterval, s.discoveryEnabled = resolvePeriodicSetting(
 		s.discoveryInterval, interval, settings.DiscoveryInterval != "", settings.DiscoveryEnabled)
+
+	s.applyScanIntervalLocked(intervals.scan, intervals.scanProvided)
 
 	s.updateCheckInterval, s.updateCheckEnabled = resolvePeriodicSetting(
 		s.updateCheckInterval, updateCheckInterval, settings.UpdateCheckInterval != "", settings.UpdateCheckEnabled)
@@ -639,6 +698,7 @@ func (s *Server) HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	persisted.RecordInteractions = currentRecord
 	persisted.DiscoveryInterval = s.discoveryInterval.String()
 	persisted.DiscoveryEnabled = s.discoveryEnabled
+	persisted.DiscoveryScanInterval = s.discoveryScanInterval.String()
 	persisted.UpdateCheckInterval = s.updateCheckInterval.String()
 	persisted.UpdateCheckEnabled = s.updateCheckEnabled
 	persisted.DNSEnabled = s.dnsEnabled

@@ -3030,32 +3030,36 @@ func (ds *DataStore) GetETagForAccount(account, device string) string {
 
 // Settings represents the global service settings.
 type Settings struct {
-	ServerURL           string         `json:"server_url"`
-	HTTPServerURL       string         `json:"https_server_url,omitempty"`
-	RedactLogs          bool           `json:"redact_logs"`
-	LogBodies           bool           `json:"log_bodies"`
-	RecordInteractions  bool           `json:"record_interactions"`
-	DiscoveryInterval   string         `json:"discovery_interval,omitempty"`
-	DiscoveryEnabled    bool           `json:"discovery_enabled"`
-	UpdateCheckInterval string         `json:"update_check_interval,omitempty"`
-	UpdateCheckEnabled  bool           `json:"update_check_enabled"`
-	DNSEnabled          bool           `json:"dns_enabled"`
-	DNSUpstream         []string       `json:"dns_upstream,omitempty"`
-	DNSBindAddr         string         `json:"dns_bind_addr,omitempty"`
-	InternalPaths       []string       `json:"internal_paths,omitempty"`
-	Shortcuts           map[string]int `json:"shortcuts,omitempty"`
-	SpotifyClientID     string         `json:"spotify_client_id,omitempty"`
-	SpotifyClientSecret string         `json:"spotify_client_secret,omitempty"`
-	SpotifyRedirectURI  string         `json:"spotify_redirect_uri,omitempty"`
-	AmazonClientID      string         `json:"amazon_client_id,omitempty"`
-	AmazonClientSecret  string         `json:"amazon_client_secret,omitempty"`
-	AmazonRedirectURI   string         `json:"amazon_redirect_uri,omitempty"`
-	TTSProvider         string         `json:"tts_provider,omitempty"`
-	TTSGoogleAPIKey     string         `json:"tts_google_api_key,omitempty"`
-	TTSAppKey           string         `json:"tts_app_key,omitempty"`
-	TTSLanguage         string         `json:"tts_language,omitempty"`
-	TTSVoice            string         `json:"tts_voice,omitempty"`
-	TTSVolume           int            `json:"tts_volume,omitempty"`
+	ServerURL          string `json:"server_url"`
+	HTTPServerURL      string `json:"https_server_url,omitempty"`
+	RedactLogs         bool   `json:"redact_logs"`
+	LogBodies          bool   `json:"log_bodies"`
+	RecordInteractions bool   `json:"record_interactions"`
+	DiscoveryInterval  string `json:"discovery_interval,omitempty"`
+	DiscoveryEnabled   bool   `json:"discovery_enabled"`
+	// DiscoveryScanInterval schedules the subnet scan ("Scan Again" on a
+	// timer). Empty or "0s" means off; installs from before this setting
+	// have no key and stay off.
+	DiscoveryScanInterval string         `json:"discovery_scan_interval,omitempty"`
+	UpdateCheckInterval   string         `json:"update_check_interval,omitempty"`
+	UpdateCheckEnabled    bool           `json:"update_check_enabled"`
+	DNSEnabled            bool           `json:"dns_enabled"`
+	DNSUpstream           []string       `json:"dns_upstream,omitempty"`
+	DNSBindAddr           string         `json:"dns_bind_addr,omitempty"`
+	InternalPaths         []string       `json:"internal_paths,omitempty"`
+	Shortcuts             map[string]int `json:"shortcuts,omitempty"`
+	SpotifyClientID       string         `json:"spotify_client_id,omitempty"`
+	SpotifyClientSecret   string         `json:"spotify_client_secret,omitempty"`
+	SpotifyRedirectURI    string         `json:"spotify_redirect_uri,omitempty"`
+	AmazonClientID        string         `json:"amazon_client_id,omitempty"`
+	AmazonClientSecret    string         `json:"amazon_client_secret,omitempty"`
+	AmazonRedirectURI     string         `json:"amazon_redirect_uri,omitempty"`
+	TTSProvider           string         `json:"tts_provider,omitempty"`
+	TTSGoogleAPIKey       string         `json:"tts_google_api_key,omitempty"`
+	TTSAppKey             string         `json:"tts_app_key,omitempty"`
+	TTSLanguage           string         `json:"tts_language,omitempty"`
+	TTSVoice              string         `json:"tts_voice,omitempty"`
+	TTSVolume             int            `json:"tts_volume,omitempty"`
 
 	// TrustForwardedHeaders enables proxy-aware client IP resolution: when the
 	// immediate TCP peer is one of the TrustedProxyCIDRs, the client IP is

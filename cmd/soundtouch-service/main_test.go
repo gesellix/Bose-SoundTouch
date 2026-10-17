@@ -612,3 +612,97 @@ func TestApplyPersistedSettings_ExistingInstallKeepsPeriodicDiscovery(t *testing
 		t.Error("existing install lost its persisted discovery_enabled=true")
 	}
 }
+
+func TestParseScanInterval(t *testing.T) {
+	cases := map[string]time.Duration{
+		"": 0, "0": 0, "0s": 0, " 6h ": 6 * time.Hour, "10m": 10 * time.Minute,
+		"-1h": 0, "soon": 0, // invalid: off, with a warning
+	}
+
+	for in, want := range cases {
+		if got := parseScanInterval(in); got != want {
+			t.Errorf("parseScanInterval(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestScheduledScanDue(t *testing.T) {
+	start := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		name     string
+		interval time.Duration
+		now      time.Time
+		want     bool
+	}{
+		{"off never runs", 0, start.Add(48 * time.Hour), false},
+		{"not yet due", 6 * time.Hour, start.Add(5 * time.Hour), false},
+		{"due exactly at the interval", 6 * time.Hour, start.Add(6 * time.Hour), true},
+		{"overdue", 6 * time.Hour, start.Add(7 * time.Hour), true},
+	}
+
+	for _, tc := range cases {
+		if got := scheduledScanDue(tc.interval, start, tc.now); got != tc.want {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// Installs from before the setting existed have no discovery_scan_interval
+// key: they keep the flag/env value (default 0, off). A saved value wins.
+func TestApplyPersistedSettings_DiscoveryScanInterval(t *testing.T) {
+	t.Run("absent key keeps the flag value", func(t *testing.T) {
+		ds := datastore.NewDataStore(t.TempDir())
+		if err := ds.SaveSettings(datastore.Settings{DiscoveryEnabled: true}); err != nil {
+			t.Fatalf("SaveSettings: %v", err)
+		}
+
+		config := &serviceConfig{discoveryScanInterval: 0}
+		applyPersistedSettings(ds, config)
+
+		if config.discoveryScanInterval != 0 {
+			t.Errorf("existing install got a scheduled scan: %v", config.discoveryScanInterval)
+		}
+
+		config = &serviceConfig{discoveryScanInterval: 2 * time.Hour}
+		applyPersistedSettings(ds, config)
+
+		if config.discoveryScanInterval != 2*time.Hour {
+			t.Errorf("env value lost: %v", config.discoveryScanInterval)
+		}
+	})
+
+	t.Run("saved value wins", func(t *testing.T) {
+		ds := datastore.NewDataStore(t.TempDir())
+		if err := ds.SaveSettings(datastore.Settings{DiscoveryScanInterval: "0s"}); err != nil {
+			t.Fatalf("SaveSettings: %v", err)
+		}
+
+		config := &serviceConfig{discoveryScanInterval: 2 * time.Hour}
+		applyPersistedSettings(ds, config)
+
+		if config.discoveryScanInterval != 0 {
+			t.Errorf("saved 0s did not override the env value: %v", config.discoveryScanInterval)
+		}
+	})
+}
+
+func TestLoadConfigDiscoveryScanInterval(t *testing.T) {
+	config, err := loadConfig(newTestServiceContext(t))
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+
+	if config.discoveryScanInterval != 0 {
+		t.Errorf("default %v, want 0 (off)", config.discoveryScanInterval)
+	}
+
+	config, err = loadConfig(newTestServiceContext(t, "--discovery-scan-interval=6h"))
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+
+	if config.discoveryScanInterval != 6*time.Hour {
+		t.Errorf("got %v, want 6h", config.discoveryScanInterval)
+	}
+}
