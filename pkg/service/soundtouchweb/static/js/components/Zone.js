@@ -12,6 +12,7 @@ import {
     zoneTopologyFingerprint,
 } from '../zonePresentation.mjs';
 import { ZoneMemberVolumeControl } from './ZoneMemberVolumeControl.js';
+import { MemberSettings } from './MemberSettings.js';
 
 const html = htm.bind(h);
 
@@ -272,6 +273,7 @@ export function Zone({ deviceId, devices, onSelectMember, volumePreview = null }
                         })}
                     </div>
                 ` : null}
+                <${MemberSettings} deviceId=${resolved.controlId} device=${devices?.[resolved.controlId]} />
             </div>
         `;
     }

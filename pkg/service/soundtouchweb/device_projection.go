@@ -13,15 +13,26 @@ import (
 // A stereo pair is projected as one target keyed by its master speaker's host;
 // the underlying registry continues to track both physical speakers.
 type deviceView struct {
-	Info       *models.DeviceInfo     `json:"info"`
-	Status     *webtypes.DeviceStatus `json:"status"`
-	LastSeen   time.Time              `json:"lastSeen"`
-	StereoPair *stereoPairView        `json:"stereoPair,omitempty"`
-	Zone       *zoneView              `json:"zone,omitempty"`
+	Info            *models.DeviceInfo           `json:"info"`
+	Status          *webtypes.DeviceStatus       `json:"status"`
+	LastSeen        time.Time                    `json:"lastSeen"`
+	StereoPair      *stereoPairView              `json:"stereoPair,omitempty"`
+	SettingsTargets []physicalSettingsTargetView `json:"settingsTargets,omitempty"`
+	Zone            *zoneView                    `json:"zone,omitempty"`
 	// ZoneMembership marks a non-master member of a projected zone, so its
 	// own card can say which group it belongs to. Only the master carries
 	// the full Zone view.
 	ZoneMembership *zoneMembershipView `json:"zoneMembership,omitempty"`
+}
+
+// physicalSettingsTargetView exposes only uniquely registered physical devices.
+// The registry key, rather than a firmware-reported interface address, owns I/O.
+type physicalSettingsTargetView struct {
+	ControlID  string                 `json:"controlId"`
+	PhysicalID string                 `json:"physicalId"`
+	Name       string                 `json:"name"`
+	Role       string                 `json:"role,omitempty"`
+	Status     *webtypes.DeviceStatus `json:"status"`
 }
 
 type zoneMembershipView struct {
@@ -232,14 +243,60 @@ func projectLogicalDeviceEntries(snapshot []deviceProjectionEntry) (
 
 		pair := masters[entry.ID]
 		devices[entry.ID] = deviceView{
-			Info:       projectedDeviceInfo(entry.ID, entry.Info, pair),
-			Status:     entry.Status,
-			LastSeen:   entry.LastSeen,
-			StereoPair: pair,
+			Info:            projectedDeviceInfo(entry.ID, entry.Info, pair),
+			Status:          entry.Status,
+			LastSeen:        entry.LastSeen,
+			StereoPair:      pair,
+			SettingsTargets: physicalSettingsTargets(entry, pair, byDeviceID),
 		}
 	}
 
 	return devices, physicalToLogical, byDeviceID
+}
+
+func physicalSettingsTargets(
+	entry deviceProjectionEntry,
+	pair *stereoPairView,
+	byDeviceID map[string][]deviceProjectionEntry,
+) []physicalSettingsTargetView {
+	if pair == nil {
+		if entry.Info == nil {
+			return nil
+		}
+
+		unique, ok := uniqueDeviceEntry(byDeviceID, entry.Info.DeviceID)
+		if !ok || unique.ID != entry.ID {
+			return nil
+		}
+
+		return []physicalSettingsTargetView{newPhysicalSettingsTarget(entry, "")}
+	}
+
+	targets := make([]physicalSettingsTargetView, 0, len(pair.Members))
+	for _, role := range []string{"LEFT", "RIGHT"} {
+		for _, member := range pair.Members {
+			if member.Role != role {
+				continue
+			}
+
+			physical, ok := uniqueDeviceEntry(byDeviceID, member.DeviceID)
+			if ok && physical.Info != nil {
+				targets = append(targets, newPhysicalSettingsTarget(physical, role))
+			}
+		}
+	}
+
+	return targets
+}
+
+func newPhysicalSettingsTarget(entry deviceProjectionEntry, role string) physicalSettingsTargetView {
+	return physicalSettingsTargetView{
+		ControlID:  entry.ID,
+		PhysicalID: strings.TrimSpace(entry.Info.DeviceID),
+		Name:       entry.Info.Name,
+		Role:       role,
+		Status:     entry.Status,
+	}
 }
 
 func projectZoneInfo(zone *models.ZoneInfo, snapshot []deviceProjectionEntry) (*zoneView, bool) {
