@@ -1,6 +1,6 @@
 module navigation-station-demo
 
-go 1.27.2
+go 1.27.3
 
 require github.com/gesellix/bose-soundtouch v0.138.1
 

@@ -159,7 +159,7 @@ docs/                  # Long-form analysis, guides, troubleshooting
 
 ## Key technologies
 
-- **Go 1.27.2+**
+- **Go 1.27.3+**
 - **chi v5** — HTTP router
 - **gorilla/websocket** — WebSocket for real-time events
 - **hashicorp/mdns** — mDNS device discovery
