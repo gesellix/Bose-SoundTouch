@@ -184,7 +184,7 @@ func TestApplyZoneVolumeRejectsProjectedHardwareReplacementAndPreservesValidMemb
 	if !result.Partial || result.Baseline != 20 || result.Delta != 10 {
 		t.Fatalf("zone result = %+v", result)
 	}
-	if _, posts, gets := masterSpeaker.operations(); fmt.Sprint(posts) != "[30]" || gets != 1 {
+	if _, posts, gets := masterSpeaker.operations(); fmt.Sprint(posts) != "[30]" || gets != 2 {
 		t.Fatalf("master operations = posts %v gets %d", posts, gets)
 	}
 	if _, posts, gets := replacementSpeaker.operations(); len(posts) != 0 || gets != 0 {

@@ -8,6 +8,7 @@ import {
     fenceVolumeReadback,
     maxReadbackActual,
     partialFailureMessage,
+    reconcileVolumeResult,
 } from '../zoneVolumeResult.mjs';
 
 const html = htm.bind(h);
@@ -21,18 +22,20 @@ export function ZoneMemberVolumeControl({
     available,
     volume,
     previewVolume = null,
+    group = false,
 }) {
     const projectedVolume = Number.isFinite(volume) ? clampVolume(volume) : null;
     const disabled = !available || projectedVolume === null;
     const projectedVolumeRef = useRef(projectedVolume);
     const disabledRef = useRef(disabled);
-    const targetKey = JSON.stringify([zoneMasterId, memberId, topologyKey]);
+    const targetKey = JSON.stringify([zoneMasterId, memberId, topologyKey, group]);
     const targetRef = useRef({ zoneMasterId, memberId, key: targetKey });
     const projectionKeyRef = useRef(projectionKey);
     const interactionActiveRef = useRef(false);
     const interactionGenerationRef = useRef(0);
     const interactionDirtyRef = useRef(false);
     const acceptedSequenceRef = useRef(0);
+    const finalResultRef = useRef(null);
     const schedulerRef = useRef(null);
     const [localVolume, setLocalVolume] = useState(projectedVolume);
     const localVolumeRef = useRef(projectedVolume);
@@ -59,30 +62,40 @@ export function ZoneMemberVolumeControl({
                 if (request.targetKey !== target.key) return { skippedStaleTarget: true };
                 return disabledRef.current
                     ? { skippedDisabledMember: true }
-                    : api.zoneMemberVolume(target.zoneMasterId, target.memberId, level);
+                    : group ? api.zoneVolume(target.zoneMasterId, level)
+                        : api.zoneMemberVolume(target.zoneMasterId, target.memberId, level);
             },
             onResult(response, metadata) {
                 const target = targetRef.current;
                 if (disabledRef.current || response?.skippedDisabledMember ||
                     response?.skippedStaleTarget || metadata.targetKey !== target.key ||
-                    !metadata.isLatest) return;
+                    !metadata.isLatest ||
+                    metadata.interactionGeneration !== interactionGenerationRef.current) return;
 
-                const data = response?.data;
+                const data = reconcileVolumeResult(response?.data, projectionKeyRef.current,
+                    metadata.projectionKey);
                 if (!response?.success || data?.requested !== metadata.value ||
-                    data?.controlId !== target.memberId) {
+                    (!group && data?.controlId !== target.memberId)) {
                     if (shouldSurfaceLatestFinal(metadata)) {
-                        setFailure(response?.error || 'Member volume update failed.');
+                        setFailure(response?.error || (group
+                            ? 'Group volume update failed.' : 'Member volume update failed.'));
                     }
                     return;
                 }
 
-                const confirmed = maxReadbackActual(data);
+                const confirmed = maxReadbackActual(data, group ? projectionKeyRef.current : null);
                 const reconciliation = fenceVolumeReadback(
                     metadata.projectionKey,
                     projectionKeyRef.current,
                     projectedVolumeRef.current,
                     confirmed,
+                    data,
                 );
+                if (shouldSurfaceLatestFinal(metadata)) {
+                    finalResultRef.current = {
+                        data, targetKey: metadata.targetKey, projectionKey: projectionKeyRef.current,
+                    };
+                }
                 if (!reconciliation.accepted) {
                     acceptedSequenceRef.current = metadata.sequence;
                     setLocalVolume(reconciliation.volume);
@@ -92,7 +105,7 @@ export function ZoneMemberVolumeControl({
                     }
                     return;
                 }
-                if (confirmed !== null) {
+                if (confirmed !== null && (metadata.final || !interactionActiveRef.current)) {
                     acceptedSequenceRef.current = metadata.sequence;
                     setLocalVolume(confirmed);
                     localVolumeRef.current = confirmed;
@@ -103,8 +116,9 @@ export function ZoneMemberVolumeControl({
             },
             onError(_error, metadata) {
                 if (!disabledRef.current && metadata.targetKey === targetRef.current.key &&
+                    metadata.interactionGeneration === interactionGenerationRef.current &&
                     shouldSurfaceLatestFinal(metadata)) {
-                    setFailure('Member volume update failed.');
+                    setFailure(group ? 'Group volume update failed.' : 'Member volume update failed.');
                 }
             },
             onStateChange(next) {
@@ -119,6 +133,14 @@ export function ZoneMemberVolumeControl({
     }
 
     useEffect(() => () => schedulerRef.current.dispose(), []);
+    useEffect(() => {
+        const final = finalResultRef.current;
+        if (!final || final.targetKey !== targetKey) return;
+        const data = reconcileVolumeResult(final.data, projectionKey, final.projectionKey);
+        if (data === final.data) return;
+        finalResultRef.current = { ...final, data };
+        setFailure(partialFailureMessage(data));
+    }, [projectionKey, targetKey]);
     useEffect(() => {
         if (!interactionActiveRef.current && !schedulerRef.current.isActive()) {
             setLocalVolume(projectedVolume);
@@ -135,7 +157,10 @@ export function ZoneMemberVolumeControl({
     useEffect(() => {
         interactionActiveRef.current = false;
         interactionDirtyRef.current = false;
+        finalResultRef.current = null;
         setFailure('');
+        setLocalVolume(projectedVolumeRef.current);
+        localVolumeRef.current = projectedVolumeRef.current;
     }, [targetKey]);
 
     function beginInteraction() {
@@ -153,6 +178,7 @@ export function ZoneMemberVolumeControl({
             beginInteraction();
             if (level === localVolumeRef.current) return;
             interactionDirtyRef.current = true;
+            finalResultRef.current = null;
             setFailure('');
         }
         setLocalVolume(level);
@@ -177,14 +203,14 @@ export function ZoneMemberVolumeControl({
     }
 
     return html`
-        <div class="zone-member-volume-control" aria-busy=${isBusy ? 'true' : 'false'}
+        <div class=${group ? 'zone-card-volume-control' : 'zone-member-volume-control'} aria-busy=${isBusy ? 'true' : 'false'}
              role=${projectedVolume === null ? 'group' : undefined}
              aria-label=${projectedVolume === null ? ariaLabel : undefined}
              aria-describedby=${projectedVolume === null ? readbackId : undefined}>
-            <div class="zone-member-volume-row">
-                ${projectedVolume !== null ? html`
-                    <label class="zone-member-volume-label" for=${inputId}>Volume</label>
-                    <input id=${inputId} type="range" class="zone-member-volume-slider"
+            <div class=${group ? 'zone-volume-row' : 'zone-member-volume-row'}>
+                ${projectedVolume !== null || group ? html`
+                    <label class=${group ? 'zone-volume-label' : 'zone-member-volume-label'} for=${inputId}>${group ? 'Group volume' : 'Volume'}</label>
+                    <input id=${inputId} type="range" class=${group ? 'zone-volume-slider' : 'zone-member-volume-slider'}
                         min="0" max="100" value=${displayedVolume} aria-label=${ariaLabel}
                         disabled=${disabled}
                         onPointerDown=${beginInteraction}
@@ -198,7 +224,7 @@ export function ZoneMemberVolumeControl({
                     <div class="zone-member-volume-slider zone-member-volume-slider-unknown"
                          aria-hidden="true"></div>
                 `}
-                <output class="zone-member-volume-value" for=${projectedVolume !== null ? inputId : undefined}>
+                <output class=${group ? 'zone-volume-value' : 'zone-member-volume-value'} for=${projectedVolume !== null ? inputId : undefined}>
                     ${projectedVolume !== null ? displayedVolume : 'Unknown'}
                 </output>
             </div>
@@ -207,7 +233,7 @@ export function ZoneMemberVolumeControl({
                     ${available ? 'Volume readback unknown.' : 'Volume unavailable.'}
                 </div>
             ` : null}
-            ${failure ? html`<div class="zone-member-volume-failure" role="status">${failure}</div>` : null}
+            ${failure ? html`<div class=${group ? 'zone-volume-failure' : 'zone-member-volume-failure'} role="status">${failure}</div>` : null}
         </div>
     `;
 }

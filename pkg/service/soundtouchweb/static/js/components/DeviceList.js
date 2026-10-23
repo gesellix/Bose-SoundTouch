@@ -7,13 +7,16 @@ import {
     nowPlayingFreshness,
     sortDeviceEntries,
 } from '../devicePresentation.js';
-import { zoneCardPresentation, zoneMembershipPresentation } from '../zonePresentation.mjs';
+import { zoneCardPresentation, zoneMembershipPresentation, zoneTopologyFingerprint } from '../zonePresentation.mjs';
+import { ZoneMemberVolumeControl } from './ZoneMemberVolumeControl.js';
+import { volumeProjectionKey } from '../zoneVolumeResult.mjs';
+import { zoneMemberVolumes } from '../zoneVolumePreview.mjs';
 
 const html = htm.bind(h);
 
 const SORT_LS_KEY = 'aftertouch_device_sort';
 
-function DeviceCard({ id, device, onSelect }) {
+function DeviceCard({ id, device, devices, onSelect }) {
     const { info, status } = device;
     const stereoPair = device.stereoPair;
     const zoneCard = device.zone ? zoneCardPresentation(device.zone) : null;
@@ -27,8 +30,8 @@ function DeviceCard({ id, device, onSelect }) {
     const indicatorClass = zoneCard?.health || connectivity;
     const healthLabel = zoneCard?.healthLabel || `Connectivity: ${connectivityLabel(device)}`;
 
-    return html`
-        <button type="button" class="device-card ${zoneCard ? `zone-card ${zoneCard.health}` : ''}"
+    const openButton = html`
+        <button type="button" class=${zoneCard ? 'zone-card-open' : 'device-card'}
                 onClick=${() => onSelect(controlID)}>
             <span class="device-header">
                 <span class="device-name" title=${info?.name || id}>${info?.name || id}</span>
@@ -81,6 +84,29 @@ function DeviceCard({ id, device, onSelect }) {
             ` : null}
         </button>
     `;
+    if (!zoneCard) return openButton;
+
+    const zone = device.zone;
+    const memberStatuses = (zone.members || []).map(member => [member.controlId,
+        member.controlId === controlID ? status : devices[member.controlId]?.status]);
+    const epoch = JSON.stringify(Object.fromEntries([[controlID, status?.epoch ?? null],
+        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.epoch ?? null])]));
+    const revision = JSON.stringify(Object.fromEntries([[controlID, status?.revision ?? null],
+        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.revision ?? null])]));
+    const topologyKey = JSON.stringify([epoch, zoneTopologyFingerprint(zone)]);
+    const projectionKey = volumeProjectionKey(epoch, revision,
+        zoneMemberVolumes(zone));
+    return html`
+        <section class="device-card zone-card ${zoneCard.health}"
+                 aria-label=${info?.name || id}>
+            ${openButton}
+            <${ZoneMemberVolumeControl} key=${topologyKey}
+                zoneMasterId=${controlID} topologyKey=${topologyKey}
+                projectionKey=${projectionKey} group=${true}
+                ariaLabel="Group volume" available=${zone.availableMemberCount !== 0}
+                volume=${zone.volume} />
+        </section>
+    `;
 }
 
 export function DeviceList({ devices, isDiscovering, onSelect, onDiscover }) {
@@ -114,7 +140,7 @@ export function DeviceList({ devices, isDiscovering, onSelect, onDiscover }) {
                 </div>
                 <div class="device-grid" key="grid">
                     ${entries.map(([id, device]) => html`
-                        <${DeviceCard} key=${id} id=${id} device=${device} onSelect=${onSelect} />
+                        <${DeviceCard} key=${id} id=${id} device=${device} devices=${devices} onSelect=${onSelect} />
                     `)}
                 </div>`
         }
