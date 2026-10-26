@@ -191,6 +191,7 @@ func (s *Server) defaultLanding() string {
 // HandleWeb returns a handler for serving web resources.
 func (s *Server) HandleWeb() http.HandlerFunc {
 	fileServer := http.FileServer(http.FS(webFS))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		// ES module imports have stable URLs, including their child imports.
 		// Revalidate each embedded module on every load so a deployment cannot
@@ -200,14 +201,17 @@ func (s *Server) HandleWeb() http.HandlerFunc {
 			if data, err := webFS.ReadFile(path); err == nil {
 				sum := sha256.Sum256(data)
 				tag := `"` + hex.EncodeToString(sum[:]) + `"`
+
 				w.Header().Set("Cache-Control", "no-cache")
 				w.Header()["ETag"] = []string{tag}
+
 				if r.Header.Get("If-None-Match") == tag {
 					w.WriteHeader(http.StatusNotModified)
 					return
 				}
 			}
 		}
+
 		fileServer.ServeHTTP(w, r)
 	}
 }
