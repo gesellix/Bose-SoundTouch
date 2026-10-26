@@ -15,27 +15,29 @@ runtime foundation. APIs under `/api/setup` and `/api/mgmt` stay unchanged.
 No browser build step is added: Go builds from embedded, vendored assets.
 
 Do not share player components or styles during phase 1, per the maintainer's
-answer in #635. Sharing the vendored library files through a new independent
-static route is a separate *unresolved* decision; the existing
-`/app/static/lib/` route is subject to the player's enable/disable gate.
+answer in #635. The player's `/app/static/lib/` route is subject to its
+enable/disable gate, so the admin does not import from it.
 
-## Open decisions (required before the first implementation PR)
+## PR 1 asset decisions
 
-1. Should the admin bundle have its own `/web/lib/` library copy populated
-   by `make update-static-deps`, or should the player and admin share a new,
-   deliberately ungated vendor-asset route? An admin page must still load
-   when the player is disabled.
-2. What is the cache-invalidation policy for the admin ES module graph?
-   Existing cache-busting covers only `script.js` and `style.css`. A version
-   on the entry module alone cannot invalidate already-cached child imports.
-   Candidates: versioned URLs for the entire graph, `Cache-Control: no-cache`
-   with ETags on `/web/js/*`, or versioned asset paths.
+Following Operator0382's instruction to proceed without waiting for a more
+specific maintainer preference, PR 1 uses the two smallest reversible options:
 
-No asset-route/cache implementation or approval is implied until the
-maintainer answers these questions. The first PR will include routing,
-module-graph, disabled-player, Node, Go and Chromium regression coverage;
-older Safari (iPadOS 15.8.8) also needs separate manual confirmation where
-hardware is available.
+1. Vendor a separate copy of preact, hooks, htm and es-module-shims in
+   `/web/lib/` via `make update-static-deps`, including licenses and lockfile.
+   This costs some binary size but avoids coupling the admin to the player
+   gate and avoids changing the existing player route.
+2. Revalidate every `/web/js/*` module and `/web/lib/*` dependency with
+   `Cache-Control: no-cache` and content-based ETags. An entry-module query
+   alone cannot invalidate cached child imports; no-cache forces a fresh
+   validation even if the module URL stays stable. Keep existing style and
+   legacy script hash queries. Do not apply this cache policy to the
+   speaker-facing/cloud-compatible endpoints.
+
+These are implementation choices, not a maintainer-endorsed public-cloud
+security design. The first PR includes routing, cache, disabled-player, Node,
+Go and Chromium regression coverage. Older Safari (iPadOS 15.8.8) needs
+separate manual confirmation where hardware is available.
 
 ## Public-cloud safety gate
 
