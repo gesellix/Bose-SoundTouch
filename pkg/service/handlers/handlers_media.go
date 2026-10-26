@@ -36,7 +36,7 @@ func mutePlayerEntry(page []byte) []byte {
 	return bytes.Replace(out, []byte(landingPlayerDesc), []byte(landingPlayerDescOff), 1)
 }
 
-//go:embed web/css/* web/js/* web/img/favicon-braille* web/img/favicon*
+//go:embed web/css/* web/js/* web/lib web/img/favicon-braille* web/img/favicon*
 var webFS embed.FS
 
 // indexHTMLVersioned is the HTML the root handler serves: identical to
@@ -190,9 +190,25 @@ func (s *Server) defaultLanding() string {
 
 // HandleWeb returns a handler for serving web resources.
 func (s *Server) HandleWeb() http.HandlerFunc {
+	fileServer := http.FileServer(http.FS(webFS))
 	return func(w http.ResponseWriter, r *http.Request) {
-		fs := http.FileServer(http.FS(webFS))
-		fs.ServeHTTP(w, r)
+		// ES module imports have stable URLs, including their child imports.
+		// Revalidate each embedded module on every load so a deployment cannot
+		// pair a new entry module with stale dependencies from a browser cache.
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if strings.HasPrefix(path, "web/js/") || strings.HasPrefix(path, "web/lib/") {
+			if data, err := webFS.ReadFile(path); err == nil {
+				sum := sha256.Sum256(data)
+				tag := `"` + hex.EncodeToString(sum[:]) + `"`
+				w.Header().Set("Cache-Control", "no-cache")
+				w.Header()["ETag"] = []string{tag}
+				if r.Header.Get("If-None-Match") == tag {
+					w.WriteHeader(http.StatusNotModified)
+					return
+				}
+			}
+		}
+		fileServer.ServeHTTP(w, r)
 	}
 }
 

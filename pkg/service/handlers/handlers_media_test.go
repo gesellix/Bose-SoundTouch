@@ -239,3 +239,83 @@ func TestIndexHTMLVersioned_CarriesHash(t *testing.T) {
 		t.Errorf("indexHTMLVersioned must carry ?v= on style.css reference")
 	}
 }
+
+func TestAdminModuleCacheRevalidatesWithETag(t *testing.T) {
+	r, _ := setupRouter("http://localhost:8001", nil)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	for _, path := range []string{"/web/js/script.js", "/web/js/script.js?v=old-release"} {
+		res, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if err != nil || res.StatusCode != http.StatusOK || len(body) == 0 {
+			t.Fatalf("GET %s: status=%d body=%d readErr=%v", path, res.StatusCode, len(body), err)
+		}
+		if got := res.Header.Get("Cache-Control"); got != "no-cache" {
+			t.Errorf("GET %s: Cache-Control=%q, want no-cache", path, got)
+		}
+		etag := res.Header.Get("ETag")
+		if etag == "" {
+			t.Fatalf("GET %s: missing ETag", path)
+		}
+		req, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("If-None-Match", etag)
+		notModified, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = notModified.Body.Close()
+		if notModified.StatusCode != http.StatusNotModified {
+			t.Errorf("GET %s with ETag: status=%d, want 304", path, notModified.StatusCode)
+		}
+		if got := notModified.Header.Get("Cache-Control"); got != "no-cache" {
+			t.Errorf("GET %s with ETag: Cache-Control=%q", path, got)
+		}
+	}
+}
+
+func TestAdminAssetsLoadWithoutPlayer(t *testing.T) {
+	r, _ := setupRouter("http://localhost:8001", nil)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	for _, path := range []string{
+		"/web/lib/preact.module.js",
+		"/web/lib/preact-hooks.module.js",
+		"/web/lib/htm.module.js",
+		"/web/lib/es-module-shims.js",
+	} {
+		res, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if err != nil || res.StatusCode != http.StatusOK || len(body) == 0 {
+			t.Errorf("GET %s: status=%d bytes=%d err=%v", path, res.StatusCode, len(body), err)
+		}
+		if got := res.Header.Get("Cache-Control"); got != "no-cache" {
+			t.Errorf("GET %s: Cache-Control=%q, want no-cache", path, got)
+		}
+		if tag := res.Header.Get("ETag"); tag == "" {
+			t.Errorf("GET %s: ETag is empty", path)
+		}
+	}
+	for _, path := range []string{
+		"web/lib/LICENSES/preact-LICENSE",
+		"web/lib/LICENSES/htm-LICENSE",
+		"web/lib/LICENSES/es-module-shims-LICENSE",
+		"web/lib/LICENSES/package-lock.json",
+	} {
+		if _, err := webFS.ReadFile(path); err != nil {
+			t.Errorf("missing provenance file %s: %v", path, err)
+		}
+	}
+}
