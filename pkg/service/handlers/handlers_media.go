@@ -36,7 +36,7 @@ func mutePlayerEntry(page []byte) []byte {
 	return bytes.Replace(out, []byte(landingPlayerDesc), []byte(landingPlayerDescOff), 1)
 }
 
-//go:embed web/css/* web/js/* web/lib web/img/favicon-braille* web/img/favicon*
+//go:embed web/css/* web/js web/lib web/img/favicon-braille* web/img/favicon*
 var webFS embed.FS
 
 // indexHTMLVersioned is the HTML the root handler serves: identical to

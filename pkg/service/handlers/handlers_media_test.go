@@ -319,3 +319,43 @@ func TestAdminAssetsLoadWithoutPlayer(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminHTMLReferencesEmbeddedModules(t *testing.T) {
+	page := string(indexHTMLVersioned)
+	_, imports, ok := strings.Cut(page, `<script type="importmap">`)
+	if !ok {
+		t.Fatal("admin page has no import map")
+	}
+	imports, _, ok = strings.Cut(imports, `</script>`)
+	if !ok {
+		t.Fatal("admin import map is not closed")
+	}
+	var importMap struct {
+		Imports map[string]string `json:"imports"`
+	}
+	if err := json.Unmarshal([]byte(imports), &importMap); err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{
+		"preact":       "/web/lib/preact.module.js",
+		"preact/hooks": "/web/lib/preact-hooks.module.js",
+		"htm":          "/web/lib/htm.module.js",
+	} {
+		if got := importMap.Imports[name]; got != path {
+			t.Errorf("import map %q = %q, want %q", name, got, path)
+		}
+	}
+	for _, path := range []string{
+		"/web/js/admin.js", "/web/js/api.js", "/web/js/logsState.mjs",
+		"/web/js/components/LogsTab.js", "/web/lib/es-module-shims.js",
+	} {
+		if _, err := webFS.ReadFile(strings.TrimPrefix(path, "/")); err != nil {
+			t.Errorf("referenced module %s is not embedded: %v", path, err)
+		}
+	}
+	if !strings.Contains(page, `<script type="module" src="/web/js/admin.js">`) ||
+		!strings.Contains(page, `HTMLScriptElement.supports('importmap')`) ||
+		!strings.Contains(page, `/web/lib/es-module-shims.js`) {
+		t.Error("admin entry module or conditional Safari shim is missing")
+	}
+}
