@@ -195,6 +195,9 @@ type DeviceStatus struct {
 	// selection waiting for authoritative confirmation needs exactly that
 	// distinction.
 	NowPlayingRevision uint64 `json:"nowPlayingRevision"`
+	// RecentsRevision invalidates the browser's on-demand /recents read without
+	// fetching history during unrelated status polls or caching event payloads.
+	RecentsRevision uint64 `json:"recentsRevision"`
 }
 
 // Connectivity is the player's aggregate view of HTTP and event-stream

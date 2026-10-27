@@ -229,6 +229,28 @@ func (app *WebApp) queueBroadcastIfChanged(changed bool) bool {
 	return changed
 }
 
+// invalidateRecents publishes only an invalidation for the current connection.
+// The visible panel reads /recents; firmware notifications need not carry a list.
+func (app *WebApp) invalidateRecents(deviceID string, conn *webtypes.DeviceConnection, physicalID string) bool {
+	current, ok := app.GetDevice(deviceID)
+	if !ok || current != conn || !speakerConnectionEventMatches(conn, physicalID) {
+		return false
+	}
+
+	select {
+	case <-conn.Done():
+		return false
+	default:
+	}
+
+	conn.UpdateStatus(func(status *webtypes.DeviceStatus) {
+		status.RecentsRevision++
+	})
+	app.QueueDeviceListBroadcast()
+
+	return true
+}
+
 // applySpeakerStatusEvent stores one speaker event for field and immediately
 // publishes a fresh device projection when its dashboard-visible payload
 // changed. Ordering against a concurrent poll of the same field is handled
@@ -774,6 +796,12 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			go app.refreshBalance(deviceID, conn)
 		})
 
+		wsClient.OnRecentsUpdated(func(event *models.RecentsUpdatedEvent) {
+			if app.invalidateRecents(deviceID, conn, event.DeviceID) {
+				conn.MarkEventStreamActivity(time.Now())
+			}
+		})
+
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
 			activity := time.Now()
 
@@ -849,6 +877,8 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			}
 
 			if connected {
+				app.invalidateRecents(deviceID, conn, "")
+
 				if generation > 1 {
 					log.Printf("WebSocket reconnected for device %s", sanitizeLog(deviceID))
 					go app.UpdateDeviceStatus(deviceID, conn)

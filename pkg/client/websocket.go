@@ -153,6 +153,14 @@ func (ws *WebSocketClient) OnPresetUpdated(handler models.TypedEventHandler[*mod
 	ws.handlers.OnPresetUpdated = handler
 }
 
+// OnRecentsUpdated sets a handler for recent items update events.
+func (ws *WebSocketClient) OnRecentsUpdated(handler models.TypedEventHandler[*models.RecentsUpdatedEvent]) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	ws.handlers.OnRecentsUpdated = handler
+}
+
 // OnNowSelection sets a handler for now-selection update events, which report
 // the ContentItem the speaker considers selected.
 func (ws *WebSocketClient) OnNowSelection(handler models.TypedEventHandler[*models.NowSelectionUpdatedEvent]) {
@@ -774,9 +782,6 @@ func (ws *WebSocketClient) dispatchTypedEventContinued(handlers *models.WebSocke
 
 		return true
 
-	case models.EventTypeRecentsUpdated:
-		return true
-
 	case models.EventTypeLanguageUpdated:
 		return true
 
@@ -790,6 +795,13 @@ func (ws *WebSocketClient) dispatchTypedEventContinued(handlers *models.WebSocke
 // it rather than suppressing the check.
 func (ws *WebSocketClient) dispatchTypedEventTail(handlers *models.WebSocketEventHandlers, eventType models.WebSocketEventType, event *models.WebSocketEvent) bool {
 	switch eventType {
+	case models.EventTypeRecentsUpdated:
+		if handlers.OnRecentsUpdated != nil && event.RecentsUpdated != nil {
+			handlers.OnRecentsUpdated(event.RecentsUpdated)
+		}
+
+		return true
+
 	case models.EventTypeNowSelectionUpdated:
 		if handlers.OnNowSelection != nil && event.NowSelectionUpdated != nil {
 			handlers.OnNowSelection(event.NowSelectionUpdated)
