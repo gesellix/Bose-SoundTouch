@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
@@ -7,27 +7,87 @@ import { artworkFor, presetArtIndex } from '../recentsArt.mjs';
 
 const html = htm.bind(h);
 
-export function Recents({ deviceId, presets, command, commandBusy = false, onPlay }) {
+export function Recents(props) {
+    if (!props.deviceId) return null;
+    // Remount before rendering: old items must never acquire a new target's
+    // onPlay handler while effect cleanup is still pending.
+    const owner = JSON.stringify([props.deviceId, props.physicalId || '', props.epoch || 0]);
+    return html`<${RecentItems} key=${owner} ...${props} />`;
+}
+
+function RecentItems({ deviceId, presets, command, commandBusy = false, onPlay,
+    revision = 0, refreshToken = 0 }) {
     const [items, setItems] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const refresh = useRef(null);
+    const trigger = JSON.stringify([revision, refreshToken]);
+    const lastTrigger = useRef(trigger);
 
     useEffect(() => {
-        if (!deviceId) return;
-        api.recents(deviceId).then(resp => {
-            setItems(resp.data?.Items ?? []);
-        }).catch(() => {
-            setItems([]);
-        }).finally(() => setLoading(false));
+        let disposed = false;
+        let running = false;
+        let pending = false;
+        const controller = new AbortController();
+
+        async function load() {
+            if (disposed) return;
+            if (running) {
+                pending = true;
+                return;
+            }
+            running = true;
+            setLoading(true);
+            try {
+                do {
+                    pending = false;
+                    try {
+                        const response = await api.recents(deviceId, { signal: controller.signal });
+                        if (disposed) return;
+                        if (pending) continue;
+                        if (!response?.success) throw new Error('Recents unavailable');
+                        const next = response.data?.Items ?? [];
+                        if (!Array.isArray(next)) throw new Error('Invalid recents response');
+                        setItems(next);
+                        setError(null);
+                    } catch (_) {
+                        if (!disposed && !pending) setError('Could not load recents.');
+                    }
+                } while (pending && !disposed);
+            } finally {
+                running = false;
+                if (!disposed) setLoading(false);
+            }
+        }
+
+        refresh.current = load;
+        void load();
+        const resume = () => {
+            if (document.visibilityState === 'visible') void load();
+        };
+        document.addEventListener('visibilitychange', resume);
+        return () => {
+            disposed = true;
+            refresh.current = null;
+            controller.abort();
+            document.removeEventListener('visibilitychange', resume);
+        };
     }, [deviceId]);
 
-    if (loading) return html`
+    useEffect(() => {
+        if (lastTrigger.current === trigger) return;
+        lastTrigger.current = trigger;
+        void refresh.current?.();
+    }, [trigger]);
+
+    if (loading && items === null && !error) return html`
         <div class="recents-section">
             <div class="section-title">Recents</div>
             <div class="loading-bar"></div>
         </div>
     `;
 
-    if (!items || items.length === 0) return null;
+    if (!items?.length && !error) return null;
 
     function play(item) {
         if (onPlay) {
@@ -54,8 +114,13 @@ export function Recents({ deviceId, presets, command, commandBusy = false, onPla
     return html`
         <div class="recents-section">
             <div class="section-title">Recents</div>
+            ${error ? html`<div role="alert">
+                ${error}
+                <button type="button" class="btn-secondary" disabled=${loading}
+                        onClick=${() => refresh.current?.()}>Retry recents</button>
+            </div>` : null}
             <div class="recents-list">
-                ${items.map(item => {
+                ${(items || []).map(item => {
                     const ci = item.ContentItem;
                     if (!ci) return null;
                     const art = artworkFor(ci, artIndex);

@@ -127,6 +127,7 @@ export function DeviceDetail({
     onStatusReadback,
     onNavigate,
     commandReadbackDelays = DISCRETE_COMMAND_READBACK_DELAYS_MS,
+    recentsRefreshToken = 0,
 }) {
     const device = devices[deviceId];
     const status = device?.status;
@@ -423,6 +424,10 @@ export function DeviceDetail({
             />
             <${Recents}
                 deviceId=${deviceId}
+                physicalId=${device.info?.device_id}
+                epoch=${device.status?.epoch}
+                revision=${device.status?.recentsRevision}
+                refreshToken=${recentsRefreshToken}
                 presets=${device.status?.presets}
                 command=${command}
                 commandBusy=${commandBusy}
@@ -474,6 +479,7 @@ function App() {
     // 'connecting' until the first frame arrives, so a page opened while the
     // service is down does not claim the connection was lost.
     const [connection, setConnection] = useState('connecting');
+    const [recentsRefreshToken, setRecentsRefreshToken] = useState(0);
     const [contentPlaybackRequest, setContentPlaybackRequest] = useState(null);
     const [contentPlaybackBusy, setContentPlaybackBusy] = useState(false);
     const contentPlaybackRef = useRef({ generation: 0, busy: false });
@@ -559,6 +565,7 @@ function App() {
             ws.onopen = () => {
                 backoff = RECONNECT_BASE_MS;
                 setConnection('online');
+                setRecentsRefreshToken(token => token + 1);
             };
 
             ws.onmessage = handleMessage;
@@ -785,6 +792,7 @@ function App() {
                         notify=${showToast}
                         onRemove=${removeDevice}
                         onStatusReadback=${mergeDeviceReadback}
+                        recentsRefreshToken=${recentsRefreshToken}
                         onNavigate=${navigate}
                     />
                 ` : page === 'tunein' ? html`

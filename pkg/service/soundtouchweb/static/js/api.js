@@ -129,7 +129,7 @@ export const api = {
     }),
     power: (id) => req(`/api/control/devices/${id}/power`, { method: 'POST' }),
     powerChecked: (id) => checkedReq(`/api/control/devices/${id}/power`, { method: 'POST' }),
-    recents: (id) => req(`/api/control/devices/${id}/recents`),
+    recents: (id, options = {}) => req(`/api/control/devices/${id}/recents`, options),
     zone: (id) => req(`/api/control/devices/${id}/zone`),
     zoneCandidates: (id) => req(`/api/control/devices/${id}/zone/candidates`),
     zoneAdd: (masterId, slaveId) => req(`/api/control/devices/${masterId}/zone/add/${slaveId}`, { method: 'POST' }),
