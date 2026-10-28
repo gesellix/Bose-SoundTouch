@@ -58,15 +58,17 @@ func TestOpenZoneDetailTracksExternalTopologyChanges(t *testing.T) {
 	if err := chromedp.Do(ctx,
 		chromedp.Navigate(server.URL+"/app"),
 		chromedp.WaitVisible(chromedp.CSS(".zone-card")),
-		chromedp.Poll[chromedp.Void](`Array.from(document.querySelectorAll('.device-card')).some(card =>
-			card.querySelector('.device-name')?.textContent.trim() === 'Breakfast Room' &&
-			card.querySelector('.zone-member-badge')?.textContent.trim() === 'In group · Atrium') &&
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.device-card').length === 1 &&
+			document.querySelector('.zone-card .device-name')?.textContent.trim() === 'Atrium' &&
 			!document.querySelector('.zone-card .zone-member-badge')`),
+		chromedp.Evaluate[chromedp.Void](`window.__zoneDocument = true`),
 		chromedp.Click(chromedp.CSS(".zone-card")),
 		chromedp.WaitVisible(chromedp.CSS(".zone-member-details > summary")),
 		chromedp.Click(chromedp.CSS(".zone-member-details > summary")),
 		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.zone-logical-member').length === 2 &&
-			document.querySelectorAll('.zone-logical-member [role="status"][aria-label]').length === 2`),
+			document.querySelectorAll('.zone-logical-member [role="status"][aria-label]').length === 2 &&
+			document.querySelector('.zone-member-details button[aria-label$="details for Breakfast Room"]') &&
+			document.querySelector('.zone-member-details').textContent.includes('192.0.2.11')`),
 	); err != nil {
 		t.Fatalf("open logical zone detail: %v", err)
 	}
@@ -108,6 +110,27 @@ func TestOpenZoneDetailTracksExternalTopologyChanges(t *testing.T) {
 	}
 	if elapsed := time.Since(createStarted); elapsed > 5*time.Second {
 		t.Fatalf("external creation took %s; periodic fallback masked the event path", elapsed)
+	}
+
+	if err := chromedp.Do(ctx,
+		chromedp.Click(chromedp.CSS(".device-detail .back-btn")),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.device-card').length === 1 &&
+			document.querySelector('.zone-card')`),
+	); err != nil {
+		t.Fatalf("return to grouped dashboard: %v", err)
+	}
+	master.UpdateStatus(func(status *webtypes.DeviceStatus) { status.Zone = nil })
+	app.BroadcastDeviceList()
+	if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`window.__zoneDocument === true &&
+		document.querySelectorAll('.device-card').length === 2 && !document.querySelector('.zone-card') &&
+		Array.from(document.querySelectorAll('.device-name')).some(name => name.textContent.trim() === 'Breakfast Room')`)); err != nil {
+		t.Fatalf("dissolution did not restore member dashboard card without reload: %v", err)
+	}
+	master.UpdateStatus(func(status *webtypes.DeviceStatus) { status.Zone = zone })
+	app.BroadcastDeviceList()
+	if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`window.__zoneDocument === true &&
+		document.querySelectorAll('.device-card').length === 1 && document.querySelector('.zone-card')`)); err != nil {
+		t.Fatalf("creation did not suppress duplicate member dashboard card without reload: %v", err)
 	}
 }
 

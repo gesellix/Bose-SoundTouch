@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { sortDeviceEntries } from '../static/js/devicePresentation.js';
 
 import {
     effectiveZoneDetail,
+    filterGroupedDeviceEntries,
     physicalMemberMetadata,
     zoneCardPresentation,
     zoneMembershipPresentation,
@@ -11,6 +13,181 @@ import {
     zoneMemberMetadata,
     zoneTopologyFingerprint,
 } from '../static/js/zonePresentation.mjs';
+
+function groupedDevices() {
+    return {
+        '192.0.2.10': {
+            info: { device_id: 'master-id', name: 'Kitchen', ip_address: '192.0.2.10' },
+            zone: {
+                masterControlId: '192.0.2.10',
+                masterDeviceId: 'master-id',
+                memberCount: 2,
+                members: [
+                    { controlId: '192.0.2.10', hwId: 'master-id', deviceIds: ['master-id'] },
+                    { controlId: '192.0.2.20', hwId: 'member-id', deviceIds: ['member-id'] },
+                ],
+            },
+        },
+        '192.0.2.20': {
+            info: { device_id: 'member-id', name: 'Dining', ip_address: '192.0.2.20' },
+            zoneMembership: { masterControlId: '192.0.2.10', masterName: 'Kitchen' },
+        },
+        '192.0.2.2': {
+            info: { device_id: 'solo-id', name: 'Atrium', ip_address: '192.0.2.2' },
+        },
+    };
+}
+
+const cardIDs = devices => filterGroupedDeviceEntries(Object.entries(devices)).map(([id]) => id);
+
+test('confirmed groups hide only duplicate logical cards and preserve inventory and sorting', () => {
+    const devices = groupedDevices();
+    const before = structuredClone(devices);
+    const entries = Object.entries(devices);
+    const retained = filterGroupedDeviceEntries(entries);
+
+    assert.deepEqual(retained.map(([id]) => id), ['192.0.2.10', '192.0.2.2']);
+    assert.equal(retained[0], entries[0]);
+    assert.equal(retained[1], entries[2]);
+    assert.deepEqual(devices, before);
+    assert.deepEqual(entries, Object.entries(before));
+    for (const mode of ['ip', 'name']) {
+        assert.deepEqual(sortDeviceEntries(retained, mode).map(([id]) => id), [
+            '192.0.2.2', '192.0.2.10',
+        ]);
+    }
+    assert.equal(devices['192.0.2.20'].info.name, 'Dining');
+});
+
+test('a stereo pair stays one logical group member; physical addresses are not card identities', () => {
+    const devices = groupedDevices();
+    const zone = devices['192.0.2.10'].zone;
+    zone.physicalMemberCount = 3;
+    zone.members[1] = {
+        ...zone.members[1], kind: 'stereoPair', deviceIds: ['member-id', 'right-id'],
+        physicalMembers: [
+            { deviceId: 'member-id', ip: '192.0.2.20', role: 'LEFT' },
+            { deviceId: 'right-id', ip: '192.0.2.2', role: 'RIGHT' },
+        ],
+    };
+    devices['192.0.2.20'].stereoPair = {
+        masterDeviceId: 'member-id',
+        members: [{ deviceId: 'member-id' }, { deviceId: 'right-id' }],
+    };
+    assert.deepEqual(cardIDs(devices), ['192.0.2.10', '192.0.2.2']);
+});
+
+test('emitted confirmed topology survives stale, offline and unavailable health metadata', () => {
+    for (const connectivity of ['stale', 'offline']) {
+        const devices = groupedDevices();
+        devices['192.0.2.10'].zone.degraded = true;
+        devices['192.0.2.10'].zone.availableMemberCount = 0;
+        for (const device of Object.values(devices)) device.status = { connectivity, isConnected: false };
+        for (const member of devices['192.0.2.10'].zone.members) member.available = false;
+        assert.deepEqual(cardIDs(devices), ['192.0.2.10', '192.0.2.2']);
+    }
+});
+
+test('a stereo master retains its group and degraded physical member identities', () => {
+    const devices = groupedDevices();
+    const master = devices['192.0.2.10'];
+    master.zone.members[0].deviceIds.push('master-right');
+    master.zone.physicalMemberCount = 3;
+    master.zone.degraded = true;
+    master.stereoPair = {
+        masterDeviceId: 'master-id', degraded: true,
+        members: [{ deviceId: 'master-id', available: true }, { deviceId: 'master-right', available: false }],
+    };
+    assert.deepEqual(cardIDs(devices), ['192.0.2.10', '192.0.2.2']);
+});
+
+test('a stereo peer can lead the physical zone under its logical pair representative', () => {
+    const devices = groupedDevices();
+    const master = devices['192.0.2.10'];
+    master.zone.masterDeviceId = 'master-right';
+    master.zone.members[0].deviceIds.push('master-right');
+    master.stereoPair = {
+        masterDeviceId: 'master-id',
+        members: [{ deviceId: 'master-id' }, { deviceId: 'master-right' }],
+    };
+    assert.deepEqual(cardIDs(devices), ['192.0.2.10', '192.0.2.2']);
+});
+
+test('incomplete or conflicting projections keep independent card access', async t => {
+    const cases = {
+        'missing master': devices => { delete devices['192.0.2.10']; },
+        'missing zone': devices => { delete devices['192.0.2.10'].zone; },
+        'wrong master control': (devices, zone) => { zone.masterControlId = '192.0.2.99'; },
+        'wrong master hardware': (devices, zone) => { zone.masterDeviceId = 'other-id'; },
+        'unrepresented master': (devices, zone) => {
+            zone.members[0] = { controlId: '192.0.2.2', hwId: 'solo-id', deviceIds: ['solo-id'] };
+        },
+        'no usable master identity': devices => { delete devices['192.0.2.10'].info; },
+        'malformed members': (devices, zone) => { zone.members = {}; },
+        'null member': (devices, zone) => { zone.members[1] = null; },
+        'count mismatch': (devices, zone) => { zone.memberCount = 3; },
+        'missing membership': devices => { delete devices['192.0.2.20'].zoneMembership; },
+        'wrong membership': devices => { devices['192.0.2.20'].zoneMembership.masterControlId = '192.0.2.2'; },
+        'master claims membership': devices => { devices['192.0.2.10'].zoneMembership = { masterControlId: '192.0.2.2' }; },
+        'member owns another zone': devices => { devices['192.0.2.20'].zone = {}; },
+        'reused control ID': (devices, zone) => { zone.members[1].controlId = '192.0.2.10'; },
+        'wrong member hardware': (devices, zone) => { zone.members[1].hwId = 'other-id'; },
+        'missing hardware identities': (devices, zone) => { delete zone.members[1].deviceIds; },
+        'malformed hardware identities': (devices, zone) => { zone.members[1].deviceIds = {}; },
+        'unrepresented member hardware': (devices, zone) => { zone.members[1].deviceIds = ['other-id']; },
+        'repeated hardware': (devices, zone) => { zone.members[1].deviceIds.push('member-id'); },
+        'shared hardware': (devices, zone) => { zone.members[1].deviceIds.push('master-id'); },
+        'stale physical pair identity': (devices, zone) => {
+            zone.members[1].deviceIds.push('old-right');
+            devices['192.0.2.20'].stereoPair = {
+                masterDeviceId: 'member-id', members: [{ deviceId: 'member-id' }, { deviceId: 'new-right' }],
+            };
+        },
+        'unexpected pair projection': (devices, zone) => { zone.members[1].deviceIds.push('right-id'); },
+        'mismatched pair master': devices => {
+            devices['192.0.2.20'].stereoPair = {
+                masterDeviceId: 'other-id', members: [{ deviceId: 'member-id' }],
+            };
+        },
+        'repeated inventory pair identity': (devices, zone) => {
+            zone.members[1].deviceIds.push('right-id');
+            devices['192.0.2.20'].stereoPair = {
+                masterDeviceId: 'member-id', members: [{ deviceId: 'member-id' }, { deviceId: 'member-id' }],
+            };
+        },
+        'duplicate inventory hardware': devices => { devices['192.0.2.2'].info.device_id = 'member-id'; },
+        'unregistered member': (devices, zone) => { zone.members[1].controlId = '192.0.2.99'; },
+        'conflicting zone control claim': (devices, zone) => {
+            devices['192.0.2.2'].zone = { members: [{ ...zone.members[1] }] };
+        },
+        'conflicting physical hardware claim': devices => {
+            devices['192.0.2.2'].zone = { members: [{ controlId: '192.0.2.99', deviceIds: ['member-id'] }] };
+        },
+    };
+    for (const [name, change] of Object.entries(cases)) {
+        await t.test(name, () => {
+            const devices = groupedDevices();
+            change(devices, devices['192.0.2.10'].zone);
+            assert.deepEqual(cardIDs(devices), Object.keys(devices));
+        });
+    }
+});
+
+test('confirmed departure and dissolution restore cards on each snapshot without a topology cache', () => {
+    const devices = groupedDevices();
+    assert.equal(cardIDs(devices).length, 2);
+    // The previous group no longer exists, even if membership metadata lags.
+    delete devices['192.0.2.10'].zone;
+    assert.deepEqual(cardIDs(devices), Object.keys(devices));
+
+    const departed = groupedDevices();
+    const zone = departed['192.0.2.10'].zone;
+    zone.members[1] = { controlId: '192.0.2.2', hwId: 'solo-id', deviceIds: ['solo-id'] };
+    departed['192.0.2.2'].zoneMembership = { masterControlId: '192.0.2.10' };
+    delete departed['192.0.2.20'].zoneMembership;
+    assert.deepEqual(cardIDs(departed), ['192.0.2.10', '192.0.2.20']);
+    assert.deepEqual(cardIDs(groupedDevices()), ['192.0.2.10', '192.0.2.2']);
+});
 
 test('healthy zone cards show one health state and only the logical count', () => {
     assert.deepEqual(zoneCardPresentation({
