@@ -89,6 +89,43 @@ func TestProjectDeviceEntriesCollapsesStereoPairUnderMaster(t *testing.T) {
 	}
 }
 
+func TestPhysicalSettingsTargetsUseRegistryKeysAndCapturedStatus(t *testing.T) {
+	group := testStereoGroup()
+	group.MasterDeviceID = "right-id"
+	left := projectionDeviceAt("left.local", "192.0.2.10", "left-id", "Left speaker", true, group)
+	right := projectionDeviceAt("right.local", "192.0.2.11", "right-id", "Right speaker", true, group)
+	left.Device.UpdateStatus(func(status *webtypes.DeviceStatus) {
+		status.Bass = &models.Bass{ActualBass: -3}
+	})
+	targets := projectDeviceEntries([]DeviceEntry{right, left})["right.local"].SettingsTargets
+	if len(targets) != 2 || targets[0].Role != "LEFT" || targets[1].Role != "RIGHT" {
+		t.Fatalf("settings order = %+v", targets)
+	}
+	if targets[0].ControlID != "left.local" || targets[1].ControlID != "right.local" ||
+		targets[0].PhysicalID != "left-id" || targets[0].Name != "Left speaker" {
+		t.Fatalf("physical registry identity lost: %+v", targets)
+	}
+	if targets[0].Status == nil || targets[0].Status.Bass == nil || targets[0].Status.Bass.ActualBass != -3 ||
+		targets[0].Status.Epoch != left.Device.Status().Epoch {
+		t.Fatalf("missing captured physical status: %+v", targets[0].Status)
+	}
+}
+
+func TestPhysicalSettingsTargetsOmitAmbiguousAndMissingRegistryEntries(t *testing.T) {
+	ordinary := projectionDevice("one.local", "duplicate-id", "One", true, nil)
+	duplicate := projectionDevice("two.local", "duplicate-id", "Two", true, nil)
+	views := projectDeviceEntries([]DeviceEntry{ordinary, duplicate})
+	if len(views["one.local"].SettingsTargets) != 0 || len(views["two.local"].SettingsTargets) != 0 {
+		t.Fatal("ambiguous physical identity exposed a settings target")
+	}
+	group := testStereoGroup()
+	left := projectionDevice("left.local", "left-id", "Left", true, group)
+	targets := projectDeviceEntries([]DeviceEntry{left})["left.local"].SettingsTargets
+	if len(targets) != 1 || targets[0].PhysicalID != "left-id" || targets[0].ControlID != "left.local" {
+		t.Fatalf("missing peer gained a control target: %+v", targets)
+	}
+}
+
 // TestProjectDeviceEntriesNormalizesMemberRoleAndDeviceID guards against
 // emitting raw, un-normalized Role/DeviceID into the frontend-facing JSON
 // while validMasterGroup/registeredMembersAgree/sameGroupClaim all
