@@ -114,9 +114,10 @@ type DeviceConnection struct {
 	fieldGenMu sync.Mutex
 	fieldGen   [numStatusFields]struct{ issued, applied uint64 }
 
-	volumeFieldMu sync.Mutex
-	groupWriteMu  sync.Mutex
-	zoneWriteMu   sync.RWMutex
+	volumeFieldMu     sync.Mutex
+	volumeOperationMu sync.Mutex
+	groupWriteMu      sync.Mutex
+	zoneWriteMu       sync.RWMutex
 
 	// groupMu orders polled /getGroup responses against real-time
 	// groupUpdated events. groupGeneration is the highest generation
@@ -592,6 +593,16 @@ func (c *DeviceConnection) ApplySourcesRead(generation uint64, sources *models.S
 		status.SourcesStale = stale
 		status.LastActivity = time.Now()
 	})
+}
+
+// WithVolumeOperation serializes each physical control target's volume write
+// and reconciliation across direct, zone, and zone-member requests. It does not
+// block status events or topology/registry updates during network I/O.
+func (c *DeviceConnection) WithVolumeOperation(operation func()) {
+	c.volumeOperationMu.Lock()
+	defer c.volumeOperationMu.Unlock()
+
+	operation()
 }
 
 // BeginVolumeRefresh reserves the existing per-field generation before an

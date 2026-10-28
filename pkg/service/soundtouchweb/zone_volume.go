@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
@@ -24,6 +25,11 @@ const (
 )
 
 var errVolumeTopologyConflict = errors.New("speaker topology changed before volume update")
+
+const (
+	zoneVolumeReadbackAttempts   = 3
+	zoneVolumeReadbackRetryDelay = 50 * time.Millisecond
+)
 
 // errZoneMasterUnreachable marks a zone check that could not ask the master,
 // as opposed to one whose answer showed a changed topology. The first is an
@@ -96,6 +102,9 @@ func (app *WebApp) HandleZoneVolume(w http.ResponseWriter, r *http.Request) {
 	}
 
 	masterDeviceID := strings.TrimSpace(view.Zone.MasterDeviceID)
+	lock := app.zoneVolumeLock(masterDeviceID)
+	lock.Lock()
+	defer lock.Unlock()
 
 	topology, err := app.revalidateZone(masterDeviceID)
 	if err != nil {
@@ -113,6 +122,17 @@ func (app *WebApp) HandleZoneVolume(w http.ResponseWriter, r *http.Request) {
 	logZoneVolumePartial(result)
 	app.BroadcastDeviceList()
 	app.sendVolumeResults(w, result, result.Members)
+}
+
+func (app *WebApp) zoneVolumeLock(masterDeviceID string) *sync.Mutex {
+	value, _ := app.zoneVolumeLocks.LoadOrStore(masterDeviceID, &sync.Mutex{})
+
+	lock, ok := value.(*sync.Mutex)
+	if !ok {
+		panic("zone volume lock has an invalid type")
+	}
+
+	return lock
 }
 
 func (app *WebApp) sendVolumeResults(w http.ResponseWriter, data interface{}, members []zoneVolumeMemberResult) {
@@ -190,27 +210,46 @@ func (app *WebApp) applyZoneVolume(zone *models.ZoneInfo, topology *zoneVolumeTo
 
 	result := zoneVolumeResult{Requested: requested, Members: make([]zoneVolumeMemberResult, len(projected.Members))}
 	targets := make([]*zoneVolumeTarget, len(projected.Members))
-	// The delta uses one local projection, not an extra network read per member.
+	// Capture every reachable member from fresh parallel reads before computing
+	// the shared delta. Cached projections can lag the preceding volume move.
+	var reads sync.WaitGroup
 	for index := range projected.Members {
-		member := &projected.Members[index]
-		result.Members[index] = zoneVolumeResultForMember(member)
+		reads.Add(1)
+		go func() {
+			defer reads.Done()
 
-		conn, group, failure := app.zoneMemberVolumeControl(*member)
-		if failure != nil {
-			result.Members[index].Error = failure.Error()
-			result.Members[index].failure = failure
+			member := &projected.Members[index]
+			result.Members[index] = zoneVolumeResultForMember(member)
 			result.Members[index].Before = nil
 
-			continue
-		}
+			conn, group, failure := app.zoneMemberVolumeControl(*member)
+			if failure != nil {
+				result.Members[index].Error = failure.Error()
+				result.Members[index].failure = failure
+				result.Members[index].Before = nil
 
-		if member.ActualVolume == nil || !models.ValidateVolumeLevel(*member.ActualVolume) {
-			result.Members[index].Error = "member volume unavailable"
-			continue
-		}
+				return
+			}
 
-		targets[index] = &zoneVolumeTarget{index: index, controlID: member.ControlID, conn: conn, groupTopology: group, before: *member.ActualVolume}
+			volume, err := conn.Client.GetVolume()
+			if err != nil || volume == nil || !models.ValidateVolumeLevel(volume.ActualVolume) {
+				result.Members[index].Error = "member volume read unavailable"
+				return
+			}
+
+			if !app.volumeTargetCurrent(member.ControlID, conn, group, topology) {
+				result.Members[index].failure = errVolumeTopologyConflict
+				result.Members[index].Error = "speaker topology changed while reading volume"
+
+				return
+			}
+
+			result.Members[index].Before = intPointer(volume.ActualVolume)
+			targets[index] = &zoneVolumeTarget{index: index, controlID: member.ControlID, conn: conn, groupTopology: group, before: volume.ActualVolume}
+		}()
 	}
+
+	reads.Wait()
 
 	result.Baseline, _ = zoneVolumeBaseline(targets)
 	result.Delta = requested - result.Baseline
@@ -308,51 +347,87 @@ func uncertainVolumeWrite(err error) bool {
 
 func (app *WebApp) applyVolumeTarget(member *zoneVolumeMemberResult, controlID string, conn *webtypes.DeviceConnection, group webtypes.GroupTopology, zone *zoneVolumeTopology, level int) (bool, bool) {
 	member.Status = volumeFailed
-	if !app.volumeTargetCurrent(controlID, conn, group, zone) {
-		member.failure = errVolumeTopologyConflict
-		member.Error = member.failure.Error()
+	atTarget, merged := false, false
 
-		return false, false
-	}
-	// No registry, topology, or operation lock survives either network call.
-	generation := conn.BeginVolumeRefresh()
+	conn.WithVolumeOperation(func() {
+		if !app.volumeTargetCurrent(controlID, conn, group, zone) {
+			member.failure = errVolumeTopologyConflict
+			member.Error = member.failure.Error()
 
-	writeErr := conn.Client.SetVolume(level)
-	if writeErr != nil && !uncertainVolumeWrite(writeErr) {
-		member.failure = writeErr
-		member.Error = fmt.Sprintf("set volume: %v", writeErr)
+			return
+		}
+		// Admission and cache guards cover local state only. The independent
+		// volume operation mutex may span I/O without blocking device events.
+		writeErr := conn.Client.SetVolume(level)
+		if writeErr != nil && !uncertainVolumeWrite(writeErr) {
+			member.failure = writeErr
+			member.Error = fmt.Sprintf("set volume: %v", writeErr)
 
-		return false, false
-	}
-
-	member.Status = volumeUnverified
-
-	volume, readErr := conn.Client.GetVolume()
-	if readErr != nil || volume == nil ||
-		!models.ValidateVolumeLevel(volume.TargetVolume) || !models.ValidateVolumeLevel(volume.ActualVolume) {
-		member.Error = "Volume update unverified: readback unavailable"
-		return false, false
-	}
-
-	merged := app.applyCurrentVolumeReadback(controlID, conn, group, zone, generation, volume)
-	if volume.TargetVolume == level && app.volumeTargetCurrent(controlID, conn, group, zone) {
-		member.Status = volumeConfirmed
-		if merged {
-			member.Actual = intPointer(volume.ActualVolume)
+			return
 		}
 
-		return true, merged
+		member.Status = volumeUnverified
+
+		for attempt := range zoneVolumeReadbackAttempts {
+			if attempt > 0 {
+				app.waitForVolumeReadbackRetry()
+
+				if !app.volumeTargetCurrent(controlID, conn, group, zone) {
+					merged = false
+					member.Actual = nil
+					member.Error = "Volume update unverified: newer topology or volume state"
+
+					return
+				}
+			}
+			// Each retry gets its own reservation so an event that invalidates
+			// one read does not invalidate all subsequent convergence reads.
+			generation := conn.BeginVolumeRefresh()
+
+			volume, readErr := conn.Client.GetVolume()
+			if readErr != nil || volume == nil ||
+				!models.ValidateVolumeLevel(volume.TargetVolume) || !models.ValidateVolumeLevel(volume.ActualVolume) {
+				merged = false
+				member.Actual = nil
+				member.Error = "Volume update unverified: readback unavailable"
+
+				return
+			}
+
+			merged = app.applyCurrentVolumeReadback(controlID, conn, group, zone, generation, volume)
+
+			member.Actual = nil
+			if merged {
+				member.Actual = intPointer(volume.ActualVolume)
+				if volume.TargetVolume == level && volume.ActualVolume == level {
+					member.Status = volumeConfirmed
+					member.Error = ""
+					atTarget = true
+
+					return
+				}
+
+				member.Error = fmt.Sprintf("Volume update unverified: target %d actual %d does not both match requested %d", volume.TargetVolume, volume.ActualVolume, level)
+			} else {
+				member.Error = "Volume update unverified: newer topology or volume state"
+			}
+
+			if !app.volumeTargetCurrent(controlID, conn, group, zone) {
+				return
+			}
+		}
+	})
+
+	return atTarget, merged
+}
+
+func (app *WebApp) waitForVolumeReadbackRetry() {
+	if app.volumeReadbackRetryWait != nil {
+		app.volumeReadbackRetryWait(zoneVolumeReadbackRetryDelay)
+		return
 	}
 
-	if !merged {
-		member.Error = "Volume update unverified: newer topology or volume state"
-		return false, false
-	}
-
-	member.Actual = intPointer(volume.ActualVolume)
-	member.Error = fmt.Sprintf("Volume update unverified: target %d, requested %d", volume.TargetVolume, level)
-
-	return false, true
+	time.Sleep(zoneVolumeReadbackRetryDelay)
 }
 
 func (app *WebApp) volumeTargetCurrent(controlID string, conn *webtypes.DeviceConnection, group webtypes.GroupTopology, zone *zoneVolumeTopology) bool {

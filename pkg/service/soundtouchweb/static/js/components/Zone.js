@@ -12,6 +12,7 @@ import {
     zoneTopologyFingerprint,
 } from '../zonePresentation.mjs';
 import { ZoneMemberVolumeControl } from './ZoneMemberVolumeControl.js';
+import { volumeProjectionKey } from '../zoneVolumeResult.mjs';
 
 const html = htm.bind(h);
 
@@ -210,13 +211,13 @@ export function Zone({ deviceId, devices, onSelectMember, volumePreview = null }
                 physical?.role || '',
             ]),
         ]);
-        const volumeProjectionKey = JSON.stringify([
-            devices?.[zoneMasterId]?.status?.epoch ?? null,
-            devices?.[zoneMasterId]?.status?.revision ?? null,
-            devices?.[resolved.controlId]?.status?.epoch ?? null,
-            devices?.[resolved.controlId]?.status?.revision ?? null,
-            Number.isFinite(member?.actualVolume) ? member.actualVolume : null,
-        ]);
+        const memberProjectionKey = volumeProjectionKey(JSON.stringify({
+            [zoneMasterId]: devices?.[zoneMasterId]?.status?.epoch ?? null,
+            [resolved.controlId]: devices?.[resolved.controlId]?.status?.epoch ?? null,
+        }), JSON.stringify({
+            [zoneMasterId]: devices?.[zoneMasterId]?.status?.revision ?? null,
+            [resolved.controlId]: devices?.[resolved.controlId]?.status?.revision ?? null,
+        }), { [resolved.controlId]: Number.isFinite(member?.actualVolume) ? member.actualVolume : null });
 
         return html`
             <div class="zone-logical-member" key=${resolved.controlId}>
@@ -241,7 +242,7 @@ export function Zone({ deviceId, devices, onSelectMember, volumePreview = null }
                     zoneMasterId=${zoneMasterId}
                     memberId=${resolved.controlId}
                     topologyKey=${volumeTopologyKey}
-                    projectionKey=${volumeProjectionKey}
+                    projectionKey=${memberProjectionKey}
                     ariaLabel=${`${metadata.name} volume`}
                     available=${member?.available !== false}
                     volume=${member?.actualVolume}

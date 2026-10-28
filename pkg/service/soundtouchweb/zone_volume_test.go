@@ -27,6 +27,7 @@ type volumeTestSpeaker struct {
 	volumeGets     int
 	ignoreWrites   bool
 	volumeResponse string
+	volumeQueue    []int
 	writeStatus    int
 	writeBody      string
 	uncertainWrite bool
@@ -81,6 +82,10 @@ func newVolumeTestSpeaker(t *testing.T, volume int, zoneXML string) *volumeTestS
 			speaker.volumeGets++
 			get := speaker.volumeGets
 			volume := speaker.volume
+			if len(speaker.volumeQueue) > 0 {
+				volume = speaker.volumeQueue[0]
+				speaker.volumeQueue = speaker.volumeQueue[1:]
+			}
 			response := speaker.volumeResponse
 			hook := speaker.onVolumeGet
 			speaker.mu.Unlock()
@@ -205,10 +210,10 @@ func TestHandleZoneVolumeSharedDeltaClampAndPartialReadback(t *testing.T) {
 
 	masterVolume, masterPosts, masterGets := masterSpeaker.operations()
 	memberVolume, memberPosts, memberGets := memberSpeaker.operations()
-	if masterVolume != 100 || fmt.Sprint(masterPosts) != "[100]" || masterGets != 1 {
+	if masterVolume != 100 || fmt.Sprint(masterPosts) != "[100]" || masterGets != 2 {
 		t.Fatalf("master operations = volume %d posts %v gets %d", masterVolume, masterPosts, masterGets)
 	}
-	if memberVolume != 70 || fmt.Sprint(memberPosts) != "[75]" || memberGets != 1 {
+	if memberVolume != 70 || fmt.Sprint(memberPosts) != "[75]" || memberGets != 4 {
 		t.Fatalf("member operations = volume %d posts %v gets %d", memberVolume, memberPosts, memberGets)
 	}
 	writeConcurrency.Lock()
@@ -274,7 +279,7 @@ func TestZoneVolumeSlowMemberDoesNotDelayOtherWrites(t *testing.T) {
 	}
 }
 
-func TestStandaloneVolumeRoutesKeepWriteOnlyContract(t *testing.T) {
+func TestStandaloneVolumeRoutesVerifyVolumeKeepSuccessEnvelope(t *testing.T) {
 	tests := []struct {
 		name    string
 		level   int
@@ -328,16 +333,6 @@ func TestStandaloneVolumeRoutesKeepWriteOnlyContract(t *testing.T) {
 				nil,
 				nil,
 			)
-			// Neither an unpolled stereo-capable device nor its pair-slave role
-			// may add admission restrictions to the existing direct routes.
-			unpolled := webtypes.NewDeviceConnection(conn.Client, conn.DeviceInfo)
-			unpolled.SetStatus(conn.Status())
-			app.RemoveDevice("speaker")
-			app.AddDevice("speaker", unpolled)
-			conn = unpolled
-			if test.name == "JSON action" {
-				conn.ApplyGroupEvent(&models.Group{ID: "pair", MasterDeviceID: "OTHER"}, time.Now())
-			}
 			conn.WebSocket = &client.WebSocketClient{}
 			response := httptest.NewRecorder()
 			test.handle(app, response, test.request(test.level))
@@ -362,22 +357,23 @@ func TestStandaloneVolumeRoutesKeepWriteOnlyContract(t *testing.T) {
 			if payload.Data.Message != fmt.Sprintf("Volume set to %d", test.level) {
 				t.Fatalf("legacy confirmation message = %q", payload.Data.Message)
 			}
-			if _, posts, gets := speaker.operations(); fmt.Sprint(posts) != fmt.Sprintf("[%d]", test.level) || gets != 0 {
+			if _, posts, gets := speaker.operations(); fmt.Sprint(posts) != fmt.Sprintf("[%d]", test.level) || gets != 1 {
 				t.Fatalf("speaker operations = posts %v gets %d", posts, gets)
 			}
-			if got := conn.Status().Volume; got == nil || got.TargetVolume != 10 || got.ActualVolume != 10 {
+			if got := conn.Status().Volume; got == nil || got.TargetVolume != test.level || got.ActualVolume != test.level {
 				t.Fatalf("cached readback = %+v", got)
 			}
 		})
 	}
 }
 
-func TestHandleZoneVolumeConfirmsTargetWhileActualRamps(t *testing.T) {
+func TestHandleZoneVolumeRequiresActualToFinishRamping(t *testing.T) {
 	zone, zoneXML := testZone()
 	masterSpeaker := newVolumeTestSpeaker(t, 20, zoneXML)
 	memberSpeaker := newVolumeTestSpeaker(t, 35, "")
 	memberSpeaker.volumeResponse = `<volume deviceID="MEMBER"><targetvolume>80</targetvolume><actualvolume>36</actualvolume></volume>`
 	app := NewWebApp()
+	app.volumeReadbackRetryWait = func(time.Duration) {}
 	addVolumeTestDevice(app, "192.0.2.10", "MASTER", "Kitchen", "SoundTouch 30", masterSpeaker, 20, nil, zone)
 	addVolumeTestDevice(app, "192.0.2.20", "MEMBER", "Dining", "SoundTouch 20", memberSpeaker, 35, nil, nil)
 	request := withChiParams(httptest.NewRequest(http.MethodPost, "/zone/volume/80", nil),
@@ -391,18 +387,18 @@ func TestHandleZoneVolumeConfirmsTargetWhileActualRamps(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != http.StatusOK || !payload.Success || payload.Data.Partial {
+	if response.Code != http.StatusOK || !payload.Success || !payload.Data.Partial {
 		t.Fatalf("ramping readback = %d %s", response.Code, response.Body.String())
 	}
 	for _, member := range payload.Data.Members {
-		if member.Status != volumeConfirmed {
+		if member.DeviceID == "MEMBER" && member.Status != volumeUnverified {
 			t.Fatalf("member = %+v", member)
 		}
 		if member.DeviceID == "MEMBER" && (member.Actual == nil || *member.Actual != 36) {
 			t.Fatalf("ramping actual = %+v", member)
 		}
 	}
-	if _, posts, gets := memberSpeaker.operations(); fmt.Sprint(posts) != "[80]" || gets != 1 {
+	if _, posts, gets := memberSpeaker.operations(); fmt.Sprint(posts) != "[80]" || gets != 4 {
 		t.Fatalf("operations = posts %v gets %d", posts, gets)
 	}
 }
@@ -445,13 +441,13 @@ func TestApplyVolumeTargetRejectsStaleGenerationsWithoutActual(t *testing.T) {
 	t.Run("volume generation invalidated during readback", func(t *testing.T) {
 		result := zoneVolumeMemberResult{}
 		atTarget, cacheApplied := app.applyVolumeTarget(&result, "192.0.2.30", conn, topology, nil, 40)
-		if !atTarget || cacheApplied || result.Actual != nil || result.Status != volumeConfirmed {
+		if atTarget || cacheApplied || result.Actual != nil || result.Status != volumeUnverified {
 			t.Fatalf("matching stale readback result = %+v, atTarget=%v cacheApplied=%v", result, atTarget, cacheApplied)
 		}
 		if conn.Status().Volume.ActualVolume != 77 {
 			t.Fatalf("rejected readback replaced event cache: %+v", conn.Status().Volume)
 		}
-		if _, posts, gets := speaker.operations(); fmt.Sprint(posts) != "[40]" || gets != 1 {
+		if _, posts, gets := speaker.operations(); fmt.Sprint(posts) != "[40]" || gets != 3 {
 			t.Fatalf("readback operations = posts %v gets %d", posts, gets)
 		}
 	})

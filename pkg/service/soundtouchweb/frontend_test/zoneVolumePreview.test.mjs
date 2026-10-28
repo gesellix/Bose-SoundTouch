@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
     mergeZoneVolumeReadback,
+    maxZoneVolume,
     previewZoneVolume,
     sameZoneMemberVolumes,
     zoneMemberVolumes,
@@ -39,4 +40,18 @@ test('requires the complete authoritative map before dropping an optimistic over
     assert.equal(sameZoneMemberVolumes({ a: 10, b: 20 }, { b: 20, a: 10 }), true);
     assert.equal(sameZoneMemberVolumes({ a: 10 }, { a: 10, b: 20 }), false);
     assert.equal(sameZoneMemberVolumes({ a: 10 }, { a: 11 }), false);
+});
+
+test('keeps the pointer-down baseline when intermediate requests are coalesced', () => {
+    const starting = { kitchen: 10, living: 20 };
+    assert.deepEqual(previewZoneVolume(starting, 20, 0), { kitchen: 0, living: 0 });
+    assert.deepEqual(previewZoneVolume(starting, 20, 10), { kitchen: 0, living: 10 });
+    assert.equal(maxZoneVolume(starting), 20);
+});
+
+test('group preview preserves offsets at an ordinary level and clamps a zero member', () => {
+    assert.deepEqual(previewZoneVolume({ master: 25, member: 20 }, 25, 30),
+        { master: 30, member: 25 });
+    assert.deepEqual(previewZoneVolume({ master: 0, member: 24 }, 24, 30),
+        { master: 6, member: 30 });
 });
