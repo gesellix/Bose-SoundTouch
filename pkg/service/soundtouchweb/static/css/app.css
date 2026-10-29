@@ -1099,7 +1099,7 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
     transition: background .1s, box-shadow .1s;
     min-height: 56px;
 }
-.preset-slot:hover:not(:disabled) { background: var(--bg); box-shadow: var(--shadow); }
+.preset-slot:hover:not(:disabled):not(.active) { background: var(--bg); box-shadow: var(--shadow); }
 .preset-slot:disabled { opacity: .4; cursor: default; }
 .preset-slot.active {
     border-color: var(--accent);
