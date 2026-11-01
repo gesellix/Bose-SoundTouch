@@ -55,6 +55,42 @@ func TestWebSocketGetBalance(t *testing.T) {
 	}
 }
 
+func TestBalanceReadbackValidationIsUsedByHTTPAndWebSocketGET(t *testing.T) {
+	incomplete := `<balance><balanceAvailable>true</balanceAvailable>` +
+		`<balanceMin>-7</balanceMin><balanceMax>7</balanceMax><balanceDefault>0</balanceDefault>` +
+		`<targetBalance>0</targetBalance></balance>`
+
+	t.Run("HTTP", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(incomplete))
+		}))
+		t.Cleanup(server.Close)
+
+		balance, err := NewClientFromHost(server.URL).GetBalance()
+		if err == nil || balance != nil {
+			t.Fatalf("GetBalance() = %+v, %v; want failure", balance, err)
+		}
+		if !strings.Contains(err.Error(), "actualBalance") {
+			t.Errorf("error = %v, want missing actualBalance context", err)
+		}
+	})
+
+	t.Run("WebSocket", func(t *testing.T) {
+		f := newFakeSpeakerWS(t)
+		f.reply = func(route, id, _ string) []string {
+			return []string{okResponse(route, id, incomplete)}
+		}
+
+		balance, err := f.connect(t).GetBalance(context.Background())
+		if err == nil || balance != nil {
+			t.Fatalf("GetBalance() = %+v, %v; want failure", balance, err)
+		}
+		if !strings.Contains(err.Error(), "actualBalance") {
+			t.Errorf("error = %v, want missing actualBalance context", err)
+		}
+	})
+}
+
 // TestWebSocketSetBalanceSendsStockholmFrame pins the exact write the firmware
 // accepts, as the app Bose ships on the speaker builds it. Confirmed on
 // hardware at both range endpoints.
@@ -96,6 +132,56 @@ func TestWebSocketSetBalanceSendsStockholmFrame(t *testing.T) {
 		if !strings.Contains(write, want) {
 			t.Errorf("write frame missing %q in: %s", want, write)
 		}
+	}
+}
+
+func TestWebSocketSetBalanceWithNilBoundsWritesOutOfRangeLevelOnce(t *testing.T) {
+	f := newFakeSpeakerWS(t)
+	f.reply = func(route, id, _ string) []string {
+		return []string{okResponse(route, id, balanceDocument(99, 99))}
+	}
+
+	updated, err := f.connect(t).SetBalanceWithBounds(context.Background(), 99, nil)
+	if err != nil {
+		t.Fatalf("SetBalanceWithBounds: %v", err)
+	}
+	if updated.Target != 99 || updated.Actual != 99 {
+		t.Errorf("updated = %+v, want complete echoed target and actual 99", updated)
+	}
+
+	requests := f.recordedRequests()
+	if len(requests) != 1 {
+		t.Fatalf("got %d requests, want exactly one write: %v", len(requests), requests)
+	}
+	if !strings.Contains(requests[0], `method="POST"`) ||
+		!strings.Contains(requests[0], `<targetBalance>99</targetBalance>`) {
+		t.Errorf("request = %s, want POST carrying targetBalance 99", requests[0])
+	}
+}
+
+func TestWebSocketSetBalanceInvalidEchoReportsUncertainOutcomeWithoutRetry(t *testing.T) {
+	f := newFakeSpeakerWS(t)
+	f.reply = func(route, id, _ string) []string {
+		return []string{okResponse(route, id,
+			`<balance><balanceAvailable>true</balanceAvailable>`+
+				`<balanceMin>-7</balanceMin><balanceMax>7</balanceMax>`+
+				`<balanceDefault>0</balanceDefault><targetBalance>3</targetBalance></balance>`)}
+	}
+
+	updated, err := f.connect(t).SetBalanceWithBounds(context.Background(), 3, nil)
+	if err == nil || updated != nil {
+		t.Fatalf("SetBalanceWithBounds() = %+v, %v; want uncertain failure", updated, err)
+	}
+	if !strings.Contains(err.Error(), "may have applied") || !strings.Contains(err.Error(), "actualBalance") {
+		t.Errorf("error = %v, want uncertain write and invalid echo context", err)
+	}
+
+	requests := f.recordedRequests()
+	if len(requests) != 1 {
+		t.Fatalf("got %d requests, want exactly one write and no readback: %v", len(requests), requests)
+	}
+	if !strings.Contains(requests[0], `method="POST"`) {
+		t.Errorf("request = %s, want POST", requests[0])
 	}
 }
 
