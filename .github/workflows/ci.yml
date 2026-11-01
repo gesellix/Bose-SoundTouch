@@ -254,7 +254,7 @@ jobs:
 
       - name: Check documentation links
         run: |
-          npm install -g markdown-link-check
+          npm install -g markdown-link-check@3.15.0
           ./scripts/check-doc-links.sh
 
       - name: Warn on pending images
