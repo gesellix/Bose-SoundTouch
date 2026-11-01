@@ -20,7 +20,8 @@ document.getElementById('fixture').innerHTML = '<button class="preset-slot" styl
 window.colors = () => {
   const tile = document.getElementById('preset');
   return { background: getComputedStyle(tile).backgroundColor,
-    text: getComputedStyle(tile.querySelector('.preset-name')).color };
+    text: getComputedStyle(tile.querySelector('.preset-name')).color,
+    shadow: getComputedStyle(tile).boxShadow };
 };`)
 	for _, theme := range []struct{ name, background, foreground, hover string }{
 		{"light", "rgb(0, 0, 0)", "rgb(255, 255, 255)", "rgb(245, 245, 245)"},
@@ -42,6 +43,8 @@ window.colors = () => {
 				chromedp.Poll[chromedp.Void](`window.colors().background === `+`"`+theme.hover+`"`, chromedp.WithPollingTimeout(time.Second)),
 				chromedp.Evaluate[chromedp.Void](`document.getElementById('preset').classList.add('active')`),
 				chromedp.Poll[chromedp.Void](`window.colors().background === "`+theme.background+`" && window.colors().text === "`+theme.foreground+`"`, chromedp.WithPollingTimeout(time.Second)),
+				// Wait out the .1s transition: a fading shadow would still read as present.
+				chromedp.Poll[chromedp.Void](`document.getElementById('preset').getAnimations().length === 0 && window.colors().shadow !== "none"`, chromedp.WithPollingTimeout(time.Second)),
 				chromedp.Evaluate[chromedp.Void](`document.getElementById('preset').disabled = true`),
 				chromedp.Poll[chromedp.Void](`window.colors().background === "`+theme.background+`"`, chromedp.WithPollingTimeout(time.Second)),
 				chromedp.Evaluate[chromedp.Void](`document.getElementById('preset').disabled = false`),
