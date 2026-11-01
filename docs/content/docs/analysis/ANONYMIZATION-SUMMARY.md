@@ -26,7 +26,7 @@ use across the codebase. Use these values in new examples and tests.
 | Bose account ID        | `1000001` / `1000002`                                                  |
 
 `192.0.2.0/24`, `198.51.100.0/24`, and `203.0.113.0/24` are reserved
-by [RFC 5737](https://www.rfc-editor.org/rfc/rfc5737) exclusively for
+by [RFC 5737](https://datatracker.ietf.org/doc/html/rfc5737) exclusively for
 documentation. They won't ever route on a real network, so readers
 know at a glance that they're placeholders and not addresses they
 need to think about.
