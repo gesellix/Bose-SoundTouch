@@ -1108,6 +1108,9 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
     background: var(--accent);
     color: var(--accent-fg);
 }
+/* A selected tile stays readable while a command runs: .4 would drop its text
+   to about 3:1 in both themes. */
+.preset-slot.active:disabled { opacity: .75; }
 .preset-slot.active .preset-name,
 .preset-slot.active .preset-source-label,
 .preset-slot.active .preset-num { color: var(--accent-fg); }
