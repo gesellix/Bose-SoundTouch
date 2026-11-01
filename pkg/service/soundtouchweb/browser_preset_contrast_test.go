@@ -152,3 +152,23 @@ func TestSelectedControlsKeepContrastUnderHover(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectedPresetStaysReadableWhileBusy(t *testing.T) {
+	ctx := selectedControlPage(t)
+
+	for _, scheme := range []string{"light", "dark"} {
+		t.Run(scheme, func(t *testing.T) {
+			emulateColorScheme(t, ctx, scheme)
+
+			if err := chromedp.Do(ctx,
+				chromedp.Evaluate[chromedp.Void](`window.setBusy(true)`),
+				chromedp.Poll[chromedp.Void](`document.querySelector('.preset-slot.active').disabled && `+
+					readableExpr(`.preset-slot.active`, `.preset-name`)),
+				chromedp.Evaluate[chromedp.Void](`window.setBusy(false)`),
+				chromedp.Poll[chromedp.Void](`!document.querySelector('.preset-slot.active').disabled`),
+			); err != nil {
+				t.Fatalf("selected preset is unreadable while a command runs: %v", err)
+			}
+		})
+	}
+}
