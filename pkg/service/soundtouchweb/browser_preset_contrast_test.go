@@ -55,3 +55,39 @@ window.colors = () => {
 		})
 	}
 }
+
+// The source pill had the same cascade: its hover rule outranked .active, which
+// left the label unreadable, and in the dark theme invisible.
+func TestActiveSourcePillKeepsContrastUnderHover(t *testing.T) {
+	server := newMetadataFixtureServer(t, `
+document.getElementById('fixture').innerHTML = '<button class="source-btn" style="position:fixed;left:20px;top:20px;width:120px;height:40px" id="source">Source</button>';
+window.colors = () => {
+  const pill = document.getElementById('source');
+  return { background: getComputedStyle(pill).backgroundColor, text: getComputedStyle(pill).color };
+};`)
+	for _, theme := range []struct{ name, background, foreground, hover string }{
+		{"light", "rgb(0, 0, 0)", "rgb(255, 255, 255)", "rgb(245, 245, 245)"},
+		{"dark", "rgb(224, 224, 224)", "rgb(17, 17, 17)", "rgb(17, 17, 17)"},
+	} {
+		t.Run(theme.name, func(t *testing.T) {
+			ctx := newHeadlessChromeContext(t)
+			if err := chromedp.Do(ctx, chromedp.Navigate(server.URL+"/fixture"),
+				chromedp.WaitVisible(chromedp.CSS(`#source`))); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{
+				Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: theme.name}},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := chromedp.Do(ctx,
+				chromedp.MouseEvent(input.DispatchMouseEventTypeMouseMoved, 40, 40),
+				chromedp.Poll[chromedp.Void](`window.colors().background === "`+theme.hover+`"`),
+				chromedp.Evaluate[chromedp.Void](`document.getElementById('source').classList.add('active')`),
+				chromedp.Poll[chromedp.Void](`window.colors().background === "`+theme.background+`" && window.colors().text === "`+theme.foreground+`"`),
+			); err != nil {
+				t.Fatalf("active source pill lost contrast under hover: %v", err)
+			}
+		})
+	}
+}
