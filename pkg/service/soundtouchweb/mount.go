@@ -46,6 +46,10 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 		// what another one had.
 		r.Get("/catalog", app.HandleCatalog)
 
+		r.Get("/favorites", app.HandleFavorites)
+		r.Post("/favorites", app.HandleAddFavorite)
+		r.Delete("/favorites/{favoriteID}", app.HandleRemoveFavorite)
+
 		// App-wide event stream: device list, discovery status, per-device
 		// status updates. The read/event half of the control surface (the
 		// per-device socket lives at devices/{id}/ws).

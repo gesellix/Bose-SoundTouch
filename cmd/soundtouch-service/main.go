@@ -29,6 +29,7 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/certmanager"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
+	"github.com/gesellix/bose-soundtouch/pkg/service/favorites"
 	"github.com/gesellix/bose-soundtouch/pkg/service/handlers"
 	"github.com/gesellix/bose-soundtouch/pkg/service/logbuf"
 	"github.com/gesellix/bose-soundtouch/pkg/service/proxy"
@@ -1670,6 +1671,9 @@ func newEmbeddedWebApp(server *handlers.Server, serverURL, internalURL string, d
 	// player's preset editor picks from (issue 754). Standalone
 	// soundtouch-player has no datastore, so it leaves this nil.
 	webApp.CatalogEntries = ds.GetCatalog
+	if ds != nil && ds.DataDir != "" {
+		webApp.Favorites = favorites.NewFileStore(filepath.Join(ds.DataDir, "favorites.json"))
+	}
 
 	// The stored preset list, and its repair (issue 697). Both resolve the
 	// account the speaker is filed under the same way the device removal does.
