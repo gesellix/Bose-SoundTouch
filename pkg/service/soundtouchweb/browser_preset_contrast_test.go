@@ -11,9 +11,10 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// Exercise the actual cascade, including a pointer that stays over the tile
-// while the command disables and re-enables it (also the sticky touch-hover case).
-func TestPresetSelectionContrastSurvivesHoverAndBusy(t *testing.T) {
+// Exercise the actual cascade. Hover and active together are enough to break the
+// pairing; the disable steps only cover a pointer that stays over the tile while
+// a command runs (also the sticky touch-hover case).
+func TestSelectedPresetKeepsContrastUnderHover(t *testing.T) {
 	server := newMetadataFixtureServer(t, `
 document.getElementById('fixture').innerHTML = '<button class="preset-slot" style="width:200px;height:70px" id="preset"><span class="preset-name">Station</span></button>';
 window.colors = () => {
@@ -46,7 +47,7 @@ window.colors = () => {
 				chromedp.Evaluate[chromedp.Void](`document.getElementById('preset').disabled = false`),
 				chromedp.Poll[chromedp.Void](`window.colors().background === "`+theme.background+`" && window.colors().text === "`+theme.foreground+`"`, chromedp.WithPollingTimeout(time.Second)),
 			); err != nil {
-				t.Fatalf("selected preset lost contrast under hover/busy transition: %v", err)
+				t.Fatalf("selected preset lost contrast under hover: %v", err)
 			}
 		})
 	}
