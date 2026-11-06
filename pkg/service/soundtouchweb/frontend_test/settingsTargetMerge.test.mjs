@@ -89,3 +89,26 @@ test('identity-changing readbacks fence sound until an equal-revision full inven
         epoch: 1, revision: 3, group: group('new'), bass: { DeviceID: 'child' } });
     assert.equal(peerChanged.master.settingsIdentityPending, true);
 });
+
+
+test('pending recovery rejects an older hidden registry mapping even at the same master revision', () => {
+    const current = device(5, 4, 'pair', 2);
+    current.settingsTargets[0].controlId = 'new.local';
+    const pending = mergeStatusUpdate({ master: current }, 'new.local', {
+        epoch: 2, revision: 5, bass: { DeviceID: 'child' }, group: { ID: 'changed' } });
+    assert.equal(pending.master.settingsIdentityPending, true);
+    const delayed = device(5, 2, 'pair', 1);
+    delayed.settingsTargets[0].controlId = 'old.local';
+    const result = mergeDevicesSnapshot(pending, { master: delayed }).master;
+    assert.equal(result.settingsIdentityPending, true);
+    assert.equal(result.settingsTargets[0].controlId, 'new.local');
+    assert.equal(result.settingsTargets[0].status.epoch, 2);
+    const delayedWithNewerMaster = { ...delayed, status: status(6) };
+    const newerMaster = mergeDevicesSnapshot(pending, { master: delayedWithNewerMaster }).master;
+    assert.equal(newerMaster.settingsIdentityPending, true, 'A newer master cannot prove a stale peer registry identity');
+    const fresh = device(5, 6, 'pair', 2);
+    fresh.settingsTargets[0].controlId = 'new.local';
+    fresh.settingsTargets[0].status.group = { ID: 'changed' };
+    const recovered = mergeDevicesSnapshot(pending, { master: fresh }).master;
+    assert.equal(Boolean(recovered.settingsIdentityPending), false);
+});
