@@ -513,6 +513,147 @@ func TestApplyGroupEventIgnoresRoleOrder(t *testing.T) {
 	}
 }
 
+func TestBassRevisionAdvancesOnUnchangedReadAndEvent(t *testing.T) {
+	conn := NewDeviceConnection(nil, nil)
+	apply := func(status *DeviceStatus) { status.Bass = &models.Bass{ActualBass: -3} }
+	first := conn.BeginFieldPoll(FieldBass)
+	if !conn.CompleteFieldPoll(FieldBass, first, apply) {
+		t.Fatal("initial bass read was rejected")
+	}
+	before := conn.Status()
+	second := conn.BeginFieldPoll(FieldBass)
+	if !conn.CompleteFieldPoll(FieldBass, second, apply) {
+		t.Fatal("unchanged bass read was rejected")
+	}
+	read := conn.Status()
+	if before.BassRevision != first || read.BassRevision != second ||
+		read.BassRevision <= before.BassRevision || read.Bass.ActualBass != -3 {
+		t.Fatalf("unchanged read lost fresh evidence: before=%+v after=%+v", before, read)
+	}
+	conn.ApplyFieldEvent(FieldBass, apply)
+	if status := conn.Status(); status.BassRevision <= read.BassRevision || status.Bass.ActualBass != -3 {
+		t.Fatalf("unchanged event lost fresh evidence: %+v", status)
+	}
+	if read.BassRevision != second || before.BassRevision != first {
+		t.Fatal("bass evidence mutated an older snapshot")
+	}
+	baseline := conn.Status().BassRevision
+	volume := conn.BeginFieldPoll(FieldVolume)
+	conn.CompleteFieldPoll(FieldVolume, volume, func(status *DeviceStatus) {
+		status.Volume = &models.Volume{ActualVolume: 42}
+	})
+	conn.ApplyFieldEvent(FieldVolume, func(status *DeviceStatus) {
+		status.Volume = &models.Volume{ActualVolume: 43}
+	})
+	if conn.Status().BassRevision != baseline {
+		t.Fatal("unrelated volume evidence advanced bass revision")
+	}
+}
+
+func TestBassRevisionRejectsStaleReadAfterNewerReadOrEvent(t *testing.T) {
+	for _, evidence := range []string{"poll", "event"} {
+		t.Run(evidence, func(t *testing.T) {
+			conn := NewDeviceConnection(nil, nil)
+			older := conn.BeginFieldPoll(FieldBass)
+			apply := func(status *DeviceStatus) { status.Bass = &models.Bass{ActualBass: -3} }
+			if evidence == "poll" {
+				conn.CompleteFieldPoll(FieldBass, conn.BeginFieldPoll(FieldBass), apply)
+			} else {
+				conn.ApplyFieldEvent(FieldBass, apply)
+			}
+			before := conn.Status()
+			if conn.CompleteFieldPoll(FieldBass, older, func(status *DeviceStatus) {
+				status.Bass = &models.Bass{ActualBass: -9}
+			}) {
+				t.Fatal("stale bass read was accepted")
+			}
+			if conn.Status() != before || before.BassRevision == 0 || before.Bass.ActualBass != -3 {
+				t.Fatalf("stale read changed bass evidence: %+v", conn.Status())
+			}
+		})
+	}
+}
+
+func TestBassRevisionRejectsReadAndEventAfterClose(t *testing.T) {
+	conn := NewDeviceConnection(nil, nil)
+	conn.ApplyFieldEvent(FieldBass, func(status *DeviceStatus) {
+		status.Bass = &models.Bass{ActualBass: -3}
+	})
+	poll := conn.BeginFieldPoll(FieldBass)
+	before := conn.Status()
+	conn.Close()
+	mutate := func(status *DeviceStatus) { t.Error("closed connection accepted bass evidence") }
+	if conn.CompleteFieldPoll(FieldBass, poll, mutate) {
+		t.Fatal("closed connection accepted bass read")
+	}
+	conn.ApplyFieldEvent(FieldBass, mutate)
+	if conn.Status() != before {
+		t.Fatal("closed connection advanced bass evidence")
+	}
+}
+
+func TestBassRevisionPreservedAcrossStatusReplacement(t *testing.T) {
+	conn := NewDeviceConnection(nil, nil)
+	conn.ApplyFieldEvent(FieldBass, func(status *DeviceStatus) {
+		status.Bass = &models.Bass{ActualBass: -3}
+	})
+	baseline := conn.Status().BassRevision
+	for _, replacement := range []uint64{0, baseline + 100} {
+		stale := conn.BeginFieldPoll(FieldBass)
+		conn.SetStatus(&DeviceStatus{Bass: &models.Bass{ActualBass: -3}, BassRevision: replacement})
+		if conn.Status().BassRevision != baseline {
+			t.Fatalf("status replacement changed bass evidence: %+v", conn.Status())
+		}
+		if conn.CompleteFieldPoll(FieldBass, stale, func(status *DeviceStatus) {
+			t.Error("status replacement accepted an older bass poll")
+		}) {
+			t.Fatal("status replacement did not fence older bass poll")
+		}
+	}
+	fresh := conn.BeginFieldPoll(FieldBass)
+	if !conn.CompleteFieldPoll(FieldBass, fresh, func(status *DeviceStatus) {
+		status.Bass = &models.Bass{ActualBass: -3}
+	}) || conn.Status().BassRevision != fresh || fresh <= baseline {
+		t.Fatal("fresh bass read after replacement did not advance evidence")
+	}
+}
+
+func TestBassRevisionConcurrentReadEventCloseAndReplacement(t *testing.T) {
+	for range 100 {
+		conn := NewDeviceConnection(nil, nil)
+		poll := conn.BeginFieldPoll(FieldBass)
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		for _, operation := range []func(){
+			func() {
+				conn.CompleteFieldPoll(FieldBass, poll, func(status *DeviceStatus) {
+					status.Bass = &models.Bass{ActualBass: -3}
+				})
+			},
+			func() {
+				conn.ApplyFieldEvent(FieldBass, func(status *DeviceStatus) {
+					status.Bass = &models.Bass{ActualBass: -3}
+				})
+			},
+			func() { conn.SetStatus(&DeviceStatus{}) },
+		} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				operation()
+			}()
+		}
+		close(start)
+		conn.Close()
+		atClose := conn.Status().BassRevision
+		wg.Wait()
+		if conn.Status().BassRevision != atClose {
+			t.Fatalf("bass evidence advanced after Close returned: before=%d after=%d", atClose, conn.Status().BassRevision)
+		}
+	}
+}
+
 func TestFieldPollCannotOverwriteNewerFieldEvent(t *testing.T) {
 	conn := NewDeviceConnection(nil, &models.DeviceInfo{Name: "test"})
 	poll := conn.BeginFieldPoll(FieldVolume)

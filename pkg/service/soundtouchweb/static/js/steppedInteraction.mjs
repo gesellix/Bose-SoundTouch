@@ -1,5 +1,18 @@
 import { createLatestWinsScheduler, shouldSurfaceLatestFinal } from './latestWinsScheduler.mjs';
 
+// Every member must have a newer bass observation from the same connection.
+export function observationsAdvanced(current, baseline) {
+    return Array.isArray(current) && Array.isArray(baseline) && baseline.length > 0 &&
+        current.length === baseline.length && baseline.every((before, index) => {
+            const after = current[index];
+            return Array.isArray(before) && before.length === 4 && Array.isArray(after) && after.length === 4 &&
+                before.slice(0, 2).every(value => typeof value === 'string' && value.length > 0) &&
+                Number.isSafeInteger(before[2]) && before[2] > 0 &&
+                before.slice(0, 3).every((value, key) => value === after[key]) &&
+                Number.isSafeInteger(before[3]) && Number.isSafeInteger(after[3]) && after[3] > before[3];
+        });
+}
+
 export function nearestStep(clientX, left, width, min, max) {
     if (![clientX, left, width, min, max].every(Number.isFinite) || width <= 0 ||
         !Number.isInteger(min) || !Number.isInteger(max) || min > max) return null;
@@ -21,8 +34,10 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
     let failure = '';
     let failureFloor = null;
     let unverifiedValue = null;
+    let unverifiedObservations = null;
     let busy = false;
     let confirmedValue = null;
+    let observationFloor = null;
     let lastCompletedWrite = null;
     const scheduler = createLatestWinsScheduler({
         interval: 0,
@@ -34,10 +49,12 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
                 return { success: false, error: 'The reported sound range changed. Refresh settings before retrying.' };
             }
             request.dispatched = true;
-            return send(target, value);
+            request.observations = rememberObservations(target.observations);
+            return send({ ...target, observations: request.observations }, value);
         },
         onResult(response, request) {
             if (request.owner !== owner) return;
+            rememberObservations(response?.observations);
             if (request.dispatched) lastCompletedWrite = { response, request };
             if (!shouldSurfaceLatestFinal(request)) return;
             if (response?.skipped) {
@@ -66,12 +83,28 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         },
     });
 
+    function rememberObservations(observations) {
+        if (!observations?.length) return observationFloor;
+        if (!observationFloor) {
+            observationFloor = observations;
+        } else if (observations.length === observationFloor.length) {
+            observationFloor = observationFloor.map((before, index) => {
+                const after = observations[index];
+                return Array.isArray(after) && before.slice(0, 3).every((value, key) => value === after[key]) &&
+                    Number.isSafeInteger(after[3]) && after[3] > before[3] ? after : before;
+            });
+        }
+        return observationFloor;
+    }
+
     function surfaceResult(response, request) {
-        if (response?.outcome === 'unverified' && !target.disabled && target.observationConfirmed !== false && request.projection !== target.projection &&
+        if (response?.outcome === 'unverified' &&
+            (!request.observations || observationsAdvanced(target.observations, request.observations)) && !target.disabled && target.observationConfirmed !== false && request.projection !== target.projection &&
             target.value === request.value && target.value >= target.min && target.value <= target.max) {
             failure = '';
             failureFloor = null;
             unverifiedValue = null;
+            unverifiedObservations = null;
             confirmedValue = target.value;
             local = target.value;
             onChange();
@@ -80,6 +113,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         failure = response?.success ? '' : response?.error || 'Sound setting update failed.';
         failureFloor = failure ? target.projection : null;
         unverifiedValue = failure && response?.outcome === 'unverified' ? request.value : null;
+        unverifiedObservations = unverifiedValue !== null ? request.observations : null;
         if (request.projection === target.projection && response?.success && Number.isInteger(response.confirmedValue)) {
             confirmedValue = response.confirmedValue;
             local = confirmedValue;
@@ -94,6 +128,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         failure = error?.message || 'Sound setting update failed.';
         failureFloor = target.projection;
         unverifiedValue = null;
+        unverifiedObservations = null;
         local = target.value;
         confirmedValue = null;
         onChange();
@@ -106,23 +141,27 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         }
         if (!target || next.key !== target.key) {
             owner += 1;
+            observationFloor = null;
             lastCompletedWrite = null;
             tap = null;
             local = next.value;
             failure = '';
             failureFloor = null;
             unverifiedValue = null;
+            unverifiedObservations = null;
             confirmedValue = null;
         } else if (next.projection !== target.projection) {
             confirmedValue = null;
             if (!scheduler.isActive()) local = next.value;
             if (failure && !next.disabled && next.observationConfirmed !== false && next.projection !== failureFloor &&
                 Number.isInteger(next.value) && next.value >= next.min && next.value <= next.max &&
-                (unverifiedValue === null || next.value === unverifiedValue)) {
+                (unverifiedValue === null || (next.value === unverifiedValue &&
+                    (!unverifiedObservations || observationsAdvanced(next.observations, unverifiedObservations))))) {
                 if (unverifiedValue !== null) confirmedValue = next.value;
                 failure = '';
                 failureFloor = null;
                 unverifiedValue = null;
+                unverifiedObservations = null;
             }
         }
         target = next;
@@ -136,6 +175,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         failure = '';
         failureFloor = null;
         unverifiedValue = null;
+        unverifiedObservations = null;
         scheduler.queue(value, { force: true, owner, eligibility, projection: target.projection, interactionGeneration: interaction });
         onChange();
     }

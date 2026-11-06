@@ -25,8 +25,8 @@ type deviceView struct {
 	ZoneMembership *zoneMembershipView `json:"zoneMembership,omitempty"`
 }
 
-// physicalSettingsTargetView exposes only uniquely registered physical devices.
-// The registry key, rather than a firmware-reported interface address, owns I/O.
+// physicalSettingsTargetView uses a registry key to own I/O. Hidden stereo
+// members additionally require a unique hardware identity for routing.
 type physicalSettingsTargetView struct {
 	ControlID  string                 `json:"controlId"`
 	PhysicalID string                 `json:"physicalId"`
@@ -260,15 +260,6 @@ func physicalSettingsTargets(
 	byDeviceID map[string][]deviceProjectionEntry,
 ) []physicalSettingsTargetView {
 	if pair == nil {
-		if entry.Info == nil {
-			return nil
-		}
-
-		unique, ok := uniqueDeviceEntry(byDeviceID, entry.Info.DeviceID)
-		if !ok || unique.ID != entry.ID {
-			return nil
-		}
-
 		return []physicalSettingsTargetView{newPhysicalSettingsTarget(entry, "")}
 	}
 
@@ -290,13 +281,17 @@ func physicalSettingsTargets(
 }
 
 func newPhysicalSettingsTarget(entry deviceProjectionEntry, role string) physicalSettingsTargetView {
-	return physicalSettingsTargetView{
-		ControlID:  entry.ID,
-		PhysicalID: strings.TrimSpace(entry.Info.DeviceID),
-		Name:       entry.Info.Name,
-		Role:       role,
-		Status:     entry.Status,
+	target := physicalSettingsTargetView{
+		ControlID: entry.ID,
+		Role:      role,
+		Status:    entry.Status,
 	}
+	if entry.Info != nil {
+		target.PhysicalID = strings.TrimSpace(entry.Info.DeviceID)
+		target.Name = entry.Info.Name
+	}
+
+	return target
 }
 
 func projectZoneInfo(zone *models.ZoneInfo, snapshot []deviceProjectionEntry) (*zoneView, bool) {

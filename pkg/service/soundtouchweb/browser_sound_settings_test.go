@@ -26,16 +26,17 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 import('/app/static/js/api.js'),
                 import('/app/static/lib/preact.module.js'),
             ]);
-            const original = { settings: api.settings, bass: api.bass, balance: api.balance, device: api.device, bassChecked: api.bassChecked, balanceChecked: api.balanceChecked };
-            api.bassChecked = (...args) => api.bass(...args); api.balanceChecked = (...args) => api.balance(...args);
+            const original = { settings: api.settings, device: api.device, bassChecked: api.bassChecked, balanceChecked: api.balanceChecked };
             const root = document.createElement('div');
             document.body.append(root);
             const bass = { 'left.local': 0, 'right.local': 0 };
             const writes = [];
             let balance = 0;
+            let bassReadRevision = 1;
             const physical = (id, role) => ({ controlId: id + '.local', physicalId: id,
                 name: id + ' speaker', role,
-                status: { epoch: 1, revision: 1, connectivity: 'online', bass: { ActualBass: 0 } } });
+                status: { epoch: 1, revision: 1, bassRevision: 1, connectivity: 'online',
+                    bassCapabilities: { BassAvailable: true, BassMin: -9, BassMax: 0, BassDefault: 0 }, bass: { ActualBass: 0 } } });
             const left = physical('left', 'LEFT');
             const right = physical('right', 'RIGHT');
             const pair = { info: { device_id: 'right', name: 'Room pair' },
@@ -58,10 +59,12 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
             api.settings = async id => ({ success: true, data: { targetIdentity: id.split('.')[0], support: {},
                 bassCapabilities: { BassAvailable: true, BassMin: -9, BassMax: 0, BassDefault: 0 },
                 statusEpoch: 1, statusRevision: 1, bass: { ActualBass: bass[id] } } });
-            api.bass = async (id, value) => { writes.push(['bass', id, value]); bass['left.local'] = value; bass['right.local'] = value; return { success: true }; };
-            api.balance = async (id, value) => { writes.push(['balance', id, value]); balance = value; return { success: true }; };
-            api.device = async () => ({ success: true, data: { ...pair,
-                status: { ...pair.status, balance: { ...pair.status.balance, Actual: balance } } } });
+            api.bassChecked = async (id, value) => { writes.push(['bass', id, value]); bass['left.local'] = value; bass['right.local'] = value; return { success: true }; };
+            api.balanceChecked = async (id, value) => { writes.push(['balance', id, value]); balance = value; return { success: true }; };
+            api.device = async () => { bassReadRevision++; return { success: true, data: { ...pair,
+                settingsTargets: pair.settingsTargets.map(member => ({ ...member, status: { ...member.status,
+                    bassRevision: bassReadRevision, bass: { ActualBass: bass[member.controlId] } } })),
+                status: { ...pair.status, balance: { ...pair.status.balance, Actual: balance } } } }; };
             try {
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 const disclosure = root.querySelector('.member-settings');
@@ -98,7 +101,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 controls[1].querySelector('[data-action="increase"]').click();
                 await waitFor(() => writes.length === 3 && settled(controls[1], 'Right 1'), 'Pair balance was not confirmed');
                 check(writes[2].join('|') === 'balance|right.local|1', 'Balance must follow the confirmed RIGHT master');
-                api.bass = async () => ({ success: false, error: 'Final bass write failed' });
+                api.bassChecked = async () => { throw Object.assign(new Error('Final bass write failed'), { definitive: true }); };
                 controls[0].querySelector('button').click();
                 await waitFor(() => controls[0].textContent.includes('Final bass write failed'), 'Final failure disappeared');
                 check(controls[0].textContent.includes('Speaker: 0'), 'Failure must retain the actual speaker readback');
@@ -115,9 +118,9 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 await waitFor(() => settled(controls[0], '-4') && !controls[0].textContent.includes('Final bass write failed'), 'External child readback did not converge');
                 let settleBass;
                 let bassStarted = false;
-                api.bass = () => {
+                api.bassChecked = () => {
                     bassStarted = true;
-                    return new Promise(resolve => { settleBass = resolve; });
+                    return new Promise((resolve, reject) => { settleBass = reject; });
                 };
                 controls[0].querySelector('button').click();
                 await waitFor(() => bassStarted, 'Bass interaction was not dispatched');
@@ -127,7 +130,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 await waitFor(() => controls[0].querySelector('button').disabled, 'Unavailable bass did not disable writes');
                 check(controls[0].isConnected && root.querySelectorAll('.sound-control').length === 2,
                     'Same physical target lost its mounted sound control');
-                settleBass({ success: false, error: 'Delayed unavailable bass failure' });
+                settleBass(Object.assign(new Error('Delayed unavailable bass failure'), { definitive: true }));
                 await waitFor(() => controls[0].textContent.includes('Delayed unavailable bass failure'), 'Availability loss discarded pending bass outcome');
                 pair.settingsTargets = [right, { ...left, status: { ...left.status, revision: 4,
                     connectivity: 'offline', bass: null, volume: { ActualVolume: 40 } } }];
@@ -141,9 +144,9 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
 
                 let settleBalance;
                 let balanceStarted = false;
-                api.balance = () => {
+                api.balanceChecked = () => {
                     balanceStarted = true;
-                    return new Promise(resolve => { settleBalance = resolve; });
+                    return new Promise((resolve, reject) => { settleBalance = reject; });
                 };
                 controls[1].querySelector('button').click();
                 await waitFor(() => balanceStarted, 'Balance interaction was not dispatched');
@@ -152,7 +155,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await waitFor(() => controls[1].querySelector('button').disabled, 'Unavailable balance did not disable writes');
                 check(controls[1].isConnected, 'Availability loss unmounted pair balance');
-                settleBalance({ success: false, error: 'Delayed unavailable balance failure' });
+                settleBalance(Object.assign(new Error('Delayed unavailable balance failure'), { definitive: true }));
                 await waitFor(() => controls[1].textContent.includes('Delayed unavailable balance failure'), 'Unavailable pair discarded pending final error');
                 pair.status = { ...pair.status, revision: 3, volume: { ActualVolume: 40 } };
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
@@ -201,8 +204,7 @@ func TestScopedSoundSettingsConnectionEpochOwnership(t *testing.T) {
                 import('/app/static/js/api.js'),
                 import('/app/static/lib/preact.module.js'),
             ]);
-            const original = { settings: api.settings, bass: api.bass, bassChecked: api.bassChecked };
-            api.bassChecked = (...args) => api.bass(...args);
+            const original = { settings: api.settings, device: api.device, bassChecked: api.bassChecked, balanceChecked: api.balanceChecked };
             const root = document.createElement('div');
             document.body.append(root);
             const check = (condition, message) => { if (!condition) throw new Error(message); };
@@ -214,7 +216,8 @@ func TestScopedSoundSettingsConnectionEpochOwnership(t *testing.T) {
                 throw new Error(message);
             };
             const target = epoch => ({ controlId: 'speaker.local', physicalId: 'speaker', name: 'Speaker',
-                status: { epoch, revision: 1, connectivity: 'online', bass: { ActualBass: 0 } } });
+                status: { epoch, revision: 1, bassRevision: 1, connectivity: 'online',
+                    bassCapabilities: { BassAvailable: true, BassMin: -9, BassMax: 0, BassDefault: 0 }, bass: { ActualBass: 0 } } });
             const control = { min: -9, max: 0, defaultValue: 0, value: 0 };
             const snapshot = (epoch, max = 0, actual = 0) => ({ success: true, data: {
                 targetIdentity: 'speaker', statusEpoch: epoch, statusRevision: 1,
@@ -224,11 +227,12 @@ func TestScopedSoundSettingsConnectionEpochOwnership(t *testing.T) {
             try {
                 let settleWrite;
                 const writes = [];
-                api.bass = (id, value) => {
+                api.bassChecked = (id, value) => {
                     writes.push([id, value]);
                     return new Promise(resolve => { settleWrite = resolve; });
                 };
-                api.settings = async () => snapshot(1, 0, -1);
+                api.device = async () => ({ success: true, data: { info: { device_id: 'speaker' },
+                    status: { ...target(1).status, bassRevision: 2, bass: { ActualBass: -1 } } } });
                 const renderControl = epoch => render(h(SteppedSoundControl, {
                     kind: 'bass', target: target(epoch), control, ownerKey: 'same-physical-target',
                 }), root);
@@ -248,29 +252,22 @@ func TestScopedSoundSettingsConnectionEpochOwnership(t *testing.T) {
                     'Old successful readback overwrote new connection state');
 
                 render(null, root);
-                let settleOldSettings;
-                const loads = [];
-                api.settings = () => {
-                    loads.push(true);
-                    return loads.length === 1 ? new Promise(resolve => { settleOldSettings = resolve; })
-                        : Promise.resolve(snapshot(2));
-                };
+                let settingsReads = 0;
+                api.settings = () => { settingsReads++; throw new Error('Unexpected settings fetch'); };
                 const renderSound = epoch => render(h(SoundSettings, {
-                    deviceId: 'speaker.local', nested: true, active: true,
-                    device: { info: { device_id: 'speaker', name: 'Speaker' }, settingsTargets: [target(epoch)] },
+                    deviceId: 'speaker.local', nested: true,
+                    device: { info: { device_id: 'speaker', name: 'Speaker' }, status: target(epoch).status },
                 }), root);
                 renderSound(1);
-                await waitFor(() => loads.length === 1, 'Initial settings read did not start');
+                await waitFor(() => root.querySelector('.sound-control'), 'Cached acoustic capabilities did not render');
                 renderSound(2);
-                await waitFor(() => loads.length === 2 && root.querySelector('.sound-control'),
-                    'New connection did not reload reported acoustic capabilities');
-                settleOldSettings(snapshot(1, 9, -1));
                 await new Promise(resolve => setTimeout(resolve, 30));
                 const scale = root.querySelector('.sound-control-scale');
                 check(scale.getAttribute('aria-valuemin') === '-9' && scale.getAttribute('aria-valuemax') === '0',
-                    'Old connection settings capabilities replaced new readback');
+                    'New connection did not use its cached reported range');
                 check(scale.getAttribute('aria-valuenow') === '0' && root.querySelector('output').textContent === '0',
                     'Old settings value settled into new connection');
+                check(settingsReads === 0, 'Opening Sound fetched the full settings snapshot');
             } finally {
                 render(null, root);
                 root.remove();
@@ -297,8 +294,7 @@ func TestScopedSoundSettingsTapAndRapidSteps(t *testing.T) {
                 import('/app/static/js/components/SteppedSoundControl.js'),
                 import('/app/static/js/api.js'), import('/app/static/lib/preact.module.js'),
             ]);
-            const original = { settings: api.settings, bass: api.bass, bassChecked: api.bassChecked };
-            api.bassChecked = (...args) => api.bass(...args);
+            const original = { settings: api.settings, device: api.device, bassChecked: api.bassChecked, balanceChecked: api.balanceChecked };
             const root = document.createElement('div'); root.style.maxWidth = '320px'; document.body.append(root);
             const check = (ok, why) => { if (!ok) throw new Error(why); };
             const wait = async (f, why) => {
@@ -306,18 +302,18 @@ func TestScopedSoundSettingsTapAndRapidSteps(t *testing.T) {
                 throw new Error(why);
             };
             const target = { controlId: 'speaker.local', physicalId: 'speaker', name: 'Speaker',
-                status: { epoch: 1, revision: 1, connectivity: 'online', bass: { ActualBass: 0 } } };
+                status: { epoch: 1, revision: 1, bassRevision: 1, connectivity: 'online', bass: { ActualBass: 0 } } };
             const control = { min: -9, max: 0, value: 0, defaultValue: 0 };
             const caps = { BassAvailable: true, BassMin: -9, BassMax: 0, BassDefault: 0 };
             let actual = 0, releaseFirst, active = 0, maxActive = 0;
             const writes = [];
-            api.bass = async (id, value) => {
+            api.bassChecked = async (id, value) => {
                 writes.push(value); active++; maxActive = Math.max(maxActive, active);
                 if (writes.length === 1) await new Promise(resolve => { releaseFirst = resolve; });
                 actual = value; active--; return { success: true };
             };
-            api.settings = async () => ({ success: true, data: { targetIdentity: 'speaker', statusEpoch: 1,
-                statusRevision: writes.length + 1, bassCapabilities: caps, bass: { ActualBass: actual } } });
+            api.device = async () => ({ success: true, data: { info: { device_id: 'speaker' },
+                status: { ...target.status, bassRevision: writes.length + 1, bassCapabilities: caps, bass: { ActualBass: actual } } } });
             try {
                 render(h(SteppedSoundControl, { kind: 'bass', target, control, ownerKey: 'owner' }), root);
                 const decrease = root.querySelector('[data-action="decrease"]');
@@ -411,7 +407,7 @@ func TestScopedSoundSettingsCompactGeometry(t *testing.T) {
                                 kind + ': scale must remain between side buttons in one 44px row');
                             check(sound.getBoundingClientRect().height <= 180, kind + ': settled control is no longer compact');
                             const output = sound.querySelector('output');
-                            check(output.getAttribute('aria-live') === 'polite'
+                            check(output.getAttribute('aria-live') === 'off'
                                 && output.getBoundingClientRect().top < area.top, 'Current value must remain in the heading');
                             check(sound.querySelector('.sound-control-scope').textContent === target.name, 'Scope label disappeared');
                             check(scale.getAttribute('role') === 'slider' && scale.getAttribute('aria-valuemin') === String(control.min)

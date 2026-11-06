@@ -9,11 +9,11 @@ export const SETTINGS_SECTION_ORDER = [
     'wifiOnboarding',
 ];
 
-export function deviceSettingsTitle(name, role = '') {
+export function deviceSettingsTitle(name, role = '', prefix = 'Device settings') {
     const target = typeof name === 'string' ? name.trim() : '';
     const targetRole = typeof role === 'string' ? role.trim().toUpperCase() : '';
     const identity = [targetRole, target].filter(Boolean).join(' · ');
-    return identity ? `Device settings · ${identity}` : 'Device settings';
+    return identity ? `${prefix} · ${identity}` : prefix;
 }
 
 export function deviceSettingsTarget(deviceId, device) {

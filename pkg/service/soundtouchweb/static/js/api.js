@@ -117,18 +117,8 @@ export const api = {
     zoneVolume: (id, level) => req(`/api/control/devices/${id}/zone/volume/${level}`, { method: 'POST' }),
     zoneMemberVolume: (zoneMasterId, memberId, level) =>
         req(`/api/control/devices/${zoneMasterId}/zone/member/${memberId}/volume/${level}`, { method: 'POST' }),
-    bass: (id, level) => req(`/api/control/devices/${id}/action/bass`, {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ level }),
-    }),
     bassChecked: (id, level) => checkedReq(`/api/control/devices/${id}/action/bass`, {
         method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ level }),
-    }),
-    balance: (id, level) => req(`/api/control/devices/${id}/action/balance`, {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ level }),
     }),
     balanceChecked: (id, level) => checkedReq(`/api/control/devices/${id}/action/balance`, {
         method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ level }),

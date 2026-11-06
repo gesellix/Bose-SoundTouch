@@ -56,3 +56,13 @@ test('hidden status delta needs an existing matching hardware identity and never
     assert.equal(mergeStatusUpdate(current, 'child.local', wrong).master.settingsTargets[0].status, current.master.settingsTargets[0].status);
     assert.equal(mergeStatusUpdate(current, 'unknown.local', update).master.settingsTargets.length, 1);
 });
+
+
+test('unmatched and stale hidden status preserves the accepted inventory object', () => {
+    const previous = { 'master.local': { info: { device_id: 'master' },
+        settingsTargets: [{ controlId: 'peer.local', physicalId: 'peer', role: 'LEFT',
+            status: { epoch: 2, revision: 4 } }] } };
+    assert.equal(mergeStatusUpdate(previous, 'unknown.local', { epoch: 2, revision: 5, bass: { DeviceID: 'peer' } }), previous);
+    assert.equal(mergeStatusUpdate(previous, 'peer.local', { epoch: 2, revision: 5, bass: { DeviceID: 'other' } }), previous);
+    assert.equal(mergeStatusUpdate(previous, 'peer.local', { epoch: 2, revision: 3, bass: { DeviceID: 'peer' } }), previous);
+});

@@ -584,6 +584,37 @@ func (app *WebApp) HandleDeviceNowPlaying(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// A logical pair exposes both bass observations. Refresh the hidden peer too,
+// including unchanged values, so a control readback need not wait for an event
+// that firmware may omit when that peer was already at the requested value.
+func (app *WebApp) refreshPairBassPeer(deviceID string) {
+	view, visible := app.deviceViewForID(deviceID)
+	if !visible || view.StereoPair == nil {
+		return
+	}
+
+	for _, target := range view.SettingsTargets {
+		if target.ControlID == deviceID {
+			continue
+		}
+
+		conn, exists := app.GetDevice(target.ControlID)
+		if !exists || conn.Client == nil {
+			continue
+		}
+
+		generation := conn.BeginFieldPoll(webtypes.FieldBass)
+		bass, err := conn.Client.GetBass()
+
+		current, stillRegistered := app.GetDevice(target.ControlID)
+		if err == nil && stillRegistered && current == conn {
+			conn.CompleteFieldPoll(webtypes.FieldBass, generation, func(status *webtypes.DeviceStatus) {
+				status.Bass = bass
+			})
+		}
+	}
+}
+
 // HandleAPIDevice returns a specific device as JSON
 func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
@@ -600,6 +631,7 @@ func (app *WebApp) HandleAPIDevice(w http.ResponseWriter, r *http.Request) {
 
 	// Update device status to get fresh power state
 	app.UpdateDeviceStatus(deviceID, device)
+	app.refreshPairBassPeer(deviceID)
 
 	// Safety net: registration already starts the event subscription; this is a no-op while it runs
 	if device.CurrentWebSocket() == nil {

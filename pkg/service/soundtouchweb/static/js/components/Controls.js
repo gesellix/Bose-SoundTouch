@@ -2,7 +2,6 @@ import { h } from 'preact';
 import { useState, useEffect, useMemo, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
-import { throttleTrailing, SLIDER_WRITE_INTERVAL_MS } from '../throttle.mjs';
 import { createLatestWinsScheduler, shouldSurfaceLatestFinal } from '../latestWinsScheduler.mjs';
 import {
     clampVolume,
@@ -314,11 +313,6 @@ export function Controls({
     const repeatCommand = command?.action?.startsWith('repeat-') ? command : null;
     const previousCommand = command?.action === 'previous-track' ? command : null;
     const nextCommand = command?.action === 'next-track' ? command : null;
-
-    // One throttle per slider per mount. The local state still updates on every
-    // input, so the handle keeps up with the pointer; only the network write is
-    // rate-limited.
-
 
     function beginVolumeInteraction() {
         if (interactionActiveRef.current) return;
