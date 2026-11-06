@@ -4,7 +4,6 @@ import test from 'node:test';
 import {
     clockControls,
     clockDisplayPatch,
-    deviceSettingsTarget,
     deviceSettingsTitle,
     networkInterfaceGroups,
     networkInterfaceName,
@@ -196,73 +195,10 @@ test('partial settings read errors remain visible in order', () => {
     }), ['language', 'sources']);
 });
 
-test('standalone settings target keeps its physical control identity', () => {
-    const target = deviceSettingsTarget('192.0.2.10', {
-        info: { device_id: 'kitchen-id', name: 'Kitchen' },
-    });
-
-    assert.deepEqual(target, {
-        controlId: '192.0.2.10',
-        physicalId: 'kitchen-id',
-        name: 'Kitchen',
-        role: '',
-    });
-    assert.equal(deviceSettingsTitle(target.name, target.role), 'Device settings · Kitchen');
-});
-
-test('confirmed stereo settings target follows the physical firmware master', () => {
-    const device = {
-        info: { name: 'Living pair' },
-        stereoPair: {
-            masterDeviceId: 'right-id',
-            members: [
-                { deviceId: 'right-id', ipAddress: '192.0.2.11', name: 'Living right', role: 'right' },
-                { deviceId: 'left-id', ipAddress: '192.0.2.10', name: 'Living left', role: 'LEFT' },
-            ],
-        },
-    };
-
-    const target = deviceSettingsTarget('192.0.2.11', device);
-    assert.deepEqual(target, {
-        controlId: '192.0.2.11',
-        physicalId: 'right-id',
-        name: 'Living right',
-        role: 'RIGHT',
-    });
-    assert.equal(deviceSettingsTitle(target.name, target.role),
-        'Device settings · RIGHT · Living right');
-});
-
-test('stereo settings target keeps the registry key of the pair master', () => {
-    const target = deviceSettingsTarget('living-master.example', {
-        stereoPair: {
-            masterDeviceId: 'right-id',
-            members: [
-                { deviceId: 'right-id', ipAddress: '198.51.100.11', name: 'Living right', role: 'RIGHT' },
-                { deviceId: 'left-id', ipAddress: '192.0.2.10', name: 'Living left', role: 'LEFT' },
-            ],
-        },
-    });
-
-    assert.equal(target.controlId, 'living-master.example');
-    assert.equal(target.physicalId, 'right-id');
-
-    const noAddress = deviceSettingsTarget('192.0.2.11', {
-        stereoPair: {
-            masterDeviceId: 'right-id',
-            members: [{ deviceId: 'right-id', name: 'Living right', role: 'RIGHT' }],
-        },
-    });
-    assert.equal(noAddress?.controlId, '192.0.2.11');
-});
-
-test('incomplete stereo ownership never falls back to a logical target', () => {
-    assert.equal(deviceSettingsTarget('logical-pair', {
-        stereoPair: {
-            masterDeviceId: 'right-id',
-            members: [{ deviceId: 'left-id', ipAddress: '192.0.2.10' }],
-        },
-    }), null);
+test('device settings titles keep the target name when using the nested prefix', () => {
+    assert.equal(deviceSettingsTitle('Kitchen'), 'Device settings · Kitchen');
+    assert.equal(deviceSettingsTitle('Living right', 'right'), 'Device settings · RIGHT · Living right');
+    assert.equal(deviceSettingsTitle('Device settings room', 'left', 'Device'), 'Device · LEFT · Device settings room');
 });
 
 test('a pending change is shown over the confirmed snapshot until its outcome', () => {
