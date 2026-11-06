@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { createSteppedInteraction } from '../steppedInteraction.mjs';
-import { balanceLabel, writeSoundSetting } from '../soundSettingsPresentation.mjs';
+import { balanceLabel, bassObservations, writeSoundSetting } from '../soundSettingsPresentation.mjs';
 
 const html = htm.bind(h);
 
@@ -16,17 +16,19 @@ export function SteppedSoundControl({ kind, target, control, ownerKey, available
     });
     const status = target.status;
     const disabled = !available || status?.connectivity !== 'online';
+    const observations = kind === 'bass' ? bassObservations(target) : null;
     interaction.current.update({
         ...control, ...target, kind,
         key: JSON.stringify([ownerKey, target.controlId, target.physicalId, status?.epoch, target.pairId || '', kind]),
         // Aggregate status revisions include volume and transport updates.
         // Only this acoustic value can recover this control's outcome.
-        projection: JSON.stringify([kind, control.value, control.pairValues]),
+        observations,
+        projection: JSON.stringify([kind, control.value, control.pairValues, observations]),
         disabled,
     });
     useEffect(() => () => interaction.current.dispose(), []);
     const { value, failure, busy, confirmedValue } = interaction.current.view();
-    const label = kind === 'bass' ? 'Bass reduction' : 'Stereo balance';
+    const label = kind === 'bass' ? (control.max <= 0 ? 'Bass reduction' : 'Bass') : 'Stereo balance';
     const display = kind === 'balance' ? balanceLabel(value) : String(value);
     const actual = confirmedValue ?? control.value;
     const readback = kind === 'balance' ? balanceLabel(actual) : String(actual);
@@ -40,11 +42,11 @@ export function SteppedSoundControl({ kind, target, control, ownerKey, available
                     <div class="sound-control-title">${label}</div>
                     <div class="sound-control-scope">${target.name}</div>
                 </div>
-                <output class="sound-control-value" aria-live="polite" aria-label=${`${label} value`}>${display}</output>
+                <output class="sound-control-value" aria-live="off" aria-label=${`${label} value`}>${display}</output>
             </div>
             <div class="sound-control-steps" role="group" aria-label=${`${label} · ${target.name}`}>
                 <button type="button" class="sound-control-step" data-action="decrease" disabled=${disabled || value <= control.min}
-                    aria-label=${kind === 'balance' ? 'One step left' : `Reduce bass · ${target.name}`}
+                    aria-label=${kind === 'balance' ? `One step left · ${target.name}` : `Reduce bass · ${target.name}`}
                     onClick=${() => interaction.current.step(-1)}>${kind === 'balance' ? '←' : '−'}</button>
                 <div class="sound-control-scale" role="slider" tabIndex=${disabled ? -1 : 0}
                     aria-label=${`${label} · ${target.name}`} aria-disabled=${disabled ? 'true' : 'false'}
@@ -66,7 +68,7 @@ export function SteppedSoundControl({ kind, target, control, ownerKey, available
                     </div>
                 </div>
                 <button type="button" class="sound-control-step" data-action="increase" disabled=${disabled || value >= control.max}
-                    aria-label=${kind === 'balance' ? 'One step right' : `Increase bass · ${target.name}`}
+                    aria-label=${kind === 'balance' ? `One step right · ${target.name}` : `Increase bass · ${target.name}`}
                     onClick=${() => interaction.current.step(1)}>${kind === 'balance' ? '→' : '+'}</button>
             </div>
             <div class="sound-control-footer">

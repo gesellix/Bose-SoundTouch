@@ -94,8 +94,9 @@ type DeviceConnection struct {
 
 	// Bass capabilities are stable for this speaker connection. Failed loads
 	// are not cached, so a temporary outage does not disable later requests.
-	bassCapabilitiesMu sync.Mutex
-	bassCapabilities   *models.BassCapabilities
+	bassCapabilitiesMu         sync.Mutex
+	bassCapabilities           *models.BassCapabilities
+	bassCapabilitiesRefreshing atomic.Bool
 
 	speakerConnectionKnown     bool
 	speakerConnectionConnected bool
@@ -115,6 +116,7 @@ type DeviceConnection struct {
 	fieldGen   [numStatusFields]struct{ issued, applied uint64 }
 
 	volumeFieldMu     sync.Mutex
+	bassFieldMu       sync.Mutex
 	volumeOperationMu sync.Mutex
 	groupWriteMu      sync.Mutex
 	zoneWriteMu       sync.RWMutex
@@ -165,21 +167,22 @@ type DeviceConnection struct {
 
 // DeviceStatus represents the current device state
 type DeviceStatus struct {
-	NowPlaying             *models.NowPlaying      `json:"nowPlaying,omitempty"`
-	Volume                 *models.Volume          `json:"volume,omitempty"`
-	Presets                *models.Presets         `json:"presets,omitempty"`
-	Sources                *models.Sources         `json:"sources,omitempty"`
-	SourcesStale           bool                    `json:"sourcesStale,omitempty"`
-	Bass                   *models.Bass            `json:"bass,omitempty"`
-	Balance                *models.Balance         `json:"balance,omitempty"`
-	Group                  *models.Group           `json:"group,omitempty"`
-	Zone                   *models.ZoneInfo        `json:"zone,omitempty"`
-	Connectivity           Connectivity            `json:"connectivity"`
-	HTTPReachable          bool                    `json:"httpReachable"`
-	WebSocketConnected     bool                    `json:"webSocketConnected"`
-	SpeakerConnectionState *SpeakerConnectionState `json:"speakerConnectionState,omitempty"`
-	IsConnected            bool                    `json:"isConnected"`
-	LastActivity           time.Time               `json:"lastActivity"`
+	NowPlaying             *models.NowPlaying       `json:"nowPlaying,omitempty"`
+	Volume                 *models.Volume           `json:"volume,omitempty"`
+	Presets                *models.Presets          `json:"presets,omitempty"`
+	Sources                *models.Sources          `json:"sources,omitempty"`
+	SourcesStale           bool                     `json:"sourcesStale,omitempty"`
+	Bass                   *models.Bass             `json:"bass,omitempty"`
+	BassCapabilities       *models.BassCapabilities `json:"bassCapabilities,omitempty"`
+	Balance                *models.Balance          `json:"balance,omitempty"`
+	Group                  *models.Group            `json:"group,omitempty"`
+	Zone                   *models.ZoneInfo         `json:"zone,omitempty"`
+	Connectivity           Connectivity             `json:"connectivity"`
+	HTTPReachable          bool                     `json:"httpReachable"`
+	WebSocketConnected     bool                     `json:"webSocketConnected"`
+	SpeakerConnectionState *SpeakerConnectionState  `json:"speakerConnectionState,omitempty"`
+	IsConnected            bool                     `json:"isConnected"`
+	LastActivity           time.Time                `json:"lastActivity"`
 
 	// Epoch identifies the DeviceConnection that produced this status.
 	// Revision restarts at 0 for every new connection, so revisions from
@@ -196,6 +199,8 @@ type DeviceStatus struct {
 	// selection waiting for authoritative confirmation needs exactly that
 	// distinction.
 	NowPlayingRevision uint64 `json:"nowPlayingRevision"`
+	// BassRevision identifies accepted bass evidence, including unchanged values.
+	BassRevision uint64 `json:"bassRevision"`
 	// RecentsRevision invalidates the browser's on-demand /recents read without
 	// fetching history during unrelated status polls or caching event payloads.
 	RecentsRevision uint64 `json:"recentsRevision"`
@@ -387,7 +392,9 @@ func (c *DeviceConnection) Done() <-chan struct{} {
 // any goroutine (e.g. a test connection with a nil Client).
 func (c *DeviceConnection) Close() {
 	c.closeOnce.Do(func() {
+		c.bassFieldMu.Lock()
 		close(c.done)
+		c.bassFieldMu.Unlock()
 
 		c.webSocketMu.Lock()
 		ws := c.WebSocket
@@ -465,6 +472,9 @@ func (c *DeviceConnection) FinishWebSocketLoop() {
 // every field, so each StatusField generation is advanced past any poll
 // still in flight.
 func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
+	c.bassFieldMu.Lock()
+	defer c.bassFieldMu.Unlock()
+
 	nowPlayingGeneration := c.supersedeAllFields()
 
 	for {
@@ -473,6 +483,7 @@ func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
 		next.Epoch = c.epoch
 		next.Revision = old.Revision + 1
 		next.NowPlayingRevision = nowPlayingGeneration
+		next.BassRevision = old.BassRevision
 
 		if c.status.CompareAndSwap(old, &next) {
 			return
@@ -512,6 +523,17 @@ func (c *DeviceConnection) BeginFieldPoll(field StatusField) uint64 {
 // field's event, or an unrelated field's poll completing first, cannot
 // discard this field's fresh, successful data.
 func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint64, mut func(*DeviceStatus)) bool {
+	if field == FieldBass {
+		c.bassFieldMu.Lock()
+		defer c.bassFieldMu.Unlock()
+
+		select {
+		case <-c.Done():
+			return false
+		default:
+		}
+	}
+
 	c.fieldGenMu.Lock()
 
 	if generation <= c.fieldGen[field].applied {
@@ -535,6 +557,17 @@ func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint6
 // authoritative evidence for field -- and invalidates any poll for field
 // that began before it, without touching any other field's ordering.
 func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceStatus)) {
+	if field == FieldBass {
+		c.bassFieldMu.Lock()
+		defer c.bassFieldMu.Unlock()
+
+		select {
+		case <-c.Done():
+			return
+		default:
+		}
+	}
+
 	c.fieldGenMu.Lock()
 	c.fieldGen[field].issued++
 	generation := c.fieldGen[field].issued
@@ -548,14 +581,14 @@ func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceSt
 }
 
 // recordFieldRevision publishes the generation that just wrote field, for the
-// fields whose ordering a client needs to observe. Only FieldNowPlaying is
-// published today: a source selection confirms itself by waiting for a
-// now-playing write strictly newer than the one it started from, and the
-// aggregate Revision cannot express that, because any other field's merge
-// advances it too.
+// fields whose ordering a client needs to observe. Source and bass selections
+// require fresh evidence for their own field; unrelated merges advance Revision.
 func recordFieldRevision(status *DeviceStatus, field StatusField, generation uint64) {
-	if field == FieldNowPlaying {
+	switch field {
+	case FieldNowPlaying:
 		status.NowPlayingRevision = generation
+	case FieldBass:
+		status.BassRevision = generation
 	}
 }
 
@@ -737,7 +770,7 @@ func (c *DeviceConnection) ZoneTopologyCurrent(topology ZoneTopology) bool {
 // writers cannot silently lose each other's changes.
 //
 // The copy mut receives is a shallow value copy of the previous status.
-// Nested pointer fields (NowPlaying, Volume, Presets, Sources, Bass, Balance,
+// Nested pointer fields (NowPlaying, Volume, Presets, Sources, Bass, BassCapabilities, Balance,
 // Group, Zone)
 // share their backing struct with the previous version: callers MUST
 // REPLACE these pointers (s.Volume = &models.Volume{...}) rather than

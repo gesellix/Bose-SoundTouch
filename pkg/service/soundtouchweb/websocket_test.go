@@ -159,13 +159,14 @@ func TestUpdateDeviceStatusDoesNotOverwriteNewerNameEvent(t *testing.T) {
 	nameRequestStarted := make(chan struct{})
 	releaseNameResponse := make(chan struct{})
 	responses := map[string]string{
-		"/now_playing": `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
-		"/volume":      `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
-		"/presets":     `<presets/>`,
-		"/sources":     `<sources/>`,
-		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
-		"/getGroup":    `<group/>`,
-		"/getZone":     `<zone master="device-1"/>`,
+		"/now_playing":      `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
+		"/volume":           `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
+		"/presets":          `<presets/>`,
+		"/sources":          `<sources/>`,
+		"/bass":             `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+		"/bassCapabilities": `<bassCapabilities><bassAvailable>true</bassAvailable><bassMin>-9</bassMin><bassMax>0</bassMax></bassCapabilities>`,
+		"/getGroup":         `<group/>`,
+		"/getZone":          `<zone master="device-1"/>`,
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -375,13 +376,14 @@ func TestUpdateDeviceStatusCannotOverwriteNewerVolumeReadback(t *testing.T) {
 	presetsRequestStarted := make(chan struct{})
 	releasePresetsResponse := make(chan struct{})
 	responses := map[string]string{
-		"/now_playing": `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
-		"/name":        `<name>Living Room</name>`,
-		"/volume":      `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
-		"/presets":     `<presets/>`,
-		"/sources":     `<sources/>`,
-		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
-		"/getZone":     `<zone master="device-1"><member>device-1</member></zone>`,
+		"/now_playing":      `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
+		"/name":             `<name>Living Room</name>`,
+		"/volume":           `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
+		"/presets":          `<presets/>`,
+		"/sources":          `<sources/>`,
+		"/bass":             `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+		"/bassCapabilities": `<bassCapabilities><bassAvailable>true</bassAvailable><bassMin>-9</bassMin><bassMax>0</bassMax></bassCapabilities>`,
+		"/getZone":          `<zone master="device-1"><member>device-1</member></zone>`,
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xml")
@@ -560,13 +562,14 @@ func newStatusTestServer(t *testing.T, groupStatus int, groupBody string) *httpt
 	t.Helper()
 
 	responses := map[string]string{
-		"/now_playing": `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
-		"/name":        `<name>Living Room Left</name>`,
-		"/volume":      `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
-		"/presets":     `<presets/>`,
-		"/sources":     `<sources/>`,
-		"/bass":        `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
-		"/getZone":     `<zone master="master-1"><member ipaddress="192.0.2.20">member-2</member></zone>`,
+		"/now_playing":      `<nowPlaying source="STANDBY"><playStatus>STOP_STATE</playStatus></nowPlaying>`,
+		"/name":             `<name>Living Room Left</name>`,
+		"/volume":           `<volume><targetvolume>10</targetvolume><actualvolume>10</actualvolume><muteenabled>false</muteenabled></volume>`,
+		"/presets":          `<presets/>`,
+		"/sources":          `<sources/>`,
+		"/bass":             `<bass><targetbass>0</targetbass><actualbass>0</actualbass></bass>`,
+		"/bassCapabilities": `<bassCapabilities><bassAvailable>true</bassAvailable><bassMin>-9</bassMin><bassMax>0</bassMax></bassCapabilities>`,
+		"/getZone":          `<zone master="master-1"><member ipaddress="192.0.2.20">member-2</member></zone>`,
 	}
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

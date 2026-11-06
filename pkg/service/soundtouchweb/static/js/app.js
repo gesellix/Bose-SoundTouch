@@ -246,12 +246,18 @@ export function mergeStatusUpdate(previous, deviceId, status) {
         const physicalId = status?.bass?.DeviceID || status?.balance?.DeviceID ||
             status?.volume?.DeviceID || status?.nowPlaying?.DeviceID;
         if (!physicalId) return previous;
-        return Object.fromEntries(Object.entries(previous).map(([id, device]) => [id, {
-            ...device,
-            settingsTargets: device.settingsTargets?.map(target => target.controlId === deviceId &&
-                target.physicalId === physicalId && acceptsNewerStatus(target.status, status)
-                ? { ...target, status } : target),
-        }]));
+        let changed = false;
+        const devices = Object.fromEntries(Object.entries(previous).map(([id, device]) => {
+            let memberChanged = false;
+            const targets = device.settingsTargets?.map(target => {
+                if (target.controlId !== deviceId || target.physicalId !== physicalId ||
+                    !acceptsNewerStatus(target.status, status)) return target;
+                changed = memberChanged = true;
+                return { ...target, status };
+            });
+            return [id, memberChanged ? { ...device, settingsTargets: targets } : device];
+        }));
+        return changed ? devices : previous;
     }
     if (!acceptsNewerStatus(previous[deviceId]?.status, status)) return previous;
     return refreshAcceptedZoneMembers(replaceDevice(previous, deviceId, {

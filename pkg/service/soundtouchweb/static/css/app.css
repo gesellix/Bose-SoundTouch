@@ -981,8 +981,6 @@ img.now-playing-source-icon { width: 28px; height: 28px; object-fit: contain; fi
     line-height: 1.35;
 }
 
-.bass-row { display: flex; align-items: center; gap: .75rem; margin-top: .5rem; }
-.bass-label { font-size: .8rem; color: var(--text-dim); width: 2.5ch; }
 
 /* ── Progress bar ────────────────────────────────────────────────────────── */
 .progress-row { margin-top: .35rem; display: flex; align-items: center; gap: .5rem; }
