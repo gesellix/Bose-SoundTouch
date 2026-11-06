@@ -81,7 +81,10 @@ export function mergeDevicesSnapshot(previous, snapshot) {
         if (!current) {
             return [deviceId, incoming];
         }
-        if (acceptsNewerStatus(current.status, incoming?.status)) {
+        const samePendingRevision = current.settingsIdentityPending &&
+            statusEpoch(current.status) === statusEpoch(incoming?.status) &&
+            current.status?.revision === incoming?.status?.revision;
+        if (acceptsNewerStatus(current.status, incoming?.status) || samePendingRevision) {
             return [deviceId, mergePhysicalSettingsStatus(incoming, current)];
         }
         // Keep the whole entry we already hold, not just its status. The
@@ -206,6 +209,14 @@ function volumePairIdentity(pair) {
         (pair?.members || []).map(member => [member.deviceId, member.role]).sort()];
 }
 
+// A status-only readback can overtake the inventory carrying its projection.
+// Only identity transitions fence sound; volume/capability changes do not.
+function settingsStatusIdentity(status) {
+    const group = status?.group;
+    return JSON.stringify([statusEpoch(status), group?.ID || '', group?.MasterDeviceID || '',
+        (group?.Roles?.Roles || []).map(member => [member.DeviceID, member.Role]).sort()]);
+}
+
 function settingsTopology(device) {
     return JSON.stringify([
         device?.info?.device_id || '',
@@ -220,14 +231,16 @@ function settingsTopology(device) {
 // taking a rejected snapshot must never revive its old pair membership.
 function mergePhysicalSettingsStatus(accepted, other) {
     if (!Array.isArray(accepted?.settingsTargets) || settingsTopology(accepted) !== settingsTopology(other)) return accepted;
+    let pending = Boolean(accepted.settingsIdentityPending);
     const targets = accepted.settingsTargets.map(target => {
         const candidates = (other?.settingsTargets || []).filter(candidate =>
             candidate.controlId === target.controlId && candidate.physicalId === target.physicalId && candidate.role === target.role);
         const candidate = candidates.length === 1 ? candidates[0] : null;
-        return candidate && acceptsNewerStatus(target.status, candidate.status)
-            ? { ...target, status: candidate.status } : target;
+        if (!candidate || !acceptsNewerStatus(target.status, candidate.status)) return target;
+        pending ||= settingsStatusIdentity(target.status) !== settingsStatusIdentity(candidate.status);
+        return { ...target, status: candidate.status };
     });
-    return { ...accepted, settingsTargets: targets };
+    return { ...accepted, settingsTargets: targets, settingsIdentityPending: pending };
 }
 
 function replaceDevice(previous, deviceId, device) {
@@ -249,13 +262,15 @@ export function mergeStatusUpdate(previous, deviceId, status) {
         let changed = false;
         const devices = Object.fromEntries(Object.entries(previous).map(([id, device]) => {
             let memberChanged = false;
+            let pending = Boolean(device.settingsIdentityPending);
             const targets = device.settingsTargets?.map(target => {
                 if (target.controlId !== deviceId || target.physicalId !== physicalId ||
                     !acceptsNewerStatus(target.status, status)) return target;
                 changed = memberChanged = true;
+                pending ||= settingsStatusIdentity(target.status) !== settingsStatusIdentity(status);
                 return { ...target, status };
             });
-            return [id, memberChanged ? { ...device, settingsTargets: targets } : device];
+            return [id, memberChanged ? { ...device, settingsTargets: targets, settingsIdentityPending: pending } : device];
         }));
         return changed ? devices : previous;
     }
@@ -263,6 +278,8 @@ export function mergeStatusUpdate(previous, deviceId, status) {
     return refreshAcceptedZoneMembers(replaceDevice(previous, deviceId, {
         ...previous[deviceId],
         status,
+        settingsIdentityPending: previous[deviceId].settingsIdentityPending ||
+            settingsStatusIdentity(previous[deviceId].status) !== settingsStatusIdentity(status),
         // A status delta carries no fresh info identity. After a connection
         // replacement, wait for a full accepted inventory before deriving its
         // contribution to a retained logical group.
