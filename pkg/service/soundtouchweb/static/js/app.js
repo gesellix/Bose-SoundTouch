@@ -81,7 +81,7 @@ export function mergeDevicesSnapshot(previous, snapshot) {
         if (!current) {
             return [deviceId, incoming];
         }
-        const samePendingRevision = current.settingsIdentityPending &&
+        const samePendingRevision = current.settingsIdentityPending && !staleSettingsTargets(incoming, current) &&
             statusEpoch(current.status) === statusEpoch(incoming?.status) &&
             current.status?.revision === incoming?.status?.revision;
         if (acceptsNewerStatus(current.status, incoming?.status) || samePendingRevision) {
@@ -226,12 +226,26 @@ function settingsTopology(device) {
     ]);
 }
 
+// A master revision does not order registry changes of its hidden peer.
+// Retain newer connection evidence when a delayed inventory uses an older key.
+function staleSettingsTargets(incoming, current) {
+    return (incoming?.settingsTargets || []).some(target =>
+        (current?.settingsTargets || []).some(previous => {
+            if (target.physicalId !== previous.physicalId) return false;
+            const before = statusEpoch(previous.status), after = statusEpoch(target.status);
+            return before !== null && (after === null || before > after ||
+                (before === after && previous.controlId !== target.controlId));
+        }));
+}
+
 // Hidden physical speakers advance independently of their logical master's
 // status. Merge only child status for the same accepted identity/topology;
 // taking a rejected snapshot must never revive its old pair membership.
 function mergePhysicalSettingsStatus(accepted, other) {
-    if (!Array.isArray(accepted?.settingsTargets) || settingsTopology(accepted) !== settingsTopology(other)) return accepted;
-    let pending = Boolean(accepted.settingsIdentityPending);
+    let pending = Boolean(accepted?.settingsIdentityPending) || staleSettingsTargets(accepted, other);
+    if (!Array.isArray(accepted?.settingsTargets) || settingsTopology(accepted) !== settingsTopology(other)) {
+        return pending ? { ...accepted, settingsIdentityPending: true } : accepted;
+    }
     const targets = accepted.settingsTargets.map(target => {
         const candidates = (other?.settingsTargets || []).filter(candidate =>
             candidate.controlId === target.controlId && candidate.physicalId === target.physicalId && candidate.role === target.role);
