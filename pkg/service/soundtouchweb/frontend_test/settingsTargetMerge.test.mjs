@@ -66,3 +66,26 @@ test('unmatched and stale hidden status preserves the accepted inventory object'
     assert.equal(mergeStatusUpdate(previous, 'peer.local', { epoch: 2, revision: 5, bass: { DeviceID: 'other' } }), previous);
     assert.equal(mergeStatusUpdate(previous, 'peer.local', { epoch: 2, revision: 3, bass: { DeviceID: 'peer' } }), previous);
 });
+
+test('identity-changing readbacks fence sound until an equal-revision full inventory arrives', () => {
+    const group = id => ({ ID: id, MasterDeviceID: 'master', Roles: { Roles: [
+        { DeviceID: 'master', Role: 'RIGHT' }, { DeviceID: 'child', Role: 'LEFT' }] } });
+    const original = device(5, 2);
+    original.status = { ...original.status, group: group('old') };
+    original.settingsTargets[0].status = { ...original.settingsTargets[0].status, group: group('old') };
+    const nextStatus = { ...original.status, revision: 6, group: group('new') };
+    const pending = mergeStatusUpdate({ master: original }, 'master', nextStatus);
+    assert.equal(pending.master.settingsIdentityPending, true);
+    assert.equal(pending.master.stereoPair.id, 'pair', 'status alone cannot replace projected membership');
+    const stale = mergeDevicesSnapshot(pending, { master: original });
+    assert.equal(stale.master.settingsIdentityPending, true);
+    const inventory = { ...original, status: nextStatus, stereoPair: { ...original.stereoPair, id: 'new' } };
+    const accepted = mergeDevicesSnapshot(pending, { master: inventory });
+    assert.equal(Boolean(accepted.master.settingsIdentityPending), false);
+    assert.equal(accepted.master.stereoPair.id, 'new');
+    const replaced = mergeStatusUpdate({ master: original }, 'master', { ...original.status, epoch: 2, revision: 1 });
+    assert.equal(replaced.master.settingsIdentityPending, true);
+    const peerChanged = mergeStatusUpdate({ master: original }, 'child.local', {
+        epoch: 1, revision: 3, group: group('new'), bass: { DeviceID: 'child' } });
+    assert.equal(peerChanged.master.settingsIdentityPending, true);
+});

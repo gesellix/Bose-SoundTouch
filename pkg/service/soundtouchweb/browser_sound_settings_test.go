@@ -430,3 +430,76 @@ func TestScopedSoundSettingsCompactGeometry(t *testing.T) {
 		})
 	}
 }
+
+func TestSoundSettingsRejectsQueuedWritesAfterIdentityChangingReadback(t *testing.T) {
+	app := NewWebApp()
+	router := chi.NewRouter()
+	app.Mount(router, nil)
+	server := httptest.NewServer(router)
+	t.Cleanup(server.Close)
+	ctx := newHeadlessChromeContext(t)
+	var result struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := chromedp.Do(ctx,
+		chromedp.Navigate(server.URL+"/app"),
+		chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
+		chromedp.Evaluate[chromedp.Void](`(async () => {
+            const [{ MemberSettings }, { mergeStatusUpdate, mergeDevicesSnapshot }, { api }, { h, render }] = await Promise.all([
+                import('/app/static/js/components/MemberSettings.js'), import('/app/static/js/app.js'),
+                import('/app/static/js/api.js'), import('/app/static/lib/preact.module.js')]);
+            const original = { bassChecked: api.bassChecked, device: api.device };
+            const root = document.createElement('div'); document.body.append(root);
+            const check = (ok, why) => { if (!ok) throw new Error(why); };
+            const wait = async (f, why) => {
+                for (let n = 0; n < 100; n++) { if (f()) return; await new Promise(r => setTimeout(r, 10)); }
+                throw new Error(why);
+            };
+            const group = id => ({ ID: id, MasterDeviceID: 'right', Roles: { Roles: [
+                { DeviceID: 'right', Role: 'RIGHT' }, { DeviceID: 'left', Role: 'LEFT' }] } });
+            const status = id => ({ epoch: 1, revision: 1, bassRevision: 1, group: group(id), connectivity: 'online',
+                bassCapabilities: { BassAvailable: true, BassMin: -9, BassMax: 0, BassDefault: 0 }, bass: { ActualBass: 0 },
+                balance: { Available: true, Min: -7, Max: 7, Default: 0, Actual: 0 } });
+            const pair = id => ({ info: { device_id: 'right', name: 'Pair' }, status: status(id),
+                stereoPair: { id, name: 'Pair', masterDeviceId: 'right', members: [
+                    { deviceId: 'right', role: 'RIGHT' }, { deviceId: 'left', role: 'LEFT' }] },
+                settingsTargets: ['left', 'right'].map(id2 => ({ controlId: id2+'.local', physicalId: id2,
+                    name: id2, role: id2.toUpperCase(), status: status(id) })) });
+            let devices = { 'right.local': pair('old') }, settle;
+            const writes = [];
+            api.bassChecked = async (id, value) => { writes.push([id,value]); await new Promise(r => { settle=r; }); };
+            api.device = async () => ({ success: true, data: pair('old') });
+            const show = () => render(h(MemberSettings, { deviceId: 'right.local', device: devices['right.local'], nested: false }), root);
+            try {
+                show();
+                await wait(() => root.querySelectorAll('.sound-control').length === 2, 'Sound controls missing');
+                const decrease = root.querySelector('[data-action="decrease"]');
+                decrease.click(); decrease.click();
+                await wait(() => writes.length === 1 && root.querySelector('output').textContent === '-2', 'Queued value missing');
+                devices = mergeStatusUpdate(devices, 'right.local', { ...status('new'), revision: 2 });
+                show();
+                await wait(() => [...root.querySelectorAll('.sound-control-step')].every(b => b.disabled), 'Changed pair still admitted writes');
+                settle();
+                await wait(() => root.querySelector('.sound-control').getAttribute('aria-busy') === 'false', 'Old request did not settle');
+                check(writes.length === 1, 'Queued old-pair write dispatched after a changed group was observed');
+                const fresh = pair('new'); fresh.status.revision = 2;
+                devices = mergeDevicesSnapshot(devices, { 'right.local': fresh });
+                show();
+                await wait(() => !root.querySelector('[data-action="decrease"]').disabled, 'Equal-revision fresh inventory did not restore controls');
+                devices = mergeStatusUpdate(devices, 'right.local', { ...fresh.status, epoch: 2, revision: 1,
+                    bass: { ActualBass: 0, DeviceID: 'replacement' }, balance: { ...fresh.status.balance, DeviceID: 'replacement' } });
+                show();
+                await wait(() => !root.querySelector('.sound-control-step:not(:disabled)'), 'Replacement epoch left an old-identity control enabled');
+                window.__soundIdentityFence = { ok: true };
+            } catch (error) { window.__soundIdentityFence = { ok: false, error: error.stack || String(error) }; }
+            finally { render(null,root); root.remove(); Object.assign(api,original); }
+        })()`, chromedp.EvalAwaitPromise),
+		evalInto(`window.__soundIdentityFence`, &result),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK {
+		t.Fatal(result.Error)
+	}
+}
