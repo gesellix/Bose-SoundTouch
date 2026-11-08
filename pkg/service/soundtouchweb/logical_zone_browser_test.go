@@ -59,8 +59,7 @@ func TestOpenZoneDetailTracksExternalTopologyChanges(t *testing.T) {
 		chromedp.Navigate(server.URL+"/app"),
 		chromedp.WaitVisible(chromedp.CSS(".zone-card")),
 		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.device-card').length === 1 &&
-			document.querySelector('.zone-card .device-name')?.textContent.trim() === 'Atrium' &&
-			!document.querySelector('.zone-card .zone-member-badge')`),
+			document.querySelector('.zone-card .device-name')?.textContent.trim() === 'Atrium'`),
 		chromedp.Evaluate[chromedp.Void](`window.__zoneDocument = true`),
 		chromedp.Click(chromedp.CSS(".zone-card")),
 		chromedp.WaitVisible(chromedp.CSS(".zone-member-details > summary")),
@@ -201,8 +200,8 @@ func TestDashboardFollowsMasterOnlyZoneChanges(t *testing.T) {
 	master.Device.UpdateStatus(func(status *webtypes.DeviceStatus) { status.Zone = nil })
 	app.BroadcastDeviceList()
 	if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelectorAll('.device-card').length === 2 &&
-		!document.querySelector('.zone-card') && !document.querySelector('.zone-member-badge')`)); err != nil {
-		t.Fatalf("dissolution left the member card marked as grouped: %v", err)
+		!document.querySelector('.zone-card')`)); err != nil {
+		t.Fatalf("dissolution left the group card in place: %v", err)
 	}
 }
 

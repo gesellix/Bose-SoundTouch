@@ -142,28 +142,6 @@ export function effectiveZoneDetail(restZone, projection, topLevelDevice, device
     return restZone;
 }
 
-// zoneMembershipPresentation labels the fallback member card when projected
-// membership cannot be hidden under the master's full zone summary.
-//
-// Deprecated, to be removed: since reconcileZoneMemberships derives membership
-// from accepted zones, filterGroupedDeviceEntries hides every member that has
-// one, unless its master is itself claimed as a member of another zone. The
-// server's physical-claim check rejects that topology, so the label is unreachable.
-export function zoneMembershipPresentation(membership) {
-    if (!membership) return null;
-
-    const master = String(membership.masterName || membership.masterControlId || '').trim();
-    if (!master) return null;
-
-    return {
-        label: `In group · ${master}`,
-        title: membership.degraded
-            ? `Member of the group led by ${master}; the group is degraded`
-            : `Member of the group led by ${master}`,
-        degraded: Boolean(membership.degraded),
-    };
-}
-
 export function zoneCardPresentation(zone) {
     const members = zone?.members || [];
     const memberCount = count(zone?.memberCount, members.length);
