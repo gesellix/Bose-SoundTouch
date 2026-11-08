@@ -86,6 +86,7 @@ type Server struct {
 	spotifyClientID          string
 	spotifyClientSecret      string
 	spotifyRedirectURI       string
+	envControlledSettings    map[string]string // Settings key -> variable that sets it
 	spotifyService           *spotify.Service
 	amazonClientID           string
 	amazonClientSecret       string
@@ -689,6 +690,15 @@ func (s *Server) SetPlayerEnabled(enabled bool) {
 	defer s.mu.Unlock()
 
 	s.playerEnabled = enabled
+}
+
+// SetEnvControlledSettings records which Settings fields a flag or environment
+// variable sets, as settings key to variable name (issue 744).
+func (s *Server) SetEnvControlledSettings(controlled map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.envControlledSettings = controlled
 }
 
 // SetPlayerEnabledChangedHook registers a callback fired when the live

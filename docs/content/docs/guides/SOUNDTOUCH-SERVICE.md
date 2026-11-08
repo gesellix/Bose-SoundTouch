@@ -152,6 +152,8 @@ The service supports multiple ways to configure its behavior. When multiple sour
 2.  **Environment Variables / CLI Flags**: If a setting is not present in `settings.json`, environment variables and flags are used.
 3.  **Default Values**: If no configuration is provided, the service uses its built-in defaults.
 
+**Exception: Spotify and Amazon credentials, and the TTS settings.** For these, a non-empty environment variable or flag wins over `settings.json`. Saving one of them in the Web UI changes the running service, but the next restart brings the variable's value back. The Settings tab marks these fields, and the service logs a warning at startup when a variable differs from the saved value.
+
 > **Tip**: If you find that changes to environment variables are not taking effect, check the **Settings** tab in the Web UI or inspect the `settings.json` file in your data directory, as it might be overriding your manual configuration.
 
 ### Configuration Options
