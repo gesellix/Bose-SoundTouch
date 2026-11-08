@@ -1,3 +1,6 @@
+// Deprecated: the bass and balance sliders were the last callers. The stepped
+// controls serialize their writes through latestWinsScheduler.mjs instead.
+//
 // Rate limiting for controls that fire continuously.
 //
 // This lives in its own framework-free module on purpose. The frontend tests
