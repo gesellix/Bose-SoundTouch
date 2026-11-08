@@ -1060,6 +1060,11 @@ func (app *WebApp) handleBassControl(w http.ResponseWriter, r *http.Request, dev
 	// the failure is not cached, so a later request tries again.
 	capabilities, err := device.LoadBassCapabilities()
 	switch {
+	case errors.Is(err, webtypes.ErrBassCapabilitiesIdentityChanged):
+		// An unreadable range is no reason to stop, but another speaker
+		// answering at this address is.
+		app.sendError(w, "A different speaker now answers at this address. Refresh before retrying.", http.StatusConflict)
+		return
 	case err != nil:
 		log.Printf("[bass] device=%q: cannot read bass capabilities, using the fixed range: %v", sanitizeLog(device.Info().DeviceID), err)
 
