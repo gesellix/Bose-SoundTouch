@@ -1572,7 +1572,7 @@ SSH into the speaker and edit the file:
 
 ```bash
 ssh -oHostKeyAlgorithms=+ssh-rsa root@<speaker-ip>
-rw
+mount -o remount,rw /
 cd /etc/init.d/Firewalls/
 vi update_iptables
 ```
