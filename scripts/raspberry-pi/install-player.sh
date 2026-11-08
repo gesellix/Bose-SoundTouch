@@ -10,7 +10,7 @@ set -euo pipefail
 # Examples (override defaults via env vars):
 #
 #   sudo \
-#     VERSION=v0.123.0 \
+#     VERSION=v0.138.1 \
 #     HTTP_PORT=8081 \
 #     bash install-player.sh
 #
@@ -21,7 +21,7 @@ set -euo pipefail
 #     bash install-player.sh
 #
 # Or with a version argument to perform an update:
-#   sudo bash install-player.sh v0.123.0
+#   sudo bash install-player.sh v0.138.1
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects
@@ -42,7 +42,7 @@ if [[ -n "$VERSION" && ! "$VERSION" =~ ^v ]]; then
 fi
 GH_REPO="${GH_REPO:-gesellix/Bose-SoundTouch}"
 # Used only when the latest-release lookup fails (offline / rate-limited).
-FALLBACK_VERSION="${FALLBACK_VERSION:-v0.123.0}"
+FALLBACK_VERSION="${FALLBACK_VERSION:-v0.138.1}"
 SERVICE_NAME="${SERVICE_NAME:-soundtouch-player}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/soundtouch-player}"
 

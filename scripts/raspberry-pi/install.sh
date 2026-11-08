@@ -10,7 +10,7 @@ set -euo pipefail
 # Examples (override defaults via env vars):
 #
 #   sudo \
-#     VERSION=v0.123.0 \
+#     VERSION=v0.138.1 \
 #     HOSTNAME_FQDN=soundtouch.local \
 #     HTTP_PORT=80 \
 #     HTTPS_PORT=443 \
@@ -18,7 +18,7 @@ set -euo pipefail
 #     bash install.sh
 #
 # Or with a version argument to perform an update:
-#   sudo bash install.sh v0.123.0
+#   sudo bash install.sh v0.138.1
 #
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects
@@ -38,7 +38,7 @@ if [[ -n "$VERSION" && ! "$VERSION" =~ ^v ]]; then
 fi
 GH_REPO="${GH_REPO:-gesellix/Bose-SoundTouch}"
 # Used only when the latest-release lookup fails (offline / rate-limited).
-FALLBACK_VERSION="${FALLBACK_VERSION:-v0.123.0}"
+FALLBACK_VERSION="${FALLBACK_VERSION:-v0.138.1}"
 SERVICE_NAME="${SERVICE_NAME:-soundtouch-service}"
 BIN_PATH="${BIN_PATH:-/usr/local/bin/soundtouch-service}"
 
@@ -130,7 +130,7 @@ detect_arch_asset() {
 download_url_for() {
   local asset="$1"
   # Release asset pattern used by you earlier:
-  # soundtouch-service-v0.123.0-linux-armv7
+  # soundtouch-service-v0.138.1-linux-armv7
   echo "https://github.com/gesellix/Bose-SoundTouch/releases/download/${VERSION}/soundtouch-service-${VERSION}-${asset}"
 }
 

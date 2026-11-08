@@ -170,14 +170,14 @@ Run the installer again with the version you want to install. The script backs u
 # 1. Environment variable — goes on `sh`, not `curl`: in a pipe, each
 #    command is a separate process, so `VERSION=X curl ... | sh` silently
 #    does NOT set it for `sh` (the one that actually reads $VERSION).
-curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | VERSION=0.123.0 sh
+curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | VERSION=0.138.1 sh
 
 # 2. Command-line flag (pass args after `sh -s --`)
-curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.123.0
+curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.138.1
 
 # 3. Download first, then run with a flag
 curl -sSLo install.sh https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh
-sh install.sh --version 0.123.0
+sh install.sh --version 0.138.1
 ```
 
 Running **without** a version override installs the latest release: the script
@@ -217,7 +217,7 @@ that actually reads it). Use `curl -sSL .../install.sh | VAR=X sh` instead.
 | `GH_REPO`                    | `gesellix/Bose-SoundTouch`                          | Install from a fork instead, e.g. for testing an unmerged branch's release.                                                                                                                                                                                                             |
 | `BINARY_URL`                 | derived from `GH_REPO`/`VERSION`                    | Override the service binary's download URL entirely, bypassing `GH_REPO`/`VERSION` for this one file.                                                                                                                                                                                   |
 | `INIT_SCRIPT_URL`            | derived from `GH_REPO`/`VERSION`                    | Override the init script's download URL entirely, bypassing `GH_REPO`/`VERSION` for this one file.                                                                                                                                                                                      |
-| `FALLBACK_VERSION`           | `0.123.0`                                           | Used only if the latest-release lookup fails (offline, rate-limited, or a `curl` build without `-w` support).                                                                                                                                                                           |
+| `FALLBACK_VERSION`           | `0.138.1`                                           | Used only if the latest-release lookup fails (offline, rate-limited, or a `curl` build without `-w` support).                                                                                                                                                                           |
 
 ## Uninstallation
 
