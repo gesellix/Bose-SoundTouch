@@ -1176,9 +1176,9 @@ img.preset-source-icon { object-fit: contain; filter: var(--content-icon-filter)
 .preset-save-btn:disabled { color: var(--text-dim); opacity: .3; cursor: default; }
 .preset-save-btn.saved { color: var(--fav-bright); opacity: 1; }
 .preset-save-btn.error { color: var(--danger); opacity: 1; }
-/* An active tile inverts its background, so the neutral disabled grey would
-   otherwise disappear into it. */
-.preset-slot-wrap.active .preset-save-btn:disabled { color: var(--accent-fg); }
+/* An active tile inverts its background, so neither the gold nor the neutral
+   disabled grey is readable on it. The glyph still tells the states apart. */
+.preset-slot-wrap.active .preset-save-btn { color: var(--accent-fg); }
 
 /* The pencil sits left of the star in the same corner, so a tile carries its
    two save gestures in one place: the star stores what is playing, the pencil
