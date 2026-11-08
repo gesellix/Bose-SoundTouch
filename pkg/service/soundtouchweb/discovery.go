@@ -75,8 +75,10 @@ func (app *WebApp) addDeviceByHost(
 	port int,
 	source string,
 ) *webtypes.DeviceConnection {
-	// Fast path: skip the network call if we already know this host.
+	// Reuse known connections, but remember a newly explicit user choice.
 	if app.TouchDevice(host) {
+		app.promoteManualDevice(host, source)
+
 		return nil
 	}
 
@@ -97,16 +99,23 @@ func (app *WebApp) addDeviceByHost(
 	info.IPAddress = resolvedDeviceIPAddress(ctx, host, info)
 
 	conn := webtypes.NewDeviceConnection(c, info)
+	conn.RecordDiscoverySource(source)
 	conn.MarkHTTPSuccess(time.Now())
 
 	if !app.AddDevice(host, conn) {
 		// Lost a race — another goroutine inserted the same host
 		// between TouchDevice and AddDevice. AddDevice bumped LastSeen
 		// on the existing entry; discard our conn.
+		app.promoteManualDevice(host, source)
+
 		return nil
 	}
 
 	app.retireStaleAliases(host, conn)
+
+	if current, ok := app.GetDevice(host); !ok || current != conn {
+		return nil
+	}
 
 	// Subscribe before any control request. Changes made by another player
 	// must arrive as events rather than waiting for the fallback status poll.

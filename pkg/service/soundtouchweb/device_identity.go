@@ -2,6 +2,7 @@ package soundtouchweb
 
 import (
 	"log"
+	"net/netip"
 	"strings"
 	"sync"
 
@@ -17,9 +18,9 @@ import (
 // Each other claimant is asked for /info again rather than judged by its
 // cached connectivity: a speaker that moved a moment ago can still look Stale
 // rather than Offline. An entry that answers with the same DeviceID is a live
-// alias (a .local name next to its IP, say) and is kept; one that fails, or
-// answers with a different DeviceID because its address now belongs to another
-// speaker, is retired.
+// alias and is kept unless it is a discovered numeric address shadowing a
+// manually configured hostname. A failed alias, or one answering as a different
+// speaker, is retired even when it was manually configured.
 //
 // Retiring only drops the registry entry and stops its goroutines. It must not
 // go through RemoveDeviceHook: the service datastore is keyed by DeviceID, so
@@ -70,17 +71,17 @@ func (app *WebApp) retireStaleAliases(host string, conn *webtypes.DeviceConnecti
 	wg.Wait()
 
 	retired := false
+	current := DeviceEntry{ID: host, Device: conn}
 
 	for i, entry := range candidates {
-		if !stale[i] {
-			continue
+		alias, survivor := entry, current
+		if !stale[i] && prefersDeviceHostname(entry, current) {
+			alias, survivor = current, entry
 		}
 
-		// removeDeviceIfMatch leaves a replacement registered under the same
-		// key in the meantime untouched.
-		if app.removeDeviceIfMatch(entry.ID, entry.Device) {
-			log.Printf("Retired %s: device %s now answers at %s",
-				sanitizeLog(entry.ID), sanitizeLog(deviceID), sanitizeLog(host))
+		if app.retireDeviceAlias(alias, survivor, stale[i]) {
+			log.Printf("Retired %s: device %s is available at %s",
+				sanitizeLog(alias.ID), sanitizeLog(deviceID), sanitizeLog(survivor.ID))
 
 			retired = true
 		}
@@ -89,4 +90,68 @@ func (app *WebApp) retireStaleAliases(host string, conn *webtypes.DeviceConnecti
 	if retired {
 		app.BroadcastDeviceList()
 	}
+}
+
+func (app *WebApp) promoteManualDevice(host, source string) {
+	if source != "manual" {
+		return
+	}
+
+	app.devicesMu.Lock()
+	conn := app.devices[host]
+
+	promoted := false
+	if conn != nil {
+		promoted = conn.RecordDiscoverySource(source)
+	}
+	app.devicesMu.Unlock()
+
+	if !promoted || conn.Client == nil || conn.Info() == nil {
+		return
+	}
+
+	// The fast path reused a cached connection. Confirm that the hostname
+	// still answers as this speaker before retiring a working IP alias.
+	live, err := conn.Client.GetDeviceInfo()
+	if err != nil || live == nil || strings.TrimSpace(live.DeviceID) != strings.TrimSpace(conn.Info().DeviceID) {
+		return
+	}
+
+	app.retireStaleAliases(host, conn)
+}
+
+func prefersDeviceHostname(preferred, other DeviceEntry) bool {
+	return preferred.Device.DiscoverySource() == "manual" &&
+		other.Device.DiscoverySource() == "discovered" &&
+		!isNumericDeviceHost(preferred.ID) && isNumericDeviceHost(other.ID)
+}
+
+func isNumericDeviceHost(host string) bool {
+	_, err := netip.ParseAddr(strings.Trim(hostOnly(host), "[]"))
+
+	return err == nil
+}
+
+// Require both connections to still be registered: concurrent reconciliation
+// must neither remove a replacement nor retire both addresses of one speaker.
+// Recheck preference while holding devicesMu so a concurrent manual promotion
+// cannot lose an explicitly configured numeric address.
+func (app *WebApp) retireDeviceAlias(alias, survivor DeviceEntry, stale bool) bool {
+	release := app.beginDeviceSettingsOperation(alias.Device)
+	defer release()
+
+	app.devicesMu.Lock()
+
+	remove := app.devices[alias.ID] == alias.Device && app.devices[survivor.ID] == survivor.Device &&
+		(stale || prefersDeviceHostname(survivor, alias))
+	if remove {
+		delete(app.devices, alias.ID)
+	}
+	app.devicesMu.Unlock()
+
+	if remove {
+		alias.Device.Close()
+	}
+
+	return remove
 }
