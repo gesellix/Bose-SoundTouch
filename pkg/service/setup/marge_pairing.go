@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -32,7 +33,16 @@ type PairAccountResult struct {
 	HTTPError                string `json:"http_error,omitempty"`
 	TelnetAttempted          bool   `json:"telnet_attempted"`
 	TelnetError              string `json:"telnet_error,omitempty"`
+	TelnetConfirmed          bool   `json:"telnet_confirmed,omitempty"`
 	Method                   string `json:"method"` // "http" | "telnet" | ""
+}
+
+// Confirmed reports whether the speaker acknowledged the pairing. Telnet has
+// no way to read the account back (envswitch has no read form), so its "OK"
+// is the only evidence there is. Any other reply still counts as an attempt,
+// as it always has, but is not enough to act on in the datastore.
+func (r PairAccountResult) Confirmed() bool {
+	return r.Method == "http" || (r.Method == "telnet" && r.TelnetConfirmed)
 }
 
 // PairAccount associates the speaker at deviceIP with accountID. It tries
@@ -110,8 +120,87 @@ func (m *Manager) PairAccount(deviceIP, accountID string, t TelnetClient) (PairA
 	fmt.Fprintf(&logs, "Telnet %q → %s\n", cmd, strings.TrimRight(resp, "\r\n"))
 
 	result.Method = "telnet"
+	result.TelnetConfirmed = telnetReplyIsOK(resp)
 
 	return result, logs.String(), nil
+}
+
+// telnetReplyIsOK reports whether a telnet reply contains OK as a word of its
+// own. The reply can carry the echoed command and a prompt around it.
+func telnetReplyIsOK(resp string) bool {
+	for _, word := range strings.Fields(resp) {
+		if strings.EqualFold(word, "OK") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// FileDeviceUnderAccount moves a device's stored data from one account to the
+// account it was just paired with. Discovery does this on its own when /info
+// reports the account, but firmware 20 keeps that field empty after pairing
+// (issue 780).
+//
+// Moving makes the device part of the account's /full, so whatever is stored
+// for it is what the speaker gets told it has. A device that never reported
+// its presets has nothing stored, and a /full without presets can clear them on
+// the speaker. The speaker's own list is therefore stored first, and when it
+// cannot be read the device stays where it is.
+func (m *Manager) FileDeviceUnderAccount(deviceIP, deviceID, fromAccount, toAccount string) error {
+	stored, err := m.DataStore.GetPresets(fromAccount, deviceID)
+	if err != nil {
+		return fmt.Errorf("read stored presets: %w", err)
+	}
+
+	if len(stored) == 0 {
+		live, fetchErr := m.fetchLivePresets(deviceIP)
+		if fetchErr != nil {
+			return fmt.Errorf("read the speaker's presets: %w", fetchErr)
+		}
+
+		if saveErr := m.DataStore.SavePresets(fromAccount, deviceID, live); saveErr != nil {
+			return fmt.Errorf("store the speaker's presets: %w", saveErr)
+		}
+	}
+
+	m.storeLiveRecentsIfNone(deviceIP, deviceID, fromAccount)
+
+	if err = m.DataStore.MoveDevice(fromAccount, toAccount, deviceID); err != nil {
+		return fmt.Errorf("move device: %w", err)
+	}
+
+	info, err := m.DataStore.GetExactDeviceInfo(toAccount, deviceID)
+	if err != nil {
+		return fmt.Errorf("read moved device info: %w", err)
+	}
+
+	info.AccountID = toAccount
+
+	if err = m.DataStore.SaveDeviceInfo(toAccount, deviceID, info); err != nil {
+		return fmt.Errorf("save moved device info: %w", err)
+	}
+
+	return nil
+}
+
+// storeLiveRecentsIfNone is the best-effort counterpart of the preset copy in
+// FileDeviceUnderAccount: losing recents is no reason to refuse the move.
+func (m *Manager) storeLiveRecentsIfNone(deviceIP, deviceID, account string) {
+	stored, err := m.DataStore.GetRecents(account, deviceID)
+	if err != nil || len(stored) > 0 {
+		return
+	}
+
+	live, err := m.fetchLiveRecents(deviceIP)
+	if err != nil {
+		log.Printf("[Pairing] Could not read recents of %s before filing it: %v", sanitizeLog(deviceID), err)
+		return
+	}
+
+	if err := m.DataStore.SaveRecents(account, deviceID, live); err != nil {
+		log.Printf("[Pairing] Could not store recents of %s before filing it: %v", sanitizeLog(deviceID), err)
+	}
 }
 
 // EnsureMargeAccountPaired reads the device's /info and, if margeAccountUUID

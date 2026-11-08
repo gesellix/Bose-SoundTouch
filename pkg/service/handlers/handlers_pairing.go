@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -101,6 +102,9 @@ func (s *Server) HandlePairAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, output, err := s.sm.PairAccount(deviceIP, accountID, t)
+	if err == nil {
+		output += s.fileDeviceAfterPairing(deviceIP, deviceID, accountID, result)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -172,6 +176,8 @@ func (s *Server) completeSpeakerPairingFix(target health.Target) (string, error)
 		return "", fmt.Errorf("pair speaker %s with account %s: %w (path output: %s)", target.Device, accountID, err, strings.TrimSpace(output))
 	}
 
+	s.fileDeviceAfterPairing(deviceIP, target.Device, accountID, result)
+
 	method := result.Method
 	if method == "" {
 		method = "unknown"
@@ -179,6 +185,34 @@ func (s *Server) completeSpeakerPairingFix(target health.Target) (string, error)
 
 	return fmt.Sprintf("Paired speaker %s with account %s via %s. The speaker will re-fetch /full on its own; playback selection should start working within seconds.",
 		target.Device, accountID, method), nil
+}
+
+// fileDeviceAfterPairing files a just-paired device under its new account and
+// returns a line for the pairing output when that did not happen. The pairing
+// itself has already succeeded at this point, so a failure here is reported,
+// not returned: the device simply stays filed where it was.
+func (s *Server) fileDeviceAfterPairing(deviceIP, deviceID, accountID string, result setup.PairAccountResult) string {
+	existing := s.findExistingDeviceInfoByDeviceID(deviceID)
+	if existing == nil || existing.AccountID == "" || existing.AccountID == accountID {
+		return ""
+	}
+
+	if !result.Confirmed() {
+		log.Printf("[Pairing] Speaker did not confirm account %s for %s, leaving it filed under %s",
+			sanitizeLog(accountID), sanitizeLog(deviceID), sanitizeLog(existing.AccountID))
+
+		return fmt.Sprintf("Speaker did not confirm the account; AfterTouch keeps it filed under %s\n", existing.AccountID)
+	}
+
+	if err := s.sm.FileDeviceUnderAccount(deviceIP, deviceID, existing.AccountID, accountID); err != nil {
+		log.Printf("[Pairing] Could not file %s under account %s: %v", sanitizeLog(deviceID), sanitizeLog(accountID), err)
+
+		return fmt.Sprintf("Could not file the device under account %s, it stays filed under %s: %v\n", accountID, existing.AccountID, err)
+	}
+
+	log.Printf("[Pairing] Filed %s under account %s (was %s)", sanitizeLog(deviceID), sanitizeLog(accountID), sanitizeLog(existing.AccountID))
+
+	return ""
 }
 
 // jsonErrorBody is the static shape of error responses from this file.
