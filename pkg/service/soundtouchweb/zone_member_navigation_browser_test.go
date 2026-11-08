@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/gesellix/bose-soundtouch/pkg/models"
@@ -48,8 +49,10 @@ func TestZoneMembersOpenFullDeviceDetailWithoutTopologyMutation(t *testing.T) {
 
 	// A member's page owns its settings, so the member row must not mount a
 	// second copy with its own write scheduler. The other rows keep theirs.
-	assertSettingsPanels(t, ctx, "Breakfast Room", 0, 1)
+	// Atrium comes first: the rows arrive with the zone data, after the page,
+	// and "no row for this member" only means something once they are there.
 	assertSettingsPanels(t, ctx, "Atrium", 1, 0)
+	assertSettingsPanels(t, ctx, "Breakfast Room", 0, 1)
 	returnToZone(t, ctx, "Atrium")
 
 	// The master's page has no top-level panel: its row is the only one.
@@ -68,6 +71,7 @@ func TestZoneMembersOpenFullDeviceDetailWithoutTopologyMutation(t *testing.T) {
 
 // assertSettingsPanels counts the settings panels mounted for one speaker: the
 // disclosure in its zone member row and the top-level panel of its own page.
+// It waits for the expected counts, then reports what is actually mounted.
 func assertSettingsPanels(t *testing.T, ctx context.Context, name string, wantRow, wantPage int) {
 	t.Helper()
 
@@ -76,14 +80,22 @@ func assertSettingsPanels(t *testing.T, ctx context.Context, name string, wantRo
 		Page int `json:"page"`
 	}
 
-	if err := chromedp.Do(ctx, evalInto(fmt.Sprintf(`(() => {
+	counts := fmt.Sprintf(`(() => {
 		const count = (selector, title) => Array.from(document.querySelectorAll(selector))
 			.filter(node => node.textContent.trim() === title).length;
 		return {
 			row: count('.member-settings > summary .section-title', %q),
 			page: count('.sound-settings > summary .section-title', %q),
 		};
-	})()`, "Settings · "+name, "Sound settings · "+name), &got)); err != nil {
+	})()`, "Settings · "+name, "Sound settings · "+name)
+
+	// A timeout is not reported here: the read below names the wrong counts.
+	_ = chromedp.Do(ctx, chromedp.Poll[chromedp.Void](
+		fmt.Sprintf(`(mounted => mounted.row === %d && mounted.page === %d)(%s)`, wantRow, wantPage, counts),
+		chromedp.WithPollingTimeout(10*time.Second),
+	))
+
+	if err := chromedp.Do(ctx, evalInto(counts, &got)); err != nil {
 		t.Fatalf("count settings panels for %s: %v", name, err)
 	}
 
