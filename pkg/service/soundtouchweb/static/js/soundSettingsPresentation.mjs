@@ -16,7 +16,7 @@ export function bassControl(target) {
 }
 
 export function balanceControl(deviceId, device) {
-    const coherent = projectedPair(deviceId, device);
+    const coherent = projectedPairMaster(deviceId, device);
     const balance = device?.status?.balance;
     const range = reportedRange(balance?.Available, balance?.Min, balance?.Max,
         balance?.Default, balance?.Actual);
@@ -25,15 +25,21 @@ export function balanceControl(deviceId, device) {
 
 // The server validates physical pair membership. Here we only locate the
 // projected master and keep its identity for the admitted operation.
-function projectedPair(deviceId, device) {
+// The projection lists only registered members, so the peer can be missing.
+function projectedPairMaster(deviceId, device) {
     const pair = device?.stereoPair;
     const targets = physicalSettingsTargets(deviceId, device);
     const master = targets.find(target => target.controlId === deviceId && target.physicalId === pair?.masterDeviceId);
-    if (!pair?.id || targets.length !== 2 || !master) return null;
+    if (!pair?.id || targets.length > 2 || !master) return null;
     return { master, targets, identity: {
         name: pair.name || device?.info?.name || 'Stereo pair', pairId: pair.id,
         pairMembers: pair.members.map(member => [member.deviceId, member.role]).sort(),
     } };
+}
+
+function projectedPair(deviceId, device) {
+    const pair = projectedPairMaster(deviceId, device);
+    return pair?.targets.length === 2 ? pair : null;
 }
 
 export function pairBassControl(deviceId, device) {
