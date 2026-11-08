@@ -261,6 +261,7 @@ func NewServer(ds *datastore.DataStore, sm *setup.Manager, serverURL string, red
 		func() (string, string) { return s.mgmtUsername, s.mgmtPassword },
 	)
 	health.RegisterAdminAreaAuthCheck(s.healthRegistry, s.AdminAreaAuthMode)
+	health.RegisterPublicNetworkPlayerCheck(s.healthRegistry, s.playerOpenOnPublicNetwork)
 
 	// Health QuickFix executor for the empty-margeAccountUUID
 	// finding from RegisterSpeakerInfoReachable. Lives here (not in
@@ -678,6 +679,15 @@ func (s *Server) PlayerEnabled() bool {
 	defer s.mu.RUnlock()
 
 	return s.playerEnabled
+}
+
+// playerOpenOnPublicNetwork reports whether the player, which has no login of
+// its own, is enabled on an install marked public-network (issue 663).
+func (s *Server) playerOpenOnPublicNetwork() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.playerEnabled && s.deploymentMode == deploymentModePublicNetwork
 }
 
 // SetPlayerEnabled sets the live player-enabled flag. Called once at startup
