@@ -194,12 +194,12 @@ func (m *Manager) storeLiveRecentsIfNone(deviceIP, deviceID, account string) {
 
 	live, err := m.fetchLiveRecents(deviceIP)
 	if err != nil {
-		log.Printf("[Pairing] Could not read recents of %s before filing it: %v", sanitizeLog(deviceID), err)
+		log.Printf("[Pairing] Could not read recents of %s before filing it: %s", sanitizeLog(deviceID), sanitizeLog(err.Error()))
 		return
 	}
 
 	if err := m.DataStore.SaveRecents(account, deviceID, live); err != nil {
-		log.Printf("[Pairing] Could not store recents of %s before filing it: %v", sanitizeLog(deviceID), err)
+		log.Printf("[Pairing] Could not store recents of %s before filing it: %s", sanitizeLog(deviceID), sanitizeLog(err.Error()))
 	}
 }
 

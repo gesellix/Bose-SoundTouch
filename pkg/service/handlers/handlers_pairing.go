@@ -205,7 +205,7 @@ func (s *Server) fileDeviceAfterPairing(deviceIP, deviceID, accountID string, re
 	}
 
 	if err := s.sm.FileDeviceUnderAccount(deviceIP, deviceID, existing.AccountID, accountID); err != nil {
-		log.Printf("[Pairing] Could not file %s under account %s: %v", sanitizeLog(deviceID), sanitizeLog(accountID), err)
+		log.Printf("[Pairing] Could not file %s under account %s: %s", sanitizeLog(deviceID), sanitizeLog(accountID), sanitizeErr(err))
 
 		return fmt.Sprintf("Could not file the device under account %s, it stays filed under %s: %v\n", accountID, existing.AccountID, err)
 	}
