@@ -410,6 +410,13 @@ func stereoPairHTTPStatus(result stereopair.Result) int {
 	}
 
 	if result.Status == stereopair.StatusDegraded {
+		// Every speaker answered and the read itself worked. success:false
+		// and the error text still report the degraded pair; a browser would
+		// otherwise log the successful read as a failed request.
+		if result.Operation == stereopair.OperationInspect {
+			return http.StatusOK
+		}
+
 		return http.StatusBadGateway
 	}
 

@@ -182,7 +182,7 @@ func TestHandleGetStereoPairPreservesDegradedRecoveryGeneration(t *testing.T) {
 	app.HandleGetStereoPair(response, request)
 
 	payload := decodeStereoPairAPIResponse(t, response)
-	if response.Code != http.StatusBadGateway || payload.Success || !payload.Data.Paired ||
+	if response.Code != http.StatusOK || payload.Success || !payload.Data.Paired ||
 		payload.Data.Group == nil || payload.Data.Group.ID != "PAIR-ID" {
 		t.Fatalf("degraded recovery data was lost: status=%d payload=%+v", response.Code, payload)
 	}
