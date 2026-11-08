@@ -80,8 +80,8 @@ mkdir -p "$UPDATE_TMP_DIR"
 echo "Installing AfterTouch $VERSION to $INSTALL_DIR ..."
 
 # /opt and /etc/init.d are on the root filesystem, which a speaker mounts
-# read-only. Do what the init script does on every start: the `rw` helper does
-# not exist on every model (issue 840).
+# read-only. Do what the init script does on every start: `rw` is only an alias
+# for interactive shells, so a script can't rely on it (issue 840).
 if ! mount -o remount,rw /; then
   echo "ERROR: could not make the root filesystem writable (mount -o remount,rw /)." >&2
   echo "Nothing was installed." >&2
