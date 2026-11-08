@@ -7,7 +7,7 @@ import {
     nowPlayingFreshness,
     sortDeviceEntries,
 } from '../devicePresentation.js';
-import { filterGroupedDeviceEntries, zoneCardPresentation, zoneMembershipPresentation, zoneTopologyFingerprint } from '../zonePresentation.mjs';
+import { filterGroupedDeviceEntries, zoneCardPresentation, zoneTopologyFingerprint } from '../zonePresentation.mjs';
 import { ZoneMemberVolumeControl } from './ZoneMemberVolumeControl.js';
 import { volumeProjectionKey } from '../zoneVolumeResult.mjs';
 import { zoneMemberVolumes } from '../zoneVolumePreview.mjs';
@@ -20,7 +20,6 @@ function DeviceCard({ id, device, devices, onSelect }) {
     const { info, status } = device;
     const stereoPair = device.stereoPair;
     const zoneCard = device.zone ? zoneCardPresentation(device.zone) : null;
-    const membership = zoneCard ? null : zoneMembershipPresentation(device.zoneMembership);
     const controlID = device.zone?.masterControlId || id;
     const np = status?.nowPlaying;
     const isPlaying = np?.PlayStatus === 'PLAY_STATE';
@@ -55,12 +54,6 @@ function DeviceCard({ id, device, devices, onSelect }) {
                             ${zoneCard.availabilityLabel}
                         </span>
                     ` : null}
-                </span>
-            ` : null}
-            ${membership ? html`
-                <span class="zone-card-summary">
-                    <span class="zone-member-badge ${membership.degraded ? 'degraded' : ''}"
-                          title=${membership.title}>${membership.label}</span>
                 </span>
             ` : null}
             ${!isStandby ? html`
