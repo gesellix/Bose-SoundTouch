@@ -8,13 +8,13 @@ set -eo pipefail
 # Pin a specific version via environment variable or the --version/-v flag.
 # The env var goes on `sh`, not `curl`: in a pipe, each command is its own
 # process, so `VERSION=X curl ... | sh` silently does NOT set it for `sh`.
-#   curl -sSL .../install.sh | VERSION=0.123.0 sh
-#   curl -sSL .../install.sh | sh -s -- --version 0.123.0
+#   curl -sSL .../install.sh | VERSION=0.138.1 sh
+#   curl -sSL .../install.sh | sh -s -- --version 0.138.1
 VERSION=${VERSION:-}
 
 # Parse optional command-line arguments so the script can be invoked as:
-#   install.sh --version 0.123.0
-#   install.sh -v 0.123.0
+#   install.sh --version 0.138.1
+#   install.sh -v 0.138.1
 while [ $# -gt 0 ]; do
   case "$1" in
     --version|-v)
@@ -31,7 +31,7 @@ GH_REPO=${GH_REPO:-gesellix/Bose-SoundTouch}
 
 # Used only when the latest-release lookup fails (offline / rate-limited /
 # a curl without -w support).
-FALLBACK_VERSION=${FALLBACK_VERSION:-0.123.0}
+FALLBACK_VERSION=${FALLBACK_VERSION:-0.138.1}
 
 # Resolve the latest release when no explicit version was provided, by
 # following the stable redirect https://github.com/<repo>/releases/latest
