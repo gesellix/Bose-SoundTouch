@@ -97,3 +97,20 @@ func TestBassControlsRejectUnsupportedSpeaker(t *testing.T) {
 		t.Fatalf("status=%d writes=%d body=%s", response.Code, writes.Load(), response.Body.String())
 	}
 }
+
+func TestBassControlsRefuseAnAddressNowAnsweredByAnotherSpeaker(t *testing.T) {
+	var writes atomic.Int32
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			writes.Add(1)
+		}
+		_, _ = w.Write([]byte(`<bassCapabilities deviceID="REPLACEMENT"><bassAvailable>true</bassAvailable><bassMin>-9</bassMin><bassMax>0</bassMax><bassDefault>0</bassDefault></bassCapabilities>`))
+	}))
+	defer speaker.Close()
+	device := webtypes.NewDeviceConnection(client.NewClient(&client.Config{Host: speaker.URL}), &models.DeviceInfo{DeviceID: "SPEAKER"})
+	response := httptest.NewRecorder()
+	NewWebApp().handleBassControl(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"level":-1}`)), device)
+	if response.Code != http.StatusConflict || writes.Load() != 0 {
+		t.Fatalf("status=%d writes=%d body=%s", response.Code, writes.Load(), response.Body.String())
+	}
+}
