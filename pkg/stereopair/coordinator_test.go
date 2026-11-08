@@ -1324,6 +1324,96 @@ func TestRenameRejectsActiveZoneOnEitherMember(t *testing.T) {
 	}
 }
 
+func erroredGroup() *models.Group {
+	group := configuredGroup("Pair")
+	group.Status = "GROUP_ERROR"
+
+	return group
+}
+
+// One member reports GROUP_ERROR and the other has no group, the state a real
+// ST10 pair was found in after one speaker had been unplugged.
+func TestDissolveClearsGroupErrorLeftOnOneMember(t *testing.T) {
+	left := readyClient(leftID, "Left")
+	right := readyClient(rightID, "Right")
+	left.group = erroredGroup()
+	coordinator := New(factoryFor(map[string]*fakeClient{leftIP: left, rightIP: right}))
+
+	result, err := coordinator.Dissolve(DissolveRequest{
+		MemberIPAddress: leftIP,
+		ExpectedGroupID: "PAIR-ID",
+	})
+	if err != nil || result.Status != StatusSucceeded {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.removeCalls != 1 || right.removeCalls != 0 {
+		t.Fatalf("remove calls LEFT=%d RIGHT=%d, want 1/0", left.removeCalls, right.removeCalls)
+	}
+	if !left.group.IsEmpty() {
+		t.Fatalf("LEFT still reports a group: %+v", left.group)
+	}
+}
+
+// The browser saves the group it read, status included, so a recovery started
+// from the member that is already empty can carry GROUP_ERROR.
+func TestDissolveRecoversErroredSnapshotThroughEmptyMember(t *testing.T) {
+	left := readyClient(leftID, "Left")
+	right := readyClient(rightID, "Right")
+	right.group = erroredGroup()
+	coordinator := New(factoryFor(map[string]*fakeClient{leftIP: left, rightIP: right}))
+
+	result, err := coordinator.Dissolve(DissolveRequest{
+		MemberIPAddress: leftIP,
+		ExpectedGroupID: "PAIR-ID",
+		ExpectedGroup:   erroredGroup(),
+	})
+	if err != nil || result.Status != StatusSucceeded {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.removeCalls != 0 || right.removeCalls != 1 {
+		t.Fatalf("remove calls LEFT=%d RIGHT=%d, want 0/1", left.removeCalls, right.removeCalls)
+	}
+}
+
+func TestDissolveStillRejectsErroredGroupWithInvalidMembers(t *testing.T) {
+	left := readyClient(leftID, "Left")
+	right := readyClient(rightID, "Right")
+	left.group = erroredGroup()
+	left.group.Roles.Roles = left.group.Roles.Roles[:1]
+	coordinator := New(factoryFor(map[string]*fakeClient{leftIP: left, rightIP: right}))
+
+	result, err := coordinator.Dissolve(DissolveRequest{
+		MemberIPAddress: leftIP,
+		ExpectedGroupID: "PAIR-ID",
+	})
+	if err == nil || result.Status != StatusFailed {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.removeCalls != 0 {
+		t.Fatalf("removeGroup called for a group without two valid members: %d", left.removeCalls)
+	}
+}
+
+func TestRenameRejectsGroupErrorWithoutMutation(t *testing.T) {
+	left := readyClient(leftID, "Left")
+	right := readyClient(rightID, "Right")
+	left.group = erroredGroup()
+	right.group = erroredGroup()
+	coordinator := New(factoryFor(map[string]*fakeClient{leftIP: left, rightIP: right}))
+
+	result, err := coordinator.Rename(RenameRequest{
+		MemberIPAddress: leftIP,
+		ExpectedGroupID: "PAIR-ID",
+		Name:            "New Name",
+	})
+	if err == nil || result.Status != StatusFailed {
+		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	if left.updateRequest != nil || right.updateRequest != nil {
+		t.Fatal("updateGroup called for a group in GROUP_ERROR")
+	}
+}
+
 func TestRenameRejectsStaleGroupIDWithoutMutation(t *testing.T) {
 	group := configuredGroup("Current Name")
 	left := readyClient(leftID, "Left")

@@ -1338,7 +1338,10 @@ func (c *Coordinator) preflightStandaloneZone(state *memberState) {
 	}
 }
 
-func (c *Coordinator) loadPair(memberIPAddress, expectedGroupID string, allowEmptyMembers bool) ([]memberState, *models.Group, error) {
+// loadPair reads the pair for a mutation. Tearing it down is more lenient than
+// changing it: a member may already be empty, and the group may report an error
+// status, because dissolving is the way out of that state.
+func (c *Coordinator) loadPair(memberIPAddress, expectedGroupID string, tearingDown bool) ([]memberState, *models.Group, error) {
 	if c.factory == nil {
 		return nil, nil, fmt.Errorf("%w: client factory is nil", ErrUnavailable)
 	}
@@ -1365,7 +1368,12 @@ func (c *Coordinator) loadPair(memberIPAddress, expectedGroupID string, allowEmp
 		return nil, nil, fmt.Errorf("%w: expected group %q, found %q", ErrConflict, expectedGroupID, current.ID)
 	}
 
-	if verifyErr := verifyConfiguredGroup(current); verifyErr != nil {
+	verify := verifyConfiguredGroup
+	if tearingDown {
+		verify = verifyGroupMembers
+	}
+
+	if verifyErr := verify(current); verifyErr != nil {
 		return nil, nil, fmt.Errorf("%w: invalid current group: %w", ErrConflict, verifyErr)
 	}
 
@@ -1385,7 +1393,7 @@ func (c *Coordinator) loadPair(memberIPAddress, expectedGroupID string, allowEmp
 
 	states := make([]memberState, len(members))
 	for i, member := range members {
-		c.preflightExistingMember(&states[i], member, current, allowEmptyMembers)
+		c.preflightExistingMember(&states[i], member, current, tearingDown)
 	}
 
 	validateCreateCandidates(states)
@@ -1410,7 +1418,7 @@ func (c *Coordinator) loadPairFromSnapshot(
 		return nil, nil, fmt.Errorf("%w: recovery snapshot does not match expected group", ErrConflict)
 	}
 
-	if err := verifyConfiguredGroup(current); err != nil {
+	if err := verifyGroupMembers(current); err != nil {
 		return nil, nil, fmt.Errorf("%w: invalid recovery snapshot: %w", ErrConflict, err)
 	}
 
@@ -1669,16 +1677,25 @@ func validateMutationResponse(operation string, response *models.Group, err erro
 }
 
 func verifyConfiguredGroup(group *models.Group) error {
+	if err := verifyGroupMembers(group); err != nil {
+		return err
+	}
+
+	if group.Status != "" && group.Status != "GROUP_OK" {
+		return fmt.Errorf("group status is %q", group.Status)
+	}
+
+	return nil
+}
+
+// verifyGroupMembers checks what identifies a pair, ignoring its status.
+func verifyGroupMembers(group *models.Group) error {
 	if group == nil || group.IsEmpty() {
 		return errors.New("group is empty")
 	}
 
 	if group.ID == "" {
 		return errors.New("group has no ID")
-	}
-
-	if group.Status != "" && group.Status != "GROUP_OK" {
-		return fmt.Errorf("group status is %q", group.Status)
 	}
 
 	_, err := pairMembers(group)
