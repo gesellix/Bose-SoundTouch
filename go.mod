@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	filippo.io/age v1.3.2
 	github.com/chromedp/cdproto v0.159.2
-	github.com/chromedp/chromedp v0.22.1
+	github.com/chromedp/chromedp v0.23.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
@@ -27,7 +27,7 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/go-json-experiment/json v1.27.0 // indirect
+	github.com/go-json-experiment/json v1.27.2 // indirect
 	github.com/xrash/smetrics v0.0.0-20261013231157-39c47d93efba // indirect
 	golang.org/x/image v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
