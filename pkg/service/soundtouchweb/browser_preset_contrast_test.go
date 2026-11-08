@@ -58,6 +58,16 @@ window.contrast = (boxSelector, textSelector) => {
   const [light, dark] = [luminance(background), luminance(foreground)].sort((a, b) => b - a);
   return (light + 0.05) / (dark + 0.05);
 };
+// The star has no fill of its own: it is drawn on the selected tile next to it.
+window.starContrast = () => {
+  const star = getComputedStyle(document.querySelector('.preset-slot-wrap.active .preset-save-btn'));
+  const tile = getComputedStyle(document.querySelector('.preset-slot.active'));
+  const page = channels(getComputedStyle(document.body).backgroundColor);
+  const background = over(channels(tile.backgroundColor), Number(tile.opacity), page);
+  const foreground = over(channels(star.color), Number(star.opacity), background);
+  const [light, dark] = [luminance(background), luminance(foreground)].sort((a, b) => b - a);
+  return (light + 0.05) / (dark + 0.05);
+};
 // Resolves a colour variable to the form getComputedStyle reports.
 window.resolved = name => {
   const probe = document.createElement('i');
@@ -148,6 +158,30 @@ func TestSelectedControlsKeepContrastUnderHover(t *testing.T) {
 				`window.contrast('.source-btn.active') >= 4.5`,
 			)); err != nil {
 				t.Fatalf("active source pill lost contrast under hover: %v", err)
+			}
+		})
+	}
+}
+
+func TestSelectedPresetStarKeepsContrast(t *testing.T) {
+	ctx := selectedControlPage(t)
+
+	const star = `.preset-slot-wrap.active .preset-save-btn`
+
+	for _, scheme := range []string{"light", "dark"} {
+		t.Run(scheme, func(t *testing.T) {
+			emulateColorScheme(t, ctx, scheme)
+
+			hoverOver(t, ctx, `.source-btn.active`)
+			if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](
+				`!document.querySelector(`+"`"+star+"`"+`).disabled && window.starContrast() >= 4.5`,
+			)); err != nil {
+				t.Fatalf("star on the selected preset is unreadable: %v", err)
+			}
+
+			hoverOver(t, ctx, star)
+			if err := chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`window.starContrast() >= 4.5`)); err != nil {
+				t.Fatalf("star on the selected preset is unreadable under hover: %v", err)
 			}
 		})
 	}
