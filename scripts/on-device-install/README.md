@@ -54,7 +54,7 @@ ssh -oHostKeyAlgorithms=+ssh-rsa root@<IP_ADDRESS_OF_SPEAKER>
 Then, run the following command to install AfterTouch on the device.
 
 ```bash
-rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh
 ```
 
 This installs the **latest release** by default (the script resolves it from
@@ -102,7 +102,7 @@ still reaches AfterTouch on `:8000` as before. Change or disable this with
 `/opt/aftertouch/aftertouch.conf`, or pass it at install time:
 
 ```bash
-rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | AFTERTOUCH_LAN_PORT=none sh
+curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | AFTERTOUCH_LAN_PORT=none sh
 ```
 
 **`aftertouch.conf` isn't limited to `AFTERTOUCH_LAN_PORT`.** The init
@@ -170,10 +170,10 @@ Run the installer again with the version you want to install. The script backs u
 # 1. Environment variable — goes on `sh`, not `curl`: in a pipe, each
 #    command is a separate process, so `VERSION=X curl ... | sh` silently
 #    does NOT set it for `sh` (the one that actually reads $VERSION).
-rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | VERSION=0.123.0 sh
+curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | VERSION=0.123.0 sh
 
 # 2. Command-line flag (pass args after `sh -s --`)
-rw && curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.123.0
+curl -sSL https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh | sh -s -- --version 0.123.0
 
 # 3. Download first, then run with a flag
 curl -sSLo install.sh https://raw.githubusercontent.com/gesellix/Bose-SoundTouch/main/scripts/on-device-install/install.sh
