@@ -17,7 +17,9 @@ export function nearestStep(clientX, left, width, min, max) {
     if (![clientX, left, width, min, max].every(Number.isFinite) || width <= 0 ||
         !Number.isInteger(min) || !Number.isInteger(max) || min > max) return null;
     const fraction = Math.max(0, Math.min(1, (clientX - left) / width));
-    return Math.round(min + fraction * (max - min));
+    // The steps are drawn as equal cells across the scale, not as points on it.
+    const steps = max - min + 1;
+    return min + Math.min(steps - 1, Math.floor(fraction * steps));
 }
 
 // Discrete clicks are complete interactions. The same scheduler used by volume

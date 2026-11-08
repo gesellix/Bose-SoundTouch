@@ -93,10 +93,14 @@ test('queued clicks are checked against current availability and bounds before d
     }
 });
 
-test('tap positions round to the nearest valid integer and clamp to reported bounds', () => {
+test('tap positions select the tick under the pointer and clamp to reported bounds', () => {
+    // Ten equal ticks of 9px across the 90px scale.
     assert.equal(nearestStep(100, 100, 90, -9, 0), -9);
-    assert.equal(nearestStep(114, 100, 90, -9, 0), -8);
-    assert.equal(nearestStep(115, 100, 90, -9, 0), -7);
+    assert.equal(nearestStep(108, 100, 90, -9, 0), -9);
+    assert.equal(nearestStep(109, 100, 90, -9, 0), -8);
+    assert.equal(nearestStep(115, 100, 90, -9, 0), -8);
+    assert.equal(nearestStep(181, 100, 90, -9, 0), 0);
+    assert.equal(nearestStep(182, 100, 90, -9, 0), 0);
     assert.equal(nearestStep(190, 100, 90, -9, 0), 0);
     assert.equal(nearestStep(-100, 100, 90, -9, 0), -9);
     assert.equal(nearestStep(1000, 100, 90, -9, 0), 0);
