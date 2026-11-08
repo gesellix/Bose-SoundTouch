@@ -45,7 +45,15 @@ func TestZoneMembersOpenFullDeviceDetailWithoutTopologyMutation(t *testing.T) {
 
 	openZoneMemberAndWait(t, ctx, "Breakfast Room", `Array.from(document.querySelectorAll('.stereo-action')).some(button =>
 		button.textContent.trim() === 'Create stereo pair' && button.disabled === false)`)
+
+	// A member's page owns its settings, so the member row must not mount a
+	// second copy with its own write scheduler. The other rows keep theirs.
+	assertSettingsPanels(t, ctx, "Breakfast Room", 0, 1)
+	assertSettingsPanels(t, ctx, "Atrium", 1, 0)
 	returnToZone(t, ctx, "Atrium")
+
+	// The master's page has no top-level panel: its row is the only one.
+	assertSettingsPanels(t, ctx, "Atrium", 1, 0)
 
 	openZoneMemberAndWait(t, ctx, "Workshop", `!document.querySelector('.stereo-pair-section')`)
 	returnToZone(t, ctx, "Atrium")
@@ -55,6 +63,32 @@ func TestZoneMembersOpenFullDeviceDetailWithoutTopologyMutation(t *testing.T) {
 
 	if got := zoneMutations.Load(); got != 0 {
 		t.Fatalf("device-detail navigation sent %d zone mutation request(s)", got)
+	}
+}
+
+// assertSettingsPanels counts the settings panels mounted for one speaker: the
+// disclosure in its zone member row and the top-level panel of its own page.
+func assertSettingsPanels(t *testing.T, ctx context.Context, name string, wantRow, wantPage int) {
+	t.Helper()
+
+	var got struct {
+		Row  int `json:"row"`
+		Page int `json:"page"`
+	}
+
+	if err := chromedp.Do(ctx, evalInto(fmt.Sprintf(`(() => {
+		const count = (selector, title) => Array.from(document.querySelectorAll(selector))
+			.filter(node => node.textContent.trim() === title).length;
+		return {
+			row: count('.member-settings > summary .section-title', %q),
+			page: count('.sound-settings > summary .section-title', %q),
+		};
+	})()`, "Settings · "+name, "Sound settings · "+name), &got)); err != nil {
+		t.Fatalf("count settings panels for %s: %v", name, err)
+	}
+
+	if got.Row != wantRow || got.Page != wantPage {
+		t.Fatalf("settings panels for %s: row=%d page=%d, want row=%d page=%d", name, got.Row, got.Page, wantRow, wantPage)
 	}
 }
 

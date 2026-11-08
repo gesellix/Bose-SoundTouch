@@ -85,6 +85,13 @@ export function zoneTopologyFingerprint(zone) {
     ]);
 }
 
+// A speaker's own page shows its settings at the top level unless it is the
+// zone master, whose page leaves them to its member row. Mounting both would
+// give one speaker two independent write schedulers.
+export function zoneRowOwnsMemberSettings(memberId, pageDeviceId, pageDevice) {
+    return memberId !== pageDeviceId || Boolean(pageDevice?.zone);
+}
+
 export function effectiveZoneDetail(restZone, projection, topLevelDevice, deviceId) {
     if (projection) {
         const members = projection.members || [];
