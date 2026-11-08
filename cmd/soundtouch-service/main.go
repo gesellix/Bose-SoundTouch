@@ -560,7 +560,11 @@ func main() {
 			// doesn't know about.
 			settingsExisted := settingsFileExists(config.dataDir)
 
+			// config still holds only flag and environment values here.
+			flagConfig := config
+
 			persisted := applyPersistedSettings(ds, &config)
+			envControlled := settingsControlledByEnvironment(flagConfig, persisted)
 
 			if !settingsExisted {
 				log.Printf("Creating default settings.json in %s", sanitizeLog(config.dataDir))
@@ -595,6 +599,7 @@ func main() {
 			server.SetDeploymentMode(config.deploymentMode)
 			server.SetDiscoveryScanInterval(config.discoveryScanInterval)
 			server.SetPlayerEnabled(config.playerEnabled)
+			server.SetEnvControlledSettings(envControlled)
 			server.SetUpdateCheckSettings(config.updateCheckInterval, config.updateCheckEnabled)
 			server.SetDNSSettings(persisted.DNSEnabled, strings.Join(persisted.DNSUpstream, ","), persisted.DNSBindAddr)
 			server.SetInternalPaths(persisted.InternalPaths)
@@ -1285,6 +1290,57 @@ func applyPersistedMusicServiceCredentials(config *serviceConfig, persisted data
 	if config.ttsVolume == 0 {
 		config.ttsVolume = persisted.TTSVolume
 	}
+}
+
+// settingsControlledByEnvironment returns the Settings fields a flag or
+// environment variable sets, as settings key to variable name, so the Settings
+// tab can say that a change there will not survive a restart (issue 744). These
+// are the fields applyPersistedMusicServiceCredentials leaves alone when they
+// are already set. config must hold only flag and environment values.
+//
+// A difference from the saved value is logged. Many of these are secrets, so
+// the log names the variable and never a value.
+func settingsControlledByEnvironment(config serviceConfig, persisted datastore.Settings) map[string]string {
+	volume, savedVolume := "", ""
+	if config.ttsVolume != 0 {
+		volume = strconv.Itoa(config.ttsVolume)
+	}
+
+	if persisted.TTSVolume != 0 {
+		savedVolume = strconv.Itoa(persisted.TTSVolume)
+	}
+
+	fields := []struct{ key, envVar, value, saved string }{
+		{"spotify_client_id", "SPOTIFY_CLIENT_ID", config.spotifyClientID, persisted.SpotifyClientID},
+		{"spotify_client_secret", "SPOTIFY_CLIENT_SECRET", config.spotifyClientSecret, persisted.SpotifyClientSecret},
+		{"spotify_redirect_uri", "SPOTIFY_REDIRECT_URI", config.spotifyRedirectURI, persisted.SpotifyRedirectURI},
+		{"amazon_client_id", "AMAZON_CLIENT_ID", config.amazonClientID, persisted.AmazonClientID},
+		{"amazon_client_secret", "AMAZON_CLIENT_SECRET", config.amazonClientSecret, persisted.AmazonClientSecret},
+		{"amazon_redirect_uri", "AMAZON_REDIRECT_URI", config.amazonRedirectURI, persisted.AmazonRedirectURI},
+		{"tts_provider", "TTS_PROVIDER", config.ttsProvider, persisted.TTSProvider},
+		{"tts_google_api_key", "TTS_GOOGLE_API_KEY", config.ttsGoogleAPIKey, persisted.TTSGoogleAPIKey},
+		{"tts_app_key", "TTS_APP_KEY", config.ttsAppKey, persisted.TTSAppKey},
+		{"tts_language", "TTS_LANGUAGE", config.ttsLanguage, persisted.TTSLanguage},
+		{"tts_voice", "TTS_VOICE", config.ttsVoice, persisted.TTSVoice},
+		{"tts_volume", "TTS_VOLUME", volume, savedVolume},
+	}
+
+	controlled := make(map[string]string, len(fields))
+
+	for _, field := range fields {
+		if field.value == "" {
+			continue
+		}
+
+		controlled[field.key] = field.envVar
+
+		if field.saved != "" && field.saved != field.value {
+			log.Printf("Warning: %s (or its command-line flag) overrides the value saved in the Settings tab. "+
+				"Remove it from the environment to use the saved value.", field.envVar)
+		}
+	}
+
+	return controlled
 }
 
 func createDefaultSettings(ds *datastore.DataStore, config serviceConfig) datastore.Settings {

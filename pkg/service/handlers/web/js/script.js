@@ -261,10 +261,26 @@ function setIntegrationBadge(id, state) {
     el.textContent = m.text;
 }
 
+// Says which fields a flag or environment variable sets: saving one changes the
+// running service, but the next restart brings the variable's value back.
+function showEnvControlledHints(controlled) {
+    document.querySelectorAll(".env-controlled-hint").forEach((el) => el.remove());
+    Object.entries(controlled || {}).forEach(([key, envVar]) => {
+        const input = document.getElementById(key.replaceAll("_", "-"));
+        if (!input) return;
+        const hint = document.createElement("div");
+        hint.className = "env-controlled-hint";
+        hint.style.cssText = "margin: 2px 0 0 134px; font-size: 0.85em; font-style: italic";
+        hint.textContent = `Set by ${envVar} or its command-line flag. A change here is lost at the next restart.`;
+        input.parentElement.appendChild(hint);
+    });
+}
+
 async function fetchSettings() {
     try {
         const response = await fetch("/api/setup/settings");
         const settings = await response.json();
+        showEnvControlledHints(settings.env_controlled);
         if (settings.server_url) {
             document.getElementById("target-domain").value = settings.server_url;
         }

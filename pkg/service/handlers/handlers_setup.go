@@ -292,6 +292,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	spotifyClientID := s.spotifyClientID
 	spotifyClientSecret := s.spotifyClientSecret
 	spotifyRedirectURI := s.spotifyRedirectURI
+	envControlled := s.envControlledSettings
 	amazonConfigured := s.amazonService != nil
 	amazonClientID := s.amazonClientID
 	amazonClientSecret := s.amazonClientSecret
@@ -391,6 +392,7 @@ func (s *Server) HandleGetSettings(w http.ResponseWriter, _ *http.Request) {
 		"tts_language":                  ttsLanguage,
 		"tts_voice":                     ttsVoice,
 		"tts_volume":                    ttsVolume,
+		"env_controlled":                envControlled,
 		"default_landing":               defaultLanding,
 		"admin_area_auth":               adminAreaAuth,
 		// nil means "never configured", which the form shows as an empty box
