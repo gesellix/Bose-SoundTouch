@@ -420,6 +420,8 @@ func TestScopedSoundSettingsCompactGeometry(t *testing.T) {
                             check(sound.querySelector('.sound-control-scope').textContent === target.name, 'Scope label disappeared');
                             check(scale.getAttribute('role') === 'slider' && scale.getAttribute('aria-valuemin') === String(control.min)
                                 && scale.getAttribute('aria-valuemax') === String(control.max), 'Compact scale lost its accessible range');
+                            check(sound.querySelector('[role="group"]').getAttribute('aria-label') !== scale.getAttribute('aria-label'),
+                                'A screen reader must be able to tell the step group from its slider');
                             const selected = sound.querySelector('.sound-control-tick.selected');
                             const ordinary = sound.querySelector('.sound-control-tick:not(.selected):not(.default)');
                             check(selected.getBoundingClientRect().height > ordinary.getBoundingClientRect().height
