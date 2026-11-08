@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect, useMemo, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { createLatestWinsScheduler, shouldSurfaceLatestFinal } from '../latestWinsScheduler.mjs';
