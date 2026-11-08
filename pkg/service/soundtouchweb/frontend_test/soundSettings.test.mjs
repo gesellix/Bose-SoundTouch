@@ -109,6 +109,11 @@ test('one pair balance follows a confirmed RIGHT master and device groups order 
     assert.equal(balanceControl('right.local', device).controlId, 'right.local');
     assert.equal(balanceControl('right.local', { ...device, settingsTargets: [left] }), null);
     assert.equal(balanceControl('right.local', { ...device, settingsTargets: [left, right, { ...right }] }), null);
+    // The projection lists only registered members, and a balance write needs
+    // only the master's WebSocket, so an unregistered peer must not remove it.
+    const masterOnly = { ...device, settingsTargets: [right] };
+    assert.equal(balanceControl('right.local', masterOnly).controlId, 'right.local');
+    assert.equal(pairBassControl('right.local', masterOnly), null);
 });
 
 test('accepted writes get one confirmation read, and a failed read never replays the POST', async () => {
