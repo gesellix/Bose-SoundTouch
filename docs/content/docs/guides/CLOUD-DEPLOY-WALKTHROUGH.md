@@ -45,6 +45,18 @@ Minimum mitigations before going live:
 - Run AfterTouch **behind a reverse proxy** (Nginx, Caddy, Coolify, Traefik)
   and consider blocking the `/streaming/*` paths to all but your speaker's
   IP address at the proxy level if your server/firewall allows it.
+- **Turn off the embedded player, or put a login in front of it.** The player
+  at `/app` and its `/api/control/*` API have no login of their own, even with
+  `MGMT_PASSWORD` set, so anyone who can reach the service can use them. A
+  player on a server usually can't reach speakers on your home network anyway.
+  Set `PLAYER_ENABLED=false` on a new install. On an existing one, use the
+  toggle in the **Settings** tab, because a saved setting wins over the
+  variable. To keep the player, require a login for `/app` and `/api/control`
+  at the proxy, and only for those paths: speakers can't log in, so a login on
+  the whole hostname would cut them off.
+- **Require a login for the admin area.** Set **Admin area login** in the
+  **Settings** tab to "Require login for the entire admin area now". Otherwise
+  only account linking and Local Accounts are protected.
 - Do not expose the Docker socket or the data volume to untrusted processes.
 
 ---
@@ -108,6 +120,8 @@ services:
       SERVER_URL: "https://soundtouch.example.com"
       HTTPS_SERVER_URL: "https://soundtouch.example.com"
       DISCOVERY_ENABLED: "false"         # speakers aren't on the same network
+      DEPLOYMENT_MODE: "public-network"  # Health then warns about an open player
+      PLAYER_ENABLED: "false"            # the player has no login, see above
       MGMT_USERNAME: "admin"
       MGMT_PASSWORD: "change_me!"        # change this
     volumes:
