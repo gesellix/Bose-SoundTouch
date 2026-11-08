@@ -44,7 +44,7 @@ export function SteppedSoundControl({ kind, target, control, ownerKey, available
                 </div>
                 <output class="sound-control-value" aria-live="off" aria-label=${`${label} value`}>${display}</output>
             </div>
-            <div class="sound-control-steps" role="group" aria-label=${`${label} · ${target.name}`}>
+            <div class="sound-control-steps" role="group" aria-label=${`${label} controls · ${target.name}`}>
                 <button type="button" class="sound-control-step" data-action="decrease" disabled=${disabled || value <= control.min}
                     aria-label=${kind === 'balance' ? `One step left · ${target.name}` : `Reduce bass · ${target.name}`}
                     onClick=${() => interaction.current.step(-1)}>${kind === 'balance' ? '←' : '−'}</button>
