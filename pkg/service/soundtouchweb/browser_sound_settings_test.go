@@ -381,8 +381,9 @@ func TestScopedSoundSettingsCompactGeometry(t *testing.T) {
 				chromedp.Navigate(server.URL+"/app"),
 				chromedp.WaitVisible(chromedp.CSS(`.nav-discover-icon`)),
 				chromedp.Evaluate[chromedp.Void](`(async () => {
-                    const [{ SteppedSoundControl }, { h, render }] = await Promise.all([
+                    const [{ SteppedSoundControl }, { nearestStep }, { h, render }] = await Promise.all([
                         import('/app/static/js/components/SteppedSoundControl.js'),
+                        import('/app/static/js/steppedInteraction.mjs'),
                         import('/app/static/lib/preact.module.js'),
                     ]);
                     const root = document.createElement('div');
@@ -406,6 +407,13 @@ func TestScopedSoundSettingsCompactGeometry(t *testing.T) {
                                 && Math.abs(increase.top - area.top) < 1 && decrease.right < area.left && area.right < increase.left,
                                 kind + ': scale must remain between side buttons in one 44px row');
                             check(sound.getBoundingClientRect().height <= 180, kind + ': settled control is no longer compact');
+                            [...sound.querySelectorAll('.sound-control-tick')].forEach((tick, index) => {
+                                const box = tick.getBoundingClientRect();
+                                for (const x of [box.left + .5, box.right - .5]) {
+                                    check(nearestStep(x, area.left, area.width, control.min, control.max) === control.min + index,
+                                        kind + ': a tap on tick ' + index + ' must select that tick');
+                                }
+                            });
                             const output = sound.querySelector('output');
                             check(output.getAttribute('aria-live') === 'off'
                                 && output.getBoundingClientRect().top < area.top, 'Current value must remain in the heading');
