@@ -325,6 +325,30 @@ ping -c 10 192.0.2.100
 - Try power cycling the device
 - Check for firmware updates via Bose app
 
+### A speaker reappears at a different IP address
+
+A DHCP lease change can leave the standalone `soundtouch-player` with an old,
+unreachable address. On rediscovery, the player checks the speaker's stable
+device ID and retires old addresses that no longer answer as that speaker.
+
+If your network resolves a stable name for the speaker, configure that name:
+
+```bash
+soundtouch-player --devices speaker.local
+```
+
+The player prefers a reachable, manually configured hostname over a discovered
+IP address reporting the same device ID, including when the IP was discovered
+first. Later discovery sweeps keep that hostname. Addresses you explicitly
+configure are preserved; unrelated speakers are unaffected. If the hostname
+stops answering as the same speaker, a newly discovered, working IP can replace
+it.
+
+A DHCP reservation in your router is another way to keep the speaker's address
+stable, especially if `.local` names do not resolve on your network. This does
+not change the service's advertised address or migrate a speaker to another
+AfterTouch host; see [Moving Hosts](MOVING-HOSTS.md) for that procedure.
+
 ### ❌ "No such host"
 
 **Symptoms:**
