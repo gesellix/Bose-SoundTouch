@@ -1,10 +1,10 @@
 module github.com/gesellix/bose-soundtouch
 
-go 1.27.3
+go 1.27.4
 
 require (
 	filippo.io/age v1.3.2
-	github.com/chromedp/cdproto v0.159.2
+	github.com/chromedp/cdproto v0.160.0
 	github.com/chromedp/chromedp v0.23.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/gopacket v1.1.19
@@ -16,11 +16,11 @@ require (
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/urfave/cli/v2 v2.27.7
-	golang.org/x/crypto v0.58.0
-	golang.org/x/mod v0.42.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/mod v0.43.0
 	golang.org/x/net v0.62.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.47.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/term v0.48.0
 )
 
 require (
@@ -29,6 +29,6 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/go-json-experiment/json v1.27.2 // indirect
 	github.com/xrash/smetrics v0.0.0-20261013231157-39c47d93efba // indirect
-	golang.org/x/image v0.47.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/image v0.48.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 )
