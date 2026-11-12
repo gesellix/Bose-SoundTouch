@@ -566,7 +566,7 @@ func (m *MockClient) GetNowPlaying() (*models.NowPlaying, error) {
 
 ```dockerfile
 # test/docker/Dockerfile
-FROM golang:1.27.3-alpine
+FROM golang:1.27.4-alpine
 
 WORKDIR /app
 COPY . .
