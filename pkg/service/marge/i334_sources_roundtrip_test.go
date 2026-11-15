@@ -96,7 +96,7 @@ func TestI334FullOmitsSourcesWithoutProviderID(t *testing.T) {
 
 	// Real /full source build: merge defaults + PrepareConfiguredSource +
 	// mapToFullResponseSource, exactly as AccountFullToXML invokes it.
-	full := getAccountSources(ds, account, device)
+	full := getAccountSources(ds, account, []string{device})
 
 	t.Logf("%-26s | %-8s | %-13s | %s", "out.name", "out.type", "out.provider", "credential.type")
 	for _, s := range full {
