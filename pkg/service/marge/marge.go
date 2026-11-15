@@ -314,15 +314,13 @@ func mapPresetToParityXML(p models.ServicePreset, sources []models.ConfiguredSou
 		// Work on a copy: the source list is shared by every preset.
 		copySource := *matchedSource
 		PrepareConfiguredSource(&copySource)
-		// A media server's account ("<UDN>/0") lives in SourceKey.Account;
-		// Username does not round-trip through the datastore. With an empty
-		// <username> the speaker loses the preset's account and recalling it
-		// fails with INVALID_SOURCE (issue 697), as it did for recents.
-		// Limited to media servers: other providers keep the empty
-		// <username> the preset parity tests expect.
-		if copySource.SourceKeyType == constants.ProviderStoredMusic {
-			copySource.Username = recentSourceUsername(&copySource)
-		}
+		// The account (a media server's "<UDN>/0", a Spotify user, ...) lives
+		// in SourceKey.Account; Username does not round-trip through the
+		// datastore. A speaker applies this list as is: with an empty
+		// <username> it drops the preset's account and recalling it fails
+		// with INVALID_SOURCE (issue 697), as it did for recents. Same rule
+		// as /full, which keeps the account: radio sources stay empty.
+		copySource.Username = recentSourceUsername(&copySource)
 
 		matchedSource = &copySource
 	}
