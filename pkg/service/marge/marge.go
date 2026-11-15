@@ -317,9 +317,13 @@ func mapPresetToParityXML(p models.ServicePreset, sources []models.ConfiguredSou
 		// A media server's account ("<UDN>/0") lives in SourceKey.Account;
 		// Username does not round-trip through the datastore. With an empty
 		// <username> the speaker loses the preset's account and recalling it
-		// fails with INVALID_SOURCE (issue 697). Same fallback as recents and
-		// /full.
-		copySource.Username = recentSourceUsername(&copySource)
+		// fails with INVALID_SOURCE (issue 697), as it did for recents.
+		// Limited to media servers: other providers keep the empty
+		// <username> the preset parity tests expect.
+		if copySource.SourceKeyType == constants.ProviderStoredMusic {
+			copySource.Username = recentSourceUsername(&copySource)
+		}
+
 		matchedSource = &copySource
 	}
 
