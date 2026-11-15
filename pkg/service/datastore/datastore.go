@@ -2405,7 +2405,7 @@ func (ds *DataStore) readConfiguredSourcesNoLock(account, device string) ([]mode
 		s.CreatedOn = ps.CreatedOn
 		s.UpdatedOn = ps.UpdatedOn
 		s.SourceProviderID = ps.SourceProviderID
-		s.SourceKey.Type = ps.SourceKey.Type
+		s.SourceKey.Type = canonicalSourceKeyType(ps.SourceKey.Type, ps.SourceProviderID)
 		s.SourceKey.Account = ps.SourceKey.Account
 
 		// Prioritize Credential element if present, otherwise use secret/secretType attributes
