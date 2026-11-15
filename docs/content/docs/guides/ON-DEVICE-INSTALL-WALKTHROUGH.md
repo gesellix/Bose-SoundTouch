@@ -402,8 +402,49 @@ should start playing the corresponding stream.
 | Install aborts with `ERROR: not enough free space … needed` | The installer has already pruned its own leftovers, so there is usually nothing left for you to delete. Update the installer first (it is fetched fresh from `main` by the one-liner), and if it still aborts, install an older, smaller release with `--version` |
 | `Continue without a backup? [y/N]` prompt during install    | `/mnt/nv` has room for the new binary but not also for a rollback backup. Answering `n` (the default) aborts and changes nothing. To proceed unattended, re-run with `AFTERTOUCH_FORCE_NO_BACKUP=yes` — but then keep your own copy of the current binary first   |
 | `subsystem request failed` when copying a binary with `scp` | The speakers ship no `sftp-server`; use `scp -O`                                                                                                                                                                                                                  |
+| Stereo pair lost after the install: `/getGroup` shows roles but no group ID, `/removeGroup` fails with `5550 GROUP_NO_GROUP_TO_REMOVE_ERROR` | See [A stereo pair without a group ID](#a-stereo-pair-without-a-group-id) below |
 
 For more detail see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+### A stereo pair without a group ID
+
+Reported for two SoundTouch 10 on firmware 27.0.6, with AfterTouch installed
+on the right speaker (the master of the pair). After migrating both speakers,
+`/getGroup` on each still listed the correct `LEFT` and `RIGHT` roles, but no
+group ID. The pair could be neither removed (`5550
+GROUP_NO_GROUP_TO_REMOVE_ERROR`) nor updated (`5610
+GROUP_NO_GROUP_TO_UPDATE_ERROR`), and AfterTouch held no group record for the
+pair.
+
+What brought the pair back, without a factory reset and without editing any
+file on the speakers:
+
+1. Create the group record in AfterTouch, matching what the speakers report:
+   same master, same device IDs, same roles. The speakers' own call for this is
+   `POST /streaming/account/<account ID>/group/` on AfterTouch, with a body like:
+
+   ```xml
+   <group>
+     <name>Stereo pair</name>
+     <masterDeviceId>DEVICEID01</masterDeviceId>
+     <roles>
+       <groupRole><deviceId>DEVICEID01</deviceId><role>RIGHT</role><ipAddress>192.0.2.11</ipAddress></groupRole>
+       <groupRole><deviceId>DEVICEID02</deviceId><role>LEFT</role><ipAddress>192.0.2.12</ipAddress></groupRole>
+     </roles>
+   </group>
+   ```
+
+   Take the account ID from the speaker's `/info` (`margeAccountUUID`) and the
+   device IDs and roles from its `/getGroup`. AfterTouch answers with the new
+   group ID. The speakers don't adopt it yet.
+2. Power-cycle the speaker that runs AfterTouch (the master) and wait until
+   AfterTouch answers again.
+3. Then power-cycle the other speaker.
+
+Afterwards both speakers reported the same group ID with status `GROUP_OK`, and
+a left/right channel test confirmed the stereo split. Keep the order: start the
+second speaker only once AfterTouch is reachable again, so it can find the
+group record when it boots.
 
 ---
 
