@@ -4,8 +4,8 @@ go 1.27.4
 
 require (
 	filippo.io/age v1.3.2
-	github.com/chromedp/cdproto v0.160.0
-	github.com/chromedp/chromedp v0.23.0
+	github.com/chromedp/cdproto v0.160.2
+	github.com/chromedp/chromedp v0.23.1
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
