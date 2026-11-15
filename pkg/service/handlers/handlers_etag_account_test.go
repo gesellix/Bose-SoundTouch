@@ -7,8 +7,20 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/datastore"
 )
+
+// changedPresets is a preset that /full actually serves, so writing it
+// changes the response (and with it the ETag, a hash of the body).
+const changedPresets = `<?xml version="1.0" encoding="UTF-8"?>
+<presets>
+    <preset id="1" createdOn="0" updatedOn="0">
+        <contentItem source="TUNEIN" type="stationurl" location="/v1/playback/station/s0000" sourceAccount="" isPresetable="true">
+            <itemName>Station</itemName>
+        </contentItem>
+    </preset>
+</presets>`
 
 // TestMargeAccountETagNoDevice tests ETag correctness on the account-level endpoints
 // when no ?device= query parameter is provided (the "no-device" code path in GetETagForAccount).
@@ -36,6 +48,14 @@ func TestMargeAccountETagNoDevice(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(deviceDir, "Presets.xml"), []byte("<presets/>"), 0644)
 		_ = os.WriteFile(filepath.Join(deviceDir, "Sources.xml"), []byte("<sources/>"), 0644)
 		_ = os.WriteFile(filepath.Join(deviceDir, "Recents.xml"), []byte("<recents/>"), 0644)
+		// /full lists a device's presets only for a device it knows.
+		if err := datastore.NewDataStore(tempDir).SaveDeviceInfo(account, deviceID, &models.ServiceDeviceInfo{
+			DeviceID:  deviceID,
+			AccountID: account,
+			Name:      deviceID,
+		}); err != nil {
+			t.Fatalf("save device info: %v", err)
+		}
 		return filepath.Join(deviceDir, "Presets.xml")
 	}
 
@@ -159,7 +179,7 @@ func TestMargeAccountETagNoDevice(t *testing.T) {
 		etag1 := res1.Header.Get("ETag")
 		_ = res1.Body.Close()
 
-		_ = os.WriteFile(presetsFile, []byte(`<presets><preset id="1"/></presets>`), 0644)
+		_ = os.WriteFile(presetsFile, []byte(changedPresets), 0644)
 
 		res2, err := http.Get(url)
 		if err != nil {
@@ -186,7 +206,7 @@ func TestMargeAccountETagNoDevice(t *testing.T) {
 		etag1 := res1.Header.Get("ETag")
 		_ = res1.Body.Close()
 
-		_ = os.WriteFile(presetsFile, []byte(`<presets><preset id="1"/></presets>`), 0644)
+		_ = os.WriteFile(presetsFile, []byte(changedPresets), 0644)
 
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("If-None-Match", etag1)
@@ -201,9 +221,11 @@ func TestMargeAccountETagNoDevice(t *testing.T) {
 		}
 	})
 
-	// The /full, /sources, and /devices endpoints all call GetETagForAccount(account, "")
-	// so they should return the same ETag for the same account state.
-	t.Run("ETag is consistent across full, sources, and devices endpoints", func(t *testing.T) {
+	// /sources and /devices call GetETagForAccount(account, "") and return the
+	// same ETag for the same account state. /full has its own: a hash of its
+	// body (issue 697), so a change in what it serves reaches the speaker
+	// even when the stored files are the same.
+	t.Run("ETag is consistent across sources and devices endpoints", func(t *testing.T) {
 		ts, tempDir := newServer(t)
 		account := "consistent-etag-account"
 		writeDeviceFiles(t, tempDir, account, "DEV1")
@@ -225,11 +247,8 @@ func TestMargeAccountETagNoDevice(t *testing.T) {
 		if etagFull == "" {
 			t.Fatal("ETag from /full must not be empty")
 		}
-		if etagFull != etagSources {
-			t.Errorf("/full ETag %q != /sources ETag %q", etagFull, etagSources)
-		}
-		if etagFull != etagDevices {
-			t.Errorf("/full ETag %q != /devices ETag %q", etagFull, etagDevices)
+		if etagSources != etagDevices {
+			t.Errorf("/sources ETag %q != /devices ETag %q", etagSources, etagDevices)
 		}
 	})
 }
