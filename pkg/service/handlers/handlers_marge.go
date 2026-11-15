@@ -171,23 +171,13 @@ func (s *Server) HandleMargeSourceProviders(w http.ResponseWriter, r *http.Reque
 func (s *Server) HandleMargeAccountFull(w http.ResponseWriter, r *http.Request) {
 	account := chi.URLParam(r, "account")
 
-	device := r.URL.Query().Get("device")
-
-	etag := s.ds.GetETagForAccount(account, device)
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
 	data, err := marge.AccountFullToXML(s.ds, account)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
-	w.Header()["ETag"] = []string{etag}
-	_, _ = w.Write(data)
+	writeWithBodyETag(w, r, "application/vnd.bose.streaming-v1.2+xml", data)
 }
 
 // HandleMargeAccountSources returns the Marge account sources.
@@ -461,21 +451,13 @@ func (s *Server) HandleMargePresets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	etag := strconv.FormatInt(s.ds.GetETagForPresets(account, device), 10)
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
 	data, err := marge.PresetsToXML(s.ds, account, device)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
-	w.Header()["ETag"] = []string{etag}
-	_, _ = w.Write(data)
+	writeWithBodyETag(w, r, "application/vnd.bose.streaming-v1.2+xml", data)
 }
 
 // HandleMargeUpdatePreset updates a Marge preset.
@@ -596,21 +578,13 @@ func (s *Server) HandleMargeRecents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	etag := strconv.FormatInt(s.ds.GetETagForRecents(account, device), 10)
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
 	data, err := marge.RecentsToXML(s.ds, account, device)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/vnd.bose.streaming-v1.2+xml")
-	w.Header()["ETag"] = []string{etag}
-	_, _ = w.Write(data)
+	writeWithBodyETag(w, r, "application/vnd.bose.streaming-v1.2+xml", data)
 }
 
 // HandleMargeAddRecent adds a recent item to Marge.
