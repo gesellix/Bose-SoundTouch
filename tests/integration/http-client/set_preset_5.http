@@ -51,7 +51,10 @@ Content-Type: application/vnd.bose.streaming-v1.2+xml
         client.assert(source.getAttribute("type") === "Audio", "Response body does not contain source type=\"Audio\"");
         client.assert(source.getAttribute("displayName") === null, "Response body should NOT contain displayName attribute in source");
         client.assert(doc.getElementsByTagName("sourceproviderid")[0].textContent === spotifySourceProviderID, "Response body does not contain <sourceproviderid>{{spotifySourceProviderID}}</sourceproviderid>");
-        client.assert(source.getElementsByTagName("username")[0].textContent === "", "Response body does not contain empty <username> in source, found: " + source.getElementsByTagName("username")[0].textContent);
+        // The source carries the Spotify account: a speaker that gets an empty
+        // <username> here drops the preset's account (issue 697).
+        const spotifyUserId = client.variables.environment.get("spotifyUserId");
+        client.assert(source.getElementsByTagName("username")[0].textContent === spotifyUserId, "Response body does not contain <username>" + spotifyUserId + "</username> in source, found: " + source.getElementsByTagName("username")[0].textContent);
         client.assert(doc.getElementsByTagName("username")[1].textContent === "For Lovers, Not Killers", "Response body does not contain <username>For Lovers, Not Killers</username> in preset, found: " + doc.getElementsByTagName("username")[1].textContent);
     });
 %}
