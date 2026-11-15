@@ -584,19 +584,27 @@ func recentToXML(r *models.ServiceRecent, matchingSrc *models.ConfiguredSource) 
 		}
 	}
 
+	lastPlayedAt := r.LastPlayedAt
+	if lastPlayedAt == "" && utcTime > 0 {
+		lastPlayedAt = time.Unix(utcTime, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
+	}
+
+	// Recents taken over from the speaker carry no createdOn. Fill in a value
+	// that stays the same from one response to the next. With "now" the
+	// served list changed on every request, so an ETag over the body could
+	// never match, and the speaker would rewrite its recents each time.
 	createdOn := r.CreatedOn
 	if createdOn == "" {
-		createdOn = FormatTime(time.Now())
+		createdOn = lastPlayedAt
+	}
+
+	if createdOn == "" {
+		createdOn = constants.DateStr
 	}
 
 	updatedOn := r.UpdatedOn
 	if updatedOn == "" {
 		updatedOn = createdOn
-	}
-
-	lastPlayedAt := r.LastPlayedAt
-	if lastPlayedAt == "" && utcTime > 0 {
-		lastPlayedAt = time.Unix(utcTime, 0).UTC().Format("2006-01-02T15:04:05.000+00:00")
 	}
 
 	res := recent{
