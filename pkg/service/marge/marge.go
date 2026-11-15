@@ -311,7 +311,16 @@ func mapPresetToParityXML(p models.ServicePreset, sources []models.ConfiguredSou
 	// Find and prepare source
 	matchedSource := findMatchingSourceForPreset(sources, p)
 	if matchedSource != nil {
-		PrepareConfiguredSource(matchedSource)
+		// Work on a copy: the source list is shared by every preset.
+		copySource := *matchedSource
+		PrepareConfiguredSource(&copySource)
+		// A media server's account ("<UDN>/0") lives in SourceKey.Account;
+		// Username does not round-trip through the datastore. With an empty
+		// <username> the speaker loses the preset's account and recalling it
+		// fails with INVALID_SOURCE (issue 697). Same fallback as recents and
+		// /full.
+		copySource.Username = recentSourceUsername(&copySource)
+		matchedSource = &copySource
 	}
 
 	if p.ContentItemType == "" && p.Name == "" && p.Location == "" && (matchedSource == nil || matchedSource.ID == "") {
@@ -2553,7 +2562,13 @@ func AddSource(ds *datastore.DataStore, account, username, providerID, secret, s
 		case strconv.Itoa(constants.AmazonProviderID):
 			newSrc.SourceKey.Type = constants.ProviderAmazon
 		default:
-			newSrc.SourceKey.Type = providerID
+			// The source key carries the provider's name ("STORED_MUSIC"),
+			// as the speaker reports it, not its numeric ID. Presets and
+			// recents name their source by type, so a media server stored
+			// as type "7" matched none of them, and /presets served its
+			// presets without a source block (issue 697). Unknown IDs stay
+			// as they are.
+			newSrc.SourceKey.Type = constants.GetProviderName(providerID)
 		}
 
 		log.Printf("[Marge] Adding source %s (%s) for device %s", sanitizeLog(newSrc.SourceKey.Type), sanitizeLog(username), sanitizeLog(devID))
