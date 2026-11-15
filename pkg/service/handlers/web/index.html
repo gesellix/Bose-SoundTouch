@@ -6,6 +6,24 @@
     <meta name="description" content="AfterTouch Admin UI — Configure your SoundTouch replacement, migrate speakers, and manage your local account." />
     <link rel="icon" href="/web/img/favicon-braille.svg" type="image/svg+xml"/>
     <link rel="stylesheet" href="/web/css/style.css"/>
+    <!-- Safari 15 supports modules but not import maps. Load the shim only there. -->
+    <script>
+        if (!(window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'))) {
+            var esModuleShimsScript = document.createElement('script');
+            esModuleShimsScript.src = '/web/lib/es-module-shims.js';
+            esModuleShimsScript.async = false;
+            document.head.appendChild(esModuleShimsScript);
+        }
+    </script>
+    <script type="importmap">
+    {
+        "imports": {
+            "preact": "/web/lib/preact.module.js",
+            "preact/hooks": "/web/lib/preact-hooks.module.js",
+            "htm": "/web/lib/htm.module.js"
+        }
+    }
+    </script>
 </head>
 <body>
 <header class="topbar">
@@ -1790,27 +1808,11 @@
     </div>
 
     <!-- Tab 8: Logs -->
-    <div id="tab-logs" class="tab-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-            <h2 style="margin: 0;">Service Logs</h2>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <input type="text" id="logs-filter" placeholder="Filter (substring, case-insensitive)" style="padding: 4px 8px; min-width: 260px;"/>
-                <label style="font-size: 0.9em;">
-                    <input type="checkbox" id="logs-follow" checked/> Follow tail
-                </label>
-            </div>
-        </div>
-        <p style="font-size: 0.9em; color: #555;">
-            Live mirror of the service's stderr log. Stderr still
-            receives every line — this is a read-only view for
-            convenience.
-        </p>
-        <div id="logs-status" style="font-size: 0.8em; color: #888; margin-bottom: 6px;">Idle.</div>
-        <pre id="logs-view" style="background: #111; color: #ddd; padding: 10px; border-radius: 4px; max-height: 60vh; overflow-y: auto; font-size: 0.8em; line-height: 1.35; margin: 0; white-space: pre-wrap; word-break: break-all;"></pre>
-    </div>
+    <div id="tab-logs" class="tab-content"></div>
 </div>
 
 <script src="/web/js/script.js"></script>
+<script type="module" src="/web/js/admin.js"></script>
 <footer
     style="margin-top: 50px; padding: 20px; border-top: 1px solid #eee; font-size: 0.8em; color: #888; text-align: center;">
     <span id="version-info">AfterTouch</span>
