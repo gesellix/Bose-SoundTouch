@@ -30,9 +30,19 @@ const CheckIDSourcesXMLDiff = "sources_xml_diff"
 type speakerSourcesXML struct {
 	XMLName xml.Name `xml:"sources"`
 	Items   []struct {
-		Source string `xml:"source,attr"`
-		Status string `xml:"status,attr"`
+		Source        string `xml:"source,attr"`
+		SourceAccount string `xml:"sourceAccount,attr"`
+		Status        string `xml:"status,attr"`
 	} `xml:"sourceItem"`
+}
+
+// firmwarePlaceholderAccounts are source accounts every SoundTouch lists on
+// its own, whether or not the source is used: the slots for Spotify Connect
+// and for Spotify via Alexa, reported as SPOTIFY with status UNAVAILABLE.
+// They say nothing about an account AfterTouch could manage (issue 762).
+var firmwarePlaceholderAccounts = map[string]bool{
+	"SpotifyConnectUserName": true,
+	"SpotifyAlexaUserName":   true,
 }
 
 // RegisterSourcesXMLDiff registers the sources_xml_diff check
@@ -128,7 +138,7 @@ func diffSourcesForDeviceWithURL(ds *datastore.DataStore, account, deviceID, ipA
 		}}
 	}
 
-	speakerSet, parseErr := parseSpeakerSources(res.Body)
+	speakerSet, speakerAccountSet, parseErr := parseSpeakerSources(res.Body)
 	if parseErr != nil {
 		return []Finding{{
 			Severity: SeverityWarning,
@@ -139,7 +149,9 @@ func diffSourcesForDeviceWithURL(ds *datastore.DataStore, account, deviceID, ipA
 	}
 
 	missingOnSpeaker := setDifference(serviceSet, speakerSet)
-	missingOnService := setDifference(speakerSet, serviceSet)
+	// A type the speaker lists only through firmware placeholders is not one
+	// the service is missing; the other direction still uses every item.
+	missingOnService := setDifference(speakerAccountSet, serviceSet)
 
 	var findings []Finding
 
@@ -187,20 +199,32 @@ func diffSourcesForDeviceWithURL(ds *datastore.DataStore, account, deviceID, ipA
 	return findings
 }
 
-func parseSpeakerSources(body []byte) (map[string]bool, error) {
+// parseSpeakerSources returns the source types the speaker lists, and the
+// subset it lists with an account of its own, leaving out the firmware's
+// placeholder entries.
+func parseSpeakerSources(body []byte) (all, withAccount map[string]bool, err error) {
 	var parsed speakerSourcesXML
-	if err := xml.Unmarshal(body, &parsed); err != nil {
-		return nil, err
+	if err = xml.Unmarshal(body, &parsed); err != nil {
+		return nil, nil, err
 	}
 
-	out := make(map[string]bool, len(parsed.Items))
+	all = make(map[string]bool, len(parsed.Items))
+	withAccount = make(map[string]bool, len(parsed.Items))
+
 	for i := range parsed.Items {
-		if s := parsed.Items[i].Source; s != "" {
-			out[s] = true
+		item := &parsed.Items[i]
+		if item.Source == "" {
+			continue
+		}
+
+		all[item.Source] = true
+
+		if !firmwarePlaceholderAccounts[item.SourceAccount] {
+			withAccount[item.Source] = true
 		}
 	}
 
-	return out, nil
+	return all, withAccount, nil
 }
 
 // setDifference returns the keys in a that are not in b, sorted.
