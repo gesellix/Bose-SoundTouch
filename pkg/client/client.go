@@ -754,15 +754,20 @@ const BalanceReadTimeout = 3 * time.Second
 //
 // Uses BalanceReadTimeout rather than the client's default: see that constant.
 func (c *Client) GetBalance() (*models.Balance, error) {
-	var balance models.Balance
+	var readback balanceReadback
 
 	shortBudget := &http.Client{Timeout: BalanceReadTimeout}
 
-	if err := c.getWithHTTPClient(shortBudget, "/balance", &balance); err != nil {
+	if err := c.getWithHTTPClient(shortBudget, "/balance", &readback); err != nil {
 		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
 
-	return &balance, nil
+	balance, err := readback.balance()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get balance: %w", err)
+	}
+
+	return balance, nil
 }
 
 // SetBalance is not available over HTTP.
