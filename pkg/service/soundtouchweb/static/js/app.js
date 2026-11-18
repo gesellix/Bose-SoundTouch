@@ -581,6 +581,7 @@ export function DeviceDetail({
             />
             <${Presets}
                 deviceId=${deviceId}
+                physicalId=${device.info?.device_id}
                 status=${device.status}
                 command=${command}
                 commandBusy=${commandBusy}
