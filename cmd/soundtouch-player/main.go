@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gesellix/bose-soundtouch/pkg/netcompat"
+	"github.com/gesellix/bose-soundtouch/pkg/service/favorites"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb"
 	"github.com/go-chi/chi/v5"
 	"github.com/urfave/cli/v2"
@@ -85,6 +86,11 @@ func main() {
 		Usage: "LAN web player for controlling Bose SoundTouch devices",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
+				Name:    "data-dir",
+				Usage:   "Directory for the player Favorites library (default: the user configuration directory/aftertouch-player). Use a separate directory for each running instance",
+				EnvVars: []string{"DATA_DIR"},
+			},
+			&cli.StringFlag{
 				Name:    "port",
 				Aliases: []string{"p"},
 				Usage:   "HTTP port to listen on",
@@ -143,8 +149,14 @@ func main() {
 				addr = bindAddr + ":" + port
 			}
 
+			dataDir, dataErr := playerDataDirectory(c.String("data-dir"))
+			if dataErr != nil {
+				return dataErr
+			}
+
 			// Create web app without templates (SPA mode)
 			webApp := soundtouchweb.NewWebApp()
+			webApp.Favorites = favorites.NewFileStore(filepath.Join(dataDir, "favorites.json"))
 			webApp.Version = version
 			webApp.Commit = commit
 			webApp.Date = date

@@ -368,3 +368,15 @@ Same as the parent project - see main repository LICENSE file.
 - UI design inspired by modern audio control interfaces
 - WebSocket protocol reverse-engineered from captured device interactions
 - Bootstrap and Bootstrap Icons for responsive design components
+
+## Favorites persistence
+
+The player stores explicit household favorites separately from learned catalog entries and the six physical preset slots. A standalone player uses `--data-dir` (`DATA_DIR`), defaulting to the current user's configuration directory under `aftertouch-player`; the embedded player uses the service data directory. Each running instance must own a separate directory and share one Favorites store inside that process. Two independently running players do not synchronize by pointing at the same file.
+
+The library lives in `favorites.json`. It is created on the first successful change, with a private directory and file permissions. Restarting or upgrading the player preserves it. Corrupt, unreadable or unsupported files produce a visible API error and are never silently replaced with an empty library. A failed or unwritable directory does not prevent speaker control from starting; saving Favorites reports the error. Back up the file with the process stopped. Restoring the previous binary leaves the independent library file intact.
+
+The Raspberry Pi installer configures a writable systemd state directory at `/var/lib/soundtouch-player` (or the configured service name), including under `ProtectSystem=strict`. The uninstaller preserves that state directory; reinstalling restores its ownership through systemd. A custom `DATA_DIR` requires equivalent writable directory permissions.
+
+The application-wide API uses `GET /api/control/favorites`, `POST /api/control/favorites` with one `ContentItem` JSON object, and `DELETE /api/control/favorites/{id}`. The six-slot API and speaker state are unaffected by library changes. Duplicate additions return the existing entry with its original name, artwork, order and ID; deleting an absent entry is harmless. Both mutations return the usual JSON success envelope. IDs are assigned once and retained when reading the versioned file. Safety bounds reject oversized input or a full file rather than evicting user selections.
+
+Favorites preserve original replay locations and source accounts. Comparison keys are used only for duplicate detection. The library is independent of Stockholm/Marge Favorites and provider-specific lists such as TuneIn favorites; import and synchronization are separate work.

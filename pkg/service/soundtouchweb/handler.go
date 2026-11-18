@@ -19,12 +19,22 @@ import (
 	"github.com/gesellix/bose-soundtouch/pkg/models"
 	bmxpkg "github.com/gesellix/bose-soundtouch/pkg/service/bmx"
 	"github.com/gesellix/bose-soundtouch/pkg/service/catalog"
+	"github.com/gesellix/bose-soundtouch/pkg/service/favorites"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/gesellix/bose-soundtouch/pkg/service/stations"
 	"github.com/gesellix/bose-soundtouch/pkg/stereopair"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
+
+// FavoritesStore is the persistent, application-wide library used by the player.
+// Mutations address individual entries so concurrent browsers do not replace
+// one another's selections with stale whole-list snapshots.
+type FavoritesStore interface {
+	List() ([]favorites.Entry, error)
+	Add(models.ContentItem) (favorites.Entry, error)
+	Remove(string) error
+}
 
 // WebApp holds the application state and dependencies.
 //
@@ -151,6 +161,10 @@ type WebApp struct {
 	// soundtouch-player leaves it nil, which the player surfaces as "no
 	// catalog here" rather than as an empty one.
 	CatalogEntries func() []catalog.Entry
+
+	// Favorites is explicit household-owned state, separate from learned catalog
+	// entries and physical preset slots. Composition supplies one owner per file.
+	Favorites FavoritesStore
 
 	// StoredPresets, when set, returns the preset rows the service has stored
 	// for a device, as stored (issue 697). The embedded build wires it to the

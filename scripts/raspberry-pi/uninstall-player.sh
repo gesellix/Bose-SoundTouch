@@ -11,7 +11,7 @@ set -euo pipefail
 #   sudo bash uninstall-player.sh
 #
 # Notes:
-# - soundtouch-player is stateless (no data directory) — nothing to preserve.
+# - Favorites in /var/lib/${SERVICE_NAME} are preserved for backup or reinstall.
 # - The shared soundtouch:soundtouch user/group is removed only when no other
 #   soundtouch-{service,player,web} install remains on this host.
 # - Safe to re-run; every step tolerates already-missing pieces.
