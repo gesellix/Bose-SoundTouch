@@ -9,7 +9,7 @@ import {
 } from '../devicePresentation.js';
 import { filterGroupedDeviceEntries, zoneCardPresentation, zoneTopologyFingerprint } from '../zonePresentation.mjs';
 import { ZoneMemberVolumeControl } from './ZoneMemberVolumeControl.js';
-import { volumeProjectionKey } from '../zoneVolumeResult.mjs';
+import { buildVolumeProjection } from '../zoneVolumeResult.mjs';
 import { zoneMemberVolumes } from '../zoneVolumePreview.mjs';
 
 const html = htm.bind(h);
@@ -80,15 +80,9 @@ function DeviceCard({ id, device, devices, onSelect }) {
     if (!zoneCard) return openButton;
 
     const zone = device.zone;
-    const memberStatuses = (zone.members || []).map(member => [member.controlId,
-        member.controlId === controlID ? status : devices[member.controlId]?.status]);
-    const epoch = JSON.stringify(Object.fromEntries([[controlID, status?.epoch ?? null],
-        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.epoch ?? null])]));
-    const revision = JSON.stringify(Object.fromEntries([[controlID, status?.revision ?? null],
-        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.revision ?? null])]));
+    const { epoch, key: projectionKey } = buildVolumeProjection(controlID, status, devices,
+        zone.members || [], zoneMemberVolumes(zone));
     const topologyKey = JSON.stringify([epoch, zoneTopologyFingerprint(zone)]);
-    const projectionKey = volumeProjectionKey(epoch, revision,
-        zoneMemberVolumes(zone));
     return html`
         <section class="device-card zone-card ${zoneCard.health}"
                  aria-label=${info?.name || id}>

@@ -2,12 +2,47 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    buildVolumeProjection,
     fenceVolumeReadback,
     maxReadbackActual,
     partialFailureMessage,
     reconcileVolumeResult,
     volumeProjectionKey,
 } from '../static/js/zoneVolumeResult.mjs';
+
+test('volume projections keep target precedence and logical members with unknown status', () => {
+    const target = { epoch: 1, revision: 7 };
+    const devices = {
+        master: { status: { epoch: 2, revision: 99 } },
+        stereo: { status: { epoch: 3, revision: 8 } },
+    };
+    const members = [
+        { controlId: 'stereo', deviceIds: ['LEFT', 'RIGHT'] },
+        { controlId: 'master' },
+        { controlId: 'missing' },
+    ];
+    const card = buildVolumeProjection('master', target, devices, members, { stereo: 25, master: 30 });
+    const detail = buildVolumeProjection('master', target, devices, members, { master: 30, stereo: 25, missing: null });
+    assert.equal(card.epoch, '{"master":1,"stereo":3,"missing":null}');
+    assert.deepEqual(JSON.parse(card.key), {
+        epoch: card.epoch,
+        revision: '{"master":7,"stereo":8,"missing":null}',
+        volumes: { master: 30, stereo: 25 },
+    });
+    assert.deepEqual(JSON.parse(detail.key), {
+        ...JSON.parse(card.key), volumes: { master: 30, stereo: 25, missing: null },
+    });
+
+    const revisionChanged = buildVolumeProjection('master', { ...target, revision: 8 }, devices, members, {});
+    assert.equal(revisionChanged.epoch, card.epoch);
+    assert.equal(JSON.parse(revisionChanged.key).revision, '{"master":8,"stereo":8,"missing":null}');
+    const epochChanged = buildVolumeProjection('master', { ...target, epoch: 4 }, devices, members, {});
+    assert.equal(epochChanged.epoch, '{"master":4,"stereo":3,"missing":null}');
+    const direct = buildVolumeProjection('master', target, devices, [], { master: 0 });
+    assert.deepEqual(JSON.parse(direct.key), {
+        epoch: '{"master":1}', revision: '{"master":7}', volumes: { master: 0 },
+    });
+});
 
 test('partial group readback retains a failed loudest member in the displayed maximum', () => {
     const projection = volumeProjectionKey(1, 5, { master: 90, member: 20 });
