@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { PresetPicker } from './PresetPicker.js';
+import { verifyPresetEdit } from '../presetMove.mjs';
+import { usePresetTarget } from '../usePresetTarget.js';
 
 const html = htm.bind(h);
 
@@ -16,9 +18,14 @@ export function Library({
     const firstDeviceId = deviceEntries.length > 0 ? deviceEntries[0][0] : null;
 
     const [deviceId, setDeviceId] = useState(firstDeviceId);
+    const device = devices[deviceId];
+    const physicalId = device?.info?.device_id;
+    const epoch = device?.status?.epoch;
+    const target = usePresetTarget(deviceId, physicalId, epoch);
+    const presetTargetKey = JSON.stringify([deviceId, physicalId, epoch]);
     const [servers, setServers] = useState([]);
     const [discovered, setDiscovered] = useState([]);
-    const [server, setServer] = useState(null);       // { udn, name, account }
+    const [server, setServer] = useState(null);
     const [navStack, setNavStack] = useState([]);     // [{ label, location, type }]
     const [entries, setEntries] = useState([]);
     // What the speaker says the open container holds, which is how we know a
@@ -61,14 +68,15 @@ export function Library({
         setDeviceId(entries[0][0]);
     }, [devices, deviceId]);
 
-    // Reload registered servers whenever deviceId changes.
+    // Reload registered servers if the selected speaker changes.
     useEffect(() => {
-        if (!deviceId) return;
+        browseGeneration.current++;
         setServer(null);
         setNavStack([]);
         setEntries([]);
-        loadServers(deviceId);
-    }, [deviceId]);
+        setLoadingMore(false);
+        if (deviceId) loadServers(deviceId);
+    }, [deviceId, physicalId]);
 
     async function loadServers(id) {
         setLoading(true);
@@ -137,7 +145,7 @@ export function Library({
 
     async function openServer(srv) {
         const account = `${srv.udn}/0`;
-        setServer({ udn: srv.udn, name: srv.name, account });
+        setServer({ udn: srv.udn, name: srv.name, account, deviceId, physicalId });
         const root = { label: srv.name, location: '', type: '' };
         setNavStack([root]);
         await browseLevel(account, '', '');
@@ -239,23 +247,28 @@ export function Library({
     function savePresetFor(entry, slot) {
         const account = server?.account;
 
-        if (!deviceId || !account || !entry?.location) {
-            return Promise.reject(new Error('no device, server or location'));
+        if (!deviceId || server?.deviceId !== deviceId || server?.physicalId !== physicalId ||
+            !account || !entry?.location) {
+            return Promise.reject(new Error('Reopen the media server before saving this preset.'));
         }
 
-        return api.storePresetContent(deviceId, slot, {
-            source: 'STORED_MUSIC',
-            sourceAccount: account,
-            location: entry.location,
-            type: entry.isDir ? '' : (entry.type || 'track'),
-            itemName: entry.name,
-        }).then(res => {
-            if (!res?.success) throw new Error(res?.error || 'preset save failed');
+        return verifyPresetEdit({
+            api,
+            ...target,
+            slot,
+            content: {
+                source: 'STORED_MUSIC',
+                sourceAccount: account,
+                location: entry.location,
+                type: entry.isDir ? '' : (entry.type || 'track'),
+                itemName: entry.name,
+            },
+            expected: presetList.find(p => p.ID === slot)?.ContentItem ?? null,
         });
     }
 
     // The slot this row already occupies, if any, so the star can say so.
-    const presetList = devices[deviceId]?.status?.presets?.Preset ?? [];
+    const presetList = device?.status?.presets?.Preset ?? [];
 
     function mappedSlotFor(entry) {
         const match = entry?.location
@@ -423,6 +436,7 @@ export function Library({
                                         onClick=${(e) => { e.stopPropagation(); playEntry(entry); }}
                                     >▶</button>
                                     <${PresetPicker}
+                                        key=${presetTargetKey}
                                         onSave=${slot => savePresetFor(entry, slot)}
                                         mappedSlot=${mappedSlotFor(entry)}
                                         label=${entry.isDir ? 'Save folder as preset' : 'Save as preset'}

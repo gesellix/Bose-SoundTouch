@@ -6,7 +6,7 @@ import { SourceIcon } from '../sourceIcons.js';
 import { sourceLabel } from '../sourceLabels.js';
 import { missingSourceFor } from '../sourceAvailability.mjs';
 import { canonicalLocation } from '../contentLocation.mjs';
-import { movePreset } from '../presetMove.mjs';
+import { movePreset, verifyPresetEdit } from '../presetMove.mjs';
 
 const html = htm.bind(h);
 
@@ -26,7 +26,7 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
     const [query, setQuery] = useState('');
     const [saving, setSaving] = useState(null);
     const [error, setError] = useState(null);
-    const [confirmingClear, setConfirmingClear] = useState(false);
+    const [confirmingClear, setConfirmingClear] = useState(null);
     const [pendingMove, setPendingMove] = useState(null);
     const [newName, setNewName] = useState(current?.ContentItem?.ItemName ?? '');
     const moving = useRef(false);
@@ -34,6 +34,7 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
     useLayoutEffect(() => () => { mounted.current = false; }, []);
 
     const item = current?.ContentItem ?? null;
+    const renameSource = useRef(item);
     const occupied = !!item;
 
     useEffect(() => {
@@ -96,56 +97,32 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
     }, [state.entries, query]);
 
     function pick(entry) {
-        storeItem(slot, {
+        editPreset({
             source: entry.source,
             sourceAccount: entry.source_account || '',
             location: entry.location,
             type: entry.type || '',
             itemName: entry.name || '',
             containerArt: entry.container_art || '',
-        }, entry.location)
-            .then(() => {
-                setSaving(null);
-                onAssigned?.(entry);
-            })
-            .catch(failed('The request did not complete; the slot may or may not have changed.'));
+        }, item, entry.location, entry);
     }
 
-    // storeItem is the one write the editor makes: it names a ContentItem and
-    // the slot it goes into. Filling from the catalog, renaming and moving are
-    // all that write with a different item or a different slot, which is why
-    // none of them needs its own endpoint.
-    function storeItem(targetSlot, contentItem, key) {
+    async function editPreset(content, expected, key, assigned = null) {
+        if (saving !== null) return;
         setSaving(key);
         setError(null);
-
-        return api.storePresetContent(deviceId, targetSlot, contentItem)
-            .then(res => {
-                if (res?.success === false) {
-                    throw new Error(res.error || 'The speaker refused this entry.');
-                }
-
-                return res;
-            });
-    }
-
-    function failed(message) {
-        return err => {
-            setSaving(null);
-            setError(err?.message || message);
-        };
-    }
-
-    function itemPayload(overrides = {}) {
-        return {
-            source: item?.Source ?? '',
-            sourceAccount: item?.SourceAccount ?? '',
-            location: item?.Location ?? '',
-            type: item?.Type ?? '',
-            itemName: item?.ItemName ?? '',
-            containerArt: item?.ContainerArt ?? '',
-            ...overrides,
-        };
+        try {
+            await verifyPresetEdit({ api, deviceId, physicalId, epoch, slot: Number(slot), content, expected,
+                isCurrent: () => mounted.current });
+            if (mounted.current) onAssigned?.(assigned);
+        } catch (error) {
+            if (mounted.current) setError(error.message);
+        } finally {
+            if (mounted.current) {
+                setSaving(null);
+                setConfirmingClear(null);
+            }
+        }
     }
 
     function rename(e) {
@@ -153,14 +130,9 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
 
         const name = newName.trim();
 
-        if (!name || name === item?.ItemName) return;
-
-        storeItem(slot, itemPayload({ itemName: name }), 'rename')
-            .then(() => {
-                setSaving(null);
-                onAssigned?.(null);
-            })
-            .catch(failed('The request did not complete; the name may or may not have changed.'));
+        const before = renameSource.current;
+        if (!before || !name || name === before.ItemName) return;
+        editPreset({ ...before, ItemName: name }, before, 'rename');
     }
 
     async function move(target) {
@@ -193,26 +165,7 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
     }
 
     function clear() {
-        setSaving('clear');
-        setError(null);
-
-        api.removePreset(deviceId, slot)
-            .then(res => {
-                setSaving(null);
-                setConfirmingClear(false);
-
-                if (res?.success === false) {
-                    setError(res.error || 'The speaker refused to clear this slot.');
-
-                    return;
-                }
-
-                onAssigned?.(null);
-            })
-            .catch(() => {
-                setSaving(null);
-                setError('The request did not complete; the slot may or may not have been cleared.');
-            });
+        if (confirmingClear) editPreset(null, confirmingClear, 'clear');
     }
 
     // A slot that holds something is being edited, not filled: renaming and
@@ -358,12 +311,12 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
                                         onClick=${clear}>Empty it</button>
                                 <button type="button" class="catalog-clear-btn"
                                         disabled=${saving !== null}
-                                        onClick=${() => setConfirmingClear(false)}>Keep it</button>
+                                        onClick=${() => setConfirmingClear(null)}>Keep it</button>
                             </span>
                         `
                         : html`
                             <button type="button" class="catalog-clear-btn"
-                                    onClick=${() => setConfirmingClear(true)}>
+                                    onClick=${() => setConfirmingClear({ ...item })}>
                                 Empty this slot
                             </button>
                         `}

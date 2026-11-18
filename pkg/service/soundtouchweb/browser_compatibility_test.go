@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 )
@@ -1258,15 +1259,16 @@ import { h, render } from 'preact';
 import { useState } from 'preact/hooks';
 import { DeviceDetail, mergeStatusUpdate } from '/app/static/js/app.js';
 const initialStatus = {
+  epoch: 1,
   revision: 1,
   nowPlayingRevision: 1,
-  nowPlaying: { Source: 'PRODUCT', PlayStatus: 'PLAY_STATE' },
+  nowPlaying: { Source: 'TUNEIN', PlayStatus: 'PLAY_STATE', ContentItem: { Source: 'TUNEIN', Location: 's23456', ItemName: 'Playing station' } },
   volume: { ActualVolume: 20, MuteEnabled: false },
   presets: { Preset: [{ ID: 1, ContentItem: { Source: 'TUNEIN', Location: '/station/preset', ItemName: 'Preset station' } }] },
   sources: { SourceItem: [] },
 };
 function Fixture() {
-  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker' }, status: initialStatus } });
+  const [devices, setDevices] = useState({ speaker: { info: { name: 'Speaker', device_id: 'SPEAKER' }, status: initialStatus } });
   return h(DeviceDetail, {
     deviceId: 'speaker', devices, onBack: () => {}, commandReadbackDelays: [100, 250, 500],
     onStatusReadback: (deviceId, status) => setDevices(previous => mergeStatusUpdate(previous, deviceId, status)),
@@ -1281,11 +1283,21 @@ render(h(Fixture), document.getElementById('fixture'));
 		r.Get("/api/control/devices/speaker/action/preset", func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
-		r.Get("/api/control/devices/speaker/action/storepreset", func(w http.ResponseWriter, req *http.Request) {
+		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
 			mu.Lock()
-			storedSlots = append(storedSlots, req.URL.Query().Get("id"))
+			storedSlots = append(storedSlots, chi.URLParam(req, "slot"))
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			const slotOne = `{"ID":1,"ContentItem":{"Source":"TUNEIN","Location":"/station/preset","ItemName":"Preset station"}}`
+			if len(storedSlots) == 0 {
+				writePresetFixtureBank(w, slotOne)
+				return
+			}
+			writePresetFixtureBank(w, slotOne, `{"ID":2,"ContentItem":{"Source":"TUNEIN","Location":"s23456","ItemName":"Playing station"}}`)
 		})
 		// Never matches the preset, so the command stays pending for the whole
 		// readback window while the empty slot is clicked.
@@ -1310,7 +1322,7 @@ render(h(Fixture), document.getElementById('fixture'));
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Starting preset'`),
 		evalInto(`document.querySelector('.preset-slot.savable').disabled === false`, &savableEnabled),
 		chromedp.Click(chromedp.CSS(`.preset-slot.savable`)),
-		chromedp.Sleep(300*time.Millisecond),
+		chromedp.WaitVisible(chromedp.CSS(`.preset-save-btn.saved`)),
 	); err != nil {
 		t.Fatalf("exercise empty preset slot during a pending command: %v", err)
 	}
@@ -3287,6 +3299,7 @@ import { useState } from 'preact/hooks';
 import { Library } from '/app/static/js/components/Library.js';
 const status = {
   revision: 1,
+  epoch: 1,
   presets: { Preset: [{ ID: 3, ContentItem: { Source: 'STORED_MUSIC', Location: '5:audio5:part13:3171:5 TRACK' } }] },
 };
 function Fixture() {
@@ -3298,6 +3311,8 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	var mu sync.Mutex
 	var stored []string
+	var reads int
+	bank := []models.Preset{{ID: 3, ContentItem: &models.ContentItem{Source: "STORED_MUSIC", Location: "5:audio5:part13:3171:5 TRACK"}}}
 	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
 		r.Get("/api/control/devices/speaker/library/servers", func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: []any{
@@ -3314,10 +3329,23 @@ render(h(Fixture), document.getElementById('fixture'));
 		})
 		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
 			body, _ := io.ReadAll(req.Body)
+			slot := chi.URLParam(req, "slot")
+			slotID, _ := strconv.Atoi(slot)
+			var content models.ContentItem
+			if err := json.Unmarshal(body, &content); err != nil {
+				t.Errorf("decode store request: %v", err)
+			}
 			mu.Lock()
-			stored = append(stored, chi.URLParam(req, "slot")+" "+string(body))
+			stored = append(stored, slot+" "+string(body))
+			bank = append(bank, models.Preset{ID: slotID, ContentItem: &content})
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			reads++
+			writePresetEditFixtureBank(t, w, req, bank)
 		})
 	})
 
@@ -3363,6 +3391,9 @@ render(h(Fixture), document.getElementById('fixture'));
 	if len(stored) != 2 {
 		t.Fatalf("store requests = %d (%v), want 2", len(stored), stored)
 	}
+	if reads != 4 {
+		t.Errorf("preset reads = %d, want one before and after each store", reads)
+	}
 	// The folder: type is sent empty, which is how the speaker stores a
 	// container itself (issue 700 hardware run).
 	for _, want := range []string{`4 `, `"source":"STORED_MUSIC"`, `"sourceAccount":"uuid:library/0"`, `"location":"1$7$0"`, `"type":""`, `"itemName":"Some Album"`} {
@@ -3377,32 +3408,61 @@ render(h(Fixture), document.getElementById('fixture'));
 	}
 }
 
-// TestNowPlayingStarSavesThroughTheSharedPicker renders the now-playing card
-// in Chrome and saves the current content to a slot. The card's star was
-// extracted into the shared PresetPicker for issue 700 and nothing exercised
-// it in a browser, so two module-level mistakes (a missing import, and the
-// card rendering the shared picker directly with the wrapper's props) went
-// unnoticed: both leave the star gone or inert at runtime.
+// The now-playing picker stores the content displayed by the card and waits
+// for the speaker to confirm the result before showing success.
 func TestNowPlayingStarSavesThroughTheSharedPicker(t *testing.T) {
 	const fixture = `
 import { h, render } from 'preact';
 import { NowPlaying } from '/app/static/js/components/NowPlaying.js';
 const nowPlaying = {
   Source: 'STORED_MUSIC', PlayStatus: 'PLAY_STATE', Track: 'Great Song',
-  ContentItem: { Source: 'STORED_MUSIC', Location: '5:audio5:part13:3171:5 TRACK', ItemName: 'Great Song' },
+  ContentItem: { Source: 'STORED_MUSIC', SourceAccount: 'uuid:library/0', Type: 'track', Location: '5:audio5:part13:3171:5 TRACK', ItemName: 'Great Song', IsPresetable: true },
 };
 const presets = { Preset: [{ ID: 2, ContentItem: { Source: 'STORED_MUSIC', Location: '5:audio5:part13:3171:5 TRACK' } }] };
-render(h(NowPlaying, { nowPlaying, deviceId: 'speaker', presets }), document.getElementById('fixture'));
+function show(track) {
+  render(h(NowPlaying, { nowPlaying: track, deviceId: 'speaker', physicalId: 'DEVICE1', epoch: 1, presets }), document.getElementById('fixture'));
+}
+show(nowPlaying);
+window.advanceTrack = () => show({ ...nowPlaying, Track: 'Next Song',
+  ContentItem: { ...nowPlaying.ContentItem, Location: 'next-track', ItemName: 'Next Song' } });
 `
 
 	var mu sync.Mutex
-	var slots []string
+	var writes []string
+	var reads int
+	releaseFirstRead := make(chan struct{})
+	bank := []models.Preset{{ID: 2, ContentItem: &models.ContentItem{Source: "STORED_MUSIC", Location: "5:audio5:part13:3171:5 TRACK"}}}
 	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
-		r.Get("/api/control/devices/speaker/action/storepreset", func(w http.ResponseWriter, req *http.Request) {
+		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
+			body, _ := io.ReadAll(req.Body)
+			slot := chi.URLParam(req, "slot")
+			var content models.ContentItem
+			if err := json.Unmarshal(body, &content); err != nil {
+				t.Errorf("decode store request: %v", err)
+			}
 			mu.Lock()
-			slots = append(slots, req.URL.Query().Get("id"))
+			writes = append(writes, slot+" "+string(body))
+			if slot == "5" {
+				bank = append(bank, models.Preset{ID: 5, ContentItem: &content})
+			}
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			reads++
+			first := reads == 1
+			mu.Unlock()
+			if first {
+				select {
+				case <-releaseFirstRead:
+				case <-req.Context().Done():
+					return
+				}
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			writePresetEditFixtureBank(t, w, req, bank)
 		})
 	})
 
@@ -3416,7 +3476,20 @@ render(h(NowPlaying, { nowPlaying, deviceId: 'speaker', presets }), document.get
 		evalInto(`document.querySelector('.now-playing-fav-btn').classList.contains('mapped')`, &mapped),
 		chromedp.Click(chromedp.CSS(`.now-playing-fav-btn`)),
 		chromedp.Click(chromedp.CSS(`.preset-picker-slot:nth-child(5)`)),
+		chromedp.WaitVisible(chromedp.CSS(`.preset-picker-slot:nth-child(5).saving`)),
+		chromedp.Evaluate[chromedp.Void](`window.advanceTrack()`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.track-title')?.textContent === 'Next Song'`),
+		chromedp.Func(func(context.Context, *chromedp.Target) error {
+			close(releaseFirstRead)
+			return nil
+		}),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.preset-picker-slot.saved')?.textContent === '✓'`),
+		// The second store acknowledges the request and leaves the bank untouched.
+		chromedp.Poll[chromedp.Void](`document.querySelector('.now-playing-fav-overlay') === null`),
+		chromedp.Click(chromedp.CSS(`.now-playing-fav-btn`)),
+		chromedp.Click(chromedp.CSS(`.preset-picker-slot:nth-child(6)`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.now-playing-fav-overlay [role="alert"]')?.textContent.includes('unverified')`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.preset-picker-slot:nth-child(6).error')?.textContent === '✗'`),
 	); err != nil {
 		t.Fatalf("save the now-playing content as a preset: %v", err)
 	}
@@ -3427,8 +3500,19 @@ render(h(NowPlaying, { nowPlaying, deviceId: 'speaker', presets }), document.get
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(slots) != 1 || slots[0] != "5" {
-		t.Errorf("storepreset calls = %v, want one for slot 5", slots)
+	if len(writes) != 2 {
+		t.Fatalf("store requests = %v, want two", writes)
+	}
+	if !strings.HasPrefix(writes[0], "5 ") || !strings.HasPrefix(writes[1], "6 ") {
+		t.Errorf("store requests = %v, want one per slot", writes)
+	}
+	for _, want := range []string{`"source":"STORED_MUSIC"`, `"sourceAccount":"uuid:library/0"`, `"type":"track"`, `"location":"5:audio5:part13:3171:5 TRACK"`, `"itemName":"Great Song"`} {
+		if !strings.Contains(writes[0], want) {
+			t.Errorf("store request = %q, want %q", writes[0], want)
+		}
+	}
+	if reads != 6 {
+		t.Errorf("preset reads = %d, want two for the confirmed write and four for the unverified write", reads)
 	}
 }
 

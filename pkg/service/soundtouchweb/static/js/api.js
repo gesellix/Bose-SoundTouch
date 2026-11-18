@@ -170,7 +170,7 @@ export const api = {
     storePreset: (id, slotId) => req(`/api/control/devices/${id}/action/storepreset?id=${slotId}`),
     // Stores named content rather than whatever is playing, so a Library row
     // can be saved to a slot without interrupting playback (issue 700).
-    storePresetContent: (id, slotId, item, options = {}) => req(`/api/control/devices/${id}/preset/${slotId}`, {
+    storePresetContent: (id, slotId, item, options = {}) => (options.headers ? checkedReq : req)(`/api/control/devices/${id}/preset/${slotId}`, {
         signal: options.signal,
         method: 'POST',
         headers: { ...JSON_HEADERS, ...options.headers },
@@ -207,7 +207,7 @@ export const api = {
     }),
     // Empties a slot. The catalog keeps the entry, so this loses the slot's
     // contents, not the station (issue 754).
-    removePreset: (id, slotId, options = {}) => req(`/api/control/devices/${id}/preset/${slotId}`, {
+    removePreset: (id, slotId, options = {}) => (options.headers ? checkedReq : req)(`/api/control/devices/${id}/preset/${slotId}`, {
         ...options, method: 'DELETE',
     }),
     selectSource: (id, source, account) => checkedReq(`/api/control/devices/${id}/action/source`, {

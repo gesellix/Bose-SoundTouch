@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 
 const html = htm.bind(h);
@@ -10,11 +10,8 @@ const SLOTS = [1, 2, 3, 4, 5, 6];
 // now-playing card and the Library rows (issue 700). It owns the popover
 // state and the save feedback; what a save *does* is the caller's business.
 //
-// onSave(slot) may return a thenable, in which case the picker shows the
-// saving / ✓ / ✗ feedback inline: both current callers do, because the store
-// is a single request whose result is known immediately. A caller that
-// returns nothing is saying the outcome will be reported elsewhere (e.g. by a
-// playback banner), so the picker only closes.
+// onSave(slot) may return a thenable for inline feedback. Its result must
+// reflect confirmation of the slot from the speaker.
 export function PresetPicker({
     onSave,
     mappedSlot = null,
@@ -27,8 +24,16 @@ export function PresetPicker({
     const [open, setOpen] = useState(false);
     const [savingSlot, setSavingSlot] = useState(null);
     const [savedSlot, setSavedSlot] = useState(null);
-    const [errorSlot, setErrorSlot] = useState(null);
+    const [error, setError] = useState(null);
     const wrapRef = useRef(null);
+    const mounted = useRef(true);
+    const saving = useRef(false);
+    const closeTimer = useRef(null);
+
+    useLayoutEffect(() => () => {
+        mounted.current = false;
+        clearTimeout(closeTimer.current);
+    }, []);
 
     // Close the popover on an outside click.
     useEffect(() => {
@@ -43,19 +48,8 @@ export function PresetPicker({
         return () => document.removeEventListener('click', onDocClick, true);
     }, [open]);
 
-    // Mirrors the feedback the preset tiles give (see Presets.js): a failed
-    // save used to close the overlay silently, which looked identical to a
-    // successful one.
-    function finish(setter, slotId) {
-        setSavingSlot(null);
-        setter(slotId);
-        setTimeout(() => {
-            setter(null);
-            setOpen(false);
-        }, 900);
-    }
-
     function save(slotId) {
+        if (saving.current) return;
         const pending = onSave?.(slotId);
 
         if (!pending?.then) {
@@ -65,10 +59,26 @@ export function PresetPicker({
             return;
         }
 
+        saving.current = true;
+        clearTimeout(closeTimer.current);
+        setSavedSlot(null);
+        setError(null);
         setSavingSlot(slotId);
-        pending
-            .then(() => finish(setSavedSlot, slotId))
-            .catch(() => finish(setErrorSlot, slotId));
+        pending.then(() => {
+            if (!mounted.current) return;
+            saving.current = false;
+            setSavingSlot(null);
+            setSavedSlot(slotId);
+            closeTimer.current = setTimeout(() => {
+                setSavedSlot(null);
+                setOpen(false);
+            }, 900);
+        }, reason => {
+            if (!mounted.current) return;
+            saving.current = false;
+            setSavingSlot(null);
+            setError({ slot: slotId, message: reason?.message || 'Could not verify the preset change.' });
+        });
     }
 
     const isMapped = mappedSlot !== null && mappedSlot !== undefined;
@@ -83,6 +93,7 @@ export function PresetPicker({
                 onClick=${e => { e.stopPropagation(); setOpen(o => !o); }}
                 title=${buttonTitle}
                 aria-label=${buttonTitle}
+                aria-expanded=${open ? 'true' : 'false'}
             >★</button>
             ${open && html`
                 <div class=${overlayClass}>
@@ -91,12 +102,13 @@ export function PresetPicker({
                         ${SLOTS.map(n => html`
                             <button
                                 key=${n}
-                                class="preset-picker-slot ${savingSlot === n ? 'saving' : savedSlot === n ? 'saved' : errorSlot === n ? 'error' : ''}"
+                                class="preset-picker-slot ${savingSlot === n ? 'saving' : savedSlot === n ? 'saved' : error?.slot === n ? 'error' : ''}"
                                 onClick=${e => { e.stopPropagation(); save(n); }}
                                 disabled=${savingSlot !== null}
-                            >${savedSlot === n ? '✓' : errorSlot === n ? '✗' : n}</button>
+                            >${savedSlot === n ? '✓' : error?.slot === n ? '✗' : n}</button>
                         `)}
                     </div>
+                    ${error && html`<div role="alert" style="color:var(--danger);font-size:.8rem;max-width:15rem">${error.message}</div>`}
                 </div>
             `}
         </div>
