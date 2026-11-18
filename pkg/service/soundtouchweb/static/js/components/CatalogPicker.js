@@ -1,11 +1,12 @@
 import { h } from 'preact';
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
 import { sourceLabel } from '../sourceLabels.js';
 import { missingSourceFor } from '../sourceAvailability.mjs';
 import { canonicalLocation } from '../contentLocation.mjs';
+import { movePreset } from '../presetMove.mjs';
 
 const html = htm.bind(h);
 
@@ -20,7 +21,7 @@ const html = htm.bind(h);
 // It deliberately does not hide entries that already sit in a slot. Copying
 // one station into a second slot, or onto a second speaker, is a thing people
 // do on purpose; the list only says where an entry already is.
-export function CatalogPicker({ deviceId, slot, presets, sources = null, current = null, onClose, onAssigned }) {
+export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sources = null, current = null, onClose, onAssigned }) {
     const [state, setState] = useState({ status: 'loading' });
     const [query, setQuery] = useState('');
     const [saving, setSaving] = useState(null);
@@ -28,6 +29,9 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
     const [confirmingClear, setConfirmingClear] = useState(false);
     const [pendingMove, setPendingMove] = useState(null);
     const [newName, setNewName] = useState(current?.ContentItem?.ItemName ?? '');
+    const moving = useRef(false);
+    const mounted = useRef(true);
+    useLayoutEffect(() => () => { mounted.current = false; }, []);
 
     const item = current?.ContentItem ?? null;
     const occupied = !!item;
@@ -159,24 +163,33 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
             .catch(failed('The request did not complete; the name may or may not have changed.'));
     }
 
-    // A move is a store into the target followed by a clear of the source, in
-    // that order: if the clear fails, the station is in two slots, which is
-    // recoverable. The other order would risk losing it from both.
-    function move(target) {
-        if (slotByNumber.get(target) && pendingMove !== target) {
-            setPendingMove(target);
+    async function move(target) {
+        if (moving.current || saving !== null) return;
+        const destination = slotByNumber.get(target);
+        const confirmed = pendingMove?.slot === target ? pendingMove : null;
+        if (destination && !confirmed) {
+            setPendingMove({ slot: target, source: { ...item }, destination: { ...destination } });
 
             return;
         }
 
-        storeItem(target, itemPayload(), `move:${target}`)
-            .then(() => api.removePreset(deviceId, slot))
-            .then(() => {
+        moving.current = true;
+        setSaving(`move:${target}`);
+        setError(null);
+        try {
+            await movePreset({ api, deviceId, physicalId, epoch, from: Number(slot), to: target,
+                source: confirmed?.source ?? item, destination: confirmed?.destination ?? destination,
+                isCurrent: () => mounted.current });
+            if (mounted.current) onAssigned?.(null);
+        } catch (err) {
+            if (mounted.current) setError(err.message || 'The move could not be confirmed. Check both presets.');
+        } finally {
+            moving.current = false;
+            if (mounted.current) {
                 setSaving(null);
                 setPendingMove(null);
-                onAssigned?.(null);
-            })
-            .catch(failed('The request did not complete; check both slots.'));
+            }
+        }
     }
 
     function clear() {
@@ -239,7 +252,7 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                                 <button
                                     key=${n}
                                     type="button"
-                                    class="catalog-move-slot ${slotByNumber.get(n) ? 'occupied' : ''} ${pendingMove === n ? 'pending' : ''}"
+                                    class="catalog-move-slot ${slotByNumber.get(n) ? 'occupied' : ''} ${pendingMove?.slot === n ? 'pending' : ''}"
                                     disabled=${saving !== null}
                                     title=${slotByNumber.get(n)
                                         ? `Preset ${n} holds ${slotByNumber.get(n).ItemName || 'something'}`
@@ -251,8 +264,8 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                     </div>
                     ${pendingMove !== null && html`
                         <p class="catalog-picker-note" role="alert">
-                            Preset ${pendingMove} holds ${slotByNumber.get(pendingMove)?.ItemName || 'something'}.
-                            Press ${pendingMove} again to replace it; it stays on this list.
+                            Preset ${pendingMove.slot} holds ${pendingMove.destination.ItemName || 'something'}.
+                            Press ${pendingMove.slot} again to replace it; it stays on this list.
                         </p>
                     `}
                 </div>
@@ -278,6 +291,8 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                 </p>
             `}
 
+            ${error && html`<p class="catalog-picker-note error" role="alert">${error}</p>`}
+
             ${state.status === 'ready' && (state.entries ?? []).length > 0 && html`
                 <input
                     class="catalog-picker-filter"
@@ -287,7 +302,6 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                     value=${query}
                     onInput=${e => setQuery(e.target.value)}
                 />
-                ${error && html`<p class="catalog-picker-note error" role="alert">${error}</p>`}
                 <ul class="catalog-picker-list">
                     ${entries.map(entry => {
                         const occupies = slotByIdentity.get(identityOf({

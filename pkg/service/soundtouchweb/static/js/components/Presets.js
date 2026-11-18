@@ -131,7 +131,7 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
     `;
 }
 
-export function Presets({ deviceId, status, command, commandBusy = false, onSelect }) {
+export function Presets({ deviceId, physicalId, status, command, commandBusy = false, onSelect }) {
     // Which slot the catalog picker is open for, if any. One picker for the
     // whole section rather than a popover per tile: six tiles wrap to two or
     // three rows on a phone, and a list that has to be filtered needs the
@@ -179,8 +179,10 @@ export function Presets({ deviceId, status, command, commandBusy = false, onSele
             </div>
             ${editingSlot !== null && html`
                 <${CatalogPicker}
-                    key=${`catalog:${editingSlot}`}
+                    key=${JSON.stringify([deviceId, physicalId, status?.epoch, editingSlot])}
                     deviceId=${deviceId}
+                    physicalId=${physicalId}
+                    epoch=${status?.epoch}
                     slot=${editingSlot}
                     presets=${status?.presets}
                     sources=${status?.sources}

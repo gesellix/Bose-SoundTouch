@@ -19,13 +19,17 @@ const catalogFixtureScript = `
 import { h, render } from 'preact';
 import { Presets } from '/app/static/js/components/Presets.js';
 const status = {
+  epoch: 1,
   revision: 1,
   nowPlaying: { Source: 'STANDBY' },
   presets: { Preset: [
     { ID: 1, ContentItem: { Source: 'TUNEIN', SourceAccount: '', Location: 's12345', ItemName: 'WDR 2' } },
   ] },
 };
-render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status })), document.getElementById('fixture'));
+window.renderPresetFixture = (items = status.presets.Preset) => render(h('section', { id: 'presets' }, h(Presets, {
+  deviceId: 'speaker', physicalId: 'SPEAKER', status: { ...status, presets: { Preset: items } },
+})), document.getElementById('fixture'));
+renderPresetFixture();
 `
 
 // TestPresetSlotFillsFromTheCatalog covers the issue 754 pick list: a slot is
@@ -220,13 +224,12 @@ func TestPresetSlotClearsWithConfirmation(t *testing.T) {
 	}
 }
 
-// TestPresetSlotRenamesAndMoves covers the two edits that do not need a new
-// endpoint: both are a store of a named ContentItem, with a different name or
-// into a different slot. The move also asserts the order the two requests go
-// in, which is what decides whether a half-failed move loses the station.
+// TestPresetSlotRenamesAndMoves verifies the destination before clearing the
+// source and verifies the resulting bank before closing the editor.
 func TestPresetSlotRenamesAndMoves(t *testing.T) {
 	var mu sync.Mutex
 	var calls []string
+	var moved, cleared bool
 
 	server := newPlayerFixtureServer(t, catalogFixtureScript, func(r chi.Router) {
 		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
@@ -237,16 +240,40 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 		})
 		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
 			body, _ := io.ReadAll(req.Body)
+			slot := chi.URLParam(req, "slot")
 			mu.Lock()
-			calls = append(calls, "store "+chi.URLParam(req, "slot")+" "+string(body))
+			calls = append(calls, "store "+slot+" "+string(body))
+			if slot == "3" {
+				moved = true
+			}
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
 		r.Delete("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
 			mu.Lock()
 			calls = append(calls, "clear "+chi.URLParam(req, "slot"))
+			cleared = true
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, req *http.Request) {
+			if req.Header.Get("X-AfterTouch-Preset-Target") != "SPEAKER" || req.Header.Get("X-AfterTouch-Preset-Epoch") != "1" {
+				w.WriteHeader(http.StatusConflict)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, "read")
+			const station = `"ContentItem":{"Source":"TUNEIN","Location":"s12345","ItemName":"WDR 2"}`
+			var presets []string
+			if !cleared {
+				presets = append(presets, `{"ID":1,`+station+`}`)
+			}
+			if moved {
+				presets = append(presets, `{"ID":3,`+station+`}`)
+			}
+			_, _ = io.WriteString(w, `{"success":true,"data":{"info":{"device_id":"SPEAKER"},"status":{"epoch":1,"presets":{"Preset":[`+
+				strings.Join(presets, ",")+`]}}}}`)
 		})
 	})
 
@@ -283,20 +310,52 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(calls) != 3 {
-		t.Fatalf("expected a rename store plus a move (store then clear), got %v", calls)
+	if len(calls) != 6 {
+		t.Fatalf("expected a rename store and a verified move, got %v", calls)
 	}
 
 	if !strings.HasPrefix(calls[0], "store 1 ") || !strings.Contains(calls[0], `"itemName":"WDR 2 Rheinland"`) {
 		t.Errorf("rename should store the new name into the same slot, got %q", calls[0])
 	}
 
-	if !strings.HasPrefix(calls[1], "store 3 ") {
-		t.Errorf("a move must store into the target first, got %q", calls[1])
+	if calls[1] != "read" || !strings.HasPrefix(calls[2], "store 3 ") || calls[3] != "read" || calls[4] != "clear 1" || calls[5] != "read" {
+		t.Errorf("a move must verify before both writes and after clearing the source, got %v", calls)
 	}
+}
 
-	if calls[2] != "clear 1" {
-		t.Errorf("a move must clear the source second, got %q", calls[2])
+func TestPresetMoveDoesNotConfirmAChangedDestination(t *testing.T) {
+	fixture := catalogFixtureScript + `
+window.destination = name => renderPresetFixture([...status.presets.Preset, {
+  ID: 3, ContentItem: { Source: 'TUNEIN', Location: name, ItemName: name },
+}]);
+destination('Original station');
+`
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"success":true,"data":{"available":true,"entries":[]}}`)
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"success":true,"data":{"info":{"device_id":"SPEAKER"},"status":{"epoch":1,"presets":{"Preset":[
+				{"ID":1,"ContentItem":{"Source":"TUNEIN","Location":"s12345","ItemName":"WDR 2"}},
+				{"ID":3,"ContentItem":{"Source":"TUNEIN","Location":"Replacement station","ItemName":"Replacement station"}}
+			]}}}}`)
+		})
+		r.MethodFunc(http.MethodPost, "/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("move overwrote the new destination without confirmation")
+			w.WriteHeader(http.StatusConflict)
+		})
+	})
+	ctx := newHeadlessChromeContext(t)
+	edit := chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)
+	move := chromedp.CSS(`#presets .catalog-move-slot:nth-child(2)`)
+	if err := chromedp.Do(ctx,
+		chromedp.Navigate(server.URL+"/fixture"), chromedp.Click(edit), chromedp.Click(move),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-current [role=alert]')?.textContent.includes('Original station')`),
+		chromedp.Evaluate[chromedp.Void](`destination('Replacement station')`),
+		chromedp.Click(move),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-picker-note.error')?.textContent.includes('source or destination preset changed')`),
+	); err != nil {
+		t.Fatalf("stale move confirmation: %v", err)
 	}
 }
 
