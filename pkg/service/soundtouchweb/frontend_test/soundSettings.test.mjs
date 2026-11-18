@@ -227,7 +227,7 @@ test('one discrete click writes once, unchanged values and passive updates never
     state.dispose();
 });
 
-test('latest final failure persists across unchanged renders and clears only on a later projection', async () => {
+test('latest final failure persists until a later projection reports a different value', async () => {
     const pending = deferred();
     const state = createSteppedInteraction({ interval: 0, send: () => pending.promise });
     state.update(target());
@@ -238,6 +238,8 @@ test('latest final failure persists across unchanged renders and clears only on 
     state.update(target('A', '2'));
     assert.equal(state.view().failure, 'Final write failed');
     state.update(target('A', '3'));
+    assert.equal(state.view().failure, 'Final write failed');
+    state.update({ ...target('A', '4'), value: -2 });
     assert.equal(state.view().failure, '');
     state.dispose();
 });
