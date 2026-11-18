@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -100,7 +101,7 @@ func (s *Server) HandlePairAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, output, err := s.sm.PairAccount(deviceIP, accountID, t)
+	result, output, err := s.sm.PairAccount(r.Context(), deviceIP, accountID, t)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -167,7 +168,10 @@ func (s *Server) completeSpeakerPairingFix(target health.Target) (string, error)
 		}
 	}
 
-	result, output, err := s.sm.PairAccount(deviceIP, accountID, t)
+	// completeSpeakerPairingFix is registered as a health FixFunc
+	// (server.go), whose signature carries no context, so there is no
+	// request scope to inherit here.
+	result, output, err := s.sm.PairAccount(context.Background(), deviceIP, accountID, t)
 	if err != nil {
 		return "", fmt.Errorf("pair speaker %s with account %s: %w (path output: %s)", target.Device, accountID, err, strings.TrimSpace(output))
 	}
