@@ -44,6 +44,16 @@ export function volumeProjectionKey(epoch, revision, volumes) {
         Object.entries(volumes).sort(([left], [right]) => left.localeCompare(right))) });
 }
 
+// The caller supplies volumes because the card and detail represent unknown
+// member volumes differently. Both preserve the logical membership order.
+export function buildVolumeProjection(controlId, status, devices, members, volumes) {
+    const statuses = [[controlId, status], ...members.map(member => [member.controlId,
+        member.controlId === controlId ? status : devices[member.controlId]?.status])];
+    const epoch = JSON.stringify(Object.fromEntries(statuses.map(([id, value]) => [id, value?.epoch ?? null])));
+    const revision = JSON.stringify(Object.fromEntries(statuses.map(([id, value]) => [id, value?.revision ?? null])));
+    return { epoch, key: volumeProjectionKey(epoch, revision, volumes) };
+}
+
 function parseVolumeProjection(key) {
     try {
         const projection = JSON.parse(key);
