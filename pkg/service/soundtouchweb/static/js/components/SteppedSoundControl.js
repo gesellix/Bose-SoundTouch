@@ -33,6 +33,7 @@ export function SteppedSoundControl({ kind, target, control, ownerKey, available
     const actual = confirmedValue ?? control.value;
     const readback = kind === 'balance' ? balanceLabel(actual) : String(actual);
     const formattedDefault = kind === 'balance' ? balanceLabel(control.defaultValue) : String(control.defaultValue);
+    const footerText = busy || actual !== value || failure ? `Speaker: ${readback}` : `Default ${formattedDefault}`;
     const steps = Array.from({ length: control.max - control.min + 1 }, (_, index) => control.min + index);
 
     return html`
@@ -72,12 +73,11 @@ export function SteppedSoundControl({ kind, target, control, ownerKey, available
                     onClick=${() => interaction.current.step(1)}>${kind === 'balance' ? '→' : '+'}</button>
             </div>
             <div class="sound-control-footer">
-                <span>Default ${formattedDefault}</span>
+                <span>${footerText}</span>
                 <button type="button" class="sound-control-reset" data-action="reset" disabled=${disabled || value === control.defaultValue}
                     aria-label=${`Reset ${label.toLowerCase()} · ${target.name} to ${formattedDefault}`}
                     onClick=${() => interaction.current.choose(control.defaultValue)}>Reset</button>
             </div>
-            ${busy || actual !== value || failure ? html`<div class="sound-control-readback">Speaker: ${readback}</div>` : null}
             ${disabled ? html`<div class="sound-control-readback">Currently unavailable</div>` : null}
             ${failure ? html`<div class="settings-error" role="alert">${failure}</div>` : null}
         </div>
