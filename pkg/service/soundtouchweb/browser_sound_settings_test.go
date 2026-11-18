@@ -107,6 +107,13 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 check(controls[0].textContent.includes('Speaker: 0'), 'Failure must retain the actual speaker readback');
                 for (const button of controls[0].querySelectorAll('button')) { button.focus(); button.blur(); }
                 check(controls[0].textContent.includes('Final bass write failed'), 'Blur cleared a final failure');
+                bassReadRevision++;
+                for (const member of [right, left]) {
+                    member.status = { ...member.status, bassRevision: bassReadRevision };
+                }
+                render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
+                check(controls[0].querySelector('[role="alert"]')?.textContent.includes('Final bass write failed'),
+                    'A fresh bass revision with the same values cleared a definitive error');
                 pair.settingsTargets = [right, { ...left, status: { ...left.status, revision: 2, bass: { ActualBass: -4 } } }];
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await waitFor(() => root.textContent.includes('different bass values'), 'Pair disagreement was not explained');
