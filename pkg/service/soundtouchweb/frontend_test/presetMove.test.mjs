@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { movePreset } from '../static/js/presetMove.mjs';
+import { movePreset, verifyPresetEdit } from '../static/js/presetMove.mjs';
 
 const source = { Source: 'TUNEIN', Location: 's12345', ItemName: 'WDR 2' };
 const preset = (ID, ContentItem = source) => ({ ID, ContentItem });
@@ -61,4 +61,30 @@ test('an acknowledged delete without source-clear evidence leaves the move unver
     const { options, calls } = setup({ afterStore: [preset(1), preset(3)] });
     await assert.rejects(movePreset(options), /clearing the original slot is unverified/);
     assert.deepEqual(calls, ['read', 'write 3', 'read', 'clear 1', 'read', 'read', 'read']);
+});
+
+test('an acknowledged save or clear without a changed preset is not confirmed', async () => {
+    for (const { slot, content, expected, write } of [
+        { slot: 3, content: source, expected: null, write: 'write 3' },
+        { slot: 1, content: null, expected: source, write: 'clear 1' },
+    ]) {
+        const { options, calls } = setup({});
+        await assert.rejects(verifyPresetEdit({ ...options, slot, content, expected }), /Preset change unverified/);
+        assert.deepEqual(calls, ['read', write, 'read', 'read', 'read']);
+    }
+});
+
+test('a lost write response can confirm once the speaker reports the selected content', async () => {
+    const { options, calls } = setup({ afterStore: [preset(1), preset(3)] });
+    const store = options.api.storePresetContent;
+    options.api.storePresetContent = async (...args) => { await store(...args); throw new Error('response lost'); };
+    await verifyPresetEdit({ ...options, slot: 3, content: source, expected: null });
+    assert.deepEqual(calls, ['read', 'write 3', 'read']);
+});
+
+test('losing a differently named preset for the same station prevents confirmation', async () => {
+    const another = { ...source, ItemName: 'WDR 2 alternate' };
+    const { options, calls } = setup({ before: [preset(1, another)], afterStore: [preset(3)] });
+    await assert.rejects(verifyPresetEdit({ ...options, slot: 3, content: source, expected: null }), /Preset change unverified/);
+    assert.deepEqual(calls, ['read', 'write 3', 'read', 'read', 'read']);
 });
