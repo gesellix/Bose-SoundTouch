@@ -558,7 +558,8 @@ export function DeviceDetail({
                     </svg>
                 </button>
             </div>
-            <${NowPlaying} nowPlaying=${device.status?.nowPlaying} deviceId=${deviceId} presets=${device.status?.presets} />
+            <${NowPlaying} nowPlaying=${device.status?.nowPlaying} deviceId=${deviceId}
+                physicalId=${device.info?.device_id} epoch=${device.status?.epoch} presets=${device.status?.presets} />
             <${Controls}
                 key=${controlsMode === 'zone' ? controlsTargetKey : deviceId}
                 deviceId=${deviceId}
@@ -580,7 +581,9 @@ export function DeviceDetail({
                 onZoneVolumeFailure=${rejectGroupVolumePreview}
             />
             <${Presets}
+                key=${JSON.stringify([deviceId, device.info?.device_id, device.status?.epoch])}
                 deviceId=${deviceId}
+                physicalId=${device.info?.device_id}
                 status=${device.status}
                 command=${command}
                 commandBusy=${commandBusy}

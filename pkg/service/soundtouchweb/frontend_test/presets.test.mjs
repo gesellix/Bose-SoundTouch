@@ -13,7 +13,7 @@ const css = await readFile(new URL('../static/css/app.css', import.meta.url), 'u
 // two reporters concluded the feature did not exist and filed a bug against
 // something else entirely.
 test('the save button is disabled rather than hidden when nothing is playing', () => {
-    assert.match(presets, /disabled=\$\{!canSave\}/);
+    assert.match(presets, /disabled=\$\{!canSave \|\| saveState === 'saving'\}/);
     assert.doesNotMatch(presets, /\$\{canSave && html/);
 });
 
