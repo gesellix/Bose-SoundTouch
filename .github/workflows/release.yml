@@ -446,7 +446,7 @@ jobs:
         # This is the path real releases take: a maintainer hand-writes
         # "Noteworthy" notes and publishes via the GitHub web UI, which
         # fires this job, not create_release (workflow_dispatch only).
-        # _/releases/_TEMPLATE.md's convention is a trailing footer line:
+        # The maintainer's release-notes template ends with a footer line:
         #   ---
         #   📦 **Downloads / installation:** <downloads page URL>
         # Drop that line (if present) and append the quick-downloads

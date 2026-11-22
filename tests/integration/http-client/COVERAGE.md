@@ -11,7 +11,8 @@ silently change the wire.
 
 The inventory below was mined (read-only) from real recorded speaker traffic
 (`User-Agent: Bose_Lisa/*` / `Bose/*`, `self/` category) across the local
-recording corpus (`_/backup/*`, `tests/integration/testdata/interactions/`).
+recording corpus (the maintainer's local backups and
+`tests/integration/testdata/interactions/`).
 Recordings are used as a **reference for route + request/response shape only**;
 no raw recorded bodies (which carry real ids/IPs/MACs/tokens) are committed.
 Authored flows use the RFC-5737 / placeholder values from `http-client.env.json`.

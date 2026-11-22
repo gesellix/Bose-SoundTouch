@@ -102,7 +102,9 @@ retrospective diffing whenever something goes sideways.
 ## Decrypting diagnostic reports
 
 Reporters attach an encrypted diagnostic archive
-(`aftertouch-diagnostic-*.age`), usually saved under `_/i_<reporter>/`.
+(`aftertouch-diagnostic-*.age`), usually saved under `_/_gh/issues/i<NNN>/`
+(or `_/_gh/discussions/d<NNN>/`), and under `_/_mail/i_<reporter>/` when
+it arrived by email.
 Decrypt it with **this repo's own tool**, not the generic `age` CLI:
 
 ```bash

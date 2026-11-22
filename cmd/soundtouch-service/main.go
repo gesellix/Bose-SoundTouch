@@ -1586,7 +1586,7 @@ func shouldRunUpdateCheckNow(
 }
 
 // startUpdateCheck runs the opt-in periodic check against GitHub Releases in
-// the background (#591, _/i591/design-update-check.md). Unlike the original
+// the background (#591). Unlike the original
 // v1 design, enabled/interval are now live-reloadable from Settings (see
 // handlers.Server.SetUpdateCheckSettings) — so this goroutine always runs,
 // mirroring startDeviceDiscovery's live-settings pattern, and re-reads the

@@ -1032,7 +1032,7 @@ async function startSync() {
 }
 
 // fetchAnnouncements loads and renders the active announcements for this
-// area (see #419 design doc, _/i419/design-admin-area-auth-gate.md). Not
+// area (see #419). Not
 // tab-scoped: the container lives outside the tab-content divs so a banner
 // stays visible regardless of which tab is open.
 async function fetchAnnouncements() {

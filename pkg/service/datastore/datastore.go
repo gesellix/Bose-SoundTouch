@@ -3197,7 +3197,7 @@ func (ds *DataStore) SaveSettings(settings Settings) error {
 }
 
 // UpdateCheckState is the small persisted state for the opt-in periodic
-// update check (#591, _/i591/design-update-check.md): when it last ran and
+// update check (#591): when it last ran and
 // what it last saw, so a restart doesn't lose the "already logged this
 // version" and "don't hammer GitHub on every startup" context. Separate
 // from Settings, which is operator-editable config, not runtime state.
