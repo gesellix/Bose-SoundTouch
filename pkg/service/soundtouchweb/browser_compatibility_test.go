@@ -488,7 +488,7 @@ window.revisionChecks = {
 
 	var checks map[string]bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.Poll[chromedp.Void](`window.revisionChecks !== undefined`),
 		evalInto(`window.revisionChecks`, &checks),
 	); err != nil {
@@ -653,7 +653,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	var powerPending, pausePending, mutePending, shufflePending, repeatPending bool
 	var nextFreedTransport bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.page-header .command-btn`)),
 		chromedp.Click(chromedp.CSS(`.page-header .command-btn`)),
 		evalInto(`document.querySelector('.page-header .command-btn').getAttribute('aria-busy') === 'true'`, &powerPending),
@@ -737,7 +737,7 @@ window.pauseConfirmationChecks = {
 
 	var checks map[string]bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.Poll[chromedp.Void](`window.pauseConfirmationChecks !== undefined`),
 		evalInto(`window.pauseConfirmationChecks`, &checks),
 	); err != nil {
@@ -820,7 +820,7 @@ func TestDiscreteCommandStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var transportEnabled bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.play-btn`)),
 		chromedp.Click(chromedp.CSS(`.play-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`),
@@ -909,7 +909,7 @@ func TestTrackSkipConfirmsByTrackID(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
 		chromedp.Click(chromedp.CSS(`.next-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next track started'`),
@@ -935,7 +935,7 @@ func TestTrackSkipIsNotConfirmedByRollingStreamMetadata(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
 		chromedp.Click(chromedp.CSS(`.next-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next-track command unverified'`),
@@ -1014,7 +1014,7 @@ func TestTrackSkipConfirmsByMetadataWhereTheSourceClaimsSkip(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
 		chromedp.Click(chromedp.CSS(`.next-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next track started'`),
@@ -1087,7 +1087,7 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.next-btn`)),
 		chromedp.Click(chromedp.CSS(`.next-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Next track started'`),
@@ -1161,7 +1161,7 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.previous-btn`)),
 		chromedp.Click(chromedp.CSS(`.previous-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Previous track started'`),
@@ -1230,7 +1230,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	var fallbacks int
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.recent-item`)),
 		evalInto(`document.querySelector('.recent-item img.recent-art')?.getAttribute('src') || ''`, &borrowed),
 		// The entry with no matching preset keeps the source-icon placeholder.
@@ -1304,7 +1304,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var savableEnabled bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.preset-slot.savable`)),
 		chromedp.Click(chromedp.CSS(`.preset-slot:not(.empty)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Starting preset'`),
@@ -1371,7 +1371,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var powerEnabled, transportEnabled bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.page-header .command-btn`)),
 		evalInto(`document.querySelector('.page-header .command-btn').disabled === false`, &powerEnabled),
 		evalInto(`document.querySelector('.play-btn').disabled === false`, &transportEnabled),
@@ -1443,7 +1443,7 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.play-btn`)),
 		chromedp.Click(chromedp.CSS(`.play-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.discrete-command-status').textContent === 'Playback paused'`),
@@ -1472,7 +1472,7 @@ func TestDiscreteCommandKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.play-btn`)),
 		chromedp.Click(chromedp.CSS(`.play-btn`)),
 		// The speaker reports the pause before the first readback deadline.
@@ -1512,7 +1512,7 @@ window.playConfirmationChecks = {
 
 	var checks map[string]bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.Poll[chromedp.Void](`window.playConfirmationChecks !== undefined`),
 		evalInto(`window.playConfirmationChecks`, &checks),
 	); err != nil {
@@ -1617,7 +1617,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var presetPending, recentPending bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.preset-slot:not(.empty)`)),
 		chromedp.Click(chromedp.CSS(`.preset-slot:not(.empty)`)),
 		evalInto(`document.querySelector('.preset-slot:not(.empty)').getAttribute('aria-busy') === 'true'`, &presetPending),
@@ -1815,7 +1815,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var radioDisabledWhilePending bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#tunein .tunein-play-btn`)),
 		chromedp.SetValue(chromedp.CSS(`#radio .tunein-search-input`), "station"),
 		chromedp.Click(chromedp.CSS(`#radio .btn-primary`)),
@@ -1989,7 +1989,7 @@ render(h(Fixture), document.getElementById('fixture'));
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.Click(chromedp.CSS(`#reject`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-status')?.classList.contains('failed')`),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.content-command-error')?.textContent === 'catalog rejected'`),
@@ -2100,7 +2100,7 @@ redraw();
 	ctx := newHeadlessChromeContext(t)
 	var trackSource string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Evaluate[chromedp.Void](`window.expireSources()`),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn')?.disabled === true`),
@@ -2172,7 +2172,7 @@ func TestSourceSelectionUsesOneWriteAndAbsoluteReadbacks(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var immediatelyPending bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		evalInto(`document.querySelector('.source-btn:nth-child(1)').getAttribute('aria-busy') === 'true'`, &immediatelyPending),
@@ -2273,7 +2273,7 @@ func TestProviderSourceResumesMostRecentStation(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
@@ -2324,7 +2324,7 @@ func TestProviderSourceWithoutRecentsNavigatesInstead(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
@@ -2382,7 +2382,7 @@ func TestProviderSourceNavigatesWhenRecentsFail(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
@@ -2424,7 +2424,7 @@ func TestStubNowPlayingIsNotReportedAsSuccess(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn:nth-child(1)').classList.contains('failed')`),
@@ -2458,7 +2458,7 @@ func TestPlayingSourceWithoutLocationStillConfirms(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
@@ -2503,7 +2503,7 @@ func TestLocalInternetRadioNeverResumes(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(2)`)),
 		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
@@ -2558,7 +2558,7 @@ func TestStoredMusicOpensTheLibrary(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var navigated []string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(3)`)),
 		chromedp.Poll[chromedp.Void](`window.navigated.length === 1`),
@@ -2599,7 +2599,7 @@ func TestSourceSelectionStopsReadbacksOnceTheEventStreamConfirms(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
@@ -2641,7 +2641,7 @@ func TestSourceSelectionKeepsReadbacksWithoutAnEventStream(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
@@ -2695,7 +2695,7 @@ render(h(Sources, {
 	ctx := newHeadlessChromeContext(t)
 	var active bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
@@ -2739,7 +2739,7 @@ func TestSourceSelectionReadbacksDoNotWaitForSlowWriteResponse(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`),
@@ -2784,7 +2784,7 @@ func TestSourceSelectionDefinitiveRefusalFailsImmediately(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-btn').classList.contains('failed')`),
@@ -2836,7 +2836,7 @@ func TestSourceSelectionLaterFirmwareErrorOverridesProvisionalConfirmation(t *te
 	ctx := newHeadlessChromeContext(t)
 	var provisional bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected, confirming'`),
@@ -2875,7 +2875,7 @@ func TestSourceSelectionKeepsPushConfirmationWhenReadbacksFail(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		// The speaker reports the switch before the first readback deadline.
@@ -2912,7 +2912,7 @@ func TestSourceSelectionRejectsReadbackWithOnlyNewerAggregateRevision(t *testing
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection unverified'`),
@@ -2947,7 +2947,7 @@ func TestSourceSelectionTreatsFirmwareErrorSourceAsFailed(t *testing.T) {
 
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selection failed: INVALID_SOURCE'`),
@@ -2996,7 +2996,7 @@ func TestSourceSelectionLaterAuthoritativeSourceClearsFinalProjection(t *testing
 			var commandCleared, auxInactive bool
 			var activeButtons int
 			if err := chromedp.Do(ctx,
-				chromedp.Navigate(server.URL+"/fixture"),
+				navigateFixture(server.URL+"/fixture"),
 				chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 				chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 				chromedp.Poll[chromedp.Void](`document.querySelector('.source-command-status').textContent === 'Source selected'`),
@@ -3076,7 +3076,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var title string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.track-title')?.textContent === 'Confirmed track'`),
@@ -3110,7 +3110,7 @@ func TestSourceSelectionResetsWhenDeviceChanges(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var statusText string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Evaluate[chromedp.Void](`window.renderStatus('STANDBY', '', false, 'other-speaker')`),
@@ -3174,7 +3174,7 @@ func TestSourceSelectionFencesOlderReadbackAndStatus(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 	var outcome, productClass string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Click(chromedp.CSS(`.source-btn:nth-child(1)`)),
 		chromedp.Sleep(140*time.Millisecond),
@@ -3215,7 +3215,7 @@ func TestStaleSourcesRemainVisibleButCannotBeSelected(t *testing.T) {
 	var staleText, staleRole string
 	var described bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn`)),
 		chromedp.Evaluate[chromedp.Void](`window.renderStatus('STANDBY', '', true)`),
 		chromedp.WaitVisible(chromedp.CSS(`#source-stale-status`)),
@@ -3324,7 +3324,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var trackStarTitle string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-item`)),
 		// The first list is the registered servers; open it to get the rows.
 		chromedp.Click(chromedp.CSS(`#library .tunein-item`)),
@@ -3410,7 +3410,7 @@ render(h(NowPlaying, { nowPlaying, deviceId: 'speaker', presets }), document.get
 	var starTitle string
 	var mapped bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.now-playing-fav-btn`)),
 		evalInto(`document.querySelector('.now-playing-fav-btn').title`, &starTitle),
 		evalInto(`document.querySelector('.now-playing-fav-btn').classList.contains('mapped')`, &mapped),
@@ -3492,7 +3492,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	var firstCount int
 	var firstLabel string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-item`)),
 		chromedp.Click(chromedp.CSS(`#library .tunein-item`)),
 		chromedp.WaitVisible(chromedp.CSS(`#library .library-more`)),
@@ -3601,7 +3601,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var emptyNote string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#library .tunein-toolbar`)),
 		// First refresh: still nothing, and the UI says where to go next.
 		chromedp.Evaluate[chromedp.Void](`[...document.querySelectorAll('#library .tunein-toolbar button')].find(b => b.textContent.trim() === 'Refresh').click()`),

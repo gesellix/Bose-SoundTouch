@@ -75,7 +75,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.zone-volume-slider`)),
 		chromedp.Evaluate[chromedp.Void](`(() => {
   const slider = document.querySelector('.zone-volume-slider');
@@ -138,7 +138,7 @@ func TestProvenGroupVolumeWarningRequiresMatchingAuthoritativeValues(t *testing.
 			})
 			ctx := newHeadlessChromeContext(t)
 			if err := chromedp.Do(ctx,
-				chromedp.Navigate(server.URL+"/fixture"),
+				navigateFixture(server.URL+"/fixture"),
 				chromedp.WaitVisible(chromedp.CSS(`.volume-slider[aria-label="Group volume"]`)),
 				chromedp.Evaluate[chromedp.Void](`(() => {
   const slider = document.querySelector('.volume-slider');
@@ -204,7 +204,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#detail .volume-slider`)),
 		chromedp.WaitVisible(chromedp.CSS(`#card .zone-volume-slider`)),
 		chromedp.Evaluate[chromedp.Void](`(() => {
@@ -270,7 +270,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#card .zone-volume-slider`)),
 		chromedp.Evaluate[chromedp.Void](`(() => {
   for (const selector of ['#detail .volume-slider', '#card .zone-volume-slider']) {
