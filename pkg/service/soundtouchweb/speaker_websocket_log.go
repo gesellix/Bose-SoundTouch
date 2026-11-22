@@ -18,14 +18,25 @@ type speakerWebSocketLogger struct {
 	conn      *webtypes.DeviceConnection
 	outage    bool
 	connected bool
+	// readError is the client's last read error, the cause of the
+	// disconnect that follows it. The outage line reports it.
+	readError string
 }
 
 func (l *speakerWebSocketLogger) Printf(format string, args ...interface{}) {
 	// Match the client's routine formats exactly so new diagnostics stay
 	// visible. Accepted transport callbacks report outages and recovery below.
 	switch format {
+	case "WebSocket read error: %v":
+		// The client logs this just before it reports the disconnect, on the
+		// same goroutine. Keep it as the reason for the outage line instead.
+		l.mu.Lock()
+		l.readError = fmt.Sprintf(format, args...)
+		l.mu.Unlock()
+
+		return
 	case "Connecting to %s", "Connected to %s", "Disconnected",
-		"WebSocket read error: %v", "Failed to send ping: %v",
+		"Failed to send ping: %v",
 		"Reconnection attempt %d", "Reconnection attempt %d failed: %v",
 		"Reconnected successfully", "Max reconnection attempts reached or reconnection disabled":
 		return
@@ -64,9 +75,18 @@ func (l *speakerWebSocketLogger) transportState(connected bool, generation uint6
 	}
 
 	if !connected {
-		l.reportOutage("transport disconnected")
+		reason := "transport disconnected"
+		if l.readError != "" {
+			reason = l.readError
+		}
+
+		l.readError = ""
+		l.reportOutage(reason)
+
 		return true
 	}
+
+	l.readError = ""
 
 	if l.outage {
 		log.Printf("WebSocket recovered for device %s", sanitizeLog(l.deviceID))

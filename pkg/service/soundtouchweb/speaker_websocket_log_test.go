@@ -61,6 +61,40 @@ func TestSpeakerWebSocketLoggerOutageLifecycle(t *testing.T) {
 	}
 }
 
+// The client's read error explains why the stream dropped. It is filtered as
+// routine noise, so the outage line carries it instead, once: a later drop
+// with no read error of its own must not inherit it.
+func TestSpeakerWebSocketLoggerOutageNamesTheReadError(t *testing.T) {
+	conn := webtypes.NewDeviceConnection(nil, nil)
+	t.Cleanup(conn.Close)
+	l := &speakerWebSocketLogger{deviceID: "speaker", conn: conn}
+	out := captureLog(t, func() {
+		l.transportState(true, 1)
+		l.Printf("WebSocket read error: %v", errors.New("websocket: close 1011 (internal server error)\r\n"))
+		l.transportState(false, 2)
+		l.transportState(true, 3)
+		l.transportState(false, 4)
+		l.transportState(true, 5)
+		// A read error whose disconnect never arrives is dropped by the next
+		// accepted recovery, not reused for a later outage.
+		l.Printf("WebSocket read error: %v", errors.New("stale"))
+		l.transportState(true, 6)
+		l.transportState(false, 7)
+	})
+	for _, want := range []string{
+		`WebSocket unavailable for device speaker: WebSocket read error: websocket: close 1011 (internal server error)\r\n`,
+		"WebSocket unavailable for device speaker: transport disconnected",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, "WebSocket unavailable") != 3 || strings.Contains(out, "stale") ||
+		strings.Count(out, "transport disconnected") != 2 {
+		t.Fatalf("read error was not reported exactly once:\n%s", out)
+	}
+}
+
 func TestSpeakerWebSocketLoggerDevicesAreIndependent(t *testing.T) {
 	a := webtypes.NewDeviceConnection(nil, nil)
 	b := webtypes.NewDeviceConnection(nil, nil)
