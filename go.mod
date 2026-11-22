@@ -4,21 +4,21 @@ go 1.27.4
 
 require (
 	filippo.io/age v1.3.2
-	github.com/chromedp/cdproto v0.160.3
-	github.com/chromedp/chromedp v0.23.1
+	github.com/chromedp/cdproto v0.160.8
+	github.com/chromedp/chromedp v0.24.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/mdns v1.0.7
 	github.com/miekg/dns v1.1.73
 	github.com/russross/blackfriday/v2 v2.1.0
-	github.com/sergi/go-diff v1.4.0
+	github.com/sergi/go-diff v1.4.5
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/urfave/cli/v2 v2.27.7
 	golang.org/x/crypto v0.59.0
 	golang.org/x/mod v0.43.0
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.48.0
 )
