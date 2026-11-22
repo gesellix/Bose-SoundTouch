@@ -81,7 +81,7 @@ window.expectedOrdinaryMetadata = [ordinaryTrack, ordinaryArtist, ordinaryAlbum]
 			var titlesComplete, detailsComplete, ordinaryDetailsComplete bool
 			if err := chromedp.Do(ctx,
 				chromedp.EmulateViewport(viewport.width, viewport.height),
-				chromedp.Navigate(server.URL+"/fixture"),
+				navigateFixture(server.URL+"/fixture"),
 				chromedp.WaitVisible(chromedp.CSS(`.track-title`)),
 				evalInto(`[
   ...[...document.querySelectorAll('.app, .device-detail, .now-playing, .track-info, .device-grid, .device-card')]

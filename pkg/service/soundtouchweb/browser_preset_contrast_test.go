@@ -90,7 +90,7 @@ func selectedControlPage(t *testing.T) context.Context {
 	server := newMetadataFixtureServer(t, selectedControlFixture)
 	ctx := newHeadlessChromeContext(t)
 
-	if err := chromedp.Do(ctx, chromedp.Navigate(server.URL+"/fixture"),
+	if err := chromedp.Do(ctx, navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.preset-slot.active`)),
 		chromedp.WaitVisible(chromedp.CSS(`.source-btn.active`))); err != nil {
 		t.Fatalf("selected controls did not render: %v", err)

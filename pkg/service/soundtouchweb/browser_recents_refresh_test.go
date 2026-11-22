@@ -45,7 +45,7 @@ func TestRecentsRefreshLifecycle(t *testing.T) {
 	wait := func(expression string) chromedp.Action[chromedp.Void] {
 		return chromedp.Poll[chromedp.Void](expression)
 	}
-	run(chromedp.Navigate(server.URL+"/fixture"), wait(`requests.length===1`), js(`answer(0,'Initial')`), wait(`document.querySelector('.recent-name')?.textContent==='Initial'`))
+	run(navigateFixture(server.URL+"/fixture"), wait(`requests.length===1`), js(`answer(0,'Initial')`), wait(`document.querySelector('.recent-name')?.textContent==='Initial'`))
 	// A mounted panel ignores unrelated render/volume-style updates.
 	run(js(`show({volume:20,commandBusy:true});show({volume:21,commandBusy:false});window.unrelatedReady=false;setTimeout(()=>window.unrelatedReady=true,180)`), wait(`unrelatedReady`))
 	var count int
@@ -103,7 +103,7 @@ detail();
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.Poll[chromedp.Void](`requests.length===1`),
 		chromedp.Evaluate[chromedp.Void](`answer(0,'First')`),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.recent-name')?.textContent==='First'`),

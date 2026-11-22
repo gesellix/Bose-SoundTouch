@@ -88,7 +88,7 @@ func TestStoredPresetProblemsAreShownAndRepaired(t *testing.T) {
 	var bodyText string
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-summary`)),
 		textInto(chromedp.CSS(`#presets .stored-presets-headline`), &headline),
 
@@ -178,7 +178,7 @@ func TestASingleStoredRowCanBeRemoved(t *testing.T) {
 	var offersBulkFix bool
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-summary`)),
 		chromedp.Click(chromedp.CSS(`#presets .stored-presets-summary`)),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-row`)),
@@ -219,7 +219,7 @@ func TestNoWarningWhenTheStoredListAgrees(t *testing.T) {
 
 	var warned bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-grid`)),
 		// Wait for the request itself to have happened, so "nothing rendered"
 		// is a verdict on the answer rather than on the timing.
@@ -292,7 +292,7 @@ func TestPerSlotChoiceSettlesOneButton(t *testing.T) {
 	var headline, ourName, theirName string
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .stored-presets-summary`)),
 		textInto(chromedp.CSS(`#presets .stored-presets-headline`), &headline),
 		chromedp.Click(chromedp.CSS(`#presets .stored-presets-summary`)),

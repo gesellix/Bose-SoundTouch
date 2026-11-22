@@ -70,7 +70,7 @@ func TestPresetSlotFillsFromTheCatalog(t *testing.T) {
 	var filtered int
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
 		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
 
@@ -134,7 +134,7 @@ func TestCatalogPickerSaysWhenThereIsNoCatalog(t *testing.T) {
 
 	var note string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
 		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(2) .preset-edit-btn`)),
 		// Poll for the settled note rather than the first one: the panel shows
@@ -183,7 +183,7 @@ func TestPresetSlotClearsWithConfirmation(t *testing.T) {
 	var confirmText string
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 
 		// Slot 2 is empty in the fixture: there is nothing to empty, so the
 		// action is not offered at all.
@@ -253,7 +253,7 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 	ctx := newHeadlessChromeContext(t)
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 
 		// Slot 1 holds WDR 2. Rename it.
 		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
@@ -360,7 +360,7 @@ render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status 
 	var markedName, warning string
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
 		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-entry`)),
@@ -440,7 +440,7 @@ render(h('section', { id: 'sources' }, h(Sources, {
 	var first, second string
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#sources .sources-elsewhere-row`)),
 		evalInto(`document.querySelectorAll('#sources .sources-elsewhere-row').length`, &rows),
 		textInto(chromedp.CSS(`#sources .sources-elsewhere-row:nth-child(1)`), &first),
@@ -491,7 +491,7 @@ render(h('section', { id: 'sources' }, h(Sources, {
 
 	var shown bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#sources .source-btn`)),
 		chromedp.Poll[chromedp.Void](`performance.getEntriesByType('resource').some(e => e.name.includes('sources-elsewhere'))`),
 		evalInto(`document.querySelector('#sources .sources-elsewhere') !== null`, &shown),
@@ -565,7 +565,7 @@ render(h('section', { id: 'sources' }, h(Sources, {
 	var buttons int
 
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`#sources .sources-elsewhere-add`)),
 
 		// Only the media server offers to be added; a music service cannot be
