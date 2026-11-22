@@ -99,7 +99,20 @@ jobs:
         with:
           fail-on-severity: moderate
           allow-ghsas: GHSA-xxxx-xxxx-xxxx  # Add specific allowlisted advisories if needed
-          deny-licenses: GPL-2.0, LGPL-2.0  # Add licenses to deny if needed
+          # Allowlist, not a deny list (deny-licenses is deprecated, see
+          # actions/dependency-review-action issue 997). These are the
+          # licenses our dependencies use today; a dependency under any other
+          # license fails the check until it has been looked at and added
+          # here. The LicenseRef is the patent grant that golang.org/x/net
+          # and golang.org/x/sys carry next to BSD-3-Clause. Dependencies
+          # without license data (most GitHub Actions) are reported, not
+          # failed.
+          allow-licenses: >-
+            MIT,
+            BSD-2-Clause,
+            BSD-3-Clause,
+            Apache-2.0,
+            LicenseRef-scancode-google-patent-license-golang
 
   security-summary:
     name: Security Summary
