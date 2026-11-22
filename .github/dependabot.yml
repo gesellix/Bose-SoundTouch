@@ -155,8 +155,12 @@ updates:
           - "codecov/*"
 
   # Docker dependency updates
+  # "/" is the service image; .github/semgrep pins the image the security
+  # workflow runs Semgrep from.
   - package-ecosystem: "docker"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/semgrep"
     schedule:
       interval: "weekly"
       day: "wednesday"
