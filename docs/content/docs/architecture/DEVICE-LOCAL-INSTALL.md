@@ -288,5 +288,5 @@ Separate user-facing material to produce when we are ready (not in this comparis
 - AfterTouch SSH client: `pkg/ssh/ssh.go` (`NewClient`, `Run`, `ReadFile`, `ReadDir`, `UploadContent`), already used by `pkg/service/setup/`.
 - Storage limitations: issue #268 (ST20 rootfs free space), issue #196 (loopback-only bind), issue #250 (status reports running but unreachable).
 - soundtouch-tiny: `https://github.com/GameTec-live/soundtouch-tiny`, raised in PR #292 (`https://github.com/gesellix/Bose-SoundTouch/pull/292`).
-- opencloudtouch parallel discussion: `https://github.com/scheilch/opencloudtouch/discussions/201`.
+- opencloudtouch parallel discussion: `https://github.com/opencloudtouch/opencloudtouch/discussions/201`.
 - Existing parity doc shape: `docs/PARITY-OPENCLOUDTOUCH.md` is the precedent for cross-project comparison documents.

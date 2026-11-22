@@ -214,7 +214,7 @@ soundtouch-cli --host 192.0.2.100 source internet-radio \
 - [SoundTouch WebServices API Wiki](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API)
 - [LOCAL_INTERNET_RADIO - streamUrl format](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API#select-local_internet_radio---streamurl-format)
 - [LOCAL_MUSIC](https://github.com/thlucas1/homeassistantcomponent_soundtouchplus/wiki/SoundTouch-WebServices-API#select-local_music)
-- [Content Selection Example](https://github.com/gesellix/Bose-SoundTouch/tree/main/examples/content-selection/README.md)
+- [Content Selection Example](https://github.com/gesellix/Bose-SoundTouch/blob/main/examples/content-selection/README.md)
 - [CLI Reference](../guides/CLI-REFERENCE.md)
 - [Content Selection Example (Direct)](https://github.com/gesellix/Bose-SoundTouch/tree/main/examples/content-selection)
 

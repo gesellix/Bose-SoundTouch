@@ -351,7 +351,7 @@ func TestSession_XMLAttributeEscape(t *testing.T) {
 // shape introduced for #195/#269 investigation. The extended path
 // mirrors what the official Bose app and Zimbo88's OpenCloudTouch
 // USB-less script send (see docs/reference/DEVICE-PAIRING-FLOW.md
-// and https://github.com/scheilch/opencloudtouch/discussions/201).
+// and https://github.com/opencloudtouch/opencloudtouch/discussions/201).
 func TestBuildPairDeviceWithAccountXML(t *testing.T) {
 	t.Run("minimal payload — no extras", func(t *testing.T) {
 		got := buildPairDeviceWithAccountXML("1234567", "Bearer tok", MargePairingExtras{})
