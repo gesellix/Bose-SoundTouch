@@ -43,6 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Upload the Semgrep SARIF to code scanning. Without it the upload is
+      # refused on pushes to main, so main never gets a baseline and every PR
+      # lists all Semgrep alerts as if they were new.
+      security-events: write
 
     steps:
       - name: Checkout code
