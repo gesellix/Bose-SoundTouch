@@ -53,8 +53,9 @@ type DeviceConnection struct {
 	DeviceInfo *models.DeviceInfo
 	LastSeen   time.Time
 
-	deviceName atomic.Pointer[string]
-	status     atomic.Pointer[DeviceStatus]
+	discoverySource atomic.Pointer[string]
+	deviceName      atomic.Pointer[string]
+	status          atomic.Pointer[DeviceStatus]
 
 	// epoch stamps every status this connection publishes. See nextStatusEpoch.
 	epoch int64
