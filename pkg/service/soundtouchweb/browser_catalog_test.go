@@ -3,6 +3,7 @@
 package soundtouchweb
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -197,7 +198,7 @@ func TestPresetSlotClearsWithConfirmation(t *testing.T) {
 		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-clear-btn`)),
 		chromedp.Click(chromedp.CSS(`#presets .catalog-clear-btn`)),
 		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-picker-confirm`)),
-		textInto(chromedp.CSS(`#presets .catalog-picker-foot .catalog-picker-note`), &confirmText),
+		textInto(chromedp.CSS(`#presets .catalog-clear .catalog-picker-note`), &confirmText),
 		chromedp.Click(chromedp.CSS(`#presets .catalog-picker-confirm .catalog-clear-btn.danger`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .catalog-picker') === null`),
 	); err != nil {
@@ -217,6 +218,55 @@ func TestPresetSlotClearsWithConfirmation(t *testing.T) {
 
 	if len(cleared) != 1 || cleared[0] != "1" {
 		t.Fatalf("expected preset 1 to be cleared once, got %v", cleared)
+	}
+}
+
+// TestPresetSlotClearStaysPutWhileTheCatalogLoads pins where the clear action
+// sits. A picker opens before its catalog has arrived, and the list renders
+// once it does. Below the list, the button moved down at that moment, and a
+// click aimed at it could land on a station and store that one instead. With
+// the slot's own actions above the list, nothing a user aims at moves.
+func TestPresetSlotClearStaysPutWhileTheCatalogLoads(t *testing.T) {
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
+
+	server := newPlayerFixtureServer(t, catalogFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			<-release
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+				"available": true,
+				"entries": []any{
+					map[string]any{"source": "TUNEIN", "location": "s12345", "name": "WDR 2", "origin": "preset"},
+					map[string]any{"source": "RADIO_BROWSER", "location": "uuid-fm4", "name": "FM4", "origin": "recent"},
+				},
+			}})
+		})
+	})
+
+	ctx := newHeadlessChromeContext(t)
+
+	const clearTop = `Math.round(document.querySelector('#presets .catalog-clear-btn').getBoundingClientRect().top)`
+
+	var whileLoading, afterLoading int
+
+	if err := chromedp.Do(ctx,
+		navigateFixture(server.URL+"/fixture"),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-clear-btn`)),
+		evalInto(clearTop, &whileLoading),
+		func(context.Context, *chromedp.Target) (chromedp.Void, error) {
+			releaseOnce.Do(func() { close(release) })
+			return chromedp.Void{}, nil
+		},
+		chromedp.WaitVisible(chromedp.CSS(`#presets .catalog-entry`)),
+		evalInto(clearTop, &afterLoading),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if whileLoading != afterLoading {
+		t.Errorf("the clear button moved from y=%d to y=%d when the catalog arrived", whileLoading, afterLoading)
 	}
 }
 

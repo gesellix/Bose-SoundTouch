@@ -1400,14 +1400,14 @@ img.catalog-entry-icon { object-fit: contain; filter: var(--content-icon-filter)
 .catalog-move-slot.pending { border-color: var(--danger); color: var(--danger); }
 .catalog-move-slot:disabled { opacity: .5; cursor: default; }
 
-.catalog-picker-foot {
+.catalog-clear {
     display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-    gap: .4rem; border-top: 1px solid var(--border); padding-top: .5rem;
+    gap: .4rem;
 }
 .catalog-picker-confirm { display: flex; gap: .4rem; }
 /* The editor's small text buttons. Rename and clear keep separate class names
-   rather than sharing one: they are the two ends of the panel, and a selector
-   that matches both would have a click land on whichever comes first. */
+   rather than sharing one: they sit in the same section, and a selector that
+   matches both would have a click land on whichever comes first. */
 .catalog-action-btn, .catalog-clear-btn {
     padding: .3rem .5rem; font-size: .78rem;
     color: var(--text-dim); background: var(--bg);
