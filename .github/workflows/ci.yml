@@ -253,11 +253,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Settings (retries, accepted status codes, excludes) live in
-      # lychee.toml at the repository root.
+      # lychee.toml at the repository root. --verbose lists every redirect
+      # (source, status, target) per file in the log and the job summary.
       - name: Check documentation links
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
           args: >-
+            --verbose
             --config lychee.toml
             --root-dir ${{ github.workspace }}/docs/static
             './**/*.md'
