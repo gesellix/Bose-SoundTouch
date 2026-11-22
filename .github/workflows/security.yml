@@ -66,14 +66,21 @@ jobs:
           staticcheck ./...
           echo "::endgroup::"
 
+      # The Semgrep CLI in its own image, not semgrep/semgrep-action: that
+      # wrapper is deprecated and warns about its own inputs. `semgrep scan`
+      # exits 0 even with findings; they go to code scanning via the SARIF
+      # upload below. Bump the tag and digest together.
       - name: Run Semgrep security analysis
-        uses: semgrep/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1 (no v1.x.y semver tag exists)
-        with:
-          config: >-
-            p/security-audit
-            p/secrets
-            p/golang
-          generateSarif: "1"
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src -w /src \
+            semgrep/semgrep:1.185.0@sha256:67518c174185a2043fdbed16c70631b79209499b3671178e7194379b48295a0d \
+            semgrep scan \
+              --config p/security-audit \
+              --config p/secrets \
+              --config p/golang \
+              --metrics=off \
+              --sarif --output semgrep.sarif
         continue-on-error: true
 
       - name: Upload Semgrep SARIF results
