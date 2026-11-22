@@ -19,18 +19,16 @@ const (
 )
 
 // Announcement is one entry in the small, in-code (not admin-authored)
-// announcement list — see #419 design doc,
-// _/i419/design-admin-area-auth-gate.md. ShowWhile lets an entry key off
+// announcement list (see #419). ShowWhile lets an entry key off
 // live server state (e.g. "only while the admin-area gate hasn't been
 // decided yet"); nil means always show (until dismissed).
 //
-// MessageFunc and DismissKeyFunc (added for #591,
-// _/i591/design-update-check.md) are the dynamic counterparts of Message
-// and ID: nil means "use the static field", as before; set means "compute
-// it from live state". The update-check notice needs both — its text names
-// a specific version, and dismissing the notice for v1.2.0 must not
-// suppress a later notice for v1.3.0, so its dismissal key has to change
-// with the detected version.
+// MessageFunc and DismissKeyFunc (added for #591) are the dynamic
+// counterparts of Message and ID: nil means "use the static field", as
+// before; set means "compute it from live state". The update-check notice
+// needs both — its text names a specific version, and dismissing the
+// notice for v1.2.0 must not suppress a later notice for v1.3.0, so its
+// dismissal key has to change with the detected version.
 type Announcement struct {
 	ID             string
 	Message        string

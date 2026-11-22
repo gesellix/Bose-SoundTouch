@@ -7,7 +7,7 @@ const html = htm.bind(h);
 // Announcements renders dismissible banners for the player (target=app),
 // mirroring the admin UI's banner (pkg/service/handlers/web/js/script.js,
 // fetchAnnouncements/dismissAnnouncement) against the same backend endpoints
-// added for #419 — see _/i419/design-admin-area-auth-gate.md. Dismissal is
+// added for #419. Dismissal is
 // recorded server-side (not a client-only localStorage flag), so it stays
 // dismissed across sessions/devices.
 export function Announcements() {

@@ -1290,8 +1290,7 @@ func (s *Server) AdminAreaAuthMode() string {
 }
 
 // activityKindNotificationDismissed is the datastore.RecordActivity "kind"
-// used for announcement-banner dismissals (see #419 design,
-// _/i419/design-admin-area-auth-gate.md).
+// used for announcement-banner dismissals (see #419).
 const activityKindNotificationDismissed = "notification_dismissed"
 
 // loadDismissedAnnouncements scans the local activity log once at startup

@@ -28,9 +28,9 @@ import (
 //
 // Before this commit the router only registered POST for that path;
 // PUT fell through to the chi router's default handling and the
-// speaker observed HTTP 502 (captured verbatim in
-// _/i285/Rename.log:38: "SimpleURLFetcher: retry needed, Curl 0,
-// http 502, retries remaining 0"). The speaker retried in a loop
+// speaker observed HTTP 502 (captured verbatim in the reporter's speaker
+// log: "SimpleURLFetcher: retry needed, Curl 0, http 502, retries
+// remaining 0"). The speaker retried in a loop
 // and the Bose App showed the rename spinning indefinitely.
 //
 // The fixture at testdata/issue285/rename_request.xml is the exact

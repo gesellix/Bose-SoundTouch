@@ -1,10 +1,9 @@
 // Package updatecheck implements the opt-in periodic check against a
-// GitHub repo's latest release (#591,
-// _/i591/design-update-check.md). Deliberately generic (repo and current
-// version are constructor arguments, not hardcoded) and decoupled from
-// handlers.Server/main.go globals, so other binaries could construct their
-// own Checker later without a rewrite — see the design doc's answer to
-// open question 2 (CLI-only users).
+// GitHub repo's latest release (#591). Deliberately generic (repo and
+// current version are constructor arguments, not hardcoded) and decoupled
+// from handlers.Server/main.go globals, so other binaries can construct
+// their own Checker, as the CLI's update-check commands do for CLI-only
+// users.
 package updatecheck
 
 import (
@@ -119,8 +118,8 @@ func (c *Checker) LastResult() Result {
 // and persists the outcome (if ds is non-nil and a latest version was
 // found). Returns an error only on a genuine fetch/parse failure — a
 // current version that can't be meaningfully compared (dev/(devel)/dirty
-// builds) is not an error, it's a no-op "skip the check" result, per the
-// design doc's answer on non-release builds.
+// builds) is not an error, it's a no-op "skip the check" result: a
+// non-release build has no release to be behind.
 func (c *Checker) CheckNow(ctx context.Context) (Result, error) {
 	result := Result{CurrentVersion: c.currentVersion, CheckedAt: time.Now()}
 
@@ -219,8 +218,7 @@ func (c *Checker) fetchLatestRelease(ctx context.Context) (githubRelease, error)
 
 // normalizeVersion reports whether v can be meaningfully compared as
 // semver, and its normalized ("v"-prefixed) form if so. Deliberately
-// treats dev/(devel)/dirty builds as unparseable rather than guessing —
-// see the design doc.
+// treats dev/(devel)/dirty builds as unparseable rather than guessing.
 func normalizeVersion(v string) (string, bool) {
 	v = strings.TrimSpace(v)
 	if v == "" || v == "dev" || v == "(devel)" || strings.Contains(v, "dirty") {
