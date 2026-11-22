@@ -71,7 +71,7 @@ The only native installable phone app in the ecosystem. Pairs with the Überbös
 ---
 
 ### 4. SoundTouch Hybrid 2026
-**[github.com/TJGigs/Bose-SoundTouch-Hybrid-2026](https://github.com/TJGigs/Bose-SoundTouch-Hybrid-2026)**
+**[github.com/TJGigs/Bose-SoundTouch-Hybrid](https://github.com/TJGigs/Bose-SoundTouch-Hybrid)**
 | | |
 |---|---|
 | Language | Node.js (JavaScript) |
@@ -85,7 +85,7 @@ A self-hosted private cloud that emulates and replaces the Bose Cloud Service. R
 ---
 
 ### 5. OpenCloudTouch (OCT)
-**[github.com/scheilch/opencloudtouch](https://github.com/scheilch/opencloudtouch)**
+**[github.com/opencloudtouch/opencloudtouch](https://github.com/opencloudtouch/opencloudtouch)**
 | | |
 |---|---|
 | Language | Python (FastAPI) + TypeScript (React) |

@@ -17,6 +17,6 @@ AfterTouch is free, open source, and maintained in spare time. If it is keeping 
     title="PayPal"
     subtitle="One-time contribution via PayPal. No GitHub account needed."
     icon="cash"
-    link="https://paypal.me/gesellix"
+    link="https://www.paypal.com/paypalme/gesellix"
   >}}
 {{< /hextra/feature-grid >}}
