@@ -26,7 +26,7 @@ set -euo pipefail
 # Notes:
 # - This script downloads a release binary for your CPU (auto-detects
 #   armv7/armv5/arm64/amd64).
-# - soundtouch-player is stateless (no data directory) — it is safe to stop/restart freely.
+# - Favorites persist under /var/lib/${SERVICE_NAME}; stopping/restarting keeps them.
 # - Default port is 8080 (unprivileged — no special capabilities needed).
 # - If soundtouch-service is already installed, soundtouch-player reuses the
 #   existing soundtouch:soundtouch user/group.
@@ -286,7 +286,10 @@ After=network-online.target
 Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_GROUP}
+Environment=DATA_DIR=/var/lib/${SERVICE_NAME}
 EnvironmentFile=${ENV_FILE}
+StateDirectory=${SERVICE_NAME}
+StateDirectoryMode=0700
 ExecStart=${BIN_PATH}
 Restart=on-failure
 RestartSec=2
