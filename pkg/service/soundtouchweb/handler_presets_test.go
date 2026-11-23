@@ -23,11 +23,12 @@ const (
 	presetWritePath    = "/api/control/devices/lib-device/preset/3"
 )
 
-func TestDevicePresetsReturnsFreshBankWithoutChangingCache(t *testing.T) {
-	var reads atomic.Int32
+func TestDevicePresetsReturnsAndPublishesFreshBank(t *testing.T) {
+	var reads, infos atomic.Int32
 	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/info":
+			infos.Add(1)
 			_, _ = w.Write([]byte(presetTestInfo))
 		case "/presets":
 			reads.Add(1)
@@ -42,6 +43,7 @@ func TestDevicePresetsReturnsFreshBankWithoutChangingCache(t *testing.T) {
 	conn, _ := app.GetDevice("lib-device")
 	cached := &models.Presets{Preset: []models.Preset{{ID: 1}}}
 	conn.UpdateStatus(func(status *webtypes.DeviceStatus) { status.Presets = cached })
+	beforeRevision := conn.Status().Revision
 	router := chi.NewRouter()
 	app.Mount(router, nil)
 	w := httptest.NewRecorder()
@@ -64,8 +66,97 @@ func TestDevicePresetsReturnsFreshBankWithoutChangingCache(t *testing.T) {
 		bank == nil || len(bank.Preset) != 1 || bank.Preset[0].ID != 3 || reads.Load() != 1 {
 		t.Fatalf("wrong fresh response: %s reads=%d", w.Body.String(), reads.Load())
 	}
-	if conn.Status().Presets != cached {
-		t.Fatal("confirmation read replaced cached status")
+	if got := conn.Status().Presets; got == cached || len(got.Preset) != 1 || got.Preset[0].ID != 3 {
+		t.Fatal("fresh confirmation bank was not published")
+	}
+	if response.Data.Status.Revision <= beforeRevision || response.Data.Status.Revision != conn.Status().Revision {
+		t.Fatal("confirmation read did not return the published revision")
+	}
+	if infos.Load() != 2 {
+		t.Fatalf("identity checks = %d, want 2", infos.Load())
+	}
+}
+
+func TestDevicePresetsRejectsReadSupersededByAnEvent(t *testing.T) {
+	var app *WebApp
+	var infos atomic.Int32
+	newer := &models.Presets{Preset: []models.Preset{{ID: 5}}}
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/info":
+			if infos.Add(1) == 2 {
+				conn, _ := app.GetDevice("lib-device")
+				app.applyPresetEvent(conn, newer)
+			}
+			_, _ = w.Write([]byte(presetTestInfo))
+		case "/presets":
+			_, _ = w.Write([]byte(presetTestBank))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer speaker.Close()
+	app = newLibraryTestApp(speaker.URL)
+	conn, _ := app.GetDevice("lib-device")
+	w := httptest.NewRecorder()
+	app.HandleDevicePresets(w, checkedPresetRequest(http.MethodGet, presetReadPath, conn.Status().Epoch))
+	if w.Code != http.StatusConflict || conn.Status().Presets != newer {
+		t.Fatalf("superseded read replaced newer event: status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestPresetNotificationReadCannotReplaceNewerBank(t *testing.T) {
+	var app *WebApp
+	newer := &models.Presets{Preset: []models.Preset{{ID: 5}}}
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/presets" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		conn, _ := app.GetDevice("lib-device")
+		app.applyPresetEvent(conn, newer)
+		_, _ = w.Write([]byte(presetTestBank))
+	}))
+	defer speaker.Close()
+	app = newLibraryTestApp(speaker.URL)
+	conn, _ := app.GetDevice("lib-device")
+	app.refreshPresets("lib-device", conn, conn.BeginFieldPoll(webtypes.FieldPresets))
+	if conn.Status().Presets != newer {
+		t.Fatal("older notification read replaced newer preset event")
+	}
+}
+
+func TestDevicePresetsRejectsReadOverlappingCheckedWriteWithoutEvent(t *testing.T) {
+	var app *WebApp
+	var writes atomic.Int32
+	speaker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/info":
+			_, _ = w.Write([]byte(presetTestInfo))
+		case "/sources":
+			_, _ = w.Write([]byte(`<sources><sourceItem source="TUNEIN" status="READY"/></sources>`))
+		case "/presets":
+			conn, _ := app.GetDevice("lib-device")
+			reply := httptest.NewRecorder()
+			app.HandleStorePresetContent(reply, checkedPresetRequest(http.MethodPost, presetWritePath, conn.Status().Epoch))
+			if reply.Code != http.StatusOK {
+				t.Errorf("concurrent store: %d %s", reply.Code, reply.Body.String())
+			}
+			_, _ = w.Write([]byte(`<presets><preset id="3"><ContentItem source="TUNEIN" location="old-station"/></preset></presets>`))
+		case "/storePreset":
+			writes.Add(1)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer speaker.Close()
+	app = newLibraryTestApp(speaker.URL)
+	conn, _ := app.GetDevice("lib-device")
+	cached := conn.Status().Presets
+	w := httptest.NewRecorder()
+	app.HandleDevicePresets(w, checkedPresetRequest(http.MethodGet, presetReadPath, conn.Status().Epoch))
+	if w.Code != http.StatusConflict || writes.Load() != 1 || conn.Status().Presets != cached {
+		t.Fatalf("read spanning a checked write was accepted: status=%d writes=%d body=%s", w.Code, writes.Load(), w.Body.String())
 	}
 }
 

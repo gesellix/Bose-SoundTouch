@@ -11,6 +11,7 @@ const html = htm.bind(h);
 export function Library({
     devices,
     onPlaybackRequest,
+    onStatusReadback,
     playbackBusy = false,
     commandReadbackDelays,
 }) {
@@ -21,7 +22,7 @@ export function Library({
     const device = devices[deviceId];
     const physicalId = device?.info?.device_id;
     const epoch = device?.status?.epoch;
-    const target = usePresetTarget(deviceId, physicalId, epoch);
+    const target = usePresetTarget(deviceId, physicalId, epoch, onStatusReadback);
     const presetTargetKey = JSON.stringify([deviceId, physicalId, epoch]);
     const [servers, setServers] = useState([]);
     const [discovered, setDiscovered] = useState([]);

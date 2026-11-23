@@ -489,8 +489,25 @@ func (app *WebApp) refreshBass(deviceID string, conn *webtypes.DeviceConnection)
 	app.applyBassEvent(conn, bass)
 }
 
+// applyPresetRead orders a physical read against other reads and pushed banks.
+// A superseded result must not be returned as fresh confirmation either.
+func (app *WebApp) applyPresetRead(conn *webtypes.DeviceConnection, generation uint64, presets *models.Presets) bool {
+	changed := false
+
+	applied := conn.CompleteFieldPoll(webtypes.FieldPresets, generation, func(status *webtypes.DeviceStatus) {
+		changed = !reflect.DeepEqual(status.Presets, presets)
+		status.Presets = presets
+		status.LastActivity = time.Now()
+	})
+	if applied {
+		app.queueBroadcastIfChanged(changed)
+	}
+
+	return applied
+}
+
 // refreshPresets re-reads /presets after a payload-free presetsUpdated signal.
-func (app *WebApp) refreshPresets(deviceID string, conn *webtypes.DeviceConnection) {
+func (app *WebApp) refreshPresets(deviceID string, conn *webtypes.DeviceConnection, generation uint64) {
 	if conn.Client == nil {
 		return
 	}
@@ -502,7 +519,7 @@ func (app *WebApp) refreshPresets(deviceID string, conn *webtypes.DeviceConnecti
 		return
 	}
 
-	app.applyPresetEvent(conn, presets)
+	app.applyPresetRead(conn, generation, presets)
 }
 
 // applyBalanceEvent stores a fresh balance reading on the device status.
@@ -810,6 +827,9 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		})
 
 		wsClient.OnPresetUpdated(func(event *models.PresetUpdatedEvent) {
+			if !speakerConnectionEventMatches(conn, event.DeviceID) {
+				return
+			}
 			activity := time.Now()
 
 			conn.MarkEventStreamActivity(activity)
@@ -818,7 +838,8 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			// bare signal. Applying the empty case as data would blank a
 			// perfectly good preset list, so re-read instead.
 			if !event.HasPayload() {
-				go app.refreshPresets(deviceID, conn)
+				generation := conn.BeginFieldPoll(webtypes.FieldPresets)
+				go app.refreshPresets(deviceID, conn, generation)
 
 				return
 			}

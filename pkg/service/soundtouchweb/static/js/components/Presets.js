@@ -145,14 +145,14 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
     `;
 }
 
-export function Presets({ deviceId, physicalId, status, command, commandBusy = false, onSelect }) {
+export function Presets({ deviceId, physicalId, status, command, commandBusy = false, onSelect, onStatusReadback }) {
     // Which slot the catalog picker is open for, if any. One picker for the
     // whole section rather than a popover per tile: six tiles wrap to two or
     // three rows on a phone, and a list that has to be filtered needs the
     // width of the section, not the width of a tile.
     const [editingSlot, setEditingSlot] = useState(null);
     const [saveError, setSaveError] = useState(null);
-    const presetTarget = usePresetTarget(deviceId, physicalId, status?.epoch);
+    const presetTarget = usePresetTarget(deviceId, physicalId, status?.epoch, onStatusReadback);
 
     const presets = status?.presets?.Preset ?? [];
     const currentSource = status?.nowPlaying?.Source;
@@ -180,7 +180,8 @@ export function Presets({ deviceId, physicalId, status, command, commandBusy = f
         <div class="presets-section">
             <h3 class="section-title">Presets</h3>
             <${StoredPresets} key=${JSON.stringify([deviceId, physicalId, status?.epoch])}
-                deviceId=${deviceId} physicalId=${physicalId} epoch=${status?.epoch} revision=${status?.revision} />
+                deviceId=${deviceId} physicalId=${physicalId} epoch=${status?.epoch} revision=${status?.revision}
+                onStatusReadback=${onStatusReadback} />
             <div class="preset-grid">
                 ${slots.map(preset => html`
                     <${PresetSlot}
@@ -210,6 +211,7 @@ export function Presets({ deviceId, physicalId, status, command, commandBusy = f
                     slot=${editingSlot}
                     presets=${status?.presets}
                     sources=${status?.sources}
+                    onStatusReadback=${onStatusReadback}
                     current=${byId[editingSlot] ?? null}
                     onClose=${() => setEditingSlot(null)}
                     onAssigned=${() => setEditingSlot(null)}

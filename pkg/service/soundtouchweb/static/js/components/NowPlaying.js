@@ -54,9 +54,9 @@ function NowPlayingPresetPicker({ target, content, presets }) {
     />`;
 }
 
-export function NowPlaying({ nowPlaying, deviceId, physicalId, epoch, presets }) {
+export function NowPlaying({ nowPlaying, deviceId, physicalId, epoch, presets, onStatusReadback }) {
     const [position, setPosition] = useState(0);
-    const target = usePresetTarget(deviceId, physicalId, epoch);
+    const target = usePresetTarget(deviceId, physicalId, epoch, onStatusReadback);
     const presetContent = currentPresetContent(nowPlaying);
 
     useEffect(() => {

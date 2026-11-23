@@ -23,8 +23,8 @@ const VERDICTS = {
 // It is silent unless something is actually wrong. A healthy install shows
 // nothing at all, because a warning that is always there stops being read.
 //
-export function StoredPresets({ deviceId, physicalId, epoch, revision }) {
-    const target = usePresetTarget(deviceId, physicalId, epoch);
+export function StoredPresets({ deviceId, physicalId, epoch, revision, onStatusReadback }) {
+    const target = usePresetTarget(deviceId, physicalId, epoch, onStatusReadback);
     const [payload, setPayload] = useState(null);
     const [open, setOpen] = useState(false);
     const [busy, setBusy] = useState(false);

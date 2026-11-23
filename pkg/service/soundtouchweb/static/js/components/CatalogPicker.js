@@ -21,7 +21,7 @@ const html = htm.bind(h);
 // It deliberately does not hide entries that already sit in a slot. Copying
 // one station into a second slot, or onto a second speaker, is a thing people
 // do on purpose; the list only says where an entry already is.
-export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sources = null, current = null, onClose, onAssigned }) {
+export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sources = null, current = null, onClose, onAssigned, onStatusReadback }) {
     const [state, setState] = useState({ status: 'loading' });
     const [query, setQuery] = useState('');
     const [saving, setSaving] = useState(null);
@@ -113,7 +113,7 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
         setError(null);
         try {
             await verifyPresetEdit({ api, deviceId, physicalId, epoch, slot: Number(slot), content, expected,
-                isCurrent: () => mounted.current });
+                isCurrent: () => mounted.current, onStatusReadback });
             if (mounted.current) onAssigned?.(assigned);
         } catch (error) {
             if (mounted.current) setError(error.message);
@@ -151,7 +151,7 @@ export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sour
         try {
             await movePreset({ api, deviceId, physicalId, epoch, from: Number(slot), to: target,
                 source: confirmed?.source ?? item, destination: confirmed?.destination ?? destination,
-                isCurrent: () => mounted.current });
+                isCurrent: () => mounted.current, onStatusReadback });
             if (mounted.current) onAssigned?.(null);
         } catch (err) {
             if (mounted.current) setError(err.message || 'The move could not be confirmed. Check both presets.');

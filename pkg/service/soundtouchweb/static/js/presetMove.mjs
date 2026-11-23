@@ -42,7 +42,9 @@ function presetBank(presets) {
         const content = presetContent(entry?.ContentItem);
         const slot = Number(entry?.ID);
         if (slot === 0 && !content) continue;
-        if (!Number.isInteger(slot) || slot < 1 || slot > 6 || seen.has(slot) || (content && (!content.source || !content.location))) {
+        // Existing source-only presets can still be compared and preserved.
+        // Creating content without a location remains unsupported.
+        if (!Number.isInteger(slot) || slot < 1 || slot > 6 || seen.has(slot) || (content && !content.source)) {
             throw new Error('The speaker returned an invalid preset bank.');
         }
         seen.add(slot);
@@ -51,17 +53,27 @@ function presetBank(presets) {
     return bank;
 }
 
-async function timedRequest(request) {
+// A checked read makes three speaker requests. A write may also look up the
+// speaker's sources and media-server artwork before sending the mutation.
+// Keep the browser budget above the normal server-side request budgets.
+const READ_TIMEOUT_MS = 35_000;
+const WRITE_TIMEOUT_MS = 45_000;
+
+async function timedRequest(request, timeout) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), timeout);
     try { return await request(controller.signal); }
     finally { clearTimeout(timer); }
+}
+
+function unverified(message, error) {
+    return new Error(error?.message ? `${message} Speaker request: ${error.message}` : message);
 }
 
 // Avoid overlapping bank edits from different controls in the same player.
 const activeEdits = new Set();
 
-async function editBank({ api, deviceId, physicalId, epoch, isCurrent }, edit) {
+async function editBank({ api, deviceId, physicalId, epoch, isCurrent, onStatusReadback }, edit) {
     if (!physicalId || !Number.isSafeInteger(epoch) || epoch < 1 || !isCurrent()) {
         throw new Error('Could not verify the speaker. Reopen the preset editor.');
     }
@@ -69,12 +81,14 @@ async function editBank({ api, deviceId, physicalId, epoch, isCurrent }, edit) {
     if (activeEdits.has(physicalId)) throw new Error('Another preset change is still being checked.');
     async function readBank() {
         if (!isCurrent()) throw new Error('The preset editor is no longer open.');
-        const response = await timedRequest(signal => api.devicePresets(deviceId, { headers, signal }));
+        const response = await timedRequest(signal => api.devicePresets(deviceId, { headers, signal }), READ_TIMEOUT_MS);
         const data = response?.data;
         if (!isCurrent() || response?.success !== true || data?.info?.device_id !== physicalId || data?.status?.epoch !== epoch) {
             throw new Error('Could not verify the speaker and its presets. Reopen the preset editor.');
         }
-        return presetBank(data.status.presets);
+        const bank = presetBank(data.status.presets);
+        if (Number.isSafeInteger(data.status.revision)) onStatusReadback?.(deviceId, data.status, data.info);
+        return bank;
     }
 
     async function waitForBank(matches) {
@@ -93,10 +107,12 @@ async function editBank({ api, deviceId, physicalId, epoch, isCurrent }, edit) {
         if (!isCurrent()) throw new Error('The preset editor is no longer open.');
         try {
             await timedRequest(signal => item ? api.storePresetContent(deviceId, slot, item, { headers, signal })
-                : api.removePreset(deviceId, slot, { headers, signal }));
+                : api.removePreset(deviceId, slot, { headers, signal }), WRITE_TIMEOUT_MS);
+            return null;
         } catch (error) {
             if (error?.definitive) throw error;
             // A lost response is ambiguous. Confirm by reading.
+            return error;
         }
     }
 
@@ -118,15 +134,20 @@ export async function movePreset({ from, to, source, destination, isCurrent, ...
             !samePreset(presetContent(destination), before[to])) {
             throw new Error('The source or destination preset changed. Reopen the editor before moving it.');
         }
-        if (!samePreset(item, before[to], true)) await write(to, item);
+        const saveError = samePreset(item, before[to], true) ? null : await write(to, item);
         const saved = await waitForBank(bank => samePreset(item, bank[to], true) &&
             before.every((entry, slot) => slot === to || samePreset(entry, bank[slot]) || (slot === from && !bank[slot])));
-        if (!saved || !isCurrent()) throw new Error('Move unverified. The player did not clear the original slot. Check both presets.');
+        if (!saved || !isCurrent()) throw unverified('Move unverified. The player did not clear the original slot. Check both presets.', saveError);
         if (!saved[from]) return;
 
-        await write(from, null);
+        let clearError;
+        try {
+            clearError = await write(from, null);
+        } catch (error) {
+            throw unverified('The destination was saved, but clearing the original slot was rejected. Check both presets.', error);
+        }
         if (!await waitForBank(bank => !bank[from] && saved.every((entry, slot) => slot === from || samePreset(entry, bank[slot])))) {
-            throw new Error('The destination was saved, but clearing the original slot is unverified. Check both presets.');
+            throw unverified('The destination was saved, but clearing the original slot is unverified. Check both presets.', clearError);
         }
     });
 }
@@ -143,9 +164,9 @@ export async function verifyPresetEdit({ slot, content, expected, ...target }) {
             throw new Error('The preset changed. Reopen the editor before editing it.');
         }
         if (samePreset(item, before[slot], true)) return;
-        await write(slot, item);
+        const writeError = await write(slot, item);
         const confirmed = await waitForBank(bank => samePreset(item, bank[slot], true) &&
             before.every((entry, index) => index === slot || samePreset(entry, bank[index])));
-        if (!confirmed) throw new Error('Preset change unverified. Check the speaker before trying again.');
+        if (!confirmed) throw unverified('Preset change unverified. Check the speaker before trying again.', writeError);
     });
 }

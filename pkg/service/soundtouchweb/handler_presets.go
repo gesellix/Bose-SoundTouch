@@ -41,16 +41,22 @@ func (app *WebApp) parsePresetTarget(w http.ResponseWriter, r *http.Request, req
 	return presetTarget{identity: identity, epoch: epoch}, true
 }
 
-func (app *WebApp) validatePresetTarget(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection, target presetTarget) bool {
-	const changedMessage = "Preset target changed; reopen the device"
-
+func (app *WebApp) currentPresetTarget(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection, target presetTarget) bool {
 	deviceID := chi.URLParam(r, "id")
 	current, exists := app.GetDevice(deviceID)
 
 	status := device.Status()
 	if !exists || current != device || settingsTargetIdentity(device) != target.identity ||
 		status == nil || status.Epoch != target.epoch {
-		app.sendError(w, changedMessage, http.StatusConflict)
+		app.sendError(w, "Preset target changed; reopen the device", http.StatusConflict)
+		return false
+	}
+
+	return true
+}
+
+func (app *WebApp) validatePresetTarget(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection, target presetTarget) bool {
+	if !app.currentPresetTarget(w, r, device, target) {
 		return false
 	}
 
@@ -59,12 +65,7 @@ func (app *WebApp) validatePresetTarget(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 
-	if current, exists = app.GetDevice(deviceID); !exists || current != device {
-		app.sendError(w, changedMessage, http.StatusConflict)
-		return false
-	}
-
-	return true
+	return app.currentPresetTarget(w, r, device, target)
 }
 
 func (app *WebApp) beginCheckedPresetWrite(w http.ResponseWriter, r *http.Request, device *webtypes.DeviceConnection) (func(), bool) {
@@ -85,11 +86,14 @@ func (app *WebApp) beginCheckedPresetWrite(w http.ResponseWriter, r *http.Reques
 		return nil, false
 	}
 
-	return release, true
+	return func() {
+		device.InvalidatePresetReads()
+		release()
+	}, true
 }
 
 // HandleDevicePresets answers a confirmation read with the physical speaker's
-// whole bank. The response does not participate in publishing cached status.
+// whole bank and publishes it via the usual ordered status updates.
 func (app *WebApp) HandleDevicePresets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 
@@ -113,6 +117,8 @@ func (app *WebApp) HandleDevicePresets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	generation := device.BeginFieldPoll(webtypes.FieldPresets)
+
 	bank, err := device.Client.GetPresets()
 	if err != nil {
 		app.sendError(w, "Could not read the speaker's presets", http.StatusBadGateway)
@@ -123,17 +129,31 @@ func (app *WebApp) HandleDevicePresets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data struct {
-		Info   *models.DeviceInfo `json:"info"`
-		Status struct {
-			Epoch   int64           `json:"epoch"`
-			Presets *models.Presets `json:"presets"`
-		} `json:"status"`
+	// No registry or settings lock is held over the reads. Fence the final
+	// publication against device removal and any newer preset bank.
+	release := app.beginDeviceSettingsOperation(device)
+	defer release()
+
+	if r.Context().Err() != nil || !app.currentPresetTarget(w, r, device, target) {
+		return
 	}
 
-	data.Info = device.Info()
-	data.Status.Epoch = device.Status().Epoch
-	data.Status.Presets = bank
+	if !app.applyPresetRead(device, generation, bank) {
+		app.sendError(w, "A newer preset bank arrived; read the speaker again", http.StatusConflict)
+		return
+	}
+
+	status := device.Status()
+
+	if status.Presets != bank {
+		app.sendError(w, "A newer preset bank arrived; read the speaker again", http.StatusConflict)
+		return
+	}
+
+	data := struct {
+		Info   *models.DeviceInfo     `json:"info"`
+		Status *webtypes.DeviceStatus `json:"status"`
+	}{Info: device.Info(), Status: status}
 
 	w.Header().Set("Content-Type", "application/json")
 

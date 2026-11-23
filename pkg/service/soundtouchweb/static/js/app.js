@@ -559,7 +559,8 @@ export function DeviceDetail({
                 </button>
             </div>
             <${NowPlaying} nowPlaying=${device.status?.nowPlaying} deviceId=${deviceId}
-                physicalId=${device.info?.device_id} epoch=${device.status?.epoch} presets=${device.status?.presets} />
+                physicalId=${device.info?.device_id} epoch=${device.status?.epoch} presets=${device.status?.presets}
+                onStatusReadback=${onStatusReadback} />
             <${Controls}
                 key=${controlsMode === 'zone' ? controlsTargetKey : deviceId}
                 deviceId=${deviceId}
@@ -588,6 +589,7 @@ export function DeviceDetail({
                 command=${command}
                 commandBusy=${commandBusy}
                 onSelect=${selectPreset}
+                onStatusReadback=${onStatusReadback}
             />
             <${Sources}
                 deviceId=${deviceId}
@@ -1009,6 +1011,7 @@ function App() {
                         key="library"
                         devices=${devices}
                         onPlaybackRequest=${startContentPlayback}
+                        onStatusReadback=${mergeDeviceReadback}
                         playbackBusy=${contentPlaybackBusy}
                     />
                 ` : null}

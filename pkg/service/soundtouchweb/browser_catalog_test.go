@@ -329,6 +329,82 @@ func TestPresetClearKeepsEditorOpenWhenSpeakerDoesNotClear(t *testing.T) {
 	}
 }
 
+func TestPresetReadbackUpdatesTheNextEditorWithoutWebSocket(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { Presets } from '/app/static/js/components/Presets.js';
+import { mergeStatusUpdate } from '/app/static/js/app.js';
+let devices = { speaker: { info: { device_id: 'SPEAKER' }, status: {
+    epoch: 1, revision: 1, nowPlaying: { Source: 'STANDBY' },
+    presets: { Preset: [{ ID: 1, ContentItem: { Source: 'TUNEIN', Location: 's12345', ItemName: 'WDR 2' } }] },
+} } };
+function draw() {
+    render(h(Presets, { deviceId: 'speaker', physicalId: 'SPEAKER', status: devices.speaker.status,
+        onStatusReadback: (id, status) => { devices = mergeStatusUpdate(devices, id, status); draw(); }
+    }), document.getElementById('fixture'));
+}
+draw();
+`
+	var mu sync.Mutex
+	name := "WDR 2"
+	revision := 1
+	stores := 0
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"success":true,"data":{"available":true,"entries":[]}}`)
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			revision++
+			data := map[string]any{
+				"info": map[string]any{"device_id": "SPEAKER"},
+				"status": map[string]any{"epoch": 1, "revision": revision,
+					"nowPlaying": map[string]string{"Source": "STANDBY"},
+					"presets": map[string]any{"Preset": []any{map[string]any{"ID": 1,
+						"ContentItem": map[string]string{"Source": "TUNEIN", "Location": "s12345", "ItemName": name}}}}},
+			}
+			if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: data}); err != nil {
+				t.Errorf("encode preset bank: %v", err)
+			}
+		})
+		r.Post("/api/control/devices/speaker/preset/1", func(w http.ResponseWriter, req *http.Request) {
+			var item struct {
+				Name string `json:"itemName"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&item); err != nil {
+				t.Errorf("decode stored item: %v", err)
+			}
+			mu.Lock()
+			name = item.Name
+			stores++
+			mu.Unlock()
+			_, _ = io.WriteString(w, `{"success":true}`)
+		})
+	})
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Do(ctx, navigateFixture(server.URL+"/fixture")); err != nil {
+		t.Fatal(err)
+	}
+	for _, label := range []string{"First rename", "Second rename"} {
+		if err := chromedp.Do(ctx,
+			chromedp.Click(chromedp.CSS(`.preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+			chromedp.WaitVisible(chromedp.CSS(`.catalog-rename-input`)),
+			chromedp.SetValue(chromedp.CSS(`.catalog-rename-input`), label),
+			chromedp.Evaluate[chromedp.Void](`document.querySelector('.catalog-rename-input').dispatchEvent(new Event('input',{bubbles:true}))`),
+			chromedp.Click(chromedp.CSS(`.catalog-action-btn`)),
+			chromedp.Poll[chromedp.Void](`!document.querySelector('.catalog-picker') && document.querySelector('.preset-name').textContent === '`+label+`'`),
+		); err != nil {
+			t.Fatalf("rename %q: %v", label, err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if stores != 2 || name != "Second rename" {
+		t.Fatalf("successive edits: %d stores, final %q", stores, name)
+	}
+}
+
 // TestPresetSlotRenamesAndMoves verifies the destination before clearing the
 // source and verifies the resulting bank before closing the editor.
 func TestPresetSlotRenamesAndMoves(t *testing.T) {
@@ -461,7 +537,7 @@ destination('Original station');
 	edit := chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)
 	move := chromedp.CSS(`#presets .catalog-move-slot:nth-child(2)`)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"), chromedp.Click(edit), chromedp.Click(move),
+		navigateFixture(server.URL+"/fixture"), chromedp.Click(edit), chromedp.Click(move),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-current [role=alert]')?.textContent.includes('Original station')`),
 		chromedp.Evaluate[chromedp.Void](`destination('Replacement station')`),
 		chromedp.Click(move),
