@@ -116,9 +116,9 @@ type DeviceConnection struct {
 	fieldGen   [numStatusFields]struct{ issued, applied uint64 }
 
 	volumeFieldMu sync.Mutex
-	// soundFieldMu keeps generation admission and the status store ordered
-	// against other bass and balance updates, SetStatus, and Close.
-	soundFieldMu      sync.Mutex
+	// orderedFieldMu keeps generation admission and the status store ordered
+	// against bass, balance and preset updates, SetStatus, and Close.
+	orderedFieldMu    sync.Mutex
 	volumeOperationMu sync.Mutex
 	groupWriteMu      sync.Mutex
 	zoneWriteMu       sync.RWMutex
@@ -394,9 +394,9 @@ func (c *DeviceConnection) Done() <-chan struct{} {
 // any goroutine (e.g. a test connection with a nil Client).
 func (c *DeviceConnection) Close() {
 	c.closeOnce.Do(func() {
-		c.soundFieldMu.Lock()
+		c.orderedFieldMu.Lock()
 		close(c.done)
-		c.soundFieldMu.Unlock()
+		c.orderedFieldMu.Unlock()
 
 		c.webSocketMu.Lock()
 		ws := c.WebSocket
@@ -474,8 +474,8 @@ func (c *DeviceConnection) FinishWebSocketLoop() {
 // every field, so each StatusField generation is advanced past any poll
 // still in flight.
 func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
-	c.soundFieldMu.Lock()
-	defer c.soundFieldMu.Unlock()
+	c.orderedFieldMu.Lock()
+	defer c.orderedFieldMu.Unlock()
 
 	nowPlayingGeneration := c.supersedeAllFields()
 
@@ -519,15 +519,28 @@ func (c *DeviceConnection) BeginFieldPoll(field StatusField) uint64 {
 	return c.fieldGen[field].issued
 }
 
+// InvalidatePresetReads fences a checked write against pre-write reads even
+// when the speaker does not send a presetsUpdated notification.
+func (c *DeviceConnection) InvalidatePresetReads() {
+	c.orderedFieldMu.Lock()
+	defer c.orderedFieldMu.Unlock()
+
+	c.fieldGenMu.Lock()
+	defer c.fieldGenMu.Unlock()
+
+	c.fieldGen[FieldPresets].issued++
+	c.fieldGen[FieldPresets].applied = c.fieldGen[FieldPresets].issued
+}
+
 // CompleteFieldPoll applies mut only if generation is strictly newer than
 // whatever last actually applied -- poll or event -- for field. A poll for
 // one field losing this race never affects any other field: an unrelated
 // field's event, or an unrelated field's poll completing first, cannot
 // discard this field's fresh, successful data.
 func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint64, mut func(*DeviceStatus)) bool {
-	if field == FieldBass || field == FieldBalance {
-		c.soundFieldMu.Lock()
-		defer c.soundFieldMu.Unlock()
+	if field == FieldBass || field == FieldBalance || field == FieldPresets {
+		c.orderedFieldMu.Lock()
+		defer c.orderedFieldMu.Unlock()
 
 		select {
 		case <-c.Done():
@@ -559,9 +572,9 @@ func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint6
 // authoritative evidence for field -- and invalidates any poll for field
 // that began before it, without touching any other field's ordering.
 func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceStatus)) {
-	if field == FieldBass || field == FieldBalance {
-		c.soundFieldMu.Lock()
-		defer c.soundFieldMu.Unlock()
+	if field == FieldBass || field == FieldBalance || field == FieldPresets {
+		c.orderedFieldMu.Lock()
+		defer c.orderedFieldMu.Unlock()
 
 		select {
 		case <-c.Done():

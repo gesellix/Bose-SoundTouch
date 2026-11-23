@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/chromedp/chromedp"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
 	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 	"github.com/go-chi/chi/v5"
 )
@@ -22,11 +23,29 @@ import { h, render } from 'preact';
 import { Presets } from '/app/static/js/components/Presets.js';
 const status = {
   revision: 1,
+  epoch: 1,
   nowPlaying: { Source: 'STANDBY' },
   presets: { Preset: [1, 2, 3, 4, 5, 6].map(id => ({ ID: id, ContentItem: { Source: 'TUNEIN', Location: 's' + id, ItemName: 'Station ' + id } })) },
 };
-render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status })), document.getElementById('fixture'));
+render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', physicalId: 'DEVICE1', status })), document.getElementById('fixture'));
 `
+
+func writePresetEditFixtureBank(t *testing.T, w http.ResponseWriter, req *http.Request, bank []models.Preset) {
+	t.Helper()
+	if req.Header.Get("X-AfterTouch-Preset-Target") != "DEVICE1" || req.Header.Get("X-AfterTouch-Preset-Epoch") != "1" {
+		t.Errorf("preset read omitted target identity or epoch: %v", req.Header)
+		w.WriteHeader(http.StatusConflict)
+		return
+	}
+	if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: map[string]any{
+		"info": map[string]any{"device_id": "DEVICE1"},
+		"status": map[string]any{
+			"epoch": 1, "presets": models.Presets{Preset: bank},
+		},
+	}}); err != nil {
+		t.Errorf("encode preset bank: %v", err)
+	}
+}
 
 func storedRow(index int, button, name, source, verdict string) map[string]any {
 	return map[string]any{
@@ -234,54 +253,85 @@ func TestNoWarningWhenTheStoredListAgrees(t *testing.T) {
 	}
 }
 
-// TestPerSlotChoiceSettlesOneButton covers the alternative to the
-// all-or-nothing import: a button the two sides fill differently, settled
-// either way, with each choice going to the side that owns it -- taking the
-// speaker's writes the service, keeping ours writes the speaker.
+// Each choice settles one slot. Keeping ours waits for a fresh preset bank
+// before reloading the comparison, and taking the speaker's writes the service.
 func TestPerSlotChoiceSettlesOneButton(t *testing.T) {
 	var mu sync.Mutex
 	var calls []string
+	var wrote, adopted bool
+	var postWriteReads int
 
 	slotPayload := func() map[string]any {
+		slots := []any{}
+		if postWriteReads < 2 {
+			slots = append(slots, map[string]any{
+				"slot": 1,
+				"ours": map[string]any{
+					"present": true, "source": "TUNEIN", "location": "s1", "itemName": "Ours",
+				},
+				"theirs": map[string]any{
+					"present": true, "source": "RADIO_BROWSER", "location": "uuid-fm4", "itemName": "Theirs",
+				},
+			})
+		}
+		if !adopted {
+			slots = append(slots, map[string]any{
+				"slot": 2,
+				"ours": map[string]any{
+					"present": true, "source": "TUNEIN", "location": "s2", "itemName": "Stored second station",
+				},
+				"theirs": map[string]any{
+					"present": true, "source": "TUNEIN", "location": "s3", "itemName": "Speaker's second station",
+				},
+			})
+		}
 		return map[string]any{
 			"available": true,
 			"rows": []any{
 				storedRow(0, "1", "Ours", "TUNEIN", "ok"),
+				storedRow(1, "2", "Stored second station", "TUNEIN", "ok"),
 			},
-			"unrecallable": 0, "speaker_count": 1, "disagrees": true,
-			"slots": []any{
-				map[string]any{
-					"slot": 1,
-					"ours": map[string]any{
-						"present": true, "source": "TUNEIN", "location": "s1", "itemName": "Ours",
-					},
-					"theirs": map[string]any{
-						"present": true, "source": "RADIO_BROWSER", "location": "uuid-fm4", "itemName": "Theirs",
-					},
-				},
-			},
+			"unrecallable": 0, "speaker_count": 2, "disagrees": len(slots) > 0,
+			"slots": slots,
 		}
 	}
 
 	server := newPlayerFixtureServer(t, storedPresetsFixtureScript, func(r chi.Router) {
 		r.Get("/api/control/devices/speaker/stored-presets/", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, "load")
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: slotPayload()})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, req *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, "read")
+			if wrote {
+				postWriteReads++
+			}
+			first := &models.ContentItem{Source: "RADIO_BROWSER", Location: "uuid-fm4", ItemName: "Theirs"}
+			if postWriteReads >= 2 {
+				first = &models.ContentItem{Source: "TUNEIN", Location: "s1", ItemName: "Ours"}
+			}
+			writePresetEditFixtureBank(t, w, req, []models.Preset{
+				{ID: 1, ContentItem: first},
+				{ID: 2, ContentItem: &models.ContentItem{Source: "TUNEIN", Location: "s3", ItemName: "Speaker's second station"}},
+			})
 		})
 		r.Post("/api/control/devices/speaker/stored-presets/adopt", func(w http.ResponseWriter, req *http.Request) {
 			body, _ := io.ReadAll(req.Body)
 			mu.Lock()
+			defer mu.Unlock()
 			calls = append(calls, "adopt "+string(body))
-			mu.Unlock()
-
-			settled := slotPayload()
-			settled["disagrees"] = false
-			settled["slots"] = []any{}
-			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: settled})
+			adopted = true
+			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: slotPayload()})
 		})
 		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
 			body, _ := io.ReadAll(req.Body)
 			mu.Lock()
 			calls = append(calls, "store "+chi.URLParam(req, "slot")+" "+string(body))
+			wrote = true
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
@@ -301,11 +351,10 @@ func TestPerSlotChoiceSettlesOneButton(t *testing.T) {
 		textInto(chromedp.CSS(`#presets .stored-presets-side:nth-child(2) .stored-presets-side-name`), &ourName),
 		textInto(chromedp.CSS(`#presets .stored-presets-side:nth-child(3) .stored-presets-side-name`), &theirName),
 
-		// Keeping ours pushes the stored content to the speaker.
+		// Keeping ours pushes the stored content and removes this disagreement
+		// when the speaker reports the change. The second slot still differs.
 		chromedp.Click(chromedp.CSS(`#presets .stored-presets-side:nth-child(2) .stored-presets-choose`)),
-		// The panel stays: keeping ours changes the speaker, and the stored
-		// list it is compared against has not moved.
-		chromedp.Poll[chromedp.Void](`performance.getEntriesByType('resource').some(e => e.name.endsWith('/preset/1'))`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .stored-presets-slot .stored-presets-button')?.textContent === '2'`),
 
 		// Taking the speaker's writes the stored list, and the panel settles.
 		chromedp.Click(chromedp.CSS(`#presets .stored-presets-side:nth-child(3) .stored-presets-choose`)),
@@ -325,18 +374,21 @@ func TestPerSlotChoiceSettlesOneButton(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(calls) != 2 {
-		t.Fatalf("expected one store and one adopt, got %v", calls)
+	if len(calls) != 7 {
+		t.Fatalf("expected to load, read, store, read twice, reload and adopt, got %v", calls)
+	}
+	if calls[0] != "load" || calls[1] != "read" || calls[3] != "read" || calls[4] != "read" || calls[5] != "load" {
+		t.Errorf("preset confirmation did not precede reloading the panel: %v", calls)
 	}
 
 	// Keeping ours goes to the speaker's preset store, with our content.
-	if !strings.HasPrefix(calls[0], "store 1 ") || !strings.Contains(calls[0], `"itemName":"Ours"`) {
-		t.Errorf("keep-ours call = %q", calls[0])
+	if !strings.HasPrefix(calls[2], "store 1 ") || !strings.Contains(calls[2], `"itemName":"Ours"`) {
+		t.Errorf("keep-ours call = %q", calls[2])
 	}
 
 	// Taking the speaker's goes to the service, naming only the slot: the
 	// content comes from asking the speaker again, not from this payload.
-	if calls[1] != `adopt {"slot":1}` {
-		t.Errorf("take-theirs call = %q", calls[1])
+	if calls[6] != `adopt {"slot":2}` {
+		t.Errorf("take-theirs call = %q", calls[6])
 	}
 }

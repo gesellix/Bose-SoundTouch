@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
@@ -7,6 +7,8 @@ import { sourceLabel } from '../sourceLabels.js';
 import { CatalogPicker } from './CatalogPicker.js';
 import { StoredPresets } from './StoredPresets.js';
 import { sameContentLocation } from '../contentLocation.mjs';
+import { currentPresetContent, verifyPresetEdit } from '../presetMove.mjs';
+import { usePresetTarget } from '../usePresetTarget.js';
 
 const html = htm.bind(h);
 
@@ -20,8 +22,10 @@ const html = htm.bind(h);
 // unreachable on touch devices and easy to miss everywhere else.  It shares
 // the star glyph and the gold --fav colour with the now-playing preset
 // picker (see NowPlaying.js) so both save paths read as the same gesture.
-function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, onSelect, onEdit, editing }) {
-    const [saveState, setSaveState] = useState(null); // null | 'saved' | 'error'
+function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, onSelect, onEdit, editing, onStore, onStoreError, isCurrent }) {
+    const [saveState, setSaveState] = useState(null);
+    const resetTimer = useRef(null);
+    useLayoutEffect(() => () => clearTimeout(resetTimer.current), []);
 
     const item = preset?.ContentItem;
     const isEmpty = !item;
@@ -41,13 +45,22 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
 
     function flash(state) {
         setSaveState(state);
-        setTimeout(() => setSaveState(null), 1500);
+        resetTimer.current = setTimeout(() => setSaveState(null), 1500);
     }
 
-    function store() {
-        api.storePreset(deviceId, preset.ID)
-            .then(res => flash(res.success ? 'saved' : 'error'))
-            .catch(() => flash('error'));
+    async function store() {
+        if (!canSave || saveState === 'saving') return;
+        clearTimeout(resetTimer.current);
+        setSaveState('saving');
+        try {
+            await onStore(preset);
+            if (isCurrent()) flash('saved');
+        } catch (error) {
+            if (isCurrent()) {
+                flash('error');
+                onStoreError(error.message);
+            }
+        }
     }
 
     function select() {
@@ -86,7 +99,7 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
                 class="preset-slot ${isEmpty ? 'empty' : ''} ${active ? 'active' : ''} ${savableEmpty ? 'savable' : ''}"
                 data-source=${item?.Source ?? ''}
                 onClick=${select}
-                disabled=${!savableEmpty && (isEmpty || commandBusy)}
+                disabled=${saveState === 'saving' || (!savableEmpty && (isEmpty || commandBusy))}
                 aria-busy=${command?.action === 'preset' && commandBusy &&
                     command?.expected?.targetId === String(preset.ID) ? 'true' : null}
                 title=${slotTitle}
@@ -121,7 +134,8 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
                 <button
                     class="preset-save-btn ${mapped ? 'mapped' : ''} ${saveState ?? ''}"
                     onClick=${save}
-                    disabled=${!canSave}
+                    disabled=${!canSave || saveState === 'saving'}
+                    aria-busy=${saveState === 'saving' ? 'true' : null}
                     aria-label=${saveTitle}
                 >
                     ${saveState === 'saved' ? '✓' : saveState === 'error' ? '✗' : mapped ? '★' : '☆'}
@@ -131,21 +145,21 @@ function PresetSlot({ preset, deviceId, active, canSave, command, commandBusy, o
     `;
 }
 
-export function Presets({ deviceId, status, command, commandBusy = false, onSelect }) {
+export function Presets({ deviceId, physicalId, status, command, commandBusy = false, onSelect, onStatusReadback }) {
     // Which slot the catalog picker is open for, if any. One picker for the
     // whole section rather than a popover per tile: six tiles wrap to two or
     // three rows on a phone, and a list that has to be filtered needs the
     // width of the section, not the width of a tile.
     const [editingSlot, setEditingSlot] = useState(null);
+    const [saveError, setSaveError] = useState(null);
+    const presetTarget = usePresetTarget(deviceId, physicalId, status?.epoch, onStatusReadback);
 
     const presets = status?.presets?.Preset ?? [];
     const currentSource = status?.nowPlaying?.Source;
     const currentLocation = status?.nowPlaying?.ContentItem?.Location;
 
-    // Enable the save buttons whenever something that isn't STANDBY is
-    // playing.  The server validates IsPresetable; if it fails the button
-    // shows ✗ briefly.
-    const canSave = !!(currentSource && currentSource !== 'STANDBY');
+    const currentContent = currentPresetContent(status?.nowPlaying);
+    const canSave = !!currentContent;
 
     // Build a map for quick lookup, then render slots 1-6
     const byId = Object.fromEntries(presets.map(p => [p.ID, p]));
@@ -157,14 +171,21 @@ export function Presets({ deviceId, status, command, commandBusy = false, onSele
             sameContentLocation(currentSource, item.Location, currentLocation);
     }
 
+    function store(preset) {
+        setSaveError(null);
+        return verifyPresetEdit({ api, ...presetTarget, slot: Number(preset.ID), content: currentContent, expected: preset.ContentItem });
+    }
+
     return html`
         <div class="presets-section">
             <h3 class="section-title">Presets</h3>
-            <${StoredPresets} deviceId=${deviceId} revision=${status?.revision} />
+            <${StoredPresets} key=${JSON.stringify([deviceId, physicalId, status?.epoch])}
+                deviceId=${deviceId} physicalId=${physicalId} epoch=${status?.epoch} revision=${status?.revision}
+                onStatusReadback=${onStatusReadback} />
             <div class="preset-grid">
                 ${slots.map(preset => html`
                     <${PresetSlot}
-                        key=${preset.ID}
+                        key=${JSON.stringify([deviceId, physicalId, status?.epoch, preset.ID])}
                         preset=${preset}
                         deviceId=${deviceId}
                         active=${isActive(preset)}
@@ -172,18 +193,25 @@ export function Presets({ deviceId, status, command, commandBusy = false, onSele
                         command=${command}
                         commandBusy=${commandBusy}
                         onSelect=${onSelect}
+                        onStore=${store}
+                        onStoreError=${setSaveError}
+                        isCurrent=${presetTarget.isCurrent}
                         onEdit=${setEditingSlot}
                         editing=${editingSlot === preset.ID}
                     />
                 `)}
             </div>
+            ${saveError && html`<p class="settings-error" role="alert">${saveError}</p>`}
             ${editingSlot !== null && html`
                 <${CatalogPicker}
-                    key=${`catalog:${editingSlot}`}
+                    key=${JSON.stringify([deviceId, physicalId, status?.epoch, editingSlot])}
                     deviceId=${deviceId}
+                    physicalId=${physicalId}
+                    epoch=${status?.epoch}
                     slot=${editingSlot}
                     presets=${status?.presets}
                     sources=${status?.sources}
+                    onStatusReadback=${onStatusReadback}
                     current=${byId[editingSlot] ?? null}
                     onClose=${() => setEditingSlot(null)}
                     onAssigned=${() => setEditingSlot(null)}

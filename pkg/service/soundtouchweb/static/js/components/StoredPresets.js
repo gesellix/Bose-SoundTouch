@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { sourceLabel } from '../sourceLabels.js';
+import { verifyPresetEdit } from '../presetMove.mjs';
+import { usePresetTarget } from '../usePresetTarget.js';
 
 const html = htm.bind(h);
 
@@ -21,18 +23,16 @@ const VERDICTS = {
 // It is silent unless something is actually wrong. A healthy install shows
 // nothing at all, because a warning that is always there stops being read.
 //
-// The repair is the one preset write that goes to the service rather than
-// through the speaker: these rows exist only in AfterTouch, and several of
-// them name no button the speaker could be asked about.
-export function StoredPresets({ deviceId, revision }) {
+export function StoredPresets({ deviceId, physicalId, epoch, revision, onStatusReadback }) {
+    const target = usePresetTarget(deviceId, physicalId, epoch, onStatusReadback);
     const [payload, setPayload] = useState(null);
     const [open, setOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
 
-    const load = useCallback(() => api.storedPresets(deviceId)
-        .then(res => setPayload(res?.data ?? null))
-        .catch(() => setPayload(null)), [deviceId]);
+    const load = useCallback((isCurrent = () => true) => api.storedPresets(deviceId)
+        .then(res => { if (isCurrent()) setPayload(res?.data ?? null); })
+        .catch(() => { if (isCurrent()) setPayload(null); }), [deviceId]);
 
     useEffect(() => { load(); }, [load, revision]);
 
@@ -70,37 +70,26 @@ export function StoredPresets({ deviceId, revision }) {
     // the speaker's next fetch, so the only thing missing is the speaker
     // catching up now. It goes through the ordinary preset store, so it is
     // validated like any other (the speaker must have the source).
-    function keepOurs(slot) {
-        const content = slots.find(entry => entry.slot === slot)?.ours;
-
-        if (!content?.present) return;
+    async function keepOurs(entry) {
+        if (busy || !entry.ours?.present) return;
 
         setBusy(true);
         setError(null);
 
-        api.storePresetContent(deviceId, slot, {
-            source: content.source,
-            sourceAccount: content.sourceAccount ?? '',
-            location: content.location,
-            type: content.type ?? '',
-            itemName: content.itemName ?? '',
-            containerArt: content.containerArt ?? '',
-        })
-            .then(res => {
-                setBusy(false);
-
-                if (res?.success === false) {
-                    setError(res.error || 'The speaker refused that preset.');
-
-                    return;
-                }
-
-                return load();
-            })
-            .catch(() => {
-                setBusy(false);
-                setError('The request did not complete; reload to see what the speaker has now.');
+        try {
+            await verifyPresetEdit({
+                api,
+                ...target,
+                slot: entry.slot,
+                content: entry.ours,
+                expected: entry.theirs?.present ? entry.theirs : null,
             });
+            if (target.isCurrent()) await load(target.isCurrent);
+        } catch (reason) {
+            if (target.isCurrent()) setError(reason?.message || 'Could not verify the preset change.');
+        } finally {
+            if (target.isCurrent()) setBusy(false);
+        }
     }
 
     function repair(drop) {
@@ -192,7 +181,7 @@ export function StoredPresets({ deviceId, revision }) {
                                             title=${entry.ours?.present
                                                 ? `Put what AfterTouch stores into the speaker's preset ${entry.slot}`
                                                 : 'AfterTouch stores nothing for this button'}
-                                            onClick=${() => keepOurs(entry.slot)}
+                                            onClick=${() => keepOurs(entry)}
                                         >Keep ours</button>
                                     </span>
                                     <span class="stored-presets-side">

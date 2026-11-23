@@ -117,6 +117,7 @@ func (app *WebApp) MountWeb(r chi.Router, discoveryService *discovery.UnifiedDis
 				// readback uses this instead of the full device fetch, which
 				// would poll every field to answer one question.
 				r.Get("/now-playing", app.HandleDeviceNowPlaying)
+				r.Get("/presets", app.HandleDevicePresets)
 				// Low-level "play this ContentItem" primitive (not a provider).
 				r.Post("/play", app.HandleDevicePlay)
 				// Low-level "store this ContentItem in a slot" primitive. The

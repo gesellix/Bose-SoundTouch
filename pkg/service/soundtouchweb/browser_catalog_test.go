@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/chromedp/chromedp"
@@ -20,14 +21,25 @@ const catalogFixtureScript = `
 import { h, render } from 'preact';
 import { Presets } from '/app/static/js/components/Presets.js';
 const status = {
+  epoch: 1,
   revision: 1,
   nowPlaying: { Source: 'STANDBY' },
   presets: { Preset: [
     { ID: 1, ContentItem: { Source: 'TUNEIN', SourceAccount: '', Location: 's12345', ItemName: 'WDR 2' } },
   ] },
 };
-render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status })), document.getElementById('fixture'));
+window.renderPresetFixture = (items = status.presets.Preset) => render(h('section', { id: 'presets' }, h(Presets, {
+  deviceId: 'speaker', physicalId: 'SPEAKER', status: { ...status, presets: { Preset: items } },
+})), document.getElementById('fixture'));
+renderPresetFixture();
 `
+
+const catalogSlotOne = `{"ID":1,"ContentItem":{"Source":"TUNEIN","Location":"s12345","ItemName":"WDR 2"}}`
+
+func writePresetFixtureBank(w http.ResponseWriter, entries ...string) {
+	_, _ = io.WriteString(w, `{"success":true,"data":{"info":{"device_id":"SPEAKER"},"status":{"epoch":1,"presets":{"Preset":[`+
+		strings.Join(entries, ",")+`]}}}}`)
+}
 
 // TestPresetSlotFillsFromTheCatalog covers the issue 754 pick list: a slot is
 // filled from what AfterTouch has seen, rather than from hand-edited XML. It
@@ -63,6 +75,15 @@ func TestPresetSlotFillsFromTheCatalog(t *testing.T) {
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(stored) == 0 {
+				writePresetFixtureBank(w, catalogSlotOne)
+				return
+			}
+			writePresetFixtureBank(w, catalogSlotOne, `{"ID":2,"ContentItem":{"Source":"RADIO_BROWSER","Location":"uuid-fm4","ItemName":"FM4"}}`)
+		})
 	})
 
 	ctx := newHeadlessChromeContext(t)
@@ -83,6 +104,10 @@ func TestPresetSlotFillsFromTheCatalog(t *testing.T) {
 		// The entry that already occupies slot 1 is listed, and says so.
 		evalInto(`Array.from(document.querySelectorAll('#presets .catalog-entry-meta'))
 			.map(e => e.textContent).find(t => t.includes('WDR 2') || t.includes('TuneIn')) || ''`, &occupiedMeta),
+
+		// Storing that same content can silently empty the original slot.
+		chromedp.Click(chromedp.CSS(`#presets .catalog-picker-list li:nth-child(2) .catalog-entry`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-picker [role="alert"]')?.textContent.includes('Use Move')`),
 
 		// The filter narrows the list rather than reloading it.
 		chromedp.SendKeys(chromedp.CSS(`#presets .catalog-picker-filter`), "FM4"),
@@ -175,6 +200,15 @@ func TestPresetSlotClearsWithConfirmation(t *testing.T) {
 			cleared = append(cleared, chi.URLParam(req, "slot"))
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(cleared) == 0 {
+				writePresetFixtureBank(w, catalogSlotOne)
+				return
+			}
+			writePresetFixtureBank(w)
 		})
 	})
 
@@ -270,13 +304,117 @@ func TestPresetSlotClearStaysPutWhileTheCatalogLoads(t *testing.T) {
 	}
 }
 
-// TestPresetSlotRenamesAndMoves covers the two edits that do not need a new
-// endpoint: both are a store of a named ContentItem, with a different name or
-// into a different slot. The move also asserts the order the two requests go
-// in, which is what decides whether a half-failed move loses the station.
+func TestPresetClearKeepsEditorOpenWhenSpeakerDoesNotClear(t *testing.T) {
+	var deletes atomic.Int32
+	server := newPlayerFixtureServer(t, catalogFixtureScript, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"success":true,"data":{"available":true,"entries":[]}}`)
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			writePresetFixtureBank(w, catalogSlotOne)
+		})
+		r.Delete("/api/control/devices/speaker/preset/1", func(w http.ResponseWriter, _ *http.Request) {
+			deletes.Add(1)
+			_, _ = io.WriteString(w, `{"success":true}`)
+		})
+	})
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Do(ctx,
+		navigateFixture(server.URL+"/fixture"),
+		chromedp.Click(chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-clear-btn`)),
+		chromedp.Click(chromedp.CSS(`#presets .catalog-picker-confirm .catalog-clear-btn.danger`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-picker [role="alert"]')?.textContent.includes('Preset change unverified')`),
+	); err != nil {
+		t.Fatalf("the unchanged slot should leave the editor open with a warning: %v", err)
+	}
+	if got := deletes.Load(); got != 1 {
+		t.Fatalf("clear sent %d writes, want 1", got)
+	}
+}
+
+func TestPresetReadbackUpdatesTheNextEditorWithoutWebSocket(t *testing.T) {
+	const fixture = `
+import { h, render } from 'preact';
+import { Presets } from '/app/static/js/components/Presets.js';
+import { mergeStatusUpdate } from '/app/static/js/app.js';
+let devices = { speaker: { info: { device_id: 'SPEAKER' }, status: {
+    epoch: 1, revision: 1, nowPlaying: { Source: 'STANDBY' },
+    presets: { Preset: [{ ID: 1, ContentItem: { Source: 'TUNEIN', Location: 's12345', ItemName: 'WDR 2' } }] },
+} } };
+function draw() {
+    render(h(Presets, { deviceId: 'speaker', physicalId: 'SPEAKER', status: devices.speaker.status,
+        onStatusReadback: (id, status) => { devices = mergeStatusUpdate(devices, id, status); draw(); }
+    }), document.getElementById('fixture'));
+}
+draw();
+`
+	var mu sync.Mutex
+	name := "WDR 2"
+	revision := 1
+	stores := 0
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"success":true,"data":{"available":true,"entries":[]}}`)
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			revision++
+			data := map[string]any{
+				"info": map[string]any{"device_id": "SPEAKER"},
+				"status": map[string]any{"epoch": 1, "revision": revision,
+					"nowPlaying": map[string]string{"Source": "STANDBY"},
+					"presets": map[string]any{"Preset": []any{map[string]any{"ID": 1,
+						"ContentItem": map[string]string{"Source": "TUNEIN", "Location": "s12345", "ItemName": name}}}}},
+			}
+			if err := json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true, Data: data}); err != nil {
+				t.Errorf("encode preset bank: %v", err)
+			}
+		})
+		r.Post("/api/control/devices/speaker/preset/1", func(w http.ResponseWriter, req *http.Request) {
+			var item struct {
+				Name string `json:"itemName"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&item); err != nil {
+				t.Errorf("decode stored item: %v", err)
+			}
+			mu.Lock()
+			name = item.Name
+			stores++
+			mu.Unlock()
+			_, _ = io.WriteString(w, `{"success":true}`)
+		})
+	})
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Do(ctx, navigateFixture(server.URL+"/fixture")); err != nil {
+		t.Fatal(err)
+	}
+	for _, label := range []string{"First rename", "Second rename"} {
+		if err := chromedp.Do(ctx,
+			chromedp.Click(chromedp.CSS(`.preset-slot-wrap:nth-child(1) .preset-edit-btn`)),
+			chromedp.WaitVisible(chromedp.CSS(`.catalog-rename-input`)),
+			chromedp.SetValue(chromedp.CSS(`.catalog-rename-input`), label),
+			chromedp.Evaluate[chromedp.Void](`document.querySelector('.catalog-rename-input').dispatchEvent(new Event('input',{bubbles:true}))`),
+			chromedp.Click(chromedp.CSS(`.catalog-action-btn`)),
+			chromedp.Poll[chromedp.Void](`!document.querySelector('.catalog-picker') && document.querySelector('.preset-name').textContent === '`+label+`'`),
+		); err != nil {
+			t.Fatalf("rename %q: %v", label, err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if stores != 2 || name != "Second rename" {
+		t.Fatalf("successive edits: %d stores, final %q", stores, name)
+	}
+}
+
+// TestPresetSlotRenamesAndMoves verifies the destination before clearing the
+// source and verifies the resulting bank before closing the editor.
 func TestPresetSlotRenamesAndMoves(t *testing.T) {
 	var mu sync.Mutex
 	var calls []string
+	var renamed, moved, cleared bool
 
 	server := newPlayerFixtureServer(t, catalogFixtureScript, func(r chi.Router) {
 		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
@@ -287,16 +425,45 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 		})
 		r.Post("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
 			body, _ := io.ReadAll(req.Body)
+			slot := chi.URLParam(req, "slot")
 			mu.Lock()
-			calls = append(calls, "store "+chi.URLParam(req, "slot")+" "+string(body))
+			calls = append(calls, "store "+slot+" "+string(body))
+			if slot == "1" {
+				renamed = true
+			}
+			if slot == "3" {
+				moved = true
+			}
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
 		})
 		r.Delete("/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, req *http.Request) {
 			mu.Lock()
 			calls = append(calls, "clear "+chi.URLParam(req, "slot"))
+			cleared = true
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, req *http.Request) {
+			if req.Header.Get("X-AfterTouch-Preset-Target") != "SPEAKER" || req.Header.Get("X-AfterTouch-Preset-Epoch") != "1" {
+				w.WriteHeader(http.StatusConflict)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, "read")
+			station := `"ContentItem":{"Source":"TUNEIN","Location":"s12345","ItemName":"WDR 2"}`
+			if renamed {
+				station = `"ContentItem":{"Source":"TUNEIN","Location":"s12345","ItemName":"WDR 2 Rheinland"}`
+			}
+			var presets []string
+			if !cleared {
+				presets = append(presets, `{"ID":1,`+station+`}`)
+			}
+			if moved {
+				presets = append(presets, `{"ID":3,`+station+`}`)
+			}
+			writePresetFixtureBank(w, presets...)
 		})
 	})
 
@@ -319,6 +486,7 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 		chromedp.Poll[chromedp.Void](`!document.querySelector('#presets .catalog-action-btn').disabled`),
 		chromedp.Click(chromedp.CSS(`#presets .catalog-action-btn`)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('#presets .catalog-picker') === null`),
+		chromedp.Evaluate[chromedp.Void](`renderPresetFixture([{ID: 1, ContentItem: {Source: 'TUNEIN', Location: 's12345', ItemName: 'WDR 2 Rheinland'}}])`),
 
 		// Move slot 1 to the empty slot 3: no confirmation, since nothing
 		// would be replaced.
@@ -333,20 +501,53 @@ func TestPresetSlotRenamesAndMoves(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if len(calls) != 3 {
-		t.Fatalf("expected a rename store plus a move (store then clear), got %v", calls)
+	if len(calls) != 8 {
+		t.Fatalf("expected a rename store and a verified move, got %v", calls)
 	}
 
-	if !strings.HasPrefix(calls[0], "store 1 ") || !strings.Contains(calls[0], `"itemName":"WDR 2 Rheinland"`) {
-		t.Errorf("rename should store the new name into the same slot, got %q", calls[0])
+	if calls[0] != "read" || !strings.HasPrefix(calls[1], "store 1 ") ||
+		!strings.Contains(calls[1], `"itemName":"WDR 2 Rheinland"`) || calls[2] != "read" {
+		t.Errorf("rename should verify the new name in the same slot, got %v", calls[:3])
 	}
 
-	if !strings.HasPrefix(calls[1], "store 3 ") {
-		t.Errorf("a move must store into the target first, got %q", calls[1])
+	if calls[3] != "read" || !strings.HasPrefix(calls[4], "store 3 ") || calls[5] != "read" || calls[6] != "clear 1" || calls[7] != "read" {
+		t.Errorf("a move must verify before both writes and after clearing the source, got %v", calls)
 	}
+}
 
-	if calls[2] != "clear 1" {
-		t.Errorf("a move must clear the source second, got %q", calls[2])
+func TestPresetMoveDoesNotConfirmAChangedDestination(t *testing.T) {
+	fixture := catalogFixtureScript + `
+window.destination = name => renderPresetFixture([...status.presets.Preset, {
+  ID: 3, ContentItem: { Source: 'TUNEIN', Location: name, ItemName: name },
+}]);
+destination('Original station');
+`
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/catalog", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"success":true,"data":{"available":true,"entries":[]}}`)
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"success":true,"data":{"info":{"device_id":"SPEAKER"},"status":{"epoch":1,"presets":{"Preset":[
+				{"ID":1,"ContentItem":{"Source":"TUNEIN","Location":"s12345","ItemName":"WDR 2"}},
+				{"ID":3,"ContentItem":{"Source":"TUNEIN","Location":"Replacement station","ItemName":"Replacement station"}}
+			]}}}}`)
+		})
+		r.MethodFunc(http.MethodPost, "/api/control/devices/speaker/preset/{slot}", func(w http.ResponseWriter, _ *http.Request) {
+			t.Error("move overwrote the new destination without confirmation")
+			w.WriteHeader(http.StatusConflict)
+		})
+	})
+	ctx := newHeadlessChromeContext(t)
+	edit := chromedp.CSS(`#presets .preset-slot-wrap:nth-child(1) .preset-edit-btn`)
+	move := chromedp.CSS(`#presets .catalog-move-slot:nth-child(2)`)
+	if err := chromedp.Do(ctx,
+		navigateFixture(server.URL+"/fixture"), chromedp.Click(edit), chromedp.Click(move),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-current [role=alert]')?.textContent.includes('Original station')`),
+		chromedp.Evaluate[chromedp.Void](`destination('Replacement station')`),
+		chromedp.Click(move),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-picker-note.error')?.textContent.includes('source or destination preset changed')`),
+	); err != nil {
+		t.Fatalf("stale move confirmation: %v", err)
 	}
 }
 
@@ -363,6 +564,7 @@ func TestCatalogMarksContentThisSpeakerCannotPlay(t *testing.T) {
 import { h, render } from 'preact';
 import { Presets } from '/app/static/js/components/Presets.js';
 const status = {
+  epoch: 1,
   revision: 1,
   nowPlaying: { Source: 'STANDBY' },
   presets: { Preset: [] },
@@ -371,7 +573,7 @@ const status = {
     { Source: 'STORED_MUSIC', SourceAccount: 'uuid:mine/0', Status: 'READY' },
   ] },
 };
-render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status })), document.getElementById('fixture'));
+render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', physicalId: 'SPEAKER', status })), document.getElementById('fixture'));
 `
 
 	var mu sync.Mutex
@@ -401,6 +603,15 @@ render(h('section', { id: 'presets' }, h(Presets, { deviceId: 'speaker', status 
 			stored = append(stored, string(body))
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(webtypes.APIResponse{Success: true})
+		})
+		r.Get("/api/control/devices/speaker/presets", func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(stored) == 0 {
+				writePresetFixtureBank(w)
+				return
+			}
+			writePresetFixtureBank(w, `{"ID":1,"ContentItem":{"Source":"STORED_MUSIC","SourceAccount":"uuid:theirs/0","Location":"1$7$0","ItemName":"Album next door"}}`)
 		})
 	})
 

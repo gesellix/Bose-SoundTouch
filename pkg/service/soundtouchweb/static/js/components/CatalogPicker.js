@@ -1,11 +1,12 @@
 import { h } from 'preact';
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
 import { sourceLabel } from '../sourceLabels.js';
 import { missingSourceFor } from '../sourceAvailability.mjs';
 import { canonicalLocation } from '../contentLocation.mjs';
+import { movePreset, verifyPresetEdit } from '../presetMove.mjs';
 
 const html = htm.bind(h);
 
@@ -17,19 +18,22 @@ const html = htm.bind(h);
 // concerned: stations and albums this household actually used, across
 // speakers, rather than a location typed by hand.
 //
-// It deliberately does not hide entries that already sit in a slot. Copying
-// one station into a second slot, or onto a second speaker, is a thing people
-// do on purpose; the list only says where an entry already is.
-export function CatalogPicker({ deviceId, slot, presets, sources = null, current = null, onClose, onAssigned }) {
+// Keep already assigned entries visible, including those that may be useful
+// on another speaker. Moving an existing preset on this speaker is explicit.
+export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sources = null, current = null, onClose, onAssigned, onStatusReadback }) {
     const [state, setState] = useState({ status: 'loading' });
     const [query, setQuery] = useState('');
     const [saving, setSaving] = useState(null);
     const [error, setError] = useState(null);
-    const [confirmingClear, setConfirmingClear] = useState(false);
+    const [confirmingClear, setConfirmingClear] = useState(null);
     const [pendingMove, setPendingMove] = useState(null);
     const [newName, setNewName] = useState(current?.ContentItem?.ItemName ?? '');
+    const moving = useRef(false);
+    const mounted = useRef(true);
+    useLayoutEffect(() => () => { mounted.current = false; }, []);
 
     const item = current?.ContentItem ?? null;
+    const renameSource = useRef(item);
     const occupied = !!item;
 
     useEffect(() => {
@@ -92,56 +96,32 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
     }, [state.entries, query]);
 
     function pick(entry) {
-        storeItem(slot, {
+        editPreset({
             source: entry.source,
             sourceAccount: entry.source_account || '',
             location: entry.location,
             type: entry.type || '',
             itemName: entry.name || '',
             containerArt: entry.container_art || '',
-        }, entry.location)
-            .then(() => {
-                setSaving(null);
-                onAssigned?.(entry);
-            })
-            .catch(failed('The request did not complete; the slot may or may not have changed.'));
+        }, item, entry.location, entry);
     }
 
-    // storeItem is the one write the editor makes: it names a ContentItem and
-    // the slot it goes into. Filling from the catalog, renaming and moving are
-    // all that write with a different item or a different slot, which is why
-    // none of them needs its own endpoint.
-    function storeItem(targetSlot, contentItem, key) {
+    async function editPreset(content, expected, key, assigned = null) {
+        if (saving !== null) return;
         setSaving(key);
         setError(null);
-
-        return api.storePresetContent(deviceId, targetSlot, contentItem)
-            .then(res => {
-                if (res?.success === false) {
-                    throw new Error(res.error || 'The speaker refused this entry.');
-                }
-
-                return res;
-            });
-    }
-
-    function failed(message) {
-        return err => {
-            setSaving(null);
-            setError(err?.message || message);
-        };
-    }
-
-    function itemPayload(overrides = {}) {
-        return {
-            source: item?.Source ?? '',
-            sourceAccount: item?.SourceAccount ?? '',
-            location: item?.Location ?? '',
-            type: item?.Type ?? '',
-            itemName: item?.ItemName ?? '',
-            containerArt: item?.ContainerArt ?? '',
-            ...overrides,
-        };
+        try {
+            await verifyPresetEdit({ api, deviceId, physicalId, epoch, slot: Number(slot), content, expected,
+                isCurrent: () => mounted.current, onStatusReadback });
+            if (mounted.current) onAssigned?.(assigned);
+        } catch (error) {
+            if (mounted.current) setError(error.message);
+        } finally {
+            if (mounted.current) {
+                setSaving(null);
+                setConfirmingClear(null);
+            }
+        }
     }
 
     function rename(e) {
@@ -149,57 +129,42 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
 
         const name = newName.trim();
 
-        if (!name || name === item?.ItemName) return;
-
-        storeItem(slot, itemPayload({ itemName: name }), 'rename')
-            .then(() => {
-                setSaving(null);
-                onAssigned?.(null);
-            })
-            .catch(failed('The request did not complete; the name may or may not have changed.'));
+        const before = renameSource.current;
+        if (!before || !name || name === before.ItemName) return;
+        editPreset({ ...before, ItemName: name }, before, 'rename');
     }
 
-    // A move is a store into the target followed by a clear of the source, in
-    // that order: if the clear fails, the station is in two slots, which is
-    // recoverable. The other order would risk losing it from both.
-    function move(target) {
-        if (slotByNumber.get(target) && pendingMove !== target) {
-            setPendingMove(target);
+    async function move(target) {
+        if (moving.current || saving !== null) return;
+        const destination = slotByNumber.get(target);
+        const confirmed = pendingMove?.slot === target ? pendingMove : null;
+        if (destination && !confirmed) {
+            setPendingMove({ slot: target, source: { ...item }, destination: { ...destination } });
 
             return;
         }
 
-        storeItem(target, itemPayload(), `move:${target}`)
-            .then(() => api.removePreset(deviceId, slot))
-            .then(() => {
+        moving.current = true;
+        setSaving(`move:${target}`);
+        setError(null);
+        try {
+            await movePreset({ api, deviceId, physicalId, epoch, from: Number(slot), to: target,
+                source: confirmed?.source ?? item, destination: confirmed?.destination ?? destination,
+                isCurrent: () => mounted.current, onStatusReadback });
+            if (mounted.current) onAssigned?.(null);
+        } catch (err) {
+            if (mounted.current) setError(err.message || 'The move could not be confirmed. Check both presets.');
+        } finally {
+            moving.current = false;
+            if (mounted.current) {
                 setSaving(null);
                 setPendingMove(null);
-                onAssigned?.(null);
-            })
-            .catch(failed('The request did not complete; check both slots.'));
+            }
+        }
     }
 
     function clear() {
-        setSaving('clear');
-        setError(null);
-
-        api.removePreset(deviceId, slot)
-            .then(res => {
-                setSaving(null);
-                setConfirmingClear(false);
-
-                if (res?.success === false) {
-                    setError(res.error || 'The speaker refused to clear this slot.');
-
-                    return;
-                }
-
-                onAssigned?.(null);
-            })
-            .catch(() => {
-                setSaving(null);
-                setError('The request did not complete; the slot may or may not have been cleared.');
-            });
+        if (confirmingClear) editPreset(null, confirmingClear, 'clear');
     }
 
     // A slot that holds something is being edited, not filled: renaming and
@@ -244,7 +209,7 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                                 <button
                                     key=${n}
                                     type="button"
-                                    class="catalog-move-slot ${slotByNumber.get(n) ? 'occupied' : ''} ${pendingMove === n ? 'pending' : ''}"
+                                    class="catalog-move-slot ${slotByNumber.get(n) ? 'occupied' : ''} ${pendingMove?.slot === n ? 'pending' : ''}"
                                     disabled=${saving !== null}
                                     title=${slotByNumber.get(n)
                                         ? `Preset ${n} holds ${slotByNumber.get(n).ItemName || 'something'}`
@@ -266,20 +231,20 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                                             onClick=${clear}>Empty it</button>
                                     <button type="button" class="catalog-clear-btn"
                                             disabled=${saving !== null}
-                                            onClick=${() => setConfirmingClear(false)}>Keep it</button>
+                                            onClick=${() => setConfirmingClear(null)}>Keep it</button>
                                 </span>
                             `
                             : html`
                                 <button type="button" class="catalog-clear-btn"
-                                        onClick=${() => setConfirmingClear(true)}>
+                                        onClick=${() => setConfirmingClear({ ...item })}>
                                     Empty this slot
                                 </button>
                             `}
                     </div>
                     ${pendingMove !== null && html`
                         <p class="catalog-picker-note" role="alert">
-                            Preset ${pendingMove} holds ${slotByNumber.get(pendingMove)?.ItemName || 'something'}.
-                            Press ${pendingMove} again to replace it; it stays on this list.
+                            Preset ${pendingMove.slot} holds ${pendingMove.destination.ItemName || 'something'}.
+                            Press ${pendingMove.slot} again to replace it; it stays on this list.
                         </p>
                     `}
                 </div>
@@ -305,6 +270,8 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                 </p>
             `}
 
+            ${error && html`<p class="catalog-picker-note error" role="alert">${error}</p>`}
+
             ${state.status === 'ready' && (state.entries ?? []).length > 0 && html`
                 <input
                     class="catalog-picker-filter"
@@ -314,7 +281,6 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                     value=${query}
                     onInput=${e => setQuery(e.target.value)}
                 />
-                ${error && html`<p class="catalog-picker-note error" role="alert">${error}</p>`}
                 <ul class="catalog-picker-list">
                     ${entries.map(entry => {
                         const occupies = slotByIdentity.get(identityOf({

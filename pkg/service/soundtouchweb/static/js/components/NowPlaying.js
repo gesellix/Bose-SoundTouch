@@ -5,6 +5,8 @@ import { api } from '../api.js';
 import { SourceIcon } from '../sourceIcons.js';
 import { PresetPicker } from './PresetPicker.js';
 import { sameContentLocation } from '../contentLocation.mjs';
+import { currentPresetContent, verifyPresetEdit } from '../presetMove.mjs';
+import { usePresetTarget } from '../usePresetTarget.js';
 
 const html = htm.bind(h);
 
@@ -20,13 +22,10 @@ function fmt(secs) {
 // current content already exists in one of the device's presets, in which
 // case the tooltip names the slot.
 //
-// The popover itself lives in PresetPicker, shared with the Library rows
-// (issue 700). Here the store is a single request against whatever is already
-// playing, so its result is known immediately and shown inline.
-function NowPlayingPresetPicker({ deviceId, nowPlaying, presets }) {
+function NowPlayingPresetPicker({ target, content, presets }) {
     // Detect whether the current content is already saved as any preset.
-    const currentSource = nowPlaying?.ContentItem?.Source;
-    const currentLocation = nowPlaying?.ContentItem?.Location;
+    const currentSource = content.Source;
+    const currentLocation = content.Location;
     const presetList = presets?.Preset ?? [];
     // Keep the matching preset, not just a boolean, so the tooltip can name
     // the slot it landed in.
@@ -37,8 +36,12 @@ function NowPlayingPresetPicker({ deviceId, nowPlaying, presets }) {
         : undefined;
 
     function save(slotId) {
-        return api.storePreset(deviceId, slotId).then(res => {
-            if (!res?.success) throw new Error(res?.error || 'preset save failed');
+        return verifyPresetEdit({
+            api,
+            ...target,
+            slot: slotId,
+            content,
+            expected: presetList.find(p => p.ID === slotId)?.ContentItem ?? null,
         });
     }
 
@@ -51,8 +54,10 @@ function NowPlayingPresetPicker({ deviceId, nowPlaying, presets }) {
     />`;
 }
 
-export function NowPlaying({ nowPlaying, deviceId, presets }) {
+export function NowPlaying({ nowPlaying, deviceId, physicalId, epoch, presets, onStatusReadback }) {
     const [position, setPosition] = useState(0);
+    const target = usePresetTarget(deviceId, physicalId, epoch, onStatusReadback);
+    const presetContent = currentPresetContent(nowPlaying);
 
     useEffect(() => {
         const pos = nowPlaying?.Time?.Position ?? 0;
@@ -115,10 +120,11 @@ export function NowPlaying({ nowPlaying, deviceId, presets }) {
                     </div>
                 `}
             </div>
-            ${deviceId && html`
+            ${deviceId && presetContent && html`
                 <${NowPlayingPresetPicker}
-                    deviceId=${deviceId}
-                    nowPlaying=${nowPlaying}
+                    key=${JSON.stringify([deviceId, physicalId, epoch])}
+                    target=${target}
+                    content=${presetContent}
                     presets=${presets}
                 />
             `}
