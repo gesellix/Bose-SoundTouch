@@ -3,6 +3,7 @@ set -e
 
 # Directory where libraries are stored
 LIB_DIR="pkg/service/soundtouchweb/static/lib"
+ADMIN_LIB_DIR="pkg/service/handlers/web/lib"
 mkdir -p "$LIB_DIR"
 
 echo "Installing static frontend dependencies from package-lock.json..."
@@ -34,5 +35,9 @@ for dependency in preact htm es-module-shims; do
     cp "node_modules/$dependency/LICENSE" "$LICENSE_DIR/$dependency-LICENSE"
 done
 cp package-lock.json "$LICENSE_DIR/package-lock.json"
+
+echo "Copying independent admin libraries (the player route may be disabled)..."
+mkdir -p "$ADMIN_LIB_DIR"
+cp -a "$LIB_DIR/." "$ADMIN_LIB_DIR/"
 
 echo "All dependencies updated successfully from node_modules."
