@@ -16,3 +16,7 @@ paths-ignore:
   # third-party code. Keep this exception file-specific so Preact, HTM, and
   # future files under static/lib remain covered.
   - "pkg/service/soundtouchweb/static/lib/es-module-shims.js"
+  # The admin UI vendors its own copy (it must not depend on the player's
+  # /app/static/lib/ route, which is behind the player's enable/disable gate),
+  # so the same third-party file needs the same file-specific exception here.
+  - "pkg/service/handlers/web/lib/es-module-shims.js"
