@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: "go.mod"
 
@@ -43,13 +43,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Upload the Semgrep SARIF to code scanning. Without it the upload is
+      # refused on pushes to main, so main never gets a baseline and every PR
+      # lists all Semgrep alerts as if they were new.
+      security-events: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: "go.mod"
 
@@ -66,14 +70,23 @@ jobs:
           staticcheck ./...
           echo "::endgroup::"
 
+      # The Semgrep CLI in its own image, not semgrep/semgrep-action: that
+      # wrapper is deprecated and warns about its own inputs. The image comes
+      # from .github/semgrep/Dockerfile, where Dependabot keeps it current.
+      # `semgrep scan` exits 0 even with findings; they go to code scanning
+      # via the SARIF upload below.
       - name: Run Semgrep security analysis
-        uses: semgrep/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1 (no v1.x.y semver tag exists)
-        with:
-          config: >-
-            p/security-audit
-            p/secrets
-            p/golang
-          generateSarif: "1"
+        run: |
+          image=$(awk '$1 == "FROM" { print $2; exit }' .github/semgrep/Dockerfile)
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src -w /src \
+            "$image" \
+            semgrep scan \
+              --config p/security-audit \
+              --config p/secrets \
+              --config p/golang \
+              --metrics=off \
+              --sarif --output semgrep.sarif
         continue-on-error: true
 
       - name: Upload Semgrep SARIF results
@@ -95,11 +108,24 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
         with:
           fail-on-severity: moderate
           allow-ghsas: GHSA-xxxx-xxxx-xxxx  # Add specific allowlisted advisories if needed
-          deny-licenses: GPL-2.0, LGPL-2.0  # Add licenses to deny if needed
+          # Allowlist, not a deny list (deny-licenses is deprecated, see
+          # actions/dependency-review-action issue 997). These are the
+          # licenses our dependencies use today; a dependency under any other
+          # license fails the check until it has been looked at and added
+          # here. The LicenseRef is the patent grant that golang.org/x/net
+          # and golang.org/x/sys carry next to BSD-3-Clause. Dependencies
+          # without license data (most GitHub Actions) are reported, not
+          # failed.
+          allow-licenses: >-
+            MIT,
+            BSD-2-Clause,
+            BSD-3-Clause,
+            Apache-2.0,
+            LicenseRef-scancode-google-patent-license-golang
 
   security-summary:
     name: Security Summary

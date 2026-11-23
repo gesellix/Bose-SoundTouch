@@ -2,11 +2,63 @@ package soundtouchweb
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/gesellix/bose-soundtouch/pkg/client"
+	"github.com/gesellix/bose-soundtouch/pkg/models"
+	"github.com/gesellix/bose-soundtouch/pkg/service/soundtouchweb/webtypes"
 )
+
+func TestBalanceReadDoesNotOverwriteWriteEcho(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/balance" || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		close(started)
+		select {
+		case <-release:
+			_, _ = fmt.Fprint(w, `<balance><balanceAvailable>true</balanceAvailable><targetBalance>0</targetBalance><actualBalance>0</actualBalance></balance>`)
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+	app := NewWebApp()
+	conn := webtypes.NewDeviceConnection(client.NewClientFromHost(server.URL), &models.DeviceInfo{Type: "SoundTouch 10"})
+	t.Cleanup(conn.Close)
+
+	done := make(chan struct{})
+	go func() {
+		app.readBalanceOnce("test-device", conn)
+		close(done)
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		close(release)
+		t.Fatal("HTTP balance read did not start")
+	}
+
+	// The successful WebSocket write updates the status before the old GET
+	// returns. This uses the same merge path as handleBalanceControl.
+	app.applyBalanceEvent(conn, &models.Balance{Available: true, Target: 3, Actual: 3})
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("HTTP balance read did not complete")
+	}
+	if balance := conn.Status().Balance; balance == nil || balance.Target != 3 || balance.Actual != 3 {
+		t.Fatalf("balance = %+v, want the confirmed write at 3", balance)
+	}
+}
 
 // TestHandleBalanceControl_RequiresWebSocket pins the one structural
 // difference between balance and every other audio control: the write goes

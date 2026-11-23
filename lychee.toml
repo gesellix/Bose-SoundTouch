@@ -1,0 +1,37 @@
+# Link check for all Markdown files (CI "Documentation Check", see
+# .github/workflows/ci.yml). Run locally with:
+#   docker run --rm -v "$PWD":/input -w /input lycheeverse/lychee \
+#     --root-dir /input/docs/static './**/*.md'
+# Absolute links like /images/x.png are site-root paths of the Hugo docs,
+# hence --root-dir docs/static.
+
+max_retries = 3
+retry_wait_time = 5
+timeout = 20
+max_concurrency = 16
+no_progress = true
+
+# A 404 fails. 401, 403 and 429 come from sites that block automated
+# requests or rate-limit them; they say nothing about the link, so they
+# don't fail the check.
+accept = ["200..=299", "401", "403", "429"]
+
+exclude_loopback = true
+exclude_private = true
+exclude_link_local = true
+
+exclude = [
+  # The README's Go Reference badge, an image rendered on demand.
+  '^https://pkg\.go\.dev/badge/',
+  # Sites that refuse automated requests outright.
+  '^https://www\.contributor-covenant\.org/',
+  '^https://www\.apkmirror\.com/',
+  '^https://apkpure\.com/',
+  '^https://bose\.fandom\.com/',
+  '^https://www\.reddit\.com/',
+]
+
+exclude_path = [
+  '^tests/',
+  'node_modules',
+]

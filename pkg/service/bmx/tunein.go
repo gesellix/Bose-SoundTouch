@@ -910,7 +910,7 @@ func resolveTuneInProgramLatestEpisode(programID string) (episodeID string, err 
 	// The modern JSON API lists a program's (`p<N>`) episodes; the legacy OPML
 	// endpoints can't (`Tune.ashx?id=p<N>` returns `#STATUS: 400`). We use the
 	// api.radiotime.com host (tuneInAPIBase) because TuneInNavigateProfile already
-	// navigates there. See `_/i226/tunein-api-findings.md` for the endpoint map.
+	// navigates there.
 	fetchURL := fmt.Sprintf("%s/profiles/%s/contents?version=1.3", tuneInAPIBase, programID)
 
 	resp, err := defaultClient.Get(fetchURL)

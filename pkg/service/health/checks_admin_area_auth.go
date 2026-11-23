@@ -4,8 +4,7 @@ package health
 // availability check. It fires when AdminAreaAuth is unset — the tri-state
 // setting that lets an operator opt in now to gating the entire admin area
 // (not just /api/mgmt/*) behind Basic Auth, ahead of a future release
-// flipping the default. See #419 and
-// _/i419/design-admin-area-auth-gate.md.
+// flipping the default. See #419.
 //
 // This is a visibility-only nudge, same spirit as
 // CheckIDMgmtDefaultCredentials: it does not gate anything and does not

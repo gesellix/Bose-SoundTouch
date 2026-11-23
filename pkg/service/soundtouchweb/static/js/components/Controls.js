@@ -4,12 +4,12 @@ import htm from 'htm';
 import { api } from '../api.js';
 import { createLatestWinsScheduler, shouldSurfaceLatestFinal } from '../latestWinsScheduler.mjs';
 import {
+    buildVolumeProjection,
     clampVolume,
     fenceVolumeReadback,
     maxReadbackActual,
     partialFailureMessage,
     reconcileVolumeResult,
-    volumeProjectionKey,
 } from '../zoneVolumeResult.mjs';
 
 const html = htm.bind(h);
@@ -111,18 +111,11 @@ export function Controls({
     const shuffle = np?.ShuffleSetting ?? 'SHUFFLE_OFF';
     const repeat = np?.RepeatSetting ?? 'REPEAT_OFF';
     const projectedVolumeRef = useRef(projectedVolume);
-    const memberStatuses = controlsLogicalZone ? (zone?.members || []).map(member => [
-        member.controlId, member.controlId === deviceId ? status : devices[member.controlId]?.status,
-    ]) : [];
-    const projectionEpoch = JSON.stringify(Object.fromEntries([[deviceId, status?.epoch ?? null],
-        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.epoch ?? null])]));
-    const projectionRevision = JSON.stringify(Object.fromEntries([[deviceId, status?.revision ?? null],
-        ...memberStatuses.map(([id, memberStatus]) => [id, memberStatus?.revision ?? null])]));
-    const projectionKey = volumeProjectionKey(projectionEpoch,
-        projectionRevision, controlsLogicalZone
-            ? Object.fromEntries((zone?.members || []).map(member => [
-                member.controlId, Number.isFinite(member.actualVolume) ? member.actualVolume : null,
-            ])) : { [deviceId]: projectedVolume });
+    const members = controlsLogicalZone ? (zone.members || []) : [];
+    const volumes = controlsLogicalZone ? Object.fromEntries(members.map(member => [
+        member.controlId, Number.isFinite(member.actualVolume) ? member.actualVolume : null,
+    ])) : { [deviceId]: projectedVolume };
+    const { epoch: projectionEpoch, key: projectionKey } = buildVolumeProjection(deviceId, status, devices, members, volumes);
     const projectionKeyRef = useRef(projectionKey);
     const controlTargetKey = JSON.stringify([
         deviceId,

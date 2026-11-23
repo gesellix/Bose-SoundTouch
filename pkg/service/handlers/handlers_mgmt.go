@@ -39,8 +39,7 @@ func (s *Server) BasicAuthMgmt() func(http.Handler) http.Handler {
 // request, so toggling the setting via the Settings UI (HandleUpdateSettings
 // -> SetAdminAreaAuth) takes effect immediately — no restart. When the mode
 // isn't "enabled", every request passes through unauthenticated, i.e.
-// today's default behavior. See #419 and
-// _/i419/design-admin-area-auth-gate.md.
+// today's default behavior. See #419.
 func (s *Server) BasicAuthAdmin() func(http.Handler) http.Handler {
 	const realm = "Admin Area"
 

@@ -113,7 +113,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
             return;
         }
         failure = response?.success ? '' : response?.error || 'Sound setting update failed.';
-        failureFloor = failure ? target.projection : null;
+        failureFloor = failure ? { projection: target.projection, value: target.value } : null;
         unverifiedValue = failure && response?.outcome === 'unverified' ? request.value : null;
         unverifiedObservations = unverifiedValue !== null ? request.observations : null;
         if (request.projection === target.projection && response?.success && Number.isInteger(response.confirmedValue)) {
@@ -128,7 +128,7 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
 
     function surfaceError(error) {
         failure = error?.message || 'Sound setting update failed.';
-        failureFloor = target.projection;
+        failureFloor = { projection: target.projection, value: target.value };
         unverifiedValue = null;
         unverifiedObservations = null;
         local = target.value;
@@ -155,10 +155,12 @@ export function createSteppedInteraction({ send, onChange = () => {}, ...timing 
         } else if (next.projection !== target.projection) {
             confirmedValue = null;
             if (!scheduler.isActive()) local = next.value;
-            if (failure && !next.disabled && next.observationConfirmed !== false && next.projection !== failureFloor &&
+            // A fresh reading can verify an uncertain write. After a
+            // definitive failure, a revision alone says nothing changed.
+            if (failure && !next.disabled && next.observationConfirmed !== false && next.projection !== failureFloor.projection &&
                 Number.isInteger(next.value) && next.value >= next.min && next.value <= next.max &&
-                (unverifiedValue === null || (next.value === unverifiedValue &&
-                    (!unverifiedObservations || observationsAdvanced(next.observations, unverifiedObservations))))) {
+                (unverifiedValue === null ? next.value !== failureFloor.value : next.value === unverifiedValue &&
+                    (!unverifiedObservations || observationsAdvanced(next.observations, unverifiedObservations)))) {
                 if (unverifiedValue !== null) confirmedValue = next.value;
                 failure = '';
                 failureFloor = null;

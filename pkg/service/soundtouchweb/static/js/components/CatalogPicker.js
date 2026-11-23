@@ -207,6 +207,11 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
     // three.
     const heading = occupied ? `Preset ${slot}` : `Fill preset ${slot}`;
 
+    // Emptying acts on the slot, like renaming and moving, so it sits with
+    // them, above the list. Below the list it moved down when the catalog
+    // arrived, and a click aimed at it could land on a station and store that
+    // one instead.
+
     return html`
         <section class="catalog-picker" aria-label=${heading}>
             <header class="catalog-picker-head">
@@ -248,6 +253,28 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                                 >${n}</button>
                             `)}
                         </span>
+                    </div>
+                    <div class="catalog-clear">
+                        ${confirmingClear
+                            ? html`
+                                <span class="catalog-picker-note">
+                                    Empty preset ${slot}? The station stays on this list.
+                                </span>
+                                <span class="catalog-picker-confirm">
+                                    <button type="button" class="catalog-clear-btn danger"
+                                            disabled=${saving !== null}
+                                            onClick=${clear}>Empty it</button>
+                                    <button type="button" class="catalog-clear-btn"
+                                            disabled=${saving !== null}
+                                            onClick=${() => setConfirmingClear(false)}>Keep it</button>
+                                </span>
+                            `
+                            : html`
+                                <button type="button" class="catalog-clear-btn"
+                                        onClick=${() => setConfirmingClear(true)}>
+                                    Empty this slot
+                                </button>
+                            `}
                     </div>
                     ${pendingMove !== null && html`
                         <p class="catalog-picker-note" role="alert">
@@ -329,31 +356,6 @@ export function CatalogPicker({ deviceId, slot, presets, sources = null, current
                     })}
                 </ul>
                 ${entries.length === 0 && html`<p class="catalog-picker-note">Nothing matches that filter.</p>`}
-            `}
-
-            ${occupied && html`
-                <footer class="catalog-picker-foot">
-                    ${confirmingClear
-                        ? html`
-                            <span class="catalog-picker-note">
-                                Empty preset ${slot}? The station stays on this list.
-                            </span>
-                            <span class="catalog-picker-confirm">
-                                <button type="button" class="catalog-clear-btn danger"
-                                        disabled=${saving !== null}
-                                        onClick=${clear}>Empty it</button>
-                                <button type="button" class="catalog-clear-btn"
-                                        disabled=${saving !== null}
-                                        onClick=${() => setConfirmingClear(false)}>Keep it</button>
-                            </span>
-                        `
-                        : html`
-                            <button type="button" class="catalog-clear-btn"
-                                    onClick=${() => setConfirmingClear(true)}>
-                                Empty this slot
-                            </button>
-                        `}
-                </footer>
             `}
         </section>
     `;

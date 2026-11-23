@@ -115,8 +115,10 @@ type DeviceConnection struct {
 	fieldGenMu sync.Mutex
 	fieldGen   [numStatusFields]struct{ issued, applied uint64 }
 
-	volumeFieldMu     sync.Mutex
-	bassFieldMu       sync.Mutex
+	volumeFieldMu sync.Mutex
+	// soundFieldMu keeps generation admission and the status store ordered
+	// against other bass and balance updates, SetStatus, and Close.
+	soundFieldMu      sync.Mutex
 	volumeOperationMu sync.Mutex
 	groupWriteMu      sync.Mutex
 	zoneWriteMu       sync.RWMutex
@@ -392,9 +394,9 @@ func (c *DeviceConnection) Done() <-chan struct{} {
 // any goroutine (e.g. a test connection with a nil Client).
 func (c *DeviceConnection) Close() {
 	c.closeOnce.Do(func() {
-		c.bassFieldMu.Lock()
+		c.soundFieldMu.Lock()
 		close(c.done)
-		c.bassFieldMu.Unlock()
+		c.soundFieldMu.Unlock()
 
 		c.webSocketMu.Lock()
 		ws := c.WebSocket
@@ -472,8 +474,8 @@ func (c *DeviceConnection) FinishWebSocketLoop() {
 // every field, so each StatusField generation is advanced past any poll
 // still in flight.
 func (c *DeviceConnection) SetStatus(s *DeviceStatus) {
-	c.bassFieldMu.Lock()
-	defer c.bassFieldMu.Unlock()
+	c.soundFieldMu.Lock()
+	defer c.soundFieldMu.Unlock()
 
 	nowPlayingGeneration := c.supersedeAllFields()
 
@@ -523,9 +525,9 @@ func (c *DeviceConnection) BeginFieldPoll(field StatusField) uint64 {
 // field's event, or an unrelated field's poll completing first, cannot
 // discard this field's fresh, successful data.
 func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint64, mut func(*DeviceStatus)) bool {
-	if field == FieldBass {
-		c.bassFieldMu.Lock()
-		defer c.bassFieldMu.Unlock()
+	if field == FieldBass || field == FieldBalance {
+		c.soundFieldMu.Lock()
+		defer c.soundFieldMu.Unlock()
 
 		select {
 		case <-c.Done():
@@ -557,9 +559,9 @@ func (c *DeviceConnection) CompleteFieldPoll(field StatusField, generation uint6
 // authoritative evidence for field -- and invalidates any poll for field
 // that began before it, without touching any other field's ordering.
 func (c *DeviceConnection) ApplyFieldEvent(field StatusField, mut func(*DeviceStatus)) {
-	if field == FieldBass {
-		c.bassFieldMu.Lock()
-		defer c.bassFieldMu.Unlock()
+	if field == FieldBass || field == FieldBalance {
+		c.soundFieldMu.Lock()
+		defer c.soundFieldMu.Unlock()
 
 		select {
 		case <-c.Done():

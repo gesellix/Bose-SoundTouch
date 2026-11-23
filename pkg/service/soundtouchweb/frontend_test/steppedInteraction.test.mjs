@@ -259,6 +259,27 @@ test('a matching newer acoustic observation confirms unverified readback but nev
     }
 });
 
+test('a newer bass revision with the same value only clears an unverified outcome', async () => {
+    for (const outcome of ['unverified', 'failed']) {
+        const pending = deferred();
+        const state = createSteppedInteraction({ send: () => pending.promise });
+        const bass = (value, revision) => {
+            const observations = [['speaker.local', 'SPEAKER', 1, revision]];
+            return target({ value, observations, projection: JSON.stringify(['bass', value, observations]) });
+        };
+        state.update(bass(0, 1));
+        state.choose(-2);
+        state.update(bass(-2, 1));
+        pending.resolve({ success: false, outcome, error: 'Write not confirmed' });
+        await flush();
+        assert.equal(state.view().failure, 'Write not confirmed');
+        state.update(bass(-2, 2));
+        assert.equal(state.view().failure, outcome === 'unverified' ? '' : 'Write not confirmed');
+        assert.equal(state.view().confirmedValue, outcome === 'unverified' ? -2 : null);
+        state.dispose();
+    }
+});
+
 test('unverified clears only on a changed valid matching observation, not unrelated or nonmatching updates', async () => {
     const pending = deferred();
     const state = createSteppedInteraction({ send: () => pending.promise });

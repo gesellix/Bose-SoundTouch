@@ -8,14 +8,12 @@ import (
 )
 
 // updateCheckRepo is the GitHub repo checked for newer releases, matching
-// soundtouch-service's periodic background check (#591,
-// _/i591/design-update-check.md).
+// soundtouch-service's periodic background check (#591).
 const updateCheckRepo = "gesellix/Bose-SoundTouch"
 
 // updateCheckCommand assembles the on-demand `soundtouch-cli update-check`
-// command, the CLI-side answer to that design doc's open question 2
-// (CLI-only users get no update notice from the service's background
-// checker). Unlike the service's opt-in periodic check, running this
+// command, for CLI-only users, who get no update notice from the
+// service's background checker. Unlike the service's opt-in periodic check, running this
 // command *is* the opt-in: no config flag, no persisted state, just one
 // GitHub API request each time it's invoked.
 func updateCheckCommand() *cli.Command {

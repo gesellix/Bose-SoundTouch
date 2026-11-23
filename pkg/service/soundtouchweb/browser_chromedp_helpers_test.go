@@ -42,3 +42,28 @@ func into[T any](a chromedp.Action[T], dst *T) chromedp.Action[chromedp.Void] {
 		return chromedp.Void{}, err
 	}
 }
+
+// navigateFixture opens a fixture page and waits until Preact has run the
+// effects of its first render.
+//
+// The fixtures render synchronously in a module script, so the DOM is there
+// once Navigate returns, but Preact runs useEffect only after the next frame.
+// Mount effects reset component state: Controls, for example, ends any volume
+// gesture and shows the speaker's volume again. A test that starts a gesture
+// in that gap loses it to the mount effect, and the next speaker update moves
+// the slider it believes is held. That made the volume tests fail at random,
+// about one run in twenty.
+func navigateFixture(url string) chromedp.Action[chromedp.Void] {
+	return func(ctx context.Context, t *chromedp.Target) (chromedp.Void, error) {
+		if _, err := chromedp.Navigate(url)(ctx, t); err != nil {
+			return chromedp.Void{}, err
+		}
+		return chromedp.Evaluate[chromedp.Void](afterEffectsScript, chromedp.EvalAwaitPromise)(ctx, t)
+	}
+}
+
+// afterEffectsScript resolves once Preact has run pending effects: Preact
+// schedules them for after the next frame, from a requestAnimationFrame
+// callback followed by a timeout.
+const afterEffectsScript = `new Promise(resolve =>
+	requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve))))`

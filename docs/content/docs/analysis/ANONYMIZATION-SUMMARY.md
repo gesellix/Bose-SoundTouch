@@ -49,8 +49,7 @@ sight that they don't represent a real device.
 
 The `.md` / `.txt` portion of the `192.168.1.*` → `192.0.2.x` sweep
 is complete. Test files (`.go` / `.xml` / `.http`) still carry the
-old placeholder pending Phase 2 in the audit at
-`_/RFC-5737-cleanup/assessment.md`.
+old placeholder, pending a second cleanup phase.
 
 ## How to audit before committing
 

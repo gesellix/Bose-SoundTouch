@@ -177,7 +177,7 @@ remain the most useful contributions.
 - [Survival Guide](https://gesellix.github.io/Bose-SoundTouch/docs/guides/SURVIVAL-GUIDE/)
 - [API Cookbook](https://gesellix.github.io/Bose-SoundTouch/docs/reference/API-COOKBOOK/)
 - [API Endpoints](https://gesellix.github.io/Bose-SoundTouch/docs/reference/API-ENDPOINTS/)
-- [Go Documentation](https://golang.org/doc/) and [Effective Go](https://golang.org/doc/effective_go.html)
+- [Go Documentation](https://go.dev/doc/) and [Effective Go](https://go.dev/doc/effective_go)
 
 ---
 

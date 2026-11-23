@@ -5,10 +5,13 @@ package soundtouchweb
 import (
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/websocket"
 )
 
 const recentsRefreshFixture = `
@@ -45,7 +48,7 @@ func TestRecentsRefreshLifecycle(t *testing.T) {
 	wait := func(expression string) chromedp.Action[chromedp.Void] {
 		return chromedp.Poll[chromedp.Void](expression)
 	}
-	run(chromedp.Navigate(server.URL+"/fixture"), wait(`requests.length===1`), js(`answer(0,'Initial')`), wait(`document.querySelector('.recent-name')?.textContent==='Initial'`))
+	run(navigateFixture(server.URL+"/fixture"), wait(`requests.length===1`), js(`answer(0,'Initial')`), wait(`document.querySelector('.recent-name')?.textContent==='Initial'`))
 	// A mounted panel ignores unrelated render/volume-style updates.
 	run(js(`show({volume:20,commandBusy:true});show({volume:21,commandBusy:false});window.unrelatedReady=false;setTimeout(()=>window.unrelatedReady=true,180)`), wait(`unrelatedReady`))
 	var count int
@@ -103,7 +106,7 @@ detail();
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.Poll[chromedp.Void](`requests.length===1`),
 		chromedp.Evaluate[chromedp.Void](`answer(0,'First')`),
 		chromedp.Poll[chromedp.Void](`document.querySelector('.recent-name')?.textContent==='First'`),
@@ -117,5 +120,97 @@ detail();
 		chromedp.Poll[chromedp.Void](`document.querySelector('.recent-name')?.textContent==='BrowserReconnect' && writes.length===0`),
 	); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAppRetriesFailedRecentsAfterReconnect(t *testing.T) {
+	const fixture = `
+document.getElementById('fixture').id = 'app';
+await import('/app/static/js/app.js');
+`
+	// Both sockets receive exactly the same device state. A new epoch or
+	// revision would exercise a different trigger than the browser reconnect.
+	const snapshot = `{"type":"devices","data":{"speaker":{
+		"info":{"name":"Speaker","device_id":"MASTER"},
+		"status":{"epoch":41,"revision":17,"recentsRevision":9,"connectivity":"online",
+			"presets":{"Preset":[]},"sources":{"SourceItem":[]},"nowPlaying":{"Source":"STANDBY"},
+			"volume":{"ActualVolume":10,"MuteEnabled":false}}
+	}}}`
+	var connections, reads atomic.Int32
+	upgrader := websocket.Upgrader{}
+	server := newPlayerFixtureServer(t, fixture, func(r chi.Router) {
+		r.Get("/api/control/version", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"success":false}`))
+		})
+		r.Get("/api/control/ws", func(w http.ResponseWriter, req *http.Request) {
+			ws, err := upgrader.Upgrade(w, req, nil)
+			if err != nil {
+				return
+			}
+			defer func() { _ = ws.Close() }()
+			connections.Add(1)
+
+			if err := ws.WriteMessage(websocket.TextMessage, []byte(snapshot)); err != nil {
+				return
+			}
+
+			for {
+				if _, _, err := ws.ReadMessage(); err != nil {
+					return
+				}
+			}
+		})
+		r.Get("/api/control/devices/speaker/recents", func(w http.ResponseWriter, _ *http.Request) {
+			reads.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+
+			if connections.Load() < 2 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"success":false}`))
+
+				return
+			}
+			_, _ = w.Write([]byte(`{"success":true,"data":{"Items":[{"ID":"station","ContentItem":{"Source":"TUNEIN","Location":"/station","ItemName":"Recovered station"}}]}}`))
+		})
+	})
+	proxy := newOutageProxy(t, server.Listener.Addr().String())
+	ctx := newHeadlessChromeContext(t)
+	if err := chromedp.Do(ctx,
+		chromedp.Navigate(proxy.url()+"/fixture"),
+		chromedp.Click(chromedp.CSS(`button.device-card`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.recents-section [role=alert]')?.textContent.includes('Could not load recents.')`),
+		chromedp.Evaluate[chromedp.Void](`window.openDetail = document.querySelector('.device-detail');
+			window.visibilityChanges = 0;
+			document.addEventListener('visibilitychange', () => window.visibilityChanges++);`),
+	); err != nil {
+		t.Fatalf("open device detail and observe the failed Recents request: %v", err)
+	}
+	if got := reads.Load(); got != 1 {
+		t.Fatalf("Recents reads before reconnect = %d, want 1", got)
+	}
+
+	proxy.setUp(false)
+	if err := chromedp.Do(ctx, chromedp.WaitVisible(chromedp.CSS(`.connection-banner`))); err != nil {
+		t.Fatalf("observe socket outage: %v", err)
+	}
+	proxy.setUp(true)
+
+	if err := chromedp.Do(ctx,
+		chromedp.Poll[chromedp.Void](`document.querySelector('.connection-banner') === null`),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.recent-name')?.textContent === 'Recovered station'
+			&& !document.querySelector('.recents-section [role=alert]')`, chromedp.WithPollingTimeout(5*time.Second)),
+	); err != nil {
+		t.Fatalf("Recents did not recover after reconnect (%d connections, %d reads): %v", connections.Load(), reads.Load(), err)
+	}
+
+	var sameDetail bool
+	if err := chromedp.Do(ctx, evalInto(`window.openDetail === document.querySelector('.device-detail')
+		&& window.visibilityChanges === 0`, &sameDetail)); err != nil {
+		t.Fatal(err)
+	}
+	if !sameDetail || connections.Load() != 2 || reads.Load() != 2 {
+		t.Fatalf("recovery should keep the same visible detail and retry exactly once: same detail %t, %d connections, %d reads",
+			sameDetail, connections.Load(), reads.Load())
 	}
 }

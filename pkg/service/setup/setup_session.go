@@ -57,7 +57,7 @@ const (
 // omitted from the XML so callers can choose any subset.
 //
 // Reference: docs/reference/DEVICE-PAIRING-FLOW.md and
-// https://github.com/scheilch/opencloudtouch/discussions/201.
+// https://github.com/opencloudtouch/opencloudtouch/discussions/201.
 type MargePairingExtras struct {
 	// BoseServer is the marge server URL the speaker should use after
 	// pairing. Typically equal to AfterTouch's service URL.

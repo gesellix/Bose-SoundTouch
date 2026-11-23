@@ -125,7 +125,7 @@ render(h(DeviceDetail, { deviceId: 'speaker', devices, onBack: () => {} }),
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.volume-slider[aria-label="Group volume"]`)),
 		chromedp.WaitVisible(chromedp.CSS(`.zone-member-volume-slider[aria-label="Living Room volume"]`)),
 		chromedp.Evaluate[chromedp.Void](`(() => {
@@ -192,7 +192,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(".volume-slider")),
 		chromedp.Evaluate[chromedp.Void](`(() => {
 			const slider = document.querySelector('.volume-slider');
@@ -287,7 +287,7 @@ func TestZoneVolumeDelayedResultCannotOverwriteNewerProjection(t *testing.T) {
 
 			ctx := newHeadlessChromeContext(t)
 			if err := chromedp.Do(ctx,
-				chromedp.Navigate(server.URL+"/fixture"),
+				navigateFixture(server.URL+"/fixture"),
 				chromedp.WaitVisible(chromedp.CSS(test.selector)),
 				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`(() => {
 					const slider = document.querySelector(%q);
@@ -376,7 +376,7 @@ func TestZoneVolumeUntouchedBlurDoesNotWriteAndFinalFailureSurvivesBlur(t *testi
 
 			ctx := newHeadlessChromeContext(t)
 			if err := chromedp.Do(ctx,
-				chromedp.Navigate(server.URL+"/fixture"),
+				navigateFixture(server.URL+"/fixture"),
 				chromedp.WaitVisible(chromedp.CSS(test.selector)),
 				chromedp.Focus(chromedp.CSS(test.selector)),
 				chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`document.querySelector(%q).blur()`, test.selector)),
@@ -467,7 +467,7 @@ render(h('div', {},
 
 	var presentation map[string]bool
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.zone-member-volume-control`)),
 		evalInto(`({
 			unavailableIsRange: document.querySelector('[aria-label="Unavailable member volume"]')?.matches('input[type="range"]') === true,
@@ -527,7 +527,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var after string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(`.zone-member-volume-slider[aria-label="Office volume"]`)),
 		chromedp.Evaluate[chromedp.Void](`(() => {
 			const slider = document.querySelector('.volume-slider[aria-label="Group volume"]');
@@ -571,7 +571,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	ctx := newHeadlessChromeContext(t)
 	var held string
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(".volume-slider")),
 		chromedp.Evaluate[chromedp.Void](`(() => {
    const slider = document.querySelector('.volume-slider');
@@ -633,7 +633,7 @@ render(h(Fixture), document.getElementById('fixture'));
 	})
 	ctx := newHeadlessChromeContext(t)
 	if err := chromedp.Do(ctx,
-		chromedp.Navigate(server.URL+"/fixture"),
+		navigateFixture(server.URL+"/fixture"),
 		chromedp.WaitVisible(chromedp.CSS(".volume-slider")),
 		chromedp.Evaluate[chromedp.Void](`(() => {
    const slider = document.querySelector('.volume-slider');

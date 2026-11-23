@@ -28,6 +28,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
             ]);
             const original = { settings: api.settings, device: api.device, bassChecked: api.bassChecked, balanceChecked: api.balanceChecked };
             const root = document.createElement('div');
+            root.style.maxWidth = '320px';
             document.body.append(root);
             const bass = { 'left.local': 0, 'right.local': 0 };
             const writes = [];
@@ -77,7 +78,7 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 check([...root.querySelectorAll('.settings-section')].slice(1).every(node => !node.open), 'Physical device groups must start collapsed');
                 const controls = [...root.querySelectorAll('.sound-control')];
                 const settled = (node, value) => node.querySelector('output').textContent === value
-                    && node.getAttribute('aria-busy') === 'false' && !node.querySelector('.sound-control-readback');
+                    && node.getAttribute('aria-busy') === 'false' && !node.textContent.includes('Speaker:');
                 check(controls[0].textContent.includes('Room pair') && controls[1].textContent.includes('Room pair'), 'Bass and balance must each identify the logical pair');
                 const groups = [...root.querySelectorAll('.member-settings-content > .settings-section')];
                 const rotation = node => getComputedStyle(node.querySelector(':scope > summary > .settings-chevron')).transform;
@@ -93,13 +94,34 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await new Promise(resolve => setTimeout(resolve, 20));
                 check(writes.length === 0, 'Focus, blur or rerender synthesized a sound write');
-                controls[0].querySelector('button').click();
+                const nextSectionTop = () => groups[0].getBoundingClientRect().top;
+                const writeWithPendingReadback = async (control, method, action, readback) => {
+                    const write = api[method];
+                    let release;
+                    const pending = new Promise(resolve => { release = resolve; });
+                    api[method] = async (...args) => { await pending; return write(...args); };
+                    const top = nextSectionTop();
+                    try {
+                        control.querySelector('[data-action="' + action + '"]').click();
+                        await waitFor(() => control.textContent.includes(readback), 'Pending speaker readback did not appear');
+                        check(nextSectionTop() === top, method + ': pending readback moved the following settings section');
+                    } finally {
+                        api[method] = write;
+                        release();
+                    }
+                    return top;
+                };
+                const topBeforeBass = await writeWithPendingReadback(controls[0], 'bassChecked', 'decrease', 'Speaker: 0');
                 await waitFor(() => settled(controls[0], '-1'), 'Bass write was not confirmed');
+                check(nextSectionTop() === topBeforeBass, 'Confirmed bass moved the following settings section');
+                check(controls[0].querySelector('.sound-control-footer').textContent.includes('Default 0'), 'Bass default did not return');
                 check(writes.length === 1 && writes[0].join('|') === 'bass|right.local|-1', 'Pair bass must write once to the confirmed RIGHT master');
                 controls[0].querySelector('[data-action="reset"]').click();
                 await waitFor(() => writes.length === 2 && settled(controls[0], '0'), 'Bass reset was not confirmed');
-                controls[1].querySelector('[data-action="increase"]').click();
+                const topBeforeBalance = await writeWithPendingReadback(controls[1], 'balanceChecked', 'increase', 'Speaker: Centered');
                 await waitFor(() => writes.length === 3 && settled(controls[1], 'Right 1'), 'Pair balance was not confirmed');
+                check(nextSectionTop() === topBeforeBalance, 'Confirmed balance moved the following settings section');
+                check(controls[1].querySelector('.sound-control-footer').textContent.includes('Default Centered'), 'Balance default did not return');
                 check(writes[2].join('|') === 'balance|right.local|1', 'Balance must follow the confirmed RIGHT master');
                 api.bassChecked = async () => { throw Object.assign(new Error('Final bass write failed'), { definitive: true }); };
                 controls[0].querySelector('button').click();
@@ -107,6 +129,13 @@ func TestScopedSoundSettingsDiscreteWritesAndHierarchy(t *testing.T) {
                 check(controls[0].textContent.includes('Speaker: 0'), 'Failure must retain the actual speaker readback');
                 for (const button of controls[0].querySelectorAll('button')) { button.focus(); button.blur(); }
                 check(controls[0].textContent.includes('Final bass write failed'), 'Blur cleared a final failure');
+                bassReadRevision++;
+                for (const member of [right, left]) {
+                    member.status = { ...member.status, bassRevision: bassReadRevision };
+                }
+                render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
+                check(controls[0].querySelector('[role="alert"]')?.textContent.includes('Final bass write failed'),
+                    'A fresh bass revision with the same values cleared a definitive error');
                 pair.settingsTargets = [right, { ...left, status: { ...left.status, revision: 2, bass: { ActualBass: -4 } } }];
                 render(h(MemberSettings, { deviceId: 'right.local', device: pair }), root);
                 await waitFor(() => root.textContent.includes('different bass values'), 'Pair disagreement was not explained');
@@ -248,7 +277,7 @@ func TestScopedSoundSettingsConnectionEpochOwnership(t *testing.T) {
                 await waitFor(() => root.querySelector('.sound-control').getAttribute('aria-busy') === 'false',
                     'Old connection request did not settle');
                 check(writes.length === 1, 'Queued old epoch value was sent to the new connection');
-                check(root.querySelector('output').textContent === '0' && !root.querySelector('.sound-control-readback'),
+                check(root.querySelector('output').textContent === '0' && !root.textContent.includes('Speaker:'),
                     'Old successful readback overwrote new connection state');
 
                 render(null, root);
@@ -324,7 +353,7 @@ func TestScopedSoundSettingsTapAndRapidSteps(t *testing.T) {
                 releaseFirst();
                 await wait(() => writes.length === 2 && root.querySelector('.sound-control').getAttribute('aria-busy') === 'false', 'Latest waiting step did not settle');
                 check(writes.join(',') === '-1,-3' && maxActive === 1 && actual === -3, 'Rapid steps must preserve latest absolute value and serialize writes');
-                check(!root.querySelector('.sound-control-readback'), 'Confirmed value must not repeat speaker readback');
+                check(!root.textContent.includes('Speaker:'), 'Confirmed value must not repeat speaker readback');
                 const scale = root.querySelector('.sound-control-scale');
                 check(scale && scale.getAttribute('role') === 'slider' && scale.tabIndex === 0, 'Scale must be keyboard accessible');
                 // Synthetic PointerEvents do not enter Chromium's native active-pointer registry.
@@ -429,7 +458,7 @@ func TestScopedSoundSettingsCompactGeometry(t *testing.T) {
                                 'Selected step must stand above short horizontal segments');
                             check(sound.querySelector('.sound-control-footer').textContent.includes(kind === 'balance' ? 'Default Centered' : 'Default 0'),
                                 'Footer must format the reported default');
-                            check(!sound.querySelector('.sound-control-readback') && !sound.textContent.includes('Range')
+                            check(!sound.textContent.includes('Speaker:') && !sound.textContent.includes('Range')
                                 && !sound.textContent.includes('Tap the scale'), 'Settled control repeats routine guidance or readback');
                         }
                     } finally { render(null, root); root.remove(); }

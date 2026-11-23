@@ -2,7 +2,7 @@
 <p style="margin-top: -10px; font-style: italic; color: #666;">Bose SoundTouch Toolkit</p>
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/gesellix/bose-soundtouch.svg)](https://pkg.go.dev/github.com/gesellix/bose-soundtouch)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/MIT)
 
 > Independent project. **Not affiliated with, endorsed by, sponsored
 > by, or otherwise connected to Bose Corporation.** See

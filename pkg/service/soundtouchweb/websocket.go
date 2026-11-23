@@ -420,44 +420,46 @@ func (app *WebApp) refreshBalance(deviceID string, conn *webtypes.DeviceConnecti
 
 // readBalanceOnce performs a single balance read and stores the result.
 func (app *WebApp) readBalanceOnce(deviceID string, conn *webtypes.DeviceConnection) {
-	balance, err := conn.Client.GetBalance()
+	// An HTTP read already in flight must not undo a newer WebSocket echo.
+	generation := conn.BeginFieldPoll(webtypes.FieldBalance)
+
+	reading, err := conn.Client.GetBalance()
 	if err != nil {
 		log.Printf("Speaker %s: balance read failed: %v", sanitizeLog(deviceID), sanitizeLog(err.Error()))
 
 		return
 	}
 
-	if !balance.Available {
+	balance := reading
+	if !reading.Available {
+		balance = nil
+	}
+
+	changed := false
+
+	if !conn.CompleteFieldPoll(webtypes.FieldBalance, generation, func(status *webtypes.DeviceStatus) {
+		changed = !reflect.DeepEqual(status.Balance, balance)
+		status.Balance = balance
+
+		if balance != nil || changed {
+			status.LastActivity = time.Now()
+		}
+	}) {
+		return
+	}
+
+	if !reading.Available {
 		// Log the whole answer, not just the fact of it: the range and target
 		// reported alongside are the evidence for why it is unavailable.
-		//
-		// Only when the state changes. This read runs on every balanceUpdated
-		// frame and every status poll, so a speaker that reports no usable
-		// balance — a standalone unit, most of them — emitted one identical
-		// line per poll, per speaker, and buried everything else in the log.
 		if conn.MarkBalanceUnavailable() {
 			log.Printf("Speaker %s: balance reported unavailable (range %d..%d, default %d, target %d, actual %d)",
-				sanitizeLog(deviceID), balance.Min, balance.Max, balance.Default, balance.Target, balance.Actual)
+				sanitizeLog(deviceID), reading.Min, reading.Max, reading.Default, reading.Target, reading.Actual)
 		}
-
-		app.clearBalance(conn)
-
-		return
+	} else {
+		conn.MarkBalanceAvailable()
 	}
 
-	conn.MarkBalanceAvailable()
-
-	app.applyBalanceEvent(conn, balance)
-}
-
-// clearBalance drops any stored reading, which is how the UI learns the
-// control no longer applies — the pair was torn down.
-func (app *WebApp) clearBalance(conn *webtypes.DeviceConnection) {
-	if conn.Status().Balance == nil {
-		return
-	}
-
-	app.applyBalanceEvent(conn, nil)
+	app.queueBroadcastIfChanged(changed)
 }
 
 // isStandbySource reports whether a now-playing source means the speaker is
@@ -734,6 +736,9 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 	)
 
 	backoff := initialBackoff
+	wsLog := &speakerWebSocketLogger{deviceID: deviceID, conn: conn}
+	wsConfig := client.DefaultWebSocketConfig()
+	wsConfig.Logger = wsLog
 
 	// Tracks the last now_playing source seen so a speaker stuck reporting an
 	// error source is logged once per transition into it, not on every event.
@@ -747,7 +752,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 		default:
 		}
 
-		wsClient := conn.Client.NewWebSocketClient(nil)
+		wsClient := conn.Client.NewWebSocketClient(wsConfig)
 
 		// Setup event handlers. Each handler funnels its change through
 		// UpdateStatus so concurrent events and the periodic poller
@@ -874,7 +879,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			// in-flight HTTP poll already reserved, so a transient transport
 			// blip would silently discard a concurrently-completing,
 			// genuinely successful poll's IsConnected=true merge.
-			if !conn.ObserveEventStreamTransport(generation, connected, time.Now()) {
+			if !wsLog.transportState(connected, generation) {
 				return
 			}
 
@@ -882,21 +887,20 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 				app.invalidateRecents(deviceID, conn, "")
 
 				if generation > 1 {
-					log.Printf("WebSocket reconnected for device %s", sanitizeLog(deviceID))
 					go app.UpdateDeviceStatus(deviceID, conn)
 				}
-			} else {
-				log.Printf("WebSocket transport disconnected for device %s", sanitizeLog(deviceID))
 			}
 		})
 
-		published, err := publishAndConnectDeviceWebSocket(conn, wsClient, wsClient.Connect)
+		published, err := publishAndConnectDeviceWebSocket(conn, wsClient, func() error {
+			return wsClient.ConnectWithConfig(wsConfig)
+		})
 		if !published {
 			return
 		}
 
 		if err != nil {
-			log.Printf("Failed to connect WebSocket for device %s: %v (retrying in %s)", sanitizeLog(deviceID), err, backoff)
+			wsLog.initialFailure(err)
 
 			if sleepOrDone(conn, backoff) {
 				return
@@ -909,8 +913,6 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 
 			continue
 		}
-
-		log.Printf("WebSocket connected for device %s", sanitizeLog(deviceID))
 
 		// Fetch current state immediately: speakers do not replay events on
 		// new WebSocket connections, so anything that changed while we were
