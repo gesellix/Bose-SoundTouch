@@ -18,9 +18,8 @@ const html = htm.bind(h);
 // concerned: stations and albums this household actually used, across
 // speakers, rather than a location typed by hand.
 //
-// It deliberately does not hide entries that already sit in a slot. Copying
-// one station into a second slot, or onto a second speaker, is a thing people
-// do on purpose; the list only says where an entry already is.
+// Keep already assigned entries visible, including those that may be useful
+// on another speaker. Moving an existing preset on this speaker is explicit.
 export function CatalogPicker({ deviceId, physicalId, epoch, slot, presets, sources = null, current = null, onClose, onAssigned, onStatusReadback }) {
     const [state, setState] = useState({ status: 'loading' });
     const [query, setQuery] = useState('');

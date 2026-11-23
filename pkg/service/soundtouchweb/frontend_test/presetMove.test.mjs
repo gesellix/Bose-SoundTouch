@@ -57,6 +57,12 @@ test('a firmware move needs no second write when the original slot is already em
     assert.deepEqual(calls, ['read', 'write 3', 'read']);
 });
 
+test('a move cannot silently remove a third duplicate slot', async () => {
+    const { options, calls } = setup({ before: [preset(1), preset(2)] });
+    await assert.rejects(movePreset(options), /may empty another preset/);
+    assert.deepEqual(calls, ['read']);
+});
+
 test('an acknowledged delete without source-clear evidence leaves the move unverified', async () => {
     const { options, calls } = setup({ afterStore: [preset(1), preset(3)] });
     await assert.rejects(movePreset(options), /clearing the original slot is unverified/);
@@ -79,14 +85,14 @@ test('an acknowledged save or clear without a changed preset is not confirmed', 
         { slot: 3, content: source, expected: null, write: 'write 3' },
         { slot: 1, content: null, expected: source, write: 'clear 1' },
     ]) {
-        const { options, calls } = setup({});
+        const { options, calls } = setup({ before: slot === 3 ? [] : [preset(1)] });
         await assert.rejects(verifyPresetEdit({ ...options, slot, content, expected }), /Preset change unverified/);
         assert.deepEqual(calls, ['read', write, 'read', 'read', 'read']);
     }
 });
 
 test('a lost write response can confirm once the speaker reports the selected content', async () => {
-    const { options, calls } = setup({ afterStore: [preset(1), preset(3)] });
+    const { options, calls } = setup({ before: [], afterStore: [preset(3)] });
     const store = options.api.storePresetContent;
     options.api.storePresetContent = async (...args) => { await store(...args); throw new Error('response lost'); };
     await verifyPresetEdit({ ...options, slot: 3, content: source, expected: null });
@@ -94,7 +100,7 @@ test('a lost write response can confirm once the speaker reports the selected co
 });
 
 test('an ambiguous speaker error remains visible if the mutation cannot be confirmed', async () => {
-    const { options, calls } = setup({});
+    const { options, calls } = setup({ before: [] });
     const store = options.api.storePresetContent;
     options.api.storePresetContent = async (...args) => {
         await store(...args);
@@ -107,7 +113,7 @@ test('an ambiguous speaker error remains visible if the mutation cannot be confi
 
 test('a slow checked write has time for best-effort artwork before readback', async t => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
-    const { options, calls } = setup({ afterStore: [preset(1), preset(3)] });
+    const { options, calls } = setup({ before: [], afterStore: [preset(3)] });
     const store = options.api.storePresetContent;
     options.api.storePresetContent = async (_, slot, item, { signal }) => {
         t.mock.timers.tick(4_500);
@@ -133,9 +139,9 @@ test('unexpected removal of a source-only preset is still unverified', async () 
     assert.deepEqual(calls, ['read', 'write 3', 'read', 'read', 'read']);
 });
 
-test('losing a differently named preset for the same station prevents confirmation', async () => {
+test('a plain save of content already stored under a different name requires using Move', async () => {
     const another = { ...source, ItemName: 'WDR 2 alternate' };
     const { options, calls } = setup({ before: [preset(1, another)], afterStore: [preset(3)] });
-    await assert.rejects(verifyPresetEdit({ ...options, slot: 3, content: source, expected: null }), /Preset change unverified/);
-    assert.deepEqual(calls, ['read', 'write 3', 'read', 'read', 'read']);
+    await assert.rejects(verifyPresetEdit({ ...options, slot: 3, content: source, expected: null }), /Already in preset 1.*Use Move/);
+    assert.deepEqual(calls, ['read']);
 });

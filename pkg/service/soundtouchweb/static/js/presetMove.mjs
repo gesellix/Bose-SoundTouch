@@ -24,10 +24,14 @@ export function currentPresetContent(nowPlaying) {
     return { ...item, ContainerArt: item.ContainerArt || (art?.ArtImageStatus === 'IMAGE_PRESENT' ? art.URL : '') || '' };
 }
 
+function samePresetIdentity(expected, actual) {
+    return expected && actual && expected.source === actual.source && expected.sourceAccount === actual.sourceAccount &&
+        canonicalLocation(expected.source, expected.location) === canonicalLocation(actual.source, actual.location);
+}
+
 function samePreset(expected, actual, allowNormalization = false) {
     if (!expected || !actual) return expected === actual;
-    return expected.source === actual.source && expected.sourceAccount === actual.sourceAccount &&
-        canonicalLocation(expected.source, expected.location) === canonicalLocation(actual.source, actual.location) &&
+    return samePresetIdentity(expected, actual) &&
         expected.itemName === actual.itemName &&
         (expected.type === actual.type || (allowNormalization && !expected.type)) &&
         (expected.containerArt === actual.containerArt || (allowNormalization && !expected.containerArt));
@@ -134,7 +138,11 @@ export async function movePreset({ from, to, source, destination, isCurrent, ...
             !samePreset(presetContent(destination), before[to])) {
             throw new Error('The source or destination preset changed. Reopen the editor before moving it.');
         }
-        const saveError = samePreset(item, before[to], true) ? null : await write(to, item);
+        const needsWrite = !samePreset(item, before[to], true);
+        if (needsWrite && before.some((entry, slot) => slot !== from && slot !== to && samePresetIdentity(item, entry))) {
+            throw new Error('The speaker may empty another preset with the same content. Clear that duplicate explicitly before moving.');
+        }
+        const saveError = needsWrite ? await write(to, item) : null;
         const saved = await waitForBank(bank => samePreset(item, bank[to], true) &&
             before.every((entry, slot) => slot === to || samePreset(entry, bank[slot]) || (slot === from && !bank[slot])));
         if (!saved || !isCurrent()) throw unverified('Move unverified. The player did not clear the original slot. Check both presets.', saveError);
@@ -164,6 +172,10 @@ export async function verifyPresetEdit({ slot, content, expected, ...target }) {
             throw new Error('The preset changed. Reopen the editor before editing it.');
         }
         if (samePreset(item, before[slot], true)) return;
+        const duplicates = before.flatMap((entry, index) => index !== slot && samePresetIdentity(item, entry) ? [index] : []);
+        if (duplicates.length) {
+            throw new Error(`Already in preset ${duplicates.join(', ')}. Saving to another slot can empty the existing preset. Use Move in the preset editor.`);
+        }
         const writeError = await write(slot, item);
         const confirmed = await waitForBank(bank => samePreset(item, bank[slot], true) &&
             before.every((entry, index) => index === slot || samePreset(entry, bank[index])));

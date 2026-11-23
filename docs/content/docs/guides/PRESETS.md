@@ -119,9 +119,9 @@ happened on. That is what makes it useful for two jobs at once.
 - **Copying between speakers.** Open the editor on the second speaker and pick
   the same entry.
 
-An entry already sitting in a slot is still listed, and says which slot it is
-in. Putting the same station in two slots is allowed; it is sometimes what you
-want.
+An entry already sitting in a slot is still listed, and says which slot it is in. Some speakers automatically empty that slot when the same content is stored elsewhere. To move such an entry, use **Move to** in the preset editor.
+
+Preset edits are checked against a fresh reading from the selected speaker. When speakers share presets through an account, subsequent account updates can still change their banks.
 
 The list holds the 100 most recently seen entries, which costs about 45 KB.
 Change that in the admin UI under Settings ("Preset catalog size"), or by

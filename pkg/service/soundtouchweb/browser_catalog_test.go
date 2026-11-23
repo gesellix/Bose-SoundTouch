@@ -105,6 +105,10 @@ func TestPresetSlotFillsFromTheCatalog(t *testing.T) {
 		evalInto(`Array.from(document.querySelectorAll('#presets .catalog-entry-meta'))
 			.map(e => e.textContent).find(t => t.includes('WDR 2') || t.includes('TuneIn')) || ''`, &occupiedMeta),
 
+		// Storing that same content can silently empty the original slot.
+		chromedp.Click(chromedp.CSS(`#presets .catalog-picker-list li:nth-child(2) .catalog-entry`)),
+		chromedp.Poll[chromedp.Void](`document.querySelector('.catalog-picker [role="alert"]')?.textContent.includes('Use Move')`),
+
 		// The filter narrows the list rather than reloading it.
 		chromedp.SendKeys(chromedp.CSS(`#presets .catalog-picker-filter`), "FM4"),
 		chromedp.Poll[chromedp.Void](`document.querySelectorAll('#presets .catalog-entry').length === 1`),
