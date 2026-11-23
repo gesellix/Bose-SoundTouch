@@ -830,6 +830,7 @@ func (app *WebApp) ConnectDeviceWebSocket(deviceID string, conn *webtypes.Device
 			if !speakerConnectionEventMatches(conn, event.DeviceID) {
 				return
 			}
+
 			activity := time.Now()
 
 			conn.MarkEventStreamActivity(activity)
